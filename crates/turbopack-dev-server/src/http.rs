@@ -88,8 +88,7 @@ pub async fn process_request_with_content_source(
         Some("get_from_source"),
     )
     .await?;
-    let side_effects: AutoSet<Vc<Box<dyn ContentSourceSideEffect>>> =
-        result.peek_collectibles().strongly_consistent().await?;
+    let side_effects: AutoSet<Vc<Box<dyn ContentSourceSideEffect>>> = result.peek_collectibles();
     match &*result.strongly_consistent().await? {
         GetFromSourceResult::Static {
             content,

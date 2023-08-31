@@ -44,6 +44,7 @@ struct NodeInner {
 
 struct NodeAggregationContext<'a> {
     additions: AtomicU32,
+    #[allow(dead_code)]
     something_with_lifetime: &'a u32,
 }
 

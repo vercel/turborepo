@@ -669,7 +669,7 @@ where
     ) -> Result<Self> {
         #[cfg(feature = "issue_path")]
         {
-            let children = self.take_collectibles().await?;
+            let children = self.take_collectibles();
             if !children.is_empty() {
                 emit(Vc::upcast::<Box<dyn IssueProcessingPath>>(
                     ItemIssueProcessingPath::cell(ItemIssueProcessingPath(
@@ -697,7 +697,7 @@ where
     ) -> Result<Self> {
         #[cfg(feature = "issue_path")]
         {
-            let children = self.take_collectibles().await?;
+            let children = self.take_collectibles();
             if !children.is_empty() {
                 emit(Vc::upcast::<Box<dyn IssueProcessingPath>>(
                     ItemIssueProcessingPath::cell(ItemIssueProcessingPath(
@@ -723,22 +723,22 @@ where
 
     async fn peek_issues_with_path(self) -> Result<Vc<CapturedIssues>> {
         Ok(CapturedIssues::cell(CapturedIssues {
-            issues: self.peek_collectibles().strongly_consistent().await?,
+            issues: self.peek_collectibles(),
             #[cfg(feature = "issue_path")]
             processing_path: ItemIssueProcessingPath::cell(ItemIssueProcessingPath(
                 None,
-                self.peek_collectibles().strongly_consistent().await?,
+                self.peek_collectibles(),
             )),
         }))
     }
 
     async fn take_issues_with_path(self) -> Result<Vc<CapturedIssues>> {
         Ok(CapturedIssues::cell(CapturedIssues {
-            issues: self.take_collectibles().strongly_consistent().await?,
+            issues: self.take_collectibles(),
             #[cfg(feature = "issue_path")]
             processing_path: ItemIssueProcessingPath::cell(ItemIssueProcessingPath(
                 None,
-                self.take_collectibles().strongly_consistent().await?,
+                self.take_collectibles(),
             )),
         }))
     }

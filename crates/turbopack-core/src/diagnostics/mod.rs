@@ -70,7 +70,7 @@ where
 {
     async fn peek_diagnostics(self) -> Result<Vc<CapturedDiagnostics>> {
         Ok(CapturedDiagnostics::cell(CapturedDiagnostics {
-            diagnostics: self.peek_collectibles().strongly_consistent().await?,
+            diagnostics: self.peek_collectibles(),
         }))
     }
 }

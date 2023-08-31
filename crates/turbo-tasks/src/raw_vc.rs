@@ -1,7 +1,7 @@
 use std::{
     any::Any,
     fmt::{Debug, Display},
-    future::{Future, IntoFuture},
+    future::Future,
     hash::Hash,
     marker::PhantomData,
     pin::Pin,
@@ -233,28 +233,25 @@ impl RawVc {
 }
 
 impl CollectiblesSource for RawVc {
-    fn peek_collectibles<T: VcValueTrait>(self) -> CollectiblesFuture<T> {
+    fn peek_collectibles<T: VcValueTrait>(self) -> AutoSet<Vc<T>> {
         let tt = turbo_tasks();
         tt.notify_scheduled_tasks();
-        let set = tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
-        CollectiblesFuture {
-            turbo_tasks: tt,
-            inner: set.into_future(),
-            take: false,
-            phantom: PhantomData,
-        }
+        let map = tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
+        map.into_iter()
+            .filter(|&(_, count)| count > 0)
+            .map(|(raw, _)| raw.into())
+            .collect()
     }
 
-    fn take_collectibles<T: VcValueTrait>(self) -> CollectiblesFuture<T> {
+    fn take_collectibles<T: VcValueTrait>(self) -> AutoSet<Vc<T>> {
         let tt = turbo_tasks();
         tt.notify_scheduled_tasks();
-        let set = tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
-        CollectiblesFuture {
-            turbo_tasks: tt,
-            inner: set.into_future(),
-            take: true,
-            phantom: PhantomData,
-        }
+        let map = tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
+        tt.unemit_collectibles(T::get_trait_type_id(), &map);
+        map.into_iter()
+            .filter(|&(_, count)| count > 0)
+            .map(|(raw, _)| raw.into())
+            .collect()
     }
 }
 
@@ -415,47 +412,3 @@ unsafe impl<T, Cast> Send for ReadRawVcFuture<T, Cast> where T: ?Sized {}
 unsafe impl<T, Cast> Sync for ReadRawVcFuture<T, Cast> where T: ?Sized {}
 
 impl<T, Cast> Unpin for ReadRawVcFuture<T, Cast> where T: ?Sized {}
-
-#[derive(Error, Debug)]
-#[error("Unable to read collectibles")]
-pub struct ReadCollectiblesError {
-    source: anyhow::Error,
-}
-
-pub struct CollectiblesFuture<T: VcValueTrait> {
-    turbo_tasks: Arc<dyn TurboTasksApi>,
-    inner: ReadRawVcFuture<AutoSet<RawVc>>,
-    take: bool,
-    phantom: PhantomData<fn() -> T>,
-}
-
-impl<T: VcValueTrait> CollectiblesFuture<T> {
-    pub fn strongly_consistent(mut self) -> Self {
-        self.inner.strongly_consistent = true;
-        self
-    }
-}
-
-impl<T: VcValueTrait + Send> Future for CollectiblesFuture<T> {
-    type Output = Result<AutoSet<Vc<T>>>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        // SAFETY: we are not moving `this`
-        let this = unsafe { self.get_unchecked_mut() };
-        // SAFETY: `this` was pinned before
-        let inner_pin = unsafe { Pin::new_unchecked(&mut this.inner) };
-        match inner_pin.poll(cx) {
-            Poll::Ready(r) => Poll::Ready(match r {
-                Ok(set) => {
-                    if this.take {
-                        this.turbo_tasks
-                            .unemit_collectibles(T::get_trait_type_id(), &set);
-                    }
-                    Ok(set.iter().map(|raw| (*raw).into()).collect())
-                }
-                Err(e) => Err(ReadCollectiblesError { source: e }.into()),
-            }),
-            Poll::Pending => Poll::Pending,
-        }
-    }
-}

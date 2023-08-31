@@ -13,7 +13,7 @@ use std::{
 };
 
 use anyhow::{bail, Result};
-use auto_hash_map::AutoSet;
+use auto_hash_map::{AutoMap, AutoSet};
 use dashmap::{mapref::entry::Entry, DashMap};
 use nohash_hasher::BuildNoHashHasher;
 use rustc_hash::FxHasher;
@@ -26,15 +26,13 @@ use turbo_tasks::{
     },
     event::EventListener,
     util::{IdFactory, NoMoveVec},
-    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi, Unused, Vc,
+    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi, Unused,
 };
 
 use crate::{
-    aggregation_tree::aggregation_info,
     cell::RecomputingCell,
     gc::GcQueue,
     output::Output,
-    priority_pair::PriorityPair,
     task::{Task, TaskDependency, DEPENDENCIES_TO_TRACK},
 };
 
@@ -46,7 +44,6 @@ pub struct MemoryBackend {
     memory_limit: usize,
     gc_queue: Option<GcQueue>,
     idle_gc_active: AtomicBool,
-    scope_add_remove_priority: PriorityPair,
 }
 
 impl Default for MemoryBackend {
@@ -65,7 +62,6 @@ impl MemoryBackend {
             memory_limit,
             gc_queue: (memory_limit != usize::MAX).then(GcQueue::new),
             idle_gc_active: AtomicBool::new(false),
-            scope_add_remove_priority: PriorityPair::new(),
         }
     }
 
@@ -180,7 +176,7 @@ impl MemoryBackend {
     ) -> TaskId {
         let new_id = new_id.into();
         // Safety: We have a fresh task id that nobody knows about yet
-        let task = unsafe { self.memory_tasks.insert(*new_id, task) };
+        unsafe { self.memory_tasks.insert(*new_id, task) };
         let result_task = match task_cache.entry(key) {
             Entry::Vacant(entry) => {
                 // This is the most likely case
@@ -430,10 +426,8 @@ impl Backend for MemoryBackend {
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> Vc<AutoSet<RawVc>> {
-        self.with_task(id, |task| {
-            task.read_task_collectibles(reader, trait_id, self, turbo_tasks)
-        })
+    ) -> AutoMap<RawVc, i32> {
+        Task::read_collectibles(id, trait_id, reader, self, turbo_tasks)
     }
 
     fn emit_collectible(
@@ -452,11 +446,12 @@ impl Backend for MemoryBackend {
         &self,
         trait_type: TraitTypeId,
         collectible: RawVc,
+        count: u32,
         id: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         self.with_task(id, |task| {
-            task.unemit_collectible(trait_type, collectible, self, turbo_tasks)
+            task.unemit_collectible(trait_type, collectible, count, self, turbo_tasks);
         });
     }
 
@@ -553,26 +548,31 @@ impl Backend for MemoryBackend {
         let id = turbo_tasks.get_fresh_task_id();
         let stats_type = turbo_tasks.stats_type();
         let id = id.into();
-        let task = match task_type {
-            TransientTaskType::Root(f) => Task::new_root(id, move || f() as _, stats_type),
-            TransientTaskType::Once(f) => Task::new_once(id, f, stats_type),
+        match task_type {
+            TransientTaskType::Root(f) => {
+                let task = Task::new_root(id, move || f() as _, stats_type);
+                // SAFETY: We have a fresh task id where nobody knows about yet
+                unsafe { self.memory_tasks.insert(*id, task) };
+                Task::set_root(id, self, turbo_tasks);
+            }
+            TransientTaskType::Once(f) => {
+                let task = Task::new_once(id, f, stats_type);
+                // SAFETY: We have a fresh task id where nobody knows about yet
+                unsafe { self.memory_tasks.insert(*id, task) };
+                Task::set_once(id, self, turbo_tasks);
+            }
         };
-        // SAFETY: We have a fresh task id where nobody knows about yet
-        #[allow(unused_variables)]
-        let task = unsafe { self.memory_tasks.insert(*id, task) };
-        #[cfg(feature = "print_scope_updates")]
-        println!("new {scope} for {task}");
         id
     }
 }
 
 pub(crate) enum Job {
-    ScheduleWhenDirtyFromAggregation(AutoSet<TaskId, BuildNoHashHasher<TaskId>>),
     GarbageCollection,
 }
 
 impl Job {
-    fn before_schedule(&self, backend: &MemoryBackend) {}
+    // TODO remove this method
+    fn before_schedule(&self, _backend: &MemoryBackend) {}
 
     async fn run(
         self,
@@ -580,14 +580,6 @@ impl Job {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         match self {
-            Job::ScheduleWhenDirtyFromAggregation(tasks) => {
-                let _guard = trace_span!("Job::ScheduleWhenDirtyFromAggregation").entered();
-                for task in tasks.into_iter() {
-                    backend.with_task(task, |task| {
-                        task.schedule_when_dirty_from_aggregation(backend, turbo_tasks);
-                    })
-                }
-            }
             Job::GarbageCollection => {
                 let _guard = trace_span!("Job::GarbageCollection").entered();
                 backend.run_gc(true, turbo_tasks);

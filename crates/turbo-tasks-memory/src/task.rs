@@ -5,10 +5,10 @@ mod stats;
 use std::{
     borrow::Cow,
     cell::RefCell,
-    cmp::{max, Ordering, Reverse},
-    collections::{HashMap, HashSet, VecDeque},
+    cmp::{max, Reverse},
+    collections::{HashMap, HashSet},
     fmt::{
-        Debug, Display, Formatter, Write, {self},
+        Debug, Display, Formatter, {self},
     },
     future::Future,
     hash::Hash,
@@ -28,17 +28,13 @@ use turbo_tasks::{
     backend::{PersistentTaskType, TaskExecutionSpec},
     event::{Event, EventListener},
     get_invalidator, registry, CellId, Invalidator, RawVc, StatsType, TaskId, TraitTypeId,
-    TryJoinIterExt, TurboTasksBackendApi, ValueTypeId, Vc,
+    TurboTasksBackendApi, ValueTypeId,
 };
 
 use crate::{
-    aggregation_tree::{
-        aggregation_info, aggregation_info_from_item, AggregationContext, AggregationTreeLeaf,
-    },
+    aggregation_tree::{aggregation_info, aggregation_info_from_item},
     cell::Cell,
-    count_hash_set::CountHashSet,
     gc::{to_exp_u8, GcPriority, GcStats, GcTaskState},
-    memory_backend::Job,
     output::{Output, OutputContent},
     stats::{ReferenceType, StatsReferences, StatsTaskType},
     task::aggregation::{TaskAggregationContext, TaskChange},
@@ -47,13 +43,6 @@ use crate::{
 
 pub type NativeTaskFuture = Pin<Box<dyn Future<Output = Result<RawVc>> + Send>>;
 pub type NativeTaskFn = Box<dyn Fn() -> NativeTaskFuture + Send + Sync>;
-
-macro_rules! log_scope_update {
-    ($($args:expr),+) => {
-        #[cfg(feature = "print_scope_updates")]
-        println!($($args),+);
-    };
-}
 
 #[derive(Hash, Copy, Clone, PartialEq, Eq)]
 pub enum TaskDependency {
@@ -243,28 +232,6 @@ impl TaskState {
             last_waiting_task: Default::default(),
         }
     }
-
-    fn new_root_scoped(
-        description: impl Fn() -> String + Send + Sync + 'static,
-        stats_type: StatsType,
-    ) -> Self {
-        Self {
-            aggregation_leaf: TaskAggregationTreeLeaf::new(),
-            state_type: Dirty {
-                event: Event::new(move || format!("TaskState({})::event", description())),
-            },
-            stateful: false,
-            children: Default::default(),
-            collectibles: Default::default(),
-            output: Default::default(),
-            prepared_type: PrepareTaskType::None,
-            cells: Default::default(),
-            gc: Default::default(),
-            stats: TaskStats::new(stats_type),
-            #[cfg(feature = "track_wait_dependencies")]
-            last_waiting_task: Default::default(),
-        }
-    }
 }
 
 /// The partial task state. It's equal to a full TaskState with state = Dirty
@@ -437,7 +404,7 @@ enum TaskStateType {
 use TaskStateType::*;
 
 use self::{
-    aggregation::{RootInfoType, TaskAggregationTreeLeaf},
+    aggregation::{RootInfoType, RootType, TaskAggregationTreeLeaf, TaskGuard},
     meta_state::{
         FullTaskWriteGuard, TaskMetaState, TaskMetaStateReadGuard, TaskMetaStateWriteGuard,
     },
@@ -506,6 +473,42 @@ impl Task {
     pub(crate) fn is_blue(&self) -> bool {
         // TODO implement something that hashes the type
         false
+    }
+
+    pub(crate) fn set_root(
+        id: TaskId,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) {
+        let mut context = TaskAggregationContext::new(turbo_tasks, backend);
+        {
+            aggregation_info(&context, id).root_type = Some(RootType::Root);
+        }
+        context.schedule_tasks_if_needed();
+    }
+
+    pub(crate) fn set_once(
+        id: TaskId,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) {
+        let mut context = TaskAggregationContext::new(turbo_tasks, backend);
+        {
+            aggregation_info(&context, id).root_type = Some(RootType::Once);
+        }
+        context.schedule_tasks_if_needed();
+    }
+
+    pub(crate) fn unset_root(
+        id: TaskId,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) {
+        let mut context = TaskAggregationContext::new(turbo_tasks, backend);
+        {
+            aggregation_info(&context, id).root_type = None;
+        }
+        context.schedule_tasks_if_needed();
     }
 
     pub(crate) fn get_function_name(&self) -> Option<&'static str> {
@@ -587,7 +590,7 @@ impl Task {
             }
             TaskDependency::TaskCollectibles(task, trait_type) => {
                 let context = TaskAggregationContext::new(turbo_tasks, backend);
-                let aggregation = aggregation_info(&context, task);
+                let mut aggregation = aggregation_info(&context, task);
                 aggregation.remove_collectible_dependent_task(trait_type, reader);
             }
         }
@@ -717,7 +720,7 @@ impl Task {
     fn make_execution_future(
         self: &Task,
         mut state: FullTaskWriteGuard<'_>,
-        backend: &MemoryBackend,
+        _backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Pin<Box<dyn Future<Output = Result<RawVc>> + Send>> {
         match &self.ty {
@@ -909,6 +912,7 @@ impl Task {
 
         if let TaskType::Once(_) = self.ty {
             // unset the root type, so tasks below are no longer active
+            let context = TaskAggregationContext::new(turbo_tasks, backend);
             aggregation_info(&context, self.id).root_type = None;
         }
 
@@ -974,7 +978,7 @@ impl Task {
                             &RootInfoType::IsActive,
                         )
                         || {
-                            let context = TaskAggregationContext::new(turbo_tasks, backend);
+                            let mut context = TaskAggregationContext::new(turbo_tasks, backend);
                             state.aggregation_leaf.change(
                                 &context,
                                 &TaskChange {
@@ -1167,7 +1171,7 @@ impl Task {
         }
     }
 
-    pub fn get_stats_info(&self, backend: &MemoryBackend) -> TaskStatsInfo {
+    pub fn get_stats_info(&self, _backend: &MemoryBackend) -> TaskStatsInfo {
         match self.state() {
             TaskMetaStateReadGuard::Full(state) => {
                 let (total_duration, last_duration, executions) = match &state.stats {
@@ -1186,7 +1190,7 @@ impl Task {
                     unloaded: false,
                 }
             }
-            TaskMetaStateReadGuard::Partial(state) => TaskStatsInfo {
+            TaskMetaStateReadGuard::Partial(_) => TaskStatsInfo {
                 total_duration: None,
                 last_duration: Duration::ZERO,
                 executions: None,
@@ -1250,7 +1254,7 @@ impl Task {
     }
 
     fn state_string(state: &TaskState) -> &'static str {
-        let mut state_str = match state.state_type {
+        match state.state_type {
             Scheduled { .. } => "scheduled",
             InProgress {
                 count_as_finished: false,
@@ -1263,8 +1267,7 @@ impl Task {
             InProgressDirty { .. } => "in progress (dirty)",
             Done { .. } => "done",
             Dirty { .. } => "dirty",
-        };
-        state_str
+        }
     }
 
     pub(crate) fn connect_child(
@@ -1273,22 +1276,24 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
-        let state = self.full_state_mut();
-        self.connect_child_internal(state, child_id, backend, turbo_tasks);
+        let mut context = TaskAggregationContext::new(turbo_tasks, backend);
+        {
+            let state = self.full_state_mut();
+            self.connect_child_internal(state, &context, child_id);
+        }
+        context.schedule_tasks_if_needed();
     }
 
     fn connect_child_internal(
         &self,
         mut state: FullTaskWriteGuard<'_>,
+        context: &TaskAggregationContext,
         child_id: TaskId,
-        backend: &MemoryBackend,
-        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         if state.children.insert(child_id) {
-            let context = TaskAggregationContext::new(turbo_tasks, backend);
             state
                 .aggregation_leaf
-                .add_child(self.is_blue(), &context, &child_id);
+                .add_child(self.is_blue(), context, &child_id);
         }
     }
 
@@ -1302,15 +1307,22 @@ impl Task {
     ) -> Result<Result<T, EventListener>> {
         let mut state = self.full_state_mut();
         if strongly_consistent {
-            let mut state = TaskMetaStateWriteGuard::Full(state);
+            let mut item = TaskGuard {
+                id: self.id,
+                guard: TaskMetaStateWriteGuard::Full(state),
+            };
             {
                 let context = TaskAggregationContext::new(turbo_tasks, backend);
-                let aggregation = aggregation_info_from_item(&context, &mut state);
+                let aggregation = aggregation_info_from_item(&context, &mut item);
                 if aggregation.unfinished > 0 {
                     return Ok(Err(aggregation.unfinished_event.listen_with_note(note)));
                 }
             }
-            let TaskMetaStateWriteGuard::Full(inner_state) = state else {
+            let TaskGuard {
+                guard: TaskMetaStateWriteGuard::Full(inner_state),
+                ..
+            } = item
+            else {
                 unreachable!();
             };
             state = inner_state;
@@ -1347,20 +1359,15 @@ impl Task {
         }
     }
 
-    pub(crate) fn read_task_collectibles(
-        &self,
+    pub(crate) fn read_collectibles(
+        id: TaskId,
+        trait_type: TraitTypeId,
         reader: TaskId,
-        trait_id: TraitTypeId,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> Vc<AutoSet<RawVc>> {
-        let task = backend.get_or_create_read_task_collectibles_task(
-            self.id,
-            trait_id,
-            reader,
-            turbo_tasks,
-        );
-        RawVc::TaskOutput(task).into()
+    ) -> AutoMap<RawVc, i32> {
+        let context = TaskAggregationContext::new(turbo_tasks, backend);
+        aggregation_info(&context, id).read_collectibles(trait_type, reader)
     }
 
     pub(crate) fn emit_collectible(
@@ -1372,7 +1379,7 @@ impl Task {
     ) {
         let mut state = self.full_state_mut();
         if state.collectibles.emit(trait_type, collectible) {
-            let context = TaskAggregationContext::new(turbo_tasks, backend);
+            let mut context = TaskAggregationContext::new(turbo_tasks, backend);
             state.aggregation_leaf.change(
                 &context,
                 &TaskChange {
@@ -1389,12 +1396,13 @@ impl Task {
         &self,
         trait_type: TraitTypeId,
         collectible: RawVc,
+        count: u32,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         let mut state = self.full_state_mut();
-        if state.collectibles.unemit(trait_type, collectible) {
-            let context = TaskAggregationContext::new(turbo_tasks, backend);
+        if state.collectibles.unemit(trait_type, collectible, count) {
+            let mut context = TaskAggregationContext::new(turbo_tasks, backend);
             state.aggregation_leaf.change(
                 &context,
                 &TaskChange {
@@ -1474,7 +1482,7 @@ impl Task {
                 let active = if state.gc.inactive {
                     let active = state.aggregation_leaf.get_root_info(
                         &TaskAggregationContext::new(turbo_tasks, backend),
-                        RootInfoType::IsActive,
+                        &RootInfoType::IsActive,
                     );
                     if active {
                         state.gc.inactive = false;
@@ -1605,9 +1613,7 @@ impl Task {
                     // new GC priority.
                     if missing_durations.is_empty() {
                         let mut new_priority = GcPriority::Placeholder;
-                        // TODO We currently don't unload root scopes tasks, because of a bug in
-                        // scope unloading. Fix that.
-                        if !active && !state.scopes.is_root() {
+                        if !active {
                             new_priority = GcPriority::InactiveUnload {
                                 age: Reverse(age),
                                 total_compute_duration: total_compute_duration_u8,
@@ -1716,16 +1722,16 @@ impl Task {
     ) -> bool {
         let mut clear_dependencies = None;
         let TaskState {
+            ref mut aggregation_leaf,
             ref mut state_type,
-            ref scopes,
             ..
         } = *full_state;
         match state_type {
             Done {
                 ref mut dependencies,
             } => {
-                let context = TaskAggregationContext::new(turbo_tasks, backend);
-                state.aggregation_leaf.change(
+                let mut context = TaskAggregationContext::new(turbo_tasks, backend);
+                aggregation_leaf.change(
                     &TaskAggregationContext::new(turbo_tasks, backend),
                     &TaskChange {
                         unfinished: 1,
@@ -1736,7 +1742,7 @@ impl Task {
                 if context.take_scheduled(self.id) {
                     // Unloading is only possible for inactive tasks.
                     // We need to abort the unloading, so revert changes done so far.
-                    state.aggregation_leaf.change(
+                    aggregation_leaf.change(
                         &TaskAggregationContext::new(turbo_tasks, backend),
                         &TaskChange {
                             unfinished: -1,
@@ -1773,7 +1779,6 @@ impl Task {
             output,
             collectibles,
             aggregation_leaf,
-            scopes,
             stats,
             // can be dropped as it will be recomputed on next execution
             stateful: _,
@@ -1811,7 +1816,7 @@ impl Task {
         }
 
         // TODO aggregation_leaf
-        let unset = todo!();
+        let unset = !aggregation_leaf.has_upper();
 
         let stats_type = match stats {
             TaskStats::Essential(_) => StatsType::Essential,

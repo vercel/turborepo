@@ -126,6 +126,7 @@ fn propagate_change_to_upper<C: AggregationContext>(
 
 pub struct AggregationInfoGuard<T: 'static> {
     guard: MutexGuard<'static, TopTreeState<T>>,
+    #[allow(dead_code, reason = "need to stay alive until the guard is dropped")]
     tree: Arc<TopTree<T>>,
 }
 

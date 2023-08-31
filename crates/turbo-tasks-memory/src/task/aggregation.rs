@@ -1,6 +1,6 @@
 use std::{
-    collections::HashSet,
     hash::{BuildHasher, Hash},
+    mem::take,
 };
 
 use auto_hash_map::{map::Entry, AutoMap, AutoSet};
@@ -83,6 +83,26 @@ impl Aggregated {
             }
         }
     }
+
+    pub(crate) fn read_collectibles(
+        &mut self,
+        trait_type: TraitTypeId,
+        reader: TaskId,
+    ) -> AutoMap<RawVc, i32> {
+        match self.collectibles.entry(trait_type) {
+            Entry::Occupied(mut e) => {
+                let info = e.get_mut();
+                info.dependent_tasks.insert(reader);
+                info.collectibles.clone()
+            }
+            Entry::Vacant(e) => {
+                e.insert(CollectiblesInfo::default())
+                    .dependent_tasks
+                    .insert(reader);
+                AutoMap::default()
+            }
+        }
+    }
 }
 
 #[derive(Default)]
@@ -129,7 +149,8 @@ impl<'a> TaskAggregationContext<'a> {
         if let Some(task_to_schedule) = task_to_schedule.as_mut() {
             let task_to_schedule = take(task_to_schedule);
             if !task_to_schedule.is_empty() {
-                turbo_tasks.schedule_notify_tasks_set(&task_to_schedule);
+                self.turbo_tasks
+                    .schedule_notify_tasks_set(&task_to_schedule);
             }
         }
     }
@@ -138,9 +159,7 @@ impl<'a> TaskAggregationContext<'a> {
 #[cfg(debug_assertions)]
 impl<'a> Drop for TaskAggregationContext<'a> {
     fn drop(&mut self) {
-        let tasks_to_schedule: &mut Option<
-            HashSet<TaskId, std::hash::BuildHasherDefault<nohash_hasher::NoHashHasher<TaskId>>>,
-        > = self.tasks_to_schedule.get_mut();
+        let tasks_to_schedule = self.tasks_to_schedule.get_mut();
         if let Some(tasks_to_schedule) = tasks_to_schedule.as_ref() {
             if !tasks_to_schedule.is_empty() {
                 panic!("TaskAggregationContext dropped without scheduling all tasks");
@@ -264,7 +283,7 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         }
     }
 
-    fn new_root_info(&self, root_info_type: &RootInfoType) -> Self::RootInfo {
+    fn new_root_info(&self, _root_info_type: &RootInfoType) -> Self::RootInfo {
         false
     }
 
@@ -293,8 +312,8 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
 }
 
 pub struct TaskGuard<'l> {
-    id: TaskId,
-    guard: TaskMetaStateWriteGuard<'l>,
+    pub(super) id: TaskId,
+    pub(super) guard: TaskMetaStateWriteGuard<'l>,
 }
 
 impl<'l> AggregationItemLock for TaskGuard<'l> {

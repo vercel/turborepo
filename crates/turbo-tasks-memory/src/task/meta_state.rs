@@ -1,10 +1,7 @@
 use std::mem::replace;
 
-use auto_hash_map::AutoSet;
-use nohash_hasher::BuildNoHashHasher;
-use once_cell::sync::Lazy;
 use parking_lot::{RwLockReadGuard, RwLockWriteGuard};
-use turbo_tasks::{StatsType, TaskId};
+use turbo_tasks::StatsType;
 
 use super::{PartialTaskState, Task, TaskState, UnloadedTaskState};
 use crate::map_guard::{ReadGuard, WriteGuard};

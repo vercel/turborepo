@@ -83,6 +83,10 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
         result
     }
 
+    pub fn has_upper(&self) -> bool {
+        !self.upper.is_empty()
+    }
+
     #[must_use]
     pub(super) fn add_upper(
         &mut self,
