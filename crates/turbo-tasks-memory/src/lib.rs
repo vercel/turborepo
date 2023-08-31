@@ -17,7 +17,6 @@ mod memory_backend;
 mod memory_backend_with_pg;
 mod output;
 mod priority_pair;
-pub mod scope;
 pub mod stats;
 mod task;
 pub mod viz;

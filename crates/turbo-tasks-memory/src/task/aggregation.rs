@@ -6,7 +6,7 @@ use std::{
 use auto_hash_map::{map::Entry, AutoMap, AutoSet};
 use nohash_hasher::BuildNoHashHasher;
 use parking_lot::Mutex;
-use turbo_tasks::{event::Event, RawVc, TaskId, TraitTypeId, TurboTasksApi};
+use turbo_tasks::{event::Event, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi};
 
 use super::{meta_state::TaskMetaStateWriteGuard, TaskStateType};
 use crate::{
@@ -87,9 +87,9 @@ impl Aggregated {
 
 #[derive(Default)]
 pub struct TaskChange {
-    unfinished: i32,
-    dirty_tasks_update: Vec<(TaskId, i32)>,
-    collectibles: Vec<(TraitTypeId, RawVc, i32)>,
+    pub unfinished: i32,
+    pub dirty_tasks_update: Vec<(TaskId, i32)>,
+    pub collectibles: Vec<(TraitTypeId, RawVc, i32)>,
 }
 
 impl TaskChange {
@@ -99,13 +99,16 @@ impl TaskChange {
 }
 
 pub struct TaskAggregationContext<'a> {
-    pub turbo_tasks: &'a dyn TurboTasksApi,
+    pub turbo_tasks: &'a dyn TurboTasksBackendApi<MemoryBackend>,
     pub backend: &'a MemoryBackend,
-    pub tasks_to_schedule: Mutex<Option<HashSet<TaskId, BuildNoHashHasher<TaskId>>>>,
+    pub tasks_to_schedule: Mutex<Option<AutoSet<TaskId, BuildNoHashHasher<TaskId>>>>,
 }
 
 impl<'a> TaskAggregationContext<'a> {
-    pub fn new(turbo_tasks: &'a dyn TurboTasksApi, backend: &'a MemoryBackend) -> Self {
+    pub fn new(
+        turbo_tasks: &'a dyn TurboTasksBackendApi<MemoryBackend>,
+        backend: &'a MemoryBackend,
+    ) -> Self {
         Self {
             turbo_tasks,
             backend,
@@ -119,6 +122,16 @@ impl<'a> TaskAggregationContext<'a> {
             .as_mut()
             .map(|t| t.remove(&task))
             .unwrap_or(false)
+    }
+
+    pub fn schedule_tasks_if_needed(&mut self) {
+        let task_to_schedule = self.tasks_to_schedule.get_mut();
+        if let Some(task_to_schedule) = task_to_schedule.as_mut() {
+            let task_to_schedule = take(task_to_schedule);
+            if !task_to_schedule.is_empty() {
+                turbo_tasks.schedule_notify_tasks_set(&task_to_schedule);
+            }
+        }
     }
 }
 
@@ -145,7 +158,7 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
     type RootInfoType = RootInfoType;
 
     fn is_blue(&self, reference: TaskId) -> bool {
-        false
+        self.backend.with_task(reference, |task| task.is_blue())
     }
 
     fn item(&self, reference: TaskId) -> Self::ItemLock<'_> {

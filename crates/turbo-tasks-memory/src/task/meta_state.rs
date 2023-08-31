@@ -7,10 +7,7 @@ use parking_lot::{RwLockReadGuard, RwLockWriteGuard};
 use turbo_tasks::{StatsType, TaskId};
 
 use super::{PartialTaskState, Task, TaskState, UnloadedTaskState};
-use crate::{
-    map_guard::{ReadGuard, WriteGuard},
-    scope::TaskScopes,
-};
+use crate::map_guard::{ReadGuard, WriteGuard};
 
 pub(super) enum TaskMetaState {
     Full(Box<TaskState>),
@@ -239,31 +236,6 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
                     TaskMetaState::as_partial_mut,
                 ))
             }
-        }
-    }
-
-    pub(super) fn scopes_and_children(
-        &mut self,
-    ) -> (&mut TaskScopes, &AutoSet<TaskId, BuildNoHashHasher<TaskId>>) {
-        match self {
-            TaskMetaStateWriteGuard::Full(state) => {
-                let TaskState {
-                    ref mut scopes,
-                    ref children,
-                    ..
-                } = **state;
-                (scopes, children)
-            }
-            TaskMetaStateWriteGuard::Partial(state) => {
-                let PartialTaskState { ref mut scopes, .. } = **state;
-                static EMPTY: Lazy<AutoSet<TaskId, BuildNoHashHasher<TaskId>>> =
-                    Lazy::new(AutoSet::default);
-                (scopes, &*EMPTY)
-            }
-            TaskMetaStateWriteGuard::Unloaded(_) => unreachable!(
-                "TaskMetaStateWriteGuard::scopes_and_children must be called with at least a \
-                 partial state"
-            ),
         }
     }
 

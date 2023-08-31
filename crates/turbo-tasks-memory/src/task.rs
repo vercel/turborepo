@@ -32,14 +32,16 @@ use turbo_tasks::{
 };
 
 use crate::{
-    aggregation::{TaskAggregationContext, TaskChange},
-    aggregation_tree::{aggregation_info, aggregation_info_from_item, AggregationTreeLeaf},
+    aggregation_tree::{
+        aggregation_info, aggregation_info_from_item, AggregationContext, AggregationTreeLeaf,
+    },
     cell::Cell,
     count_hash_set::CountHashSet,
     gc::{to_exp_u8, GcPriority, GcStats, GcTaskState},
     memory_backend::Job,
     output::{Output, OutputContent},
     stats::{ReferenceType, StatsReferences, StatsTaskType},
+    task::aggregation::{TaskAggregationContext, TaskChange},
     MemoryBackend,
 };
 
@@ -67,16 +69,6 @@ task_local! {
 }
 
 type OnceTaskFn = Mutex<Option<Pin<Box<dyn Future<Output = Result<RawVc>> + Send + 'static>>>>;
-
-struct ReadTaskCollectiblesTaskType {
-    task: TaskId,
-    trait_type: TraitTypeId,
-}
-
-struct ReadScopeCollectiblesTaskType {
-    scope: TaskScopeId,
-    trait_type: TraitTypeId,
-}
 
 /// Different Task types
 enum TaskType {
@@ -109,13 +101,6 @@ impl TaskTypeForDescription {
         match task_type {
             TaskType::Root(..) => Self::Root,
             TaskType::Once(..) => Self::Once,
-            TaskType::ReadTaskCollectibles(box ReadTaskCollectiblesTaskType {
-                trait_type, ..
-            }) => Self::ReadTaskCollectibles(*trait_type),
-            TaskType::ReadScopeCollectibles(box ReadScopeCollectiblesTaskType {
-                trait_type,
-                ..
-            }) => Self::ReadScopeCollectibles(*trait_type),
             TaskType::Persistent(ty) => Self::Persistent(ty.clone()),
         }
     }
@@ -388,20 +373,24 @@ impl MaybeCollectibles {
 
     /// Emits a collectible.
     fn emit(&mut self, trait_type: TraitTypeId, value: RawVc) -> bool {
-        *self
+        let value = self
             .inner
             .get_or_insert_default()
             .entry((trait_type, value))
-            .or_default() += 1;
+            .or_default();
+        *value += 1;
+        *value == 1
     }
 
     /// Unemits a collectible.
     fn unemit(&mut self, trait_type: TraitTypeId, value: RawVc, count: u32) -> bool {
-        *self
+        let value = self
             .inner
             .get_or_insert_default()
             .entry((trait_type, value))
-            .or_default() -= count as i32;
+            .or_default();
+        *value -= count as i32;
+        *value == 0
     }
 }
 
@@ -448,7 +437,7 @@ enum TaskStateType {
 use TaskStateType::*;
 
 use self::{
-    aggregation::TaskAggregationTreeLeaf,
+    aggregation::{RootInfoType, TaskAggregationTreeLeaf},
     meta_state::{
         FullTaskWriteGuard, TaskMetaState, TaskMetaStateReadGuard, TaskMetaStateWriteGuard,
     },
@@ -514,6 +503,11 @@ impl Task {
         }
     }
 
+    pub(crate) fn is_blue(&self) -> bool {
+        // TODO implement something that hashes the type
+        false
+    }
+
     pub(crate) fn get_function_name(&self) -> Option<&'static str> {
         if let TaskType::Persistent(ty) = &self.ty {
             match &**ty {
@@ -554,12 +548,6 @@ impl Task {
                         registry::get_trait(*trait_type).name
                     )
                 }
-                PersistentTaskType::Collectibles(task, trait_type) => format!(
-                    "[{}] [collectibles] {} of [{}]",
-                    id,
-                    registry::get_trait(*trait_type).name,
-                    task
-                ),
             },
         }
     }
@@ -576,7 +564,12 @@ impl Task {
         Self::get_event_description_static(self.id, &self.ty)
     }
 
-    pub(crate) fn remove_dependency(dep: TaskDependency, reader: TaskId, backend: &MemoryBackend) {
+    pub(crate) fn remove_dependency(
+        dep: TaskDependency,
+        reader: TaskId,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) {
         match dep {
             TaskDependency::TaskOutput(task) => {
                 backend.with_task(task, |task| {
@@ -601,14 +594,24 @@ impl Task {
     }
 
     #[cfg(not(feature = "report_expensive"))]
-    fn clear_dependencies(&self, dependencies: AutoSet<TaskDependency>, backend: &MemoryBackend) {
+    fn clear_dependencies(
+        &self,
+        dependencies: AutoSet<TaskDependency>,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) {
         for dep in dependencies.into_iter() {
-            Task::remove_dependency(dep, self.id, backend);
+            Task::remove_dependency(dep, self.id, backend, turbo_tasks);
         }
     }
 
     #[cfg(feature = "report_expensive")]
-    fn clear_dependencies(&self, dependencies: AutoSet<TaskDependency>, backend: &MemoryBackend) {
+    fn clear_dependencies(
+        &self,
+        dependencies: AutoSet<TaskDependency>,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) {
         use std::time::Instant;
 
         use turbo_tasks::util::FormatDuration;
@@ -617,7 +620,7 @@ impl Task {
         let count = dependencies.len();
 
         for dep in dependencies.into_iter() {
-            Task::remove_dependency(dep, self.id, backend);
+            Task::remove_dependency(dep, self.id, backend, turbo_tasks);
         }
         let elapsed = start.elapsed();
         if elapsed.as_millis() >= 10 || count > 10000 {
@@ -683,22 +686,20 @@ impl Task {
                     count_as_finished: false,
                 };
                 state.stats.increment_executions();
-                // TODO we need to reconsider the approach of doing scope changes in background
-                // since they affect collectibles and need to be computed eagerly to allow
-                // strongly_consistent to work properly.
-                // We could move this operation to the point when the task execution is
-                // finished.
                 if !state.children.is_empty() {
                     let set = take(&mut state.children);
+                    let context = TaskAggregationContext::new(turbo_tasks, backend);
                     for child in set {
                         state
                             .aggregation_leaf
                             .remove_child(self.is_blue(), &context, &child);
                     }
                 }
-                let change = TaskChange::default();
+                let mut change = TaskChange::default();
                 if let Some(collectibles) = state.collectibles.take_collectibles() {
-                    change.collectibles
+                    for ((trait_type, value), count) in collectibles.into_iter() {
+                        change.collectibles.push((trait_type, value, -count));
+                    }
                 }
             }
             Dirty { .. } => {
@@ -765,23 +766,15 @@ impl Task {
                         turbo_tasks,
                     ))
                 }
-                PersistentTaskType::Collectibles(task_id, trait_type) => {
-                    // Connect the task to the current task. This makes strongly consistent behaving
-                    // as expected and we can look up the collectibles in the current scope.
-                    self.connect_child_internal(state, *task_id, backend, turbo_tasks);
-                    // state was dropped by previous method
-                    Box::pin(Self::execute_collectibles(
-                        self.id,
-                        *task_id,
-                        *trait_type,
-                        turbo_tasks.pin(),
-                    ))
-                }
             },
         }
     }
 
-    pub(crate) fn mark_as_finished(&self, backend: &MemoryBackend) {
+    pub(crate) fn mark_as_finished(
+        &self,
+        backend: &MemoryBackend,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) {
         let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() else {
             return;
         };
@@ -798,7 +791,7 @@ impl Task {
         *count_as_finished = true;
         state.aggregation_leaf.change(
             &TaskAggregationContext::new(turbo_tasks, backend),
-            TaskChange {
+            &TaskChange {
                 unfinished: -1,
                 ..Default::default()
             },
@@ -889,7 +882,7 @@ impl Task {
                     if !count_as_finished {
                         state.aggregation_leaf.change(
                             &TaskAggregationContext::new(turbo_tasks, backend),
-                            TaskChange {
+                            &TaskChange {
                                 unfinished: -1,
                                 ..Default::default()
                             },
@@ -911,11 +904,12 @@ impl Task {
             };
         }
         if !dependencies.is_empty() {
-            self.clear_dependencies(dependencies, backend);
+            self.clear_dependencies(dependencies, backend, turbo_tasks);
         }
 
         if let TaskType::Once(_) = self.ty {
-            self.remove_root_or_initial_scope(backend, turbo_tasks);
+            // unset the root type, so tasks below are no longer active
+            aggregation_info(&context, self.id).root_type = None;
         }
 
         schedule_task
@@ -977,13 +971,13 @@ impl Task {
                     let should_schedule = force_schedule
                         || state.aggregation_leaf.get_root_info(
                             &TaskAggregationContext::new(turbo_tasks, backend),
-                            RootInfoType::IsActive,
+                            &RootInfoType::IsActive,
                         )
                         || {
                             let context = TaskAggregationContext::new(turbo_tasks, backend);
                             state.aggregation_leaf.change(
                                 &context,
-                                TaskChange {
+                                &TaskChange {
                                     unfinished: 1,
                                     dirty_tasks_update: vec![(self.id, 1)],
                                     ..Default::default()
@@ -992,7 +986,7 @@ impl Task {
                             if context.take_scheduled(self.id) {
                                 state.aggregation_leaf.change(
                                     &context,
-                                    TaskChange {
+                                    &TaskChange {
                                         dirty_tasks_update: vec![(self.id, -1)],
                                         ..Default::default()
                                     },
@@ -1043,7 +1037,7 @@ impl Task {
             }
 
             if !clear_dependencies.is_empty() {
-                self.clear_dependencies(clear_dependencies, backend);
+                self.clear_dependencies(clear_dependencies, backend, turbo_tasks);
             }
         }
     }
@@ -1217,7 +1211,6 @@ impl Task {
                 PersistentTaskType::ResolveTrait(t, n, _) => {
                     StatsTaskType::ResolveTrait(*t, n.to_string())
                 }
-                PersistentTaskType::Collectibles(_, t) => StatsTaskType::Collectibles(*t),
             },
         }
     }
@@ -1250,9 +1243,6 @@ impl Task {
                             refs.push((ReferenceType::Input, task));
                         }
                     }
-                }
-                PersistentTaskType::Collectibles(task) => {
-                    refs.push((ReferenceType::Input, task));
                 }
             }
         }
@@ -1295,6 +1285,7 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         if state.children.insert(child_id) {
+            let context = TaskAggregationContext::new(turbo_tasks, backend);
             state
                 .aggregation_leaf
                 .add_child(self.is_blue(), &context, &child_id);
@@ -1356,105 +1347,6 @@ impl Task {
         }
     }
 
-    async fn execute_read_task_collectibles(
-        read_task_id: TaskId,
-        task_id: TaskId,
-        trait_type_id: TraitTypeId,
-        turbo_tasks: Arc<dyn TurboTasksBackendApi<MemoryBackend>>,
-    ) -> Result<RawVc> {
-        Self::execute_read_collectibles(
-            read_task_id,
-            |turbo_tasks| {
-                let backend = turbo_tasks.backend();
-                backend.with_task(task_id, |task| {
-                    let state =
-                        task.ensure_root_scoped(task.full_state_mut(), backend, turbo_tasks);
-                    if let TaskScopes::Root(scope_id) = state.scopes {
-                        backend.with_scope(scope_id, |scope| {
-                            scope.read_collectibles_and_children(
-                                scope_id,
-                                trait_type_id,
-                                read_task_id,
-                            )
-                        })
-                    } else {
-                        unreachable!();
-                    }
-                })
-            },
-            trait_type_id,
-            turbo_tasks,
-        )
-        .await
-    }
-
-    async fn execute_read_scope_collectibles(
-        read_task_id: TaskId,
-        scope_id: TaskScopeId,
-        trait_type_id: TraitTypeId,
-        turbo_tasks: Arc<dyn TurboTasksBackendApi<MemoryBackend>>,
-    ) -> Result<RawVc> {
-        Self::execute_read_collectibles(
-            read_task_id,
-            |turbo_tasks| {
-                let backend = turbo_tasks.backend();
-                backend.with_scope(scope_id, |scope| {
-                    scope.read_collectibles_and_children(scope_id, trait_type_id, read_task_id)
-                })
-            },
-            trait_type_id,
-            turbo_tasks,
-        )
-        .await
-    }
-
-    async fn execute_read_collectibles(
-        read_task_id: TaskId,
-        read_collectibles_and_children: impl Fn(
-            &dyn TurboTasksBackendApi<MemoryBackend>,
-        ) -> Result<
-            (CountHashSet<RawVc>, Vec<TaskScopeId>),
-            EventListener,
-        >,
-        trait_type_id: TraitTypeId,
-        turbo_tasks: Arc<dyn TurboTasksBackendApi<MemoryBackend>>,
-    ) -> Result<RawVc> {
-        let (mut current, children) = loop {
-            // For performance reasons we only want to read collectibles when there are no
-            // unfinished tasks anymore.
-            match read_collectibles_and_children(&*turbo_tasks) {
-                Ok(r) => break r,
-                Err(listener) => listener.await,
-            }
-        };
-        let backend = turbo_tasks.backend();
-        let children = children
-            .into_iter()
-            .filter_map(|child| {
-                backend.with_scope(child, |scope| {
-                    scope.is_propagating_collectibles().then(|| {
-                        let task = backend.get_or_create_read_scope_collectibles_task(
-                            child,
-                            trait_type_id,
-                            read_task_id,
-                            &*turbo_tasks,
-                        );
-                        unsafe { <Vc<AutoSet<RawVc>>>::from_task_id(task) }
-                    })
-                })
-            })
-            .try_join()
-            .await?;
-        for child in children {
-            for v in child.iter() {
-                current.add(*v);
-            }
-        }
-        Ok(Vc::into_raw(Vc::<AutoSet<RawVc>>::cell(
-            current.iter().copied().collect(),
-        )))
-    }
-
     pub(crate) fn read_task_collectibles(
         &self,
         reader: TaskId,
@@ -1480,19 +1372,16 @@ impl Task {
     ) {
         let mut state = self.full_state_mut();
         if state.collectibles.emit(trait_type, collectible) {
-            let tasks = state
-                .scopes
-                .iter()
-                .flat_map(|id| {
-                    backend.with_scope(id, |scope| {
-                        let mut state = scope.state.lock();
-                        state.add_collectible(trait_type, collectible)
-                    })
-                })
-                .flat_map(|e| e.notify)
-                .collect::<AutoSet<_, _>>();
+            let context = TaskAggregationContext::new(turbo_tasks, backend);
+            state.aggregation_leaf.change(
+                &context,
+                &TaskChange {
+                    collectibles: vec![(trait_type, collectible, 1)],
+                    ..Default::default()
+                },
+            );
             drop(state);
-            turbo_tasks.schedule_notify_tasks_set(&tasks);
+            context.schedule_tasks_if_needed();
         }
     }
 
@@ -1505,19 +1394,16 @@ impl Task {
     ) {
         let mut state = self.full_state_mut();
         if state.collectibles.unemit(trait_type, collectible) {
-            let mut tasks = AutoSet::default();
-            state
-                .scopes
-                .iter()
-                .flat_map(|id| {
-                    backend.with_scope(id, |scope| {
-                        let mut state = scope.state.lock();
-                        state.remove_collectible(trait_type, collectible)
-                    })
-                })
-                .for_each(|e| tasks.extend(e.notify));
+            let context = TaskAggregationContext::new(turbo_tasks, backend);
+            state.aggregation_leaf.change(
+                &context,
+                &TaskChange {
+                    collectibles: vec![(trait_type, collectible, -1)],
+                    ..Default::default()
+                },
+            );
             drop(state);
-            turbo_tasks.schedule_notify_tasks_set(&tasks);
+            context.schedule_tasks_if_needed();
         }
     }
 
@@ -1539,7 +1425,6 @@ impl Task {
         now_relative_to_start: Duration,
         max_priority: GcPriority,
         task_duration_cache: &mut HashMap<TaskId, Duration, BuildNoHashHasher<TaskId>>,
-        scope_active_cache: &mut HashMap<TaskScopeId, bool, BuildNoHashHasher<TaskScopeId>>,
         stats: &mut GcStats,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
@@ -1568,21 +1453,6 @@ impl Task {
             }
 
             if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
-                fn is_active(
-                    state: &TaskState,
-                    scope_active_cache: &mut HashMap<
-                        TaskScopeId,
-                        bool,
-                        BuildNoHashHasher<TaskScopeId>,
-                    >,
-                    backend: &MemoryBackend,
-                ) -> bool {
-                    state.scopes.iter().any(|scope| {
-                        *scope_active_cache.entry(scope).or_insert_with(|| {
-                            backend.with_scope(scope, |scope| scope.state.lock().is_active())
-                        })
-                    })
-                }
                 if state.stateful {
                     stats.no_gc_possible += 1;
                     return None;
@@ -1602,7 +1472,11 @@ impl Task {
 
                 // Check if the task need to be activated again
                 let active = if state.gc.inactive {
-                    if is_active(&state, scope_active_cache, backend) {
+                    let active = state.aggregation_leaf.get_root_info(
+                        &TaskAggregationContext::new(turbo_tasks, backend),
+                        RootInfoType::IsActive,
+                    );
+                    if active {
                         state.gc.inactive = false;
                         true
                     } else {
@@ -1850,41 +1724,27 @@ impl Task {
             Done {
                 ref mut dependencies,
             } => {
-                for (i, scope) in scopes.iter().enumerate() {
-                    let active = backend.with_scope(scope, |scope| {
-                        scope.increment_unfinished_tasks(backend);
-                        let mut scope_state = scope.state.lock();
-                        if scope_state.is_active() {
-                            drop(scope_state);
-                            log_scope_update!(
-                                "add unfinished task (unload): {} -> {}",
-                                *scope.id,
-                                *self.id
-                            );
-                            scope.decrement_unfinished_tasks(backend);
-                            true
-                        } else {
-                            scope_state.add_dirty_task(self.id);
-                            false
-                        }
-                    });
-                    if active {
-                        // Unloading is only possible for inactive tasks.
-                        // We need to abort the unloading, so revert changes done so far.
-                        for scope in scopes.iter().take(i) {
-                            backend.with_scope(scope, |scope| {
-                                scope.decrement_unfinished_tasks(backend);
-                                log_scope_update!(
-                                    "remove unfinished task (undo unload): {} -> {}",
-                                    *scope.id,
-                                    *self.id
-                                );
-                                let mut scope = scope.state.lock();
-                                scope.remove_dirty_task(self.id);
-                            });
-                        }
-                        return false;
-                    }
+                let context = TaskAggregationContext::new(turbo_tasks, backend);
+                state.aggregation_leaf.change(
+                    &TaskAggregationContext::new(turbo_tasks, backend),
+                    &TaskChange {
+                        unfinished: 1,
+                        dirty_tasks_update: vec![(self.id, 1)],
+                        ..Default::default()
+                    },
+                );
+                if context.take_scheduled(self.id) {
+                    // Unloading is only possible for inactive tasks.
+                    // We need to abort the unloading, so revert changes done so far.
+                    state.aggregation_leaf.change(
+                        &TaskAggregationContext::new(turbo_tasks, backend),
+                        &TaskChange {
+                            unfinished: -1,
+                            dirty_tasks_update: vec![(self.id, -1)],
+                            ..Default::default()
+                        },
+                    );
+                    return false;
                 }
                 clear_dependencies = Some(take(dependencies));
             }
@@ -1925,30 +1785,33 @@ impl Task {
             gc: _,
         } = old_state.into_full().unwrap();
 
+        let context = TaskAggregationContext::new(turbo_tasks, backend);
+
         // Remove all children, as they will be added again when this task is executed
         // again
         if !children.is_empty() {
-            remove_from_scopes(children, &scopes, backend, turbo_tasks);
+            for child in children {
+                aggregation_leaf.remove_child(self.is_blue(), &context, &child);
+            }
         }
 
         // Remove all collectibles, as they will be added again when this task is
         // executed again.
         if let Some(collectibles) = collectibles.into_inner() {
-            remove_collectible_from_scopes(
-                collectibles.emitted,
-                collectibles.unemitted,
-                &scopes,
-                backend,
-                turbo_tasks,
+            aggregation_leaf.change(
+                &context,
+                &TaskChange {
+                    collectibles: collectibles
+                        .into_iter()
+                        .map(|((t, r), c)| (t, r, -c))
+                        .collect(),
+                    ..Default::default()
+                },
             );
         }
 
         // TODO aggregation_leaf
-        let unset = if let TaskScopes::Inner(ref scopes, _) = scopes {
-            scopes.is_unset()
-        } else {
-            false
-        };
+        let unset = todo!();
 
         let stats_type = match stats {
             TaskStats::Essential(_) => StatsType::Essential,
@@ -1959,7 +1822,6 @@ impl Task {
         } else {
             *state = TaskMetaState::Partial(Box::new(PartialTaskState {
                 aggregation_leaf,
-                scopes,
                 stats_type,
             }));
         }
@@ -1977,119 +1839,10 @@ impl Task {
 
         // We can clear the dependencies as we are already marked as dirty
         if let Some(dependencies) = clear_dependencies {
-            self.clear_dependencies(dependencies, backend);
+            self.clear_dependencies(dependencies, backend, turbo_tasks);
         }
 
         true
-    }
-}
-
-fn remove_collectible_from_scopes(
-    emitted: AutoSet<(TraitTypeId, RawVc)>,
-    unemitted: AutoSet<(TraitTypeId, RawVc)>,
-    task_scopes: &TaskScopes,
-    backend: &MemoryBackend,
-    turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-) {
-    task_scopes.iter().for_each(|id| {
-        backend.with_scope(id, |scope| {
-            let mut tasks = AutoSet::default();
-            {
-                let mut state = scope.state.lock();
-                emitted
-                    .iter()
-                    .filter_map(|(trait_id, collectible)| {
-                        state.remove_collectible(*trait_id, *collectible)
-                    })
-                    .for_each(|e| tasks.extend(e.notify));
-
-                unemitted
-                    .iter()
-                    .filter_map(|(trait_id, collectible)| {
-                        state.add_collectible(*trait_id, *collectible)
-                    })
-                    .for_each(|e| tasks.extend(e.notify));
-            };
-            turbo_tasks.schedule_notify_tasks_set(&tasks);
-        })
-    })
-}
-
-fn remove_from_scopes(
-    tasks: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
-    task_scopes: &TaskScopes,
-    backend: &MemoryBackend,
-    turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-) {
-    match task_scopes {
-        TaskScopes::Root(scope) => {
-            turbo_tasks.schedule_backend_foreground_job(
-                backend.create_backend_job(Job::RemoveFromScope(tasks, *scope)),
-            );
-        }
-        TaskScopes::Inner(ref scopes, _) => {
-            turbo_tasks.schedule_backend_foreground_job(backend.create_backend_job(
-                Job::RemoveFromScopes(tasks, scopes.iter().copied().collect()),
-            ));
-        }
-    }
-}
-
-/// Heuristic to decide when to split off work in `run_add_to_scope_queue` and
-/// `run_remove_from_scope_queue`.
-const SPLIT_OFF_QUEUE_AT: usize = 100;
-
-/// Adds a list of tasks and their children to a scope, recursively.
-pub fn run_add_to_scope_queue(
-    mut queue: VecDeque<TaskId>,
-    id: TaskScopeId,
-    merging_scopes: usize,
-    backend: &MemoryBackend,
-    turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-) {
-    while let Some(child) = queue.pop_front() {
-        backend.with_task(child, |child| {
-            child.add_to_scope_internal_shallow(
-                id,
-                merging_scopes,
-                backend,
-                turbo_tasks,
-                &mut queue,
-            );
-        });
-        #[cfg(not(feature = "inline_add_to_scope"))]
-        while queue.len() > SPLIT_OFF_QUEUE_AT {
-            let split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
-            turbo_tasks.schedule_backend_foreground_job(backend.create_backend_job(
-                Job::AddToScopeQueue {
-                    queue: split_off_queue,
-                    scope: id,
-                    merging_scopes,
-                },
-            ));
-        }
-    }
-}
-
-/// Removes a list of tasks and their children from a scope, recursively.
-pub fn run_remove_from_scope_queue(
-    mut queue: VecDeque<TaskId>,
-    id: TaskScopeId,
-    backend: &MemoryBackend,
-    turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-) {
-    while let Some(child) = queue.pop_front() {
-        backend.with_task(child, |child| {
-            child.remove_from_scope_internal_shallow(id, backend, turbo_tasks, &mut queue);
-        });
-        #[cfg(not(feature = "inline_remove_from_scope"))]
-        while queue.len() > SPLIT_OFF_QUEUE_AT {
-            let split_off_queue = queue.split_off(queue.len() - SPLIT_OFF_QUEUE_AT);
-
-            turbo_tasks.schedule_backend_foreground_job(
-                backend.create_backend_job(Job::RemoveFromScopeQueue(split_off_queue, id)),
-            );
-        }
     }
 }
 

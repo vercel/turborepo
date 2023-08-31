@@ -2,7 +2,6 @@ use std::{
     borrow::{Borrow, Cow},
     cell::RefCell,
     cmp::min,
-    collections::VecDeque,
     future::Future,
     hash::{BuildHasher, BuildHasherDefault, Hash},
     pin::Pin,
@@ -19,7 +18,7 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use nohash_hasher::BuildNoHashHasher;
 use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
-use tracing::{trace_span, Instrument};
+use tracing::trace_span;
 use turbo_tasks::{
     backend::{
         Backend, BackendJobId, CellContent, PersistentTaskType, TaskExecutionSpec,
@@ -36,11 +35,7 @@ use crate::{
     gc::GcQueue,
     output::Output,
     priority_pair::PriorityPair,
-    scope::{TaskScope, TaskScopeId},
-    task::{
-        run_add_to_scope_queue, run_remove_from_scope_queue, Task, TaskDependency,
-        DEPENDENCIES_TO_TRACK,
-    },
+    task::{Task, TaskDependency, DEPENDENCIES_TO_TRACK},
 };
 
 pub struct MemoryBackend {
@@ -181,15 +176,11 @@ impl MemoryBackend {
         key: K,
         new_id: Unused<TaskId>,
         task: Task,
-        root_scoped: bool,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> TaskId {
         let new_id = new_id.into();
         // Safety: We have a fresh task id that nobody knows about yet
         let task = unsafe { self.memory_tasks.insert(*new_id, task) };
-        if root_scoped {
-            task.make_root_scoped(self, turbo_tasks);
-        }
         let result_task = match task_cache.entry(key) {
             Entry::Vacant(entry) => {
                 // This is the most likely case
@@ -532,7 +523,6 @@ impl Backend for MemoryBackend {
                 task_type,
                 id,
                 task,
-                false,
                 turbo_tasks,
             )
         }
@@ -550,9 +540,9 @@ impl Backend for MemoryBackend {
     fn mark_own_task_as_finished(
         &self,
         task: TaskId,
-        _turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
-        self.with_task(task, |task| task.mark_as_finished(self))
+        self.with_task(task, |task| task.mark_as_finished(self, turbo_tasks))
     }
 
     fn create_transient_task(
