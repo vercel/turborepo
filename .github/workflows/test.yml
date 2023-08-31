@@ -1277,7 +1277,7 @@ jobs:
 
         # workspaces are added here as their lint issues are fixed
       - name: Lint check
-        run: turbo run lint --filter=create-turbo --filter=eslint-config-turbo --filter=eslint-plugin-turbo --filter=turbo-ignore --filter=@turbo/test-utils --filter=@turbo/types --filter=@turbo/workspaces --filter=@turbo/gen --filter=@turbo/utils
+        run: turbo run lint --filter=create-turbo --filter=eslint-config-turbo --filter=eslint-plugin-turbo --filter=turbo-ignore --filter=@turbo/test-utils --filter=@turbo/types --filter=@turbo/workspaces --filter=@turbo/gen --filter=@turbo/codemod
 
   final:
     name: Ok

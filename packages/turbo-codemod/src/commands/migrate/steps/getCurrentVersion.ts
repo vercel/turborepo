@@ -2,7 +2,7 @@ import { type Project } from "@turbo/workspaces";
 import { exec } from "../utils";
 import type { MigrateCommandOptions } from "../types";
 
-function getCurrentVersion(
+export function getCurrentVersion(
   project: Project,
   opts: MigrateCommandOptions
 ): string | undefined {
@@ -27,11 +27,6 @@ function getCurrentVersion(
   if (packageManager === "pnpm") {
     return exec(`pnpm turbo --version`, { cwd: project.paths.root });
   }
-  if (packageManager === "npm") {
-    return exec(`npm exec -c 'turbo --version'`, { cwd: project.paths.root });
-  }
 
-  return undefined;
+  return exec(`npm exec -c 'turbo --version'`, { cwd: project.paths.root });
 }
-
-export default getCurrentVersion;

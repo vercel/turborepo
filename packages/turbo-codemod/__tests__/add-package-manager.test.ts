@@ -1,12 +1,10 @@
-import { transformer } from "../src/transforms/add-package-manager";
-import { setupTestFixtures } from "@turbo/test-utils";
-import { TransformerResults } from "../src/runner";
-import { TransformerOptions } from "../src/types";
-
-// imports for mocks
 import fs from "fs-extra";
 import * as turboWorkspaces from "@turbo/workspaces";
 import * as turboUtils from "@turbo/utils";
+import { setupTestFixtures } from "@turbo/test-utils";
+import { transformer } from "../src/transforms/add-package-manager";
+import type { TransformerResults } from "../src/runner";
+import type { TransformerOptions } from "../src/types";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
 jest.mock("@turbo/workspaces", () => ({

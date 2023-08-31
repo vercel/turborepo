@@ -1,10 +1,11 @@
-import path from "path";
-import fs from "fs-extra";
+import path from "node:path";
+import { readJsonSync, existsSync } from "fs-extra";
 import { gte } from "semver";
-
 import {
   getAvailablePackageManagers,
   getPackageManagersBinPaths,
+  logger,
+  type PackageJson,
 } from "@turbo/utils";
 import { type Project, type PackageManager } from "@turbo/workspaces";
 import { exec } from "../utils";
@@ -13,7 +14,7 @@ type InstallType = "dependencies" | "devDependencies";
 
 function getGlobalUpgradeCommand(
   packageManager: PackageManager,
-  to: string = "latest"
+  to = "latest"
 ) {
   switch (packageManager) {
     case "yarn":
@@ -53,15 +54,15 @@ function getLocalUpgradeCommand({
           installType === "devDependencies" && "--dev",
         ]);
         // yarn 1.x
-      } else {
-        return renderCommand([
-          "yarn",
-          "add",
-          `turbo@${to}`,
-          installType === "devDependencies" && "--dev",
-          isUsingWorkspaces && "-W",
-        ]);
       }
+      return renderCommand([
+        "yarn",
+        "add",
+        `turbo@${to}`,
+        installType === "devDependencies" && "--dev",
+        isUsingWorkspaces && "-W",
+      ]);
+
     case "npm":
       return renderCommand([
         "npm",
@@ -83,12 +84,12 @@ function getLocalUpgradeCommand({
 function getInstallType({ root }: { root: string }): InstallType | undefined {
   // read package.json to make sure we have a reference to turbo
   const packageJsonPath = path.join(root, "package.json");
-  if (!fs.existsSync(packageJsonPath)) {
-    console.error(`Unable to find package.json at ${packageJsonPath}`);
+  if (!existsSync(packageJsonPath)) {
+    logger.error(`Unable to find package.json at ${packageJsonPath}`);
     return undefined;
   }
 
-  const packageJson = fs.readJsonSync(packageJsonPath);
+  const packageJson = readJsonSync(packageJsonPath) as PackageJson;
   const isDevDependency =
     packageJson.devDependencies && "turbo" in packageJson.devDependencies;
   const isDependency =
@@ -108,7 +109,7 @@ function getInstallType({ root }: { root: string }): InstallType | undefined {
 
   We try global first to let turbo handle the inference, then we try local.
 **/
-export default async function getTurboUpgradeCommand({
+export async function getTurboUpgradeCommand({
   project,
   to,
 }: {
@@ -135,23 +136,22 @@ export default async function getTurboUpgradeCommand({
   if (turboBinaryPathFromGlobal && globalPackageManager) {
     // figure which package manager we need to upgrade
     return getGlobalUpgradeCommand(globalPackageManager, to);
-  } else {
-    const { packageManager } = project;
-    // we didn't find a global install, so we'll try to find a local one
-    const isUsingWorkspaces = project.workspaceData.globs.length > 0;
-    const installType = getInstallType({ root: project.paths.root });
-    const availablePackageManagers = await getAvailablePackageManagers();
-    const version = availablePackageManagers[packageManager];
+  }
+  const { packageManager } = project;
+  // we didn't find a global install, so we'll try to find a local one
+  const isUsingWorkspaces = project.workspaceData.globs.length > 0;
+  const installType = getInstallType({ root: project.paths.root });
+  const availablePackageManagers = await getAvailablePackageManagers();
+  const version = availablePackageManagers[packageManager];
 
-    if (packageManager && version && installType) {
-      return getLocalUpgradeCommand({
-        packageManager,
-        packageManagerVersion: version,
-        installType,
-        isUsingWorkspaces,
-        to,
-      });
-    }
+  if (version && installType) {
+    return getLocalUpgradeCommand({
+      packageManager,
+      packageManagerVersion: version,
+      installType,
+      isUsingWorkspaces,
+      to,
+    });
   }
 
   return undefined;
