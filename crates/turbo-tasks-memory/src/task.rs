@@ -1,3 +1,4 @@
+mod aggregation;
 mod meta_state;
 mod stats;
 
@@ -211,6 +212,7 @@ impl Debug for Task {
 
 /// The full state of a [Task], it includes all information.
 struct TaskState {
+    aggregation_leaf: TaskAggregationTreeLeaf,
     scopes: TaskScopes,
 
     // TODO using a Atomic might be possible here
@@ -247,6 +249,7 @@ impl TaskState {
         stats_type: StatsType,
     ) -> Self {
         Self {
+            aggregation_leaf: TaskAggregationTreeLeaf::new(),
             scopes: Default::default(),
             state_type: Dirty {
                 event: Event::new(move || format!("TaskState({})::event", description())),
@@ -270,6 +273,7 @@ impl TaskState {
         stats_type: StatsType,
     ) -> Self {
         Self {
+            aggregation_leaf: TaskAggregationTreeLeaf::new(),
             scopes: TaskScopes::Inner(CountHashSet::from([scope]), 0),
             state_type: Scheduled {
                 event: Event::new(move || format!("TaskState({})::event", description())),
@@ -293,6 +297,7 @@ impl TaskState {
         stats_type: StatsType,
     ) -> Self {
         Self {
+            aggregation_leaf: TaskAggregationTreeLeaf::new(),
             scopes: TaskScopes::Root(scope),
             state_type: Dirty {
                 event: Event::new(move || format!("TaskState({})::event", description())),
@@ -318,12 +323,14 @@ impl TaskState {
 /// but is still attached to scopes.
 struct PartialTaskState {
     stats_type: StatsType,
+    aggregation_leaf: TaskAggregationTreeLeaf,
     scopes: TaskScopes,
 }
 
 impl PartialTaskState {
     fn into_full(self, description: impl Fn() -> String + Send + Sync + 'static) -> TaskState {
         TaskState {
+            aggregation_leaf: self.aggregation_leaf,
             scopes: self.scopes,
             state_type: Dirty {
                 event: Event::new(move || format!("TaskState({})::event", description())),
@@ -357,6 +364,7 @@ fn test_unloaded_task_state_size() {
 impl UnloadedTaskState {
     fn into_full(self, description: impl Fn() -> String + Send + Sync + 'static) -> TaskState {
         TaskState {
+            aggregation_leaf: TaskAggregationTreeLeaf::new(),
             scopes: Default::default(),
             state_type: Dirty {
                 event: Event::new(move || format!("TaskState({})::event", description())),
@@ -374,6 +382,7 @@ impl UnloadedTaskState {
 
     fn into_partial(self) -> PartialTaskState {
         PartialTaskState {
+            aggregation_leaf: TaskAggregationTreeLeaf::new(),
             scopes: TaskScopes::Inner(CountHashSet::new(), 0),
             stats_type: self.stats_type,
         }
@@ -496,8 +505,11 @@ enum TaskStateType {
 
 use TaskStateType::*;
 
-use self::meta_state::{
-    FullTaskWriteGuard, TaskMetaState, TaskMetaStateReadGuard, TaskMetaStateWriteGuard,
+use self::{
+    aggregation::TaskAggregationTreeLeaf,
+    meta_state::{
+        FullTaskWriteGuard, TaskMetaState, TaskMetaStateReadGuard, TaskMetaStateWriteGuard,
+    },
 };
 
 /// Heuristic when a task should switch to root scoped.
@@ -2742,6 +2754,7 @@ impl Task {
             cells,
             output,
             collectibles,
+            aggregation_leaf,
             scopes,
             stats,
             // can be dropped as it will be recomputed on next execution
@@ -2772,6 +2785,7 @@ impl Task {
             );
         }
 
+        // TODO aggregation_leaf
         let unset = if let TaskScopes::Inner(ref scopes, _) = scopes {
             scopes.is_unset()
         } else {
@@ -2785,7 +2799,11 @@ impl Task {
         if unset {
             *state = TaskMetaState::Unloaded(UnloadedTaskState { stats_type });
         } else {
-            *state = TaskMetaState::Partial(Box::new(PartialTaskState { scopes, stats_type }));
+            *state = TaskMetaState::Partial(Box::new(PartialTaskState {
+                aggregation_leaf,
+                scopes,
+                stats_type,
+            }));
         }
         drop(state);
 

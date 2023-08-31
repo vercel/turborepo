@@ -281,4 +281,8 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
             TaskMetaStateWriteGuard::Unloaded(state) => state.into_inner(),
         }
     }
+
+    pub(super) fn ensure_at_least_partial(&mut self) {
+        todo!()
+    }
 }
