@@ -16,12 +16,16 @@ use std::time::Duration;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
 
-pub struct Open(Vec<child::Child>);
-pub struct Closed;
-
+/// A process manager that is responsible for spawning and managing child
+/// processes. When the manager is Open, new child processes can be spawned
+/// using `spawn`. When the manager is Closed, all currently-running children
+/// will be closed, and no new children can be spawned.
 pub struct ProcessManager<T> {
     state: T,
 }
+
+pub struct Open(Vec<child::Child>);
+pub struct Closed;
 
 impl ProcessManager<Closed> {
     pub fn new() -> Self {
@@ -38,18 +42,17 @@ impl ProcessManager<Closed> {
 impl ProcessManager<Open> {
     /// Spawn a new child process to run the given command.
     ///
-    /// Returns a oneshot receiver that will receive the exit code of the
-    /// process when it exits. You do not need to wait for this receiver to
-    /// complete, as the process is already being managed by the manager.
+    /// The handle of the child can be either waited or stopped by the caller,
+    /// as well as the entire process manager.
     pub fn spawn(&mut self, command: child::Command, timeout: Duration) -> child::Child {
-        let mut child = child::Child::spawn(command, child::ShutdownStyle::Graceful(timeout));
+        let child = child::Child::spawn(command, child::ShutdownStyle::Graceful(timeout));
         self.state.0.push(child.clone());
         child
     }
 
     /// Stop the process manager, closing all child processes. On posix
-    /// systems this will send a SIGINT, and on windows it will send a
-    /// CTRL_BREAK_EVENT.
+    /// systems this will send a SIGINT, and on windows it will just kill
+    /// the process immediately.
     pub async fn stop(self) -> ProcessManager<Closed> {
         let mut set = JoinSet::new();
 
@@ -89,13 +92,14 @@ impl ProcessManager<Open> {
 
 #[cfg(test)]
 mod test {
-    use tokio::process::Command;
+    use tokio::{process::Command, time::sleep};
+    use tracing_test::traced_test;
 
     use super::*;
 
     fn get_command() -> Command {
-        let mut cmd = Command::new("sleep");
-        cmd.arg("1");
+        let mut cmd = Command::new("node");
+        cmd.arg("./test/scripts/sleep_5_interruptable.js");
         cmd
     }
 
@@ -114,6 +118,8 @@ mod test {
         manager.spawn(get_command(), Duration::from_secs(2));
         manager.spawn(get_command(), Duration::from_secs(2));
 
+        sleep(Duration::from_millis(100)).await;
+
         manager.stop().await;
     }
 
@@ -125,13 +131,57 @@ mod test {
         let mut manager = manager.stop().await.start();
         manager.spawn(get_command(), Duration::from_secs(2));
 
+        sleep(Duration::from_millis(100)).await;
+
         manager.stop().await;
     }
 
     #[tokio::test]
     async fn test_exit_code() {
         let mut manager = ProcessManager::new().start();
+        let mut child = manager.spawn(get_command(), Duration::from_secs(2));
+
+        sleep(Duration::from_millis(100)).await;
+
+        let code = child.wait().await;
+        assert_eq!(code, Some(0));
+
+        manager.stop().await;
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn test_message_after_stop() {
+        let mut manager = ProcessManager::new().start();
+        let mut child = manager.spawn(get_command(), Duration::from_secs(2));
+
+        sleep(Duration::from_millis(100)).await;
+
+        let code = child.wait().await;
+        assert_eq!(code, Some(0));
+
+        manager.stop().await;
+
+        // this is idempotent, so calling it after the manager is stopped is ok
+        child.kill().await;
+
+        let code = child.wait().await;
+        assert_eq!(code, None);
+    }
+
+    #[tokio::test]
+    async fn test_reuse_manager() {
+        let mut manager = ProcessManager::new().start();
         manager.spawn(get_command(), Duration::from_secs(2));
+
+        sleep(Duration::from_millis(100)).await;
+
+        let mut manager = manager.stop().await.start();
+
+        manager.spawn(get_command(), Duration::from_secs(2));
+
+        sleep(Duration::from_millis(100)).await;
+
         manager.stop().await;
     }
 }
