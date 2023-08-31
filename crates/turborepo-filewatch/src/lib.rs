@@ -1,14 +1,17 @@
 #![feature(assert_matches)]
 
-use std::{fmt::Debug, future::IntoFuture, result::Result, sync::Arc, time::Duration};
+use std::{fmt::Debug, future::IntoFuture, path::Path, result::Result, sync::Arc, time::Duration};
 
 use itertools::Itertools;
+#[cfg(any(feature = "watch_recursively", feature = "watch_ancestors"))]
+use notify::event::EventKind;
 use notify::{RecursiveMode, Watcher};
 use notify_debouncer_full::{
     DebounceEventHandler, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap,
 };
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
+use tracing::warn;
 // windows -> no recursive watch, watch ancestors
 // linux -> recursive watch, watch ancestors
 #[cfg(feature = "watch_ancestors")]
@@ -17,12 +20,10 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 // macos -> custom watcher impl in fsevents, no recursive watch, no watching ancestors
 #[cfg(target_os = "macos")]
 use {fsevent::FsEventWatcher, notify_debouncer_full::new_debouncer_opt};
-#[cfg(any(feature = "watch_recursively", feature = "watch_ancestors"))]
-use {notify::event::EventKind, tracing::warn};
 #[cfg(feature = "watch_recursively")]
 use {
     notify::event::{CreateKind, Event, EventAttributes},
-    std::{path::Path, time::Instant},
+    std::time::Instant,
     walkdir::WalkDir,
 };
 #[cfg(not(target_os = "macos"))]
@@ -338,13 +339,16 @@ async fn wait_for_cookie(
                     errs.into_iter().map(|e| e.to_string()).join(", ")
                 ))
             })?;
-        for event in events {
-            for path in &event.paths {
-                if path == (&cookie_path as &AbsoluteSystemPath) {
-                    let _ = cookie_path.remove();
-                    return Ok(());
-                }
+        if events.iter().flat_map(|e| &(*e.paths)).any(|path| {
+            let path: &Path = path;
+            path == (&cookie_path as &AbsoluteSystemPath)
+        }) {
+            // We don't need to stop everything if we failed to remove the cookie file
+            // for some reason. We can warn about it though.
+            if let Err(e) = cookie_path.remove() {
+                warn!("failed to remove cookie file {}", e);
             }
+            return Ok(());
         }
     }
 }
