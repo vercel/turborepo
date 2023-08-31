@@ -105,7 +105,7 @@ async fn watch_events(
     mut recv_file_events: mpsc::Receiver<DebounceEventResult>,
     exit_signal: tokio::sync::oneshot::Receiver<()>,
     broadcast_sender: broadcast::Sender<Result<DebouncedEvent, Vec<NotifyError>>>,
-) -> Result<(), WatchError> {
+) {
     let mut exit_signal = exit_signal;
     'outer: loop {
         tokio::select! {
@@ -126,7 +126,6 @@ async fn watch_events(
             }
         }
     }
-    Ok::<(), WatchError>(())
 }
 
 #[cfg(any(feature = "watch_ancestors", feature = "watch_recursively"))]
@@ -137,7 +136,7 @@ async fn watch_events(
     mut recv_file_events: mpsc::Receiver<DebounceEventResult>,
     exit_signal: tokio::sync::oneshot::Receiver<()>,
     broadcast_sender: broadcast::Sender<Result<DebouncedEvent, Vec<NotifyError>>>,
-) -> Result<(), WatchError> {
+) {
     let mut exit_signal = exit_signal;
     'outer: loop {
         tokio::select! {
@@ -169,7 +168,6 @@ async fn watch_events(
             }
         }
     }
-    Ok::<(), WatchError>(())
 }
 
 // Since we're manually watching the parent directories, we need
