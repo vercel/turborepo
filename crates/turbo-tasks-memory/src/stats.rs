@@ -18,16 +18,17 @@ use crate::{
 
 pub struct StatsReferences {
     pub tasks: Vec<(ReferenceType, TaskId)>,
+    pub scopes: Vec<(ReferenceType, TaskScopeId)>,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum StatsTaskType {
     Root(TaskId),
     Once(TaskId),
+    ReadCollectibles(TraitTypeId),
     Native(FunctionId),
     ResolveNative(FunctionId),
     ResolveTrait(TraitTypeId, String),
-    Collectibles(TraitTypeId),
 }
 
 impl Display for StatsTaskType {
@@ -35,7 +36,7 @@ impl Display for StatsTaskType {
         match self {
             StatsTaskType::Root(_) => write!(f, "root"),
             StatsTaskType::Once(_) => write!(f, "once"),
-            StatsTaskType::Collectibles(t) => {
+            StatsTaskType::ReadCollectibles(t) => {
                 write!(f, "read collectibles {}", registry::get_trait(*t).name)
             }
             StatsTaskType::Native(nf) => write!(f, "{}", registry::get_function(*nf).name),
@@ -192,7 +193,7 @@ impl Stats {
             StatsTaskType::Root(_)
             | StatsTaskType::Once(_)
             | StatsTaskType::Native(_)
-            | StatsTaskType::Collectibles(..) => false,
+            | StatsTaskType::ReadCollectibles(..) => false,
             StatsTaskType::ResolveNative(_) | StatsTaskType::ResolveTrait(_, _) => true,
         })
     }
