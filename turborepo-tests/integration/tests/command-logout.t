@@ -8,5 +8,5 @@ Logout while logged in
 
 Logout while logged out
   $ ${TURBO} logout
-  >>> Logged out
+  >>> Not logged in
 
