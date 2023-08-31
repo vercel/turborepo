@@ -22,7 +22,11 @@ use turborepo_ui::CYAN;
 use turborepo_ui::{BOLD, GREY, UNDERLINE};
 use turborepo_vercel_api::{CachingStatus, Space, Team};
 
-use crate::{cli::LinkTarget, commands::CommandBase, rewrite_json, rewrite_json::set_path};
+use crate::{
+    cli::LinkTarget,
+    commands::CommandBase,
+    rewrite_json::{self, set_path, unset_path},
+};
 
 #[derive(Clone)]
 pub(crate) enum SelectedTeam<'a> {
@@ -171,7 +175,23 @@ pub async fn link(
                     Err(anyhow!("read before write link"))
                 }
             })?;
-            let after = set_path(&before, &["teamId"], &format!("\"{}\"", team_id))?;
+            let no_preexisting_id =
+                if let Some(too_permissive) = unset_path(&before, &["teamid"], false)? {
+                    too_permissive
+                } else {
+                    before
+                };
+            let no_preexisting_slug =
+                if let Some(too_permissive) = unset_path(&no_preexisting_id, &["teamid"], false)? {
+                    too_permissive
+                } else {
+                    no_preexisting_id
+                };
+            let after = set_path(
+                &no_preexisting_slug,
+                &["teamId"],
+                &format!("\"{}\"", team_id),
+            )?;
             base.local_config_path().ensure_dir()?;
             base.local_config_path().create_with_contents(after)?;
 
@@ -259,7 +279,23 @@ pub async fn link(
                     Err(anyhow!("read before write spaces link"))
                 }
             })?;
-            let after = set_path(&before, &["spaces", "teamId"], &format!("\"{}\"", team_id))?;
+            let no_preexisting_id =
+                if let Some(too_permissive) = unset_path(&before, &["teamid"], false)? {
+                    too_permissive
+                } else {
+                    before
+                };
+            let no_preexisting_slug =
+                if let Some(too_permissive) = unset_path(&no_preexisting_id, &["teamid"], false)? {
+                    too_permissive
+                } else {
+                    no_preexisting_id
+                };
+            let after = set_path(
+                &no_preexisting_slug,
+                &["spaces", "teamId"],
+                &format!("\"{}\"", team_id),
+            )?;
             base.local_config_path().ensure_dir()?;
             base.local_config_path().create_with_contents(after)?;
 
