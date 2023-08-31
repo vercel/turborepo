@@ -157,19 +157,19 @@ fn get_env_var_config(environment: HashMap<String, String>) -> Result<Configurat
 
     let mut output_map = HashMap::new();
 
-    // Process the VERCEL_ARTIFACTS_* first.
-    vercel_artifacts_mapping.iter().for_each(|(k, mapped)| {
-        let k = k.to_string();
-        if let Some(value) = environment.get(&k) {
+    // Process the TURBO_* first.
+    turbo_mapping.iter().for_each(|(k, mapped)| {
+        if let Some(value) = environment.get(k) {
             if !value.is_empty() {
                 output_map.insert(mapped.to_string(), value.to_string());
             }
         }
     });
 
-    // Process the TURBO_* next.
-    turbo_mapping.iter().for_each(|(k, mapped)| {
-        if let Some(value) = environment.get(k) {
+    // Process the VERCEL_ARTIFACTS_* next.
+    vercel_artifacts_mapping.iter().for_each(|(k, mapped)| {
+        let k = k.to_string();
+        if let Some(value) = environment.get(&k) {
             if !value.is_empty() {
                 output_map.insert(mapped.to_string(), value.to_string());
             }
