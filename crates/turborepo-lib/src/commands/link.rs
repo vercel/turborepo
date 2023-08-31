@@ -163,8 +163,15 @@ pub async fn link(
             verify_caching_enabled(&api_client, team_id, token, Some(selected_team.clone()))
                 .await?;
 
-            let before = base.local_config_path().read_to_string()?;
-            let after = set_path(&before, &["teamId"], team_id)?;
+            let before = base.local_config_path().read_to_string().or_else(|e| {
+                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                    Ok(String::from("{}"))
+                } else {
+                    dbg!(e);
+                    Err(anyhow!("read before write link"))
+                }
+            })?;
+            let after = set_path(&before, &["teamId"], &format!("\"{}\"", team_id))?;
             base.local_config_path().ensure_dir()?;
             base.local_config_path().create_with_contents(after)?;
 
@@ -244,8 +251,15 @@ pub async fn link(
                 )
             })?;
 
-            let before = base.local_config_path().read_to_string()?;
-            let after = set_path(&before, &["spaces", "teamId"], team_id)?;
+            let before = base.local_config_path().read_to_string().or_else(|e| {
+                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                    Ok(String::from("{}"))
+                } else {
+                    dbg!(e);
+                    Err(anyhow!("read before write spaces link"))
+                }
+            })?;
+            let after = set_path(&before, &["spaces", "teamId"], &format!("\"{}\"", team_id))?;
             base.local_config_path().ensure_dir()?;
             base.local_config_path().create_with_contents(after)?;
 

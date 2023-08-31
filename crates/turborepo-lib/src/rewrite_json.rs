@@ -44,7 +44,13 @@ pub fn set_path(
     path: &[&str],
     json_value: &str,
 ) -> Result<String, RewriteError> {
-    let root = get_root(json_document_string)?;
+    let string_to_process = if json_document_string == "" {
+        "{}"
+    } else {
+        json_document_string
+    };
+
+    let root = get_root(string_to_process)?;
 
     // Find the token we'll be modifying and its path from the root.
     let current_path = &mut vec![];
@@ -95,7 +101,7 @@ pub fn set_path(
     };
 
     // Generate a new document!
-    let mut output: String = json_document_string.to_owned();
+    let mut output: String = string_to_process.to_owned();
     output.replace_range(start..end, &computed_object);
 
     Ok(output)
@@ -205,12 +211,13 @@ fn generate_member(path_segments: &[&str], value: &str, separator: &str) -> Stri
 pub fn unset_path(
     json_document_string: &str,
     path: &[&str],
+    case_sensitivity: bool,
 ) -> Result<Option<String>, RewriteError> {
     let root = get_root(json_document_string)?;
 
     // The key path can appear multiple times. This a vec that contains each time it
     // occurs.
-    let path_ranges = find_all_paths(&root, path);
+    let path_ranges = find_all_paths(&root, path, case_sensitivity);
 
     if path_ranges.is_empty() {
         return Ok(None);
@@ -257,6 +264,7 @@ pub fn unset_path(
 fn find_all_paths<'a>(
     current_node: &'a jsonc_parser::ast::Value<'a>,
     target_path: &[&str],
+    case_sensitivity: bool,
 ) -> Vec<Range> {
     let mut ranges: Vec<Range> = vec![];
 
@@ -274,7 +282,14 @@ fn find_all_paths<'a>(
         let mut previous_property: Option<&jsonc_parser::ast::ObjectProp<'_>> = None;
         while let Some(property) = properties_iterator.next() {
             let current_property_name = property.name.as_str();
-            if target_path[0] == current_property_name {
+
+            let should_rewrite = if case_sensitivity {
+                target_path[0] == current_property_name
+            } else {
+                target_path[0].to_ascii_lowercase() == current_property_name.to_ascii_lowercase()
+            };
+
+            if should_rewrite {
                 // target_path == 1? We've arrived at a node to remove.
                 if target_path.len() == 1 {
                     let next_property = properties_iterator.peek();
@@ -318,7 +333,8 @@ fn find_all_paths<'a>(
                     let next_current_node = &property.value;
                     let next_target_path = &target_path[1..];
 
-                    let mut children_ranges = find_all_paths(next_current_node, next_target_path);
+                    let mut children_ranges =
+                        find_all_paths(next_current_node, next_target_path, case_sensitivity);
                     ranges.append(&mut children_ranges);
                 }
             }
@@ -351,7 +367,7 @@ mod test {
             #[test]
             fn $name() {
                 let (json_document_string, path, expected) = $value;
-                let output_option = unset_path(json_document_string, path).unwrap();
+                let output_option = unset_path(json_document_string, path, false).unwrap();
                 assert_eq!(output_option.as_deref(), expected);
             }
         )*

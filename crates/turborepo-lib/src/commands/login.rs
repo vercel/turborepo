@@ -46,8 +46,19 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
     let verified_user = api_client.verify_sso_token(token, &token_name).await?;
     let user_response = api_client.get_user(&verified_user.token).await?;
 
-    let before = base.global_config_path()?.read_to_string()?;
-    let after = set_path(&before, &["token"], &verified_user.token)?;
+    let before = base.global_config_path()?.read_to_string().or_else(|e| {
+        if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+            Ok(String::from("{}"))
+        } else {
+            dbg!(e);
+            Err(anyhow!("global_read"))
+        }
+    })?;
+    let after = set_path(
+        &before,
+        &["token"],
+        &format!("\"{}\"", &verified_user.token),
+    )?;
     base.global_config_path()?.ensure_dir()?;
     base.global_config_path()?.create_with_contents(after)?;
 

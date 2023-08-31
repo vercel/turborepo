@@ -1,6 +1,6 @@
 use std::fs;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use turborepo_ui::GREY;
 
 use crate::{
@@ -19,15 +19,22 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<()> {
         base.config()?.team_id().is_some() || base.config()?.team_slug().is_some();
 
     let output = if needs_disabling {
-        let before = base.local_config_path().read_to_string()?;
+        let before = base.local_config_path().read_to_string().or_else(|e| {
+            if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                Ok(String::from("{}"))
+            } else {
+                dbg!(e);
+                Err(anyhow!("unlink remote cache"))
+            }
+        })?;
         let mut updated = before;
-        let minus_team_slug = unset_path(&updated, &["teamSlug"])?;
+        let minus_team_slug = unset_path(&updated, &["teamSlug"], false)?;
         updated = if let Some(minus_team_slug) = minus_team_slug {
             minus_team_slug
         } else {
             updated
         };
-        let minus_team_id = unset_path(&updated, &["teamId"])?;
+        let minus_team_id = unset_path(&updated, &["teamId"], false)?;
         updated = if let Some(minus_team_id) = minus_team_id {
             minus_team_id
         } else {
@@ -51,15 +58,22 @@ fn unlink_spaces(base: &mut CommandBase) -> Result<()> {
         base.config()?.team_id().is_some() || base.config()?.team_slug().is_some();
 
     if needs_disabling {
-        let before = base.local_config_path().read_to_string()?;
+        let before = base.local_config_path().read_to_string().or_else(|e| {
+            if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                Ok(String::from("{}"))
+            } else {
+                dbg!(e);
+                Err(anyhow!("unlink spaces"))
+            }
+        })?;
         let mut updated = before;
-        let minus_team_slug = unset_path(&updated, &["teamSlug"])?;
+        let minus_team_slug = unset_path(&updated, &["teamSlug"], false)?;
         updated = if let Some(minus_team_slug) = minus_team_slug {
             minus_team_slug
         } else {
             updated
         };
-        let minus_team_id = unset_path(&updated, &["teamId"])?;
+        let minus_team_id = unset_path(&updated, &["teamId"], false)?;
         updated = if let Some(minus_team_id) = minus_team_id {
             minus_team_id
         } else {
@@ -100,7 +114,7 @@ fn remove_spaces_from_turbo_json(base: &CommandBase) -> Result<UnlinkSpacesResul
     let turbo_json_path = base.repo_root.join_component("turbo.json");
     let turbo_json = fs::read_to_string(&turbo_json_path)?;
 
-    let output = rewrite_json::unset_path(&turbo_json, &["experimentalSpaces", "id"])?;
+    let output = rewrite_json::unset_path(&turbo_json, &["experimentalSpaces", "id"], true)?;
     if let Some(output) = output {
         fs::write(turbo_json_path, output)?;
         Ok(UnlinkSpacesResult::Unlinked)

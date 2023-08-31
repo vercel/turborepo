@@ -263,11 +263,19 @@ impl TurborepoConfigBuilder {
             dbg!(e);
             anyhow!("global_path")
         })?;
-        let contents = std::fs::read_to_string(global_config_path).map_err(|e| {
-            dbg!(e);
-            anyhow!("global_read")
+        let mut contents = std::fs::read_to_string(global_config_path).or_else(|e| {
+            if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                Ok(String::from(""))
+            } else {
+                dbg!(e);
+                Err(anyhow!("global_read"))
+            }
         })?;
+        if contents == "" {
+            contents = String::from("{}");
+        }
         let global_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
+            dbg!(contents);
             dbg!(e);
             anyhow!("global_de")
         })?;
@@ -276,11 +284,19 @@ impl TurborepoConfigBuilder {
 
     fn get_local_config(&self) -> Result<ConfigurationOptions, Error> {
         let local_config_path = self.local_config_path();
-        let contents = local_config_path.read_to_string().map_err(|e| {
-            dbg!(e);
-            anyhow!("local_read")
+        let mut contents = local_config_path.read_to_string().or_else(|e| {
+            if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                Ok(String::from(""))
+            } else {
+                dbg!(e);
+                Err(anyhow!("local_read"))
+            }
         })?;
+        if contents == "" {
+            contents = String::from("{}");
+        }
         let local_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
+            dbg!(contents);
             dbg!(e);
             anyhow!("local_de")
         })?;
