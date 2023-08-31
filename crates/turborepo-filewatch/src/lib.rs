@@ -3,12 +3,11 @@
 use std::{fmt::Debug, future::IntoFuture, result::Result, sync::Arc, time::Duration};
 
 use itertools::Itertools;
-#[cfg(any(feature = "watch_recursively", feature = "watch_ancestors"))]
-use notify::event::EventKind;
 use notify::{RecursiveMode, Watcher};
-use notify_debouncer_full::{DebounceEventHandler, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap};
+use notify_debouncer_full::{
+    DebounceEventHandler, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap,
+};
 use thiserror::Error;
-use tracing::warn;
 use tokio::sync::{broadcast, mpsc};
 // windows -> no recursive watch, watch ancestors
 // linux -> recursive watch, watch ancestors
@@ -17,10 +16,9 @@ use turbopath::PathRelation;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 // macos -> custom watcher impl in fsevents, no recursive watch, no watching ancestors
 #[cfg(target_os = "macos")]
-use {
-    fsevent::FsEventWatcher,
-    notify_debouncer_full::{new_debouncer_opt, DebounceEventHandler},
-};
+use {fsevent::FsEventWatcher, notify_debouncer_full::new_debouncer_opt};
+#[cfg(any(feature = "watch_recursively", feature = "watch_ancestors"))]
+use {notify::event::EventKind, tracing::warn};
 #[cfg(feature = "watch_recursively")]
 use {
     notify::event::{CreateKind, Event, EventAttributes},
@@ -243,9 +241,9 @@ fn watch_recursively(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result
     manually_add_recursive_watches(root.as_std_path(), watcher, None)
 }
 
-
 #[cfg(feature = "watch_recursively")]
-fn manually_add_recursive_watches(root: &Path,
+fn manually_add_recursive_watches(
+    root: &Path,
     watcher: &mut Backend,
     sender: Option<(
         Instant,
@@ -457,12 +455,10 @@ mod test {
         .await;
 
         let test_file_path = repo_root.join_component("test-file");
-        test_file_path.create_with_contents("test contents").unwrap();
-        expect_filesystem_event!(
-            recv,
-            test_file_path,
-            EventKind::Create(_)
-        );
+        test_file_path
+            .create_with_contents("test contents")
+            .unwrap();
+        expect_filesystem_event!(recv, test_file_path, EventKind::Create(_));
 
         // TODO: implement default filtering (.git, node_modules)
     }
