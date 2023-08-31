@@ -5,7 +5,7 @@ use std::{
 };
 
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_scm::SCM;
 use wax::Pattern;
 
