@@ -140,11 +140,15 @@ function parseWorkspacePackages({
     return [];
   }
 
-  if ("packages" in workspaces) {
-    return workspaces.packages;
+  if (Array.isArray(workspaces)) {
+    return workspaces;
   }
 
-  return workspaces;
+  if ("packages" in workspaces) {
+    return workspaces.packages ?? [];
+  }
+
+  return [];
 }
 
 function expandWorkspaces({
