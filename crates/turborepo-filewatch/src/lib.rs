@@ -6,8 +6,9 @@ use itertools::Itertools;
 #[cfg(any(feature = "watch_recursively", feature = "watch_ancestors"))]
 use notify::event::EventKind;
 use notify::{RecursiveMode, Watcher};
-use notify_debouncer_full::{DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap};
+use notify_debouncer_full::{DebounceEventHandler, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap};
 use thiserror::Error;
+use tracing::warn;
 use tokio::sync::{broadcast, mpsc};
 // windows -> no recursive watch, watch ancestors
 // linux -> recursive watch, watch ancestors
@@ -150,7 +151,10 @@ async fn watch_events(
                                 let time = event.time;
                                 if event.event.kind == EventKind::Create(CreateKind::Folder) {
                                     for new_path in &event.event.paths {
-                                        watch_recursively(&new_path, debouncer.watcher(), Some((time, &broadcast_sender)))?;
+                                        if let Err(err) = manually_add_recursive_watches(&new_path, debouncer.watcher(), Some((time, &broadcast_sender))) {
+                                            warn!("encountered error watching filesyste {}", err);
+                                            break 'outer;
+                                        }
                                     }
                                 }
                             }
@@ -227,15 +231,28 @@ fn watch_parents(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(),
     Ok(())
 }
 
+#[cfg(not(feature = "watch_recursively"))]
+fn watch_recursively(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(), WatchError> {
+    watcher.watch(&root.as_std_path(), RecursiveMode::Recursive)?;
+    Ok(())
+}
+
 #[cfg(feature = "watch_recursively")]
-fn watch_recursively(
-    root: &Path,
+fn watch_recursively(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(), WatchError> {
+    // Don't synthesize initial events
+    manually_add_recursive_watches(root.as_std_path(), watcher, None)
+}
+
+
+#[cfg(feature = "watch_recursively")]
+fn manually_add_recursive_watches(root: &Path,
     watcher: &mut Backend,
     sender: Option<(
         Instant,
         &broadcast::Sender<Result<DebouncedEvent, Vec<NotifyError>>>,
     )>,
 ) -> Result<(), WatchError> {
+    // Note that WalkDir yields the root as well as doing the walk.
     for dir in WalkDir::new(root).follow_links(false).into_iter() {
         let dir = dir?;
         if dir.file_type().is_dir() {
@@ -266,29 +283,22 @@ fn run_watcher(
     root: &AbsoluteSystemPath,
     sender: mpsc::Sender<DebounceEventResult>,
 ) -> Result<Debouncer<Backend, FileIdMap>, WatchError> {
-    #[cfg(target_os = "macos")]
     let mut debouncer = make_debouncer(move |res| {
         let _ = sender.blocking_send(res);
     })?;
-    #[cfg(not(target_os = "macos"))]
-    let mut debouncer = new_debouncer(Duration::from_millis(1), None, move |res| {
-        let _ = sender.blocking_send(res);
-    })?;
 
-    // Note that the "watch_recursively" feature corresponds to manual
-    // recursive watching.
-    #[cfg(not(feature = "watch_recursively"))]
-    debouncer
-        .watcher()
-        .watch(&root.as_std_path(), RecursiveMode::Recursive)?;
-    #[cfg(feature = "watch_recursively")]
-    {
-        // Don't synthesize initial events
-        watch_recursively(root.as_std_path(), debouncer.watcher(), None)?;
-    }
+    watch_recursively(root, debouncer.watcher())?;
+
     #[cfg(feature = "watch_ancestors")]
     watch_parents(root, debouncer.watcher())?;
     Ok(debouncer)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn make_debouncer<F: DebounceEventHandler>(
+    event_handler: F,
+) -> Result<Debouncer<Backend, FileIdMap>, notify::Error> {
+    new_debouncer(Duration::from_millis(1), None, event_handler)
 }
 
 #[cfg(target_os = "macos")]
@@ -445,6 +455,14 @@ mod test {
             ],
         )
         .await;
+
+        let test_file_path = repo_root.join_component("test-file");
+        test_file_path.create_with_contents("test contents").unwrap();
+        expect_filesystem_event!(
+            recv,
+            test_file_path,
+            EventKind::Create(_)
+        );
 
         // TODO: implement default filtering (.git, node_modules)
     }
