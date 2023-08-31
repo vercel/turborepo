@@ -176,9 +176,8 @@ export function getWorkspaceConfigs(
               if ("extends" in turboConfig) {
                 return;
               }
-            }
-            // invalid - workspace config with no extends
-            if (!("extends" in turboConfig)) {
+            } else if (!("extends" in turboConfig)) {
+              // invalid - workspace config with no extends
               return;
             }
           }
