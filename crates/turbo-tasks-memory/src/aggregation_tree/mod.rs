@@ -37,11 +37,13 @@ use self::leaf::top_tree;
 pub use self::{leaf::AggregationTreeLeaf, top_tree::AggregationInfoGuard};
 
 pub trait AggregationContext {
-    type ItemLock: AggregationItemLock<
+    type ItemLock<'a>: AggregationItemLock<
         ItemRef = Self::ItemRef,
         Info = Self::Info,
         ItemChange = Self::ItemChange,
-    >;
+    >
+    where
+        Self: 'a;
     type Info: Default;
     type ItemChange;
     type ItemRef: Eq + Hash + Clone;
@@ -49,7 +51,7 @@ pub trait AggregationContext {
     type RootInfoType;
 
     fn is_blue(&self, reference: Self::ItemRef) -> bool;
-    fn item(&self, reference: Self::ItemRef) -> Self::ItemLock;
+    fn item(&self, reference: Self::ItemRef) -> Self::ItemLock<'_>;
 
     fn apply_change(
         &self,
@@ -98,7 +100,7 @@ pub fn aggregation_info<C: AggregationContext>(
 
 pub fn aggregation_info_from_item<C: AggregationContext>(
     context: &C,
-    item: &mut C::ItemLock,
+    item: &mut C::ItemLock<'_>,
 ) -> AggregationInfoGuard<C::Info> {
     top_tree(context, item, 0).info()
 }

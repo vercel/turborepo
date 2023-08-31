@@ -114,7 +114,7 @@ impl AggregationItemLock for NodeGuard {
 }
 
 impl<'a> AggregationContext for NodeAggregationContext<'a> {
-    type ItemLock = NodeGuard;
+    type ItemLock<'l> = NodeGuard where Self: 'l;
     type Info = Aggregated;
     type ItemRef = NodeRef;
     type ItemChange = Change;
@@ -123,7 +123,7 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
         reference.0.blue
     }
 
-    fn item(&self, reference: Self::ItemRef) -> Self::ItemLock {
+    fn item(&self, reference: Self::ItemRef) -> Self::ItemLock<'_> {
         let r = reference.0.clone();
         let guard = r.inner.lock();
         NodeGuard {
@@ -167,7 +167,9 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
     type RootInfoType = ();
 
     fn new_root_info(&self, root_info_type: &Self::RootInfoType) -> Self::RootInfo {
-        false
+        match root_info_type {
+            () => false,
+        }
     }
 
     fn info_to_root_info(
@@ -175,7 +177,9 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
         info: &Self::Info,
         root_info_type: &Self::RootInfoType,
     ) -> Self::RootInfo {
-        info.active
+        match root_info_type {
+            () => info.active,
+        }
     }
 
     fn merge_root_info(

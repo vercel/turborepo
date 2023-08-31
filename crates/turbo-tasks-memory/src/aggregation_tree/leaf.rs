@@ -104,7 +104,7 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
 
 pub fn top_tree<C: AggregationContext>(
     context: &C,
-    item: &mut C::ItemLock,
+    item: &mut C::ItemLock<'_>,
     depth: u8,
 ) -> Arc<TopTree<C::Info>> {
     if let Some(top_tree) = item.leaf().top_trees.get(&depth) {
@@ -119,7 +119,7 @@ pub fn top_tree<C: AggregationContext>(
 
 pub fn bottom_tree<C: AggregationContext>(
     context: &C,
-    item: &mut C::ItemLock,
+    item: &mut C::ItemLock<'_>,
     height: u8,
 ) -> Arc<BottomTree<C::Info, C::ItemRef>> {
     if let Some(bottom_tree) = item.leaf().bottom_trees.get(&height) {

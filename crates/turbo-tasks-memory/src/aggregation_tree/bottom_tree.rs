@@ -363,7 +363,7 @@ fn propagate_change_to_upper<C: AggregationContext>(
 
 pub fn add_parent_to_item<C: AggregationContext>(
     context: &C,
-    item: &mut C::ItemLock,
+    item: &mut C::ItemLock<'_>,
     parent: Arc<BottomTree<C::Info, C::ItemRef>>,
     location: ChildLocation,
 ) {
@@ -384,7 +384,7 @@ pub fn add_parent_to_item<C: AggregationContext>(
 
 pub fn remove_parent_from_item<C: AggregationContext>(
     context: &C,
-    item: &mut C::ItemLock,
+    item: &mut C::ItemLock<'_>,
     parent: Arc<BottomTree<C::Info, C::ItemRef>>,
     location: ChildLocation,
 ) {
