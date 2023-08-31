@@ -214,6 +214,18 @@ impl MemoryBackend {
             *task
         })
     }
+
+    pub(crate) fn schedule_when_dirty_from_aggregation(
+        &self,
+        set: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) {
+        for task in set {
+            self.with_task(task, |task| {
+                task.schedule_when_dirty_from_aggregation(self, turbo_tasks)
+            });
+        }
+    }
 }
 
 impl Backend for MemoryBackend {

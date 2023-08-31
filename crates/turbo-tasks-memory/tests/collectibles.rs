@@ -27,6 +27,7 @@ async fn transitive_emitting() {
 async fn multi_emitting() {
     run! {
         let result = my_multi_emitting_function();
+        result.strongly_consistent().await?;
         let list = result.peek_collectibles::<Box<dyn ValueToString>>();
         assert_eq!(list.len(), 2);
         let mut expected = ["123", "42"].into_iter().collect::<HashSet<_>>();

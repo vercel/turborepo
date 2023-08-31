@@ -484,7 +484,7 @@ impl Task {
         {
             aggregation_info(&context, id).root_type = Some(RootType::Root);
         }
-        context.schedule_tasks_if_needed();
+        context.schedule_dirty_tasks_if_needed();
     }
 
     pub(crate) fn set_once(
@@ -496,7 +496,7 @@ impl Task {
         {
             aggregation_info(&context, id).root_type = Some(RootType::Once);
         }
-        context.schedule_tasks_if_needed();
+        context.schedule_dirty_tasks_if_needed();
     }
 
     pub(crate) fn unset_root(
@@ -508,7 +508,7 @@ impl Task {
         {
             aggregation_info(&context, id).root_type = None;
         }
-        context.schedule_tasks_if_needed();
+        context.schedule_dirty_tasks_if_needed();
     }
 
     pub(crate) fn get_function_name(&self) -> Option<&'static str> {
@@ -987,7 +987,7 @@ impl Task {
                                     ..Default::default()
                                 },
                             );
-                            if context.take_scheduled(self.id) {
+                            if context.take_scheduled_dirty_task(self.id) {
                                 state.aggregation_leaf.change(
                                     &context,
                                     &TaskChange {
@@ -1281,7 +1281,7 @@ impl Task {
             let state = self.full_state_mut();
             self.connect_child_internal(state, &context, child_id);
         }
-        context.schedule_tasks_if_needed();
+        context.schedule_dirty_tasks_if_needed();
     }
 
     fn connect_child_internal(
@@ -1388,7 +1388,7 @@ impl Task {
                 },
             );
             drop(state);
-            context.schedule_tasks_if_needed();
+            context.schedule_dirty_tasks_if_needed();
         }
     }
 
@@ -1411,7 +1411,7 @@ impl Task {
                 },
             );
             drop(state);
-            context.schedule_tasks_if_needed();
+            context.schedule_dirty_tasks_if_needed();
         }
     }
 
@@ -1739,7 +1739,7 @@ impl Task {
                         ..Default::default()
                     },
                 );
-                if context.take_scheduled(self.id) {
+                if context.take_scheduled_dirty_task(self.id) {
                     // Unloading is only possible for inactive tasks.
                     // We need to abort the unloading, so revert changes done so far.
                     aggregation_leaf.change(

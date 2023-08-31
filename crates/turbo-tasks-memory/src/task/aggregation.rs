@@ -121,7 +121,7 @@ impl TaskChange {
 pub struct TaskAggregationContext<'a> {
     pub turbo_tasks: &'a dyn TurboTasksBackendApi<MemoryBackend>,
     pub backend: &'a MemoryBackend,
-    pub tasks_to_schedule: Mutex<Option<AutoSet<TaskId, BuildNoHashHasher<TaskId>>>>,
+    pub dirty_tasks_to_schedule: Mutex<Option<AutoSet<TaskId, BuildNoHashHasher<TaskId>>>>,
 }
 
 impl<'a> TaskAggregationContext<'a> {
@@ -132,25 +132,25 @@ impl<'a> TaskAggregationContext<'a> {
         Self {
             turbo_tasks,
             backend,
-            tasks_to_schedule: Mutex::new(None),
+            dirty_tasks_to_schedule: Mutex::new(None),
         }
     }
 
-    pub fn take_scheduled(&mut self, task: TaskId) -> bool {
-        let task_to_schedule = self.tasks_to_schedule.get_mut();
-        task_to_schedule
+    pub fn take_scheduled_dirty_task(&mut self, task: TaskId) -> bool {
+        let dirty_task_to_schedule = self.dirty_tasks_to_schedule.get_mut();
+        dirty_task_to_schedule
             .as_mut()
             .map(|t| t.remove(&task))
             .unwrap_or(false)
     }
 
-    pub fn schedule_tasks_if_needed(&mut self) {
-        let task_to_schedule = self.tasks_to_schedule.get_mut();
-        if let Some(task_to_schedule) = task_to_schedule.as_mut() {
-            let task_to_schedule = take(task_to_schedule);
-            if !task_to_schedule.is_empty() {
-                self.turbo_tasks
-                    .schedule_notify_tasks_set(&task_to_schedule);
+    pub fn schedule_dirty_tasks_if_needed(&mut self) {
+        let tasks = self.dirty_tasks_to_schedule.get_mut();
+        if let Some(tasks) = tasks.as_mut() {
+            let tasks = take(tasks);
+            if !tasks.is_empty() {
+                self.backend
+                    .schedule_when_dirty_from_aggregation(tasks, self.turbo_tasks);
             }
         }
     }
@@ -159,7 +159,7 @@ impl<'a> TaskAggregationContext<'a> {
 #[cfg(debug_assertions)]
 impl<'a> Drop for TaskAggregationContext<'a> {
     fn drop(&mut self) {
-        let tasks_to_schedule = self.tasks_to_schedule.get_mut();
+        let tasks_to_schedule = self.dirty_tasks_to_schedule.get_mut();
         if let Some(tasks_to_schedule) = tasks_to_schedule.as_ref() {
             if !tasks_to_schedule.is_empty() {
                 panic!("TaskAggregationContext dropped without scheduling all tasks");
@@ -197,7 +197,7 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
             let value = update_count_entry(info.dirty_tasks.entry(task), count);
             if value > 0 {
                 if matches!(info.root_type, Some(RootType::Root) | Some(RootType::Once)) {
-                    let mut tasks_to_schedule = self.tasks_to_schedule.lock();
+                    let mut tasks_to_schedule = self.dirty_tasks_to_schedule.lock();
                     tasks_to_schedule.get_or_insert_default().insert(task);
                 }
             }
