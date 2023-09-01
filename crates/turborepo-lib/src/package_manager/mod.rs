@@ -280,7 +280,6 @@ static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
     lazy_regex!(r"(?P<manager>npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)");
 
 impl PackageManager {
-
     /// Returns the set of globs for the workspace.
     pub fn get_workspace_globs(
         &self,

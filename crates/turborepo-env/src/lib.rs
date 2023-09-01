@@ -26,7 +26,10 @@ pub struct EnvironmentVariableMap(HashMap<String, String>);
 
 impl EnvironmentVariableMap {
     pub fn to_hashable(&self) -> EnvironmentVariablePairs {
-        self.iter().map(|(k, v)| format!("{}={}", k, v)).collect()
+        let mut list: Vec<_> = self.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
+        list.sort();
+
+        list
     }
 
     pub fn names(&self) -> Vec<String> {

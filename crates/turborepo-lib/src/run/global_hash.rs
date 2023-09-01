@@ -29,11 +29,11 @@ enum GlobalHashError {}
 pub struct GlobalHashableInputs {
     global_cache_key: &'static str,
     global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
-    pub root_external_dependencies_hash: String,
+    root_external_dependencies_hash: String,
     env: Vec<String>,
     // Only Option to allow #[derive(Default)]
     resolved_env_vars: Option<DetailedMap>,
-    pass_through_env: Option<Vec<String>>,
+    pass_through_env: Vec<String>,
     env_mode: EnvMode,
     framework_inference: bool,
     dot_env: Vec<RelativeUnixPathBuf>,
@@ -115,7 +115,7 @@ pub fn get_global_hash_inputs<L: ?Sized + Lockfile>(
         root_external_dependencies_hash,
         env: global_env,
         resolved_env_vars: Some(global_hashable_env_vars),
-        pass_through_env: Some(global_pass_through_env),
+        pass_through_env: global_pass_through_env,
         env_mode,
         framework_inference,
         dot_env,
@@ -125,21 +125,11 @@ pub fn get_global_hash_inputs<L: ?Sized + Lockfile>(
 impl GlobalHashableInputs {
     pub fn calculate_global_hash_from_inputs(mut self) -> String {
         match self.env_mode {
-            EnvMode::Infer
-                if self
-                    .pass_through_env
-                    .as_ref()
-                    .map_or(false, |env| !env.is_empty()) =>
-            {
+            EnvMode::Infer if !self.pass_through_env.is_empty() => {
                 self.env_mode = EnvMode::Strict;
             }
             EnvMode::Loose => {
-                self.pass_through_env = None;
-            }
-            // Collapse `None` and `Some([])` to `Some([])` in strict mode
-            // to match Go behavior
-            EnvMode::Strict if self.pass_through_env.is_none() => {
-                self.pass_through_env = Some(Vec::new());
+                self.pass_through_env = Vec::new();
             }
             _ => {}
         }
@@ -157,7 +147,7 @@ impl GlobalHashableInputs {
                 .resolved_env_vars
                 .map(|evm| evm.all.to_hashable())
                 .unwrap_or_default(),
-            pass_through_env: self.pass_through_env.unwrap_or_default(),
+            pass_through_env: self.pass_through_env,
             env_mode: self.env_mode,
             framework_inference: self.framework_inference,
             dot_env: self.dot_env,

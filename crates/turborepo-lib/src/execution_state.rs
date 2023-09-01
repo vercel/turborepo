@@ -3,7 +3,6 @@ use tracing::trace;
 
 use crate::{
     cli::Args, commands::CommandBase, package_json::PackageJson, package_manager::PackageManager,
-    run::Run,
 };
 
 #[derive(Debug, Serialize)]
@@ -42,8 +41,6 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
     type Error = anyhow::Error;
 
     fn try_from(base: &'a CommandBase) -> Result<Self, Self::Error> {
-        let run = Run::new((*base).clone());
-
         let root_package_json =
             PackageJson::load(&base.repo_root.join_component("package.json")).ok();
 

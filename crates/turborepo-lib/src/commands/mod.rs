@@ -25,7 +25,7 @@ pub(crate) mod prune;
 pub(crate) mod run;
 pub(crate) mod unlink;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,
     pub ui: UI,

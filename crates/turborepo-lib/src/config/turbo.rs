@@ -27,7 +27,7 @@ pub struct SpacesJson {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 // The processed TurboJSON ready for use by Turborepo.
 pub struct TurboJson {
-    extends: Vec<String>,
+    pub(crate) extends: Vec<String>,
     pub(crate) global_deps: Vec<String>,
     pub(crate) global_dot_env: Vec<RelativeUnixPathBuf>,
     pub(crate) global_env: Vec<String>,
