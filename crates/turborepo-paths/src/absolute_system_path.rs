@@ -22,8 +22,6 @@ use crate::{
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PathRelation {
-    // absolute vs relative
-    Incomparable,
     // e.g. /a/b vs /a/c
     Divergent,
     // e.g. /a vs /a/b
@@ -92,24 +90,23 @@ impl AbsoluteSystemPath {
     /// }
     /// ```
     pub fn new<P: AsRef<str> + ?Sized>(value: &P) -> Result<&Self, PathError> {
-        let path = value.as_ref();
-        if Path::new(path).is_relative() {
-            return Err(PathError::NotAbsolute(path.to_owned()));
-        }
-
-        Ok(Self::new_unchecked(path))
+        let path: &Utf8Path = value.as_ref().into();
+        Self::from_utf8_path(path)
     }
 
     pub fn from_std_path(path: &Path) -> Result<&Self, PathError> {
-        let path_str = path
-            .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
-
-        Self::new(path_str)
+        let path: &Utf8Path = path.try_into()?;
+        Self::from_utf8_path(path)
     }
 
-    pub(crate) fn new_unchecked<'a>(path: impl AsRef<str> + 'a) -> &'a Self {
-        let path = Utf8Path::new(path.as_ref());
+    fn from_utf8_path(path: &Utf8Path) -> Result<&Self, PathError> {
+        if path.is_relative() {
+            return Err(PathError::NotAbsolute(path.to_string()));
+        }
+        Ok(Self::new_unchecked(path))
+    }
+
+    pub(crate) fn new_unchecked<'a>(path: &'a Utf8Path) -> &'a Self {
         unsafe { &*(path as *const Utf8Path as *const Self) }
     }
 
@@ -336,11 +333,8 @@ impl AbsoluteSystemPath {
     /// determine how this path relates to the given path. In the event that
     /// the paths are the same, we return `Parent`, much the way that `contains`
     /// would return `true`.
-    pub fn relation_to_path(&self, other: &Path) -> PathRelation {
-        if !other.is_absolute() {
-            return PathRelation::Incomparable;
-        }
-        let mut self_components = self.as_std_path().components();
+    pub fn relation_to_path(&self, other: &Self) -> PathRelation {
+        let mut self_components = self.components();
         let mut other_components = other.components();
         loop {
             match (self_components.next(), other_components.next()) {
@@ -439,6 +433,14 @@ impl PartialEq<&AbsoluteSystemPath> for Path {
 impl PartialEq<&AbsoluteSystemPath> for PathBuf {
     fn eq(&self, other: &&AbsoluteSystemPath) -> bool {
         self.as_path().eq(other)
+    }
+}
+
+impl<'a> TryFrom<&'a Path> for &'a AbsoluteSystemPath {
+    type Error = PathError;
+
+    fn try_from(value: &'a Path) -> Result<Self, Self::Error> {
+        AbsoluteSystemPath::from_std_path(value)
     }
 }
 

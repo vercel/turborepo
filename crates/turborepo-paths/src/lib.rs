@@ -56,6 +56,8 @@ pub enum PathError {
     InvalidUnicode(String),
     #[error("Failed to convert path")]
     FromPathBufError(#[from] camino::FromPathBufError),
+    #[error("Failed to convert path")]
+    FromPathError(#[from] camino::FromPathError),
     #[error("path is malformed: {0}")]
     MalformedPath(String),
     #[error("Path is not safe for windows: {0}")]

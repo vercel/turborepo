@@ -187,8 +187,11 @@ fn filter_relevant(root: &AbsoluteSystemPath, event: &mut Event) {
     let is_modify_existing = matches!(event.kind, EventKind::Remove(_) | EventKind::Modify(_));
 
     event.paths.retain_mut(|path| {
-        match root.relation_to_path(&path) {
-            PathRelation::Incomparable => panic!("Non-absolute path from filewatching"),
+        let abs_path: &AbsoluteSystemPath = path
+            .as_path()
+            .try_into()
+            .expect("Non-absolute path from filewatching");
+        match root.relation_to_path(abs_path) {
             // An irrelevant path, probably from a non-recursive watch of a parent directory
             PathRelation::Divergent => false,
             // A path contained in the root
