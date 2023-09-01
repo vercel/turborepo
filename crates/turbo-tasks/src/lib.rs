@@ -68,7 +68,6 @@ pub mod task;
 mod timed_future;
 pub mod trace;
 mod trait_ref;
-mod unit;
 pub mod util;
 mod value;
 mod value_type;
