@@ -106,7 +106,7 @@ impl AbsoluteSystemPath {
         Ok(Self::new_unchecked(path))
     }
 
-    pub(crate) fn new_unchecked<'a>(path: &'a Utf8Path) -> &'a Self {
+    pub(crate) fn new_unchecked(path: &Utf8Path) -> &Self {
         unsafe { &*(path as *const Utf8Path as *const Self) }
     }
 
@@ -591,13 +591,10 @@ mod tests {
         let abs_path = AbsoluteSystemPathBuf::try_from(root)
             .unwrap()
             .join_components(abs_path_components);
-        let other_path = other_components.iter().fold(
-            PathBuf::from_str(root).unwrap(),
-            |mut current, component| {
-                current.push(component);
-                current
-            },
-        );
+        let other_path = AbsoluteSystemPathBuf::try_from(root)
+            .unwrap()
+            .join_components(other_components);
+
         let relation = abs_path.relation_to_path(&other_path);
         assert_eq!(relation, expected);
     }
