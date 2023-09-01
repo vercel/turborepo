@@ -1,14 +1,22 @@
 #![feature(assert_matches)]
 
-use std::{fmt::Debug, future::IntoFuture, path::Path, result::Result, sync::Arc, time::Duration};
+use std::{
+    fmt::{Debug, Display},
+    future::IntoFuture,
+    path::Path,
+    result::Result,
+    sync::Arc,
+    time::Duration,
+};
 
-use itertools::Itertools;
+// macos -> custom watcher impl in fsevents, no recursive watch, no watching ancestors
+#[cfg(target_os = "macos")]
+use fsevent::FsEventWatcher;
 #[cfg(any(feature = "watch_recursively", feature = "watch_ancestors"))]
 use notify::event::EventKind;
-use notify::{RecursiveMode, Watcher};
-use notify_debouncer_full::{
-    DebounceEventHandler, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap,
-};
+#[cfg(not(target_os = "macos"))]
+use notify::{Config, RecommendedWatcher};
+use notify::{Event, EventHandler, RecursiveMode, Watcher};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
 use tracing::warn;
@@ -17,17 +25,11 @@ use tracing::warn;
 #[cfg(feature = "watch_ancestors")]
 use turbopath::PathRelation;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-// macos -> custom watcher impl in fsevents, no recursive watch, no watching ancestors
-#[cfg(target_os = "macos")]
-use {fsevent::FsEventWatcher, notify_debouncer_full::new_debouncer_opt};
 #[cfg(feature = "watch_recursively")]
 use {
-    notify::event::{CreateKind, Event, EventAttributes},
-    std::time::Instant,
+    notify::event::{CreateKind, EventAttributes},
     walkdir::WalkDir,
 };
-#[cfg(not(target_os = "macos"))]
-use {notify::RecommendedWatcher, notify_debouncer_full::new_debouncer};
 
 #[cfg(target_os = "macos")]
 mod fsevent;
@@ -36,6 +38,8 @@ mod fsevent;
 type Backend = RecommendedWatcher;
 #[cfg(target_os = "macos")]
 type Backend = FsEventWatcher;
+
+type EventResult = Result<Event, notify::Error>;
 
 #[derive(Debug, Error)]
 pub enum WatchError {
@@ -52,7 +56,7 @@ pub enum WatchError {
 // We want to broadcast the errors we get, but notify::Error does not implement
 // Clone. We provide a wrapper that uses an Arc to implement Clone so that we
 // can send errors on a broadcast channel.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub struct NotifyError(Arc<notify::Error>);
 
 impl From<notify::Error> for NotifyError {
@@ -61,8 +65,14 @@ impl From<notify::Error> for NotifyError {
     }
 }
 
+impl Display for NotifyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 pub struct FileSystemWatcher {
-    sender: broadcast::Sender<Result<DebouncedEvent, Vec<NotifyError>>>,
+    sender: broadcast::Sender<Result<Event, NotifyError>>,
     // _exit_ch exists to trigger a close on the receiver when an instance
     // of this struct is dropped. The task that is receiving events will exit,
     // dropping the other sender for the broadcast channel, causing all receivers
@@ -76,12 +86,12 @@ impl FileSystemWatcher {
         let (send_file_events, mut recv_file_events) = mpsc::channel(1024);
         let watch_root = root.to_owned();
         let broadcast_sender = sender.clone();
-        let debouncer = run_watcher(&watch_root, send_file_events).unwrap();
+        let watcher = run_watcher(&watch_root, send_file_events).unwrap();
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
         // Ensure we are ready to receive new events, not events for existing state
-        futures::executor::block_on(wait_for_cookie(&watch_root, &mut recv_file_events))?;
+        futures::executor::block_on(wait_for_cookie(&root, &mut recv_file_events))?;
         tokio::task::spawn(watch_events(
-            debouncer,
+            watcher,
             watch_root,
             recv_file_events,
             exit_signal,
@@ -93,18 +103,18 @@ impl FileSystemWatcher {
         })
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<Result<DebouncedEvent, Vec<NotifyError>>> {
+    pub fn subscribe(&self) -> broadcast::Receiver<Result<Event, NotifyError>> {
         self.sender.subscribe()
     }
 }
 
 #[cfg(not(any(feature = "watch_ancestors", feature = "watch_recursively")))]
 async fn watch_events(
-    _debouncer: Debouncer<Backend, FileIdMap>,
+    _watcher: Backend,
     _watch_root: AbsoluteSystemPathBuf,
-    mut recv_file_events: mpsc::Receiver<DebounceEventResult>,
+    mut recv_file_events: mpsc::Receiver<EventResult>,
     exit_signal: tokio::sync::oneshot::Receiver<()>,
-    broadcast_sender: broadcast::Sender<Result<DebouncedEvent, Vec<NotifyError>>>,
+    broadcast_sender: broadcast::Sender<Result<Event, NotifyError>>,
 ) {
     let mut exit_signal = exit_signal;
     'outer: loop {
@@ -112,15 +122,13 @@ async fn watch_events(
             _ = &mut exit_signal => break 'outer,
             Some(event) = recv_file_events.recv().into_future() => {
                 match event {
-                    Ok(events) => {
-                        for event in events {
-                            // we don't care if we fail to send, it just means no one is currently watching
-                            let _ = broadcast_sender.send(Ok(event));
-                        }
-                    },
-                    Err(errors) => {
+                    Ok(event) => {
                         // we don't care if we fail to send, it just means no one is currently watching
-                        let _ = broadcast_sender.send(Err(errors.into_iter().map(NotifyError::from).collect()));
+                        let _ = broadcast_sender.send(Ok(event));
+                    },
+                    Err(error) => {
+                        // we don't care if we fail to send, it just means no one is currently watching
+                        let _ = broadcast_sender.send(Err(NotifyError::from(error)));
                     }
                 }
             }
@@ -130,12 +138,12 @@ async fn watch_events(
 
 #[cfg(any(feature = "watch_ancestors", feature = "watch_recursively"))]
 async fn watch_events(
-    #[cfg(feature = "watch_recursively")] mut debouncer: Debouncer<Backend, FileIdMap>,
-    #[cfg(not(feature = "watch_recursively"))] _debouncer: Debouncer<Backend, FileIdMap>,
+    #[cfg(feature = "watch_recursively")] mut watcher: Backend,
+    #[cfg(not(feature = "watch_recursively"))] _watcher: Backend,
     watch_root: AbsoluteSystemPathBuf,
-    mut recv_file_events: mpsc::Receiver<DebounceEventResult>,
+    mut recv_file_events: mpsc::Receiver<EventResult>,
     exit_signal: tokio::sync::oneshot::Receiver<()>,
-    broadcast_sender: broadcast::Sender<Result<DebouncedEvent, Vec<NotifyError>>>,
+    broadcast_sender: broadcast::Sender<Result<Event, NotifyError>>,
 ) {
     let mut exit_signal = exit_signal;
     'outer: loop {
@@ -143,29 +151,26 @@ async fn watch_events(
             _ = &mut exit_signal => break 'outer,
             Some(event) = recv_file_events.recv().into_future() => {
                 match event {
-                    Ok(events) => {
-                        for mut event in events {
-                            #[cfg(feature = "watch_recursively")]
-                            {
-                                let time = event.time;
-                                if event.event.kind == EventKind::Create(CreateKind::Folder) {
-                                    for new_path in &event.event.paths {
-                                        if let Err(err) = manually_add_recursive_watches(&new_path, debouncer.watcher(), Some((time, &broadcast_sender))) {
-                                            warn!("encountered error watching filesyste {}", err);
-                                            break 'outer;
-                                        }
+                    Ok(mut event) => {
+                        #[cfg(feature = "watch_recursively")]
+                        {
+                            if event.kind == EventKind::Create(CreateKind::Folder) {
+                                for new_path in &event.paths {
+                                    if let Err(err) = manually_add_recursive_watches(&new_path, &mut watcher, Some(&broadcast_sender)) {
+                                        warn!("encountered error watching filesystem {}", err);
+                                        break 'outer;
                                     }
                                 }
                             }
-                            #[cfg(feature = "watch_ancestors")]
-                            filter_relevant(&watch_root, &mut event);
-                            // we don't care if we fail to send, it just means no one is currently watching
-                            let _ = broadcast_sender.send(Ok(event));
                         }
-                    },
-                    Err(errors) => {
+                        #[cfg(feature = "watch_ancestors")]
+                        filter_relevant(&watch_root, &mut event);
                         // we don't care if we fail to send, it just means no one is currently watching
-                        let _ = broadcast_sender.send(Err(errors.into_iter().map(NotifyError::from).collect()));
+                        let _ = broadcast_sender.send(Ok(event));
+                    },
+                    Err(error) => {
+                        // we don't care if we fail to send, it just means no one is currently watching
+                        let _ = broadcast_sender.send(Err(NotifyError::from(error)));
                     }
                 }
             }
@@ -177,7 +182,7 @@ async fn watch_events(
 // to handle both getting irrelevant events and getting ancestor
 // events that translate to events at the root.
 #[cfg(feature = "watch_ancestors")]
-fn filter_relevant(root: &AbsoluteSystemPath, event: &mut DebouncedEvent) {
+fn filter_relevant(root: &AbsoluteSystemPath, event: &mut Event) {
     // If path contains root && event type is modify, synthesize modify at root
     let is_modify_existing = matches!(event.kind, EventKind::Remove(_) | EventKind::Modify(_));
 
@@ -246,10 +251,7 @@ fn watch_recursively(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result
 fn manually_add_recursive_watches(
     root: &Path,
     watcher: &mut Backend,
-    sender: Option<(
-        Instant,
-        &broadcast::Sender<Result<DebouncedEvent, Vec<NotifyError>>>,
-    )>,
+    sender: Option<&broadcast::Sender<Result<Event, NotifyError>>>,
 ) -> Result<(), WatchError> {
     // Note that WalkDir yields the root as well as doing the walk.
     for dir in WalkDir::new(root).follow_links(false).into_iter() {
@@ -257,19 +259,16 @@ fn manually_add_recursive_watches(
         if dir.file_type().is_dir() {
             watcher.watch(dir.path(), RecursiveMode::NonRecursive)?;
         }
-        if let Some((instant, sender)) = sender.as_ref() {
+        if let Some(sender) = sender.as_ref() {
             let create_kind = if dir.file_type().is_dir() {
                 CreateKind::Folder
             } else {
                 CreateKind::File
             };
-            let event = DebouncedEvent {
-                event: Event {
-                    paths: vec![dir.path().to_owned()],
-                    kind: EventKind::Create(create_kind),
-                    attrs: EventAttributes::default(),
-                },
-                time: *instant,
+            let event = Event {
+                paths: vec![dir.path().to_owned()],
+                kind: EventKind::Create(create_kind),
+                attrs: EventAttributes::default(),
             };
             // It's ok if we fail to send, it means we're shutting down
             let _ = sender.send(Ok(event));
@@ -280,37 +279,27 @@ fn manually_add_recursive_watches(
 
 fn run_watcher(
     root: &AbsoluteSystemPath,
-    sender: mpsc::Sender<DebounceEventResult>,
-) -> Result<Debouncer<Backend, FileIdMap>, WatchError> {
-    let mut debouncer = make_debouncer(move |res| {
+    sender: mpsc::Sender<EventResult>,
+) -> Result<Backend, WatchError> {
+    let mut watcher = make_watcher(move |res| {
         let _ = sender.blocking_send(res);
     })?;
 
-    watch_recursively(root, debouncer.watcher())?;
+    watch_recursively(root, &mut watcher)?;
 
     #[cfg(feature = "watch_ancestors")]
-    watch_parents(root, debouncer.watcher())?;
-    Ok(debouncer)
+    watch_parents(root, &mut watcher)?;
+    Ok(watcher)
 }
 
 #[cfg(not(target_os = "macos"))]
-fn make_debouncer<F: DebounceEventHandler>(
-    event_handler: F,
-) -> Result<Debouncer<Backend, FileIdMap>, notify::Error> {
-    new_debouncer(Duration::from_millis(1), None, event_handler)
+fn make_watcher<F: EventHandler>(event_handler: F) -> Result<Backend, notify::Error> {
+    RecommendedWatcher::new(event_handler, Config::default())
 }
 
 #[cfg(target_os = "macos")]
-fn make_debouncer<F: DebounceEventHandler>(
-    event_handler: F,
-) -> Result<Debouncer<Backend, FileIdMap>, notify::Error> {
-    new_debouncer_opt::<F, FsEventWatcher, FileIdMap>(
-        Duration::from_millis(1),
-        None,
-        event_handler,
-        FileIdMap::new(),
-        notify::Config::default(),
-    )
+fn make_watcher<F: EventHandler>(event_handler: F) -> Result<Backend, notify::Error> {
+    FsEventWatcher::new(event_handler, notify::Config::default())
 }
 
 /// wait_for_cookie performs a roundtrip through the filewatching mechanism.
@@ -318,28 +307,25 @@ fn make_debouncer<F: DebounceEventHandler>(
 /// than receiving events from existing state, which some backends can do.
 async fn wait_for_cookie(
     root: &AbsoluteSystemPath,
-    recv: &mut mpsc::Receiver<DebounceEventResult>,
+    recv: &mut mpsc::Receiver<EventResult>,
 ) -> Result<(), WatchError> {
     let cookie_path = root.join_component(".turbo-cookie");
     cookie_path.create_with_contents("cookie").map_err(|e| {
         WatchError::Setup(format!("failed to write cookie to {}: {}", cookie_path, e))
     })?;
     loop {
-        let events = tokio::time::timeout(Duration::from_millis(2000), recv.recv())
+        let event = tokio::time::timeout(Duration::from_millis(2000), recv.recv())
             .await
-            .map_err(|_| WatchError::Setup("waiting for cookie timed out".to_string()))?
+            .map_err(|e| WatchError::Setup(format!("waiting for cookie timed out: {}", e)))?
             .ok_or_else(|| {
                 WatchError::Setup(
                     "filewatching closed before cookie file  was observed".to_string(),
                 )
             })?
-            .map_err(|errs| {
-                WatchError::Setup(format!(
-                    "initial watch encountered errors: {}",
-                    errs.into_iter().map(|e| e.to_string()).join(", ")
-                ))
+            .map_err(|err| {
+                WatchError::Setup(format!("initial watch encountered errors: {}", err))
             })?;
-        if events.iter().flat_map(|e| &(*e.paths)).any(|path| {
+        if event.paths.iter().any(|path| {
             let path: &Path = path;
             path == (&cookie_path as &AbsoluteSystemPath)
         }) {
@@ -359,8 +345,7 @@ mod test {
 
     #[cfg(not(target_os = "windows"))]
     use notify::event::RenameMode;
-    use notify::{event::ModifyKind, EventKind};
-    use notify_debouncer_full::DebouncedEvent;
+    use notify::{event::ModifyKind, Event, EventKind};
     use tokio::sync::broadcast;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
@@ -380,10 +365,9 @@ mod test {
                     .expect("timed out waiting for filesystem event")
                     .expect("sender was dropped")
                     .expect("filewatching error");
-                println!("event {:?}", event);
-                for path in event.event.paths {
+                for path in event.paths {
                     if path == (&$expected_path as &AbsoluteSystemPath)
-                        && matches!(event.event.kind, $pattern)
+                        && matches!(event.kind, $pattern)
                     {
                         break 'outer;
                     }
@@ -395,7 +379,7 @@ mod test {
     static WATCH_COUNT: AtomicUsize = AtomicUsize::new(0);
 
     async fn expect_watching(
-        recv: &mut broadcast::Receiver<Result<DebouncedEvent, Vec<NotifyError>>>,
+        recv: &mut broadcast::Receiver<Result<Event, NotifyError>>,
         dirs: &[&AbsoluteSystemPath],
     ) {
         for dir in dirs {
@@ -687,6 +671,7 @@ mod test {
         //   parent/
         //     child/
         //   symlink -> parent/child
+
         let (repo_root, _tmp_repo_root) = temp_dir();
         let repo_root = repo_root.to_realpath().unwrap();
 
@@ -808,6 +793,16 @@ mod test {
             watcher.subscribe()
         };
 
-        assert_matches!(recv.recv().await, Err(broadcast::error::RecvError::Closed));
+        // There may be spurious events, but we should expect a close in short order
+        tokio::time::timeout(Duration::from_millis(100), async move {
+            loop {
+                if let Err(e) = recv.recv().await {
+                    assert_matches!(e, broadcast::error::RecvError::Closed);
+                    return;
+                }
+            }
+        })
+        .await
+        .unwrap();
     }
 }
