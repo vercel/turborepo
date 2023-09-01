@@ -237,6 +237,14 @@ impl TryFrom<&Path> for AbsoluteSystemPathBuf {
     }
 }
 
+impl TryFrom<&str> for AbsoluteSystemPathBuf {
+    type Error = PathError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new(Utf8PathBuf::from(value))
+    }
+}
+
 impl From<AbsoluteSystemPathBuf> for PathBuf {
     fn from(path: AbsoluteSystemPathBuf) -> Self {
         path.0.into_std_path_buf()
