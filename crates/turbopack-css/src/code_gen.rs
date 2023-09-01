@@ -1,6 +1,4 @@
-use std::convert::Infallible;
-
-use lightningcss::visitor::Visitor;
+use lightningcss::{stylesheet::StyleSheet, visitor::Visitor};
 use turbo_tasks::Vc;
 use turbopack_core::chunk::ChunkingContext;
 
@@ -24,11 +22,11 @@ pub struct CodeGeneration {
 }
 
 pub trait VisitorFactory: Send + Sync {
-    fn create<'a>(&'a self) -> Box<dyn Visitor<Error = Infallible> + Send + Sync + 'a>;
+    fn create<'a>(&'a self) -> VisitorLike<'a>;
 }
 
 pub struct VisitorLike<'a> {
-    op: Box<dyn 'a + FnOnce(&mut Stylesheet<'static, 'static>) + Send + Sync>,
+    op: Box<dyn 'a + FnOnce(&mut StyleSheet<'static, 'static>) + Send + Sync>,
 }
 
 #[turbo_tasks::value_trait]
