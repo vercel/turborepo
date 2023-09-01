@@ -68,10 +68,15 @@ macro_rules! create_visitor {
         }
 
         impl<T: Fn(&mut $ty) + Send + Sync> $crate::code_gen::VisitorFactory
-            for Box<Visitor<T>>
+            for Visitor<T>
         {
             fn create<'a>(&'a self) -> $crate::code_gen::VisitorLike<'a> {
-                Box::new(&**self)
+                use lightningcss::visitor::Visit;
+                $crate::code_gen::VisitorLike {
+                    op: Box::new(move |s: &mut lightningcss::stylesheet::StyleSheet| {
+                        s.visit(&mut self);
+                    }),
+                }
             }
         }
 
