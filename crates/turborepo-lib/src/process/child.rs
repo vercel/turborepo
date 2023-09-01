@@ -140,7 +140,7 @@ impl ShutdownStyle {
 ///
 /// This is a wrapper around the `tokio::process::Child` struct, which provides
 /// a cross platform interface for spawning and managing child processes.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Child {
     pid: Option<u32>,
     gid: Option<u32>,

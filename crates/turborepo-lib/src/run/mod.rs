@@ -28,11 +28,10 @@ use crate::{
     config::TurboJson,
     daemon::DaemonConnector,
     engine::EngineBuilder,
-    manager::Manager,
     opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
-    process::ProcessManager,
+    process::SharedProcessManager,
     run::global_hash::get_global_hash_inputs,
     task_graph::Visitor,
     task_hash::PackageInputsHashes,
@@ -41,12 +40,12 @@ use crate::{
 #[derive(Debug)]
 pub struct Run {
     base: CommandBase,
-    processes: Manager,
+    processes: SharedProcessManager,
 }
 
 impl Run {
     pub fn new(base: CommandBase) -> Self {
-        let processes = Manager::new();
+        let processes = SharedProcessManager::new();
         Self { base, processes }
     }
 

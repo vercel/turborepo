@@ -10,9 +10,12 @@
 //! must be either `wait`ed on or `stop`ped to drive state.
 
 mod child;
+mod shared_adaptor;
 
 use std::time::Duration;
 
+pub use child::Command;
+pub use shared_adaptor::SharedProcessManager;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
 
@@ -20,11 +23,14 @@ use tracing::{debug, trace};
 /// processes. When the manager is Open, new child processes can be spawned
 /// using `spawn`. When the manager is Closed, all currently-running children
 /// will be closed, and no new children can be spawned.
+#[derive(Debug)]
 pub struct ProcessManager<T> {
     state: T,
 }
 
+#[derive(Debug)]
 pub struct Open(Vec<child::Child>);
+#[derive(Debug)]
 pub struct Closed;
 
 impl ProcessManager<Closed> {
@@ -44,8 +50,8 @@ impl ProcessManager<Open> {
     ///
     /// The handle of the child can be either waited or stopped by the caller,
     /// as well as the entire process manager.
-    pub fn spawn(&mut self, command: child::Command, timeout: Duration) -> child::Child {
-        let child = child::Child::spawn(command, child::ShutdownStyle::Graceful(timeout));
+    pub fn spawn(&mut self, command: child::Command, stop_timeout: Duration) -> child::Child {
+        let child = child::Child::spawn(command, child::ShutdownStyle::Graceful(stop_timeout));
         self.state.0.push(child.clone());
         child
     }
