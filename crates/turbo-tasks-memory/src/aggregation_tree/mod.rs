@@ -31,24 +31,19 @@ mod leaf;
 mod tests;
 mod top_tree;
 
-use std::{hash::Hash, ops::ControlFlow, sync::Arc};
+use std::{hash::Hash, ops::ControlFlow};
 
-use self::{bottom_tree::BottomTree, inner_refs::ChildLocation, leaf::top_tree, top_tree::TopTree};
+use self::leaf::top_tree;
 pub use self::{leaf::AggregationTreeLeaf, top_tree::AggregationInfoGuard};
 
-pub enum AggregationSubJob<T, I> {
-    BottomTree {
-        tree: Arc<BottomTree<T, I>>,
-        location: ChildLocation,
-        add: bool,
-    },
-    TopTree {
-        tree: Arc<TopTree<T>>,
-        add: bool,
-    },
-}
-
 pub trait AggregationContext {
+    type ItemLock<'a>: AggregationItemLock<
+        ItemRef = Self::ItemRef,
+        Info = Self::Info,
+        ItemChange = Self::ItemChange,
+    >
+    where
+        Self: 'a;
     type Info: Default;
     type ItemChange;
     type ItemRef: Eq + Hash + Clone;
@@ -56,16 +51,7 @@ pub trait AggregationContext {
     type RootInfoType;
 
     fn is_blue(&self, reference: &Self::ItemRef) -> bool;
-    fn queue_job_with_item_front(
-        &self,
-        reference: &Self::ItemRef,
-        job: AggregationSubJob<Self::Info, Self::ItemRef>,
-    );
-    fn queue_job_with_item_back(
-        &self,
-        reference: &Self::ItemRef,
-        job: AggregationSubJob<Self::Info, Self::ItemRef>,
-    );
+    fn item(&self, reference: Self::ItemRef) -> Self::ItemLock<'_>;
 
     fn apply_change(
         &self,
