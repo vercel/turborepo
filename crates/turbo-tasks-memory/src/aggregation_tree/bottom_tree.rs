@@ -1,6 +1,5 @@
 use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
-use auto_hash_map::AutoSet;
 use parking_lot::{Mutex, MutexGuard};
 
 use super::{
@@ -9,6 +8,7 @@ use super::{
     top_tree::TopTree,
     AggregationContext, AggregationItemLock,
 };
+use crate::count_hash_set::CountHashSet;
 
 /// The bottom half of the aggregation tree. It aggregates items up the a
 /// certain connectivity depending on the "height". Every level of the tree
@@ -59,9 +59,9 @@ impl<T, I> Hash for BottomTreeParent<T, I> {
 
 pub struct BottomTreeState<T, I> {
     data: T,
-    upper: AutoSet<BottomTreeParent<T, I>>,
+    upper: CountHashSet<BottomTreeParent<T, I>>,
     /// Items that are referenced by right children of this node.
-    following: AutoSet<I>,
+    following: CountHashSet<I>,
 }
 
 impl<T: Default, I> BottomTree<T, I> {
@@ -70,8 +70,8 @@ impl<T: Default, I> BottomTree<T, I> {
             height,
             state: Mutex::new(BottomTreeState {
                 data: T::default(),
-                upper: AutoSet::new(),
-                following: AutoSet::new(),
+                upper: CountHashSet::new(),
+                following: CountHashSet::new(),
             }),
         }
     }
@@ -135,7 +135,7 @@ impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
                         }
                     }
                 }
-                state.following.insert(child_of_child);
+                state.following.add(child_of_child);
             }
         }
     }
@@ -199,7 +199,7 @@ impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
                         }
                     }
                 }
-                state.following.remove(&child_of_child);
+                state.following.remove(child_of_child);
             }
         }
     }
@@ -211,7 +211,7 @@ impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
         location: ChildLocation,
     ) {
         let mut state = self.state.lock();
-        if state.upper.insert(BottomTreeParent::Bottom(BottomRef {
+        if state.upper.add(BottomTreeParent::Bottom(BottomRef {
             parent: parent.clone(),
             location,
         })) {
@@ -236,7 +236,7 @@ impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
         location: ChildLocation,
     ) {
         let mut state = self.state.lock();
-        if state.upper.remove(&BottomTreeParent::Bottom(BottomRef {
+        if state.upper.remove(BottomTreeParent::Bottom(BottomRef {
             parent: parent.clone(),
             location,
         })) {
@@ -260,7 +260,7 @@ impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
         parent: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
-        if state.upper.insert(BottomTreeParent::Top(TopRef {
+        if state.upper.add(BottomTreeParent::Top(TopRef {
             parent: parent.clone(),
         })) {
             if let Some(change) = context.info_to_add_change(&state.data) {
@@ -278,7 +278,7 @@ impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
         parent: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
-        if state.upper.remove(&BottomTreeParent::Top(TopRef {
+        if state.upper.remove(BottomTreeParent::Top(TopRef {
             parent: parent.clone(),
         })) {
             if let Some(change) = context.info_to_remove_change(&state.data) {

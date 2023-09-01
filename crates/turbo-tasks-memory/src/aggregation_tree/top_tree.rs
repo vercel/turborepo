@@ -1,9 +1,9 @@
 use std::{mem::transmute, ops::ControlFlow, sync::Arc};
 
-use auto_hash_map::AutoSet;
 use parking_lot::{Mutex, MutexGuard};
 
 use super::{inner_refs::TopRef, leaf::top_tree, AggregationContext};
+use crate::count_hash_set::CountHashSet;
 
 pub struct TopTree<T> {
     depth: u8,
@@ -12,7 +12,7 @@ pub struct TopTree<T> {
 
 struct TopTreeState<T> {
     data: T,
-    upper: AutoSet<TopRef<T>>,
+    upper: CountHashSet<TopRef<T>>,
 }
 
 impl<T: Default> TopTree<T> {
@@ -21,7 +21,7 @@ impl<T: Default> TopTree<T> {
             depth,
             state: Mutex::new(TopTreeState {
                 data: T::default(),
-                upper: AutoSet::new(),
+                upper: CountHashSet::new(),
             }),
         }
     }
@@ -55,7 +55,7 @@ impl<T> TopTree<T> {
         if let Some(change) = context.info_to_add_change(&state.data) {
             parent.child_change(context, &change);
         }
-        state.upper.insert(TopRef {
+        state.upper.add(TopRef {
             parent: parent.clone(),
         });
     }
@@ -69,7 +69,7 @@ impl<T> TopTree<T> {
         if let Some(change) = context.info_to_remove_change(&state.data) {
             parent.child_change(context, &change);
         }
-        state.upper.remove(&TopRef {
+        state.upper.remove(TopRef {
             parent: parent.clone(),
         });
     }
