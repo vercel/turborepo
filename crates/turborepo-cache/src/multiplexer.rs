@@ -100,7 +100,6 @@ impl CacheMultiplexer {
         &self,
         anchor: &AbsoluteSystemPath,
         key: &str,
-        team_slug: Option<&str>,
     ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
         if let Some(fs) = &self.fs {
             if let Ok(cache_response) = fs.fetch(anchor, key) {
@@ -109,7 +108,7 @@ impl CacheMultiplexer {
         }
 
         if let Some(http) = self.get_http_cache() {
-            if let Ok((cache_response, files)) = http.fetch(key, team_slug).await {
+            if let Ok((cache_response, files)) = http.fetch(key).await {
                 // Store this into fs cache. We can ignore errors here because we know
                 // we have previously successfully stored in HTTP cache, and so the overall
                 // result is a success at fetching. Storing in lower-priority caches is an
@@ -125,11 +124,7 @@ impl CacheMultiplexer {
         Err(CacheError::CacheMiss)
     }
 
-    pub async fn exists(
-        &self,
-        key: &str,
-        team_slug: Option<&str>,
-    ) -> Result<CacheResponse, CacheError> {
+    pub async fn exists(&self, key: &str) -> Result<CacheResponse, CacheError> {
         if let Some(fs) = &self.fs {
             match fs.exists(key) {
                 Ok(cache_response) => {
@@ -140,7 +135,7 @@ impl CacheMultiplexer {
         }
 
         if let Some(http) = self.get_http_cache() {
-            match http.exists(key, team_slug).await {
+            match http.exists(key).await {
                 Ok(cache_response) => {
                     return Ok(cache_response);
                 }

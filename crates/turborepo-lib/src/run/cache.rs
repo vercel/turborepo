@@ -165,7 +165,6 @@ impl TaskCache {
 
     pub async fn restore_outputs(
         &mut self,
-        team_slug: Option<&str>,
         prefixed_ui: &mut PrefixedUI<impl Write>,
     ) -> Result<CacheResponse, anyhow::Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
@@ -218,7 +217,7 @@ impl TaskCache {
             let (cache_status, restored_files) = self
                 .run_cache
                 .cache
-                .fetch(&self.run_cache.repo_root, &self.hash, team_slug)
+                .fetch(&self.run_cache.repo_root, &self.hash)
                 .await
                 .map_err(|err| {
                     if matches!(err, CacheError::CacheMiss) {
