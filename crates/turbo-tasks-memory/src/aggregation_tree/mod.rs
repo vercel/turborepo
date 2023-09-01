@@ -73,6 +73,16 @@ pub trait AggregationContext {
         root_info: &mut Self::RootInfo,
         other: Self::RootInfo,
     ) -> ControlFlow<()>;
+
+    fn on_change(&self, change: &Self::ItemChange) {
+        let _ = change;
+    }
+    fn on_add_change(&self, change: &Self::ItemChange) {
+        let _ = change;
+    }
+    fn on_remove_change(&self, change: &Self::ItemChange) {
+        let _ = change;
+    }
 }
 
 pub trait AggregationItemLock {

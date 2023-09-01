@@ -339,25 +339,23 @@ impl MaybeCollectibles {
     }
 
     /// Emits a collectible.
-    fn emit(&mut self, trait_type: TraitTypeId, value: RawVc) -> bool {
+    fn emit(&mut self, trait_type: TraitTypeId, value: RawVc) {
         let value = self
             .inner
             .get_or_insert_default()
             .entry((trait_type, value))
             .or_default();
         *value += 1;
-        *value == 1
     }
 
     /// Unemits a collectible.
-    fn unemit(&mut self, trait_type: TraitTypeId, value: RawVc, count: u32) -> bool {
+    fn unemit(&mut self, trait_type: TraitTypeId, value: RawVc, count: u32) {
         let value = self
             .inner
             .get_or_insert_default()
             .entry((trait_type, value))
             .or_default();
         *value -= count as i32;
-        *value == 0
     }
 }
 
@@ -484,7 +482,7 @@ impl Task {
         {
             aggregation_info(&context, id).root_type = Some(RootType::Root);
         }
-        context.schedule_dirty_tasks_if_needed();
+        context.apply_queued_updates();
     }
 
     pub(crate) fn set_once(
@@ -496,7 +494,7 @@ impl Task {
         {
             aggregation_info(&context, id).root_type = Some(RootType::Once);
         }
-        context.schedule_dirty_tasks_if_needed();
+        context.apply_queued_updates();
     }
 
     pub(crate) fn unset_root(
@@ -508,7 +506,7 @@ impl Task {
         {
             aggregation_info(&context, id).root_type = None;
         }
-        context.schedule_dirty_tasks_if_needed();
+        context.apply_queued_updates();
     }
 
     pub(crate) fn get_function_name(&self) -> Option<&'static str> {
@@ -796,6 +794,8 @@ impl Task {
             &TaskAggregationContext::new(turbo_tasks, backend),
             &TaskChange {
                 unfinished: -1,
+                #[cfg(feature = "track_unfinished")]
+                unfinished_tasks_update: vec![(self.id, -1)],
                 ..Default::default()
             },
         );
@@ -887,6 +887,8 @@ impl Task {
                             &TaskAggregationContext::new(turbo_tasks, backend),
                             &TaskChange {
                                 unfinished: -1,
+                                #[cfg(feature = "track_unfinished")]
+                                unfinished_tasks_update: vec![(self.id, -1)],
                                 ..Default::default()
                             },
                         );
@@ -959,6 +961,13 @@ impl Task {
                                 format!("TaskState({})::event", description())
                             }),
                         };
+                        state.aggregation_leaf.change(
+                            &TaskAggregationContext::new(turbo_tasks, backend),
+                            &TaskChange {
+                                dirty_tasks_update: vec![(self.id, -1)],
+                                ..Default::default()
+                            },
+                        );
                         drop(state);
                         turbo_tasks.schedule(self.id);
                     } else {
@@ -969,6 +978,7 @@ impl Task {
                 Done {
                     ref mut dependencies,
                 } => {
+                    let mut has_set_unfinished = false;
                     clear_dependencies = take(dependencies);
                     // add to dirty lists and potentially schedule
                     let description = self.get_event_description();
@@ -983,10 +993,13 @@ impl Task {
                                 &context,
                                 &TaskChange {
                                     unfinished: 1,
+                                    #[cfg(feature = "track_unfinished")]
+                                    unfinished_tasks_update: vec![(self.id, 1)],
                                     dirty_tasks_update: vec![(self.id, 1)],
                                     ..Default::default()
                                 },
                             );
+                            has_set_unfinished = true;
                             if context.take_scheduled_dirty_task(self.id) {
                                 state.aggregation_leaf.change(
                                     &context,
@@ -1000,6 +1013,17 @@ impl Task {
                                 false
                             }
                         };
+                    if !has_set_unfinished {
+                        state.aggregation_leaf.change(
+                            &TaskAggregationContext::new(turbo_tasks, backend),
+                            &TaskChange {
+                                unfinished: 1,
+                                #[cfg(feature = "track_unfinished")]
+                                unfinished_tasks_update: vec![(self.id, 1)],
+                                ..Default::default()
+                            },
+                        );
+                    }
                     if should_schedule {
                         state.state_type = Scheduled {
                             event: Event::new(move || {
@@ -1031,6 +1055,8 @@ impl Task {
                             &TaskAggregationContext::new(turbo_tasks, backend),
                             &TaskChange {
                                 unfinished: 1,
+                                #[cfg(feature = "track_unfinished")]
+                                unfinished_tasks_update: vec![(self.id, 1)],
                                 ..Default::default()
                             },
                         );
@@ -1281,7 +1307,7 @@ impl Task {
             let state = self.full_state_mut();
             self.connect_child_internal(state, &context, child_id);
         }
-        context.schedule_dirty_tasks_if_needed();
+        context.apply_queued_updates();
     }
 
     fn connect_child_internal(
@@ -1377,19 +1403,18 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
+        let mut context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut state = self.full_state_mut();
-        if state.collectibles.emit(trait_type, collectible) {
-            let mut context = TaskAggregationContext::new(turbo_tasks, backend);
-            state.aggregation_leaf.change(
-                &context,
-                &TaskChange {
-                    collectibles: vec![(trait_type, collectible, 1)],
-                    ..Default::default()
-                },
-            );
-            drop(state);
-            context.schedule_dirty_tasks_if_needed();
-        }
+        state.collectibles.emit(trait_type, collectible);
+        state.aggregation_leaf.change(
+            &context,
+            &TaskChange {
+                collectibles: vec![(trait_type, collectible, 1)],
+                ..Default::default()
+            },
+        );
+        drop(state);
+        context.apply_queued_updates();
     }
 
     pub(crate) fn unemit_collectible(
@@ -1400,19 +1425,18 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
+        let mut context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut state = self.full_state_mut();
-        if state.collectibles.unemit(trait_type, collectible, count) {
-            let mut context = TaskAggregationContext::new(turbo_tasks, backend);
-            state.aggregation_leaf.change(
-                &context,
-                &TaskChange {
-                    collectibles: vec![(trait_type, collectible, -1)],
-                    ..Default::default()
-                },
-            );
-            drop(state);
-            context.schedule_dirty_tasks_if_needed();
-        }
+        state.collectibles.unemit(trait_type, collectible, count);
+        state.aggregation_leaf.change(
+            &context,
+            &TaskChange {
+                collectibles: vec![(trait_type, collectible, -(count as i32))],
+                ..Default::default()
+            },
+        );
+        drop(state);
+        context.apply_queued_updates();
     }
 
     pub(crate) fn gc_check_inactive(&self, backend: &MemoryBackend) {

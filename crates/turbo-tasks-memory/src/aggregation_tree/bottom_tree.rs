@@ -369,6 +369,7 @@ pub fn add_parent_to_item<C: AggregationContext>(
 ) {
     if item.leaf().add_upper(parent.clone(), location) {
         if let Some(change) = item.get_add_change() {
+            context.on_add_change(&change);
             let mut state = parent.state.lock();
             let change = context.apply_change(&mut state.data, &change);
             propagate_change_to_upper(&mut state, context, change);
@@ -390,6 +391,7 @@ pub fn remove_parent_from_item<C: AggregationContext>(
 ) {
     if item.leaf().remove_upper(parent.clone(), location) {
         if let Some(change) = item.get_remove_change() {
+            context.on_remove_change(&change);
             let mut state = parent.state.lock();
             let change = context.apply_change(&mut state.data, &change);
             propagate_change_to_upper(&mut state, context, change);

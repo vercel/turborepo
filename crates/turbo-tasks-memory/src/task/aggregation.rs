@@ -42,6 +42,9 @@ pub struct Aggregated {
     pub unfinished: i32,
     /// Event that will be notified when all unfinished tasks are done.
     pub unfinished_event: Event,
+    /// A list of all tasks that are unfinished. Only for debugging.
+    #[cfg(feature = "track_unfinished")]
+    pub unfinished_tasks: AutoMap<TaskId, i32, BuildNoHashHasher<TaskId>>,
     /// A list of all tasks that are dirty.
     /// When the it becomes active, these need to be scheduled.
     // TODO evaluate a more efficient data structure for this since we are copying the list on
@@ -62,6 +65,8 @@ impl Default for Aggregated {
         Self {
             unfinished: 0,
             unfinished_event: Event::new(|| "Aggregated::unfinished_event".to_string()),
+            #[cfg(feature = "track_unfinished")]
+            unfinished_tasks: AutoMap::with_hasher(),
             dirty_tasks: AutoMap::with_hasher(),
             collectibles: AutoMap::with_hasher(),
             root_type: None,
@@ -105,16 +110,26 @@ impl Aggregated {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TaskChange {
     pub unfinished: i32,
+    #[cfg(feature = "track_unfinished")]
+    pub unfinished_tasks_update: Vec<(TaskId, i32)>,
     pub dirty_tasks_update: Vec<(TaskId, i32)>,
     pub collectibles: Vec<(TraitTypeId, RawVc, i32)>,
 }
 
 impl TaskChange {
     fn is_empty(&self) -> bool {
-        self.unfinished == 0 && self.dirty_tasks_update.is_empty() && self.collectibles.is_empty()
+        #[allow(unused_mut, reason = "feature flag")]
+        let mut empty = self.unfinished == 0
+            && self.dirty_tasks_update.is_empty()
+            && self.collectibles.is_empty();
+        #[cfg(feature = "track_unfinished")]
+        if !self.unfinished_tasks_update.is_empty() {
+            empty = false;
+        }
+        empty
     }
 }
 
@@ -122,6 +137,7 @@ pub struct TaskAggregationContext<'a> {
     pub turbo_tasks: &'a dyn TurboTasksBackendApi<MemoryBackend>,
     pub backend: &'a MemoryBackend,
     pub dirty_tasks_to_schedule: Mutex<Option<AutoSet<TaskId, BuildNoHashHasher<TaskId>>>>,
+    pub tasks_to_notify: Mutex<Option<AutoSet<TaskId, BuildNoHashHasher<TaskId>>>>,
 }
 
 impl<'a> TaskAggregationContext<'a> {
@@ -133,6 +149,7 @@ impl<'a> TaskAggregationContext<'a> {
             turbo_tasks,
             backend,
             dirty_tasks_to_schedule: Mutex::new(None),
+            tasks_to_notify: Mutex::new(None),
         }
     }
 
@@ -144,13 +161,20 @@ impl<'a> TaskAggregationContext<'a> {
             .unwrap_or(false)
     }
 
-    pub fn schedule_dirty_tasks_if_needed(&mut self) {
+    pub fn apply_queued_updates(&mut self) {
         let tasks = self.dirty_tasks_to_schedule.get_mut();
         if let Some(tasks) = tasks.as_mut() {
             let tasks = take(tasks);
             if !tasks.is_empty() {
                 self.backend
                     .schedule_when_dirty_from_aggregation(tasks, self.turbo_tasks);
+            }
+        }
+        let tasks = self.tasks_to_notify.get_mut();
+        if let Some(tasks) = tasks.as_mut() {
+            let tasks = take(tasks);
+            if !tasks.is_empty() {
+                self.turbo_tasks.schedule_notify_tasks_set(&tasks);
             }
         }
     }
@@ -163,6 +187,12 @@ impl<'a> Drop for TaskAggregationContext<'a> {
         if let Some(tasks_to_schedule) = tasks_to_schedule.as_ref() {
             if !tasks_to_schedule.is_empty() {
                 panic!("TaskAggregationContext dropped without scheduling all tasks");
+            }
+        }
+        let tasks_to_notify = self.tasks_to_notify.get_mut();
+        if let Some(tasks_to_notify) = tasks_to_notify.as_ref() {
+            if !tasks_to_notify.is_empty() {
+                panic!("TaskAggregationContext dropped without notifying all tasks");
             }
         }
     }
@@ -192,10 +222,26 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         info: &mut Aggregated,
         change: &Self::ItemChange,
     ) -> Option<Self::ItemChange> {
-        info.unfinished += change.unfinished;
+        let mut unfinished = 0;
+        if info.unfinished > 0 {
+            info.unfinished += change.unfinished;
+            if info.unfinished == 0 {
+                info.unfinished_event.notify(usize::MAX);
+                unfinished = -1;
+            }
+        } else {
+            info.unfinished += change.unfinished;
+            if info.unfinished > 0 {
+                unfinished = 1;
+            }
+        }
+        #[cfg(feature = "track_unfinished")]
+        for &(task, count) in change.unfinished_tasks_update.iter() {
+            update_count_entry(info.unfinished_tasks.entry(task), count);
+        }
         for &(task, count) in change.dirty_tasks_update.iter() {
             let value = update_count_entry(info.dirty_tasks.entry(task), count);
-            if value > 0 {
+            if value > 0 && value <= count {
                 if matches!(info.root_type, Some(RootType::Root) | Some(RootType::Once)) {
                     let mut tasks_to_schedule = self.dirty_tasks_to_schedule.lock();
                     tasks_to_schedule.get_or_insert_default().insert(task);
@@ -207,8 +253,17 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
             match collectibles_info_entry {
                 Entry::Occupied(mut e) => {
                     let collectibles_info = e.get_mut();
-                    update_count_entry(collectibles_info.collectibles.entry(collectible), count);
-                    if collectibles_info.is_unset() {
+                    let value = update_count_entry(
+                        collectibles_info.collectibles.entry(collectible),
+                        count,
+                    );
+                    if !collectibles_info.dependent_tasks.is_empty() {
+                        self.tasks_to_notify
+                            .lock()
+                            .get_or_insert_default()
+                            .extend(collectibles_info.dependent_tasks.iter().copied());
+                    }
+                    if value == 0 && collectibles_info.is_unset() {
                         e.remove();
                     }
                 }
@@ -219,8 +274,19 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
                 }
             }
         }
+        #[cfg(feature = "track_unfinished")]
+        if info.unfinished > 0 && info.unfinished_tasks.is_empty()
+            || info.unfinished == 0 && !info.unfinished_tasks.is_empty()
+        {
+            panic!(
+                "inconsistent state: unfinished {}, unfinished_tasks {:?}, change {:?}",
+                info.unfinished, info.unfinished_tasks, change
+            );
+        }
         let new_change = TaskChange {
-            unfinished: info.unfinished.clamp(0, 1),
+            unfinished,
+            #[cfg(feature = "track_unfinished")]
+            unfinished_tasks_update: change.unfinished_tasks_update.clone(),
             dirty_tasks_update: change.dirty_tasks_update.clone(),
             collectibles: change.collectibles.clone(),
         };
@@ -232,13 +298,13 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
     }
 
     fn info_to_add_change(&self, info: &Aggregated) -> Option<Self::ItemChange> {
-        let mut change = TaskChange {
-            unfinished: 0,
-            dirty_tasks_update: vec![],
-            collectibles: vec![],
-        };
+        let mut change = TaskChange::default();
         if info.unfinished > 0 {
             change.unfinished = 1;
+        }
+        #[cfg(feature = "track_unfinished")]
+        for (&task, &count) in info.unfinished_tasks.iter() {
+            change.unfinished_tasks_update.push((task, count));
         }
         for (&task, &count) in info.dirty_tasks.iter() {
             change.dirty_tasks_update.push((task, count));
@@ -258,13 +324,13 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
     }
 
     fn info_to_remove_change(&self, info: &Aggregated) -> Option<Self::ItemChange> {
-        let mut change = TaskChange {
-            unfinished: 0,
-            dirty_tasks_update: vec![],
-            collectibles: vec![],
-        };
+        let mut change = TaskChange::default();
         if info.unfinished > 0 {
             change.unfinished = -1;
+        }
+        #[cfg(feature = "track_unfinished")]
+        for (&task, &count) in info.unfinished_tasks.iter() {
+            change.unfinished_tasks_update.push((task, -count));
         }
         for (&task, &count) in info.dirty_tasks.iter() {
             change.dirty_tasks_update.push((task, -count));
@@ -359,11 +425,17 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
                         }
                 ) {
                     change.unfinished = 1;
+                    #[cfg(feature = "track_unfinished")]
+                    change.unfinished_tasks_update.push((self.id, 1));
                 }
                 if matches!(guard.state_type, TaskStateType::Dirty { .. }) {
                     change.dirty_tasks_update.push((self.id, 1));
                 }
-                // TODO collectibles
+                if let Some(collectibles) = guard.collectibles.as_ref() {
+                    for (&(trait_type_id, collectible), _) in collectibles.iter() {
+                        change.collectibles.push((trait_type_id, collectible, 1));
+                    }
+                }
                 if change.is_empty() {
                     None
                 } else {
@@ -387,11 +459,17 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
                         }
                 ) {
                     change.unfinished = -1;
+                    #[cfg(feature = "track_unfinished")]
+                    change.unfinished_tasks_update.push((self.id, -1));
                 }
                 if matches!(guard.state_type, TaskStateType::Dirty { .. }) {
                     change.dirty_tasks_update.push((self.id, -1));
                 }
-                // TODO collectibles
+                if let Some(collectibles) = guard.collectibles.as_ref() {
+                    for (&(trait_type_id, collectible), _) in collectibles.iter() {
+                        change.collectibles.push((trait_type_id, collectible, -1));
+                    }
+                }
                 if change.is_empty() {
                     None
                 } else {

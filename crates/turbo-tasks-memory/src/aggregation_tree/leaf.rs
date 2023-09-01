@@ -1,6 +1,6 @@
 use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
-use auto_hash_map::AutoMap;
+use auto_hash_map::{AutoMap, AutoSet};
 use nohash_hasher::BuildNoHashHasher;
 
 use super::{
@@ -9,12 +9,11 @@ use super::{
     top_tree::TopTree,
     AggregationContext, AggregationItemLock,
 };
-use crate::count_hash_set::CountHashSet;
 
 pub struct AggregationTreeLeaf<T, I> {
     top_trees: AutoMap<u8, Arc<TopTree<T>>, BuildNoHashHasher<u8>>,
     bottom_trees: AutoMap<u8, Arc<BottomTree<T, I>>, BuildNoHashHasher<u8>>,
-    upper: CountHashSet<BottomRef<T, I>>,
+    upper: AutoSet<BottomRef<T, I>>,
 }
 
 impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
@@ -22,7 +21,7 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
         Self {
             top_trees: AutoMap::with_hasher(),
             bottom_trees: AutoMap::with_hasher(),
-            upper: CountHashSet::new(),
+            upper: AutoSet::new(),
         }
     }
 
@@ -55,6 +54,7 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
         context: &C,
         change: &C::ItemChange,
     ) {
+        context.on_change(change);
         for BottomRef {
             parent,
             location: _,
@@ -93,7 +93,7 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
         parent: Arc<BottomTree<T, I>>,
         location: ChildLocation,
     ) -> bool {
-        self.upper.add(BottomRef { parent, location })
+        self.upper.insert(BottomRef { parent, location })
     }
 
     #[must_use]
@@ -102,7 +102,7 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
         parent: Arc<BottomTree<T, I>>,
         location: ChildLocation,
     ) -> bool {
-        self.upper.remove(BottomRef { parent, location })
+        self.upper.remove(&BottomRef { parent, location })
     }
 }
 

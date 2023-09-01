@@ -38,6 +38,7 @@ turbo-tasks-testing = { workspace = true }
 turbo-tasks-build = { workspace = true }
 
 [features]
+track_unfinished = []
 unsafe_once_map = []
 log_running_tasks = []
 log_scheduled_tasks = []
@@ -48,6 +49,7 @@ print_scope_updates = []
 print_task_invalidation = []
 inline_add_to_scope = []
 inline_remove_from_scope = []
+default = []
 
 [[bench]]
 name = "mod"
