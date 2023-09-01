@@ -119,9 +119,7 @@ impl GetContentSourceContent for TurboTasksSource {
                 let b = tt.backend();
                 let include_unloaded = query.contains_key("unloaded");
                 b.with_all_cached_tasks(|task| {
-                    stats.add_id_conditional(b, task, |_, info| {
-                        (include_unloaded || !info.unloaded)
-                    });
+                    stats.add_id_conditional(b, task, |_, info| include_unloaded || !info.unloaded);
                 });
                 let tree = stats.treeify(ReferenceType::Dependency);
                 let table = viz::table::create_table(tree, tt.stats_type());
