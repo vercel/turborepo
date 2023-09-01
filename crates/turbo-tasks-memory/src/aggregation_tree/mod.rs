@@ -31,19 +31,24 @@ mod leaf;
 mod tests;
 mod top_tree;
 
-use std::{hash::Hash, ops::ControlFlow};
+use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
-use self::leaf::top_tree;
+use self::{bottom_tree::BottomTree, inner_refs::ChildLocation, leaf::top_tree, top_tree::TopTree};
 pub use self::{leaf::AggregationTreeLeaf, top_tree::AggregationInfoGuard};
 
+pub enum AggregationSubJob<T, I> {
+    BottomTree {
+        tree: Arc<BottomTree<T, I>>,
+        location: ChildLocation,
+        add: bool,
+    },
+    TopTree {
+        tree: Arc<TopTree<T>>,
+        add: bool,
+    },
+}
+
 pub trait AggregationContext {
-    type ItemLock<'a>: AggregationItemLock<
-        ItemRef = Self::ItemRef,
-        Info = Self::Info,
-        ItemChange = Self::ItemChange,
-    >
-    where
-        Self: 'a;
     type Info: Default;
     type ItemChange;
     type ItemRef: Eq + Hash + Clone;
@@ -51,7 +56,16 @@ pub trait AggregationContext {
     type RootInfoType;
 
     fn is_blue(&self, reference: &Self::ItemRef) -> bool;
-    fn item(&self, reference: Self::ItemRef) -> Self::ItemLock<'_>;
+    fn queue_job_with_item_front(
+        &self,
+        reference: &Self::ItemRef,
+        job: AggregationSubJob<Self::Info, Self::ItemRef>,
+    );
+    fn queue_job_with_item_back(
+        &self,
+        reference: &Self::ItemRef,
+        job: AggregationSubJob<Self::Info, Self::ItemRef>,
+    );
 
     fn apply_change(
         &self,
@@ -99,18 +113,46 @@ pub trait AggregationItemLock {
     fn get_add_change(&self) -> Option<Self::ItemChange>;
 }
 
-pub fn aggregation_info<C: AggregationContext>(
-    context: &C,
-    reference: C::ItemRef,
-) -> AggregationInfoGuard<C::Info> {
-    let mut item = context.item(reference);
-    let top_tree = top_tree(context, &mut item, 0);
-    top_tree.info()
-}
-
 pub fn aggregation_info_from_item<C: AggregationContext>(
     context: &C,
-    item: &mut C::ItemLock<'_>,
-) -> AggregationInfoGuard<C::Info> {
-    top_tree(context, item, 0).info()
+    reference: &C::ItemRef,
+    item: &mut impl AggregationItemLock<
+        Info = C::Info,
+        ItemRef = C::ItemRef,
+        ItemChange = C::ItemChange,
+    >,
+) -> AggregationInfoReference<C::Info> {
+    AggregationInfoReference {
+        tree: top_tree(context, reference, item, 0),
+    }
+}
+
+pub struct AggregationInfoReference<T> {
+    tree: Arc<TopTree<T>>,
+}
+
+impl<T> AggregationInfoReference<T> {
+    pub fn lock(&self) -> AggregationInfoGuard<T> {
+        self.tree.lock_info()
+    }
+}
+
+pub fn process_queued_sub_job<C: AggregationContext>(
+    context: &C,
+    reference: &C::ItemRef,
+    item: &mut impl AggregationItemLock<
+        Info = C::Info,
+        ItemRef = C::ItemRef,
+        ItemChange = C::ItemChange,
+    >,
+    job: AggregationSubJob<C::Info, C::ItemRef>,
+) {
+    match job {
+        AggregationSubJob::BottomTree {
+            tree,
+            location,
+            add,
+        } => tree.process_job(context, reference, item, location, add),
+        AggregationSubJob::TopTree { tree, add } => tree.process_job(context, reference, item, add),
+    }
 }

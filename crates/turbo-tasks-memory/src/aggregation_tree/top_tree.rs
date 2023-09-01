@@ -2,7 +2,9 @@ use std::{mem::transmute, ops::ControlFlow, sync::Arc};
 
 use parking_lot::{Mutex, MutexGuard};
 
-use super::{inner_refs::TopRef, leaf::top_tree, AggregationContext};
+use super::{
+    inner_refs::TopRef, leaf::top_tree, AggregationContext, AggregationItemLock, AggregationSubJob,
+};
 use crate::count_hash_set::CountHashSet;
 
 pub struct TopTree<T> {
@@ -31,19 +33,29 @@ impl<T> TopTree<T> {
     pub(super) fn add_child_of_child<C: AggregationContext<Info = T>>(
         self: &Arc<Self>,
         context: &C,
-        child_of_child: C::ItemRef,
+        child_of_child: &C::ItemRef,
     ) {
-        top_tree(context, &mut context.item(child_of_child), self.depth + 1)
-            .add_parent(context, self);
+        context.queue_job_with_item_front(
+            child_of_child,
+            AggregationSubJob::TopTree {
+                tree: self.clone(),
+                add: true,
+            },
+        );
     }
 
     pub(super) fn remove_child_of_child<C: AggregationContext<Info = T>>(
         self: &Arc<Self>,
         context: &C,
-        child_of_child: C::ItemRef,
+        child_of_child: &C::ItemRef,
     ) {
-        top_tree(context, &mut context.item(child_of_child), self.depth + 1)
-            .remove_parent(context, self);
+        context.queue_job_with_item_front(
+            child_of_child,
+            AggregationSubJob::TopTree {
+                tree: self.clone(),
+                add: false,
+            },
+        );
     }
 
     pub(super) fn add_parent<C: AggregationContext<Info = T>>(
@@ -105,13 +117,23 @@ impl<T> TopTree<T> {
         }
     }
 
-    pub(super) fn info(self: Arc<Self>) -> AggregationInfoGuard<T> {
+    pub(super) fn lock_info(self: &Arc<Self>) -> AggregationInfoGuard<T> {
         AggregationInfoGuard {
             // SAFETY: We can cast the lifetime as we keep a strong reference to the tree.
             // The order of the field in the struct is important to drop guard before tree.
             guard: unsafe { transmute(self.state.lock()) },
             tree: self.clone(),
         }
+    }
+
+    pub(super) fn process_job<C: AggregationContext<Info = T>>(
+        self: &Arc<TopTree<T>>,
+        context: &C,
+        reference: &C::ItemRef,
+        item: &mut impl AggregationItemLock<Info = T, ItemRef = C::ItemRef, ItemChange = C::ItemChange>,
+        add: bool,
+    ) {
+        top_tree(context, reference, item, self.depth + 1).add_parent(context, self);
     }
 }
 

@@ -1,5 +1,7 @@
 use std::{
+    collections::VecDeque,
     hash::Hash,
+    mem::replace,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
@@ -8,7 +10,10 @@ use std::{
 
 use parking_lot::{Mutex, MutexGuard};
 
-use super::{aggregation_info, AggregationContext, AggregationItemLock, AggregationTreeLeaf};
+use super::{
+    aggregation_info_from_item, process_queued_sub_job, AggregationContext, AggregationItemLock,
+    AggregationSubJob, AggregationTreeLeaf,
+};
 
 struct Node {
     blue: bool,
@@ -44,8 +49,27 @@ struct NodeInner {
 
 struct NodeAggregationContext<'a> {
     additions: AtomicU32,
+    queue: Mutex<VecDeque<(NodeRef, AggregationSubJob<Aggregated, NodeRef>)>>,
     #[allow(dead_code)]
     something_with_lifetime: &'a u32,
+}
+
+impl<'a> NodeAggregationContext<'a> {
+    fn run_queue(&mut self) {
+        while let Some((reference, job)) = self.queue.get_mut().pop_front() {
+            let mut item = lock_item(reference.clone());
+            process_queued_sub_job(self, &reference, &mut item, job);
+        }
+    }
+}
+
+fn lock_item(reference: NodeRef) -> NodeGuard {
+    let r = reference.0.clone();
+    let guard = r.inner.lock();
+    NodeGuard {
+        guard: unsafe { std::mem::transmute(guard) },
+        node: r,
+    }
 }
 
 #[derive(Clone)]
@@ -115,22 +139,12 @@ impl AggregationItemLock for NodeGuard {
 }
 
 impl<'a> AggregationContext for NodeAggregationContext<'a> {
-    type ItemLock<'l> = NodeGuard where Self: 'l;
     type Info = Aggregated;
     type ItemRef = NodeRef;
     type ItemChange = Change;
 
     fn is_blue(&self, reference: &Self::ItemRef) -> bool {
         reference.0.blue
-    }
-
-    fn item(&self, reference: Self::ItemRef) -> Self::ItemLock<'_> {
-        let r = reference.0.clone();
-        let guard = r.inner.lock();
-        NodeGuard {
-            guard: unsafe { std::mem::transmute(guard) },
-            node: r,
-        }
     }
 
     fn apply_change(&self, info: &mut Aggregated, change: &Change) -> Option<Change> {
@@ -195,6 +209,22 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
             std::ops::ControlFlow::Continue(())
         }
     }
+
+    fn queue_job_with_item_back(
+        &self,
+        reference: &Self::ItemRef,
+        job: super::AggregationSubJob<Self::Info, Self::ItemRef>,
+    ) {
+        self.queue.lock().push_back((reference.clone(), job));
+    }
+
+    fn queue_job_with_item_front(
+        &self,
+        reference: &Self::ItemRef,
+        job: super::AggregationSubJob<Self::Info, Self::ItemRef>,
+    ) {
+        self.queue.lock().push_front((reference.clone(), job));
+    }
 }
 
 #[derive(Default)]
@@ -206,8 +236,9 @@ struct Aggregated {
 #[test]
 fn test() {
     let something_with_lifetime = 0;
-    let context = NodeAggregationContext {
+    let mut context = NodeAggregationContext {
         additions: AtomicU32::new(0),
+        queue: Mutex::new(VecDeque::new()),
         something_with_lifetime: &something_with_lifetime,
     };
     let leaf = Arc::new(Node {
@@ -241,8 +272,10 @@ fn test() {
     }
 
     {
-        let aggregated = aggregation_info(&context, current.clone());
-        assert_eq!(aggregated.value, 15050);
+        let aggregated =
+            aggregation_info_from_item(&context, &current, &mut lock_item(current.clone()));
+        context.run_queue();
+        assert_eq!(aggregated.lock().value, 15050);
     }
     assert_eq!(context.additions.load(Ordering::SeqCst), 100);
     context.additions.store(0, Ordering::SeqCst);
@@ -262,7 +295,10 @@ fn test() {
     context.additions.store(0, Ordering::SeqCst);
 
     {
-        let mut aggregated = aggregation_info(&context, current.clone());
+        let aggregated =
+            aggregation_info_from_item(&context, &current, &mut lock_item(current.clone()));
+        context.run_queue();
+        let mut aggregated = aggregated.lock();
         assert_eq!(aggregated.value, 25050);
         (*aggregated).active = true;
     }
@@ -290,7 +326,10 @@ fn test() {
     let current = NodeRef(current);
 
     {
-        let aggregated = aggregation_info(&context, current);
+        let aggregated =
+            aggregation_info_from_item(&context, &current, &mut lock_item(current.clone()));
+        context.run_queue();
+        let aggregated = aggregated.lock();
         assert_eq!(aggregated.value, 25151);
     }
     // This should be way less the 100 to prove that we are reusing trees

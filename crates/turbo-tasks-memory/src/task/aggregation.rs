@@ -1,6 +1,6 @@
 use std::{
     hash::{BuildHasher, Hash},
-    mem::take,
+    mem::{replace, take},
 };
 
 use auto_hash_map::{map::Entry, AutoMap, AutoSet};
@@ -10,7 +10,10 @@ use turbo_tasks::{event::Event, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi
 
 use super::{meta_state::TaskMetaStateWriteGuard, TaskStateType};
 use crate::{
-    aggregation_tree::{AggregationContext, AggregationItemLock, AggregationTreeLeaf},
+    aggregation_tree::{
+        aggregation_info_from_item, process_queued_sub_job, AggregationContext,
+        AggregationInfoReference, AggregationItemLock, AggregationSubJob, AggregationTreeLeaf,
+    },
     MemoryBackend,
 };
 
@@ -133,9 +136,17 @@ impl TaskChange {
     }
 }
 
+fn lock_item(reference: TaskId, backend: &MemoryBackend) -> TaskGuard<'_> {
+    TaskGuard {
+        id: reference,
+        guard: backend.task(reference).state_mut(),
+    }
+}
+
 pub struct TaskAggregationContext<'a> {
     pub turbo_tasks: &'a dyn TurboTasksBackendApi<MemoryBackend>,
     pub backend: &'a MemoryBackend,
+    queue: Mutex<Vec<(TaskId, AggregationSubJob<Aggregated, TaskId>)>>,
     pub dirty_tasks_to_schedule: Mutex<Option<AutoSet<TaskId, BuildNoHashHasher<TaskId>>>>,
     pub tasks_to_notify: Mutex<Option<AutoSet<TaskId, BuildNoHashHasher<TaskId>>>>,
 }
@@ -148,6 +159,7 @@ impl<'a> TaskAggregationContext<'a> {
         Self {
             turbo_tasks,
             backend,
+            queue: Mutex::new(Vec::new()),
             dirty_tasks_to_schedule: Mutex::new(None),
             tasks_to_notify: Mutex::new(None),
         }
@@ -161,7 +173,27 @@ impl<'a> TaskAggregationContext<'a> {
             .unwrap_or(false)
     }
 
+    pub fn has_queue(&mut self) -> bool {
+        !self.queue.get_mut().is_empty()
+    }
+
+    pub fn run_queue(&mut self) {
+        let mut old_queue = Vec::new();
+        loop {
+            let mut queue = replace(self.queue.get_mut(), old_queue);
+            if queue.is_empty() {
+                break;
+            }
+            for (reference, job) in queue.drain(..) {
+                let mut item = lock_item(reference, self.backend);
+                process_queued_sub_job(self, &reference, &mut item, job);
+            }
+            old_queue = queue;
+        }
+    }
+
     pub fn apply_queued_updates(&mut self) {
+        self.run_queue();
         let tasks = self.dirty_tasks_to_schedule.get_mut();
         if let Some(tasks) = tasks.as_mut() {
             let tasks = take(tasks);
@@ -178,11 +210,20 @@ impl<'a> TaskAggregationContext<'a> {
             }
         }
     }
+
+    pub fn aggregation_info(&self, id: TaskId) -> AggregationInfoReference<Aggregated> {
+        let mut item = lock_item(id, self.backend);
+        aggregation_info_from_item(self, &id, &mut item)
+    }
 }
 
 #[cfg(debug_assertions)]
 impl<'a> Drop for TaskAggregationContext<'a> {
     fn drop(&mut self) {
+        let queue = self.queue.get_mut();
+        if !queue.is_empty() {
+            panic!("TaskAggregationContext dropped without processing all queued jobs");
+        }
         let tasks_to_schedule = self.dirty_tasks_to_schedule.get_mut();
         if let Some(tasks_to_schedule) = tasks_to_schedule.as_ref() {
             if !tasks_to_schedule.is_empty() {
@@ -199,7 +240,6 @@ impl<'a> Drop for TaskAggregationContext<'a> {
 }
 
 impl<'a> AggregationContext for TaskAggregationContext<'a> {
-    type ItemLock<'l> = TaskGuard<'l> where Self: 'l;
     type Info = Aggregated;
     type ItemChange = TaskChange;
     type ItemRef = TaskId;
@@ -208,13 +248,6 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
 
     fn is_blue(&self, reference: &TaskId) -> bool {
         self.backend.with_task(*reference, |task| task.is_blue())
-    }
-
-    fn item(&self, reference: TaskId) -> Self::ItemLock<'_> {
-        TaskGuard {
-            id: reference,
-            guard: self.backend.task(reference).state_mut(),
-        }
     }
 
     fn apply_change(
@@ -374,6 +407,22 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         } else {
             std::ops::ControlFlow::Continue(())
         }
+    }
+
+    fn queue_job_with_item_front(
+        &self,
+        reference: &Self::ItemRef,
+        job: AggregationSubJob<Self::Info, Self::ItemRef>,
+    ) {
+        self.queue.lock().push((*reference, job));
+    }
+
+    fn queue_job_with_item_back(
+        &self,
+        reference: &Self::ItemRef,
+        job: AggregationSubJob<Self::Info, Self::ItemRef>,
+    ) {
+        self.queue.lock().push((*reference, job));
     }
 }
 

@@ -4,10 +4,10 @@ use auto_hash_map::{AutoMap, AutoSet};
 use nohash_hasher::BuildNoHashHasher;
 
 use super::{
-    bottom_tree::{add_parent_to_item, BottomTree},
+    bottom_tree::BottomTree,
     inner_refs::{BottomRef, ChildLocation},
     top_tree::TopTree,
-    AggregationContext, AggregationItemLock,
+    AggregationContext, AggregationItemLock, AggregationSubJob,
 };
 
 pub struct AggregationTreeLeaf<T, I> {
@@ -106,13 +106,18 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
 
 pub fn top_tree<C: AggregationContext>(
     context: &C,
-    item: &mut C::ItemLock<'_>,
+    reference: &C::ItemRef,
+    item: &mut impl AggregationItemLock<
+        Info = C::Info,
+        ItemRef = C::ItemRef,
+        ItemChange = C::ItemChange,
+    >,
     depth: u8,
 ) -> Arc<TopTree<C::Info>> {
     if let Some(top_tree) = item.leaf().top_trees.get(&depth) {
         return top_tree.clone();
     }
-    let bottom_tree = bottom_tree(context, item, depth);
+    let bottom_tree = bottom_tree(context, reference, item, depth);
     let top_tree = Arc::new(TopTree::new(depth));
     bottom_tree.add_top_tree_parent(context, &top_tree);
     item.leaf().top_trees.insert(depth, top_tree.clone());
@@ -121,22 +126,26 @@ pub fn top_tree<C: AggregationContext>(
 
 pub fn bottom_tree<C: AggregationContext>(
     context: &C,
-    item: &mut C::ItemLock<'_>,
+    reference: &C::ItemRef,
+    item: &mut impl AggregationItemLock<
+        Info = C::Info,
+        ItemRef = C::ItemRef,
+        ItemChange = C::ItemChange,
+    >,
     height: u8,
 ) -> Arc<BottomTree<C::Info, C::ItemRef>> {
     if let Some(bottom_tree) = item.leaf().bottom_trees.get(&height) {
         return bottom_tree.clone();
     }
     let new_bottom_tree = Arc::new(BottomTree::new(height));
-    if height == 0 {
-        add_parent_to_item(context, item, &new_bottom_tree, ChildLocation::Left);
-    } else {
-        bottom_tree(context, item, height - 1).add_bottom_tree_parent(
-            context,
-            &new_bottom_tree,
-            ChildLocation::Left,
-        );
-    }
+    context.queue_job_with_item_front(
+        reference,
+        AggregationSubJob::BottomTree {
+            tree: new_bottom_tree.clone(),
+            location: ChildLocation::Left,
+            add: true,
+        },
+    );
     item.leaf()
         .bottom_trees
         .insert(height, new_bottom_tree.clone());

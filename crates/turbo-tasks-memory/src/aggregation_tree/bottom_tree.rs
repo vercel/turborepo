@@ -6,7 +6,7 @@ use super::{
     inner_refs::{BottomRef, ChildLocation, TopRef},
     leaf::bottom_tree,
     top_tree::TopTree,
-    AggregationContext, AggregationItemLock,
+    AggregationContext, AggregationItemLock, AggregationSubJob,
 };
 use crate::count_hash_set::CountHashSet;
 
@@ -89,31 +89,27 @@ impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
             (ChildLocation::Left, false) | (ChildLocation::Middle, _) => {
                 // the left/middle child has a new child
                 // this means it's a right child of this node
-                let mut item = context.item(child_of_child);
-                if self.height == 0 {
-                    add_parent_to_item(context, &mut item, &self, ChildLocation::Right);
-                } else {
-                    bottom_tree(context, &mut item, self.height - 1).add_bottom_tree_parent(
-                        context,
-                        &self,
-                        ChildLocation::Right,
-                    );
-                }
+                context.queue_job_with_item_front(
+                    &child_of_child,
+                    AggregationSubJob::BottomTree {
+                        tree: self.clone(),
+                        location: ChildLocation::Right,
+                        add: true,
+                    },
+                );
             }
             (ChildLocation::Left, true) => {
                 // the left child has a new child
                 // and the left child is a blue node
                 // this means it's a middle child of this node
-                let mut item = context.item(child_of_child);
-                if self.height == 0 {
-                    add_parent_to_item(context, &mut item, &self, ChildLocation::Middle);
-                } else {
-                    bottom_tree(context, &mut item, self.height - 1).add_bottom_tree_parent(
-                        context,
-                        &self,
-                        ChildLocation::Middle,
-                    );
-                }
+                context.queue_job_with_item_front(
+                    &child_of_child,
+                    AggregationSubJob::BottomTree {
+                        tree: self.clone(),
+                        location: ChildLocation::Middle,
+                        add: true,
+                    },
+                );
             }
             (ChildLocation::Right, _) => {
                 // the right child has a new child
@@ -123,7 +119,7 @@ impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
                 for parent in state.upper.iter() {
                     match parent {
                         BottomTreeParent::Top(TopRef { parent }) => {
-                            parent.add_child_of_child(context, child_of_child.clone());
+                            parent.add_child_of_child(context, &child_of_child);
                         }
                         BottomTreeParent::Bottom(BottomRef { parent, location }) => {
                             parent.add_child_of_child(
@@ -151,33 +147,27 @@ impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
             (ChildLocation::Left, false) | (ChildLocation::Middle, _) => {
                 // the left/middle child has lost a child
                 // this means this node has lost a right child
-                if self.height == 0 {
-                    remove_parent_from_item(
-                        context,
-                        &mut context.item(child_of_child),
-                        &self,
-                        ChildLocation::Right,
-                    );
-                } else {
-                    bottom_tree(context, &mut context.item(child_of_child), self.height - 1)
-                        .remove_bottom_tree_parent(context, &self, ChildLocation::Right);
-                }
+                context.queue_job_with_item_back(
+                    &child_of_child,
+                    AggregationSubJob::BottomTree {
+                        tree: self.clone(),
+                        location: ChildLocation::Right,
+                        add: false,
+                    },
+                );
             }
             (ChildLocation::Left, true) => {
                 // the left child has lost a child
                 // and the left child is a blue node
                 // this means this node has lost a middle child
-                if self.height == 0 {
-                    remove_parent_from_item(
-                        context,
-                        &mut context.item(child_of_child),
-                        &self,
-                        ChildLocation::Middle,
-                    );
-                } else {
-                    bottom_tree(context, &mut context.item(child_of_child), self.height - 1)
-                        .remove_bottom_tree_parent(context, &self, ChildLocation::Middle);
-                }
+                context.queue_job_with_item_back(
+                    &child_of_child,
+                    AggregationSubJob::BottomTree {
+                        tree: self.clone(),
+                        location: ChildLocation::Middle,
+                        add: false,
+                    },
+                );
             }
             (ChildLocation::Right, _) => {
                 // the right child has lost a child
@@ -187,7 +177,7 @@ impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
                 for parent in state.upper.iter() {
                     match parent {
                         BottomTreeParent::Top(TopRef { parent }) => {
-                            parent.remove_child_of_child(context, child_of_child.clone());
+                            parent.remove_child_of_child(context, &child_of_child);
                         }
                         BottomTreeParent::Bottom(BottomRef { parent, location }) => {
                             parent.remove_child_of_child(
@@ -267,7 +257,7 @@ impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
                 parent.child_change(context, &change);
             }
             for following in state.following.iter() {
-                parent.add_child_of_child(context, following.clone());
+                parent.add_child_of_child(context, following);
             }
         }
     }
@@ -285,7 +275,7 @@ impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
                 parent.child_change(context, &change);
             }
             for following in state.following.iter() {
-                parent.remove_child_of_child(context, following.clone());
+                parent.remove_child_of_child(context, following);
             }
         }
     }
@@ -328,6 +318,31 @@ impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
         }
         result
     }
+
+    pub(super) fn process_job<C: AggregationContext<Info = T, ItemRef = I>>(
+        self: &Arc<BottomTree<T, I>>,
+        context: &C,
+        reference: &I,
+        item: &mut impl AggregationItemLock<Info = T, ItemRef = I, ItemChange = C::ItemChange>,
+        location: ChildLocation,
+        add: bool,
+    ) {
+        if add {
+            if self.height == 0 {
+                add_parent_to_item(context, item, &self, location);
+            } else {
+                bottom_tree(context, reference, item, self.height - 1)
+                    .add_bottom_tree_parent(context, &self, location);
+            }
+        } else {
+            if self.height == 0 {
+                remove_parent_from_item(context, item, &self, location);
+            } else {
+                bottom_tree(context, reference, item, self.height - 1)
+                    .remove_bottom_tree_parent(context, &self, location);
+            }
+        }
+    }
 }
 
 fn propagate_change_to_upper<C: AggregationContext>(
@@ -355,7 +370,11 @@ fn propagate_change_to_upper<C: AggregationContext>(
 
 pub fn add_parent_to_item<C: AggregationContext>(
     context: &C,
-    item: &mut C::ItemLock<'_>,
+    item: &mut impl AggregationItemLock<
+        Info = C::Info,
+        ItemRef = C::ItemRef,
+        ItemChange = C::ItemChange,
+    >,
     parent: &Arc<BottomTree<C::Info, C::ItemRef>>,
     location: ChildLocation,
 ) {
@@ -375,7 +394,11 @@ pub fn add_parent_to_item<C: AggregationContext>(
 
 pub fn remove_parent_from_item<C: AggregationContext>(
     context: &C,
-    item: &mut C::ItemLock<'_>,
+    item: &mut impl AggregationItemLock<
+        Info = C::Info,
+        ItemRef = C::ItemRef,
+        ItemChange = C::ItemChange,
+    >,
     parent: &Arc<BottomTree<C::Info, C::ItemRef>>,
     location: ChildLocation,
 ) {

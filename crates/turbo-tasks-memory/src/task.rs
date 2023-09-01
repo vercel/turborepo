@@ -33,7 +33,7 @@ use turbo_tasks::{
 };
 
 use crate::{
-    aggregation_tree::{aggregation_info, aggregation_info_from_item},
+    aggregation_tree::aggregation_info_from_item,
     cell::Cell,
     gc::{to_exp_u8, GcPriority, GcStats, GcTaskState},
     output::{Output, OutputContent},
@@ -492,7 +492,7 @@ impl Task {
     ) {
         let mut context = TaskAggregationContext::new(turbo_tasks, backend);
         {
-            aggregation_info(&context, id).root_type = Some(RootType::Root);
+            context.aggregation_info(id).lock().root_type = Some(RootType::Root);
         }
         context.apply_queued_updates();
     }
@@ -504,7 +504,7 @@ impl Task {
     ) {
         let mut context = TaskAggregationContext::new(turbo_tasks, backend);
         {
-            aggregation_info(&context, id).root_type = Some(RootType::Once);
+            context.aggregation_info(id).lock().root_type = Some(RootType::Once);
         }
         context.apply_queued_updates();
     }
@@ -516,7 +516,7 @@ impl Task {
     ) {
         let mut context = TaskAggregationContext::new(turbo_tasks, backend);
         {
-            aggregation_info(&context, id).root_type = None;
+            context.aggregation_info(id).lock().root_type = None;
         }
         context.apply_queued_updates();
     }
@@ -599,9 +599,12 @@ impl Task {
                 });
             }
             TaskDependency::TaskCollectibles(task, trait_type) => {
-                let context = TaskAggregationContext::new(turbo_tasks, backend);
-                let mut aggregation = aggregation_info(&context, task);
-                aggregation.remove_collectible_dependent_task(trait_type, reader);
+                let mut context = TaskAggregationContext::new(turbo_tasks, backend);
+                let aggregation = context.aggregation_info(task);
+                aggregation
+                    .lock()
+                    .remove_collectible_dependent_task(trait_type, reader);
+                context.run_queue();
             }
         }
     }
@@ -672,11 +675,13 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Option<TaskExecutionSpec> {
+        let mut context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut state = self.full_state_mut();
-        if !self.try_start_execution(&mut state, turbo_tasks, backend) {
+        if !self.try_start_execution(&mut state, &mut context, turbo_tasks, backend) {
             return None;
         }
         let future = self.make_execution_future(state, backend, turbo_tasks);
+        context.run_queue();
         Some(TaskExecutionSpec { future })
     }
 
@@ -685,6 +690,7 @@ impl Task {
     fn try_start_execution(
         &self,
         state: &mut TaskState,
+        context: &mut TaskAggregationContext<'_>,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
         backend: &MemoryBackend,
     ) -> bool {
@@ -701,11 +707,10 @@ impl Task {
                 state.stats.increment_executions();
                 if !state.children.is_empty() {
                     let set = take(&mut state.children);
-                    let context = TaskAggregationContext::new(turbo_tasks, backend);
                     for child in set {
                         state
                             .aggregation_leaf
-                            .remove_child(self.is_blue(), &context, &child);
+                            .remove_child(self.is_blue(), context, &child);
                     }
                 }
                 let mut change = TaskChange::default();
@@ -802,8 +807,9 @@ impl Task {
             return;
         }
         *count_as_finished = true;
+        let context = TaskAggregationContext::new(turbo_tasks, backend);
         state.aggregation_leaf.change(
-            &TaskAggregationContext::new(turbo_tasks, backend),
+            &context,
             &TaskChange {
                 unfinished: -1,
                 #[cfg(feature = "track_unfinished")]
@@ -811,6 +817,7 @@ impl Task {
                 ..Default::default()
             },
         );
+        drop(state);
     }
 
     pub(crate) fn execution_result(
@@ -926,8 +933,9 @@ impl Task {
 
         if let TaskType::Once(_) = self.ty {
             // unset the root type, so tasks below are no longer active
-            let context = TaskAggregationContext::new(turbo_tasks, backend);
-            aggregation_info(&context, self.id).root_type = None;
+            let mut context = TaskAggregationContext::new(turbo_tasks, backend);
+            context.aggregation_info(self.id).lock().root_type = None;
+            context.run_queue();
         }
 
         schedule_task
@@ -994,13 +1002,12 @@ impl Task {
                     clear_dependencies = take(dependencies);
                     // add to dirty lists and potentially schedule
                     let description = self.get_event_description();
+                    let mut context = TaskAggregationContext::new(turbo_tasks, backend);
                     let should_schedule = force_schedule
-                        || state.aggregation_leaf.get_root_info(
-                            &TaskAggregationContext::new(turbo_tasks, backend),
-                            &RootInfoType::IsActive,
-                        )
+                        || state
+                            .aggregation_leaf
+                            .get_root_info(&context, &RootInfoType::IsActive)
                         || {
-                            let mut context = TaskAggregationContext::new(turbo_tasks, backend);
                             state.aggregation_leaf.change(
                                 &context,
                                 &TaskChange {
@@ -1027,7 +1034,7 @@ impl Task {
                         };
                     if !has_set_unfinished {
                         state.aggregation_leaf.change(
-                            &TaskAggregationContext::new(turbo_tasks, backend),
+                            &context,
                             &TaskChange {
                                 unfinished: 1,
                                 #[cfg(feature = "track_unfinished")]
@@ -1343,27 +1350,43 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Result<Result<T, EventListener>> {
-        let mut state = self.full_state_mut();
-        if strongly_consistent {
-            let mut item = TaskGuard {
-                id: self.id,
-                guard: TaskMetaStateWriteGuard::Full(state),
-            };
-            {
-                let context = TaskAggregationContext::new(turbo_tasks, backend);
-                let aggregation = aggregation_info_from_item(&context, &mut item);
-                if aggregation.unfinished > 0 {
-                    return Ok(Err(aggregation.unfinished_event.listen_with_note(note)));
+        let mut state;
+        loop {
+            state = self.full_state_mut();
+            if strongly_consistent {
+                let mut item = TaskGuard {
+                    id: self.id,
+                    guard: TaskMetaStateWriteGuard::Full(state),
+                };
+                {
+                    let mut context = TaskAggregationContext::new(turbo_tasks, backend);
+                    let aggregation = aggregation_info_from_item(&context, &self.id, &mut item);
+                    if context.has_queue() {
+                        drop(item);
+                        context.run_queue();
+                        let aggregation = aggregation.lock();
+                        if aggregation.unfinished > 0 {
+                            return Ok(Err(aggregation.unfinished_event.listen_with_note(note)));
+                        } else {
+                            // restart for new state
+                            continue;
+                        }
+                    }
+                    let aggregation = aggregation.lock();
+                    if aggregation.unfinished > 0 {
+                        return Ok(Err(aggregation.unfinished_event.listen_with_note(note)));
+                    }
                 }
+                let TaskGuard {
+                    guard: TaskMetaStateWriteGuard::Full(inner_state),
+                    ..
+                } = item
+                else {
+                    unreachable!();
+                };
+                state = inner_state;
             }
-            let TaskGuard {
-                guard: TaskMetaStateWriteGuard::Full(inner_state),
-                ..
-            } = item
-            else {
-                unreachable!();
-            };
-            state = inner_state;
+            break;
         }
         match state.state_type {
             Done { .. } => {
@@ -1404,8 +1427,12 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> AutoMap<RawVc, i32> {
-        let context = TaskAggregationContext::new(turbo_tasks, backend);
-        aggregation_info(&context, id).read_collectibles(trait_type, reader)
+        let mut context = TaskAggregationContext::new(turbo_tasks, backend);
+        let aggregation_info = &context.aggregation_info(id);
+        context.run_queue();
+        aggregation_info
+            .lock()
+            .read_collectibles(trait_type, reader)
     }
 
     pub(crate) fn emit_collectible(
