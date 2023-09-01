@@ -99,9 +99,7 @@ pub fn get_global_hash_inputs<L: ?Sized + Lockfile>(
 
         let dot_env_object = hasher.hash_existing_of(root_path, system_dot_env)?;
 
-        for (key, value) in dot_env_object {
-            global_file_hash_map.insert(key, value);
-        }
+        global_file_hash_map.extend(dot_env_object);
     }
 
     let root_external_dependencies_hash = root_workspace.get_external_deps_hash();
