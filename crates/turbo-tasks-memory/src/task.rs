@@ -11,7 +11,7 @@ use std::{
         Debug, Display, Formatter, {self},
     },
     future::Future,
-    hash::Hash,
+    hash::{BuildHasher, BuildHasherDefault, Hash, Hasher},
     mem::{replace, take},
     pin::Pin,
     sync::Arc,
@@ -22,6 +22,7 @@ use anyhow::Result;
 use auto_hash_map::{AutoMap, AutoSet};
 use nohash_hasher::BuildNoHashHasher;
 use parking_lot::{Mutex, RwLock};
+use rustc_hash::FxHasher;
 use stats::TaskStats;
 use tokio::task_local;
 use turbo_tasks::{
@@ -76,7 +77,10 @@ enum TaskType {
     Once(Box<OnceTaskFn>),
 
     /// A normal persistent task
-    Persistent(Arc<PersistentTaskType>),
+    Persistent {
+        ty: Arc<PersistentTaskType>,
+        blue: bool,
+    },
 }
 
 enum TaskTypeForDescription {
@@ -90,7 +94,7 @@ impl TaskTypeForDescription {
         match task_type {
             TaskType::Root(..) => Self::Root,
             TaskType::Once(..) => Self::Once,
-            TaskType::Persistent(ty) => Self::Persistent(ty.clone()),
+            TaskType::Persistent { ty, .. } => Self::Persistent(ty.clone()),
         }
     }
 }
@@ -100,7 +104,7 @@ impl Debug for TaskType {
         match self {
             Self::Root(..) => f.debug_tuple("Root").finish(),
             Self::Once(..) => f.debug_tuple("Once").finish(),
-            Self::Persistent(ty) => Debug::fmt(ty, f),
+            Self::Persistent { ty, .. } => Debug::fmt(ty, f),
         }
     }
 }
@@ -110,7 +114,7 @@ impl Display for TaskType {
         match self {
             Self::Root(..) => f.debug_tuple("Root").finish(),
             Self::Once(..) => f.debug_tuple("Once").finish(),
-            Self::Persistent(ty) => Display::fmt(ty, f),
+            Self::Persistent { ty, .. } => Display::fmt(ty, f),
         }
     }
 }
@@ -414,7 +418,13 @@ impl Task {
         task_type: Arc<PersistentTaskType>,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::Persistent(task_type);
+        let mut hasher: FxHasher = BuildHasherDefault::default().build_hasher();
+        task_type.hash(&mut hasher);
+        let blue = hasher.finish() % 2 == 0;
+        let ty = TaskType::Persistent {
+            ty: task_type,
+            blue,
+        };
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
@@ -462,15 +472,17 @@ impl Task {
 
     pub(crate) fn is_pure(&self) -> bool {
         match &self.ty {
-            TaskType::Persistent(_) => true,
+            TaskType::Persistent { .. } => true,
             TaskType::Root(_) => false,
             TaskType::Once(_) => false,
         }
     }
 
     pub(crate) fn is_blue(&self) -> bool {
-        // TODO implement something that hashes the type
-        false
+        match self.ty {
+            TaskType::Root(_) | TaskType::Once(_) => false,
+            TaskType::Persistent { blue, .. } => blue,
+        }
     }
 
     pub(crate) fn set_root(
@@ -510,7 +522,7 @@ impl Task {
     }
 
     pub(crate) fn get_function_name(&self) -> Option<&'static str> {
-        if let TaskType::Persistent(ty) = &self.ty {
+        if let TaskType::Persistent { ty, .. } = &self.ty {
             match &**ty {
                 PersistentTaskType::Native(native_fn, _)
                 | PersistentTaskType::ResolveNative(native_fn, _) => {
@@ -730,7 +742,7 @@ impl Task {
                 drop(state);
                 mutex.lock().take().expect("Task can only be executed once")
             }
-            TaskType::Persistent(ty) => match &**ty {
+            TaskType::Persistent { ty, .. } => match &**ty {
                 PersistentTaskType::Native(native_fn, inputs) => {
                     let future = if let PrepareTaskType::Native(bound_fn) = &state.prepared_type {
                         bound_fn()
@@ -1235,7 +1247,7 @@ impl Task {
         match &self.ty {
             TaskType::Root(_) => StatsTaskType::Root(self.id),
             TaskType::Once(_) => StatsTaskType::Once(self.id),
-            TaskType::Persistent(ty) => match &**ty {
+            TaskType::Persistent { ty, .. } => match &**ty {
                 PersistentTaskType::Native(f, _) => StatsTaskType::Native(*f),
                 PersistentTaskType::ResolveNative(f, _) => StatsTaskType::ResolveNative(*f),
                 PersistentTaskType::ResolveTrait(t, n, _) => {
@@ -1263,7 +1275,7 @@ impl Task {
                 }
             }
         }
-        if let TaskType::Persistent(ty) = &self.ty {
+        if let TaskType::Persistent { ty, .. } = &self.ty {
             match &**ty {
                 PersistentTaskType::Native(_, inputs)
                 | PersistentTaskType::ResolveNative(_, inputs)
