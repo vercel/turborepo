@@ -121,16 +121,8 @@ async fn watch_events(
         tokio::select! {
             _ = &mut exit_signal => break 'outer,
             Some(event) = recv_file_events.recv().into_future() => {
-                match event {
-                    Ok(event) => {
-                        // we don't care if we fail to send, it just means no one is currently watching
-                        let _ = broadcast_sender.send(Ok(event));
-                    },
-                    Err(error) => {
-                        // we don't care if we fail to send, it just means no one is currently watching
-                        let _ = broadcast_sender.send(Err(NotifyError::from(error)));
-                    }
-                }
+                // we don't care if we fail to send, it just means no one is currently watching
+                let _ = broadcast_sender.send(event.map_err(NotifyError::from));
             }
         }
     }
