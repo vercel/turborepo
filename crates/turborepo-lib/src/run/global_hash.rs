@@ -78,7 +78,7 @@ pub fn get_global_hash_inputs<L: ?Sized + Lockfile>(
 
     if lockfile.is_none() {
         global_deps.insert(root_path.join_component("package.json"));
-        let lockfile_path = root_path.join_component(package_manager.get_lockfile_path());
+        let lockfile_path = package_manager.lockfile_path(root_path);
         if lockfile_path.exists() {
             global_deps.insert(lockfile_path);
         }
