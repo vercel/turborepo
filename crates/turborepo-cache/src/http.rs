@@ -14,6 +14,7 @@ pub struct HTTPCache {
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
     repo_root: AbsoluteSystemPathBuf,
     token: String,
+    team_id: String,
 }
 
 pub struct APIAuth {
@@ -46,6 +47,7 @@ impl HTTPCache {
             signer_verifier,
             repo_root,
             token: api_auth.token,
+            team_id: api_auth.team_id,
         }
     }
 
@@ -89,12 +91,11 @@ impl HTTPCache {
     pub async fn exists(
         &self,
         hash: &str,
-        team_id: &str,
         team_slug: Option<&str>,
     ) -> Result<CacheResponse, CacheError> {
         let response = self
             .client
-            .artifact_exists(hash, &self.token, team_id, team_slug)
+            .artifact_exists(hash, &self.token, &self.team_id, team_slug)
             .await?;
 
         let duration = Self::get_duration_from_response(&response)?;
@@ -122,12 +123,11 @@ impl HTTPCache {
     pub async fn fetch(
         &self,
         hash: &str,
-        team_id: &str,
         team_slug: Option<&str>,
     ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
         let response = self
             .client
-            .fetch_artifact(hash, &self.token, team_id, team_slug)
+            .fetch_artifact(hash, &self.token, &self.team_id, team_slug)
             .await?;
 
         let duration = Self::get_duration_from_response(&response)?;
@@ -241,12 +241,12 @@ mod test {
             .put(&repo_root_path, hash, &anchored_files, duration)
             .await?;
 
-        let cache_response = cache.exists(hash, "", None).await?;
+        let cache_response = cache.exists(hash, None).await?;
 
         assert_eq!(cache_response.time_saved, duration);
         assert_eq!(cache_response.source, CacheSource::Remote);
 
-        let (cache_response, received_files) = cache.fetch(hash, "", None).await?;
+        let (cache_response, received_files) = cache.fetch(hash, None).await?;
         assert_eq!(cache_response.time_saved, duration);
 
         for (test_file, received_file) in files.iter().zip(received_files) {

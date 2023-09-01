@@ -53,19 +53,17 @@ impl AsyncCache {
         &self,
         anchor: &AbsoluteSystemPath,
         key: &str,
-        team_id: &str,
         team_slug: Option<&str>,
     ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
-        self.real_cache.fetch(anchor, key, team_id, team_slug).await
+        self.real_cache.fetch(anchor, key, team_slug).await
     }
 
     pub async fn exists(
         &mut self,
         key: &str,
-        team_id: &str,
         team_slug: Option<&str>,
     ) -> Result<CacheResponse, CacheError> {
-        self.real_cache.exists(key, team_id, team_slug).await
+        self.real_cache.exists(key, team_slug).await
     }
 
     // Used for testing to ensure that the workers resolve
@@ -144,7 +142,7 @@ mod tests {
         let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth)?;
 
         // Ensure that the cache is empty
-        let response = async_cache.exists(&hash, "my-team-id", None).await;
+        let response = async_cache.exists(&hash, None).await;
 
         assert_matches!(response, Err(CacheError::CacheMiss));
 
@@ -171,7 +169,7 @@ mod tests {
         // Confirm that fs cache file does *not* exist
         assert!(!fs_cache_path.exists());
 
-        let response = async_cache.exists(&hash, "my-team-id", None).await?;
+        let response = async_cache.exists(&hash, None).await?;
 
         // Confirm that we fetch from remote cache and not local.
         assert_eq!(
@@ -213,7 +211,7 @@ mod tests {
         let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth)?;
 
         // Ensure that the cache is empty
-        let response = async_cache.exists(&hash, "my-team-id", None).await;
+        let response = async_cache.exists(&hash, None).await;
 
         assert_matches!(response, Err(CacheError::CacheMiss));
 
@@ -240,7 +238,7 @@ mod tests {
         // Confirm that fs cache file exists
         assert!(fs_cache_path.exists());
 
-        let response = async_cache.exists(&hash, "my-team-id", None).await?;
+        let response = async_cache.exists(&hash, None).await?;
 
         // Confirm that we fetch from local cache first.
         assert_eq!(
@@ -254,7 +252,7 @@ mod tests {
         // Remove fs cache file
         fs_cache_path.remove_file()?;
 
-        let response = async_cache.exists(&hash, "my-team-id", None).await;
+        let response = async_cache.exists(&hash, None).await;
 
         // Confirm that we get a cache miss
         assert_matches!(response, Err(CacheError::CacheMiss));
@@ -288,7 +286,7 @@ mod tests {
         let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth)?;
 
         // Ensure that the cache is empty
-        let response = async_cache.exists(&hash, "my-team-id", None).await;
+        let response = async_cache.exists(&hash, None).await;
 
         assert_matches!(response, Err(CacheError::CacheMiss));
 
@@ -315,7 +313,7 @@ mod tests {
         // Confirm that fs cache file exists
         assert!(fs_cache_path.exists());
 
-        let response = async_cache.exists(&hash, "my-team-id", None).await?;
+        let response = async_cache.exists(&hash, None).await?;
 
         // Confirm that we fetch from local cache first.
         assert_eq!(
@@ -329,7 +327,7 @@ mod tests {
         // Remove fs cache file
         fs_cache_path.remove_file()?;
 
-        let response = async_cache.exists(&hash, "my-team-id", None).await?;
+        let response = async_cache.exists(&hash, None).await?;
 
         // Confirm that we still can fetch from remote cache
         assert_eq!(
