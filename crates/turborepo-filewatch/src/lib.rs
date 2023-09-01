@@ -12,7 +12,7 @@ use std::{
 // macos -> custom watcher impl in fsevents, no recursive watch, no watching ancestors
 #[cfg(target_os = "macos")]
 use fsevent::FsEventWatcher;
-#[cfg(any(feature = "watch_recursively", feature = "watch_ancestors"))]
+#[cfg(any(feature = "manual_recursive_watch", feature = "watch_ancestors"))]
 use notify::event::EventKind;
 #[cfg(not(target_os = "macos"))]
 use notify::{Config, RecommendedWatcher};
@@ -25,7 +25,7 @@ use tracing::warn;
 #[cfg(feature = "watch_ancestors")]
 use turbopath::PathRelation;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-#[cfg(feature = "watch_recursively")]
+#[cfg(feature = "manual_recursive_watch")]
 use {
     notify::event::{CreateKind, EventAttributes},
     walkdir::WalkDir,
@@ -108,7 +108,7 @@ impl FileSystemWatcher {
     }
 }
 
-#[cfg(not(any(feature = "watch_ancestors", feature = "watch_recursively")))]
+#[cfg(not(any(feature = "watch_ancestors", feature = "manual_recursive_watch")))]
 async fn watch_events(
     _watcher: Backend,
     _watch_root: AbsoluteSystemPathBuf,
@@ -136,10 +136,10 @@ async fn watch_events(
     }
 }
 
-#[cfg(any(feature = "watch_ancestors", feature = "watch_recursively"))]
+#[cfg(any(feature = "watch_ancestors", feature = "manual_recursive_watch"))]
 async fn watch_events(
-    #[cfg(feature = "watch_recursively")] mut watcher: Backend,
-    #[cfg(not(feature = "watch_recursively"))] _watcher: Backend,
+    #[cfg(feature = "manual_recursive_watch")] mut watcher: Backend,
+    #[cfg(not(feature = "manual_recursive_watch"))] _watcher: Backend,
     watch_root: AbsoluteSystemPathBuf,
     mut recv_file_events: mpsc::Receiver<EventResult>,
     exit_signal: tokio::sync::oneshot::Receiver<()>,
@@ -152,7 +152,7 @@ async fn watch_events(
             Some(event) = recv_file_events.recv().into_future() => {
                 match event {
                     Ok(mut event) => {
-                        #[cfg(feature = "watch_recursively")]
+                        #[cfg(feature = "manual_recursive_watch")]
                         {
                             if event.kind == EventKind::Create(CreateKind::Folder) {
                                 for new_path in &event.paths {
@@ -238,19 +238,19 @@ fn watch_parents(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(),
     Ok(())
 }
 
-#[cfg(not(feature = "watch_recursively"))]
+#[cfg(not(feature = "manual_recursive_watch"))]
 fn watch_recursively(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(), WatchError> {
     watcher.watch(&root.as_std_path(), RecursiveMode::Recursive)?;
     Ok(())
 }
 
-#[cfg(feature = "watch_recursively")]
+#[cfg(feature = "manual_recursive_watch")]
 fn watch_recursively(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(), WatchError> {
     // Don't synthesize initial events
     manually_add_recursive_watches(root.as_std_path(), watcher, None)
 }
 
-#[cfg(feature = "watch_recursively")]
+#[cfg(feature = "manual_recursive_watch")]
 fn manually_add_recursive_watches(
     root: &Path,
     watcher: &mut Backend,
