@@ -280,13 +280,6 @@ static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
     lazy_regex!(r"(?P<manager>npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)");
 
 impl PackageManager {
-    pub fn get_lockfile_path(&self) -> &'static str {
-        match self {
-            PackageManager::Berry | PackageManager::Yarn => yarn::LOCKFILE,
-            PackageManager::Npm => npm::LOCKFILE,
-            PackageManager::Pnpm | PackageManager::Pnpm6 => pnpm::LOCKFILE,
-        }
-    }
 
     /// Returns the set of globs for the workspace.
     pub fn get_workspace_globs(
