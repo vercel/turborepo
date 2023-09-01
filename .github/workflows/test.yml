@@ -946,12 +946,12 @@ jobs:
       - name: Build benchmarks for tests
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --workspace --exclude turbopack-bench --no-run
+          cargo tp-bench-test --no-run
 
       - name: Run cargo test on benchmarks
         timeout-minutes: 120
         run: |
-          cargo test --benches --release --workspace --exclude turbopack-bench
+          cargo tp-bench-test
 
       - name: Build benchmarks for tests for other bundlers
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
