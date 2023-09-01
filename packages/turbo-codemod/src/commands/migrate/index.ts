@@ -1,20 +1,20 @@
+import os from "node:os";
+import { execSync } from "node:child_process";
 import chalk from "chalk";
-import os from "os";
-import inquirer from "inquirer";
-import { getWorkspaceDetails } from "@turbo/workspaces";
-
-import getCurrentVersion from "./steps/getCurrentVersion";
-import getLatestVersion from "./steps/getLatestVersion";
-import getCodemodsForMigration from "./steps/getTransformsForMigration";
-import checkGitStatus from "../../utils/checkGitStatus";
-import directoryInfo from "../../utils/directoryInfo";
-import getTurboUpgradeCommand from "./steps/getTurboUpgradeCommand";
-import Runner from "../../runner/Runner";
+import { prompt } from "inquirer";
+import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
+import { logger } from "@turbo/utils";
+import { checkGitStatus } from "../../utils/checkGitStatus";
+import { directoryInfo } from "../../utils/directoryInfo";
+import { Runner } from "../../runner/Runner";
+import { looksLikeRepo } from "../../utils/looksLikeRepo";
+import type { TransformerResults } from "../../runner";
+import { getCurrentVersion } from "./steps/getCurrentVersion";
+import { getLatestVersion } from "./steps/getLatestVersion";
+import { getTransformsForMigration } from "./steps/getTransformsForMigration";
+import { getTurboUpgradeCommand } from "./steps/getTurboUpgradeCommand";
 import type { MigrateCommandArgument, MigrateCommandOptions } from "./types";
-import looksLikeRepo from "../../utils/looksLikeRepo";
-import { TransformerResults } from "../../runner";
 import { shutdownDaemon } from "./steps/shutdownDaemon";
-import { execSync } from "child_process";
 
 function endMigration({
   message,
@@ -24,16 +24,16 @@ function endMigration({
   success: boolean;
 }) {
   if (success) {
-    console.log(chalk.bold(chalk.green("Migration completed")));
+    logger.bold(chalk.green("Migration completed"));
     if (message) {
-      console.log(message);
+      logger.log(message);
     }
     return process.exit(0);
   }
 
-  console.log(chalk.bold(chalk.red("Migration failed")));
+  logger.bold(chalk.red("Migration failed"));
   if (message) {
-    console.log(message);
+    logger.log(message);
   }
   return process.exit(1);
 }
@@ -48,7 +48,7 @@ Migration is done in 4 steps:
   4. execute the codemods (serially, and in order)
   5. update the turbo version (optionally)
 **/
-export default async function migrate(
+export async function migrate(
   directory: MigrateCommandArgument,
   options: MigrateCommandOptions
 ) {
@@ -57,7 +57,7 @@ export default async function migrate(
     checkGitStatus({ directory, force: options.force });
   }
 
-  const answers = await inquirer.prompt<{
+  const answers = await prompt<{
     directoryInput?: string;
   }>([
     {
@@ -66,19 +66,19 @@ export default async function migrate(
       message: "Where is the root of the repo to migrate?",
       when: !directory,
       default: ".",
-      validate: (directory: string) => {
-        const { exists, absolute } = directoryInfo({ directory });
+      validate: (d: string) => {
+        const { exists, absolute } = directoryInfo({ directory: d });
         if (exists) {
           return true;
-        } else {
-          return `Directory ${chalk.dim(`(${absolute})`)} does not exist`;
         }
+        return `Directory ${chalk.dim(`(${absolute})`)} does not exist`;
       },
-      filter: (directory: string) => directory.trim(),
+      filter: (d: string) => d.trim(),
     },
   ]);
 
-  const { directoryInput: selectedDirectory = directory as string } = answers;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- we know it exists because of the prompt
+  const { directoryInput: selectedDirectory = directory! } = answers;
   const { exists, absolute: root } = directoryInfo({
     directory: selectedDirectory,
   });
@@ -98,8 +98,10 @@ export default async function migrate(
     });
   }
 
-  const project = await getWorkspaceDetails({ root });
-  if (!project) {
+  let project: Project | undefined;
+  try {
+    project = await getWorkspaceDetails({ root });
+  } catch (err) {
     return endMigration({
       success: false,
       message: `Unable to read determine package manager details from ${chalk.dim(
@@ -149,9 +151,9 @@ export default async function migrate(
   }
 
   // step 3
-  const codemods = getCodemodsForMigration({ fromVersion, toVersion });
+  const codemods = getTransformsForMigration({ fromVersion, toVersion });
   if (codemods.length === 0) {
-    console.log(
+    logger.log(
       `No codemods required to migrate from ${fromVersion} to ${toVersion}`,
       os.EOL
     );
@@ -164,7 +166,7 @@ export default async function migrate(
   }
 
   // step 4
-  console.log(
+  logger.log(
     `Upgrading turbo from ${chalk.bold(fromVersion)} to ${chalk.bold(
       toVersion
     )} (${
@@ -178,11 +180,12 @@ export default async function migrate(
   );
 
   const results: Array<TransformerResults> = [];
-  for (let [idx, codemod] of codemods.entries()) {
-    console.log(
+  for (const [idx, codemod] of codemods.entries()) {
+    logger.log(
       `(${idx + 1}/${codemods.length}) ${chalk.bold(`Running ${codemod.name}`)}`
     );
 
+    // eslint-disable-next-line no-await-in-loop -- transforms have to run serially to avoid conflicts
     const result = await codemod.transformer({
       root: project.paths.root,
       options,
@@ -222,25 +225,25 @@ export default async function migrate(
   // install
   if (options.install) {
     if (options.dry) {
-      console.log(
+      logger.log(
         `Upgrading turbo with ${chalk.bold(upgradeCommand)} ${chalk.dim(
           "(dry run)"
         )}`,
         os.EOL
       );
     } else {
-      console.log(`Upgrading turbo with ${chalk.bold(upgradeCommand)}`, os.EOL);
+      logger.log(`Upgrading turbo with ${chalk.bold(upgradeCommand)}`, os.EOL);
       try {
         execSync(upgradeCommand, { stdio: "pipe", cwd: project.paths.root });
-      } catch (err) {
+      } catch (err: unknown) {
         return endMigration({
           success: false,
-          message: `Unable to upgrade turbo: ${err}`,
+          message: `Unable to upgrade turbo: ${String(err)}`,
         });
       }
     }
   } else {
-    console.log(`Upgrade turbo with ${chalk.bold(upgradeCommand)}`, os.EOL);
+    logger.log(`Upgrade turbo with ${chalk.bold(upgradeCommand)}`, os.EOL);
   }
 
   endMigration({ success: true });

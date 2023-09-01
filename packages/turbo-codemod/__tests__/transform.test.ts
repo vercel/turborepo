@@ -1,10 +1,9 @@
-import transform from "../src/commands/transform";
-import { MigrateCommandArgument } from "../src/commands";
-import { setupTestFixtures, spyExit } from "@turbo/test-utils";
-import * as checkGitStatus from "../src/utils/checkGitStatus";
-
 import * as turboWorkspaces from "@turbo/workspaces";
 import * as turboUtils from "@turbo/utils";
+import { setupTestFixtures, spyExit } from "@turbo/test-utils";
+import { transform } from "../src/commands/transform";
+import * as checkGitStatus from "../src/utils/checkGitStatus";
+import type { MigrateCommandArgument } from "../src/commands";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
 jest.mock("@turbo/workspaces", () => ({
@@ -29,7 +28,7 @@ describe("transform", () => {
 
     // setup mocks
     const mockedCheckGitStatus = jest
-      .spyOn(checkGitStatus, "default")
+      .spyOn(checkGitStatus, "checkGitStatus")
       .mockReturnValue(undefined);
     const mockGetAvailablePackageManagers = jest
       .spyOn(turboUtils, "getAvailablePackageManagers")
@@ -86,7 +85,7 @@ describe("transform", () => {
 
     // setup mocks
     const mockedCheckGitStatus = jest
-      .spyOn(checkGitStatus, "default")
+      .spyOn(checkGitStatus, "checkGitStatus")
       .mockReturnValue(undefined);
     const mockGetAvailablePackageManagers = jest
       .spyOn(turboUtils, "getAvailablePackageManagers")
@@ -163,7 +162,7 @@ describe("transform", () => {
   });
 
   it("exits on invalid directory", async () => {
-    const { root } = useFixture({
+    useFixture({
       fixture: "basic",
     });
 

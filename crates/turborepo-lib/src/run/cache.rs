@@ -1,4 +1,4 @@
-use std::{io::Write, rc::Rc};
+use std::{io::Write, sync::Arc};
 
 use console::StyledObject;
 use tracing::{debug, log::warn};
@@ -49,15 +49,16 @@ impl RunCache {
     }
 
     pub fn task_cache(
-        self: &Rc<Self>,
+        self: &Arc<Self>,
         // TODO: Group these in a struct
         task_definition: &TaskDefinition,
-        task_dir: &AbsoluteSystemPath,
+        workspace_dir: &AnchoredSystemPath,
         task_id: TaskId<'static>,
-        log_file: &AnchoredSystemPath,
         hash: &str,
     ) -> TaskCache {
-        let log_file_path = self.repo_root.resolve(log_file);
+        let task_dir = self.repo_root.resolve(workspace_dir);
+        let log_file_path =
+            task_dir.join_components(&[".turbo", &format!("turbo-{}.log", task_id.task())]);
         let hashable_outputs = task_definition.hashable_outputs(&task_id);
         let mut repo_relative_globs = TaskOutputs {
             inclusions: Vec::with_capacity(hashable_outputs.inclusions.len()),
@@ -102,7 +103,7 @@ impl RunCache {
 
 pub struct TaskCache {
     expanded_outputs: Vec<AnchoredSystemPathBuf>,
-    run_cache: Rc<RunCache>,
+    run_cache: Arc<RunCache>,
     repo_relative_globs: TaskOutputs,
     hash: String,
     task_output_mode: OutputLogsMode,
@@ -114,7 +115,7 @@ pub struct TaskCache {
 }
 
 impl TaskCache {
-    fn replay_log_file(
+    pub fn replay_log_file(
         &self,
         prefixed_ui: &mut PrefixedUI<impl Write>,
     ) -> Result<(), anyhow::Error> {
@@ -125,7 +126,7 @@ impl TaskCache {
         Ok(())
     }
 
-    fn on_error(&self, prefixed_ui: &mut PrefixedUI<impl Write>) -> Result<(), anyhow::Error> {
+    pub fn on_error(&self, prefixed_ui: &mut PrefixedUI<impl Write>) -> Result<(), anyhow::Error> {
         if self.task_output_mode == OutputLogsMode::ErrorsOnly {
             prefixed_ui.output(format!(
                 "cache miss, executing {}",
@@ -137,7 +138,7 @@ impl TaskCache {
         Ok(())
     }
 
-    fn output_writer<W: Write>(
+    pub fn output_writer<W: Write>(
         &self,
         prefix: StyledObject<String>,
         writer: W,
@@ -162,7 +163,7 @@ impl TaskCache {
         Ok(log_writer)
     }
 
-    async fn restore_outputs(
+    pub async fn restore_outputs(
         &mut self,
         team_id: &str,
         team_slug: Option<&str>,

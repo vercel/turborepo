@@ -39,6 +39,9 @@ runs:
         cache-key: ${{ inputs.target }}
         save-cache: true
 
+    - name: "Setup capnproto"
+      uses: ./.github/actions/setup-capnproto
+
     - name: Install Turbo globally
       shell: bash
       run: |

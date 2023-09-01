@@ -1,10 +1,14 @@
-import execa, { Options } from "execa";
-import os from "os";
+import os from "node:os";
+import type { Options } from "execa";
+import execa from "execa";
 
 export type PackageManager = "npm" | "yarn" | "pnpm";
-export type PackageManagerAvailable = { available: boolean; version?: string };
+export interface PackageManagerAvailable {
+  available: boolean;
+  version?: string;
+}
 
-async function exec(command: string, args: string[] = [], opts?: Options) {
+async function exec(command: string, args: Array<string> = [], opts?: Options) {
   // run the check from tmpdir to avoid corepack conflicting -
   // this is no longer needed as of https://github.com/nodejs/corepack/pull/167
   // but we'll keep the behavior for those on older versions)

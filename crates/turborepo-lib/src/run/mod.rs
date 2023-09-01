@@ -3,14 +3,15 @@
 mod cache;
 mod global_hash;
 mod scope;
+mod summary;
 pub mod task_id;
-
 use std::{
     io::{BufWriter, IsTerminal},
     sync::Arc,
 };
 
 use anyhow::{anyhow, Context as ErrorContext, Result};
+pub use cache::{RunCache, TaskCache};
 use itertools::Itertools;
 use tracing::{debug, info};
 use turbopath::AbsoluteSystemPathBuf;
@@ -29,7 +30,7 @@ use crate::{
     opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
-    run::{cache::RunCache, global_hash::get_global_hash_inputs},
+    run::global_hash::get_global_hash_inputs,
     task_graph::Visitor,
 };
 

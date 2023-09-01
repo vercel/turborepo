@@ -5,20 +5,18 @@ import type { DryRun } from "@turbo/types";
 import { getComparison } from "./getComparison";
 import { getTask } from "./getTask";
 import { getWorkspace } from "./getWorkspace";
-import { info, warn, error } from "./logger";
+import { log, info, warn, error } from "./logger";
 import { shouldWarn } from "./errors";
 import type { TurboIgnoreArgs } from "./types";
 import { checkCommit } from "./checkCommit";
 
 function ignoreBuild() {
-  // eslint-disable-next-line no-console
-  console.log("⏭ Ignoring the change");
+  log("⏭ Ignoring the change");
   return process.exit(0);
 }
 
 function continueBuild() {
-  // eslint-disable-next-line no-console
-  console.log("✓ Proceeding with deployment");
+  log("✓ Proceeding with deployment");
   return process.exit(1);
 }
 

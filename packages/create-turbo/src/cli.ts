@@ -63,13 +63,10 @@ createTurboCli
   .parseAsync()
   .then(notifyUpdate)
   .catch(async (reason) => {
-    // eslint-disable-next-line no-console
-    console.log();
+    logger.log();
     logger.error("Unexpected error. Please report it as a bug:");
-    // eslint-disable-next-line no-console
-    console.log(reason);
-    // eslint-disable-next-line no-console
-    console.log();
+    logger.log(reason);
+    logger.log();
     await notifyUpdate();
     process.exit(1);
   });

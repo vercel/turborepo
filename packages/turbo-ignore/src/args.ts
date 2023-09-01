@@ -6,6 +6,7 @@ import {
   skipWorkspaceCommits,
   forceWorkspaceCommits,
 } from "./checkCommit";
+import { log } from "./logger";
 
 export const help = `
 turbo-ignore
@@ -53,14 +54,12 @@ export function parseArgs({ argv }: { argv: Array<string> }): TurboIgnoreArgs {
 
   // handle help flag and exit
   if (flags.has("help") || flags.has("h")) {
-    // eslint-disable-next-line no-console
-    console.log(help);
+    log(help);
     process.exit(0);
   }
   // handle version flag and exit
   if (flags.has("version") || flags.has("v")) {
-    // eslint-disable-next-line no-console
-    console.log(pkg.version);
+    log(pkg.version);
     process.exit(0);
   }
 

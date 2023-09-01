@@ -1,13 +1,18 @@
-import fs from "fs-extra";
-import path from "path";
-import glob from "fast-glob";
+import path from "node:path";
+import { readJsonSync, existsSync, readFileSync } from "fs-extra";
+import { sync as globSync } from "fast-glob";
 import yaml from "js-yaml";
-import { PackageManager, Project, Workspace, WorkspaceInfo } from "./types";
 import type { PackageJson } from "@turbo/utils";
+import type {
+  PackageManager,
+  Project,
+  Workspace,
+  WorkspaceInfo,
+} from "./types";
 import { ConvertError } from "./errors";
 
 // adapted from https://github.com/nodejs/corepack/blob/cae770694e62f15fed33dd8023649d77d96023c1/sources/specUtils.ts#L14
-const PACKAGE_MANAGER_REGEX = /^(?!_)(.+)@(.+)$/;
+const PACKAGE_MANAGER_REGEX = /^(?!_)(?<manager>.+)@(?<version>.+)$/;
 
 function getPackageJson({
   workspaceRoot,
@@ -16,7 +21,7 @@ function getPackageJson({
 }): PackageJson {
   const packageJsonPath = path.join(workspaceRoot, "package.json");
   try {
-    return fs.readJsonSync(packageJsonPath, "utf8");
+    return readJsonSync(packageJsonPath, "utf8") as PackageJson;
   } catch (err) {
     if (err && typeof err === "object" && "code" in err) {
       if (err.code === "ENOENT") {
@@ -47,7 +52,7 @@ function getWorkspacePackageManager({
   const { packageManager } = getPackageJson({ workspaceRoot });
   if (packageManager) {
     try {
-      const match = packageManager.match(PACKAGE_MANAGER_REGEX);
+      const match = PACKAGE_MANAGER_REGEX.exec(packageManager);
       if (match) {
         const [_, manager] = match;
         return manager;
@@ -81,9 +86,9 @@ function getPnpmWorkspaces({
   workspaceRoot: string;
 }): Array<string> {
   const workspaceFile = path.join(workspaceRoot, "pnpm-workspace.yaml");
-  if (fs.existsSync(workspaceFile)) {
+  if (existsSync(workspaceFile)) {
     try {
-      const workspaceConfig = yaml.load(fs.readFileSync(workspaceFile, "utf8"));
+      const workspaceConfig = yaml.load(readFileSync(workspaceFile, "utf8"));
       // validate it's the type we expect
       if (
         workspaceConfig instanceof Object &&
@@ -135,11 +140,15 @@ function parseWorkspacePackages({
     return [];
   }
 
-  if ("packages" in workspaces) {
-    return workspaces.packages;
+  if (Array.isArray(workspaces)) {
+    return workspaces;
   }
 
-  return workspaces;
+  if ("packages" in workspaces) {
+    return workspaces.packages ?? [];
+  }
+
+  return [];
 }
 
 function expandWorkspaces({
@@ -147,7 +156,7 @@ function expandWorkspaces({
   workspaceGlobs,
 }: {
   workspaceRoot: string;
-  workspaceGlobs?: string[];
+  workspaceGlobs?: Array<string>;
 }): Array<Workspace> {
   if (!workspaceGlobs) {
     return [];
@@ -155,22 +164,22 @@ function expandWorkspaces({
   return workspaceGlobs
     .flatMap((workspaceGlob) => {
       const workspacePackageJsonGlob = `${workspaceGlob}/package.json`;
-      return glob.sync(workspacePackageJsonGlob, {
+      return globSync(workspacePackageJsonGlob, {
         onlyFiles: true,
         absolute: true,
         cwd: workspaceRoot,
       });
     })
     .map((workspacePackageJson) => {
-      const workspaceRoot = path.dirname(workspacePackageJson);
-      const { name, description } = getWorkspaceInfo({ workspaceRoot });
+      const root = path.dirname(workspacePackageJson);
+      const { name, description } = getWorkspaceInfo({ workspaceRoot: root });
       return {
         name,
         description,
         paths: {
-          root: workspaceRoot,
+          root,
           packageJson: workspacePackageJson,
-          nodeModules: path.join(workspaceRoot, "node_modules"),
+          nodeModules: path.join(root, "node_modules"),
         },
       };
     });
@@ -178,7 +187,7 @@ function expandWorkspaces({
 
 function directoryInfo({ directory }: { directory: string }) {
   const dir = path.resolve(process.cwd(), directory);
-  return { exists: fs.existsSync(dir), absolute: dir };
+  return { exists: existsSync(dir), absolute: dir };
 }
 
 function getMainStep({
