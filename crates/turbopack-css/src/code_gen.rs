@@ -27,6 +27,10 @@ pub trait VisitorFactory: Send + Sync {
     fn create<'a>(&'a self) -> Box<dyn Visitor<Error = Infallible> + Send + Sync + 'a>;
 }
 
+pub struct VisitorLike<'a> {
+    op: Box<dyn 'a + FnOnce(&mut Stylesheet<'static, 'static>) + Send + Sync>,
+}
+
 #[turbo_tasks::value_trait]
 pub trait CodeGenerateable {
     fn code_generation(
