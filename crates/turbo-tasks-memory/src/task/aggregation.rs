@@ -206,8 +206,8 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
     type RootInfo = bool;
     type RootInfoType = RootInfoType;
 
-    fn is_blue(&self, reference: TaskId) -> bool {
-        self.backend.with_task(reference, |task| task.is_blue())
+    fn is_blue(&self, reference: &TaskId) -> bool {
+        self.backend.with_task(*reference, |task| task.is_blue())
     }
 
     fn item(&self, reference: TaskId) -> Self::ItemLock<'_> {

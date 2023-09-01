@@ -120,7 +120,7 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
     type ItemRef = NodeRef;
     type ItemChange = Change;
 
-    fn is_blue(&self, reference: Self::ItemRef) -> bool {
+    fn is_blue(&self, reference: &Self::ItemRef) -> bool {
         reference.0.blue
     }
 

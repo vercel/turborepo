@@ -32,9 +32,7 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
         child: &I,
     ) {
         for BottomRef { parent, location } in self.upper.iter() {
-            parent
-                .clone()
-                .add_child_of_child(context, *location, self_is_blue, child.clone());
+            parent.add_child_of_child(context, *location, self_is_blue, child.clone());
         }
     }
 
@@ -116,7 +114,7 @@ pub fn top_tree<C: AggregationContext>(
     }
     let bottom_tree = bottom_tree(context, item, depth);
     let top_tree = Arc::new(TopTree::new(depth));
-    bottom_tree.add_top_tree_parent(context, top_tree.clone());
+    bottom_tree.add_top_tree_parent(context, &top_tree);
     item.leaf().top_trees.insert(depth, top_tree.clone());
     top_tree
 }
@@ -131,11 +129,11 @@ pub fn bottom_tree<C: AggregationContext>(
     }
     let new_bottom_tree = Arc::new(BottomTree::new(height));
     if height == 0 {
-        add_parent_to_item(context, item, new_bottom_tree.clone(), ChildLocation::Left);
+        add_parent_to_item(context, item, &new_bottom_tree, ChildLocation::Left);
     } else {
         bottom_tree(context, item, height - 1).add_bottom_tree_parent(
             context,
-            new_bottom_tree.clone(),
+            &new_bottom_tree,
             ChildLocation::Left,
         );
     }

@@ -50,7 +50,7 @@ pub trait AggregationContext {
     type RootInfo;
     type RootInfoType;
 
-    fn is_blue(&self, reference: Self::ItemRef) -> bool;
+    fn is_blue(&self, reference: &Self::ItemRef) -> bool;
     fn item(&self, reference: Self::ItemRef) -> Self::ItemLock<'_>;
 
     fn apply_change(

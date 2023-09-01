@@ -1,9 +1,9 @@
 use std::{mem::transmute, ops::ControlFlow, sync::Arc};
 
+use auto_hash_map::AutoSet;
 use parking_lot::{Mutex, MutexGuard};
 
 use super::{inner_refs::TopRef, leaf::top_tree, AggregationContext};
-use crate::count_hash_set::CountHashSet;
 
 pub struct TopTree<T> {
     depth: u8,
@@ -12,7 +12,7 @@ pub struct TopTree<T> {
 
 struct TopTreeState<T> {
     data: T,
-    upper: CountHashSet<TopRef<T>>,
+    upper: AutoSet<TopRef<T>>,
 }
 
 impl<T: Default> TopTree<T> {
@@ -21,7 +21,7 @@ impl<T: Default> TopTree<T> {
             depth,
             state: Mutex::new(TopTreeState {
                 data: T::default(),
-                upper: CountHashSet::new(),
+                upper: AutoSet::new(),
             }),
         }
     }
@@ -29,7 +29,7 @@ impl<T: Default> TopTree<T> {
 
 impl<T> TopTree<T> {
     pub(super) fn add_child_of_child<C: AggregationContext<Info = T>>(
-        self: Arc<Self>,
+        self: &Arc<Self>,
         context: &C,
         child_of_child: C::ItemRef,
     ) {
@@ -38,7 +38,7 @@ impl<T> TopTree<T> {
     }
 
     pub(super) fn remove_child_of_child<C: AggregationContext<Info = T>>(
-        self: Arc<Self>,
+        self: &Arc<Self>,
         context: &C,
         child_of_child: C::ItemRef,
     ) {
@@ -49,25 +49,29 @@ impl<T> TopTree<T> {
     pub(super) fn add_parent<C: AggregationContext<Info = T>>(
         &self,
         context: &C,
-        parent: Arc<TopTree<T>>,
+        parent: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
         if let Some(change) = context.info_to_add_change(&state.data) {
             parent.child_change(context, &change);
         }
-        state.upper.add(TopRef { parent });
+        state.upper.insert(TopRef {
+            parent: parent.clone(),
+        });
     }
 
     pub(super) fn remove_parent<C: AggregationContext<Info = T>>(
         &self,
         context: &C,
-        parent: Arc<TopTree<T>>,
+        parent: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
         if let Some(change) = context.info_to_remove_change(&state.data) {
             parent.child_change(context, &change);
         }
-        state.upper.remove(TopRef { parent });
+        state.upper.remove(&TopRef {
+            parent: parent.clone(),
+        });
     }
 
     pub(super) fn child_change<C: AggregationContext<Info = T>>(
