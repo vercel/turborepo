@@ -73,9 +73,7 @@ pub fn get_global_hash_inputs<L: ?Sized + Lockfile>(
             WalkType::All,
         )?;
 
-        for file in files {
-            global_deps.insert(file);
-        }
+        global_deps.extend(files);
     }
 
     if lockfile.is_none() {
