@@ -26,11 +26,10 @@ use crate::{
     config::TurboJson,
     daemon::DaemonConnector,
     engine::EngineBuilder,
-    manager::Manager,
     opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
-    process::ProcessManager,
+    process::SharedProcessManager,
     run::global_hash::get_global_hash_inputs,
     task_graph::Visitor,
 };
@@ -38,12 +37,12 @@ use crate::{
 #[derive(Debug)]
 pub struct Run {
     base: CommandBase,
-    processes: Manager,
+    processes: SharedProcessManager,
 }
 
 impl Run {
     pub fn new(base: CommandBase) -> Self {
-        let processes = Manager::new();
+        let processes = SharedProcessManager::new();
         Self { base, processes }
     }
 
@@ -231,7 +230,10 @@ impl Run {
         ));
 
         // create one to remove dead code warnings
-        let _proc_manager = ProcessManager::new();
+        let proc_manager = SharedProcessManager::new();
+        proc_manager.start();
+
+        // proc_manager.spawn(command, timeout);
 
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
