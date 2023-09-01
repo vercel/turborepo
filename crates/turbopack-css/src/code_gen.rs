@@ -70,7 +70,7 @@ macro_rules! create_visitor {
         impl<T: Fn(&mut $ty) + Send + Sync> $crate::code_gen::VisitorFactory
             for Box<Visitor<T>>
         {
-            fn create<'a>(&'a self) -> Box<dyn lightningcss::visitor::Visitor<Error = std::convert::Infallible> + Send + Sync + 'a> {
+            fn create<'a>(&'a self) -> $crate::code_gen::VisitorLike<'a> {
                 Box::new(&**self)
             }
         }
