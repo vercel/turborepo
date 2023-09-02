@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
             let glob_result = input.read_glob(glob, true);
             let dir_hash = hash_glob_result(glob_result);
             print_hash(dir_hash).await?;
-            Ok(unit())
+            Ok(Default::default())
         })
     });
     tt.wait_task_completion(task, true).await.unwrap();
@@ -61,7 +61,7 @@ pub fn empty_string() -> Vc<String> {
 #[turbo_tasks::function]
 async fn print_hash(dir_hash: Vc<String>) -> Result<Vc<()>> {
     println!("DIR HASH: {}", dir_hash.await?.as_str());
-    Ok(unit())
+    Ok(Default::default())
 }
 
 #[turbo_tasks::function]

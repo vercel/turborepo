@@ -41,7 +41,7 @@ pub fn fibonacci(c: &mut Criterion) {
                         // size >= 1 => + fib(0) = 1
                         // size >= 2 => + fib(1) = 2
                         (0..size).map(|i| fib(i, i)).try_join().await?;
-                        Ok(unit())
+                        Ok(Default::default())
                     });
                     tt.wait_task_completion(task, false).await.unwrap();
                     tt

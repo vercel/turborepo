@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use turbo_tasks::{unit, TransientInstance, TryJoinIterExt, TurboTasks, Value, Vc};
+use turbo_tasks::{TransientInstance, TryJoinIterExt, TurboTasks, Value, Vc};
 use turbo_tasks_fs::FileSystem;
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::ecmascript::EcmascriptModuleAsset;
@@ -142,7 +142,7 @@ impl TurbopackBuildBuilder {
             )
             .await?;
 
-            Ok(unit())
+            Ok(Default::default())
         });
 
         self.turbo_tasks.wait_task_completion(task, true).await?;
@@ -294,7 +294,7 @@ async fn build_internal(
         .try_join()
         .await?;
 
-    Ok(unit())
+    Ok(Default::default())
 }
 
 pub async fn build(args: &BuildArguments) -> Result<()> {
