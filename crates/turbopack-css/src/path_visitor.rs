@@ -31,15 +31,12 @@ impl<'a> ApplyVisitors<'a> {
             index: 0,
         }
     }
+}
 
-    fn visit_if_required<N>(&mut self, n: &mut N, ast_path: &mut AstKindPath<AstParentKind>)
-    where
-        N: for<'aa> Visit<
-                'aa,
-                DefaultAtRule,
-                dyn for<'i> Visitor<'i, Error = Infallible> + Send + Sync + 'aa,
-            > + for<'aa> Visit<'aa, DefaultAtRule, ApplyVisitors<'aa>>,
-    {
+impl Visitor<'_> for ApplyVisitors<'_> {
+    // TODO: we need a macro to apply that for all methods
+
+    fn visit_url(&mut self, n: &mut Url, ast_path: &mut AstKindPath<AstParentKind>) {
         let mut index = self.index;
         let mut current_visitors_map = Cow::Borrowed(&self.visitors);
         while index < ast_path.len() {
@@ -92,13 +89,5 @@ impl<'a> ApplyVisitors<'a> {
         }
         // Ast path is unchanged, just keep visiting
         n.visit_mut_children_with_path(self, ast_path);
-    }
-}
-
-impl Visitor<'_> for ApplyVisitors<'_> {
-    // TODO: we need a macro to apply that for all methods
-
-    fn visit_url(&mut self, n: &mut Url, ast_path: &mut AstKindPath<AstParentKind>) {
-        self.visit_if_required(n, ast_path);
     }
 }
