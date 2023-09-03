@@ -65,7 +65,7 @@ pub async fn analyze_css_stylesheet(
             GLOBALS.set(&globals, || {
                 // TODO migrate to effects
                 let mut visitor = ModuleReferencesVisitor::new(source, origin, &mut references);
-                stylesheet.visit_with_path(&mut visitor, &mut Default::default());
+                stylesheet.visit(&mut visitor);
             })
         });
     }
