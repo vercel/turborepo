@@ -8,6 +8,7 @@ use lightningcss::{
 };
 use once_cell::sync::Lazy;
 use regex::Regex;
+use smallvec::smallvec;
 use swc_core::{
     common::{
         errors::Handler, source_map::SourceMapGenConfig, BytePos, FileName, LineCol, SourceMap,
