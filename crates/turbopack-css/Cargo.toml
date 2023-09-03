@@ -15,6 +15,7 @@ async-trait = { workspace = true }
 indexmap = { workspace = true }
 indoc = { workspace = true }
 lightningcss = { version = "1.0.0-alpha.45", features = [
+  "serde",
   "visitor",
   "into_owned",
 ] }
