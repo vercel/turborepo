@@ -172,10 +172,24 @@ async fn parse_content(
 
     let fm = source_map.new_source_file(FileName::Custom(ident_str.to_string()), string);
 
-    let config = ParserConfig {
-        css_modules: matches!(ty, CssModuleAssetType::Module),
-        legacy_nesting: true,
-        legacy_ie: true,
+    let config = ParserOptions {
+        css_modules: match ty {
+            CssModuleAssetType::Module => Some(lightningcss::css_modules::Config {
+                pattern: Pattern {
+                    segments: smallvec![
+                        Segment::Local,
+                        Segment::Literal("__"),
+                        Segment::Name,
+                        Segment::Literal("__"),
+                        Segment::Hash,
+                    ],
+                },
+                dashed_idents: false,
+            }),
+
+            _ => None,
+        },
+        filename: ident_str.to_string(),
         ..Default::default()
     };
 
