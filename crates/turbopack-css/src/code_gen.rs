@@ -91,6 +91,8 @@ macro_rules! create_visitor {
         {
             type Error = std::convert::Infallible;
 
+            const TYPES: lightningcss::visitor::VisitTypes =lightningcss::visitor::VisitTypes::all();
+
             fn visit_types(&self) -> lightningcss::visitor::VisitTypes {
                 lightningcss::visitor::VisitTypes::all()
             }
