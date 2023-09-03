@@ -279,7 +279,7 @@ impl CssChunkItem for CssModuleChunkItem {
                 .0
                 .retain(|r| !matches!(r, &CssRule::Import(..)));
 
-            let mut srcmap = Default::default();
+            let mut srcmap = parcel_sourcemap::SourceMap::new("");
             let result = stylesheet.to_css(PrinterOptions {
                 source_map: Some(&mut srcmap),
                 ..Default::default()
