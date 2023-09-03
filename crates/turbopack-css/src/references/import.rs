@@ -25,7 +25,7 @@ use crate::{
     references::{css_resolve, AstPath},
 };
 
-#[turbo_tasks::value(into = "new", serialization = "none")]
+#[turbo_tasks::value(into = "new")]
 pub struct ImportAttributes {
     #[turbo_tasks(trace_ignore)]
     pub layer_name: Option<LayerName<'static>>,

@@ -95,8 +95,9 @@ macro_rules! create_visitor {
                 lightningcss::visitor::VisitTypes::all()
             }
 
-            fn $name(&mut self, $arg: &mut $ty) {
+            fn $name(&mut self, $arg: &mut $ty) -> std::result::Result<(), Self::Error> {
                 (self.$name)($arg);
+                Ok(())
             }
         }
 
