@@ -203,16 +203,6 @@ async fn parse_content(
         }
     };
 
-    let mut has_errors = false;
-    for e in errors {
-        e.to_diagnostics(&handler).emit();
-        has_errors = true
-    }
-
-    if has_errors {
-        return Ok(ParseCssResult::Unparseable.into());
-    }
-
     let transform_context = TransformContext {
         source_map: &source_map,
     };
