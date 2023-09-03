@@ -89,6 +89,12 @@ macro_rules! create_visitor {
         impl<'a, T: Fn(&mut $ty) + Send + Sync> lightningcss::visitor::Visitor<'_>
             for &'a Visitor<T>
         {
+            type Error = std::convert::Infallible;
+
+            fn visit_types(&self) -> lightningcss::visitor::VisitTypes {
+                lightningcss::visitor::VisitTypes::all()
+            }
+
             fn $name(&mut self, $arg: &mut $ty) {
                 (self.$name)($arg);
             }
