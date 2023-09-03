@@ -194,12 +194,11 @@ async fn parse_content(
         ..Default::default()
     };
 
-    let mut errors = Vec::new();
-    let mut parsed_stylesheet = match StyleSheet::parse(&fm, config) {
+    let mut parsed_stylesheet = match StyleSheet::parse(&string, config) {
         Ok(stylesheet) => stylesheet,
         Err(e) => {
-            // TODO report in in a stream
-            e.to_diagnostics(&handler).emit();
+            // TODO(kdy1): Report errors
+            // e.to_diagnostics(&handler).emit();
             return Ok(ParseCssResult::Unparseable.into());
         }
     };
