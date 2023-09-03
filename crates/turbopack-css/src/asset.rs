@@ -1,5 +1,5 @@
 use anyhow::Result;
-use lightningcss::{rules::CssRule, stylesheet::PrinterOptions};
+use lightningcss::{rules::CssRule, stylesheet::PrinterOptions, visitor::Visit};
 use swc_core::common::{Globals, GLOBALS};
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
@@ -261,13 +261,10 @@ impl CssChunkItem for CssModuleChunkItem {
             let globals = Globals::new();
             GLOBALS.set(&globals, || {
                 if !visitors.is_empty() {
-                    stylesheet.visit_mut_with_path(
-                        &mut ApplyVisitors::new(visitors),
-                        &mut Default::default(),
-                    );
+                    stylesheet.visit(&mut ApplyVisitors::new(visitors));
                 }
                 for visitor in root_visitors {
-                    stylesheet.visit_mut_with(&mut visitor.create());
+                    stylesheet.visit(&mut visitor.create());
                 }
             });
 
