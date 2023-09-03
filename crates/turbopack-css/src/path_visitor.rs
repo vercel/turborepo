@@ -34,6 +34,10 @@ impl<'a> ApplyVisitors<'a> {
 }
 
 impl Visitor<'_> for ApplyVisitors<'_> {
+    type Error = Infallible;
+
+    const TYPES: lightningcss::visitor::VisitTypes = lightningcss::visitor::VisitTypes::all();
+
     // TODO: we need a macro to apply that for all methods
 
     fn visit_url(&mut self, n: &mut Url, ast_path: &mut AstKindPath<AstParentKind>) {
@@ -76,7 +80,7 @@ impl Visitor<'_> for ApplyVisitors<'_> {
                         );
                     }
                     for visitor in active_visitors {
-                        n.visit_mut_with(&mut visitor.create());
+                        n.visit(&mut visitor.create());
                     }
                     return;
                 } else {
