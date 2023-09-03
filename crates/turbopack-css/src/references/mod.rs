@@ -178,7 +178,7 @@ pub async fn css_resolve(
 #[turbo_tasks::value(transparent, serialization = "none")]
 pub struct AstPath(#[turbo_tasks(trace_ignore)] Vec<AstParentKind>);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AstParentKind {}
 
 pub type AstKindPath = swc_core::common::pass::AstKindPath<AstParentKind>;
