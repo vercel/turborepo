@@ -1,6 +1,7 @@
 use anyhow::Result;
 use lightningcss::{
     printer::Printer,
+    properties::custom::TokenList,
     rules::{
         import::ImportRule,
         layer::{LayerName, LayerStatementRule},
@@ -65,7 +66,7 @@ impl ImportAttributes {
         // })
         let mut rule = CssRule::Unknown(UnknownAtRule {
             name: "".into(),
-            prelude: Default::default(),
+            prelude: TokenList(vec![]),
             block: None,
             loc: Default::default(),
         });
