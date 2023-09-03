@@ -1,13 +1,10 @@
 use anyhow::Result;
 use lightningcss::{
+    media_query::MediaList,
     printer::Printer,
     properties::custom::TokenList,
     rules::{
-        import::ImportRule,
-        layer::{LayerName, LayerStatementRule},
-        media::MediaRule,
-        supports::SupportsRule,
-        unknown::UnknownAtRule,
+        import::ImportRule, layer::LayerName, supports::SupportsCondition, unknown::UnknownAtRule,
         CssRule,
     },
     stylesheet::PrinterOptions,
@@ -28,14 +25,14 @@ use crate::{
     references::{css_resolve, AstPath},
 };
 
-#[turbo_tasks::value(into = "new")]
+#[turbo_tasks::value(into = "new", serialization = "none")]
 pub struct ImportAttributes {
     #[turbo_tasks(trace_ignore)]
-    pub layer_name: Option<LayerStatementRule<'static>>,
+    pub layer_name: Option<LayerName<'static>>,
     #[turbo_tasks(trace_ignore)]
-    pub supports: Option<SupportsRule<'static>>,
+    pub supports: Option<SupportsCondition<'static>>,
     #[turbo_tasks(trace_ignore)]
-    pub media: Option<MediaRule<'static>>,
+    pub media: MediaList<'static>,
 }
 
 impl ImportAttributes {
