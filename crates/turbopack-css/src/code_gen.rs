@@ -29,6 +29,12 @@ pub struct VisitorLike<'a> {
     op: Box<dyn 'a + FnOnce(&mut StyleSheet<'static, 'static>) + Send + Sync>,
 }
 
+impl VisitorLike<'_> {
+    pub fn call(&self, s: &mut StyleSheet<'static, 'static>) {
+        (self.op)(s);
+    }
+}
+
 #[turbo_tasks::value_trait]
 pub trait CodeGenerateable {
     fn code_generation(
