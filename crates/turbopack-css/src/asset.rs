@@ -1,5 +1,9 @@
 use anyhow::Result;
-use lightningcss::{rules::CssRule, stylesheet::PrinterOptions, visitor::Visit};
+use lightningcss::{
+    rules::CssRule,
+    stylesheet::{PrinterOptions, StyleSheet},
+    visitor::Visit,
+};
 use swc_core::common::{Globals, GLOBALS};
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
@@ -256,7 +260,7 @@ impl CssChunkItem for CssModuleChunkItem {
             ..
         } = &*parsed
         {
-            let mut stylesheet = stylesheet.clone();
+            let mut stylesheet: StyleSheet<'_, '_> = stylesheet.clone();
 
             let globals = Globals::new();
             GLOBALS.set(&globals, || {
@@ -264,20 +268,16 @@ impl CssChunkItem for CssModuleChunkItem {
                     stylesheet.visit(&mut ApplyVisitors::new(visitors));
                 }
                 for visitor in root_visitors {
-                    stylesheet.visit(&mut visitor.create());
+                    let mut v = visitor.create();
+                    v.call(&mut stylesheet);
                 }
             });
 
             // remove imports
-            stylesheet.rules.retain(|r| {
-                !matches!(
-                    r,
-                    &Rule::AtRule(box AtRule {
-                        prelude: Some(box AtRulePrelude::ImportPrelude(_)),
-                        ..
-                    })
-                )
-            });
+            stylesheet
+                .rules
+                .0
+                .retain(|r| !matches!(r, &CssRule::Import(..)));
 
             let mut srcmap = Default::default();
             let result = stylesheet.to_css(PrinterOptions {
