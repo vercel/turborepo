@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};
-use turbo_tasks::{unit, util::FormatDuration, TurboTasks, UpdateInfo, Vc};
+use turbo_tasks::{util::FormatDuration, TurboTasks, UpdateInfo, Vc};
 use turbo_tasks_fs::{
     register, DirectoryContent, DirectoryEntry, DiskFileSystem, FileContent, FileSystem,
     FileSystemPath,
@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
             let input = fs.root().join("demo".to_string());
             let dir_hash = hash_directory(input);
             print_hash(dir_hash).await?;
-            Ok(Default::default())
+            Ok::<Vc<()>, _>(Default::default())
         })
     });
     tt.wait_task_completion(task, true).await.unwrap();

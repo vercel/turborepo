@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Result;
 use sha2::{Digest, Sha256};
-use turbo_tasks::{unit, util::FormatDuration, TurboTasks, UpdateInfo, Vc};
+use turbo_tasks::{util::FormatDuration, TurboTasks, UpdateInfo, Vc};
 use turbo_tasks_fs::{
     glob::Glob, register, DirectoryEntry, DiskFileSystem, FileContent, FileSystem, FileSystemPath,
     ReadGlobResult,
@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
             let glob_result = input.read_glob(glob, true);
             let dir_hash = hash_glob_result(glob_result);
             print_hash(dir_hash).await?;
-            Ok(Default::default())
+            Ok::<Vc<()>, _>(Default::default())
         })
     });
     tt.wait_task_completion(task, true).await.unwrap();
