@@ -137,7 +137,7 @@ enum ModuleCssClass {
 /// 3. class3: [Local("exported_class3), Import("class4", "./other.module.css")]
 #[turbo_tasks::value(transparent)]
 #[derive(Debug, Clone)]
-struct ModuleCssClasses(IndexMap<String, ModuleCssClass>);
+struct ModuleCssClasses(IndexMap<String, Vec<ModuleCssClass>>);
 
 #[turbo_tasks::value_impl]
 impl ModuleCssAsset {
