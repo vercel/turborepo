@@ -132,14 +132,6 @@ enum ModuleCssClass {
 struct ModuleCssClasses(IndexMap<String, ModuleCssClass>);
 
 #[turbo_tasks::value_impl]
-impl Asset for ModuleCssAsset {
-    #[turbo_tasks::function]
-    fn content(&self) -> Result<Vc<AssetContent>> {
-        bail!("CSS module asset has no contents")
-    }
-}
-
-#[turbo_tasks::value_impl]
 impl ModuleCssAsset {
     #[turbo_tasks::function]
     async fn inner(self: Vc<Self>) -> Result<Vc<Box<dyn Module>>> {
@@ -151,7 +143,7 @@ impl ModuleCssAsset {
     }
 
     #[turbo_tasks::function]
-    pub async fn classes(self: Vc<Self>) -> Result<Vc<ModuleCssClasses>> {
+    async fn classes(self: Vc<Self>) -> Result<Vc<ModuleCssClasses>> {
         let inner = self.inner();
 
         let Some(inner) = Vc::try_resolve_sidecast::<Box<dyn ProcessCss>>(inner).await? else {
