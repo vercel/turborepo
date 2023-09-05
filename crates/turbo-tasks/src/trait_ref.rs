@@ -104,7 +104,7 @@ where
 
 impl<T> TraitRef<T>
 where
-    T: VcValueTrait + ?Sized,
+    T: VcValueTrait + ?Sized + Send,
 {
     /// Returns a new cell that points to a value that implements the value
     /// trait `T`.
