@@ -338,7 +338,7 @@ async fn reference_to_graph_nodes<I>(
     )>,
 >
 where
-    I: FromChunkableModule,
+    I: Send + FromChunkableModule,
 {
     let Some(chunkable_module_reference) =
         Vc::try_resolve_downcast::<Box<dyn ChunkableModuleReference>>(reference).await?
