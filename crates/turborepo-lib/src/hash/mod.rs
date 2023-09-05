@@ -384,22 +384,22 @@ mod test {
     #[test]
     fn task_hashable() {
         let task_hashable = TaskHashable {
-            global_hash: "global_hash".to_string(),
+            global_hash: "global_hash",
             task_dependency_hashes: vec!["task_dependency_hash".to_string()],
             package_dir: turbopath::RelativeUnixPathBuf::new("package_dir").unwrap(),
-            hash_of_files: "hash_of_files".to_string(),
+            hash_of_files: "hash_of_files",
             external_deps_hash: "external_deps_hash".to_string(),
-            task: "task".to_string(),
+            task: "task",
             outputs: TaskOutputs {
                 inclusions: vec!["inclusions".to_string()],
                 exclusions: vec!["exclusions".to_string()],
             },
-            pass_through_args: vec!["pass_thru_args".to_string()],
-            env: vec!["env".to_string()],
+            pass_through_args: &["pass_thru_args".to_string()],
+            env: &["env".to_string()],
             resolved_env_vars: vec![],
-            pass_through_env: vec!["pass_thru_env".to_string()],
+            pass_through_env: &["pass_thru_env".to_string()],
             env_mode: ResolvedEnvMode::Loose,
-            dot_env: vec![turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
+            dot_env: &[turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 
         assert_eq!(task_hashable.hash(), "ff765ee2f83bc034");
@@ -416,13 +416,13 @@ mod test {
             .into_iter()
             .collect(),
             root_external_dependencies_hash: "0000000000000000".to_string(),
-            env: vec!["env".to_string()],
+            env: &["env".to_string()],
             resolved_env_vars: vec![],
-            pass_through_env: vec!["pass_through_env".to_string()],
+            pass_through_env: &["pass_through_env".to_string()],
             env_mode: EnvMode::Infer,
             framework_inference: true,
 
-            dot_env: vec![turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
+            dot_env: &[turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 
         assert_eq!(global_hash.hash(), "c0ddf8138bd686e8");

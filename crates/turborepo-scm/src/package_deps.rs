@@ -188,7 +188,7 @@ impl Git {
 mod tests {
     use std::{assert_matches::assert_matches, collections::HashMap, process::Command};
 
-    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
     use super::*;
     use crate::{manual::get_package_file_hashes_from_processing_gitignore, SCM};

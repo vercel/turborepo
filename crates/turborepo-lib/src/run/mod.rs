@@ -33,7 +33,7 @@ use crate::{
     package_json::PackageJson,
     run::global_hash::get_global_hash_inputs,
     task_graph::Visitor,
-    task_hash::{PackageInputsHashes, TaskHashTracker},
+    task_hash::PackageInputsHashes,
 };
 
 #[derive(Debug)]

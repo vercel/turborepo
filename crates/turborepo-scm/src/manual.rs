@@ -118,7 +118,9 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
 #[cfg(test)]
 mod tests {
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
+    use turbopath::{
+        AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf,
+    };
 
     use super::*;
 
