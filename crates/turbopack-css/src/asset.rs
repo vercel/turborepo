@@ -21,8 +21,9 @@ use turbopack_core::{
 use crate::{
     chunk::{CssChunkItem, CssChunkItemContent, CssChunkPlaceable, CssChunkType, CssImport},
     code_gen::CodeGenerateable,
-    parse::{parse_css, ParseCss, ParseCssResult, ParseCssResultSourceMap},
+    parse::ParseCssResultSourceMap,
     path_visitor::ApplyVisitors,
+    process::ProcessCssResult,
     references::{
         analyze_css_stylesheet, compose::CssModuleComposeReference, import::ImportAssetReference,
     },
@@ -66,14 +67,6 @@ impl CssModuleAsset {
     #[turbo_tasks::function]
     pub async fn source_ident(self: Vc<Self>) -> Result<Vc<AssetIdent>> {
         Ok(self.await?.source.ident())
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ParseCss for CssModuleAsset {
-    #[turbo_tasks::function]
-    fn parse_css(&self) -> Vc<ParseCssResult> {
-        parse_css(self.source, self.ty, self.transforms)
     }
 }
 
@@ -252,41 +245,9 @@ impl CssChunkItem for CssModuleChunkItem {
             }
         }
 
-        let parsed = self.module.parse_css().await?;
+        let result: ProcessCssResult = self.module.parse_css().await?;
 
-        if let ParseCssResult::Ok {
-            stylesheet,
-            source_map,
-            ..
-        } = &*parsed
-        {
-            let mut stylesheet: StyleSheet<'_, '_> = stylesheet.clone();
-
-            let globals = Globals::new();
-            GLOBALS.set(&globals, || {
-                if !visitors.is_empty() {
-                    stylesheet.visit(&mut ApplyVisitors::new(visitors));
-                }
-                for visitor in root_visitors {
-                    let mut v = visitor.create();
-                    v.call(&mut stylesheet);
-                }
-            });
-
-            // remove imports
-            stylesheet
-                .rules
-                .0
-                .retain(|r| !matches!(r, &CssRule::Import(..)));
-
-            let mut srcmap = parcel_sourcemap::SourceMap::new("");
-            let result = stylesheet.to_css(PrinterOptions {
-                source_map: Some(&mut srcmap),
-                ..Default::default()
-            })?;
-
-            let srcmap = ParseCssResultSourceMap::new(source_map.clone(), srcmap).cell();
-
+        if let ProcessCssResult::Ok {} = &*result {
             Ok(CssChunkItemContent {
                 inner_code: result.code.into(),
                 imports,
