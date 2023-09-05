@@ -2,7 +2,6 @@ use anyhow::Result;
 use lightningcss::{
     css_modules::{CssModuleExports, Pattern, Segment},
     dependencies::{Dependency, DependencyOptions},
-    rules::CssRule,
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet},
 };
 use smallvec::smallvec;
@@ -12,7 +11,6 @@ use turbopack_core::{
     asset::{Asset, AssetContent},
     source::Source,
     source_map::{GenerateSourceMap, OptionSourceMap},
-    SOURCE_MAP_ROOT_NAME,
 };
 
 use crate::CssModuleAssetType;
@@ -112,6 +110,7 @@ async fn process_content(
         output_code: result.code,
         dependencies: result.dependencies,
         exports: result.exports,
+        source_map: ProcessCssResultSourceMap::new(srcmap).cell(),
     }
     .into())
 }
