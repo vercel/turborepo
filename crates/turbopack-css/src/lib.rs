@@ -9,6 +9,7 @@ pub mod chunk;
 mod code_gen;
 pub mod embed;
 mod global_asset;
+mod lifetime_util;
 mod module_asset;
 pub(crate) mod parse;
 pub(crate) mod process;
