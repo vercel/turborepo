@@ -1,7 +1,8 @@
 use anyhow::Result;
 use lightningcss::{
     css_modules::{Pattern, Segment},
-    stylesheet::{ParserOptions, StyleSheet},
+    rules::CssRule,
+    stylesheet::{ParserOptions, PrinterOptions, StyleSheet},
 };
 use smallvec::smallvec;
 use turbo_tasks::{ValueToString, Vc};
@@ -11,7 +12,7 @@ use turbopack_core::{
     source::Source,
 };
 
-use crate::{CssModuleAssetType, ParseCssResult};
+use crate::CssModuleAssetType;
 
 #[turbo_tasks::value(shared, serialization = "none")]
 pub enum ProcessCssResult {
@@ -81,6 +82,18 @@ async fn process_content(
             return Ok(ProcessCssResult::Unparseable.into());
         }
     };
+
+    // remove imports
+    stylesheet
+        .rules
+        .0
+        .retain(|r| !matches!(r, &CssRule::Import(..)));
+
+    let mut srcmap = parcel_sourcemap::SourceMap::new("");
+    let result = stylesheet.to_css(PrinterOptions {
+        source_map: Some(&mut srcmap),
+        ..Default::default()
+    })?;
 
     Ok(ProcessCssResult::Ok {}.into())
 }
