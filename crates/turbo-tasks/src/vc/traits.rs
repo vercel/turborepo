@@ -47,9 +47,9 @@ where
 ///
 /// The implementor of this trait must ensure that `Self` implements the
 /// trait `T`.
-pub unsafe trait Dynamic<T>
+pub unsafe trait Dynamic<T>: Send
 where
-    T: VcValueTrait + ?Sized + Send,
+    T: VcValueTrait + ?Sized,
 {
 }
 
