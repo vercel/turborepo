@@ -13,6 +13,7 @@ mod global_asset;
 mod module_asset;
 pub(crate) mod parse;
 mod path_visitor;
+mod process;
 pub(crate) mod references;
 pub(crate) mod transform;
 pub(crate) mod util;
