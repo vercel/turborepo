@@ -1,7 +1,7 @@
 use anyhow::Result;
 use lightningcss::{
     css_modules::{CssModuleExports, Pattern, Segment},
-    dependencies::Dependency,
+    dependencies::{Dependency, DependencyOptions},
     rules::CssRule,
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet},
 };
@@ -95,19 +95,22 @@ async fn process_content(
         }
     };
 
-    // remove imports
-    stylesheet
-        .rules
-        .0
-        .retain(|r| !matches!(r, &CssRule::Import(..)));
-
     let mut srcmap = parcel_sourcemap::SourceMap::new("");
     let result = stylesheet.to_css(PrinterOptions {
         source_map: Some(&mut srcmap),
+        analyze_dependencies: Some(DependencyOptions {
+            remove_imports: true,
+            ..
+        }),
         ..Default::default()
     })?;
 
-    Ok(ProcessCssResult::Ok {}.into())
+    Ok(ProcessCssResult::Ok {
+        output_code: result.code,
+        dependencies: result.dependencies,
+        exports: result.exports,
+    }
+    .into())
 }
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
