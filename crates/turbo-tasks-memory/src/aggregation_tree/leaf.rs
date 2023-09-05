@@ -1,19 +1,20 @@
 use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
-use auto_hash_map::{AutoMap, AutoSet};
+use auto_hash_map::AutoMap;
 use nohash_hasher::BuildNoHashHasher;
 
 use super::{
     bottom_tree::{add_parent_to_item, BottomTree},
-    inner_refs::{BottomRef, ChildLocation},
+    inner_refs::ChildLocation,
     top_tree::TopTree,
+    upper_map::UpperMap,
     AggregationContext, AggregationItemLock,
 };
 
 pub struct AggregationTreeLeaf<T, I> {
     top_trees: AutoMap<u8, Arc<TopTree<T>>, BuildNoHashHasher<u8>>,
     bottom_trees: AutoMap<u8, Arc<BottomTree<T, I>>, BuildNoHashHasher<u8>>,
-    upper: AutoSet<BottomRef<T, I>>,
+    upper: UpperMap<BottomTree<T, I>>,
 }
 
 impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
@@ -21,7 +22,7 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
         Self {
             top_trees: AutoMap::with_hasher(),
             bottom_trees: AutoMap::with_hasher(),
-            upper: AutoSet::new(),
+            upper: UpperMap::new(),
         }
     }
 
@@ -31,8 +32,8 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
         context: &C,
         child: &I,
     ) {
-        for BottomRef { parent, location } in self.upper.iter() {
-            parent.add_child_of_child(context, *location, self_is_blue, child);
+        for (parent, location) in self.upper.iter() {
+            parent.add_child_of_child(context, location, self_is_blue, child);
         }
     }
 
@@ -42,8 +43,8 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
         context: &C,
         child: &I,
     ) {
-        for BottomRef { parent, location } in self.upper.iter() {
-            parent.remove_child_of_child(context, *location, self_is_blue, child);
+        for (parent, location) in self.upper.iter() {
+            parent.remove_child_of_child(context, location, self_is_blue, child);
         }
     }
 
@@ -53,11 +54,7 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
         change: &C::ItemChange,
     ) {
         context.on_change(change);
-        for BottomRef {
-            parent,
-            location: _,
-        } in self.upper.iter()
-        {
+        for parent in self.upper.keys() {
             parent.child_change(context, change);
         }
     }
@@ -68,11 +65,7 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
         root_info_type: &C::RootInfoType,
     ) -> C::RootInfo {
         let mut result = context.new_root_info(root_info_type);
-        for BottomRef {
-            parent,
-            location: _,
-        } in self.upper.iter()
-        {
+        for parent in self.upper.keys() {
             let info = parent.get_root_info(context, root_info_type);
             if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
                 break;
@@ -88,19 +81,30 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
     #[must_use]
     pub(super) fn add_upper(
         &mut self,
-        parent: Arc<BottomTree<T, I>>,
+        parent: &Arc<BottomTree<T, I>>,
         location: ChildLocation,
     ) -> bool {
-        self.upper.insert(BottomRef { parent, location })
+        match location {
+            ChildLocation::Left => {
+                self.upper.init_left(parent.clone());
+                true
+            }
+            ChildLocation::Middle => self.upper.add_middle(parent.clone()),
+            ChildLocation::Right => self.upper.add_right(parent.clone()),
+        }
     }
 
     #[must_use]
     pub(super) fn remove_upper(
         &mut self,
-        parent: Arc<BottomTree<T, I>>,
+        parent: &Arc<BottomTree<T, I>>,
         location: ChildLocation,
-    ) -> bool {
-        self.upper.remove(&BottomRef { parent, location })
+    ) -> Option<ChildLocation> {
+        match location {
+            ChildLocation::Left => unreachable!(),
+            ChildLocation::Middle => self.upper.remove_middle(parent.clone()),
+            ChildLocation::Right => self.upper.remove_right(parent.clone()),
+        }
     }
 }
 
@@ -109,7 +113,6 @@ pub fn top_tree<C: AggregationContext>(
     reference: &C::ItemRef,
     depth: u8,
 ) -> Arc<TopTree<C::Info>> {
-    println!("top_tree({depth})");
     let new_top_tree = {
         let mut item = context.item(reference);
         let leaf = item.leaf();

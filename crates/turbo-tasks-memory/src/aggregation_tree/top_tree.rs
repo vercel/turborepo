@@ -50,12 +50,13 @@ impl<T> TopTree<T> {
         parent: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
-        if let Some(change) = context.info_to_add_change(&state.data) {
-            parent.child_change(context, &change);
-        }
-        state.upper.add(TopRef {
+        if state.upper.add(TopRef {
             parent: parent.clone(),
-        });
+        }) {
+            if let Some(change) = context.info_to_add_change(&state.data) {
+                parent.child_change(context, &change);
+            }
+        }
     }
 
     pub(super) fn remove_parent<C: AggregationContext<Info = T>>(
@@ -64,12 +65,13 @@ impl<T> TopTree<T> {
         parent: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
-        if let Some(change) = context.info_to_remove_change(&state.data) {
-            parent.child_change(context, &change);
-        }
-        state.upper.remove(TopRef {
+        if state.upper.remove(TopRef {
             parent: parent.clone(),
-        });
+        }) {
+            if let Some(change) = context.info_to_remove_change(&state.data) {
+                parent.child_change(context, &change);
+            }
+        }
     }
 
     pub(super) fn child_change<C: AggregationContext<Info = T>>(

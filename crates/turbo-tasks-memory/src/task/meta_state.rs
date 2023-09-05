@@ -252,7 +252,7 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
     }
 
     pub(super) fn ensure_at_least_partial(&mut self) {
-        if let TaskMetaStateWriteGuard::Unloaded(state) = self {
+        if let TaskMetaStateWriteGuard::Unloaded(_state) = self {
             todo!()
         }
     }

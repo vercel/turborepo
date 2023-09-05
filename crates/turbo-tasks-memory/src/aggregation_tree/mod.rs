@@ -30,6 +30,7 @@ mod leaf;
 #[cfg(test)]
 mod tests;
 mod top_tree;
+mod upper_map;
 
 use std::{borrow::Cow, hash::Hash, ops::ControlFlow, sync::Arc};
 
