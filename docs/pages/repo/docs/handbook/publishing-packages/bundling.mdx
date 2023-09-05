@@ -3,7 +3,7 @@ import { Tabs, Tab } from "../../../../../components/Tabs";
 
 # Bundling packages in a Monorepo
 
-Unlike [internal](/repo/docs/handbook/sharing-code/internal-packages) packages, external packages can be deployed to npm _and_ used locally. In this guide, we'll be using a bundler to bundle a package to [`CommonJS`](https://en.wikipedia.org/wiki/CommonJS), the most commonly used format used on npm.
+Unlike [internal](/repo/docs/handbook/sharing-code/internal-packages) packages, external packages can be deployed to [npm](https://www.npmjs.com) _and_ used locally. In this guide, we'll bundle a package to both [ECMAScript modules](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules) (`esm`) and [CommonJS modules](https://en.wikipedia.org/wiki/CommonJS) (`cjs`), the most commonly used formats on npm.
 
 ## Setting up a build script
 
