@@ -28,6 +28,9 @@ pub enum ProcessCssResult {
 
         #[turbo_tasks(trace_ignore)]
         dependencies: Option<Vec<Dependency>>,
+
+        #[turbo_tasks(trace_ignore)]
+        source_map: Option<parcel_sourcemap::SourceMap>,
     },
     Unparseable,
     NotFound,
