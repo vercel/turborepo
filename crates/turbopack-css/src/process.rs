@@ -24,7 +24,7 @@ pub enum ProcessCssResult {
         output_code: String,
 
         #[turbo_tasks(trace_ignore)]
-        exports: CssModuleExports,
+        exports: Option<CssModuleExports>,
 
         #[turbo_tasks(trace_ignore)]
         dependencies: Option<Vec<Dependency>>,
@@ -102,7 +102,6 @@ async fn process_content(
         source_map: Some(&mut srcmap),
         analyze_dependencies: Some(DependencyOptions {
             remove_imports: true,
-            ..
         }),
         ..Default::default()
     })?;
