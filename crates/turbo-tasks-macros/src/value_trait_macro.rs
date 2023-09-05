@@ -197,7 +197,7 @@ pub fn value_trait(args: TokenStream, input: TokenStream) -> TokenStream {
     let expanded = quote! {
         #[must_use]
         #(#attrs)*
-        #vis #trait_token #trait_ident: #(#supertraits)+*
+        #vis #trait_token #trait_ident: std::marker::Send + #(#supertraits)+*
         {
             #(#items)*
         }
