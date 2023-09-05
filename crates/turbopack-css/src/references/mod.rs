@@ -27,6 +27,7 @@ use turbopack_core::{
 use turbopack_swc_utils::emitter::IssueEmitter;
 
 use crate::{
+    process::{process_css, ProcessCssResult},
     references::{
         import::{ImportAssetReference, ImportAttributes},
         url::UrlAssetReference,
@@ -44,13 +45,12 @@ pub async fn analyze_css_stylesheet(
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
     ty: CssModuleAssetType,
-    transforms: Vc<CssInputTransforms>,
 ) -> Result<Vc<ModuleReferences>> {
     let mut references = Vec::new();
 
-    let parsed = parse_css(source, ty, transforms).await?;
+    let parsed = process_css(source, ty).await?;
 
-    if let ParseCssResult::Ok {
+    if let ProcessCssResult::Ok {
         stylesheet,
         source_map,
         ..
