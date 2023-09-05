@@ -142,13 +142,16 @@ impl Run {
             vec![],
         )?;
 
-        let team_id = self.base.repo_config()?.team_id();
+        let repo_config = self.base.repo_config()?;
+        let team_id = repo_config.team_id();
+        let team_slug = repo_config.team_slug();
 
         let token = self.base.user_config()?.token();
 
         let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
             team_id: team_id.to_string(),
             token: token.to_string(),
+            team_slug: team_slug.map(|s| s.to_string()),
         });
 
         let async_cache = AsyncCache::new(
