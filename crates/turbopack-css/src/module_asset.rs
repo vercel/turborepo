@@ -114,7 +114,11 @@ impl ModuleCssAsset {
         let result = inner.process_css().await?;
 
         // TODO(alexkirsz) Should we report an error on parse error here?
-        if let ProcessCssResult::Ok { exports, .. } = &*result {
+        if let ProcessCssResult::Ok {
+            exports: Some(exports),
+            ..
+        } = &*result
+        {
             return Ok(Vc::cell(exports.clone()));
         }
 
@@ -250,7 +254,7 @@ impl ChunkItem for ModuleChunkItem {
 /// 3. class3: [Local("exported_class3), Import("class4", "./other.module.css")]
 #[turbo_tasks::value(transparent)]
 #[derive(Debug, Clone)]
-struct ModuleCssClasses(CssModuleExports);
+struct ModuleCssClasses(#[turbo_tasks(trace_ignore)] CssModuleExports);
 
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ModuleChunkItem {
@@ -265,9 +269,9 @@ impl EcmascriptChunkItem for ModuleChunkItem {
 
         let mut code = "__turbopack_export_value__({\n".to_string();
         for (export_name, class_names) in &*classes {
-            let mut exported_class_names = Vec::with_capacity(class_names.len());
+            let mut exported_class_names = Vec::with_capacity(class_names.composes.len());
 
-            for class_name in class_names {
+            for class_name in &class_names.composes {
                 match class_name {
                     ModuleCssClass::Import {
                         original: original_name,
