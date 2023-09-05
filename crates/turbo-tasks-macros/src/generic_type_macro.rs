@@ -36,11 +36,8 @@ pub fn generic_type(input: TokenStream) -> TokenStream {
     // Add Send bound to input generics.
 
     for param in &mut input.generics.params {
-        match param {
-            GenericParam::Type(param) => {
-                param.bounds.push(syn::parse_quote! { std::marker::Send });
-            }
-            _ => {}
+        if let GenericParam::Type(param) = param {
+            param.bounds.push(syn::parse_quote! { std::marker::Send });
         }
     }
 
