@@ -105,7 +105,7 @@ impl TurbopackBuildBuilder {
     }
 
     pub async fn build(self) -> Result<()> {
-        let task = self.turbo_tasks.spawn_once_task(async move {
+        let task = self.turbo_tasks.spawn_once_task::<(), _>(async move {
             let build_result = build_internal(
                 self.project_dir.clone(),
                 self.root_dir,
@@ -204,13 +204,11 @@ async fn build_internal(
         .map(|r| async move {
             Ok(match &*r.await? {
                 EntryRequest::Relative(p) => {
-                    Request::relative(Value::new(p.clone().into()), Vc::<String>::empty(), false)
+                    Request::relative(Value::new(p.clone().into()), Default::default(), false)
                 }
-                EntryRequest::Module(m, p) => Request::module(
-                    m.clone(),
-                    Value::new(p.clone().into()),
-                    Vc::<String>::empty(),
-                ),
+                EntryRequest::Module(m, p) => {
+                    Request::module(m.clone(), Value::new(p.clone().into()), Default::default())
+                }
             })
         })
         .try_join()
