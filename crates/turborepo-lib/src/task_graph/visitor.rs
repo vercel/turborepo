@@ -3,7 +3,9 @@ use std::sync::{Arc, OnceLock};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::sync::mpsc;
+use turbopath::AbsoluteSystemPath;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
+use turborepo_scm::SCM;
 
 use crate::{
     cli::EnvMode,
@@ -12,7 +14,7 @@ use crate::{
     package_graph::{PackageGraph, WorkspaceName},
     run::task_id::{self, TaskId},
     task_hash,
-    task_hash::{PackageInputsHashes, TaskHashTracker, TaskHasher},
+    task_hash::{TaskHashTracker, TaskHasher},
 };
 
 // This holds the whole world
@@ -21,6 +23,8 @@ pub struct Visitor<'a> {
     opts: &'a Opts<'a>,
     task_hasher: TaskHasher<'a>,
     global_env_mode: EnvMode,
+    scm: &'a SCM,
+    repo_root: &'a AbsoluteSystemPath,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -46,23 +50,21 @@ impl<'a> Visitor<'a> {
     pub fn new(
         package_graph: Arc<PackageGraph>,
         opts: &'a Opts,
-        package_inputs_hashes: PackageInputsHashes,
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
         global_env_mode: EnvMode,
+        scm: &'a SCM,
+        repo_root: &'a AbsoluteSystemPath,
     ) -> Self {
-        let task_hasher = TaskHasher::new(
-            package_inputs_hashes,
-            opts,
-            env_at_execution_start,
-            global_hash,
-        );
+        let task_hasher = TaskHasher::new(opts, env_at_execution_start, global_hash);
 
         Self {
             package_graph,
             opts,
             task_hasher,
             global_env_mode,
+            scm,
+            repo_root,
         }
     }
 
@@ -128,11 +130,13 @@ impl<'a> Visitor<'a> {
             let task_hash = self
                 .task_hasher
                 .calculate_task_hash(
+                    &self.scm,
                     &info,
                     &task_definition,
                     task_env_mode,
                     workspace_info,
                     dependency_set,
+                    self.repo_root,
                 )
                 .await?;
 
