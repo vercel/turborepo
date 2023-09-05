@@ -115,32 +115,10 @@ impl ModuleCssAsset {
 
         // TODO(alexkirsz) Should we report an error on parse error here?
         if let ProcessCssResult::Ok { exports, .. } = &*result {
-            for (class_name, export_class_names) in exports {
-                let mut export = Vec::default();
-
-                for export_class_name in export_class_names {
-                    export.push(match export_class_name {
-                        CssClassName::Import { from, name } => ModuleCssClass::Import {
-                            original: name.value.to_string(),
-                            from: CssModuleComposeReference::new(
-                                Vc::upcast(self),
-                                Request::parse(Value::new(from.to_string().into())),
-                            ),
-                        },
-                        CssClassName::Local { name } => ModuleCssClass::Local {
-                            name: name.value.to_string(),
-                        },
-                        CssClassName::Global { name } => ModuleCssClass::Global {
-                            name: name.value.to_string(),
-                        },
-                    })
-                }
-
-                classes.insert(class_name.to_string(), export);
-            }
+            return Ok(Vc::cell(exports.clone()));
         }
 
-        Ok(Vc::cell(classes))
+        Ok(Vc::cell(CssModuleExports::default()))
     }
 
     #[turbo_tasks::function]
