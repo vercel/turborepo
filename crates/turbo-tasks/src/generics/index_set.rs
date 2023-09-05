@@ -23,7 +23,10 @@ async fn index_set_is_empty(index_set: Vc<IndexSet<Vc<()>>>) -> Result<Vc<bool>>
     Ok(Vc::cell(index_set.is_empty()))
 }
 
-impl<T> Vc<IndexSet<Vc<T>>> {
+impl<T> Vc<IndexSet<Vc<T>>>
+where
+    T: Send,
+{
     /// See [`IndexSet::len`].
     pub fn len(self) -> Vc<usize> {
         index_set_len(Self::to_repr(self))

@@ -136,7 +136,7 @@ pub trait IntoTraitRef {
 
 impl<T> IntoTraitRef for Vc<T>
 where
-    T: VcValueTrait + ?Sized,
+    T: VcValueTrait + ?Sized + Send,
 {
     type ValueTrait = T;
 
