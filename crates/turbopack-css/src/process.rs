@@ -9,11 +9,13 @@ use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
+    reference::ModuleReferences,
+    resolve::origin::ResolveOrigin,
     source::Source,
     source_map::{GenerateSourceMap, OptionSourceMap},
 };
 
-use crate::CssModuleAssetType;
+use crate::{references::analyze_references, CssModuleAssetType};
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 pub enum ProcessCssResult {
@@ -26,6 +28,8 @@ pub enum ProcessCssResult {
 
         #[turbo_tasks(trace_ignore)]
         dependencies: Option<Vec<Dependency>>,
+
+        references: Vc<ModuleReferences>,
 
         source_map: Vc<ProcessCssResultSourceMap>,
     },
@@ -47,6 +51,7 @@ pub trait ProcessCss {
 #[turbo_tasks::function]
 pub async fn process_css(
     source: Vc<Box<dyn Source>>,
+    origin: Vc<Box<dyn ResolveOrigin>>,
     ty: CssModuleAssetType,
 ) -> Result<Vc<ProcessCssResult>> {
     let content = source.content();
@@ -59,7 +64,8 @@ pub async fn process_css(
             FileContent::Content(file) => match file.content().to_str() {
                 Err(_err) => ProcessCssResult::Unparseable.cell(),
                 Ok(string) => {
-                    process_content(string.into_owned(), fs_path, ident_str, source, ty).await?
+                    process_content(string.into_owned(), fs_path, ident_str, source, origin, ty)
+                        .await?
                 }
             },
         },
@@ -71,6 +77,7 @@ async fn process_content(
     fs_path: &FileSystemPath,
     ident_str: &str,
     source: Vc<Box<dyn Source>>,
+    origin: Vc<Box<dyn ResolveOrigin>>,
     ty: CssModuleAssetType,
 ) -> Result<Vc<ProcessCssResult>> {
     let config = ParserOptions {
@@ -103,6 +110,8 @@ async fn process_content(
         }
     };
 
+    let references = analyze_references(&mut stylesheet, source, origin)?;
+
     let mut srcmap = parcel_sourcemap::SourceMap::new("");
     let result = stylesheet.to_css(PrinterOptions {
         source_map: Some(&mut srcmap),
@@ -116,6 +125,7 @@ async fn process_content(
         output_code: result.code,
         dependencies: result.dependencies,
         exports: result.exports,
+        references: Vc::cell(referencesx),
         source_map: ProcessCssResultSourceMap::new(srcmap).cell(),
     }
     .into())

@@ -61,7 +61,7 @@ impl ProcessCss for CssModuleAsset {
     #[turbo_tasks::function]
     async fn process_css(self: Vc<Self>) -> Result<Vc<ProcessCssResult>> {
         let this = self.await?;
-        Ok(process_css(this.source, this.ty))
+        Ok(process_css(this.source, Vc::upcast(self), this.ty))
     }
 }
 
@@ -77,13 +77,14 @@ impl Module for CssModuleAsset {
 
     #[turbo_tasks::function]
     async fn references(self: Vc<Self>) -> Result<Vc<ModuleReferences>> {
-        let this = self.await?;
+        let result = self.process_css().await?;
         // TODO: include CSS source map
-        Ok(analyze_css_stylesheet(
-            this.source,
-            Vc::upcast(self),
-            this.ty,
-        ))
+
+        match &*result {
+            ProcessCssResult::Ok { references, .. } => Ok(references.clone()),
+            ProcessCssResult::Unparseable => Ok(ModuleReferences::empty()),
+            ProcessCssResult::NotFound => Ok(ModuleReferences::empty()),
+        }
     }
 }
 
