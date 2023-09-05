@@ -13,10 +13,12 @@ use turbopack_core::{
     reference::ModuleReferences,
     resolve::origin::ResolveOrigin,
     source::Source,
-    source_map::{CrateMapWrapper, GenerateSourceMap, OptionSourceMap},
+    source_map::{GenerateSourceMap, OptionSourceMap},
 };
 
-use crate::{references::analyze_references, CssModuleAssetType};
+use crate::{
+    lifetime_util::stylesheet_into_static, references::analyze_references, CssModuleAssetType,
+};
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 pub enum ProcessCssResult {
@@ -102,7 +104,7 @@ async fn process_content(
         ..Default::default()
     };
 
-    let mut stylesheet = match StyleSheet::parse(&code, config) {
+    let stylesheet = match StyleSheet::parse(&code, config) {
         Ok(stylesheet) => stylesheet,
         Err(e) => {
             // TODO(kdy1): Report errors
@@ -110,6 +112,7 @@ async fn process_content(
             return Ok(ProcessCssResult::Unparseable.into());
         }
     };
+    let mut stylesheet = stylesheet_into_static(stylesheet);
 
     let references = analyze_references(&mut stylesheet, source, origin)?;
 
@@ -161,15 +164,15 @@ impl GenerateSourceMap for ProcessCssResultSourceMap {
         }
 
         for (idx, content) in self.source_map.get_sources_content().iter().enumerate() {
-            builder.set_source_contents(idx, content);
+            builder.set_source_contents(idx as _, Some(&content));
         }
 
         for m in self.source_map.get_mappings() {
             builder.add(
                 m.generated_line,
                 m.generated_column,
-                m.original.map(|v| v.original_line),
-                m.original.map(|v| v.original_column),
+                m.original.map(|v| v.original_line).unwrap_or_default(),
+                m.original.map(|v| v.original_column).unwrap_or_default(),
                 None,
                 None,
             );
