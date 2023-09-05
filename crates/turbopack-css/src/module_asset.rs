@@ -87,6 +87,14 @@ impl Module for ModuleCssAsset {
     }
 }
 
+#[turbo_tasks::value_impl]
+impl Asset for ModuleCssAsset {
+    #[turbo_tasks::function]
+    fn content(&self) -> Result<Vc<AssetContent>> {
+        bail!("CSS module asset has no contents")
+    }
+}
+
 /// A CSS class that is exported from a CSS module.
 ///
 /// See [`ModuleCssClasses`] for more information.
