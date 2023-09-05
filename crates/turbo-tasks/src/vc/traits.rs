@@ -49,7 +49,7 @@ where
 /// trait `T`.
 pub unsafe trait Dynamic<T>
 where
-    T: VcValueTrait + ?Sized,
+    T: VcValueTrait + ?Sized + Send,
 {
 }
 
