@@ -15,7 +15,7 @@ use turbopack_core::{
 use crate::{
     chunk::{CssChunkItem, CssChunkItemContent, CssChunkPlaceable, CssChunkType, CssImport},
     code_gen::CodeGenerateable,
-    process::{process_css, ProcessCss, ProcessCssResult},
+    process::{process_css, ProcessCss, ProcessCssResult, ProcessCssResultSourceMap},
     references::{
         analyze_css_stylesheet, compose::CssModuleComposeReference, import::ImportAssetReference,
     },
@@ -244,11 +244,16 @@ impl CssChunkItem for CssModuleChunkItem {
 
         let result = self.module.process_css().await?;
 
-        if let ProcessCssResult::Ok { output_code, .. } = &*result {
+        if let ProcessCssResult::Ok {
+            output_code,
+            source_map,
+            ..
+        } = &*result
+        {
             Ok(CssChunkItemContent {
                 inner_code: output_code.to_owned().into(),
                 imports,
-                source_map: Some(srcmap),
+                source_map: Some(source_map.clone()),
             }
             .into())
         } else {
