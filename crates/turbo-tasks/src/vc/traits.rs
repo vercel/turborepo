@@ -34,9 +34,9 @@ pub trait VcValueTrait {
 ///
 /// The implementor of this trait must ensure that `Self` implements the
 /// trait `T`.
-pub unsafe trait Upcast<T>
+pub unsafe trait Upcast<T>: Send
 where
-    T: VcValueTrait + ?Sized,
+    T: VcValueTrait + ?Sized + Send,
 {
 }
 
@@ -49,7 +49,7 @@ where
 /// trait `T`.
 pub unsafe trait Dynamic<T>: Send
 where
-    T: VcValueTrait + ?Sized,
+    T: VcValueTrait + ?Sized + Send,
 {
 }
 
