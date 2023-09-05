@@ -84,6 +84,17 @@ impl Module for ModuleCssAsset {
     }
 }
 
+/// A CSS class that is exported from a CSS module.
+///
+/// See [`ModuleCssClasses`] for more information.
+#[turbo_tasks::value(transparent)]
+#[derive(Debug, Clone)]
+enum ModuleCssClass {
+    Local { name: String },
+    Global { name: String },
+    Import { original: String },
+}
+
 /// A map of CSS classes exported from a CSS module.
 ///
 /// ## Example
@@ -108,7 +119,7 @@ impl Module for ModuleCssAsset {
 /// 3. class3: [Local("exported_class3), Import("class4", "./other.module.css")]
 #[turbo_tasks::value(transparent, serialization = "none")]
 #[derive(Debug, Clone)]
-struct ModuleCssClasses(#[turbo_tasks(trace_ignore)] CssModuleExports);
+struct ModuleCssClasses(IndexMap<String, ModuleCssClass>);
 
 #[turbo_tasks::value_impl]
 impl Asset for ModuleCssAsset {
@@ -138,6 +149,7 @@ impl ModuleCssAsset {
         };
 
         let result = inner.process_css().await?;
+        let mut classes = IndexMap::default();
 
         // TODO(alexkirsz) Should we report an error on parse error here?
         if let ProcessCssResult::Ok {
@@ -145,7 +157,29 @@ impl ModuleCssAsset {
             ..
         } = &*result
         {
-            return Ok(Vc::cell(exports.clone()));
+            for (class_name, export_class_names) in exports {
+                let mut export = Vec::default();
+
+                for export_class_name in &export_class_names.composes {
+                    export.push(match export_class_name {
+                        CssModuleReference::Import { from, name } => ModuleCssClass::Import {
+                            original: name.value.to_string(),
+                            from: CssModuleComposeReference::new(
+                                Vc::upcast(self),
+                                Request::parse(Value::new(from.to_string().into())),
+                            ),
+                        },
+                        CssModuleReference::Local { name } => ModuleCssClass::Local {
+                            name: name.value.to_string(),
+                        },
+                        CssModuleReference::Global { name } => ModuleCssClass::Global {
+                            name: name.value.to_string(),
+                        },
+                    })
+                }
+
+                classes.insert(class_name.to_string(), export);
+            }
         }
 
         Ok(Vc::cell(CssModuleExports::default()))
