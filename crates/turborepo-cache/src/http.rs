@@ -14,11 +14,14 @@ pub struct HTTPCache {
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
     repo_root: AbsoluteSystemPathBuf,
     token: String,
+    team_id: String,
+    team_slug: Option<String>,
 }
 
 pub struct APIAuth {
     pub team_id: String,
     pub token: String,
+    pub team_slug: Option<String>,
 }
 
 impl HTTPCache {
@@ -40,12 +43,19 @@ impl HTTPCache {
         } else {
             None
         };
+        let APIAuth {
+            team_id,
+            token,
+            team_slug,
+        } = api_auth;
 
         HTTPCache {
             client,
             signer_verifier,
             repo_root,
-            token: api_auth.token,
+            token,
+            team_id,
+            team_slug,
         }
     }
 
@@ -86,15 +96,10 @@ impl HTTPCache {
         Ok(())
     }
 
-    pub async fn exists(
-        &self,
-        hash: &str,
-        team_id: &str,
-        team_slug: Option<&str>,
-    ) -> Result<CacheResponse, CacheError> {
+    pub async fn exists(&self, hash: &str) -> Result<CacheResponse, CacheError> {
         let response = self
             .client
-            .artifact_exists(hash, &self.token, team_id, team_slug)
+            .artifact_exists(hash, &self.token, &self.team_id, self.team_slug.as_deref())
             .await?;
 
         let duration = Self::get_duration_from_response(&response)?;
@@ -122,12 +127,10 @@ impl HTTPCache {
     pub async fn fetch(
         &self,
         hash: &str,
-        team_id: &str,
-        team_slug: Option<&str>,
     ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
         let response = self
             .client
-            .fetch_artifact(hash, &self.token, team_id, team_slug)
+            .fetch_artifact(hash, &self.token, &self.team_id, self.team_slug.as_deref())
             .await?;
 
         let duration = Self::get_duration_from_response(&response)?;
@@ -232,6 +235,7 @@ mod test {
         let api_auth = APIAuth {
             team_id: "my-team".to_string(),
             token: "my-token".to_string(),
+            team_slug: None,
         };
 
         let cache = HTTPCache::new(api_client, &opts, repo_root_path.to_owned(), api_auth);
@@ -241,12 +245,12 @@ mod test {
             .put(&repo_root_path, hash, &anchored_files, duration)
             .await?;
 
-        let cache_response = cache.exists(hash, "", None).await?;
+        let cache_response = cache.exists(hash).await?;
 
         assert_eq!(cache_response.time_saved, duration);
         assert_eq!(cache_response.source, CacheSource::Remote);
 
-        let (cache_response, received_files) = cache.fetch(hash, "", None).await?;
+        let (cache_response, received_files) = cache.fetch(hash).await?;
         assert_eq!(cache_response.time_saved, duration);
 
         for (test_file, received_file) in files.iter().zip(received_files) {

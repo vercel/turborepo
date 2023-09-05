@@ -1,8 +1,8 @@
-import { TransformerOptions } from "../types";
+import type { TransformerOptions } from "../types";
 import { Runner } from "../runner";
-import Logger from "./logger";
+import { Logger } from "./logger";
 
-export default function getTransformerHelpers({
+export function getTransformerHelpers({
   transformer,
   rootPath,
   options,

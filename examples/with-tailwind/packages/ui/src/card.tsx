@@ -2,26 +2,29 @@ import * as React from "react";
 
 export function Card({
   title,
-  cta,
+  children,
   href,
 }: {
   title: string;
-  cta: string;
+  children: React.ReactNode;
   href: string;
 }): JSX.Element {
   return (
     <a
-      className="ui-group ui-mt-4 ui-rounded-lg ui-border ui-border-transparent ui-overflow-hidden ui-bg-origin-border ui-bg-gradient-to-r ui-from-brandred ui-to-brandblue ui-text-[#6b7280]"
-      href={href}
+      className="ui-group ui-rounded-lg ui-border ui-border-transparent ui-px-5 ui-py-4 ui-transition-colors hover:ui-border-neutral-700 hover:ui-bg-neutral-800/30"
+      href={`${href}?utm_source=create-turbo&utm_medium=with-tailwind&utm_campaign=create-turbo"`}
       rel="noopener noreferrer"
       target="_blank"
     >
-      <div className="ui-p-4 ui-bg-zinc-900 ui-h-full">
-        <p className="ui-inline-block ui-text-xl ui-text-white">{title}</p>
-        <div className="ui-text-xs ui-mt-4 group-hover:ui-underline">
-          {cta} →
-        </div>
-      </div>
+      <h2 className="ui-mb-3 ui-text-2xl ui-font-semibold">
+        {title}{" "}
+        <span className="ui-inline-block ui-transition-transform group-hover:ui-translate-x-1 motion-reduce:ui-transform-none">
+          -&gt;
+        </span>
+      </h2>
+      <p className="ui-m-0 ui-max-w-[30ch] ui-text-sm ui-opacity-50">
+        {children}
+      </p>
     </a>
   );
 }

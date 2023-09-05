@@ -38,7 +38,7 @@ mod relative_unix_path_buf;
 
 use std::io;
 
-pub use absolute_system_path::AbsoluteSystemPath;
+pub use absolute_system_path::{AbsoluteSystemPath, PathRelation};
 pub use absolute_system_path_buf::AbsoluteSystemPathBuf;
 pub use anchored_system_path::AnchoredSystemPath;
 pub use anchored_system_path_buf::AnchoredSystemPathBuf;
@@ -56,6 +56,8 @@ pub enum PathError {
     InvalidUnicode(String),
     #[error("Failed to convert path")]
     FromPathBufError(#[from] camino::FromPathBufError),
+    #[error("Failed to convert path")]
+    FromPathError(#[from] camino::FromPathError),
     #[error("path is malformed: {0}")]
     MalformedPath(String),
     #[error("Path is not safe for windows: {0}")]
