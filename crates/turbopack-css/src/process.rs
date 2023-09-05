@@ -15,7 +15,7 @@ use turbopack_core::{
 
 use crate::CssModuleAssetType;
 
-#[turbo_tasks::value(shared, serialization = "none")]
+#[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 pub enum ProcessCssResult {
     Ok {
         #[turbo_tasks(trace_ignore)]
@@ -31,6 +31,12 @@ pub enum ProcessCssResult {
     },
     Unparseable,
     NotFound,
+}
+
+impl PartialEq for ProcessCssResult {
+    fn eq(&self, other: &Self) -> bool {
+        false
+    }
 }
 
 #[turbo_tasks::value_trait]
