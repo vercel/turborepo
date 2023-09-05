@@ -3,6 +3,7 @@ use std::sync::{Arc, OnceLock};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::sync::mpsc;
+use tracing::debug;
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_scm::SCM;
@@ -140,7 +141,7 @@ impl<'a> Visitor<'a> {
                 )
                 .await?;
 
-            println!("task {} hash is {}", info, task_hash);
+            debug!("task {} hash is {}", info, task_hash);
 
             tasks.push(tokio::spawn(async move {
                 println!(
@@ -159,10 +160,6 @@ impl<'a> Visitor<'a> {
         }
 
         Ok(())
-    }
-
-    pub fn into_task_hash_tracker(self) -> TaskHashTracker {
-        self.task_hasher.into_tracker()
     }
 }
 

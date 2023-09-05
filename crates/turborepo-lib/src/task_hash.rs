@@ -87,6 +87,10 @@ impl<'a> TaskHasher<'a> {
         }
     }
 
+    /// Calculates the package inputs hash, i.e. the hash of
+    /// the files for a given task.
+    /// This is a little bit of an expensive operation,
+    /// so in the future we should look into caching it.
     pub async fn calculate_package_inputs_hash(
         &self,
         scm: &SCM,
@@ -99,7 +103,6 @@ impl<'a> TaskHasher<'a> {
             return Ok(None);
         }
 
-        // TODO: Look into making WorkspaceName take a Cow
         let workspace_name = WorkspaceName::Other(task_id.package().to_string());
 
         let package_file_hash_inputs = PackageFileHashInputs {
@@ -275,6 +278,15 @@ impl<'a> TaskHasher<'a> {
         Ok(task_hash)
     }
 
+    /// Gets the hashes of a task's dependencies. Because the visitor
+    /// receives the nodes in topological order, we know that all of
+    /// the dependencies have been processed before the current task.
+    ///
+    /// # Arguments
+    ///
+    /// * `dependency_set`: The dependencies of the current task
+    ///
+    /// returns: Result<Vec<String, Global>, Error>
     async fn calculate_dependency_hashes(
         &self,
         dependency_set: HashSet<&TaskNode>,
@@ -302,9 +314,5 @@ impl<'a> TaskHasher<'a> {
         dependency_hash_list.sort();
 
         Ok(dependency_hash_list)
-    }
-
-    pub fn into_tracker(self) -> TaskHashTracker {
-        self.task_hash_tracker.into_inner()
     }
 }
