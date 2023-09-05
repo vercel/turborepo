@@ -19,7 +19,7 @@ use turbopack_core::{
     module::Module,
     reference::{ModuleReference, ModuleReferences},
     reference_type::{CssReferenceSubType, ReferenceType},
-    resolve::origin::ResolveOrigin,
+    resolve::{origin::ResolveOrigin, parse::Request},
     source::Source,
 };
 use turbopack_ecmascript::{
@@ -93,9 +93,16 @@ impl Module for ModuleCssAsset {
 #[turbo_tasks::value(transparent)]
 #[derive(Debug, Clone)]
 enum ModuleCssClass {
-    Local { name: String },
-    Global { name: String },
-    Import { original: String },
+    Local {
+        name: String,
+    },
+    Global {
+        name: String,
+    },
+    Import {
+        original: String,
+        from: Vc<CssModuleComposeReference>,
+    },
 }
 
 /// A map of CSS classes exported from a CSS module.
@@ -165,18 +172,20 @@ impl ModuleCssAsset {
 
                 for export_class_name in &export_class_names.composes {
                     export.push(match export_class_name {
-                        CssModuleReference::Import { from, name } => ModuleCssClass::Import {
-                            original: name.value.to_string(),
-                            from: CssModuleComposeReference::new(
-                                Vc::upcast(self),
-                                Request::parse(Value::new(from.to_string().into())),
-                            ),
-                        },
+                        CssModuleReference::Dependency { specifier, name } => {
+                            ModuleCssClass::Import {
+                                original: name.to_string(),
+                                from: CssModuleComposeReference::new(
+                                    Vc::upcast(self),
+                                    Request::parse(Value::new(specifier.to_string().into())),
+                                ),
+                            }
+                        }
                         CssModuleReference::Local { name } => ModuleCssClass::Local {
-                            name: name.value.to_string(),
+                            name: name.to_string(),
                         },
                         CssModuleReference::Global { name } => ModuleCssClass::Global {
-                            name: name.value.to_string(),
+                            name: name.to_string(),
                         },
                     })
                 }
@@ -185,7 +194,7 @@ impl ModuleCssAsset {
             }
         }
 
-        Ok(Vc::cell(CssModuleExports::default()))
+        Ok(Vc::cell(classes))
     }
 
     #[turbo_tasks::function]
