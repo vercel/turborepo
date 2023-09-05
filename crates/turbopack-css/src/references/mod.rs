@@ -27,7 +27,6 @@ use turbopack_core::{
 use turbopack_swc_utils::emitter::IssueEmitter;
 
 use crate::{
-    parse::{parse_css, ParseCssResult},
     references::{
         import::{ImportAssetReference, ImportAttributes},
         url::UrlAssetReference,
