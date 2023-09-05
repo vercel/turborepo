@@ -39,7 +39,7 @@ use crate::{
 #[must_use]
 pub struct Vc<T>
 where
-    T: ?Sized,
+    T: ?Sized + Send,
 {
     pub(crate) node: RawVc,
     #[doc(hidden)]
