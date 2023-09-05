@@ -197,22 +197,25 @@ impl TaskDefinition {
         task_name: &TaskId,
         workspace_dir: &AnchoredSystemPath,
     ) -> TaskOutputs {
-        let mut repo_relative_globs = self.hashable_outputs(task_name);
-
-        let repo_relative_glob = |glob: &str| -> String {
+        let make_glob_repo_relative = |glob: &str| -> String {
             let mut repo_relative_glob = workspace_dir.to_string();
             repo_relative_glob.push(std::path::MAIN_SEPARATOR);
             repo_relative_glob.push_str(glob);
             repo_relative_glob
         };
 
+        // At this point repo_relative_globs are still workspace relative, but
+        // the processing in the rest of the function converts this to be repo
+        // relative.
+        let mut repo_relative_globs = self.hashable_outputs(task_name);
+
         for input in repo_relative_globs.inclusions.iter_mut() {
-            let relative_input = repo_relative_glob(input.as_str());
+            let relative_input = make_glob_repo_relative(input.as_str());
             *input = relative_input;
         }
 
         for output in repo_relative_globs.exclusions.iter_mut() {
-            let relative_output = repo_relative_glob(output.as_str());
+            let relative_output = make_glob_repo_relative(output.as_str());
             *output = relative_output;
         }
 
