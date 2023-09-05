@@ -126,9 +126,6 @@ impl Run {
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
-        let root_external_dependencies =
-            pkg_dep_graph.transitive_external_dependencies(std::iter::once(&WorkspaceName::Root));
-
         let repo_config = self.base.repo_config()?;
         let team_id = repo_config.team_id();
         let team_slug = repo_config.team_slug();
