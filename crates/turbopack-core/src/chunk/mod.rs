@@ -515,7 +515,7 @@ type ChunkItemToGraphNodesFuture<I: FromChunkableModule> =
 
 impl<I> Visit<ChunkContentGraphNode<Vc<I>>, ()> for ChunkContentVisit<Vc<I>>
 where
-    I: FromChunkableModule,
+    I: Send + FromChunkableModule,
 {
     type Edge = (
         Option<(Vc<Box<dyn Module>>, ChunkingType)>,
