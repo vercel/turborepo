@@ -11,6 +11,8 @@ use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     source::Source,
+    source_map::{GenerateSourceMap, OptionSourceMap},
+    SOURCE_MAP_ROOT_NAME,
 };
 
 use crate::CssModuleAssetType;
@@ -119,20 +121,20 @@ pub struct ProcessCssResultSourceMap {
     source_map: parcel_sourcemap::SourceMap,
 }
 
-impl PartialEq for ParseCssResultSourceMap {
+impl PartialEq for ProcessCssResultSourceMap {
     fn eq(&self, other: &Self) -> bool {
         false
     }
 }
 
-impl ParseCssResultSourceMap {
+impl ProcessCssResultSourceMap {
     pub fn new(source_map: parcel_sourcemap::SourceMap) -> Self {
         ProcessCssResultSourceMap { source_map }
     }
 }
 
 #[turbo_tasks::value_impl]
-impl GenerateSourceMap for ParseCssResultSourceMap {
+impl GenerateSourceMap for ProcessCssResultSourceMap {
     #[turbo_tasks::function]
     fn generate_source_map(&self) -> Vc<OptionSourceMap> {
         let map = self.source_map.build_source_map_with_config(
