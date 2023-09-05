@@ -309,9 +309,9 @@ impl EcmascriptChunkItem for ModuleChunkItem {
 
         let mut code = "__turbopack_export_value__({\n".to_string();
         for (export_name, class_names) in &*classes {
-            let mut exported_class_names = Vec::with_capacity(class_names.composes.len());
+            let mut exported_class_names = Vec::with_capacity(class_names.len());
 
-            for class_name in &class_names.composes {
+            for class_name in class_names {
                 match class_name {
                     ModuleCssClass::Import {
                         original: original_name,
