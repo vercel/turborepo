@@ -165,11 +165,7 @@ impl CodeGenerateable for ImportAssetReference {
             ))))
         }
 
-        Ok(CodeGeneration {
-            visitors: vec![],
-            imports,
-        }
-        .into())
+        Ok(CodeGeneration { imports }.into())
     }
 }
 
