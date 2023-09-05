@@ -125,7 +125,7 @@ async fn process_content(
         output_code: result.code,
         dependencies: result.dependencies,
         exports: result.exports,
-        references: Vc::cell(referencesx),
+        references: Vc::cell(references),
         source_map: ProcessCssResultSourceMap::new(srcmap).cell(),
     }
     .into())
