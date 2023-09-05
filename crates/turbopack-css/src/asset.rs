@@ -1,10 +1,4 @@
 use anyhow::Result;
-use lightningcss::{
-    rules::CssRule,
-    stylesheet::{PrinterOptions, StyleSheet},
-    visitor::Visit,
-};
-use swc_core::common::{Globals, GLOBALS};
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
@@ -21,8 +15,6 @@ use turbopack_core::{
 use crate::{
     chunk::{CssChunkItem, CssChunkItemContent, CssChunkPlaceable, CssChunkType, CssImport},
     code_gen::CodeGenerateable,
-    parse::ParseCssResultSourceMap,
-    path_visitor::ApplyVisitors,
     process::ProcessCssResult,
     references::{
         analyze_css_stylesheet, compose::CssModuleComposeReference, import::ImportAssetReference,
@@ -247,9 +239,9 @@ impl CssChunkItem for CssModuleChunkItem {
 
         let result: ProcessCssResult = self.module.parse_css().await?;
 
-        if let ProcessCssResult::Ok {} = &*result {
+        if let ProcessCssResult::Ok { output_code } = &*result {
             Ok(CssChunkItemContent {
-                inner_code: result.code.into(),
+                inner_code: output_code.into(),
                 imports,
                 source_map: Some(srcmap),
             }
