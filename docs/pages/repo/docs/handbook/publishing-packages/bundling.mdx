@@ -3,7 +3,7 @@ import { Tabs, Tab } from "../../../../../components/Tabs";
 
 # Bundling packages in a Monorepo
 
-Unlike [internal](/repo/docs/handbook/sharing-code/internal-packages) packages, external packages can be deployed to npm _and_ used locally. In this guide, we'll be using a bundler to bundle a package to [`CommonJS`](https://en.wikipedia.org/wiki/CommonJS), the most commonly used format used on npm.
+Unlike [internal](/repo/docs/handbook/sharing-code/internal-packages) packages, external packages can be deployed to [npm](https://www.npmjs.com) _and_ used locally. In this guide, we'll bundle a package to both [ECMAScript modules](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules) (`esm`) and [CommonJS modules](https://en.wikipedia.org/wiki/CommonJS) (`cjs`), the most commonly used formats on npm.
 
 ## Setting up a build script
 
@@ -37,7 +37,7 @@ First install, `tsup` inside `packages/math-helpers` using your [package manager
 ```json filename="packages/math-helpers/package.json"
 {
   "scripts": {
-    "build": "tsup src/index.ts --format cjs --dts"
+    "build": "tsup src/index.ts --format cjs,esm --dts"
   }
 }
 ```
@@ -59,18 +59,21 @@ First install, `tsup` inside `packages/math-helpers` using your [package manager
 
 That way, when `tsup` is run the outputs can be [cached](/repo/docs/core-concepts/caching) by Turborepo.
 
-Finally, we should change `main` to point at `./dist/index.js` inside `package.json`. `types` can point at `./dist/index.d.ts`:
+Finally, we should update our package entrypoints. Inside `package.json`, change `main` to point at `./dist/index.js` for clients using CommonJS modules (`cjs`), `module` to point at `./dist/index.mjs` for clients using ECMAScript modules (`esm`), and `types` to the type definition file - `./dist/index.d.ts`:
 
 ```json filename="packages/math-helpers/package.json"
 {
   "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts"
 }
 ```
 
 <Callout>
 
-If you run into errors by using `main` and `types`, take a look at the [tsup docs](https://tsup.egoist.dev/#bundle-formats).
+It is not required to bundle to both `cjs` and `esm`. However, it is recommended, as it allows your package to be used in a wider variety of environments.
+
+If you run into errors by using `main`, `module` and `types`, take a look at the [tsup docs](https://tsup.egoist.dev/#bundle-formats).
 
 Bundling is a complicated topic, and we don't have space here to cover everything!
 
@@ -112,7 +115,7 @@ That's because we don't have a `dev` script to rebuild our packages while we're 
 ```json filename="packages/math-helpers/package.json"
 {
   "scripts": {
-    "build": "tsup src/index.ts --format cjs --dts",
+    "build": "tsup src/index.ts --format cjs,esm --dts",
     "dev": "npm run build -- --watch"
   }
 }
