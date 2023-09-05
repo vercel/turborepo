@@ -1,38 +1,12 @@
 use std::sync::Arc;
 
-use anyhow::Result;
-use indexmap::IndexMap;
-use lightningcss::{
-    css_modules::{Pattern, Segment},
-    stylesheet::{ParserOptions, StyleSheet},
-};
 use once_cell::sync::Lazy;
 use regex::Regex;
-use smallvec::smallvec;
-use swc_core::{
-    common::{
-        errors::Handler, source_map::SourceMapGenConfig, BytePos, FileName, LineCol, SourceMap,
-    },
-    css::{
-        ast::Stylesheet,
-        modules::{CssClassName, TransformConfig},
-        parser::{parse_file, parser::ParserConfig},
-    },
-    ecma::atoms::JsWord,
-};
+use swc_core::common::{source_map::SourceMapGenConfig, FileName, SourceMap};
 use turbo_tasks::{ValueToString, Vc};
-use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
-    asset::{Asset, AssetContent},
-    source::Source,
     source_map::{GenerateSourceMap, OptionSourceMap},
     SOURCE_MAP_ROOT_NAME,
-};
-use turbopack_swc_utils::emitter::IssueEmitter;
-
-use crate::{
-    transform::{CssInputTransform, CssInputTransforms, TransformContext},
-    CssModuleAssetType,
 };
 
 // Capture up until the first "."
