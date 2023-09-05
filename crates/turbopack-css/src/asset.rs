@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{task::IntoTaskFn, TaskInput, TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -16,9 +16,7 @@ use crate::{
     chunk::{CssChunkItem, CssChunkItemContent, CssChunkPlaceable, CssChunkType, CssImport},
     code_gen::CodeGenerateable,
     process::{process_css, ProcessCss, ProcessCssResult},
-    references::{
-        analyze_css_stylesheet, compose::CssModuleComposeReference, import::ImportAssetReference,
-    },
+    references::{compose::CssModuleComposeReference, import::ImportAssetReference},
     CssModuleAssetType,
 };
 
