@@ -33,7 +33,7 @@ use turbo_tasks::{
 };
 
 use crate::{
-    aggregation_tree::aggregation_info_from_item,
+    aggregation_tree::aggregation_info,
     cell::Cell,
     gc::{to_exp_u8, GcPriority, GcStats, GcTaskState},
     output::{Output, OutputContent},
@@ -406,7 +406,7 @@ enum TaskStateType {
 use TaskStateType::*;
 
 use self::{
-    aggregation::{RootInfoType, RootType, TaskAggregationTreeLeaf, TaskGuard},
+    aggregation::{RootInfoType, RootType, TaskAggregationTreeLeaf},
     meta_state::{
         FullTaskWriteGuard, TaskMetaState, TaskMetaStateReadGuard, TaskMetaStateWriteGuard,
     },
@@ -604,7 +604,6 @@ impl Task {
                 aggregation
                     .lock()
                     .remove_collectible_dependent_task(trait_type, reader);
-                context.run_queue();
             }
         }
     }
@@ -681,7 +680,6 @@ impl Task {
             return None;
         }
         let future = self.make_execution_future(state, backend, turbo_tasks);
-        context.run_queue();
         Some(TaskExecutionSpec { future })
     }
 
@@ -691,8 +689,8 @@ impl Task {
         &self,
         state: &mut TaskState,
         context: &mut TaskAggregationContext<'_>,
-        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-        backend: &MemoryBackend,
+        _turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+        _backend: &MemoryBackend,
     ) -> bool {
         match state.state_type {
             Done { .. } | InProgress { .. } | InProgressDirty { .. } => {
@@ -935,7 +933,6 @@ impl Task {
             // unset the root type, so tasks below are no longer active
             let mut context = TaskAggregationContext::new(turbo_tasks, backend);
             context.aggregation_info(self.id).lock().root_type = None;
-            context.run_queue();
         }
 
         schedule_task
@@ -1350,43 +1347,17 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Result<Result<T, EventListener>> {
-        let mut state;
-        loop {
-            state = self.full_state_mut();
-            if strongly_consistent {
-                let mut item = TaskGuard {
-                    id: self.id,
-                    guard: TaskMetaStateWriteGuard::Full(state),
-                };
-                {
-                    let mut context = TaskAggregationContext::new(turbo_tasks, backend);
-                    let aggregation = aggregation_info_from_item(&context, &self.id, &mut item);
-                    if context.has_queue() {
-                        drop(item);
-                        context.run_queue();
-                        let aggregation = aggregation.lock();
-                        if aggregation.unfinished > 0 {
-                            return Ok(Err(aggregation.unfinished_event.listen_with_note(note)));
-                        } else {
-                            // restart for new state
-                            continue;
-                        }
-                    }
-                    let aggregation = aggregation.lock();
-                    if aggregation.unfinished > 0 {
-                        return Ok(Err(aggregation.unfinished_event.listen_with_note(note)));
-                    }
+        let context = TaskAggregationContext::new(turbo_tasks, backend);
+        let aggregation_when_strongly_consistent =
+            strongly_consistent.then(|| aggregation_info(&context, &self.id));
+        let mut state = self.full_state_mut();
+        if let Some(aggregation) = aggregation_when_strongly_consistent {
+            {
+                let aggregation = aggregation.lock();
+                if aggregation.unfinished > 0 {
+                    return Ok(Err(aggregation.unfinished_event.listen_with_note(note)));
                 }
-                let TaskGuard {
-                    guard: TaskMetaStateWriteGuard::Full(inner_state),
-                    ..
-                } = item
-                else {
-                    unreachable!();
-                };
-                state = inner_state;
             }
-            break;
         }
         match state.state_type {
             Done { .. } => {
@@ -1428,9 +1399,8 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> AutoMap<RawVc, i32> {
         let mut context = TaskAggregationContext::new(turbo_tasks, backend);
-        let aggregation_info = &context.aggregation_info(id);
-        context.run_queue();
-        aggregation_info
+        context
+            .aggregation_info(id)
             .lock()
             .read_collectibles(trait_type, reader)
     }

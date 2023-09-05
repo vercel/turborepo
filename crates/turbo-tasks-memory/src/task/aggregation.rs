@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     hash::{BuildHasher, Hash},
     mem::take,
 };
@@ -10,7 +11,10 @@ use turbo_tasks::{event::Event, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi
 
 use super::{meta_state::TaskMetaStateWriteGuard, TaskStateType};
 use crate::{
-    aggregation_tree::{AggregationContext, AggregationItemLock, AggregationTreeLeaf},
+    aggregation_tree::{
+        aggregation_info, AggregationContext, AggregationInfoReference, AggregationItemLock,
+        AggregationTreeLeaf,
+    },
     MemoryBackend,
 };
 
@@ -178,6 +182,10 @@ impl<'a> TaskAggregationContext<'a> {
             }
         }
     }
+
+    pub fn aggregation_info(&mut self, id: TaskId) -> AggregationInfoReference<Aggregated> {
+        aggregation_info(self, &id)
+    }
 }
 
 #[cfg(debug_assertions)]
@@ -210,10 +218,10 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         self.backend.with_task(*reference, |task| task.is_blue())
     }
 
-    fn item(&self, reference: TaskId) -> Self::ItemLock<'_> {
+    fn item(&self, reference: &TaskId) -> Self::ItemLock<'_> {
         TaskGuard {
-            id: reference,
-            guard: self.backend.task(reference).state_mut(),
+            id: *reference,
+            guard: self.backend.task(*reference).state_mut(),
         }
     }
 
@@ -386,7 +394,7 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
     type Info = Aggregated;
     type ItemRef = TaskId;
     type ItemChange = TaskChange;
-    type ChildrenIter<'a> = impl Iterator<Item = TaskId> + 'a where Self: 'a;
+    type ChildrenIter<'a> = impl Iterator<Item = Cow<'a, TaskId>> + 'a where Self: 'a;
 
     fn leaf(&mut self) -> &mut AggregationTreeLeaf<Self::Info, Self::ItemRef> {
         self.guard.ensure_at_least_partial();
@@ -400,7 +408,9 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
     fn children(&self) -> Self::ChildrenIter<'_> {
         match self.guard {
             TaskMetaStateWriteGuard::Full(ref guard) => {
-                Some(guard.children.iter().copied()).into_iter().flatten()
+                Some(guard.children.iter().map(|c| Cow::Borrowed(c)))
+                    .into_iter()
+                    .flatten()
             }
             TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => {
                 None.into_iter().flatten()

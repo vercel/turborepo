@@ -32,7 +32,7 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
         child: &I,
     ) {
         for BottomRef { parent, location } in self.upper.iter() {
-            parent.add_child_of_child(context, *location, self_is_blue, child.clone());
+            parent.add_child_of_child(context, *location, self_is_blue, child);
         }
     }
 
@@ -43,7 +43,7 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
         child: &I,
     ) {
         for BottomRef { parent, location } in self.upper.iter() {
-            parent.remove_child_of_child(context, *location, self_is_blue, child.clone());
+            parent.remove_child_of_child(context, *location, self_is_blue, child);
         }
     }
 
@@ -106,39 +106,49 @@ impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
 
 pub fn top_tree<C: AggregationContext>(
     context: &C,
-    item: &mut C::ItemLock<'_>,
+    reference: &C::ItemRef,
     depth: u8,
 ) -> Arc<TopTree<C::Info>> {
-    if let Some(top_tree) = item.leaf().top_trees.get(&depth) {
-        return top_tree.clone();
-    }
-    let bottom_tree = bottom_tree(context, item, depth);
-    let top_tree = Arc::new(TopTree::new(depth));
-    bottom_tree.add_top_tree_parent(context, &top_tree);
-    item.leaf().top_trees.insert(depth, top_tree.clone());
-    top_tree
+    println!("top_tree({depth})");
+    let new_top_tree = {
+        let mut item = context.item(reference);
+        let leaf = item.leaf();
+        if let Some(top_tree) = leaf.top_trees.get(&depth) {
+            return top_tree.clone();
+        }
+        let new_top_tree = Arc::new(TopTree::new(depth));
+        leaf.top_trees.insert(depth, new_top_tree.clone());
+        new_top_tree
+    };
+    let bottom_tree = bottom_tree(context, reference, depth);
+    bottom_tree.add_top_tree_parent(context, &new_top_tree);
+    new_top_tree
 }
 
 pub fn bottom_tree<C: AggregationContext>(
     context: &C,
-    item: &mut C::ItemLock<'_>,
+    reference: &C::ItemRef,
     height: u8,
 ) -> Arc<BottomTree<C::Info, C::ItemRef>> {
-    if let Some(bottom_tree) = item.leaf().bottom_trees.get(&height) {
-        return bottom_tree.clone();
-    }
-    let new_bottom_tree = Arc::new(BottomTree::new(height));
-    if height == 0 {
-        add_parent_to_item(context, item, &new_bottom_tree, ChildLocation::Left);
-    } else {
-        bottom_tree(context, item, height - 1).add_bottom_tree_parent(
+    let new_bottom_tree = {
+        let mut item = context.item(reference);
+        let leaf = item.leaf();
+        if let Some(bottom_tree) = leaf.bottom_trees.get(&height) {
+            return bottom_tree.clone();
+        }
+        let new_bottom_tree = Arc::new(BottomTree::new(height));
+        leaf.bottom_trees.insert(height, new_bottom_tree.clone());
+        if height == 0 {
+            add_parent_to_item(context, &mut item, &new_bottom_tree, ChildLocation::Left);
+        }
+        new_bottom_tree
+    };
+    if height != 0 {
+        bottom_tree(context, reference, height - 1).add_bottom_tree_parent(
             context,
             &new_bottom_tree,
             ChildLocation::Left,
         );
     }
-    item.leaf()
-        .bottom_trees
-        .insert(height, new_bottom_tree.clone());
     new_bottom_tree
 }

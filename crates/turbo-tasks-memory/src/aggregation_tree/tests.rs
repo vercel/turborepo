@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     hash::Hash,
     sync::{
         atomic::{AtomicU32, Ordering},
@@ -74,7 +75,7 @@ impl AggregationItemLock for NodeGuard {
     type Info = Aggregated;
     type ItemRef = NodeRef;
     type ItemChange = Change;
-    type ChildrenIter<'a> = impl Iterator<Item = NodeRef> + 'a;
+    type ChildrenIter<'a> = impl Iterator<Item = Cow<'a, NodeRef>> + 'a;
 
     fn leaf(&mut self) -> &mut AggregationTreeLeaf<Aggregated, NodeRef> {
         &mut self.guard.aggregation_leaf
@@ -84,7 +85,7 @@ impl AggregationItemLock for NodeGuard {
         self.guard
             .children
             .iter()
-            .map(|child| NodeRef(child.clone()))
+            .map(|child| Cow::Owned(NodeRef(child.clone())))
     }
 
     fn is_blue(&self) -> bool {
@@ -124,7 +125,7 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
         reference.0.blue
     }
 
-    fn item(&self, reference: Self::ItemRef) -> Self::ItemLock<'_> {
+    fn item(&self, reference: &Self::ItemRef) -> Self::ItemLock<'_> {
         let r = reference.0.clone();
         let guard = r.inner.lock();
         NodeGuard {
@@ -204,7 +205,7 @@ struct Aggregated {
 }
 
 #[test]
-fn test() {
+fn chain() {
     let something_with_lifetime = 0;
     let context = NodeAggregationContext {
         additions: AtomicU32::new(0),
@@ -241,8 +242,8 @@ fn test() {
     }
 
     {
-        let aggregated = aggregation_info(&context, current.clone());
-        assert_eq!(aggregated.value, 15050);
+        let aggregated = aggregation_info(&context, &current);
+        assert_eq!(aggregated.lock().value, 15050);
     }
     assert_eq!(context.additions.load(Ordering::SeqCst), 100);
     context.additions.store(0, Ordering::SeqCst);
@@ -262,7 +263,8 @@ fn test() {
     context.additions.store(0, Ordering::SeqCst);
 
     {
-        let mut aggregated = aggregation_info(&context, current.clone());
+        let aggregated = aggregation_info(&context, &current);
+        let mut aggregated = aggregated.lock();
         assert_eq!(aggregated.value, 25050);
         (*aggregated).active = true;
     }
@@ -290,7 +292,8 @@ fn test() {
     let current = NodeRef(current);
 
     {
-        let aggregated = aggregation_info(&context, current);
+        let aggregated = aggregation_info(&context, &current);
+        let aggregated = aggregated.lock();
         assert_eq!(aggregated.value, 25151);
     }
     // This should be way less the 100 to prove that we are reusing trees
@@ -310,4 +313,50 @@ fn test() {
             .get_root_info(&context, &());
         assert_eq!(root_info, true);
     }
+}
+
+#[test]
+fn chain_double_connected() {
+    let something_with_lifetime = 0;
+    let context = NodeAggregationContext {
+        additions: AtomicU32::new(0),
+        something_with_lifetime: &something_with_lifetime,
+    };
+    let leaf = Arc::new(Node {
+        blue: false,
+        inner: Mutex::new(NodeInner {
+            children: vec![],
+            aggregation_leaf: AggregationTreeLeaf::new(),
+            value: 1,
+        }),
+    });
+    let mut current = leaf.clone();
+    let mut current2 = Arc::new(Node {
+        blue: false,
+        inner: Mutex::new(NodeInner {
+            children: vec![leaf.clone()],
+            aggregation_leaf: AggregationTreeLeaf::new(),
+            value: 2,
+        }),
+    });
+    for i in 3..=100 {
+        let new_node = Arc::new(Node {
+            blue: (i % 2 == 0) ^ (i % 3 == 0) ^ (i % 4 == 0),
+            inner: Mutex::new(NodeInner {
+                children: vec![current, current2.clone()],
+                aggregation_leaf: AggregationTreeLeaf::new(),
+                value: i,
+            }),
+        });
+        current = current2;
+        current2 = new_node;
+    }
+    let current = NodeRef(current2);
+
+    {
+        let aggregated = aggregation_info(&context, &current);
+        assert_eq!(aggregated.lock().value, 5050);
+    }
+    assert_eq!(context.additions.load(Ordering::SeqCst), 100);
+    context.additions.store(0, Ordering::SeqCst);
 }
