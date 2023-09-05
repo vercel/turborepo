@@ -140,7 +140,7 @@ pub fn prune(
     }
 
     for (relative_path, required_for_install) in ADDITIONAL_FILES.as_slice() {
-        let path = relative_path.to_system_path();
+        let path = relative_path.to_anchored_system_path_buf();
         prune.copy_file(&path, *required_for_install)?;
     }
 
@@ -184,7 +184,10 @@ pub fn prune(
         }
 
         for patch in pruned_patches {
-            prune.copy_file(&patch.to_system_path(), Some(CopyDestination::Docker))?;
+            prune.copy_file(
+                &patch.to_anchored_system_path_buf(),
+                Some(CopyDestination::Docker),
+            )?;
         }
     } else {
         prune.copy_file(package_json(), Some(CopyDestination::Docker))?;

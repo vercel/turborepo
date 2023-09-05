@@ -1,11 +1,9 @@
-import { setupTestFixtures } from "@turbo/test-utils";
-import getTurboUpgradeCommand from "../src/commands/migrate/steps/getTurboUpgradeCommand";
-import * as utils from "../src/commands/migrate/utils";
-import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
-
-// imports for mocks
 import * as turboWorkspaces from "@turbo/workspaces";
 import * as turboUtils from "@turbo/utils";
+import { setupTestFixtures } from "@turbo/test-utils";
+import { getTurboUpgradeCommand } from "../src/commands/migrate/steps/getTurboUpgradeCommand";
+import * as utils from "../src/commands/migrate/utils";
+import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
 jest.mock("@turbo/workspaces", () => ({
   __esModule: true,

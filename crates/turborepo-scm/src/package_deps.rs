@@ -2,13 +2,28 @@ use std::collections::HashMap;
 
 use itertools::{Either, Itertools};
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf,
+};
 
 use crate::{hash_object::hash_objects, Error, Git, SCM};
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
 
 impl SCM {
+    pub fn get_hashes_for_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        files: &[impl AsRef<AnchoredSystemPath>],
+        allow_missing: bool,
+    ) -> Result<GitHashes, Error> {
+        if allow_missing {
+            self.hash_existing_of(turbo_root, files.iter())
+        } else {
+            self.hash_files(turbo_root, files.iter())
+        }
+    }
+
     pub fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -40,7 +55,7 @@ impl SCM {
     pub fn hash_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        files: impl Iterator<Item = AnchoredSystemPathBuf>,
+        files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
         match self {
             SCM::Manual => crate::manual::hash_files(turbo_root, files, false),
@@ -54,7 +69,7 @@ impl SCM {
     pub fn hash_existing_of(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        files: impl Iterator<Item = AnchoredSystemPathBuf>,
+        files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
         crate::manual::hash_files(turbo_root, files, true)
     }
@@ -92,7 +107,7 @@ impl Git {
     fn hash_files(
         &self,
         process_relative_to: &AbsoluteSystemPath,
-        files: impl Iterator<Item = AnchoredSystemPathBuf>,
+        files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
         let mut hashes = GitHashes::new();
         let to_hash = files

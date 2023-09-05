@@ -20,36 +20,32 @@ export const turboLoader = (text: string) =>
   });
 
 export const info = (...args: Array<unknown>) => {
-  // eslint-disable-next-line no-console
-  console.log(turboBlue.bold(">>>"), ...args);
-};
-
-export const error = (...args: Array<unknown>) => {
-  // eslint-disable-next-line no-console
-  console.error(turboRed.bold(">>>"), ...args);
-};
-
-export const warn = (...args: Array<unknown>) => {
-  // eslint-disable-next-line no-console
-  console.error(yellow.bold(">>>"), ...args);
+  log(turboBlue.bold(">>>"), ...args);
 };
 
 export const bold = (...args: Array<string>) => {
-  // eslint-disable-next-line no-console
-  console.log(chalk.bold(...args));
+  log(chalk.bold(...args));
 };
 
 export const dimmed = (...args: Array<string>) => {
-  // eslint-disable-next-line no-console
-  console.log(chalk.dim(...args));
+  log(chalk.dim(...args));
 };
 
 export const item = (...args: Array<unknown>) => {
-  // eslint-disable-next-line no-console
-  console.log(turboBlue.bold("  •"), ...args);
+  log(turboBlue.bold("  •"), ...args);
 };
 
 export const log = (...args: Array<unknown>) => {
-  // eslint-disable-next-line no-console
+  // eslint-disable-next-line no-console -- logger
   console.log(...args);
+};
+
+export const warn = (...args: Array<unknown>) => {
+  // eslint-disable-next-line no-console -- warn logger
+  console.error(yellow.bold(">>>"), ...args);
+};
+
+export const error = (...args: Array<unknown>) => {
+  // eslint-disable-next-line no-console -- error logger
+  console.error(turboRed.bold(">>>"), ...args);
 };

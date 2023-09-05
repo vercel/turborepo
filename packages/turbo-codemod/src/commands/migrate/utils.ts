@@ -1,4 +1,5 @@
-import { execSync, ExecSyncOptions } from "child_process";
+import type { ExecSyncOptions } from "node:child_process";
+import { execSync } from "node:child_process";
 
 function exec(
   command: string,

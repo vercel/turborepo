@@ -1,37 +1,35 @@
 import chalk from "chalk";
 import checkForUpdate from "update-check";
-
-import cliPkgJson from "../../package.json";
+import { logger } from "@turbo/utils";
 import { getWorkspaceDetails } from "@turbo/workspaces";
+import cliPkgJson from "../../package.json";
 
 const update = checkForUpdate(cliPkgJson).catch(() => null);
 
-export default async function notifyUpdate(): Promise<void> {
+export async function notifyUpdate(): Promise<void> {
   try {
     const res = await update;
     if (res?.latest) {
-      const project = await getWorkspaceDetails({ root: process.cwd() });
+      const { packageManager } = await getWorkspaceDetails({
+        root: process.cwd(),
+      });
 
-      const { packageManager } = project || {};
+      let upgradeCommand = "npm i -g @turbo/codemod";
+      if (packageManager === "yarn") {
+        upgradeCommand = "yarn global add @turbo/codemod";
+      } else if (packageManager === "pnpm") {
+        upgradeCommand = "pnpm i -g @turbo/codemod";
+      }
 
-      console.log();
-      console.log(
+      logger.log();
+      logger.log(
         chalk.yellow.bold("A new version of `@turbo/codemod` is available!")
       );
-      console.log(
-        "You can update by running: " +
-          chalk.cyan(
-            packageManager === "yarn"
-              ? "yarn global add @turbo/codemod"
-              : packageManager === "pnpm"
-              ? "pnpm i -g @turbo/codemod"
-              : "npm i -g @turbo/codemod"
-          )
-      );
-      console.log();
+      logger.log(`You can update by running: ${chalk.cyan(upgradeCommand)}`);
+      logger.log();
     }
     process.exit();
-  } catch (_e: any) {
+  } catch (_) {
     // ignore error
   }
 }

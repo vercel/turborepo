@@ -318,12 +318,8 @@ pub extern "C" fn get_hashes_for_files(buffer: Buffer) -> Buffer {
         }
     };
     let hasher = turborepo_scm::SCM::new(&turbo_root);
-    let result = if allow_missing {
-        hasher.hash_existing_of(&turbo_root, files.into_iter())
-    } else {
-        hasher.hash_files(&turbo_root, files.into_iter())
-    };
-    match result {
+
+    match hasher.get_hashes_for_files(&turbo_root, &files, allow_missing) {
         Ok(hashes) => {
             let mut to_return = HashMap::new();
             for (filename, hash) in hashes {
@@ -442,7 +438,7 @@ pub extern "C" fn get_global_hashable_env_vars(buffer: Buffer) -> Buffer {
     };
 
     match turborepo_env::get_global_hashable_env_vars(
-        req.env_at_execution_start.unwrap().map.into(),
+        &req.env_at_execution_start.unwrap().map.into(),
         &req.global_env,
     ) {
         Ok(map) => {
