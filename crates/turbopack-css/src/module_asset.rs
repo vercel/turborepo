@@ -3,6 +3,7 @@ use std::{fmt::Write, iter::once, sync::Arc};
 use anyhow::{bail, Context, Result};
 use indexmap::IndexMap;
 use indoc::formatdoc;
+use lightningcss::css_modules::{CssModuleExport, CssModuleExports};
 use swc_core::common::{BytePos, FileName, LineCol, SourceMap};
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
@@ -27,7 +28,10 @@ use turbopack_ecmascript::{
     ParseResultSourceMap,
 };
 
-use crate::references::{compose::CssModuleComposeReference, internal::InternalCssAssetReference};
+use crate::{
+    process::ProcessCss,
+    references::{compose::CssModuleComposeReference, internal::InternalCssAssetReference},
+};
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<String> {
@@ -97,6 +101,15 @@ impl ModuleCssAsset {
             this.source,
             Value::new(ReferenceType::Css(CssReferenceSubType::Internal)),
         ))
+    }
+
+    #[turbo_tasks::function]
+    pub async fn classes(&self) -> Result<Vc<ModuleCssClasses>> {
+        let inner = self.inner();
+
+        let Some(inner) = Vc::try_resolve_sidecast::<Box<dyn ProcessCss>>(inner).await? else {
+            bail!("inner asset should be CSS parseable");
+        };
     }
 
     #[turbo_tasks::function]
@@ -197,6 +210,32 @@ impl ChunkItem for ModuleChunkItem {
         Vc::upcast(self.module)
     }
 }
+
+/// A map of CSS classes exported from a CSS module.
+///
+/// ## Example
+///
+/// ```css
+/// :global(.class1) {
+///    color: red;
+/// }
+///
+/// .class2 {
+///   color: blue;
+/// }
+///
+/// .class3 {
+///   composes: class4 from "./other.module.css";
+/// }
+/// ```
+///
+/// The above CSS module would have the following exports:
+/// 1. class1: [Global("exported_class1")]
+/// 2. class2: [Local("exported_class2")]
+/// 3. class3: [Local("exported_class3), Import("class4", "./other.module.css")]
+#[turbo_tasks::value(transparent)]
+#[derive(Debug, Clone)]
+struct ModuleCssClasses(CssModuleExports);
 
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ModuleChunkItem {
