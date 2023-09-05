@@ -401,7 +401,7 @@ where
     /// removing the need for a `Result` return type.
     pub async fn try_resolve_sidecast<K>(vc: Self) -> Result<Option<Vc<K>>, ResolveTypeError>
     where
-        K: VcValueTrait + ?Sized,
+        K: VcValueTrait + ?Sized + Send,
     {
         let raw_vc: RawVc = vc.node;
         let raw_vc = raw_vc
@@ -421,7 +421,7 @@ where
     pub async fn try_resolve_downcast<K>(vc: Self) -> Result<Option<Vc<K>>, ResolveTypeError>
     where
         K: Upcast<T>,
-        K: VcValueTrait + ?Sized,
+        K: VcValueTrait + ?Sized + Send,
     {
         let raw_vc: RawVc = vc.node;
         let raw_vc = raw_vc
