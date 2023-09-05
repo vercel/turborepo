@@ -103,7 +103,7 @@ fn bench_emit(b: &mut Bencher, bench_input: &BenchInput) {
 
                 emit_with_completion(Vc::upcast(rebased), output_dir).await?;
 
-                Ok(Default::default())
+                Ok::<Vc<()>, _>(Default::default())
             });
             tt.wait_task_completion(task, true).await.unwrap();
         }
