@@ -1,7 +1,7 @@
 use std::convert::Infallible;
 
 use anyhow::Result;
-use lightningcss::{rules::CssRule, values::url::Url, visitor::Visitor};
+use lightningcss::{rules::CssRule, stylesheet::StyleSheet, values::url::Url, visitor::Visitor};
 use swc_core::common::{source_map::Pos, Spanned};
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
@@ -32,26 +32,17 @@ pub(crate) mod internal;
 pub(crate) mod url;
 
 #[turbo_tasks::function]
-pub async fn analyze_css_stylesheet(
+pub async fn analyze_references(
+    stylesheet: &mut StyleSheet<'static, 'static>,
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
-    ty: CssModuleAssetType,
 ) -> Result<Vc<ModuleReferences>> {
     let mut references = Vec::new();
 
-    let parsed = process_css(source, ty).await?;
+    let mut visitor = ModuleReferencesVisitor::new(source, origin, &mut references);
+    stylesheet.visit(&mut visitor);
 
-    if let ProcessCssResult::Ok {
-        stylesheet,
-        source_map,
-        ..
-    } = &*parsed
-    {
-        // TODO migrate to effects
-        let mut visitor = ModuleReferencesVisitor::new(source, origin, &mut references);
-        stylesheet.visit(&mut visitor);
-    }
-    Ok(Vc::cell(references))
+    Ok(ModuleReferences::new(references))
 }
 
 struct ModuleReferencesVisitor<'a> {
