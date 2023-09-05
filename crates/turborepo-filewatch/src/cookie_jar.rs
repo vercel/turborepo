@@ -2,14 +2,14 @@ use std::{
     collections::HashMap,
     fs::OpenOptions,
     path::PathBuf,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{atomic::AtomicUsize, Arc, Mutex},
     time::Duration,
 };
 
 use notify::{Event, EventKind};
 use thiserror::Error;
 use tokio::{
-    sync::{broadcast, oneshot, Mutex},
+    sync::{broadcast, oneshot},
     time::error::Elapsed,
 };
 use tracing::debug;
@@ -89,7 +89,7 @@ impl CookieJar {
         let cookie_path = self.root.join_component(&format!("{}.cookie", serial));
         let (tx, rx) = oneshot::channel();
         {
-            let mut watches = self.watches.lock().await;
+            let mut watches = self.watches.lock().expect("mutex poisoned");
             if watches.closed {
                 return Err(CookieError::Watch(WatchError::Closed));
             }
@@ -103,8 +103,9 @@ impl CookieJar {
             // dropping the resulting file closes the handle
             _ = cookie_path.open_with_options(opts)?;
         }
-        let resp = tokio::time::timeout(self.timeout, rx).await?;
-        unwrap_resp(resp)
+        // ??? -> timeout, recv failure, actual cookie failure
+        tokio::time::timeout(self.timeout, rx).await???;
+        Ok(())
     }
 }
 
@@ -118,10 +119,10 @@ async fn watch_cookies(
         tokio::select! {
             _ = &mut exit_signal => return,
             event = file_events.recv() => {
-                match unwrap_event(event) {
+                match flatten_event(event) {
                     Ok(event) => {
                         if event.kind == EventKind::Create(notify::event::CreateKind::File) {
-                            let mut watches = watches.lock().await;
+                            let mut watches = watches.lock().expect("mutex poisoned");
                             for path in event.paths {
                                 let abs_path: &AbsoluteSystemPath = path
                                     .as_path()
@@ -148,7 +149,7 @@ async fn watch_cookies(
                             WatchError::RecvError(broadcast::error::RecvError::Closed)
                         );
                         let resp = if is_closing { WatchError::Closed } else { e };
-                        let mut watches = watches.lock().await;
+                        let mut watches = watches.lock().expect("mutex poisoned");
                         for (_, sender) in watches.cookies.drain() {
                             if let Err(_) = sender.send(Err(resp.clone())) {
                                 // Note that cookie waiters will time out if they don't get a response, so
@@ -170,25 +171,10 @@ async fn watch_cookies(
 
 // result flattening is an unstable feature, so add a manual helper to do so.
 // This version is for unwrapping events coming from filewatching
-fn unwrap_event(
+fn flatten_event(
     event: Result<Result<Event, NotifyError>, broadcast::error::RecvError>,
 ) -> Result<Event, WatchError> {
-    match event {
-        Ok(event) => event.map_err(|e| e.into()),
-        Err(e) => Err(e.into()),
-    }
-}
-
-// result flattening is an unstable feature, so add a manual helper to do so.
-// This version is for flattening notifications coming back from the cookie
-// watching task
-fn unwrap_resp(
-    resp: Result<Result<(), WatchError>, oneshot::error::RecvError>,
-) -> Result<(), CookieError> {
-    match resp {
-        Ok(resp) => resp.map_err(|e| e.into()),
-        Err(e) => Err(e.into()),
-    }
+    Ok(event??)
 }
 
 #[cfg(test)]
@@ -209,7 +195,7 @@ mod test {
         let mut interval = time::interval(Duration::from_millis(2));
         for _i in 0..50 {
             interval.tick().await;
-            let watches = cookie_jar.watches.lock().await;
+            let watches = cookie_jar.watches.lock().expect("mutex poisoned");
             if watches.cookies.contains_key(path) {
                 return;
             }
