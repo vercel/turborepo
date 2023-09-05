@@ -109,3 +109,36 @@ async fn process_content(
 
     Ok(ProcessCssResult::Ok {}.into())
 }
+
+#[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
+pub struct ProcessCssResultSourceMap {
+    #[turbo_tasks(debug_ignore, trace_ignore)]
+    source_map: parcel_sourcemap::SourceMap,
+}
+
+impl PartialEq for ParseCssResultSourceMap {
+    fn eq(&self, other: &Self) -> bool {
+        false
+    }
+}
+
+impl ParseCssResultSourceMap {
+    pub fn new(source_map: parcel_sourcemap::SourceMap) -> Self {
+        ProcessCssResultSourceMap { source_map }
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl GenerateSourceMap for ParseCssResultSourceMap {
+    #[turbo_tasks::function]
+    fn generate_source_map(&self) -> Vc<OptionSourceMap> {
+        let map = self.source_map.build_source_map_with_config(
+            &self.mappings,
+            None,
+            InlineSourcesContentConfig {},
+        );
+        Vc::cell(Some(
+            turbopack_core::source_map::SourceMap::new_regular(map).cell(),
+        ))
+    }
+}
