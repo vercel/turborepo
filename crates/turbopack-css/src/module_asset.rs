@@ -87,6 +87,32 @@ impl Module for ModuleCssAsset {
     }
 }
 
+/// A map of CSS classes exported from a CSS module.
+///
+/// ## Example
+///
+/// ```css
+/// :global(.class1) {
+///    color: red;
+/// }
+///
+/// .class2 {
+///   color: blue;
+/// }
+///
+/// .class3 {
+///   composes: class4 from "./other.module.css";
+/// }
+/// ```
+///
+/// The above CSS module would have the following exports:
+/// 1. class1: [Global("exported_class1")]
+/// 2. class2: [Local("exported_class2")]
+/// 3. class3: [Local("exported_class3), Import("class4", "./other.module.css")]
+#[turbo_tasks::value(transparent, serialization = "none")]
+#[derive(Debug, Clone)]
+struct ModuleCssClasses(#[turbo_tasks(trace_ignore)] CssModuleExports);
+
 #[turbo_tasks::value_impl]
 impl Asset for ModuleCssAsset {
     #[turbo_tasks::function]
@@ -232,32 +258,6 @@ impl ChunkItem for ModuleChunkItem {
         Vc::upcast(self.module)
     }
 }
-
-/// A map of CSS classes exported from a CSS module.
-///
-/// ## Example
-///
-/// ```css
-/// :global(.class1) {
-///    color: red;
-/// }
-///
-/// .class2 {
-///   color: blue;
-/// }
-///
-/// .class3 {
-///   composes: class4 from "./other.module.css";
-/// }
-/// ```
-///
-/// The above CSS module would have the following exports:
-/// 1. class1: [Global("exported_class1")]
-/// 2. class2: [Local("exported_class2")]
-/// 3. class3: [Local("exported_class3), Import("class4", "./other.module.css")]
-#[turbo_tasks::value(transparent, serialization = "none")]
-#[derive(Debug, Clone)]
-struct ModuleCssClasses(#[turbo_tasks(trace_ignore)] CssModuleExports);
 
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkItem for ModuleChunkItem {
