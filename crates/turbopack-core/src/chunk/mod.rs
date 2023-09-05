@@ -503,7 +503,7 @@ struct ChunkContentVisit<I> {
     _phantom: PhantomData<I>,
 }
 
-type ChunkItemToGraphNodesEdges<I> = impl Iterator<
+type ChunkItemToGraphNodesEdges<I: Send> = impl Iterator<
     Item = (
         Option<(Vc<Box<dyn Module>>, ChunkingType)>,
         ChunkContentGraphNode<Vc<I>>,
