@@ -3,7 +3,7 @@ mod visitor;
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
-use turbopath::RelativeUnixPathBuf;
+use turbopath::{AnchoredSystemPath, RelativeUnixPathBuf};
 pub use visitor::{Error, Visitor};
 
 use crate::{
@@ -192,6 +192,36 @@ impl TaskDefinition {
         hashable
     }
 
+    pub fn repo_relative_hashable_outputs(
+        &self,
+        task_name: &TaskId,
+        workspace_dir: &AnchoredSystemPath,
+    ) -> TaskOutputs {
+        let make_glob_repo_relative = |glob: &str| -> String {
+            let mut repo_relative_glob = workspace_dir.to_string();
+            repo_relative_glob.push(std::path::MAIN_SEPARATOR);
+            repo_relative_glob.push_str(glob);
+            repo_relative_glob
+        };
+
+        // At this point repo_relative_globs are still workspace relative, but
+        // the processing in the rest of the function converts this to be repo
+        // relative.
+        let mut repo_relative_globs = self.hashable_outputs(task_name);
+
+        for input in repo_relative_globs.inclusions.iter_mut() {
+            let relative_input = make_glob_repo_relative(input.as_str());
+            *input = relative_input;
+        }
+
+        for output in repo_relative_globs.exclusions.iter_mut() {
+            let relative_output = make_glob_repo_relative(output.as_str());
+            *output = relative_output;
+        }
+
+        repo_relative_globs
+    }
+
     // merge accepts a BookkeepingTaskDefinitions and
     // merges it into TaskDefinition. It uses the bookkeeping
     // defined_fields to determine which fields should be overwritten and when
@@ -235,5 +265,46 @@ impl FromIterator<BookkeepingTaskDefinition> for TaskDefinition {
                 def.merge(other);
                 def
             })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    #[test]
+    fn test_relative_output_globs() {
+        let task_defn = TaskDefinition {
+            outputs: TaskOutputs {
+                inclusions: vec![".next/**/*".to_string()],
+                exclusions: vec![".next/bad-file".to_string()],
+            },
+            ..Default::default()
+        };
+
+        let task_id = TaskId::new("foo", "build");
+        let workspace_dir = AnchoredSystemPath::new(match cfg!(windows) {
+            true => "apps\\foo",
+            false => "apps/foo",
+        })
+        .unwrap();
+
+        let relative_outputs = task_defn.repo_relative_hashable_outputs(&task_id, workspace_dir);
+        let relative_prefix = match cfg!(windows) {
+            true => "apps\\foo\\",
+            false => "apps/foo/",
+        };
+        assert_eq!(
+            relative_outputs,
+            TaskOutputs {
+                inclusions: vec![
+                    format!("{relative_prefix}.next/**/*"),
+                    format!("{relative_prefix}.turbo/turbo-build.log"),
+                ],
+                exclusions: vec![format!("{relative_prefix}.next/bad-file")],
+            }
+        );
     }
 }

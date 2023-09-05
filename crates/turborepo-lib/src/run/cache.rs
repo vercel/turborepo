@@ -59,25 +59,8 @@ impl RunCache {
         let task_dir = self.repo_root.resolve(workspace_dir);
         let log_file_path =
             task_dir.join_components(&[".turbo", &format!("turbo-{}.log", task_id.task())]);
-        let hashable_outputs = task_definition.hashable_outputs(&task_id);
-        let mut repo_relative_globs = TaskOutputs {
-            inclusions: Vec::with_capacity(hashable_outputs.inclusions.len()),
-            exclusions: Vec::with_capacity(hashable_outputs.exclusions.len()),
-        };
-
-        for output in hashable_outputs.inclusions {
-            let inclusion_glob = task_dir.join_component(&output);
-            repo_relative_globs
-                .inclusions
-                .push(inclusion_glob.to_string());
-        }
-
-        for output in hashable_outputs.exclusions {
-            let exclusion_glob = task_dir.join_component(&output);
-            repo_relative_globs
-                .exclusions
-                .push(exclusion_glob.to_string());
-        }
+        let repo_relative_globs =
+            task_definition.repo_relative_hashable_outputs(&task_id, workspace_dir);
 
         let mut task_output_mode = task_definition.output_mode;
         if let Some(task_output_mode_override) = self.task_output_mode {
