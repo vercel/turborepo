@@ -282,7 +282,11 @@ mod test {
         };
 
         let task_id = TaskId::new("foo", "build");
-        let workspace_dir = AnchoredSystemPath::new("apps/foo").unwrap();
+        let workspace_dir = AnchoredSystemPath::new(match cfg!(windows) {
+            true => "apps\\foo",
+            false => "apps/foo",
+        })
+        .unwrap();
 
         let relative_outputs = task_defn.repo_relative_hashable_outputs(&task_id, workspace_dir);
         let relative_prefix = match cfg!(windows) {
