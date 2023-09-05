@@ -5,6 +5,7 @@ use lightningcss::{
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet},
 };
 use smallvec::smallvec;
+use swc_core::base::sourcemap::SourceMapBuilder;
 use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
@@ -12,7 +13,7 @@ use turbopack_core::{
     reference::ModuleReferences,
     resolve::origin::ResolveOrigin,
     source::Source,
-    source_map::{GenerateSourceMap, OptionSourceMap},
+    source_map::{CrateMapWrapper, GenerateSourceMap, OptionSourceMap},
 };
 
 use crate::{references::analyze_references, CssModuleAssetType};
@@ -153,13 +154,29 @@ impl ProcessCssResultSourceMap {
 impl GenerateSourceMap for ProcessCssResultSourceMap {
     #[turbo_tasks::function]
     fn generate_source_map(&self) -> Vc<OptionSourceMap> {
-        let map = self.source_map.build_source_map_with_config(
-            &self.mappings,
-            None,
-            InlineSourcesContentConfig {},
-        );
+        let mut builder = SourceMapBuilder::new(None);
+
+        for src in self.source_map.get_sources() {
+            builder.add_source(src);
+        }
+
+        for (idx, content) in self.source_map.get_sources_content().iter().enumerate() {
+            builder.set_source_contents(idx, content);
+        }
+
+        for m in self.source_map.get_mappings() {
+            builder.add(
+                m.generated_line,
+                m.generated_column,
+                m.original.map(|v| v.original_line),
+                m.original.map(|v| v.original_column),
+                None,
+                None,
+            );
+        }
+
         Vc::cell(Some(
-            turbopack_core::source_map::SourceMap::new_regular(map).cell(),
+            turbopack_core::source_map::SourceMap::new_regular(builder.into_sourcemap()).cell(),
         ))
     }
 }
