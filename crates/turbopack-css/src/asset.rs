@@ -33,7 +33,6 @@ fn modifier() -> Vc<String> {
 pub struct CssModuleAsset {
     source: Vc<Box<dyn Source>>,
     asset_context: Vc<Box<dyn AssetContext>>,
-    transforms: Vc<CssInputTransforms>,
     ty: CssModuleAssetType,
 }
 
@@ -44,13 +43,11 @@ impl CssModuleAsset {
     pub fn new(
         source: Vc<Box<dyn Source>>,
         asset_context: Vc<Box<dyn AssetContext>>,
-        transforms: Vc<CssInputTransforms>,
         ty: CssModuleAssetType,
     ) -> Vc<Self> {
         Self::cell(CssModuleAsset {
             source,
             asset_context,
-            transforms,
             ty,
         })
     }
@@ -89,7 +86,6 @@ impl Module for CssModuleAsset {
             this.source,
             Vc::upcast(self),
             this.ty,
-            this.transforms,
         ))
     }
 }
