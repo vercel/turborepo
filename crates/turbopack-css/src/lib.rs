@@ -14,14 +14,12 @@ mod module_asset;
 pub(crate) mod parse;
 pub(crate) mod process;
 pub(crate) mod references;
-pub(crate) mod transform;
 pub(crate) mod util;
 
 pub use asset::CssModuleAsset;
 pub use global_asset::GlobalCssAsset;
 pub use module_asset::ModuleCssAsset;
 use serde::{Deserialize, Serialize};
-pub use transform::{CssInputTransform, CssInputTransforms};
 use turbo_tasks::{trace::TraceRawVcs, TaskInput};
 
 use crate::references::import::ImportAssetReference;

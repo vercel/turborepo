@@ -1,16 +1,8 @@
 use std::convert::Infallible;
 
 use anyhow::Result;
-use lightningcss::{
-    rules::CssRule,
-    values::url::Url,
-    visitor::{Visit, Visitor},
-};
-use swc_core::common::{
-    errors::{Handler, HANDLER},
-    source_map::Pos,
-    Globals, Spanned, GLOBALS,
-};
+use lightningcss::{rules::CssRule, values::url::Url, visitor::Visitor};
+use swc_core::common::{source_map::Pos, Spanned};
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
     issue::{IssueSeverity, IssueSource},
@@ -24,7 +16,6 @@ use turbopack_core::{
     },
     source::Source,
 };
-use turbopack_swc_utils::emitter::IssueEmitter;
 
 use crate::{
     process::{process_css, ProcessCssResult},
@@ -32,7 +23,7 @@ use crate::{
         import::{ImportAssetReference, ImportAttributes},
         url::UrlAssetReference,
     },
-    CssInputTransforms, CssModuleAssetType,
+    CssModuleAssetType,
 };
 
 pub(crate) mod compose;
@@ -56,23 +47,9 @@ pub async fn analyze_css_stylesheet(
         ..
     } = &*parsed
     {
-        let handler = Handler::with_emitter(
-            true,
-            false,
-            Box::new(IssueEmitter {
-                source,
-                source_map: source_map.clone(),
-                title: None,
-            }),
-        );
-        let globals = Globals::new();
-        HANDLER.set(&handler, || {
-            GLOBALS.set(&globals, || {
-                // TODO migrate to effects
-                let mut visitor = ModuleReferencesVisitor::new(source, origin, &mut references);
-                stylesheet.visit(&mut visitor);
-            })
-        });
+        // TODO migrate to effects
+        let mut visitor = ModuleReferencesVisitor::new(source, origin, &mut references);
+        stylesheet.visit(&mut visitor);
     }
     Ok(Vc::cell(references))
 }
