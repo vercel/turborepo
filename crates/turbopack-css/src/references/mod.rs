@@ -112,6 +112,8 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
         // ignore server-relative urls like `url(/foo)`
         if !matches!(src.bytes().next(), Some(b'#') | Some(b'/')) {
             let issue_span = u.span;
+
+            u.url = "";
             self.references.push(Vc::upcast(UrlAssetReference::new(
                 self.origin,
                 Request::parse(Value::new(src.to_string().into())),
