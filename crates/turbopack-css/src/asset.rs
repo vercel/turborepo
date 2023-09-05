@@ -248,7 +248,7 @@ impl CssChunkItem for CssModuleChunkItem {
 
         let result = self.module.process_css().await?;
 
-        if let ProcessCssResult::Ok { output_code } = &*result {
+        if let ProcessCssResult::Ok { output_code, .. } = &*result {
             Ok(CssChunkItemContent {
                 inner_code: output_code.to_owned().into(),
                 imports,
