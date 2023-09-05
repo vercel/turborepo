@@ -3,7 +3,10 @@ use std::{fmt::Write, iter::once, sync::Arc};
 use anyhow::{bail, Context, Result};
 use indexmap::IndexMap;
 use indoc::formatdoc;
-use lightningcss::css_modules::{CssModuleExport, CssModuleExports};
+use lightningcss::{
+    css_modules::{CssModuleExport, CssModuleExports},
+    dependencies::Dependency,
+};
 use swc_core::common::{BytePos, FileName, LineCol, SourceMap};
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
@@ -133,7 +136,13 @@ impl ModuleCssAsset {
 
         // TODO(alexkirsz) Should we report an error on parse error here?
         if let ProcessCssResult::Ok { dependencies, .. } = &*result {
-            if let Some(dependencies) = dependencies {}
+            if let Some(dependencies) = dependencies {
+                let mut references = Vec::with_capacity(dependencies.len());
+                for dependency in dependencies {
+                    // TODO(kdy1)
+                }
+                return Ok(Vc::cell(references));
+            }
         }
 
         Ok(Vc::cell(CssModuleExports::default()))
