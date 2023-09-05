@@ -1,6 +1,7 @@
 use anyhow::Result;
 use lightningcss::{
-    css_modules::{Pattern, Segment},
+    css_modules::{CssModuleExports, Pattern, Segment},
+    dependencies::Dependency,
     rules::CssRule,
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet},
 };
@@ -19,6 +20,12 @@ pub enum ProcessCssResult {
     Ok {
         #[turbo_tasks(trace_ignore)]
         output_code: String,
+
+        #[turbo_tasks(trace_ignore)]
+        exports: CssModuleExports,
+
+        #[turbo_tasks(trace_ignore)]
+        dependencies: Option<Vec<Dependency>>,
     },
     Unparseable,
     NotFound,
