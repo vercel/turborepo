@@ -24,6 +24,11 @@ pub enum ProcessCssResult {
     NotFound,
 }
 
+#[turbo_tasks::value_trait]
+pub trait ProcessCss {
+    async fn process_css(self: Vc<Self>) -> Result<Vc<ProcessCssResult>>;
+}
+
 #[turbo_tasks::function]
 pub async fn process_css(
     source: Vc<Box<dyn Source>>,
