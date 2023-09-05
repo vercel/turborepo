@@ -123,20 +123,20 @@ impl ModuleCssAsset {
 
     #[turbo_tasks::function]
     async fn module_references(self: Vc<Self>) -> Result<Vc<ModuleReferences>> {
-        let mut references = vec![];
+        let inner = self.inner();
 
-        for (_, class_names) in &*self.classes().await? {
-            for class_name in class_names {
-                match class_name {
-                    ModuleCssClass::Import { from, .. } => {
-                        references.push(Vc::upcast(*from));
-                    }
-                    ModuleCssClass::Local { .. } | ModuleCssClass::Global { .. } => {}
-                }
-            }
+        let Some(inner) = Vc::try_resolve_sidecast::<Box<dyn ProcessCss>>(inner).await? else {
+            bail!("inner asset should be CSS parseable");
+        };
+
+        let result = inner.process_css().await?;
+
+        // TODO(alexkirsz) Should we report an error on parse error here?
+        if let ProcessCssResult::Ok { dependencies, .. } = &*result {
+            if let Some(dependencies) = dependencies {}
         }
 
-        Ok(Vc::cell(references))
+        Ok(Vc::cell(CssModuleExports::default()))
     }
 }
 
