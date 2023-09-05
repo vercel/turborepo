@@ -44,7 +44,7 @@ impl RelativeUnixPath {
         }
     }
 
-    pub fn to_system_path(&self) -> AnchoredSystemPathBuf {
+    pub fn to_anchored_system_path_buf(&self) -> AnchoredSystemPathBuf {
         AnchoredSystemPathBuf(self.to_system_path_buf())
     }
 
@@ -90,7 +90,7 @@ mod test {
     use crate::AnchoredSystemPath;
 
     #[test]
-    fn test_to_system_path() {
+    fn test_to_anchored_system_path_buf() {
         let path = RelativeUnixPath::new("foo/bar/baz").unwrap();
         let expected = AnchoredSystemPath::new(if cfg!(windows) {
             // Unix path separators should be converted
@@ -100,6 +100,6 @@ mod test {
             "foo/bar/baz"
         })
         .unwrap();
-        assert_eq!(&*path.to_system_path(), expected);
+        assert_eq!(&*path.to_anchored_system_path_buf(), expected);
     }
 }

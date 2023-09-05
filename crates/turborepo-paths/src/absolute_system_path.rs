@@ -202,6 +202,10 @@ impl AbsoluteSystemPath {
         )
     }
 
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
     pub fn join_unix_path(
         &self,
         unix_path: impl AsRef<RelativeUnixPath>,
