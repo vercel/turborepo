@@ -12,7 +12,6 @@ pub mod embed;
 mod global_asset;
 mod module_asset;
 pub(crate) mod parse;
-mod path_visitor;
 pub(crate) mod process;
 pub(crate) mod references;
 pub(crate) mod transform;
