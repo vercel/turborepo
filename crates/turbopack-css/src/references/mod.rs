@@ -1,7 +1,12 @@
 use std::convert::Infallible;
 
 use anyhow::Result;
-use lightningcss::{rules::CssRule, stylesheet::StyleSheet, values::url::Url, visitor::Visitor};
+use lightningcss::{
+    rules::CssRule,
+    stylesheet::StyleSheet,
+    values::url::Url,
+    visitor::{Visit, Visitor},
+};
 use swc_core::common::{source_map::Pos, Spanned};
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
@@ -17,13 +22,9 @@ use turbopack_core::{
     source::Source,
 };
 
-use crate::{
-    process::{process_css, ProcessCssResult},
-    references::{
-        import::{ImportAssetReference, ImportAttributes},
-        url::UrlAssetReference,
-    },
-    CssModuleAssetType,
+use crate::references::{
+    import::{ImportAssetReference, ImportAttributes},
+    url::UrlAssetReference,
 };
 
 pub(crate) mod compose;
@@ -31,18 +32,17 @@ pub(crate) mod import;
 pub(crate) mod internal;
 pub(crate) mod url;
 
-#[turbo_tasks::function]
-pub async fn analyze_references(
+pub fn analyze_references(
     stylesheet: &mut StyleSheet<'static, 'static>,
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
-) -> Result<Vc<ModuleReferences>> {
+) -> Result<Vec<Vc<Box<dyn ModuleReference>>>> {
     let mut references = Vec::new();
 
     let mut visitor = ModuleReferencesVisitor::new(source, origin, &mut references);
     stylesheet.visit(&mut visitor);
 
-    Ok(ModuleReferences::new(references))
+    Ok(references)
 }
 
 struct ModuleReferencesVisitor<'a> {
