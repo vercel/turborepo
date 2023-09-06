@@ -33,7 +33,7 @@ use crate::{
 pub struct UnresolvedUrlReferences(pub Vec<(String, Vc<UrlAssetReference>)>);
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
-pub enum ProcessCssResult {
+pub enum ParseCssResult {
     Ok {
         #[turbo_tasks(trace_ignore)]
         stylesheet: StyleSheet<'static, 'static>,
@@ -46,7 +46,7 @@ pub enum ProcessCssResult {
     NotFound,
 }
 
-impl PartialEq for ProcessCssResult {
+impl PartialEq for ParseCssResult {
     fn eq(&self, other: &Self) -> bool {
         false
     }
@@ -78,12 +78,12 @@ impl PartialEq for FinalCssResult {
 
 #[turbo_tasks::function]
 pub async fn finalize_css(
-    result: Vc<ProcessCssResult>,
+    result: Vc<ParseCssResult>,
     chunking_context: Vc<Box<dyn ChunkingContext>>,
 ) -> Result<Vc<FinalCssResult>> {
     let result = result.await?;
     match &*result {
-        ProcessCssResult::Ok {
+        ParseCssResult::Ok {
             stylesheet,
             references,
             url_references,
@@ -122,14 +122,14 @@ pub async fn finalize_css(
             }
             .into())
         }
-        ProcessCssResult::Unparseable => Ok(FinalCssResult::Unparseable.into()),
-        ProcessCssResult::NotFound => Ok(FinalCssResult::NotFound.into()),
+        ParseCssResult::Unparseable => Ok(FinalCssResult::Unparseable.into()),
+        ParseCssResult::NotFound => Ok(FinalCssResult::NotFound.into()),
     }
 }
 
 #[turbo_tasks::value_trait]
 pub trait ProcessCss {
-    async fn parse_css(self: Vc<Self>) -> Result<Vc<ProcessCssResult>>;
+    async fn parse_css(self: Vc<Self>) -> Result<Vc<ParseCssResult>>;
 
     async fn finalize_css(
         self: Vc<Self>,
@@ -142,16 +142,16 @@ pub async fn parse_css(
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
     ty: CssModuleAssetType,
-) -> Result<Vc<ProcessCssResult>> {
+) -> Result<Vc<ParseCssResult>> {
     let content = source.content();
     let fs_path = &*source.ident().path().await?;
     let ident_str = &*source.ident().to_string().await?;
     Ok(match &*content.await? {
-        AssetContent::Redirect { .. } => ProcessCssResult::Unparseable.cell(),
+        AssetContent::Redirect { .. } => ParseCssResult::Unparseable.cell(),
         AssetContent::File(file) => match &*file.await? {
-            FileContent::NotFound => ProcessCssResult::NotFound.cell(),
+            FileContent::NotFound => ParseCssResult::NotFound.cell(),
             FileContent::Content(file) => match file.content().to_str() {
-                Err(_err) => ProcessCssResult::Unparseable.cell(),
+                Err(_err) => ParseCssResult::Unparseable.cell(),
                 Ok(string) => {
                     process_content(string.into_owned(), fs_path, ident_str, source, origin, ty)
                         .await?
@@ -168,7 +168,7 @@ async fn process_content(
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
     ty: CssModuleAssetType,
-) -> Result<Vc<ProcessCssResult>> {
+) -> Result<Vc<ParseCssResult>> {
     let config = ParserOptions {
         css_modules: match ty {
             CssModuleAssetType::Module => Some(lightningcss::css_modules::Config {
@@ -195,14 +195,14 @@ async fn process_content(
         Err(e) => {
             // TODO(kdy1): Report errors
             // e.to_diagnostics(&handler).emit();
-            return Ok(ProcessCssResult::Unparseable.into());
+            return Ok(ParseCssResult::Unparseable.into());
         }
     };
     let mut stylesheet = stylesheet_into_static(&stylesheet);
 
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
 
-    Ok(ProcessCssResult::Ok {
+    Ok(ParseCssResult::Ok {
         stylesheet,
         references: Vc::cell(references),
         url_references: Vc::cell(url_references),
