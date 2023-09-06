@@ -46,7 +46,7 @@ pub struct TaskHashable<'a> {
     // hashes
     pub(crate) global_hash: &'a str,
     pub(crate) task_dependency_hashes: Vec<String>,
-    pub(crate) hash_of_files: String,
+    pub(crate) hash_of_files: &'a str,
     pub(crate) external_deps_hash: String,
 
     // task
@@ -387,7 +387,7 @@ mod test {
             global_hash: "global_hash",
             task_dependency_hashes: vec!["task_dependency_hash".to_string()],
             package_dir: turbopath::RelativeUnixPathBuf::new("package_dir").unwrap(),
-            hash_of_files: "hash_of_files".to_string(),
+            hash_of_files: "hash_of_files",
             external_deps_hash: "external_deps_hash".to_string(),
             task: "task",
             outputs: TaskOutputs {

@@ -11,6 +11,7 @@ use std::{
 pub use builder::EngineBuilder;
 pub use execute::{ExecuteError, ExecutionOptions, Message};
 use petgraph::Graph;
+use rayon::iter::ParallelIterator;
 
 use crate::{
     package_graph::{PackageGraph, WorkspaceName},
@@ -123,6 +124,14 @@ impl Engine<Built> {
     // lifetime of the return ref
     pub fn task_definition(&self, task_id: &TaskId<'static>) -> Option<&TaskDefinition> {
         self.task_definitions.get(task_id)
+    }
+
+    pub fn tasks(&self) -> impl Iterator<Item = &TaskNode> {
+        self.task_graph.node_weights()
+    }
+
+    pub fn task_definitions(&self) -> &HashMap<TaskId<'static>, TaskDefinition> {
+        &self.task_definitions
     }
 
     pub fn validate(
