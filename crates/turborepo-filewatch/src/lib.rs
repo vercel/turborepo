@@ -151,7 +151,7 @@ async fn watch_events(
                         {
                             if event.kind == EventKind::Create(CreateKind::Folder) {
                                 for new_path in &event.paths {
-                                    if let Err(err) = manually_add_recursive_watches(&new_path, &mut watcher, Some(&broadcast_sender)) {
+                                    if let Err(err) = manually_add_recursive_watches(new_path, &mut watcher, Some(&broadcast_sender)) {
                                         warn!("encountered error watching filesystem {}", err);
                                         break 'outer;
                                     }
