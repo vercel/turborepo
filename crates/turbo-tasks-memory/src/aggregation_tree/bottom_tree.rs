@@ -72,16 +72,12 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     ) {
         let is_blue = self.is_blue(child_of_child_hash);
         match (child_location, is_blue) {
-            (ChildLocation::Left, _) => {
+            (ChildLocation::Left, _) | (ChildLocation::Inner, false) => {
                 // the left child has a new child
-                // this means it's a inner child of this node
-                self.add_child_of_child_inner(context, child_of_child, child_of_child_hash);
-            }
-            (ChildLocation::Inner, false) => {
-                // the inner child has a new child
+                // or the inner child has a new child
                 // but it's not a blue node
-                // this means it's also an inner child of this node
-                self.add_child_of_child_inner(context, child_of_child, child_of_child_hash);
+                // this means it's a inner child of this node
+                self.add_child_of_child_inner(context, child_of_child);
             }
             (ChildLocation::Inner, true) => {
                 // the inner child has a new child
@@ -131,7 +127,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         self: &Arc<Self>,
         context: &C,
         child_of_child: &I,
-        child_of_child_hash: u32,
     ) {
         if self.height == 0 {
             add_upper_to_item_ref(context, child_of_child, &self, ChildLocation::Inner);

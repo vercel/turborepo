@@ -109,7 +109,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     }
 
     pub fn has_upper(&self) -> bool {
-        self.left_upper.is_some() || !self.inner_upper.is_empty()
+        self.left_upper.is_some() || !self.inner_upper.is_unset()
     }
 
     #[must_use]
