@@ -158,75 +158,78 @@ impl GlobTracker {
         }
     }
 
+    fn handle_query(&mut self, query: Query) {
+        match query {
+            Query::WatchGlobs {
+                hash,
+                glob_set,
+                resp,
+            } => {
+                // Assume cookie handling has happened external to this component.
+                // Other tasks _could_ write to the
+                // same output directories, however we are relying on task
+                // execution dependencies to prevent that.
+                for (glob_str, glob) in glob_set.include.iter() {
+                    let glob_str = glob_str.to_owned();
+                    let (_, hashes) = self
+                        .glob_statuses
+                        .entry(glob_str)
+                        .or_insert_with(|| (glob.clone(), HashSet::new()));
+                    hashes.insert(hash.clone());
+                }
+                self.hash_globs.insert(hash.clone(), glob_set);
+                let _ = resp.send(Ok(()));
+            }
+            Query::GetChangedGlobs {
+                hash,
+                mut candidates,
+                resp,
+            } => {
+                // Assume cookie handling has happened external to this component.
+                // Build a set of candidate globs that *may* have changed.
+                // An empty set translates to all globs have not changed.
+                if let Some(unchanged_globs) = self.hash_globs.get(&hash) {
+                    candidates.retain(|glob_str| {
+                        // We are keeping the globs from candidates that
+                        // we don't have a record of as unchanged.
+                        // If we do have a record, drop it from candidates.
+                        !unchanged_globs.include.contains_key(glob_str)
+                    });
+                }
+                // If the client has gone away, we don't care about the error
+                let _ = resp.send(Ok(candidates));
+            }
+        }
+    }
+
+    fn handle_file_event(
+        &mut self,
+        file_event: Result<Result<Event, NotifyError>, broadcast::error::RecvError>,
+    ) {
+        match file_event {
+            Err(broadcast::error::RecvError::Closed) => return,
+            Err(e @ broadcast::error::RecvError::Lagged(_)) => self.on_error(e.into()),
+            Ok(Err(error)) => self.on_error(error.into()),
+            Ok(Ok(file_event)) => {
+                for path in file_event.paths {
+                    let path = AbsoluteSystemPathBuf::try_from(path)
+                        .expect("filewatching should produce absolute paths");
+                    let Ok(to_match) = self.root.anchor(path) else {
+                        // irrelevant filesystem update
+                        return;
+                    };
+                    self.handle_path_change(&to_match.to_unix());
+                }
+            }
+        }
+    }
+
     async fn watch(mut self) {
         loop {
             tokio::select! {
                 _ = &mut self.exit_signal => return,
-                Some(query) = self.query_recv.recv().into_future() => {
-                    match query {
-                        Query::WatchGlobs {
-                            hash,
-                            glob_set,
-                            resp
-                        } => {
-                            // Assume cookie handling has happened external to this component.
-                            // Other tasks _could_ write to the
-                            // same output directories, however we are relying on task
-                            // execution dependencies to prevent that.
-                            for (glob_str, glob) in glob_set.include.iter() {
-                                let glob_str = glob_str.to_owned();
-                                match self.glob_statuses.entry(glob_str) {
-                                    Entry::Occupied(mut existing) => {
-                                        existing.get_mut().1.insert(hash.clone());
-                                    },
-                                    Entry::Vacant(vacancy) => {
-                                        let mut hashes = HashSet::new();
-                                        hashes.insert(hash.clone());
-                                        vacancy.insert((glob.clone(), hashes));
-                                    }
-                                }
-                            }
-                            self.hash_globs.insert(hash.clone(), glob_set);
-                            let _ = resp.send(Ok(()));
-                        },
-                        Query::GetChangedGlobs {
-                            hash,
-                            mut candidates,
-                            resp
-                        } => {
-                            // Assume cookie handling has happened external to this component.
-                            // Build a set of candidate globs that *may* have changed.
-                            // An empty set translates to all globs have not changed.
-                            if let Some(unchanged_globs) = self.hash_globs.get(&hash) {
-                                candidates.retain(|glob_str| {
-                                    // We are keeping the globs from candidates that
-                                    // we don't have a record of as unchanged.
-                                    // If we do have a record, drop it from candidates.
-                                    !unchanged_globs.include.contains_key(glob_str)
-                                });
-                            }
-                            // If the client has gone away, we don't care about the error
-                            let _ = resp.send(Ok(candidates));
-                        }
-                    }
-                },
-                file_event = self.recv.recv().into_future() => {
-                    match file_event {
-                        Err(broadcast::error::RecvError::Closed) => return,
-                        Err(e @ broadcast::error::RecvError::Lagged(_)) => self.on_error(e.into()),
-                        Ok(Err(error)) => self.on_error(error.into()),
-                        Ok(Ok(file_event)) => {
-                            for path in file_event.paths {
-                                let path = AbsoluteSystemPathBuf::try_from(path).expect("filewatching should produce absolute paths");
-                                let Ok(to_match) = self.root.anchor(path) else {
-                                    // irrelevant filesystem update
-                                    continue;
-                                };
-                                self.handle_path_change(&to_match.to_unix());
-                            }
-                        }
-                    }
-                }
+                Some(query) = self.query_recv.recv().into_future() => self.handle_query(query),
+                file_event = self.recv.recv().into_future() => self.handle_file_event(file_event)
             }
         }
     }
