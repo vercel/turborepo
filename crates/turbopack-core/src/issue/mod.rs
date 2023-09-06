@@ -407,6 +407,11 @@ pub struct IssueSource {
 #[turbo_tasks::value_impl]
 impl IssueSource {
     #[turbo_tasks::function]
+    pub fn new(source: Vc<Box<dyn Source>>, start: SourcePos, end: SourcePos) -> Result<Vc<Self>> {
+        Ok(Self::cell(IssueSource { source, start, end }))
+    }
+
+    #[turbo_tasks::function]
     pub async fn from_byte_offset(
         source: Vc<Box<dyn Source>>,
         start: usize,
