@@ -20,6 +20,7 @@ use turbopack_core::{
         ModuleResolveResult,
     },
     source::Source,
+    source_pos::SourcePos,
 };
 
 use crate::references::{
@@ -91,11 +92,17 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                     self.origin,
                     Request::parse(Value::new(src.to_string().into())),
                     ImportAttributes::new_from_prelude(i).into(),
-                    IssueSource::from_byte_offset(
-                        Vc::upcast(self.source),
-                        issue_span.lo.to_usize(),
-                        issue_span.hi.to_usize(),
-                    ),
+                    Vc::cell(IssueSource {
+                        source: Vc::upcast(self.source),
+                        start: SourcePos {
+                            line: issue_span.line as _,
+                            column: issue_span.column as _,
+                        },
+                        end: SourcePos {
+                            line: issue_span.line as _,
+                            column: issue_span.column as _,
+                        },
+                    }),
                 )));
 
                 self.is_import = true;
@@ -123,11 +130,17 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
             let vc = UrlAssetReference::new(
                 self.origin,
                 Request::parse(Value::new(src.to_string().into())),
-                IssueSource::from_byte_offset(
-                    Vc::upcast(self.source),
-                    issue_span.lo.to_usize(),
-                    issue_span.hi.to_usize(),
-                ),
+                Vc::cell(IssueSource {
+                    source: Vc::upcast(self.source),
+                    start: SourcePos {
+                        line: issue_span.line as _,
+                        column: issue_span.column as _,
+                    },
+                    end: SourcePos {
+                        line: issue_span.line as _,
+                        column: issue_span.column as _,
+                    },
+                }),
             );
 
             self.references.push(Vc::upcast(vc));
