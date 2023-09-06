@@ -759,7 +759,7 @@ pub async fn run(
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
             }
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, UI::new(true))?;
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
 
             if args.experimental_rust_codepath {
                 use crate::commands::run;
@@ -777,7 +777,7 @@ pub async fn run(
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
             }
-            let base = CommandBase::new(cli_args, repo_root, version, UI::new(true))?;
+            let base = CommandBase::new(cli_args, repo_root, version, ui)?;
             Ok(Payload::Go(Box::new(base)))
         }
         Command::Prune {
@@ -788,7 +788,7 @@ pub async fn run(
             let scope = scope.clone();
             let docker = *docker;
             let output_dir = output_dir.clone();
-            let base = CommandBase::new(cli_args, repo_root, version, UI::new(true))?;
+            let base = CommandBase::new(cli_args, repo_root, version, ui)?;
             prune::prune(&base, &scope, docker, &output_dir)?;
             Ok(Payload::Rust(Ok(0)))
         }
