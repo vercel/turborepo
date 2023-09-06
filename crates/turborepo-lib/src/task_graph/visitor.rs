@@ -21,7 +21,7 @@ use crate::{
 
 // This holds the whole world
 pub struct Visitor<'a> {
-    runcache: Arc<RunCache>,
+    run_cache: Arc<RunCache>,
     package_graph: Arc<PackageGraph>,
     opts: &'a Opts<'a>,
     task_hasher: TaskHasher<'a>,
@@ -50,7 +50,7 @@ pub enum Error {
 impl<'a> Visitor<'a> {
     pub fn new(
         package_graph: Arc<PackageGraph>,
-        runcache: Arc<RunCache>,
+        run_cache: Arc<RunCache>,
         opts: &'a Opts,
         package_inputs_hashes: PackageInputsHashes,
         env_at_execution_start: &'a EnvironmentVariableMap,
@@ -65,7 +65,7 @@ impl<'a> Visitor<'a> {
         );
 
         Self {
-            runcache,
+            run_cache,
             package_graph,
             opts,
             task_hasher,
@@ -87,6 +87,13 @@ impl<'a> Visitor<'a> {
         while let Some(message) = node_stream.recv().await {
             let crate::engine::Message { info, callback } = message;
             let package_name = WorkspaceName::from(info.package());
+            let workspace_dir =
+                self.package_graph
+                    .workspace_dir(&package_name)
+                    .ok_or_else(|| Error::MissingPackage {
+                        package_name: package_name.clone(),
+                        task_id: info.clone(),
+                    })?;
             let workspace_info = self
                 .package_graph
                 .workspace_info(&package_name)
@@ -142,11 +149,16 @@ impl<'a> Visitor<'a> {
 
             debug!("task {} hash is {}", info, task_hash);
 
+            let task_cache =
+                self.run_cache
+                    .task_cache(task_definition, workspace_dir, info.clone(), "fake");
+
             tasks.push(tokio::spawn(async move {
                 println!(
                     "Executing {info}: {}",
                     command.as_deref().unwrap_or("no script def")
                 );
+                let _task_cache = task_cache;
                 callback.send(Ok(())).unwrap();
             }));
         }
