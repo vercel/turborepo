@@ -220,18 +220,18 @@ impl Run {
 
         let color_selector = ColorSelector::default();
 
-        let _runcache = RunCache::new(
+        let runcache = Arc::new(RunCache::new(
             async_cache,
             &self.base.repo_root,
             &opts.runcache_opts,
             color_selector,
             daemon,
             self.base.ui,
-        );
+        ));
 
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
-        let visitor = Visitor::new(pkg_dep_graph, &opts);
+        let visitor = Visitor::new(pkg_dep_graph, runcache, &opts);
         visitor.visit(engine).await?;
 
         Ok(())
