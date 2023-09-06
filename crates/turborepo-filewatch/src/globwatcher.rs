@@ -527,14 +527,13 @@ mod test {
     async fn test_watch_single_file() {
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
-        let (cookie_dir, _cookie_dir) = temp_dir();
+        let cookie_dir = repo_root.join_component(".git");
 
         let watcher = FileSystemWatcher::new(&repo_root).unwrap();
-        let cookie_watcher = FileSystemWatcher::new(&cookie_dir).unwrap();
         let cookie_jar = CookieJar::new(
             &cookie_dir,
             Duration::from_secs(2),
-            cookie_watcher.subscribe(),
+            watcher.subscribe(),
         );
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
