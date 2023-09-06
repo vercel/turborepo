@@ -67,81 +67,74 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             (ChildLocation::Left, false) | (ChildLocation::Middle, _) => {
                 // the left/middle child has a new child
                 // this means it's a right child of this node
-                {
-                    let mut state = self.state.lock();
-                    if state.following.remove(child_of_child.clone()) {
-                        for (parent, location) in state.bottom_upper.iter() {
-                            parent.remove_child_of_child(
-                                context,
-                                location,
-                                context.is_blue(&child_of_child),
-                                child_of_child,
-                            );
-                        }
-                        for TopRef { parent } in state.top_upper.iter() {
-                            parent.remove_child_of_child(context, child_of_child);
-                        }
-                    }
-                }
-                if self.height == 0 {
-                    add_parent_to_item_ref(context, child_of_child, &self, ChildLocation::Right);
-                } else {
-                    bottom_tree(context, child_of_child, self.height - 1).add_bottom_tree_parent(
-                        context,
-                        &self,
-                        ChildLocation::Right,
-                    );
-                }
+                self.add_child_of_child_inner(context, child_of_child, ChildLocation::Right);
             }
             (ChildLocation::Left, true) => {
                 // the left child has a new child
                 // and the left child is a blue node
                 // this means it's a middle child of this node
-                {
-                    let mut state = self.state.lock();
-                    if state.following.remove(child_of_child.clone()) {
-                        for (parent, location) in state.bottom_upper.iter() {
-                            parent.remove_child_of_child(
-                                context,
-                                location,
-                                context.is_blue(&child_of_child),
-                                child_of_child,
-                            );
-                        }
-                        for TopRef { parent } in state.top_upper.iter() {
-                            parent.remove_child_of_child(context, child_of_child);
-                        }
-                    }
-                }
-                if self.height == 0 {
-                    add_parent_to_item_ref(context, child_of_child, &self, ChildLocation::Middle);
-                } else {
-                    bottom_tree(context, child_of_child, self.height - 1).add_bottom_tree_parent(
-                        context,
-                        &self,
-                        ChildLocation::Middle,
-                    );
-                }
+                self.add_child_of_child_inner(context, child_of_child, ChildLocation::Middle);
             }
             (ChildLocation::Right, _) => {
                 // the right child has a new child
                 // this means we need to propagate the change up
                 // and store them in our own list
-                let mut state = self.state.lock();
-                if state.following.add(child_of_child.clone()) {
-                    for (parent, location) in state.bottom_upper.iter() {
-                        parent.add_child_of_child(
-                            context,
-                            location,
-                            context.is_blue(&child_of_child),
-                            child_of_child,
-                        );
-                    }
-                    for TopRef { parent } in state.top_upper.iter() {
-                        parent.add_child_of_child(context, child_of_child);
-                    }
+                self.add_child_of_child_following(context, child_of_child);
+            }
+        }
+    }
+
+    fn add_child_of_child_following<C: AggregationContext<Info = T, ItemRef = I>>(
+        self: &Arc<Self>,
+        context: &C,
+        child_of_child: &I,
+    ) {
+        let mut bottom_parents = Vec::new();
+        let mut state = self.state.lock();
+        if state.following.add(child_of_child.clone()) {
+            bottom_parents.extend(state.bottom_upper.iter().map(|(p, l)| (p.clone(), l)));
+            for TopRef { parent } in state.top_upper.iter() {
+                parent.add_child_of_child(context, child_of_child);
+            }
+        }
+        drop(state);
+        for (parent, location) in bottom_parents {
+            parent.add_child_of_child(
+                context,
+                location,
+                context.is_blue(&child_of_child),
+                child_of_child,
+            );
+        }
+    }
+
+    fn add_child_of_child_inner<C: AggregationContext<Info = T, ItemRef = I>>(
+        self: &Arc<Self>,
+        context: &C,
+        child_of_child: &I,
+        location: ChildLocation,
+    ) {
+        {
+            let mut state = self.state.lock();
+            if state.following.remove(child_of_child.clone()) {
+                for (parent, location) in state.bottom_upper.iter() {
+                    parent.remove_child_of_child(
+                        context,
+                        location,
+                        context.is_blue(&child_of_child),
+                        child_of_child,
+                    );
+                }
+                for TopRef { parent } in state.top_upper.iter() {
+                    parent.remove_child_of_child(context, child_of_child);
                 }
             }
+        }
+        if self.height == 0 {
+            add_parent_to_item_ref(context, child_of_child, &self, location);
+        } else {
+            bottom_tree(context, child_of_child, self.height - 1)
+                .add_bottom_tree_parent(context, &self, location);
         }
     }
 
