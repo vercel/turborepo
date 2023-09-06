@@ -33,6 +33,7 @@ use {
 
 mod cookie_jar;
 #[cfg(target_os = "macos")]
+#[allow(clippy::all)]
 mod fsevent;
 
 #[cfg(not(target_os = "macos"))]
