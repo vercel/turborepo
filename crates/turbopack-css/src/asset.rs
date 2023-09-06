@@ -240,7 +240,7 @@ impl CssChunkItem for CssModuleChunkItem {
             }
         }
 
-        let result = self.module.process_css().await?;
+        let result = self.module.finalize_css(chunking_context).await?;
 
         if let FinalCssResult::Ok {
             output_code,
