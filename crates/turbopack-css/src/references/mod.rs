@@ -127,6 +127,8 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
         }
 
         u.visit_children(self);
+
+        Ok(())
     }
 }
 
