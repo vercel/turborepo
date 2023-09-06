@@ -26,7 +26,7 @@ use turbopack_core::{
 use crate::{
     chunk::CssImport,
     code_gen::{CodeGenerateable, CodeGeneration},
-    references::{css_resolve, AstPath},
+    references::css_resolve,
 };
 
 #[turbo_tasks::value(into = "new", eq = "manual")]
@@ -124,7 +124,6 @@ impl ImportAttributes {
 pub struct ImportAssetReference {
     pub origin: Vc<Box<dyn ResolveOrigin>>,
     pub request: Vc<Request>,
-    pub path: Vc<AstPath>,
     pub attributes: Vc<ImportAttributes>,
     pub issue_source: Vc<IssueSource>,
 }
@@ -135,14 +134,12 @@ impl ImportAssetReference {
     pub fn new(
         origin: Vc<Box<dyn ResolveOrigin>>,
         request: Vc<Request>,
-        path: Vc<AstPath>,
         attributes: Vc<ImportAttributes>,
         issue_source: Vc<IssueSource>,
     ) -> Vc<Self> {
         Self::cell(ImportAssetReference {
             origin,
             request,
-            path,
             attributes,
             issue_source,
         })
