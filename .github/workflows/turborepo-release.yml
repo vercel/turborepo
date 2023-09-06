@@ -250,6 +250,9 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Setup capnproto
+        uses: ./.github/actions/setup-capnproto
+
       - name: Rust Setup
         uses: actions-rs/toolchain@v1
         with:
