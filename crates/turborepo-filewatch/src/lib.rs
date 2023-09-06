@@ -3,10 +3,11 @@
 use std::{
     fmt::{Debug, Display},
     future::IntoFuture,
+    io,
     path::Path,
     result::Result,
     sync::Arc,
-    time::Duration, io,
+    time::Duration,
 };
 
 // macos -> custom watcher impl in fsevents, no recursive watch, no watching ancestors
@@ -16,7 +17,7 @@ use fsevent::FsEventWatcher;
 use notify::event::EventKind;
 #[cfg(not(target_os = "macos"))]
 use notify::{Config, RecommendedWatcher};
-use notify::{Event, EventHandler, RecursiveMode, Watcher, ErrorKind};
+use notify::{ErrorKind, Event, EventHandler, RecursiveMode, Watcher};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
 use tracing::warn;
@@ -268,11 +269,11 @@ fn manually_add_recursive_watches(
         let dir = dir?;
         if dir.file_type().is_dir() {
             match watcher.watch(dir.path(), RecursiveMode::NonRecursive) {
-                Ok(()) => {},
+                Ok(()) => {}
                 // If we try to watch a non-existent path, we can just skip
                 // it.
                 Err(e) if is_not_found(&e) => continue,
-                Err(e) => return Err(e.into())
+                Err(e) => return Err(e.into()),
             }
         }
         if let Some(sender) = sender.as_ref() {
