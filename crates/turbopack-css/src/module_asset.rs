@@ -158,7 +158,7 @@ impl ModuleCssAsset {
             bail!("inner asset should be CSS parseable");
         };
 
-        let result = inner.process_css().await?;
+        let result = inner.parse_css().await?;
         let mut classes = IndexMap::default();
 
         // TODO(alexkirsz) Should we report an error on parse error here?
