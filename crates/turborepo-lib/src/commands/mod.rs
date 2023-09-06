@@ -22,7 +22,7 @@ pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
 pub(crate) mod prune;
-pub(crate) mod run;
+pub mod run;
 pub(crate) mod unlink;
 
 #[derive(Debug)]

@@ -1687,6 +1687,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "criterion"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2b12d017a929603d80db1831cd3a24082f8137ce19c69e6447f54f5fc8d692f"
+dependencies = [
+ "anes",
+ "cast",
+ "ciborium",
+ "clap 4.1.11",
+ "criterion-plot",
+ "futures",
+ "is-terminal",
+ "itertools",
+ "num-traits",
+ "once_cell",
+ "oorandom",
+ "plotters",
+ "rayon",
+ "regex",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "tinytemplate",
+ "tokio",
+ "walkdir",
+]
+
+[[package]]
 name = "criterion-plot"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9099,7 +9127,7 @@ dependencies = [
  "bitflags 1.3.2",
  "bytes",
  "concurrent-queue",
- "criterion",
+ "criterion 0.4.0",
  "dashmap",
  "dunce",
  "futures",
@@ -9185,7 +9213,7 @@ dependencies = [
  "anyhow",
  "auto-hash-map",
  "concurrent-queue",
- "criterion",
+ "criterion 0.4.0",
  "dashmap",
  "indexmap 1.9.3",
  "lazy_static",
@@ -9236,7 +9264,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-recursion",
- "criterion",
+ "criterion 0.4.0",
  "difference",
  "futures",
  "indexmap 1.9.3",
@@ -9274,7 +9302,7 @@ dependencies = [
  "chromiumoxide",
  "clap 4.1.11",
  "console-subscriber",
- "criterion",
+ "criterion 0.4.0",
  "dunce",
  "futures",
  "mime",
@@ -9378,7 +9406,7 @@ dependencies = [
  "anyhow",
  "clap 4.1.11",
  "console-subscriber",
- "criterion",
+ "criterion 0.4.0",
  "dunce",
  "futures",
  "mime",
@@ -9582,7 +9610,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "criterion",
+ "criterion 0.4.0",
  "futures",
  "indexmap 1.9.3",
  "indoc",
@@ -10008,6 +10036,7 @@ dependencies = [
  "config",
  "console",
  "const_format",
+ "criterion 0.5.1",
  "ctrlc",
  "dialoguer",
  "directories 4.0.1",

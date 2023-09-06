@@ -21,6 +21,7 @@ go-daemon = []
 [dev-dependencies]
 assert_cmd = { workspace = true }
 async-stream = "0.3.4"
+criterion = { version = "0.5.1", features = ["async_tokio"] }
 itertools = { workspace = true }
 port_scanner = { workspace = true }
 pretty_assertions = { workspace = true }
@@ -124,3 +125,7 @@ async-io = "1.12.0"
 [build-dependencies]
 capnpc = "0.17.2"
 tonic-build = "0.8.4"
+
+[[bench]]
+name = "hashes"
+harness = false
