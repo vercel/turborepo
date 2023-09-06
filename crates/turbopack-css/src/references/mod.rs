@@ -92,17 +92,17 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                     self.origin,
                     Request::parse(Value::new(src.to_string().into())),
                     ImportAttributes::new_from_prelude(i).into(),
-                    Vc::cell(IssueSource {
-                        source: Vc::upcast(self.source),
-                        start: SourcePos {
+                    IssueSource::new(
+                        Vc::upcast(self.source),
+                        SourcePos {
                             line: issue_span.line as _,
                             column: issue_span.column as _,
                         },
-                        end: SourcePos {
+                        SourcePos {
                             line: issue_span.line as _,
                             column: issue_span.column as _,
                         },
-                    }),
+                    ),
                 )));
 
                 self.is_import = true;
@@ -130,17 +130,17 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
             let vc = UrlAssetReference::new(
                 self.origin,
                 Request::parse(Value::new(src.to_string().into())),
-                Vc::cell(IssueSource {
-                    source: Vc::upcast(self.source),
-                    start: SourcePos {
+                IssueSource::new(
+                    Vc::upcast(self.source),
+                    SourcePos {
                         line: issue_span.line as _,
                         column: issue_span.column as _,
                     },
-                    end: SourcePos {
+                    SourcePos {
                         line: issue_span.line as _,
                         column: issue_span.column as _,
                     },
-                }),
+                ),
             );
 
             self.references.push(Vc::upcast(vc));
