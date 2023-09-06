@@ -9,7 +9,6 @@ pub mod request;
 pub(crate) mod resolve;
 pub mod route_tree;
 pub mod router;
-pub mod source_maps;
 pub mod static_assets;
 pub mod wrapping_source;
 
@@ -420,7 +419,7 @@ pub trait ContentSource {
     }
 }
 
-pub trait ContentSourceExt {
+pub trait ContentSourceExt: Send {
     fn issue_file_path(
         self: Vc<Self>,
         file_path: Vc<FileSystemPath>,

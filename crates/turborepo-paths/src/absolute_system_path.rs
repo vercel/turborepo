@@ -8,7 +8,7 @@ use std::{
     fmt,
     fs::{File, Metadata, OpenOptions, Permissions},
     io,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
@@ -19,6 +19,16 @@ use wax::CandidatePath;
 use crate::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPath,
 };
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum PathRelation {
+    // e.g. /a/b vs /a/c
+    Divergent,
+    // e.g. /a vs /a/b
+    Parent,
+    // e.g. /a/b vs /a
+    Child,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct AbsoluteSystemPath(Utf8Path);
@@ -80,24 +90,23 @@ impl AbsoluteSystemPath {
     /// }
     /// ```
     pub fn new<P: AsRef<str> + ?Sized>(value: &P) -> Result<&Self, PathError> {
-        let path = value.as_ref();
-        if Path::new(path).is_relative() {
-            return Err(PathError::NotAbsolute(path.to_owned()));
-        }
-
-        Ok(Self::new_unchecked(path))
+        let path: &Utf8Path = value.as_ref().into();
+        Self::from_utf8_path(path)
     }
 
     pub fn from_std_path(path: &Path) -> Result<&Self, PathError> {
-        let path_str = path
-            .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
-
-        Self::new(path_str)
+        let path: &Utf8Path = path.try_into()?;
+        Self::from_utf8_path(path)
     }
 
-    pub(crate) fn new_unchecked<'a>(path: impl AsRef<str> + 'a) -> &'a Self {
-        let path = Utf8Path::new(path.as_ref());
+    fn from_utf8_path(path: &Utf8Path) -> Result<&Self, PathError> {
+        if path.is_relative() {
+            return Err(PathError::NotAbsolute(path.to_string()));
+        }
+        Ok(Self::new_unchecked(path))
+    }
+
+    pub(crate) fn new_unchecked(path: &Utf8Path) -> &Self {
         unsafe { &*(path as *const Utf8Path as *const Self) }
     }
 
@@ -157,6 +166,10 @@ impl AbsoluteSystemPath {
         fs::remove_dir_all(&self.0)
     }
 
+    pub fn rename(&self, other: &Self) -> Result<(), io::Error> {
+        fs::rename(&self.0, &other.0)
+    }
+
     pub fn extension(&self) -> Option<&str> {
         self.0.extension()
     }
@@ -187,6 +200,10 @@ impl AbsoluteSystemPath {
                 .try_into()
                 .unwrap(),
         )
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
     }
 
     pub fn join_unix_path(
@@ -265,6 +282,10 @@ impl AbsoluteSystemPath {
         fs::remove_file(&self.0)
     }
 
+    pub fn remove_dir(&self) -> Result<(), io::Error> {
+        fs::remove_dir(&self.0)
+    }
+
     pub fn components(&self) -> Utf8Components<'_> {
         self.0.components()
     }
@@ -297,6 +318,7 @@ impl AbsoluteSystemPath {
             .expect("collapsed path should be absolute")
     }
 
+    // TODO: consider consolidating with `relation_to_path` below
     pub fn contains(&self, other: &Self) -> bool {
         // On windows, trying to get a relative path between files on different volumes
         // is an error. We don't care about the error, it's good enough for us to say
@@ -309,6 +331,34 @@ impl AbsoluteSystemPath {
         let other = other.collapse();
         let rel = AnchoredSystemPathBuf::relative_path_between(&this, &other);
         rel.components().next() != Some(Utf8Component::ParentDir)
+    }
+
+    /// relation_to_path does a lexical comparison of path components to
+    /// determine how this path relates to the given path. In the event that
+    /// the paths are the same, we return `Parent`, much the way that `contains`
+    /// would return `true`.
+    pub fn relation_to_path(&self, other: &Self) -> PathRelation {
+        let mut self_components = self.components();
+        let mut other_components = other.components();
+        loop {
+            match (self_components.next(), other_components.next()) {
+                // Non-matching component, the paths diverge
+                (Some(self_component), Some(other_component))
+                    if self_component != other_component =>
+                {
+                    return PathRelation::Divergent
+                }
+                // A matching component, continue iterating
+                (Some(_), Some(_)) => {}
+                // We've reached the end of a possible parent without hitting a
+                // non-matching component. Return Parent.
+                (None, _) => return PathRelation::Parent,
+                // We've hit the end of the other path without hitting the
+                // end of this path. Since we haven't hit a non-matching component,
+                // our path must be a child
+                (_, None) => return PathRelation::Child,
+            }
+        }
     }
 
     pub fn parent(&self) -> Option<&AbsoluteSystemPath> {
@@ -362,8 +412,46 @@ impl<'a> From<&'a AbsoluteSystemPath> for CandidatePath<'a> {
     }
 }
 
+impl PartialEq<AbsoluteSystemPath> for Path {
+    fn eq(&self, other: &AbsoluteSystemPath) -> bool {
+        Utf8Path::from_path(self)
+            .map(|path| &other.0 == path)
+            .unwrap_or(false)
+    }
+}
+
+impl PartialEq<AbsoluteSystemPath> for PathBuf {
+    fn eq(&self, other: &AbsoluteSystemPath) -> bool {
+        self.as_path().eq(other)
+    }
+}
+
+impl PartialEq<&AbsoluteSystemPath> for Path {
+    fn eq(&self, other: &&AbsoluteSystemPath) -> bool {
+        Utf8Path::from_path(self)
+            .map(|path| &other.0 == path)
+            .unwrap_or(false)
+    }
+}
+
+impl PartialEq<&AbsoluteSystemPath> for PathBuf {
+    fn eq(&self, other: &&AbsoluteSystemPath) -> bool {
+        self.as_path().eq(other)
+    }
+}
+
+impl<'a> TryFrom<&'a Path> for &'a AbsoluteSystemPath {
+    type Error = PathError;
+
+    fn try_from(value: &'a Path) -> Result<Self, Self::Error> {
+        AbsoluteSystemPath::from_std_path(value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use anyhow::Result;
     use tempdir::TempDir;
     use test_case::test_case;
@@ -488,5 +576,30 @@ mod tests {
 
             Ok(())
         }
+    }
+
+    #[test_case(&["a", "b"], &["a", "b"], PathRelation::Parent ; "equal paths return parent")]
+    #[test_case(&["a"], &["a", "b"], PathRelation::Parent ; "a is a parent of a/b")]
+    #[test_case(&["a", "b"], &["a"], PathRelation::Child ; "a/b is a child of a")]
+    #[test_case(&["a", "b"], &["a", "c"], PathRelation::Divergent ; "a/b and a/c are divergent")]
+    fn test_path_relation(
+        abs_path_components: &[&str],
+        other_components: &[&str],
+        expected: PathRelation,
+    ) {
+        #[cfg(windows)]
+        let root = "C:\\";
+        #[cfg(not(windows))]
+        let root = "/";
+
+        let abs_path = AbsoluteSystemPathBuf::try_from(root)
+            .unwrap()
+            .join_components(abs_path_components);
+        let other_path = AbsoluteSystemPathBuf::try_from(root)
+            .unwrap()
+            .join_components(other_components);
+
+        let relation = abs_path.relation_to_path(&other_path);
+        assert_eq!(relation, expected);
     }
 }

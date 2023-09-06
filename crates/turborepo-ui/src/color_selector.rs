@@ -1,10 +1,9 @@
 use std::{
-    borrow::Cow,
     collections::HashMap,
     sync::{Arc, OnceLock, RwLock},
 };
 
-use console::Style;
+use console::{Style, StyledObject};
 
 static COLORS: OnceLock<[Style; 5]> = OnceLock::new();
 
@@ -49,13 +48,13 @@ impl ColorSelector {
         color
     }
 
-    pub fn prefix_with_color(&self, cache_key: &str, prefix: &str) -> Cow<'static, str> {
+    pub fn prefix_with_color(&self, cache_key: &str, prefix: &str) -> StyledObject<String> {
         if prefix.is_empty() {
-            return "".into();
+            return Style::new().apply_to(String::new());
         }
 
         let style = self.color_for_key(cache_key);
-        style.apply_to(format!("{}: ", prefix)).to_string().into()
+        style.apply_to(format!("{}: ", prefix))
     }
 }
 

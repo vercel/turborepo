@@ -1083,7 +1083,11 @@ function createModuleHot(moduleId, hotData) {
         status: ()=>"idle",
         // NOTE(alexkirsz) Since we always return "idle" for now, these are no-ops.
         addStatusHandler: (_handler)=>{},
-        removeStatusHandler: (_handler)=>{}
+        removeStatusHandler: (_handler)=>{},
+        // NOTE(jridgewell) Check returns the list of updated modules, but we don't
+        // want the webpack code paths to ever update (the turbopack paths handle
+        // this already).
+        check: ()=>Promise.resolve(null)
     };
     return {
         hot,
@@ -1457,8 +1461,8 @@ async function loadWebAssemblyModule(_source1, wasmChunkPath1) {
     }
 })();
 function _eval({ code, url, map }) {
-    code += `\n\n//# sourceURL=${location.origin}/${url}`;
-    if (map) code += `\n//# sourceMappingURL=${map}`;
+    code += `\n\n//# sourceURL=${location.origin}/${CHUNK_BASE_PATH}${url}`;
+    if (map) code += `\n//# sourceMappingURL=${location.origin}/${CHUNK_BASE_PATH}${map}`;
     return eval(code);
 }
 const chunksToRegister = globalThis.TURBOPACK;

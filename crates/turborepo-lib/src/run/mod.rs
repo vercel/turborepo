@@ -126,29 +126,16 @@ impl Run {
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
-        let _global_hash_inputs = get_global_hash_inputs(
-            &self.base.ui,
-            &self.base.repo_root,
-            pkg_dep_graph.root_package_json(),
-            pkg_dep_graph.package_manager(),
-            pkg_dep_graph.lockfile(),
-            // TODO: Fill in these vec![] once turbo.json is ported
-            vec![],
-            &env_at_execution_start,
-            vec![],
-            vec![],
-            opts.run_opts.env_mode,
-            opts.run_opts.framework_inference,
-            vec![],
-        )?;
-
-        let team_id = self.base.repo_config()?.team_id();
+        let repo_config = self.base.repo_config()?;
+        let team_id = repo_config.team_id();
+        let team_slug = repo_config.team_slug();
 
         let token = self.base.user_config()?.token();
 
         let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
             team_id: team_id.to_string(),
             token: token.to_string(),
+            team_slug: team_slug.map(|s| s.to_string()),
         });
 
         let async_cache = AsyncCache::new(
@@ -208,6 +195,28 @@ impl Run {
             }
             return Ok(());
         }
+
+        let root_workspace = pkg_dep_graph
+            .workspace_info(&WorkspaceName::Root)
+            .expect("must have root workspace");
+
+        let global_hash_inputs = get_global_hash_inputs(
+            root_workspace,
+            &self.base.repo_root,
+            pkg_dep_graph.package_manager(),
+            pkg_dep_graph.lockfile(),
+            root_turbo_json.global_deps,
+            &env_at_execution_start,
+            root_turbo_json.global_env,
+            root_turbo_json.global_pass_through_env,
+            opts.run_opts.env_mode,
+            opts.run_opts.framework_inference,
+            root_turbo_json.global_dot_env,
+        )?;
+
+        let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
+
+        debug!("global hash: {}", global_hash);
 
         let color_selector = ColorSelector::default();
 

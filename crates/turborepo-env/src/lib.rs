@@ -24,6 +24,22 @@ pub enum Error {
 #[serde(transparent)]
 pub struct EnvironmentVariableMap(HashMap<String, String>);
 
+impl EnvironmentVariableMap {
+    pub fn to_hashable(&self) -> EnvironmentVariablePairs {
+        let mut list: Vec<_> = self.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
+        list.sort();
+
+        list
+    }
+
+    pub fn names(&self) -> Vec<String> {
+        let mut names: Vec<_> = self.keys().cloned().collect();
+        names.sort();
+
+        names
+    }
+}
+
 // BySource contains a map of environment variables broken down by the source
 #[derive(Debug, Serialize)]
 pub struct BySource {
@@ -39,6 +55,9 @@ pub struct DetailedMap {
     pub all: EnvironmentVariableMap,
     pub by_source: BySource,
 }
+
+// A list of "k=v" strings for env variables and their values
+pub type EnvironmentVariablePairs = Vec<String>;
 
 // WildcardMaps is a pair of EnvironmentVariableMaps.
 #[derive(Debug)]
@@ -221,7 +240,7 @@ fn wildcard_to_regex_pattern(pattern: &str) -> String {
 }
 
 pub fn get_global_hashable_env_vars(
-    env_at_execution_start: EnvironmentVariableMap,
+    env_at_execution_start: &EnvironmentVariableMap,
     global_env: &[String],
 ) -> Result<DetailedMap, Error> {
     let default_env_var_map = env_at_execution_start.from_wildcards(&DEFAULT_ENV_VARS[..])?;
