@@ -64,7 +64,7 @@ pub enum FinalCssResult {
         #[turbo_tasks(trace_ignore)]
         dependencies: Option<Vec<Dependency>>,
 
-        source_map: Vc<ProcessCssResultSourceMap>,
+        source_map: Vc<ParseCssResultSourceMap>,
     },
     Unparseable,
     NotFound,
@@ -118,7 +118,7 @@ pub async fn finalize_css(
                 output_code: result.code,
                 dependencies: result.dependencies,
                 exports: result.exports,
-                source_map: ProcessCssResultSourceMap::new(srcmap).cell(),
+                source_map: ParseCssResultSourceMap::new(srcmap).cell(),
             }
             .into())
         }
@@ -211,25 +211,25 @@ async fn process_content(
 }
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
-pub struct ProcessCssResultSourceMap {
+pub struct ParseCssResultSourceMap {
     #[turbo_tasks(debug_ignore, trace_ignore)]
     source_map: parcel_sourcemap::SourceMap,
 }
 
-impl PartialEq for ProcessCssResultSourceMap {
+impl PartialEq for ParseCssResultSourceMap {
     fn eq(&self, other: &Self) -> bool {
         false
     }
 }
 
-impl ProcessCssResultSourceMap {
+impl ParseCssResultSourceMap {
     pub fn new(source_map: parcel_sourcemap::SourceMap) -> Self {
-        ProcessCssResultSourceMap { source_map }
+        ParseCssResultSourceMap { source_map }
     }
 }
 
 #[turbo_tasks::value_impl]
-impl GenerateSourceMap for ProcessCssResultSourceMap {
+impl GenerateSourceMap for ParseCssResultSourceMap {
     #[turbo_tasks::function]
     fn generate_source_map(&self) -> Vc<OptionSourceMap> {
         let mut builder = SourceMapBuilder::new(None);
