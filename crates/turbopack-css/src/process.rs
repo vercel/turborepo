@@ -30,6 +30,23 @@ use crate::{
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 pub enum ProcessCssResult {
     Ok {
+        stylesheet: StyleSheet<'static, 'static>,
+
+        references: Vc<ModuleReferences>,
+    },
+    Unparseable,
+    NotFound,
+}
+
+impl PartialEq for ProcessCssResult {
+    fn eq(&self, other: &Self) -> bool {
+        false
+    }
+}
+
+#[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
+pub enum FinalCssResult {
+    Ok {
         #[turbo_tasks(trace_ignore)]
         output_code: String,
 
@@ -39,17 +56,56 @@ pub enum ProcessCssResult {
         #[turbo_tasks(trace_ignore)]
         dependencies: Option<Vec<Dependency>>,
 
-        references: Vc<ModuleReferences>,
-
         source_map: Vc<ProcessCssResultSourceMap>,
     },
     Unparseable,
     NotFound,
 }
 
-impl PartialEq for ProcessCssResult {
+impl PartialEq for FinalCssResult {
     fn eq(&self, other: &Self) -> bool {
         false
+    }
+}
+
+#[turbo_tasks::function]
+pub async fn finalize_css(result: Vc<ProcessCssResult>) -> Result<Vc<FinalCssResult>> {
+    let result = result.await?;
+    match &*result {
+        ProcessCssResult::Ok {
+            stylesheet,
+            references,
+        } => {
+            {
+                let mut url_map = HashMap::new();
+
+                for (src, reference) in url_references {
+                    let resolved = resolve_url_reference(reference).await?;
+                    url_map.insert(src, resolved.as_ref().cloned());
+                }
+
+                replace_url_references(&mut stylesheet, &url_map);
+            }
+
+            let mut srcmap = parcel_sourcemap::SourceMap::new("");
+            let result = stylesheet.to_css(PrinterOptions {
+                source_map: Some(&mut srcmap),
+                analyze_dependencies: Some(DependencyOptions {
+                    remove_imports: true,
+                }),
+                ..Default::default()
+            })?;
+
+            Ok(FinalCssResult::Ok {
+                output_code: result.code,
+                dependencies: result.dependencies,
+                exports: result.exports,
+                source_map: ProcessCssResultSourceMap::new(srcmap).cell(),
+            }
+            .into())
+        }
+        ProcessCssResult::Unparseable => Ok(FinalCssResult::Unparseable.into()),
+        ProcessCssResult::NotFound => Ok(FinalCssResult::NotFound.into()),
     }
 }
 
@@ -123,32 +179,9 @@ async fn process_content(
 
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
 
-    {
-        let mut url_map = HashMap::new();
-
-        for (src, reference) in url_references {
-            let resolved = resolve_url_reference(reference).await?;
-            url_map.insert(src, resolved.as_ref().cloned());
-        }
-
-        replace_url_references(&mut stylesheet, &url_map);
-    }
-
-    let mut srcmap = parcel_sourcemap::SourceMap::new("");
-    let result = stylesheet.to_css(PrinterOptions {
-        source_map: Some(&mut srcmap),
-        analyze_dependencies: Some(DependencyOptions {
-            remove_imports: true,
-        }),
-        ..Default::default()
-    })?;
-
     Ok(ProcessCssResult::Ok {
-        output_code: result.code,
-        dependencies: result.dependencies,
-        exports: result.exports,
+        stylesheet,
         references: Vc::cell(references),
-        source_map: ProcessCssResultSourceMap::new(srcmap).cell(),
     }
     .into())
 }
