@@ -15,7 +15,7 @@ use turbopack_core::{
 use crate::{
     chunk::{CssChunkItem, CssChunkItemContent, CssChunkPlaceable, CssChunkType, CssImport},
     code_gen::CodeGenerateable,
-    process::{process_css, FinalCssResult, ProcessCss, ProcessCssResult},
+    process::{finalize_css, process_css, FinalCssResult, ProcessCss, ProcessCssResult},
     references::{compose::CssModuleComposeReference, import::ImportAssetReference},
     CssModuleAssetType,
 };
@@ -65,8 +65,13 @@ impl ProcessCss for CssModuleAsset {
     }
 
     #[turbo_tasks::function]
-    async fn finalize_css(self: Vc<Self>) -> Result<Vc<FinalCssResult>> {
-        let this = self.await?;
+    async fn finalize_css(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Result<Vc<FinalCssResult>> {
+        let parse_result = self.process_css();
+
+        Ok(finalize_css(parse_result, chunking_context))
     }
 }
 

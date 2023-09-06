@@ -12,6 +12,7 @@ use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
+    chunk::ChunkingContext,
     reference::ModuleReferences,
     resolve::origin::ResolveOrigin,
     source::Source,
@@ -69,7 +70,10 @@ impl PartialEq for FinalCssResult {
 }
 
 #[turbo_tasks::function]
-pub async fn finalize_css(result: Vc<ProcessCssResult>) -> Result<Vc<FinalCssResult>> {
+pub async fn finalize_css(
+    result: Vc<ProcessCssResult>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
+) -> Result<Vc<FinalCssResult>> {
     let result = result.await?;
     match &*result {
         ProcessCssResult::Ok {
@@ -80,8 +84,10 @@ pub async fn finalize_css(result: Vc<ProcessCssResult>) -> Result<Vc<FinalCssRes
                 let mut url_map = HashMap::new();
 
                 for (src, reference) in url_references {
-                    let resolved = resolve_url_reference(reference).await?;
-                    url_map.insert(src, resolved.as_ref().cloned());
+                    let resolved = resolve_url_reference(reference, chunking_context).await?;
+                    if let Some(v) = resolved.as_ref().cloned() {
+                        url_map.insert(src, v);
+                    }
                 }
 
                 replace_url_references(&mut stylesheet, &url_map);
@@ -112,6 +118,11 @@ pub async fn finalize_css(result: Vc<ProcessCssResult>) -> Result<Vc<FinalCssRes
 #[turbo_tasks::value_trait]
 pub trait ProcessCss {
     async fn process_css(self: Vc<Self>) -> Result<Vc<ProcessCssResult>>;
+
+    async fn finalize_css(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Result<Vc<FinalCssResult>>;
 }
 
 #[turbo_tasks::function]
