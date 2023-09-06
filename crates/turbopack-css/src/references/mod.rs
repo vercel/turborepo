@@ -49,7 +49,7 @@ struct ModuleReferencesVisitor<'a> {
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
     references: &'a mut Vec<Vc<Box<dyn ModuleReference>>>,
-    urls: &'a mut Vec<Vc<(String, Box<dyn ModuleReference>)>>,
+    urls: &'a mut Vec<(String, Vc<Box<dyn ModuleReference>>)>,
     is_import: bool,
 }
 
@@ -58,7 +58,7 @@ impl<'a> ModuleReferencesVisitor<'a> {
         source: Vc<Box<dyn Source>>,
         origin: Vc<Box<dyn ResolveOrigin>>,
         references: &'a mut Vec<Vc<Box<dyn ModuleReference>>>,
-        urls: &'a mut Vec<Vc<(String, Box<dyn ModuleReference>)>>,
+        urls: &'a mut Vec<(String, Vc<Box<dyn ModuleReference>>)>,
     ) -> Self {
         Self {
             source,
@@ -115,16 +115,18 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
         if !matches!(src.bytes().next(), Some(b'#') | Some(b'/')) {
             let issue_span = u.span;
 
-            u.url = "";
-            self.references.push(Vc::upcast(UrlAssetReference::new(
-                self.origin,
-                Request::parse(Value::new(src.to_string().into())),
-                IssueSource::from_byte_offset(
-                    Vc::upcast(self.source),
-                    issue_span.lo.to_usize(),
-                    issue_span.hi.to_usize(),
-                ),
-            )));
+            self.urls.push((
+                u.url.to_string(),
+                Vc::upcast(UrlAssetReference::new(
+                    self.origin,
+                    Request::parse(Value::new(src.to_string().into())),
+                    IssueSource::from_byte_offset(
+                        Vc::upcast(self.source),
+                        issue_span.lo.to_usize(),
+                        issue_span.hi.to_usize(),
+                    ),
+                )),
+            ))
         }
 
         u.visit_children(self);
