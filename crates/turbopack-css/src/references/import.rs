@@ -4,8 +4,12 @@ use lightningcss::{
     printer::Printer,
     properties::custom::TokenList,
     rules::{
-        import::ImportRule, layer::LayerName, supports::SupportsCondition, unknown::UnknownAtRule,
-        CssRule,
+        import::ImportRule,
+        layer::{LayerName, LayerStatementRule},
+        media::MediaRule,
+        supports::{SupportsCondition, SupportsRule},
+        unknown::UnknownAtRule,
+        CssRule, CssRuleList, Location,
     },
     stylesheet::PrinterOptions,
     traits::ToCss,
@@ -67,22 +71,40 @@ impl ImportAttributes {
         //         },
         //     )))],
         // })
-        let mut rule = CssRule::Unknown(UnknownAtRule {
+
+        let default_loc = Location {
+            source_index: 0,
+            line: 0,
+            column: 0,
+        };
+
+        let mut rule: CssRule = CssRule::Unknown(UnknownAtRule {
             name: "".into(),
             prelude: TokenList(vec![]),
             block: None,
-            loc: Default::default(),
+            loc: default_loc,
         });
 
-        if let Some(media) = &self.media {
-            rule = CssRule::Media(media.clone())
+        if !self.media.media_queries.is_empty() {
+            rule = CssRule::Media(MediaRule {
+                query: self.media.clone(),
+                rules: CssRuleList(vec![rule]),
+                loc: default_loc,
+            })
         }
 
         if let Some(supports) = &self.supports {
-            rule = CssRule::Supports(supports.clone())
+            rule = CssRule::Supports(SupportsRule {
+                condition: supports.clone(),
+                rules: CssRuleList(vec![rule]),
+                loc: default_loc,
+            })
         }
         if let Some(layer_name) = &self.layer_name {
-            rule = CssRule::LayerStatement(layer_name.clone());
+            rule = CssRule::LayerStatement(LayerStatementRule {
+                names: vec![layer_name.clone()],
+                loc: default_loc,
+            });
         }
 
         let mut output = String::new();
