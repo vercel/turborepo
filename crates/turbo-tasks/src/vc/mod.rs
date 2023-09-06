@@ -459,11 +459,11 @@ impl<T> CollectiblesSource for Vc<T>
 where
     T: ?Sized + Send,
 {
-    fn take_collectibles<Vt: VcValueTrait>(self) -> AutoSet<Vc<Vt>> {
+    fn take_collectibles<Vt: VcValueTrait + Send>(self) -> AutoSet<Vc<Vt>> {
         self.node.take_collectibles()
     }
 
-    fn peek_collectibles<Vt: VcValueTrait>(self) -> AutoSet<Vc<Vt>> {
+    fn peek_collectibles<Vt: VcValueTrait + Send>(self) -> AutoSet<Vc<Vt>> {
         self.node.peek_collectibles()
     }
 }

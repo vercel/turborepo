@@ -233,7 +233,7 @@ impl RawVc {
 }
 
 impl CollectiblesSource for RawVc {
-    fn peek_collectibles<T: VcValueTrait>(self) -> AutoSet<Vc<T>> {
+    fn peek_collectibles<T: VcValueTrait + Send>(self) -> AutoSet<Vc<T>> {
         let tt = turbo_tasks();
         tt.notify_scheduled_tasks();
         let map = tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
@@ -243,7 +243,7 @@ impl CollectiblesSource for RawVc {
             .collect()
     }
 
-    fn take_collectibles<T: VcValueTrait>(self) -> AutoSet<Vc<T>> {
+    fn take_collectibles<T: VcValueTrait + Send>(self) -> AutoSet<Vc<T>> {
         let tt = turbo_tasks();
         tt.notify_scheduled_tasks();
         let map = tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
