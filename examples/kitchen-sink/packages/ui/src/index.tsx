@@ -1,3 +1,2 @@
-import * as React from "react";
-export { NewTabLink } from "./NewTabLink";
+export { Link } from "./Link";
 export { CounterButton } from "./CounterButton";
