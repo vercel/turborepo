@@ -32,7 +32,7 @@ pub(crate) mod import;
 pub(crate) mod internal;
 pub(crate) mod url;
 
-/// Returns `(imports, urls)`.
+/// Returns `(all_references, urls)`.
 pub fn analyze_references(
     stylesheet: &mut StyleSheet<'static, 'static>,
     source: Vc<Box<dyn Source>>,
@@ -85,7 +85,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
             CssRule::Import(i) => {
                 let src = &*i.url;
 
-                let issue_span = i.href.span();
+                let issue_span = i.loc;
 
                 self.references.push(Vc::upcast(ImportAssetReference::new(
                     self.origin,
@@ -118,20 +118,20 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
         // ignore internal urls like `url(#noiseFilter)`
         // ignore server-relative urls like `url(/foo)`
         if !matches!(src.bytes().next(), Some(b'#') | Some(b'/')) {
-            let issue_span = u.span;
+            let issue_span = u.loc;
 
-            self.urls.push((
-                u.url.to_string(),
-                Vc::upcast(UrlAssetReference::new(
-                    self.origin,
-                    Request::parse(Value::new(src.to_string().into())),
-                    IssueSource::from_byte_offset(
-                        Vc::upcast(self.source),
-                        issue_span.lo.to_usize(),
-                        issue_span.hi.to_usize(),
-                    ),
-                )),
-            ))
+            let vc = UrlAssetReference::new(
+                self.origin,
+                Request::parse(Value::new(src.to_string().into())),
+                IssueSource::from_byte_offset(
+                    Vc::upcast(self.source),
+                    issue_span.lo.to_usize(),
+                    issue_span.hi.to_usize(),
+                ),
+            );
+
+            self.references.push(Vc::upcast(vc));
+            self.urls.push((u.url.to_string(), Vc::upcast(vc)))
         }
 
         u.visit_children(self);
