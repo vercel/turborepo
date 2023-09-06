@@ -39,7 +39,7 @@ pub fn analyze_references(
     origin: Vc<Box<dyn ResolveOrigin>>,
 ) -> Result<(
     Vec<Vc<Box<dyn ModuleReference>>>,
-    Vec<(String, Vc<Box<dyn ModuleReference>>)>,
+    Vec<(String, Vc<UrlAssetReference>)>,
 )> {
     let mut references = Vec::new();
     let mut urls = Vec::new();
@@ -54,7 +54,7 @@ struct ModuleReferencesVisitor<'a> {
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
     references: &'a mut Vec<Vc<Box<dyn ModuleReference>>>,
-    urls: &'a mut Vec<(String, Vc<Box<dyn ModuleReference>>)>,
+    urls: &'a mut Vec<(String, Vc<UrlAssetReference>)>,
     is_import: bool,
 }
 
@@ -63,7 +63,7 @@ impl<'a> ModuleReferencesVisitor<'a> {
         source: Vc<Box<dyn Source>>,
         origin: Vc<Box<dyn ResolveOrigin>>,
         references: &'a mut Vec<Vc<Box<dyn ModuleReference>>>,
-        urls: &'a mut Vec<(String, Vc<Box<dyn ModuleReference>>)>,
+        urls: &'a mut Vec<(String, Vc<UrlAssetReference>)>,
     ) -> Self {
         Self {
             source,
@@ -131,7 +131,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
             );
 
             self.references.push(Vc::upcast(vc));
-            self.urls.push((u.url.to_string(), Vc::upcast(vc)))
+            self.urls.push((u.url.to_string(), vc));
         }
 
         u.visit_children(self);

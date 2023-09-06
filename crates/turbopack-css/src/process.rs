@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use lightningcss::{
     css_modules::{CssModuleExports, Pattern, Segment},
@@ -17,7 +19,12 @@ use turbopack_core::{
 };
 
 use crate::{
-    lifetime_util::stylesheet_into_static, references::analyze_references, CssModuleAssetType,
+    lifetime_util::stylesheet_into_static,
+    references::{
+        analyze_references,
+        url::{replace_url_references, resolve_url_reference},
+    },
+    CssModuleAssetType,
 };
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
@@ -115,6 +122,17 @@ async fn process_content(
     let mut stylesheet = stylesheet_into_static(stylesheet);
 
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
+
+    {
+        let mut url_map = HashMap::new();
+
+        for (src, reference) in url_references {
+            let resolved = resolve_url_reference(reference).await?;
+            url_map.insert(src, resolved.as_ref().cloned());
+        }
+
+        replace_url_references(&mut stylesheet, &url_map);
+    }
 
     let mut srcmap = parcel_sourcemap::SourceMap::new("");
     let result = stylesheet.to_css(PrinterOptions {
