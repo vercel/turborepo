@@ -121,7 +121,7 @@ pub async fn resolve_url_reference(
     Ok(Vc::cell(None))
 }
 
-pub fn replace_asset_references(
+pub fn replace_url_references(
     ss: &mut StyleSheet<'static, 'static>,
     urls: &HashMap<String, String>,
 ) {
