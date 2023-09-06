@@ -15,7 +15,7 @@ use turbopack_core::{
 use crate::{
     chunk::{CssChunkItem, CssChunkItemContent, CssChunkPlaceable, CssChunkType, CssImport},
     code_gen::CodeGenerateable,
-    process::{finalize_css, parse_css, FinalCssResult, ProcessCss, ProcessCssResult},
+    process::{finalize_css, parse_css, FinalCssResult, ParseCssResult, ProcessCss},
     references::{compose::CssModuleComposeReference, import::ImportAssetReference},
     CssModuleAssetType,
 };
@@ -59,7 +59,7 @@ impl CssModuleAsset {
 #[turbo_tasks::value_impl]
 impl ProcessCss for CssModuleAsset {
     #[turbo_tasks::function]
-    async fn parse_css(self: Vc<Self>) -> Result<Vc<ProcessCssResult>> {
+    async fn parse_css(self: Vc<Self>) -> Result<Vc<ParseCssResult>> {
         let this = self.await?;
         Ok(parse_css(this.source, Vc::upcast(self), this.ty))
     }
@@ -91,9 +91,9 @@ impl Module for CssModuleAsset {
         // TODO: include CSS source map
 
         match &*result {
-            ProcessCssResult::Ok { references, .. } => Ok(references.clone()),
-            ProcessCssResult::Unparseable => Ok(ModuleReferences::empty()),
-            ProcessCssResult::NotFound => Ok(ModuleReferences::empty()),
+            ParseCssResult::Ok { references, .. } => Ok(references.clone()),
+            ParseCssResult::Unparseable => Ok(ModuleReferences::empty()),
+            ParseCssResult::NotFound => Ok(ModuleReferences::empty()),
         }
     }
 }
