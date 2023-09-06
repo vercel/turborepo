@@ -129,7 +129,7 @@ pub async fn finalize_css(
 
 #[turbo_tasks::value_trait]
 pub trait ProcessCss {
-    async fn process_css(self: Vc<Self>) -> Result<Vc<ProcessCssResult>>;
+    async fn parse_css(self: Vc<Self>) -> Result<Vc<ProcessCssResult>>;
 
     async fn finalize_css(
         self: Vc<Self>,
@@ -138,7 +138,7 @@ pub trait ProcessCss {
 }
 
 #[turbo_tasks::function]
-pub async fn process_css(
+pub async fn parse_css(
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
     ty: CssModuleAssetType,
