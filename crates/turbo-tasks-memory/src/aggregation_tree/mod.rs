@@ -30,7 +30,6 @@ mod leaf;
 #[cfg(test)]
 mod tests;
 mod top_tree;
-mod upper_map;
 
 use std::{borrow::Cow, hash::Hash, ops::ControlFlow, sync::Arc};
 
@@ -53,7 +52,7 @@ pub trait AggregationContext {
     type RootInfo;
     type RootInfoType;
 
-    fn is_blue(&self, reference: &Self::ItemRef) -> bool;
+    fn hash(&self, reference: &Self::ItemRef) -> u32;
     fn item(&self, reference: &Self::ItemRef) -> Self::ItemLock<'_>;
 
     fn apply_change(
@@ -97,7 +96,7 @@ pub trait AggregationItemLock {
         Self: 'a;
     fn leaf(&mut self) -> &mut AggregationTreeLeaf<Self::Info, Self::ItemRef>;
     fn children(&self) -> Self::ChildrenIter<'_>;
-    fn is_blue(&self) -> bool;
+    fn hash(&self) -> u32;
     fn get_remove_change(&self) -> Option<Self::ItemChange>;
     fn get_add_change(&self) -> Option<Self::ItemChange>;
 }

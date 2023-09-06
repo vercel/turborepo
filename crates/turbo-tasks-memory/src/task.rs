@@ -79,7 +79,7 @@ enum TaskType {
     /// A normal persistent task
     Persistent {
         ty: Arc<PersistentTaskType>,
-        blue: bool,
+        aggregation_hash: u32,
     },
 }
 
@@ -420,10 +420,10 @@ impl Task {
     ) -> Self {
         let mut hasher: FxHasher = BuildHasherDefault::default().build_hasher();
         task_type.hash(&mut hasher);
-        let blue = hasher.finish() % 2 == 0;
+        let aggregation_hash = hasher.finish() as u32;
         let ty = TaskType::Persistent {
             ty: task_type,
-            blue,
+            aggregation_hash,
         };
         let description = Self::get_event_description_static(id, &ty);
         Self {
@@ -478,10 +478,12 @@ impl Task {
         }
     }
 
-    pub(crate) fn is_blue(&self) -> bool {
+    pub(crate) fn aggregation_hash(&self) -> u32 {
         match self.ty {
-            TaskType::Root(_) | TaskType::Once(_) => false,
-            TaskType::Persistent { blue, .. } => blue,
+            TaskType::Root(_) | TaskType::Once(_) => 0,
+            TaskType::Persistent {
+                aggregation_hash, ..
+            } => aggregation_hash,
         }
     }
 
@@ -706,9 +708,7 @@ impl Task {
                 if !state.children.is_empty() {
                     let set = take(&mut state.children);
                     for child in set {
-                        state
-                            .aggregation_leaf
-                            .remove_child(self.is_blue(), context, &child);
+                        state.aggregation_leaf.remove_child(context, &child);
                     }
                 }
                 let mut change = TaskChange::default();
@@ -1324,11 +1324,7 @@ impl Task {
             {
                 let mut state = self.full_state_mut();
                 if state.children.insert(child_id) {
-                    job = Some(state.aggregation_leaf.add_child_job(
-                        self.is_blue(),
-                        &context,
-                        &child_id,
-                    ));
+                    job = Some(state.aggregation_leaf.add_child_job(&context, &child_id));
                 }
             }
             if let Some(job) = job {
@@ -1828,7 +1824,7 @@ impl Task {
         // again
         if !children.is_empty() {
             for child in children {
-                aggregation_leaf.remove_child(self.is_blue(), &context, &child);
+                aggregation_leaf.remove_child(&context, &child);
             }
         }
 

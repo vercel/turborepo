@@ -51,7 +51,7 @@ impl<T> TopTree<T> {
     ) {
         let mut state = self.state.lock();
         if state.upper.add(TopRef {
-            parent: parent.clone(),
+            upper: parent.clone(),
         }) {
             if let Some(change) = context.info_to_add_change(&state.data) {
                 parent.child_change(context, &change);
@@ -66,7 +66,7 @@ impl<T> TopTree<T> {
     ) {
         let mut state = self.state.lock();
         if state.upper.remove(TopRef {
-            parent: parent.clone(),
+            upper: parent.clone(),
         }) {
             if let Some(change) = context.info_to_remove_change(&state.data) {
                 parent.child_change(context, &change);
@@ -95,8 +95,8 @@ impl<T> TopTree<T> {
             context.info_to_root_info(&state.data, root_info_type)
         } else {
             let mut result = context.new_root_info(root_info_type);
-            for TopRef { parent } in state.upper.iter() {
-                let info = parent.get_root_info(context, root_info_type);
+            for TopRef { upper } in state.upper.iter() {
+                let info = upper.get_root_info(context, root_info_type);
                 if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
                     break;
                 }
@@ -123,8 +123,8 @@ fn propagate_change_to_upper<C: AggregationContext>(
     let Some(change) = change else {
         return;
     };
-    for TopRef { parent } in state.upper.iter() {
-        parent.child_change(context, &change);
+    for TopRef { upper } in state.upper.iter() {
+        upper.child_change(context, &change);
     }
 }
 

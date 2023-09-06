@@ -214,14 +214,17 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
     type RootInfo = bool;
     type RootInfoType = RootInfoType;
 
-    fn is_blue(&self, reference: &TaskId) -> bool {
-        self.backend.with_task(*reference, |task| task.is_blue())
+    fn hash(&self, reference: &TaskId) -> u32 {
+        self.backend
+            .with_task(*reference, |task| task.aggregation_hash())
     }
 
     fn item(&self, reference: &TaskId) -> Self::ItemLock<'_> {
+        let task = self.backend.task(*reference);
         TaskGuard {
             id: *reference,
-            guard: self.backend.task(*reference).state_mut(),
+            hash: task.aggregation_hash(),
+            guard: task.state_mut(),
         }
     }
 
@@ -387,6 +390,7 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
 
 pub struct TaskGuard<'l> {
     pub(super) id: TaskId,
+    pub(super) hash: u32,
     pub(super) guard: TaskMetaStateWriteGuard<'l>,
 }
 
@@ -418,8 +422,8 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
         }
     }
 
-    fn is_blue(&self) -> bool {
-        false
+    fn hash(&self) -> u32 {
+        self.hash
     }
 
     fn get_add_change(&self) -> Option<Self::ItemChange> {

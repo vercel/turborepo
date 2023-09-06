@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    hash::Hash,
+    hash::{Hash, Hasher},
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
@@ -13,7 +13,7 @@ use parking_lot::{Mutex, MutexGuard};
 use super::{aggregation_info, AggregationContext, AggregationItemLock, AggregationTreeLeaf};
 
 struct Node {
-    blue: bool,
+    hash: u32,
     inner: Mutex<NodeInner>,
 }
 
@@ -91,8 +91,8 @@ impl AggregationItemLock for NodeGuard {
             .map(|child| Cow::Owned(NodeRef(child.clone())))
     }
 
-    fn is_blue(&self) -> bool {
-        self.node.blue
+    fn hash(&self) -> u32 {
+        self.node.hash
     }
 
     fn get_remove_change(&self) -> Option<Change> {
@@ -124,8 +124,8 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
     type ItemRef = NodeRef;
     type ItemChange = Change;
 
-    fn is_blue(&self, reference: &Self::ItemRef) -> bool {
-        reference.0.blue
+    fn hash(&self, reference: &Self::ItemRef) -> u32 {
+        reference.0.hash
     }
 
     fn item(&self, reference: &Self::ItemRef) -> Self::ItemLock<'_> {
@@ -207,6 +207,12 @@ struct Aggregated {
     active: bool,
 }
 
+fn hash(i: u32) -> u32 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    i.hash(&mut hasher);
+    hasher.finish() as u32
+}
+
 #[test]
 fn chain() {
     let something_with_lifetime = 0;
@@ -215,7 +221,7 @@ fn chain() {
         something_with_lifetime: &something_with_lifetime,
     };
     let leaf = Arc::new(Node {
-        blue: false,
+        hash: hash(0),
         inner: Mutex::new(NodeInner {
             children: vec![],
             aggregation_leaf: AggregationTreeLeaf::new(),
@@ -225,7 +231,7 @@ fn chain() {
     let mut current = leaf.clone();
     for i in 1..=100 {
         current = Arc::new(Node {
-            blue: (i % 2 == 0) ^ (i % 3 == 0) ^ (i % 4 == 0),
+            hash: hash(i),
             inner: Mutex::new(NodeInner {
                 children: vec![current],
                 aggregation_leaf: AggregationTreeLeaf::new(),
@@ -262,7 +268,7 @@ fn chain() {
 
     leaf.incr(&context);
     // The change need to propagate through 5 top trees and 5 bottom trees
-    assert_eq!(context.additions.load(Ordering::SeqCst), 10);
+    assert_eq!(context.additions.load(Ordering::SeqCst), 6);
     context.additions.store(0, Ordering::SeqCst);
 
     {
@@ -285,7 +291,7 @@ fn chain() {
 
     let i = 101;
     let current = Arc::new(Node {
-        blue: (i % 2 == 0) ^ (i % 3 == 0) ^ (i % 4 == 0),
+        hash: hash(i),
         inner: Mutex::new(NodeInner {
             children: vec![current.0],
             aggregation_leaf: AggregationTreeLeaf::new(),
@@ -300,12 +306,12 @@ fn chain() {
         assert_eq!(aggregated.value, 25151);
     }
     // This should be way less the 100 to prove that we are reusing trees
-    assert_eq!(context.additions.load(Ordering::SeqCst), 21);
+    assert_eq!(context.additions.load(Ordering::SeqCst), 10);
     context.additions.store(0, Ordering::SeqCst);
 
     leaf.incr(&context);
     // This should be less the 20 to prove that we are reusing trees
-    assert_eq!(context.additions.load(Ordering::SeqCst), 17);
+    assert_eq!(context.additions.load(Ordering::SeqCst), 9);
     context.additions.store(0, Ordering::SeqCst);
 
     {
@@ -326,7 +332,7 @@ fn chain_double_connected() {
         something_with_lifetime: &something_with_lifetime,
     };
     let leaf = Arc::new(Node {
-        blue: false,
+        hash: hash(1),
         inner: Mutex::new(NodeInner {
             children: vec![],
             aggregation_leaf: AggregationTreeLeaf::new(),
@@ -335,7 +341,7 @@ fn chain_double_connected() {
     });
     let mut current = leaf.clone();
     let mut current2 = Arc::new(Node {
-        blue: false,
+        hash: hash(2),
         inner: Mutex::new(NodeInner {
             children: vec![leaf.clone()],
             aggregation_leaf: AggregationTreeLeaf::new(),
@@ -344,7 +350,7 @@ fn chain_double_connected() {
     });
     for i in 3..=100 {
         let new_node = Arc::new(Node {
-            blue: (i % 2 == 0) ^ (i % 3 == 0) ^ (i % 4 == 0),
+            hash: hash(i),
             inner: Mutex::new(NodeInner {
                 children: vec![current, current2.clone()],
                 aggregation_leaf: AggregationTreeLeaf::new(),
@@ -358,8 +364,8 @@ fn chain_double_connected() {
 
     {
         let aggregated = aggregation_info(&context, &current);
-        assert_eq!(aggregated.lock().value, 5050);
+        assert_eq!(aggregated.lock().value, 41766);
     }
-    assert_eq!(context.additions.load(Ordering::SeqCst), 100);
+    assert_eq!(context.additions.load(Ordering::SeqCst), 373);
     context.additions.store(0, Ordering::SeqCst);
 }
