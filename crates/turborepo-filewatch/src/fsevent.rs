@@ -14,6 +14,9 @@
 //! [ref]: https://developer.apple.com/library/mac/documentation/Darwin/Reference/FSEvents_Ref/
 
 #![allow(non_upper_case_globals, dead_code)]
+// bitflags! with a 0 value defined triggers this clippy error,
+// but we want to be able to define a value for fs::kFSEventStreamEventFlagNone
+#![allow(clippy::bad_bit_mask)]
 
 use std::{
     collections::HashMap,

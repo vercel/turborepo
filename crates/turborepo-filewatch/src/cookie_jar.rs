@@ -130,7 +130,7 @@ async fn watch_cookies(
                                     .expect("Non-absolute path from filewatching");
                                 if root.relation_to_path(abs_path) == PathRelation::Parent {
                                     if let Some(responder) = watches.cookies.remove(&path) {
-                                        if let Err(_) = responder.send(Ok(())) {
+                                        if responder.send(Ok(())).is_err() {
                                             // Note that cookie waiters will time out if they don't get a
                                             // response, so we don't necessarily
                                             // need to panic here, although we could decide to do that in the
@@ -151,7 +151,7 @@ async fn watch_cookies(
                         let resp = if is_closing { WatchError::Closed } else { e };
                         let mut watches = watches.lock().expect("mutex poisoned");
                         for (_, sender) in watches.cookies.drain() {
-                            if let Err(_) = sender.send(Err(resp.clone())) {
+                            if sender.send(Err(resp.clone())).is_err() {
                                 // Note that cookie waiters will time out if they don't get a response, so
                                 // we don't necessarily need to panic here, although
                                 // we could decide to do that in the future.

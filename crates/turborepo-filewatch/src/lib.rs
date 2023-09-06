@@ -90,7 +90,7 @@ impl FileSystemWatcher {
         let watcher = run_watcher(&watch_root, send_file_events).unwrap();
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
         // Ensure we are ready to receive new events, not events for existing state
-        futures::executor::block_on(wait_for_cookie(&root, &mut recv_file_events))?;
+        futures::executor::block_on(wait_for_cookie(root, &mut recv_file_events))?;
         tokio::task::spawn(watch_events(
             watcher,
             watch_root,
@@ -233,7 +233,7 @@ fn watch_parents(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(),
 
 #[cfg(not(feature = "manual_recursive_watch"))]
 fn watch_recursively(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(), WatchError> {
-    watcher.watch(&root.as_std_path(), RecursiveMode::Recursive)?;
+    watcher.watch(root.as_std_path(), RecursiveMode::Recursive)?;
     Ok(())
 }
 
