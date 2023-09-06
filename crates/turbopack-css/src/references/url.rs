@@ -19,11 +19,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::resolve::url_resolve;
 
-use crate::{
-    code_gen::{CodeGenerateable, CodeGeneration},
-    embed::{CssEmbed, CssEmbeddable},
-    references::AstPath,
-};
+use crate::embed::{CssEmbed, CssEmbeddable};
 
 #[turbo_tasks::value(into = "new")]
 pub enum ReferencedAsset {
@@ -36,7 +32,6 @@ pub enum ReferencedAsset {
 pub struct UrlAssetReference {
     pub origin: Vc<Box<dyn ResolveOrigin>>,
     pub request: Vc<Request>,
-    pub path: Vc<AstPath>,
     pub issue_source: Vc<IssueSource>,
 }
 
@@ -46,13 +41,11 @@ impl UrlAssetReference {
     pub fn new(
         origin: Vc<Box<dyn ResolveOrigin>>,
         request: Vc<Request>,
-        path: Vc<AstPath>,
         issue_source: Vc<IssueSource>,
     ) -> Vc<Self> {
         Self::cell(UrlAssetReference {
             origin,
             request,
-            path,
             issue_source,
         })
     }

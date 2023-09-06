@@ -49,6 +49,7 @@ struct ModuleReferencesVisitor<'a> {
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
     references: &'a mut Vec<Vc<Box<dyn ModuleReference>>>,
+    urls: &'a mut Vec<Vc<(String, Box<dyn ModuleReference>)>>,
     is_import: bool,
 }
 
@@ -57,11 +58,13 @@ impl<'a> ModuleReferencesVisitor<'a> {
         source: Vc<Box<dyn Source>>,
         origin: Vc<Box<dyn ResolveOrigin>>,
         references: &'a mut Vec<Vc<Box<dyn ModuleReference>>>,
+        urls: &'a mut Vec<Vc<(String, Box<dyn ModuleReference>)>>,
     ) -> Self {
         Self {
             source,
             origin,
             references,
+            urls,
             is_import: false,
         }
     }
@@ -82,7 +85,6 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                 self.references.push(Vc::upcast(ImportAssetReference::new(
                     self.origin,
                     Request::parse(Value::new(src.to_string().into())),
-                    Vc::cell(ast_path),
                     ImportAttributes::new_from_prelude(i).into(),
                     IssueSource::from_byte_offset(
                         Vc::upcast(self.source),
@@ -117,7 +119,6 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
             self.references.push(Vc::upcast(UrlAssetReference::new(
                 self.origin,
                 Request::parse(Value::new(src.to_string().into())),
-                Vc::cell(ast_path),
                 IssueSource::from_byte_offset(
                     Vc::upcast(self.source),
                     issue_span.lo.to_usize(),
@@ -153,17 +154,4 @@ pub async fn css_resolve(
         IssueSeverity::Error.cell(),
     )
     .await
-}
-
-// TODO enable serialization
-#[turbo_tasks::value(transparent, serialization = "none")]
-pub struct AstPath(#[turbo_tasks(trace_ignore)] Vec<AstParentKind>);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AstParentKind {}
-
-pub type AstKindPath = swc_core::common::pass::AstKindPath<AstParentKind>;
-
-impl swc_core::common::pass::ParentKind for AstParentKind {
-    fn set_index(&mut self, _: usize) {}
 }
