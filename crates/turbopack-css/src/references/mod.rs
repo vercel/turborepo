@@ -32,17 +32,22 @@ pub(crate) mod import;
 pub(crate) mod internal;
 pub(crate) mod url;
 
+/// Returns `(imports, urls)`.
 pub fn analyze_references(
     stylesheet: &mut StyleSheet<'static, 'static>,
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
-) -> Result<Vec<Vc<Box<dyn ModuleReference>>>> {
+) -> Result<(
+    Vec<Vc<Box<dyn ModuleReference>>>,
+    Vec<(String, Vc<Box<dyn ModuleReference>>)>,
+)> {
     let mut references = Vec::new();
+    let mut urls = Vec::new();
 
-    let mut visitor = ModuleReferencesVisitor::new(source, origin, &mut references);
+    let mut visitor = ModuleReferencesVisitor::new(source, origin, &mut references, &mut urls);
     stylesheet.visit(&mut visitor);
 
-    Ok(references)
+    Ok((references, urls))
 }
 
 struct ModuleReferencesVisitor<'a> {
