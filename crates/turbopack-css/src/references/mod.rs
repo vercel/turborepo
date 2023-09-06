@@ -92,18 +92,18 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                 )));
 
                 self.is_import = true;
-                let res = i.visit_children_with_path(self, ast_path);
+                let res = i.visit_children(self);
                 self.is_import = false;
                 res
             }
 
-            _ => rule.visit_children_with(self),
+            _ => rule.visit_children(self),
         }
     }
 
-    fn visit_url(&mut self, u: &Url, ast_path: &mut AstKindPath) {
+    fn visit_url(&mut self, u: &mut Url) -> std::result::Result<(), Self::Error> {
         if self.is_import {
-            return u.visit_children_with_path(self, ast_path);
+            return u.visit_children(self);
         }
 
         let src = &*u.url;
@@ -126,7 +126,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
             )));
         }
 
-        u.visit_children_with_path(self, ast_path);
+        u.visit_children(self);
     }
 }
 
