@@ -31,6 +31,7 @@ use crate::{
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 pub enum ProcessCssResult {
     Ok {
+        #[turbo_tasks(trace_ignore)]
         stylesheet: StyleSheet<'static, 'static>,
 
         references: Vc<ModuleReferences>,
