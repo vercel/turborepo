@@ -34,6 +34,8 @@ mod upper_map;
 
 use std::{borrow::Cow, hash::Hash, ops::ControlFlow, sync::Arc};
 
+use nohash_hasher::IsEnabled;
+
 use self::{leaf::top_tree, top_tree::TopTree};
 pub use self::{leaf::AggregationTreeLeaf, top_tree::AggregationInfoGuard};
 
@@ -47,7 +49,7 @@ pub trait AggregationContext {
         Self: 'a;
     type Info: Default;
     type ItemChange;
-    type ItemRef: Eq + Hash + Clone;
+    type ItemRef: Eq + Hash + Clone + IsEnabled;
     type RootInfo;
     type RootInfoType;
 
@@ -88,7 +90,7 @@ pub trait AggregationContext {
 
 pub trait AggregationItemLock {
     type Info;
-    type ItemRef: Clone;
+    type ItemRef: Clone + IsEnabled;
     type ItemChange;
     type ChildrenIter<'a>: Iterator<Item = Cow<'a, Self::ItemRef>> + 'a
     where

@@ -1,5 +1,6 @@
 use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
+use nohash_hasher::{BuildNoHashHasher, IsEnabled};
 use parking_lot::{Mutex, MutexGuard};
 
 use super::{
@@ -27,20 +28,20 @@ use crate::count_hash_set::CountHashSet;
 /// The concept of "blue" nodes will improve the sharing of graphs as
 /// aggregation will eventually propagate to use the same items, even if they
 /// start on different depths of the graph.
-pub struct BottomTree<T, I> {
+pub struct BottomTree<T, I: IsEnabled> {
     height: u8,
     state: Mutex<BottomTreeState<T, I>>,
 }
 
-pub struct BottomTreeState<T, I> {
+pub struct BottomTreeState<T, I: IsEnabled> {
     data: T,
     bottom_upper: UpperMap<BottomTree<T, I>>,
     top_upper: CountHashSet<TopRef<T>>,
     /// Items that are referenced by right children of this node.
-    following: CountHashSet<I>,
+    following: CountHashSet<I, BuildNoHashHasher<I>>,
 }
 
-impl<T: Default, I> BottomTree<T, I> {
+impl<T: Default, I: IsEnabled> BottomTree<T, I> {
     pub fn new(height: u8) -> Self {
         Self {
             height,
@@ -54,7 +55,7 @@ impl<T: Default, I> BottomTree<T, I> {
     }
 }
 
-impl<T, I: Clone + Eq + Hash> BottomTree<T, I> {
+impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     pub fn add_child_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         context: &C,
@@ -388,27 +389,45 @@ pub fn add_parent_to_item_ref<C: AggregationContext>(
     parent: &Arc<BottomTree<C::Info, C::ItemRef>>,
     location: ChildLocation,
 ) {
-    let mut item = context.item(reference);
-    add_parent_to_item(context, &mut item, parent, location);
+    let result = {
+        let mut item = context.item(reference);
+        add_parent_to_item_step_1::<C>(&mut item, parent, location)
+    };
+    add_parent_to_item_step_2(context, parent, result);
 }
 
-pub fn add_parent_to_item<C: AggregationContext>(
-    context: &C,
+#[must_use]
+pub fn add_parent_to_item_step_1<C: AggregationContext>(
     item: &mut C::ItemLock<'_>,
     parent: &Arc<BottomTree<C::Info, C::ItemRef>>,
     location: ChildLocation,
-) {
+) -> (Option<C::ItemChange>, ChildLocation, bool, Vec<C::ItemRef>) {
     if item.leaf().add_upper(parent, location) {
-        if let Some(change) = item.get_add_change() {
-            context.on_add_change(&change);
-            let mut state = parent.state.lock();
-            let change = context.apply_change(&mut state.data, &change);
-            propagate_change_to_upper(&mut state, context, change);
-        }
+        let change = item.get_add_change();
         let child_is_blue = item.is_blue();
-        for child in item.children() {
-            parent.add_child_of_child(context, location, child_is_blue, &*child)
-        }
+        (
+            change,
+            location,
+            child_is_blue,
+            item.children().map(|r| r.into_owned()).collect(),
+        )
+    } else {
+        (None, location, false, Vec::new())
+    }
+}
+
+pub fn add_parent_to_item_step_2<C: AggregationContext>(
+    context: &C,
+    parent: &Arc<BottomTree<C::Info, C::ItemRef>>,
+    step_1_result: (Option<C::ItemChange>, ChildLocation, bool, Vec<C::ItemRef>),
+) {
+    let (change, location, is_blue, children) = step_1_result;
+    if let Some(change) = change {
+        context.on_add_change(&change);
+        parent.child_change(context, &change);
+    }
+    for child in children {
+        parent.add_child_of_child(context, location, is_blue, &child)
     }
 }
 
@@ -418,26 +437,44 @@ pub fn remove_parent_from_item_ref<C: AggregationContext>(
     parent: &Arc<BottomTree<C::Info, C::ItemRef>>,
     location: ChildLocation,
 ) {
-    let mut item = context.item(reference);
-    remove_parent_from_item(context, &mut item, parent, location);
+    let result = {
+        let mut item = context.item(reference);
+        remove_parent_from_item_step_1::<C>(&mut item, parent, location)
+    };
+    remove_parent_from_item_step_2(context, parent, result);
 }
 
-pub fn remove_parent_from_item<C: AggregationContext>(
-    context: &C,
+#[must_use]
+pub fn remove_parent_from_item_step_1<C: AggregationContext>(
     item: &mut C::ItemLock<'_>,
     parent: &Arc<BottomTree<C::Info, C::ItemRef>>,
     location: ChildLocation,
-) {
+) -> (Option<C::ItemChange>, ChildLocation, bool, Vec<C::ItemRef>) {
     if let Some(location) = item.leaf().remove_upper(parent, location) {
-        if let Some(change) = item.get_remove_change() {
-            context.on_remove_change(&change);
-            let mut state = parent.state.lock();
-            let change = context.apply_change(&mut state.data, &change);
-            propagate_change_to_upper(&mut state, context, change);
-        }
+        let change = item.get_remove_change();
         let child_is_blue = item.is_blue();
-        for child in item.children() {
-            parent.remove_child_of_child(context, location, child_is_blue, &*child)
-        }
+        (
+            change,
+            location,
+            child_is_blue,
+            item.children().map(|r| r.into_owned()).collect(),
+        )
+    } else {
+        (None, ChildLocation::Left, false, Vec::new())
+    }
+}
+
+pub fn remove_parent_from_item_step_2<C: AggregationContext>(
+    context: &C,
+    parent: &Arc<BottomTree<C::Info, C::ItemRef>>,
+    step_1_result: (Option<C::ItemChange>, ChildLocation, bool, Vec<C::ItemRef>),
+) {
+    let (change, location, is_blue, children) = step_1_result;
+    if let Some(change) = change {
+        context.on_remove_change(&change);
+        parent.child_change(context, &change);
+    }
+    for child in children {
+        parent.remove_child_of_child(context, location, is_blue, &child)
     }
 }

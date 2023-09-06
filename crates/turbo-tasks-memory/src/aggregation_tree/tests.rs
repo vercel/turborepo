@@ -7,6 +7,7 @@ use std::{
     },
 };
 
+use nohash_hasher::IsEnabled;
 use parking_lot::{Mutex, MutexGuard};
 
 use super::{aggregation_info, AggregationContext, AggregationItemLock, AggregationTreeLeaf};
@@ -57,6 +58,8 @@ impl Hash for NodeRef {
         Arc::as_ptr(&self.0).hash(state);
     }
 }
+
+impl IsEnabled for NodeRef {}
 
 impl PartialEq for NodeRef {
     fn eq(&self, other: &Self) -> bool {

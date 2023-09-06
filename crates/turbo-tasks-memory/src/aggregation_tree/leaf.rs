@@ -1,23 +1,23 @@
 use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
 use auto_hash_map::AutoMap;
-use nohash_hasher::BuildNoHashHasher;
+use nohash_hasher::{BuildNoHashHasher, IsEnabled};
 
 use super::{
-    bottom_tree::{add_parent_to_item, BottomTree},
+    bottom_tree::{add_parent_to_item_step_1, add_parent_to_item_step_2, BottomTree},
     inner_refs::ChildLocation,
     top_tree::TopTree,
     upper_map::UpperMap,
     AggregationContext, AggregationItemLock,
 };
 
-pub struct AggregationTreeLeaf<T, I> {
+pub struct AggregationTreeLeaf<T, I: IsEnabled> {
     top_trees: AutoMap<u8, Arc<TopTree<T>>, BuildNoHashHasher<u8>>,
     bottom_trees: AutoMap<u8, Arc<BottomTree<T, I>>, BuildNoHashHasher<u8>>,
     upper: UpperMap<BottomTree<T, I>>,
 }
 
-impl<T, I: Clone + Eq + Hash> AggregationTreeLeaf<T, I> {
+impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     pub fn new() -> Self {
         Self {
             top_trees: AutoMap::with_hasher(),
@@ -123,7 +123,7 @@ pub fn top_tree<C: AggregationContext>(
         leaf.top_trees.insert(depth, new_top_tree.clone());
         new_top_tree
     };
-    let bottom_tree = bottom_tree(context, reference, depth);
+    let bottom_tree = bottom_tree(context, reference, (depth + 1) * 4);
     bottom_tree.add_top_tree_parent(context, &new_top_tree);
     new_top_tree
 }
@@ -133,19 +133,27 @@ pub fn bottom_tree<C: AggregationContext>(
     reference: &C::ItemRef,
     height: u8,
 ) -> Arc<BottomTree<C::Info, C::ItemRef>> {
-    let new_bottom_tree = {
+    let new_bottom_tree;
+    let mut result = None;
+    {
         let mut item = context.item(reference);
         let leaf = item.leaf();
         if let Some(bottom_tree) = leaf.bottom_trees.get(&height) {
             return bottom_tree.clone();
         }
-        let new_bottom_tree = Arc::new(BottomTree::new(height));
+        new_bottom_tree = Arc::new(BottomTree::new(height));
         leaf.bottom_trees.insert(height, new_bottom_tree.clone());
         if height == 0 {
-            add_parent_to_item(context, &mut item, &new_bottom_tree, ChildLocation::Left);
+            result = Some(add_parent_to_item_step_1::<C>(
+                &mut item,
+                &new_bottom_tree,
+                ChildLocation::Left,
+            ));
         }
-        new_bottom_tree
-    };
+    }
+    if let Some(result) = result {
+        add_parent_to_item_step_2(context, &new_bottom_tree, result);
+    }
     if height != 0 {
         bottom_tree(context, reference, height - 1).add_bottom_tree_parent(
             context,
