@@ -25,7 +25,7 @@ use crate::{
     references::{css_resolve, AstPath},
 };
 
-#[turbo_tasks::value(into = "new")]
+#[turbo_tasks::value(into = "new", eq = "manual")]
 pub struct ImportAttributes {
     #[turbo_tasks(trace_ignore)]
     pub layer_name: Option<LayerName<'static>>,
@@ -33,6 +33,12 @@ pub struct ImportAttributes {
     pub supports: Option<SupportsCondition<'static>>,
     #[turbo_tasks(trace_ignore)]
     pub media: MediaList<'static>,
+}
+
+impl PartialEq for ImportAttributes {
+    fn eq(&self, other: &Self) -> bool {
+        false
+    }
 }
 
 impl ImportAttributes {
