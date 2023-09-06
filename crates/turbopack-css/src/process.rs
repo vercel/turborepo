@@ -23,10 +23,14 @@ use crate::{
     lifetime_util::stylesheet_into_static,
     references::{
         analyze_references,
-        url::{replace_url_references, resolve_url_reference},
+        url::{replace_url_references, resolve_url_reference, UrlAssetReference},
     },
     CssModuleAssetType,
 };
+
+/// Multiple [ModuleReference]s
+#[turbo_tasks::value(transparent)]
+pub struct UnresolvedUrlReferences(pub Vec<(String, Vc<UrlAssetReference>)>);
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 pub enum ProcessCssResult {
@@ -35,6 +39,8 @@ pub enum ProcessCssResult {
         stylesheet: StyleSheet<'static, 'static>,
 
         references: Vc<ModuleReferences>,
+
+        url_references: Vc<UnresolvedUrlReferences>,
     },
     Unparseable,
     NotFound,
@@ -80,14 +86,19 @@ pub async fn finalize_css(
         ProcessCssResult::Ok {
             stylesheet,
             references,
+            url_references,
         } => {
             {
+                let mut stylesheet = stylesheet_into_static(stylesheet);
+
+                let url_references = *url_references;
+
                 let mut url_map = HashMap::new();
 
-                for (src, reference) in url_references {
-                    let resolved = resolve_url_reference(reference, chunking_context).await?;
+                for (src, reference) in (*url_references.await?).iter() {
+                    let resolved = resolve_url_reference(*reference, chunking_context).await?;
                     if let Some(v) = resolved.as_ref().cloned() {
-                        url_map.insert(src, v);
+                        url_map.insert(src.to_string(), v);
                     }
                 }
 
@@ -187,13 +198,14 @@ async fn process_content(
             return Ok(ProcessCssResult::Unparseable.into());
         }
     };
-    let mut stylesheet = stylesheet_into_static(stylesheet);
+    let mut stylesheet = stylesheet_into_static(&stylesheet);
 
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
 
     Ok(ProcessCssResult::Ok {
         stylesheet,
         references: Vc::cell(references),
+        url_references: Vc::cell(url_references),
     }
     .into())
 }
