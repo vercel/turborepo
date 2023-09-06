@@ -1,8 +1,10 @@
 use std::time::Duration;
 
 use camino::Utf8PathBuf;
+use futures::FutureExt;
 use pidlock::PidlockError::AlreadyOwned;
 use time::{format_description, OffsetDateTime};
+use tokio::signal::ctrl_c;
 use tracing::{trace, warn};
 use turbopath::AbsoluteSystemPathBuf;
 
@@ -162,8 +164,23 @@ pub async fn daemon_server(
         .map_err(|_| DaemonError::InvalidTimeout(idle_time.to_owned()))
         .map(|d| Duration::from_nanos(d as u64))?;
 
-    let server = crate::daemon::DaemonServer::new(base, timeout, log_file)?;
-    let reason = server.serve().await;
+    // let server = crate::daemon::DaemonServer::new(base, timeout, log_file)?;
+    // let reason = server.serve().await;
+    let daemon_root = base.daemon_file_root();
+    let exit_signal = ctrl_c().map(|result| {
+        if let Err(e) = result {
+            tracing::error!("Error with signal handling: {}", e);
+        }
+        CloseReason::Interrupt
+    });
+    let reason = crate::daemon::serve(
+        &base.repo_root,
+        &daemon_root,
+        log_file,
+        timeout,
+        exit_signal,
+    )
+    .await;
 
     match reason {
         CloseReason::SocketOpenError(SocketOpenError::LockError(AlreadyOwned)) => {
