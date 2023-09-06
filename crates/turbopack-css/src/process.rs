@@ -114,7 +114,7 @@ async fn process_content(
     };
     let mut stylesheet = stylesheet_into_static(stylesheet);
 
-    let references = analyze_references(&mut stylesheet, source, origin)?;
+    let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
 
     let mut srcmap = parcel_sourcemap::SourceMap::new("");
     let result = stylesheet.to_css(PrinterOptions {
