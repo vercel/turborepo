@@ -1320,23 +1320,22 @@ impl Task {
     ) {
         let mut context = TaskAggregationContext::new(turbo_tasks, backend);
         {
-            let state = self.full_state_mut();
-            self.connect_child_internal(state, &context, child_id);
+            let mut job = None;
+            {
+                let mut state = self.full_state_mut();
+                if state.children.insert(child_id) {
+                    job = Some(state.aggregation_leaf.add_child_job(
+                        self.is_blue(),
+                        &context,
+                        &child_id,
+                    ));
+                }
+            }
+            if let Some(job) = job {
+                (job)();
+            }
         }
         context.apply_queued_updates();
-    }
-
-    fn connect_child_internal(
-        &self,
-        mut state: FullTaskWriteGuard<'_>,
-        context: &TaskAggregationContext,
-        child_id: TaskId,
-    ) {
-        if state.children.insert(child_id) {
-            state
-                .aggregation_leaf
-                .add_child(self.is_blue(), context, &child_id);
-        }
     }
 
     pub(crate) fn get_or_wait_output<T, F: FnOnce(&mut Output) -> Result<T>>(

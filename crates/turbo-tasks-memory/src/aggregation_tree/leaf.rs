@@ -37,6 +37,27 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         }
     }
 
+    pub fn add_child_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        self_is_blue: bool,
+        context: &'a C,
+        child: &'a I,
+    ) -> impl FnOnce() + 'a
+    where
+        T: 'a,
+    {
+        let parents = self
+            .upper
+            .iter()
+            .map(|(p, l)| (p.clone(), l))
+            .collect::<Vec<_>>();
+        move || {
+            for (parent, location) in parents {
+                parent.add_child_of_child(context, location, self_is_blue, child);
+            }
+        }
+    }
+
     pub fn remove_child<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         self_is_blue: bool,
