@@ -49,6 +49,28 @@ pub fn start_spinner(message: &str) -> ProgressBar {
     pb
 }
 
+#[macro_export]
+macro_rules! color {
+    ($ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
+        let formatted_str = format!($format_string $(, $arg)*);
+
+        let colored_str = $color.apply_to(formatted_str);
+
+        $ui.apply(colored_str)
+    }};
+}
+
+#[macro_export]
+macro_rules! display {
+    ($ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
+        let formatted_str = format!($format_string $(, $arg)*);
+
+        let colored_str = $color.apply_to(formatted_str);
+
+        println!("{}", $ui.apply(colored_str))
+    }};
+}
+
 /// Helper struct to apply any necessary formatting to UI output
 #[derive(Debug, Clone, Copy)]
 pub struct UI {
@@ -127,6 +149,7 @@ lazy_static! {
     pub static ref BOLD: Style = Style::new().bold();
     pub static ref MAGENTA: Style = Style::new().magenta();
     pub static ref UNDERLINE: Style = Style::new().underlined();
+    pub static ref BOLD_CYAN: Style = Style::new().cyan().bold();
 }
 
 pub const RESET: &str = "\x1b[0m";

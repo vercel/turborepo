@@ -3,9 +3,9 @@ use std::sync::Arc;
 use futures::{stream::FuturesUnordered, StreamExt};
 use tokio::task::JoinHandle;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-use turborepo_api_client::APIClient;
+use turborepo_api_client::{APIAuth, APIClient};
 
-use crate::{http::APIAuth, multiplexer::CacheMultiplexer, CacheError, CacheOpts, CacheResponse};
+use crate::{multiplexer::CacheMultiplexer, CacheError, CacheOpts, CacheResponse};
 
 pub struct AsyncCache {
     workers: FuturesUnordered<JoinHandle<()>>,

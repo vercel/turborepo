@@ -2,13 +2,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
-use turborepo_api_client::APIClient;
+use turborepo_api_client::{APIAuth, APIClient};
 
-use crate::{
-    fs::FSCache,
-    http::{APIAuth, HTTPCache},
-    CacheError, CacheOpts, CacheResponse,
-};
+use crate::{fs::FSCache, http::HTTPCache, CacheError, CacheOpts, CacheResponse};
 
 pub struct CacheMultiplexer {
     // We use an `AtomicBool` instead of removing the cache because that would require

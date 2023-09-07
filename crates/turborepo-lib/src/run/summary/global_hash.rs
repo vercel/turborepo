@@ -23,19 +23,19 @@ pub(crate) struct GlobalEnvVarSummary {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct GlobalHashSummary {
+pub struct GlobalHashSummary<'a> {
     global_cache_key: &'static str,
     global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
-    root_external_deps_hash: String,
+    root_external_deps_hash: &'a str,
     dot_env: Vec<RelativeUnixPathBuf>,
     env_vars: GlobalEnvVarSummary,
 }
 
-impl GlobalHashSummary {
+impl<'a> GlobalHashSummary<'a> {
     pub fn new(
         global_cache_key: &'static str,
         global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
-        root_external_deps_hash: String,
+        root_external_deps_hash: &'a str,
         global_env: Vec<String>,
         global_pass_through_env: Vec<String>,
         global_dot_env: Vec<RelativeUnixPathBuf>,

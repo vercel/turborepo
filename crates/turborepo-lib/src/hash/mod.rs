@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 use capnp::message::{Builder, HeapAllocator};
 pub use traits::TurboHash;
-use turborepo_env::ResolvedEnvMode;
+use turborepo_env::{EnvironmentVariablePairs, ResolvedEnvMode};
 
 use crate::{cli::EnvMode, task_graph::TaskOutputs};
 
@@ -66,11 +66,11 @@ pub struct TaskHashable<'a> {
 #[derive(Debug, Clone)]
 pub struct GlobalHashable<'a> {
     pub global_cache_key: &'static str,
-    pub global_file_hash_map: HashMap<turbopath::RelativeUnixPathBuf, String>,
+    pub global_file_hash_map: &'a HashMap<turbopath::RelativeUnixPathBuf, String>,
     // This is None in single package mode
-    pub root_external_dependencies_hash: Option<String>,
+    pub root_external_dependencies_hash: Option<&'a str>,
     pub env: &'a [String],
-    pub resolved_env_vars: Vec<String>,
+    pub resolved_env_vars: EnvironmentVariablePairs,
     pub pass_through_env: &'a [String],
     pub env_mode: EnvMode,
     pub framework_inference: bool,
@@ -288,7 +288,7 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
     }
 }
 
-impl<'a> From<GlobalHashable<'a>> for Builder<HeapAllocator> {
+impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
     fn from(hashable: GlobalHashable) -> Self {
         let mut message =
             ::capnp::message::TypedBuilder::<proto_capnp::global_hashable::Owned>::new_default();

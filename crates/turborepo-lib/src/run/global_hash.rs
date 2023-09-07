@@ -28,23 +28,24 @@ enum GlobalHashError {}
 
 #[derive(Debug, Default)]
 pub struct GlobalHashableInputs<'a> {
-    global_cache_key: &'static str,
-    global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
+    pub global_cache_key: &'static str,
+    pub global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
     // This is `None` in single package mode
-    root_external_dependencies_hash: Option<String>,
-    env: &'a [String],
+    pub root_external_dependencies_hash: Option<String>,
+    pub env: &'a [String],
     // Only Option to allow #[derive(Default)]
-    resolved_env_vars: Option<DetailedMap>,
-    pass_through_env: Option<&'a [String]>,
-    env_mode: EnvMode,
-    framework_inference: bool,
-    dot_env: &'a [RelativeUnixPathBuf],
+    pub resolved_env_vars: Option<DetailedMap>,
+    pub pass_through_env: Option<&'a [String]>,
+    pub env_mode: EnvMode,
+    pub framework_inference: bool,
+    pub dot_env: &'a [RelativeUnixPathBuf],
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     is_monorepo: bool,
     root_workspace: &WorkspaceInfo,
+    root_external_dependencies_hash: &'a str,
     root_path: &AbsoluteSystemPath,
     package_manager: &PackageManager,
     lockfile: Option<&L>,
@@ -140,7 +141,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
 }
 
 impl<'a> GlobalHashableInputs<'a> {
-    pub fn calculate_global_hash_from_inputs(mut self) -> String {
+    pub fn calculate_global_hash_from_inputs(&mut self) -> String {
         match self.env_mode {
             // In infer mode, if there is any pass_through config (even if it is an empty array)
             // we'll hash the whole object, so we can detect changes to that config
@@ -158,20 +159,21 @@ impl<'a> GlobalHashableInputs<'a> {
         self.calculate_global_hash()
     }
 
-    fn calculate_global_hash(self) -> String {
+    fn calculate_global_hash(&self) -> String {
         let global_hashable = GlobalHashable {
             global_cache_key: self.global_cache_key,
-            global_file_hash_map: self.global_file_hash_map,
-            root_external_dependencies_hash: self.root_external_dependencies_hash,
-            env: self.env,
+            global_file_hash_map: &self.global_file_hash_map,
+            root_external_dependencies_hash: &self.root_external_dependencies_hash,
+            env: &self.env,
             resolved_env_vars: self
                 .resolved_env_vars
+                .as_ref()
                 .map(|evm| evm.all.to_hashable())
                 .unwrap_or_default(),
             pass_through_env: self.pass_through_env.unwrap_or_default(),
             env_mode: self.env_mode,
             framework_inference: self.framework_inference,
-            dot_env: self.dot_env,
+            dot_env: &self.dot_env,
         };
 
         global_hashable.hash()

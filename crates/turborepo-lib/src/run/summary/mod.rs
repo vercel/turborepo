@@ -5,29 +5,34 @@ mod scm;
 mod spaces;
 mod task;
 
+use std::{collections::HashSet, io, io::Write};
+
 use chrono::Local;
-use global_hash::GlobalHashSummary;
+pub use global_hash::GlobalHashSummary;
 use serde::Serialize;
 use svix_ksuid::{Ksuid, KsuidLike};
+use tabwriter::TabWriter;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
-use turborepo_api_client::APIClient;
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_ui::UI;
+use turborepo_ui::{color, BOLD_CYAN, UI};
 
 use crate::{
     cli::EnvMode,
     opts::RunOpts,
+    package_graph::{PackageGraph, WorkspaceName},
     run::summary::{execution::ExecutionSummary, scm::SCMState, task::TaskSummary},
 };
 
 #[derive(Debug, Error)]
-enum Error {
-    #[error("Failed to write run summary {0}")]
-    IO(#[from] std::io::Error),
-    #[error("Failed to serialize run summary to JSON")]
+pub enum Error {
+    #[error("failed to write run summary {0}")]
+    IO(#[from] io::Error),
+    #[error("failed to serialize run summary to JSON")]
     Serde(#[from] serde_json::Error),
+    #[error("missing workspace {0}")]
+    MissingWorkspace(WorkspaceName),
 }
 
 // NOTE: When changing this, please ensure that the server side is updated to
@@ -35,6 +40,7 @@ enum Error {
 // of env vars (unknown run summary versions will be ignored on the server)
 const RUN_SUMMARY_SCHEMA_VERSION: &str = "1";
 
+#[derive(Debug)]
 enum RunType {
     Real,
     DryText,
@@ -53,7 +59,8 @@ fn get_user(env_vars: &EnvironmentVariableMap) -> Option<String> {
 
 // Wrapper around the serializable RunSummary, with some extra information
 // about the Run and references to other things that we need.
-struct Meta<'a> {
+#[derive(Debug)]
+pub struct Meta<'a> {
     run_summary: RunSummary<'a>,
     repo_root: &'a AbsoluteSystemPath,
     single_package: bool,
@@ -64,16 +71,16 @@ struct Meta<'a> {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct RunSummary<'a> {
+pub struct RunSummary<'a> {
     id: Ksuid,
     version: String,
     turbo_version: String,
     monorepo: bool,
-    global_hash_summary: GlobalHashSummary,
-    packages: Vec<String>,
+    global_hash_summary: GlobalHashSummary<'a>,
+    packages: HashSet<WorkspaceName>,
     env_mode: EnvMode,
     framework_inference: bool,
-    execution_summary: Option<ExecutionSummary>,
+    execution_summary: Option<ExecutionSummary<'a>>,
     tasks: Vec<TaskSummary<'a>>,
     user: Option<String>,
     scm: SCMState,
@@ -83,13 +90,12 @@ impl<'a> Meta<'a> {
     pub fn new_run_summary(
         start_at: chrono::DateTime<Local>,
         repo_root: &'a AbsoluteSystemPath,
-        package_inference_root: &AnchoredSystemPath,
+        package_inference_root: Option<&'a AnchoredSystemPath>,
         turbo_version: &'static str,
-        run_opts: RunOpts,
-        packages: &[String],
-        global_env_mode: EnvMode,
+        run_opts: &RunOpts,
+        packages: HashSet<WorkspaceName>,
         env_at_execution_start: EnvironmentVariableMap,
-        global_hash_summary: GlobalHashSummary,
+        global_hash_summary: GlobalHashSummary<'a>,
         synthesized_command: String,
     ) -> Meta<'a> {
         let single_package = run_opts.single_package;
@@ -119,8 +125,8 @@ impl<'a> Meta<'a> {
                 version: RUN_SUMMARY_SCHEMA_VERSION.to_string(),
                 execution_summary: Some(execution_summary),
                 turbo_version: turbo_version.to_string(),
-                packages: packages.to_vec(),
-                env_mode: global_env_mode,
+                packages,
+                env_mode: run_opts.env_mode,
                 framework_inference: run_opts.framework_inference,
                 tasks: vec![],
                 global_hash_summary,
@@ -137,25 +143,52 @@ impl<'a> Meta<'a> {
         }
     }
 
-    fn close(&mut self, exit_code: u32, ui: UI) {
+    pub fn close(
+        &mut self,
+        exit_code: u32,
+        pkg_dep_graph: &PackageGraph,
+        ui: UI,
+    ) -> Result<(), Error> {
         if matches!(self.run_type, RunType::DryJson | RunType::DryText) {
-            self.close_dry_run()
+            self.close_dry_run(pkg_dep_graph, ui)?;
         }
+
+        Ok(())
     }
 
-    fn close_dry_run(&mut self) -> Result<(), Error> {
+    fn close_dry_run(&mut self, pkg_dep_graph: &PackageGraph, ui: UI) -> Result<(), Error> {
         if matches!(self.run_type, RunType::DryJson) {
-            let rendered = self.format_json();
+            let rendered = self.format_json()?;
 
             println!("{}", rendered);
             return Ok(());
         }
 
-        self.format_and_print_text()
+        self.format_and_print_text(pkg_dep_graph, ui)
     }
 
-    fn format_and_print_text(&mut self) -> Result<(), Error> {
+    fn format_and_print_text(&mut self, pkg_dep_graph: &PackageGraph, ui: UI) -> Result<(), Error> {
         self.normalize();
+
+        if !self.single_package {
+            println!("\n{}", color!(ui, BOLD_CYAN, "Packages in Scope"));
+            let mut tab_writer = TabWriter::new(io::stdout());
+            write!(tab_writer, "Name\tPath\t")?;
+            for pkg in &self.run_summary.packages {
+                let dir = pkg_dep_graph
+                    .workspace_info(&pkg)
+                    .ok_or_else(|| Error::MissingWorkspace(pkg.clone()))?
+                    .package_path();
+
+                write!(tab_writer, "{}\t{}\t\n", pkg, dir)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn format_json(&self) -> Result<String, Error> {
+        Ok(String::new())
     }
 
     fn normalize(&mut self) {
@@ -167,7 +200,7 @@ impl<'a> Meta<'a> {
         // For single packages, we don't need the packages
         // and each task summary needs some cleaning
         if self.single_package {
-            self.run_summary.packages = vec![];
+            self.run_summary.packages.drain();
 
             for task_summary in &mut self.run_summary.tasks {
                 task_summary.clean_for_single_package();

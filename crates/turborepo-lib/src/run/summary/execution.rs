@@ -3,7 +3,7 @@ use std::fmt;
 use chrono::{DateTime, Duration, Local};
 use serde::{ser::SerializeStruct, Serialize};
 use tokio::sync::mpsc;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPath};
+use turbopath::AnchoredSystemPath;
 
 use crate::run::task_id::TaskId;
 
@@ -21,7 +21,7 @@ pub struct ExecutionSummary<'a> {
     #[serde(skip)]
     sender: mpsc::Sender<Message>,
     command: String,
-    package_inference_path: &'a AnchoredSystemPath,
+    package_inference_path: Option<&'a AnchoredSystemPath>,
     started_at: DateTime<Local>,
 }
 
@@ -107,7 +107,7 @@ impl TaskExecutionSummary {
 impl<'a> ExecutionSummary<'a> {
     pub fn new(
         command: String,
-        package_inference_path: &'a AnchoredSystemPath,
+        package_inference_path: Option<&'a AnchoredSystemPath>,
         started_at: DateTime<Local>,
     ) -> Self {
         // This buffer size is probably overkill, but since messages are only a byte

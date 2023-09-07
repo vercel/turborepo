@@ -12,11 +12,13 @@ use std::{
 
 use anyhow::{anyhow, Context as ErrorContext, Result};
 pub use cache::{RunCache, TaskCache};
+use chrono::{DateTime, Local};
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tracing::{debug, info};
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_cache::{http::APIAuth, AsyncCache};
+use turborepo_api_client::APIAuth;
+use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
 use turborepo_ui::ColorSelector;
@@ -32,7 +34,10 @@ use crate::{
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
     process::ProcessManager,
-    run::global_hash::get_global_hash_inputs,
+    run::{
+        global_hash::get_global_hash_inputs,
+        summary::{GlobalHashSummary, Meta},
+    },
     task_graph::Visitor,
     task_hash::PackageInputsHashes,
 };
@@ -58,7 +63,7 @@ impl<'a> Run<'a> {
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        let _start_at = std::time::Instant::now();
+        let start_at = Local::now();
         let package_json_path = self.base.repo_root.join_component("package.json");
         let root_package_json =
             PackageJson::load(&package_json_path).context("failed to read package.json")?;
@@ -161,7 +166,7 @@ impl<'a> Run<'a> {
                 .collect(),
         ))
         .with_tasks_only(opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.into_iter().collect())
+        .with_workspaces(filtered_pkgs.iter().collect())
         .with_tasks(
             opts.run_opts
                 .tasks
@@ -203,9 +208,12 @@ impl<'a> Run<'a> {
             .workspace_info(&WorkspaceName::Root)
             .expect("must have root workspace");
 
-        let global_hash_inputs = get_global_hash_inputs(
+        let root_external_dependencies_hash = root_workspace.get_external_deps_hash();
+
+        let mut global_hash_inputs = get_global_hash_inputs(
             !opts.run_opts.single_package,
             root_workspace,
+            &root_external_dependencies_hash,
             &self.base.repo_root,
             pkg_dep_graph.package_manager(),
             pkg_dep_graph.lockfile(),
@@ -256,6 +264,7 @@ impl<'a> Run<'a> {
 
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
+
         let visitor = Visitor::new(
             pkg_dep_graph.clone(),
             runcache,
@@ -269,6 +278,38 @@ impl<'a> Run<'a> {
         );
 
         visitor.visit(engine.clone()).await?;
+
+        println!("done");
+
+        let resolved_pass_through_env_vars =
+            env_at_execution_start.from_wildcards(&global_hash_inputs.pass_through_env)?;
+
+        let global_hash_summary = GlobalHashSummary::new(
+            global_hash_inputs.global_cache_key,
+            global_hash_inputs.global_file_hash_map,
+            &root_external_dependencies_hash,
+            global_hash_inputs.env,
+            global_hash_inputs.pass_through_env,
+            global_hash_inputs.dot_env,
+            global_hash_inputs.resolved_env_vars.unwrap_or_default(),
+            resolved_pass_through_env_vars,
+        );
+
+        let mut run_summary = Meta::new_run_summary(
+            start_at,
+            &self.base.repo_root,
+            opts.scope_opts.pkg_inference_root.as_deref(),
+            self.base.version(),
+            &opts.run_opts,
+            filtered_pkgs.clone(),
+            env_at_execution_start,
+            global_hash_summary,
+            "todo".to_string(),
+        );
+
+        println!("{:?}", run_summary);
+
+        run_summary.close(0, &*pkg_dep_graph, self.base.ui)?;
 
         Ok(())
     }

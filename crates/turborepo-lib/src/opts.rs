@@ -257,7 +257,7 @@ impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
         };
         Ok(Self {
             global_deps: args.global_deps.clone(),
-            pkg_inference_root,
+            pkg_inference_root: pkg_inference_root,
             legacy_filter,
             filter_patterns: args.filter.clone(),
             ignore_patterns: args.ignore.clone(),

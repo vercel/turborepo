@@ -1,6 +1,5 @@
 use chrono::{DateTime, Local};
 use serde::Serialize;
-use time::Duration;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{APIAuth, APIClient};
 
