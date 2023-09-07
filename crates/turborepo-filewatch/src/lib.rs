@@ -3,7 +3,6 @@
 use std::{
     fmt::{Debug, Display},
     future::IntoFuture,
-    io,
     path::Path,
     result::Result,
     sync::Arc,
@@ -17,7 +16,7 @@ use fsevent::FsEventWatcher;
 use notify::event::EventKind;
 #[cfg(not(target_os = "macos"))]
 use notify::{Config, RecommendedWatcher};
-use notify::{ErrorKind, Event, EventHandler, RecursiveMode, Watcher};
+use notify::{Event, EventHandler, RecursiveMode, Watcher};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
 use tracing::warn;
@@ -28,7 +27,11 @@ use turbopath::PathRelation;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 #[cfg(feature = "manual_recursive_watch")]
 use {
-    notify::event::{CreateKind, EventAttributes},
+    notify::{
+        event::{CreateKind, EventAttributes},
+        ErrorKind,
+    },
+    std::io,
     walkdir::WalkDir,
 };
 
