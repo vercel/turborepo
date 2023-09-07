@@ -7,28 +7,28 @@ use turborepo_env::{DetailedMap, EnvironmentVariableMap, EnvironmentVariablePair
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 // Contains the environment variable inputs for the global hash
-pub(crate) struct GlobalEnvConfiguration {
-    env: Vec<String>,
-    pass_through_env: Vec<String>,
+pub struct GlobalEnvConfiguration {
+    pub env: Vec<String>,
+    pub pass_through_env: Vec<String>,
 }
 
 // Contains the environment variables that impacted the global hash
 #[derive(Debug, Serialize)]
-pub(crate) struct GlobalEnvVarSummary {
-    specified: GlobalEnvConfiguration,
+pub struct GlobalEnvVarSummary {
+    pub specified: GlobalEnvConfiguration,
 
-    configured: EnvironmentVariablePairs,
-    inferred: EnvironmentVariablePairs,
-    pass_through: EnvironmentVariablePairs,
+    pub configured: EnvironmentVariablePairs,
+    pub inferred: EnvironmentVariablePairs,
+    pub pass_through: EnvironmentVariablePairs,
 }
 
 #[derive(Debug, Serialize)]
 pub struct GlobalHashSummary<'a> {
-    global_cache_key: &'static str,
-    global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
-    root_external_deps_hash: &'a str,
-    dot_env: Vec<RelativeUnixPathBuf>,
-    env_vars: GlobalEnvVarSummary,
+    pub global_cache_key: &'static str,
+    pub global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
+    pub root_external_deps_hash: &'a str,
+    pub dot_env: Vec<RelativeUnixPathBuf>,
+    pub env_vars: GlobalEnvVarSummary,
 }
 
 impl<'a> GlobalHashSummary<'a> {

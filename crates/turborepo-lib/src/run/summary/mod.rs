@@ -9,6 +9,7 @@ use std::{collections::HashSet, io, io::Write};
 
 use chrono::Local;
 pub use global_hash::GlobalHashSummary;
+use itertools::Itertools;
 use serde::Serialize;
 use svix_ksuid::{Ksuid, KsuidLike};
 use tabwriter::TabWriter;
@@ -16,7 +17,7 @@ use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_ui::{color, BOLD_CYAN, UI};
+use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
 use crate::{
     cli::EnvMode,
@@ -173,14 +174,194 @@ impl<'a> Meta<'a> {
         if !self.single_package {
             println!("\n{}", color!(ui, BOLD_CYAN, "Packages in Scope"));
             let mut tab_writer = TabWriter::new(io::stdout());
-            write!(tab_writer, "Name\tPath\t")?;
+            writeln!(tab_writer, "Name\tPath")?;
             for pkg in &self.run_summary.packages {
+                if matches!(pkg, WorkspaceName::Root) {
+                    continue;
+                }
                 let dir = pkg_dep_graph
                     .workspace_info(&pkg)
                     .ok_or_else(|| Error::MissingWorkspace(pkg.clone()))?
                     .package_path();
 
-                write!(tab_writer, "{}\t{}\t\n", pkg, dir)?;
+                writeln!(tab_writer, "{}\t{}", pkg, dir)?;
+                tab_writer.flush()?;
+            }
+        }
+
+        let file_count = self
+            .run_summary
+            .global_hash_summary
+            .global_file_hash_map
+            .len();
+
+        let mut tab_writer = TabWriter::new(io::stdout());
+        cprintln!(ui, BOLD_CYAN, "\nGlobal Hash Inputs");
+        cwriteln!(tab_writer, ui, GREY, "  Global Files\t=\t{}", file_count)?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  External Dependencies Hash\t=\t{}",
+            self.run_summary.global_hash_summary.root_external_deps_hash
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Cache Key\t=\t{}",
+            self.run_summary.global_hash_summary.global_cache_key
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global .env Files considered\t=\t{}",
+            self.run_summary.global_hash_summary.dot_env.len()
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Env Vars\t=\t{}",
+            self.run_summary
+                .global_hash_summary
+                .env_vars
+                .specified
+                .env
+                .join(", ")
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Env Vars Values\t=\t{}",
+            self.run_summary
+                .global_hash_summary
+                .env_vars
+                .configured
+                .join(", ")
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Inferred Global Env Vars Values\t=\t{}",
+            self.run_summary
+                .global_hash_summary
+                .env_vars
+                .inferred
+                .join(", ")
+        )?;
+
+        tab_writer.flush()?;
+
+        for task in &self.run_summary.tasks {
+            if self.single_package {
+                cprintln!(ui, BOLD, "{}", task.task_id.task());
+            } else {
+                cprintln!(ui, BOLD, "{}", task.task_id);
+            };
+
+            let mut tab_writer = TabWriter::new(io::stdout());
+            cwriteln!(tab_writer, ui, GREY, "  Task\t=\t{}", task.task_id)?;
+
+            if let Some(package) = &task.package {
+                cwriteln!(tab_writer, ui, GREY, "  Package\t=\t{}", package)?;
+            }
+
+            cwriteln!(tab_writer, ui, GREY, "  Command\t=\t{}", task.command)?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Outputs\t=\t{}",
+                task.outputs.join(", ")
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Log File\t=\t{}",
+                task.log_file_relative_path
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Dependencies\t=\t{}",
+                task.dependencies.iter().join(", ")
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Dependents\t=\t{}",
+                task.dependents.iter().join(", ")
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Inputs Files Considered\t=\t{}",
+                task.expanded_inputs.len()
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  .env Files Considered\t=\t{}",
+                task.dot_env.len()
+            )?;
+
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Env Vars\t=\t{}",
+                task.env_vars.specified.env.join(", ")
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Env Vars Values\t=\t{}",
+                task.env_vars.configured.join(", ")
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Inferred Env Vars Values\t=\t{}",
+                task.env_vars.inferred.join(", ")
+            )?;
+
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Passed Through Env Vars\t=\t{}",
+                task.env_vars.specified.pass_through_env.join(", ")
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Passed Through Env Vars Values\t=\t{}",
+                task.env_vars.pass_through.join(", ")
+            )?;
+
+            // If there's an error, we can silently ignore it, we don't need to block the
+            // entire print.
+            if let Ok(task_definition_json) = serde_json::to_string(&task.resolved_task_definition)
+            {
+                cwriteln!(
+                    tab_writer,
+                    ui,
+                    GREY,
+                    "  Task Definition\t=\t{}",
+                    task_definition_json
+                )?;
             }
         }
 

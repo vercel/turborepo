@@ -61,13 +61,35 @@ macro_rules! color {
 }
 
 #[macro_export]
-macro_rules! display {
+macro_rules! cprintln {
     ($ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
         let formatted_str = format!($format_string $(, $arg)*);
 
         let colored_str = $color.apply_to(formatted_str);
 
         println!("{}", $ui.apply(colored_str))
+    }};
+}
+
+#[macro_export]
+macro_rules! cwrite {
+    ($ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
+        let formatted_str = format!($format_string $(, $arg)*);
+
+        let colored_str = $color.apply_to(formatted_str);
+
+        write!("{}", $ui.apply(colored_str))
+    }};
+}
+
+#[macro_export]
+macro_rules! cwriteln {
+    ($writer:expr, $ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
+        let formatted_str = format!($format_string $(, $arg)*);
+
+        let colored_str = $color.apply_to(formatted_str);
+
+        writeln!($writer, "{}", $ui.apply(colored_str))
     }};
 }
 

@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[derive(Debug, Serialize)]
-struct TaskCacheSummary {
+pub struct TaskCacheSummary {
     local: bool,
     remote: bool,
     status: String,
@@ -22,41 +22,41 @@ struct TaskCacheSummary {
 #[derive(Debug, Serialize)]
 pub(crate) struct TaskSummary<'a> {
     pub(crate) task_id: TaskId<'a>,
-    package: Option<String>,
-    hash: String,
-    expanded_inputs: HashMap<RelativeUnixPathBuf, String>,
-    external_deps_hash: String,
-    cache_summary: TaskCacheSummary,
-    command: String,
-    command_arguments: Vec<String>,
-    outputs: Vec<String>,
-    excluded_outputs: Vec<String>,
-    log_file_relative_path: String,
-    dir: Option<String>,
-    dependencies: Vec<TaskId<'a>>,
-    dependents: Vec<TaskId<'a>>,
-    resolved_task_definition: TaskDefinition,
-    expanded_outputs: Vec<AnchoredSystemPathBuf>,
-    framework: String,
-    env_mode: EnvMode,
-    env_vars: TaskEnvVarSummary,
-    dot_env: Vec<RelativeUnixPathBuf>,
-    execution: TaskExecutionSummary,
+    pub package: Option<String>,
+    pub hash: String,
+    pub expanded_inputs: HashMap<RelativeUnixPathBuf, String>,
+    pub external_deps_hash: String,
+    pub cache_summary: TaskCacheSummary,
+    pub command: String,
+    pub command_arguments: Vec<String>,
+    pub outputs: Vec<String>,
+    pub excluded_outputs: Vec<String>,
+    pub log_file_relative_path: String,
+    pub dir: Option<String>,
+    pub dependencies: Vec<TaskId<'a>>,
+    pub dependents: Vec<TaskId<'a>>,
+    pub resolved_task_definition: TaskDefinition,
+    pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
+    pub framework: String,
+    pub env_mode: EnvMode,
+    pub env_vars: TaskEnvVarSummary,
+    pub dot_env: Vec<RelativeUnixPathBuf>,
+    pub execution: TaskExecutionSummary,
 }
 
 #[derive(Debug, Serialize)]
-struct TaskEnvConfiguration {
-    env: Vec<String>,
-    pass_through_env: Vec<String>,
+pub struct TaskEnvConfiguration {
+    pub env: Vec<String>,
+    pub pass_through_env: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
-struct TaskEnvVarSummary {
-    specified: TaskEnvConfiguration,
+pub struct TaskEnvVarSummary {
+    pub specified: TaskEnvConfiguration,
 
-    configured: Vec<String>,
-    inferred: Vec<String>,
-    pass_through: Vec<String>,
+    pub configured: Vec<String>,
+    pub inferred: Vec<String>,
+    pub pass_through: Vec<String>,
 }
 
 impl<'a> TaskSummary<'a> {
