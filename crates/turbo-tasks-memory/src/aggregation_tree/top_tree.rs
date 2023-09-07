@@ -28,12 +28,22 @@ impl<T: Default> TopTree<T> {
 }
 
 impl<T> TopTree<T> {
+    pub(super) fn add_children_of_child<C: AggregationContext<Info = T>>(
+        self: &Arc<Self>,
+        context: &C,
+        children: &[(u32, &C::ItemRef)],
+    ) {
+        for (_, child) in children {
+            top_tree(context, child, self.depth + 1).add_upper(context, self);
+        }
+    }
+
     pub(super) fn add_child_of_child<C: AggregationContext<Info = T>>(
         self: &Arc<Self>,
         context: &C,
         child_of_child: &C::ItemRef,
     ) {
-        top_tree(context, child_of_child, self.depth + 1).add_parent(context, self);
+        top_tree(context, child_of_child, self.depth + 1).add_upper(context, self);
     }
 
     pub(super) fn remove_child_of_child<C: AggregationContext<Info = T>>(
@@ -41,35 +51,35 @@ impl<T> TopTree<T> {
         context: &C,
         child_of_child: &C::ItemRef,
     ) {
-        top_tree(context, child_of_child, self.depth + 1).remove_parent(context, self);
+        top_tree(context, child_of_child, self.depth + 1).remove_upper(context, self);
     }
 
-    pub(super) fn add_parent<C: AggregationContext<Info = T>>(
+    pub(super) fn add_upper<C: AggregationContext<Info = T>>(
         &self,
         context: &C,
-        parent: &Arc<TopTree<T>>,
+        upper: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
         if state.upper.add(TopRef {
-            upper: parent.clone(),
+            upper: upper.clone(),
         }) {
             if let Some(change) = context.info_to_add_change(&state.data) {
-                parent.child_change(context, &change);
+                upper.child_change(context, &change);
             }
         }
     }
 
-    pub(super) fn remove_parent<C: AggregationContext<Info = T>>(
+    pub(super) fn remove_upper<C: AggregationContext<Info = T>>(
         &self,
         context: &C,
-        parent: &Arc<TopTree<T>>,
+        upper: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
         if state.upper.remove(TopRef {
-            upper: parent.clone(),
+            upper: upper.clone(),
         }) {
             if let Some(change) = context.info_to_remove_change(&state.data) {
-                parent.child_change(context, &change);
+                upper.child_change(context, &change);
             }
         }
     }

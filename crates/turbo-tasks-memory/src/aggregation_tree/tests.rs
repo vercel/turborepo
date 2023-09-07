@@ -364,8 +364,8 @@ fn chain_double_connected() {
 
     {
         let aggregated = aggregation_info(&context, &current);
-        assert_eq!(aggregated.lock().value, 41766);
+        assert_eq!(aggregated.lock().value, 106545);
     }
-    assert_eq!(context.additions.load(Ordering::SeqCst), 373);
+    assert_eq!(context.additions.load(Ordering::SeqCst), 493);
     context.additions.store(0, Ordering::SeqCst);
 }

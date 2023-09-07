@@ -56,9 +56,97 @@ impl<T: Default, I: IsEnabled> BottomTree<T, I> {
     }
 }
 
+struct SplitChildren<'a, I> {
+    blue: Vec<(u32, &'a I)>,
+    white: Vec<(u32, &'a I)>,
+}
+
 impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
-    fn is_blue(self: &Arc<Self>, hash: u32) -> bool {
+    fn is_blue(&self, hash: u32) -> bool {
         hash >> self.height & 1 == 0
+    }
+
+    fn split_children<'a>(&self, children: &[(u32, &'a I)]) -> SplitChildren<'a, I> {
+        let mut blue = Vec::with_capacity(children.len());
+        let mut white = Vec::with_capacity(children.len());
+        for &(hash, child) in children {
+            if self.is_blue(hash) {
+                blue.push((hash, child));
+            } else {
+                white.push((hash, child));
+            }
+        }
+        SplitChildren { blue, white }
+    }
+
+    pub fn add_children_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
+        self: &Arc<Self>,
+        context: &C,
+        child_location: ChildLocation,
+        mut children: &[(u32, &'_ I)],
+    ) {
+        match child_location {
+            ChildLocation::Left => {
+                // the left child has new children
+                // this means it's a inner child of this node
+                self.add_children_of_child_inner(context, &children);
+            }
+            ChildLocation::Inner => {
+                // the inner child has new children
+                // this means white children are inner children of this node
+                // and blue children need to propagate up
+                let SplitChildren { blue, white } = self.split_children(children);
+                if !white.is_empty() {
+                    self.add_children_of_child_inner(context, &white);
+                }
+                if !blue.is_empty() {
+                    self.add_children_of_child_following(context, blue);
+                }
+            }
+        }
+    }
+
+    fn add_children_of_child_following<C: AggregationContext<Info = T, ItemRef = I>>(
+        self: &Arc<Self>,
+        context: &C,
+        mut children: Vec<(u32, &I)>,
+    ) {
+        let mut left_bottom_upper = None;
+        let mut inner_bottom_uppers = Vec::new();
+        let mut state = self.state.lock();
+        children.retain(|&(hash, child)| state.following.add(child.clone()));
+        if children.is_empty() {
+            return;
+        }
+        left_bottom_upper = state.left_bottom_upper.clone();
+        inner_bottom_uppers.extend(state.inner_bottom_upper.iter().cloned());
+        for TopRef { upper } in state.top_upper.iter() {
+            upper.add_children_of_child(context, &children);
+        }
+        drop(state);
+        if let Some(upper) = left_bottom_upper {
+            upper.add_children_of_child(context, ChildLocation::Left, &children);
+        }
+        for BottomRef { upper } in inner_bottom_uppers {
+            upper.add_children_of_child(context, ChildLocation::Inner, &children);
+        }
+    }
+
+    fn add_children_of_child_inner<C: AggregationContext<Info = T, ItemRef = I>>(
+        self: &Arc<Self>,
+        context: &C,
+        children: &[(u32, &I)],
+    ) {
+        if self.height == 0 {
+            for &(_, child) in children {
+                add_upper_to_item_ref(context, child, &self, ChildLocation::Inner);
+            }
+        } else {
+            children
+                .iter()
+                .map(|&(_, child)| bottom_tree(context, child, self.height - 1))
+                .for_each(|tree| tree.add_bottom_tree_upper(context, &self, ChildLocation::Inner));
+        }
     }
 
     pub fn add_child_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
@@ -231,9 +319,12 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             if let Some(change) = context.info_to_add_change(&state.data) {
                 upper.child_change(context, &change);
             }
-            for following in state.following.iter() {
-                upper.add_child_of_child(context, location, following, context.hash(following));
-            }
+            let children = state
+                .following
+                .iter()
+                .map(|item| (context.hash(item), item))
+                .collect::<Vec<_>>();
+            upper.add_children_of_child(context, location, &children);
         }
     }
 

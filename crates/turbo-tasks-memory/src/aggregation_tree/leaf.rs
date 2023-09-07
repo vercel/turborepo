@@ -28,6 +28,25 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         }
     }
 
+    pub fn add_children<'a, C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &C,
+        children: impl IntoIterator<Item = &'a I>,
+    ) where
+        I: 'a,
+    {
+        let children = children
+            .into_iter()
+            .map(|child| (context.hash(child), child))
+            .collect::<Vec<_>>();
+        if let Some(upper) = self.left_upper.as_ref() {
+            upper.add_children_of_child(context, ChildLocation::Left, &children);
+        }
+        for BottomRef { upper } in self.inner_upper.iter() {
+            upper.add_children_of_child(context, ChildLocation::Inner, &children);
+        }
+    }
+
     pub fn add_child<C: AggregationContext<Info = T, ItemRef = I>>(&self, context: &C, child: &I) {
         let hash = context.hash(child);
         if let Some(upper) = self.left_upper.as_ref() {
@@ -35,6 +54,31 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         }
         for BottomRef { upper } in self.inner_upper.iter() {
             upper.add_child_of_child(context, ChildLocation::Inner, child, hash);
+        }
+    }
+
+    pub fn add_children_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &'a C,
+        children: Vec<I>,
+    ) -> impl FnOnce() + 'a
+    where
+        I: 'a,
+        T: 'a,
+    {
+        let left_upper = self.left_upper.clone();
+        let inner_upper = self.inner_upper.iter().cloned().collect::<Vec<_>>();
+        move || {
+            let children = children
+                .iter()
+                .map(|child| (context.hash(child), child))
+                .collect::<Vec<_>>();
+            if let Some(upper) = left_upper {
+                upper.add_children_of_child(context, ChildLocation::Left, &children);
+            }
+            for BottomRef { upper } in inner_upper {
+                upper.add_children_of_child(context, ChildLocation::Inner, &children);
+            }
         }
     }
 
@@ -84,6 +128,28 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         }
         for BottomRef { upper } in self.inner_upper.iter() {
             upper.child_change(context, change);
+        }
+    }
+
+    pub fn change_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &'a C,
+        change: C::ItemChange,
+    ) -> impl FnOnce() + 'a
+    where
+        I: 'a,
+        T: 'a,
+    {
+        let left_upper = self.left_upper.clone();
+        let inner_upper = self.inner_upper.iter().cloned().collect::<Vec<_>>();
+        move || {
+            context.on_change(&change);
+            if let Some(upper) = left_upper {
+                upper.child_change(context, &change);
+            }
+            for BottomRef { upper } in inner_upper {
+                upper.child_change(context, &change);
+            }
         }
     }
 
