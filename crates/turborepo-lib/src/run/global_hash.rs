@@ -54,7 +54,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     dot_env: &'a [RelativeUnixPathBuf],
 ) -> Result<GlobalHashableInputs<'a>> {
     let global_hashable_env_vars =
-        get_global_hashable_env_vars(env_at_execution_start, &global_env)?;
+        get_global_hashable_env_vars(env_at_execution_start, global_env)?;
 
     debug!(
         "global hash env vars {:?}",
@@ -68,7 +68,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
 
         let files = globwalk::globwalk(
             root_path,
-            &global_file_dependencies,
+            global_file_dependencies,
             &globs.raw_exclusions,
             WalkType::All,
         )?;
