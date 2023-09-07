@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     future::IntoFuture,
 };
 
@@ -107,7 +107,7 @@ impl GlobWatcher {
         let (tx, rx) = oneshot::channel();
         self.query_ch
             .send(Query::WatchGlobs {
-                hash: hash,
+                hash,
                 glob_set: globs,
                 resp: tx,
             })
@@ -207,7 +207,7 @@ impl GlobTracker {
         file_event: Result<Result<Event, NotifyError>, broadcast::error::RecvError>,
     ) {
         match file_event {
-            Err(broadcast::error::RecvError::Closed) => return,
+            Err(broadcast::error::RecvError::Closed) => (),
             Err(e @ broadcast::error::RecvError::Lagged(_)) => self.on_error(e.into()),
             Ok(Err(error)) => self.on_error(error.into()),
             Ok(Ok(file_event)) => {

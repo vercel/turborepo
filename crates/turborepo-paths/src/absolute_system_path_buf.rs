@@ -1,7 +1,6 @@
 use std::{
     borrow::Borrow,
-    fmt,
-    io::{self, Write},
+    fmt, io,
     ops::Deref,
     path::{Path, PathBuf},
 };
