@@ -85,11 +85,10 @@ mod tests {
     use futures::future::try_join_all;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_api_client::APIClient;
+    use turborepo_api_client::{APIAuth, APIClient};
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
-        http::APIAuth,
         test_cases::{get_test_cases, TestCase},
         AsyncCache, CacheError, CacheOpts, CacheResponse, CacheSource, RemoteCacheOpts,
     };

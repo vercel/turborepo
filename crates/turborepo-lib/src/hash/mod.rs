@@ -305,8 +305,8 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
             // get a sorted iterator over keys and values of the hashmap
             // and set the entries in the capnp message
 
-            let mut hashable: Vec<_> = hashable.global_file_hash_map.into_iter().collect();
-            hashable.sort_by(|a, b| a.0.cmp(&b.0));
+            let mut hashable: Vec<_> = hashable.global_file_hash_map.iter().collect();
+            hashable.sort_by(|a, b| a.0.cmp(b.0));
 
             for (i, (key, value)) in hashable.iter().enumerate() {
                 let mut entry = entries.reborrow().get(i as u32);
@@ -415,15 +415,17 @@ mod test {
 
     #[test]
     fn global_hashable() {
+        let global_file_hash_map = vec![(
+            turbopath::RelativeUnixPathBuf::new("global_file_hash_map").unwrap(),
+            "global_file_hash_map".to_string(),
+        )]
+        .into_iter()
+        .collect();
+
         let global_hash = GlobalHashable {
             global_cache_key: "global_cache_key",
-            global_file_hash_map: vec![(
-                turbopath::RelativeUnixPathBuf::new("global_file_hash_map").unwrap(),
-                "global_file_hash_map".to_string(),
-            )]
-            .into_iter()
-            .collect(),
-            root_external_dependencies_hash: Some("0000000000000000".to_string()),
+            global_file_hash_map: &global_file_hash_map,
+            root_external_dependencies_hash: Some("0000000000000000"),
             env: &["env".to_string()],
             resolved_env_vars: vec![],
             pass_through_env: &["pass_through_env".to_string()],

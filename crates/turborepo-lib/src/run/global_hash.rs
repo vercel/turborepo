@@ -12,7 +12,6 @@ use turborepo_scm::SCM;
 use crate::{
     cli::EnvMode,
     hash::{GlobalHashable, TurboHash},
-    package_graph::WorkspaceInfo,
     package_manager,
     package_manager::PackageManager,
 };
@@ -31,7 +30,7 @@ pub struct GlobalHashableInputs<'a> {
     pub global_cache_key: &'static str,
     pub global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
     // This is `None` in single package mode
-    pub root_external_dependencies_hash: Option<String>,
+    pub root_external_dependencies_hash: Option<&'a str>,
     pub env: &'a [String],
     // Only Option to allow #[derive(Default)]
     pub resolved_env_vars: Option<DetailedMap>,
@@ -44,7 +43,6 @@ pub struct GlobalHashableInputs<'a> {
 #[allow(clippy::too_many_arguments)]
 pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     is_monorepo: bool,
-    root_workspace: &WorkspaceInfo,
     root_external_dependencies_hash: &'a str,
     root_path: &AbsoluteSystemPath,
     package_manager: &PackageManager,
@@ -117,8 +115,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         global_file_hash_map.extend(dot_env_object);
     }
 
-    let root_external_dependencies_hash =
-        is_monorepo.then(|| root_workspace.get_external_deps_hash());
+    let root_external_dependencies_hash = is_monorepo.then_some(root_external_dependencies_hash);
 
     debug!(
         "external deps hash: {}",
@@ -163,7 +160,7 @@ impl<'a> GlobalHashableInputs<'a> {
         let global_hashable = GlobalHashable {
             global_cache_key: self.global_cache_key,
             global_file_hash_map: &self.global_file_hash_map,
-            root_external_dependencies_hash: &self.root_external_dependencies_hash,
+            root_external_dependencies_hash: self.root_external_dependencies_hash,
             env: &self.env,
             resolved_env_vars: self
                 .resolved_env_vars
@@ -173,7 +170,7 @@ impl<'a> GlobalHashableInputs<'a> {
             pass_through_env: self.pass_through_env.unwrap_or_default(),
             env_mode: self.env_mode,
             framework_inference: self.framework_inference,
-            dot_env: &self.dot_env,
+            dot_env: self.dot_env,
         };
 
         global_hashable.hash()

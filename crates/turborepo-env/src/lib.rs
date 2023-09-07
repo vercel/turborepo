@@ -58,7 +58,7 @@ impl EnvironmentVariableMap {
     pub fn to_secret_hashable(&self) -> EnvironmentVariablePairs {
         self.iter()
             .map(|(k, v)| {
-                if v != "" {
+                if !v.is_empty() {
                     let mut hasher = Sha256::new();
                     hasher.update(v.as_bytes());
                     let hash = hasher.finalize();

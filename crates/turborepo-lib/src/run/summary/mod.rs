@@ -58,11 +58,11 @@ fn get_user(env_vars: &EnvironmentVariableMap) -> Option<String> {
     None
 }
 
-// Wrapper around the serializable RunSummary, with some extra information
+// Wrapper around the serializable RunSummaryInner, with some extra information
 // about the Run and references to other things that we need.
 #[derive(Debug)]
-pub struct Meta<'a> {
-    run_summary: RunSummary<'a>,
+pub struct RunSummary<'a> {
+    inner: RunSummaryInner<'a>,
     repo_root: &'a AbsoluteSystemPath,
     single_package: bool,
     should_save: bool,
@@ -72,7 +72,7 @@ pub struct Meta<'a> {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RunSummary<'a> {
+pub struct RunSummaryInner<'a> {
     id: Ksuid,
     version: String,
     turbo_version: String,
@@ -87,8 +87,9 @@ pub struct RunSummary<'a> {
     scm: SCMState,
 }
 
-impl<'a> Meta<'a> {
-    pub fn new_run_summary(
+impl<'a> RunSummary<'a> {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
         start_at: chrono::DateTime<Local>,
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&'a AnchoredSystemPath>,
@@ -98,11 +99,9 @@ impl<'a> Meta<'a> {
         env_at_execution_start: EnvironmentVariableMap,
         global_hash_summary: GlobalHashSummary<'a>,
         synthesized_command: String,
-    ) -> Meta<'a> {
+    ) -> RunSummary<'a> {
         let single_package = run_opts.single_package;
-        let profile = run_opts.profile;
         let should_save = run_opts.summarize.flatten().is_some_and(|s| s);
-        let space_id = &run_opts.experimental_space_id;
 
         let run_type = if run_opts.dry_run {
             if run_opts.dry_run_json {
@@ -120,8 +119,8 @@ impl<'a> Meta<'a> {
             start_at,
         );
 
-        Meta {
-            run_summary: RunSummary {
+        RunSummary {
+            inner: RunSummaryInner {
                 id: Ksuid::new(None, None),
                 version: RUN_SUMMARY_SCHEMA_VERSION.to_string(),
                 execution_summary: Some(execution_summary),
@@ -146,7 +145,7 @@ impl<'a> Meta<'a> {
 
     pub fn close(
         &mut self,
-        exit_code: u32,
+        _exit_code: u32,
         pkg_dep_graph: &PackageGraph,
         ui: UI,
     ) -> Result<(), Error> {
@@ -175,12 +174,12 @@ impl<'a> Meta<'a> {
             println!("\n{}", color!(ui, BOLD_CYAN, "Packages in Scope"));
             let mut tab_writer = TabWriter::new(io::stdout());
             writeln!(tab_writer, "Name\tPath")?;
-            for pkg in &self.run_summary.packages {
+            for pkg in &self.inner.packages {
                 if matches!(pkg, WorkspaceName::Root) {
                     continue;
                 }
                 let dir = pkg_dep_graph
-                    .workspace_info(&pkg)
+                    .workspace_info(pkg)
                     .ok_or_else(|| Error::MissingWorkspace(pkg.clone()))?
                     .package_path();
 
@@ -189,11 +188,7 @@ impl<'a> Meta<'a> {
             }
         }
 
-        let file_count = self
-            .run_summary
-            .global_hash_summary
-            .global_file_hash_map
-            .len();
+        let file_count = self.inner.global_hash_summary.global_file_hash_map.len();
 
         let mut tab_writer = TabWriter::new(io::stdout());
         cprintln!(ui, BOLD_CYAN, "\nGlobal Hash Inputs");
@@ -203,28 +198,28 @@ impl<'a> Meta<'a> {
             ui,
             GREY,
             "  External Dependencies Hash\t=\t{}",
-            self.run_summary.global_hash_summary.root_external_deps_hash
+            self.inner.global_hash_summary.root_external_deps_hash
         )?;
         cwriteln!(
             tab_writer,
             ui,
             GREY,
             "  Global Cache Key\t=\t{}",
-            self.run_summary.global_hash_summary.global_cache_key
+            self.inner.global_hash_summary.global_cache_key
         )?;
         cwriteln!(
             tab_writer,
             ui,
             GREY,
             "  Global .env Files considered\t=\t{}",
-            self.run_summary.global_hash_summary.dot_env.len()
+            self.inner.global_hash_summary.dot_env.len()
         )?;
         cwriteln!(
             tab_writer,
             ui,
             GREY,
             "  Global Env Vars\t=\t{}",
-            self.run_summary
+            self.inner
                 .global_hash_summary
                 .env_vars
                 .specified
@@ -236,7 +231,7 @@ impl<'a> Meta<'a> {
             ui,
             GREY,
             "  Global Env Vars Values\t=\t{}",
-            self.run_summary
+            self.inner
                 .global_hash_summary
                 .env_vars
                 .configured
@@ -247,16 +242,12 @@ impl<'a> Meta<'a> {
             ui,
             GREY,
             "  Inferred Global Env Vars Values\t=\t{}",
-            self.run_summary
-                .global_hash_summary
-                .env_vars
-                .inferred
-                .join(", ")
+            self.inner.global_hash_summary.env_vars.inferred.join(", ")
         )?;
 
         tab_writer.flush()?;
 
-        for task in &self.run_summary.tasks {
+        for task in &self.inner.tasks {
             if self.single_package {
                 cprintln!(ui, BOLD, "{}", task.task_id.task());
             } else {
@@ -375,33 +366,31 @@ impl<'a> Meta<'a> {
     fn normalize(&mut self) {
         // Remove execution summary for dry runs
         if matches!(self.run_type, RunType::DryJson) {
-            self.run_summary.execution_summary = None;
+            self.inner.execution_summary = None;
         }
 
         // For single packages, we don't need the packages
         // and each task summary needs some cleaning
         if self.single_package {
-            self.run_summary.packages.drain();
+            self.inner.packages.drain();
 
-            for task_summary in &mut self.run_summary.tasks {
+            for task_summary in &mut self.inner.tasks {
                 task_summary.clean_for_single_package();
             }
         }
 
-        self.run_summary
-            .tasks
-            .sort_by(|a, b| a.task_id.cmp(&b.task_id));
+        self.inner.tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
     }
 
     fn get_path(&self) -> AbsoluteSystemPathBuf {
-        let filename = format!("{}.json", self.run_summary.id);
+        let filename = format!("{}.json", self.inner.id);
 
         self.repo_root
             .join_components(&[".turbo", "runs", &filename])
     }
 
     fn save(&self) -> Result<(), Error> {
-        let json = serde_json::to_string_pretty(&self.run_summary)?;
+        let json = serde_json::to_string_pretty(&self.inner)?;
 
         let summary_path = self.get_path();
         summary_path.ensure_dir()?;

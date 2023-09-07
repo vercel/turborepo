@@ -7,15 +7,15 @@ use turborepo_env::{DetailedMap, EnvironmentVariableMap, EnvironmentVariablePair
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 // Contains the environment variable inputs for the global hash
-pub struct GlobalEnvConfiguration {
-    pub env: Vec<String>,
-    pub pass_through_env: Vec<String>,
+pub struct GlobalEnvConfiguration<'a> {
+    pub env: &'a [String],
+    pub pass_through_env: &'a [String],
 }
 
 // Contains the environment variables that impacted the global hash
 #[derive(Debug, Serialize)]
-pub struct GlobalEnvVarSummary {
-    pub specified: GlobalEnvConfiguration,
+pub struct GlobalEnvVarSummary<'a> {
+    pub specified: GlobalEnvConfiguration<'a>,
 
     pub configured: EnvironmentVariablePairs,
     pub inferred: EnvironmentVariablePairs,
@@ -27,18 +27,19 @@ pub struct GlobalHashSummary<'a> {
     pub global_cache_key: &'static str,
     pub global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
     pub root_external_deps_hash: &'a str,
-    pub dot_env: Vec<RelativeUnixPathBuf>,
-    pub env_vars: GlobalEnvVarSummary,
+    pub dot_env: &'a [RelativeUnixPathBuf],
+    pub env_vars: GlobalEnvVarSummary<'a>,
 }
 
 impl<'a> GlobalHashSummary<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         global_cache_key: &'static str,
         global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
         root_external_deps_hash: &'a str,
-        global_env: Vec<String>,
-        global_pass_through_env: Vec<String>,
-        global_dot_env: Vec<RelativeUnixPathBuf>,
+        global_env: &'a [String],
+        global_pass_through_env: &'a [String],
+        global_dot_env: &'a [RelativeUnixPathBuf],
         resolved_env_vars: DetailedMap,
         resolved_pass_through_env_vars: EnvironmentVariableMap,
     ) -> Self {

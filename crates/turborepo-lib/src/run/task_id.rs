@@ -15,12 +15,6 @@ pub struct TaskId<'a> {
     task: Cow<'a, str>,
 }
 
-impl Serialize for TaskId<'_> {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
 /// A task name as it appears in in a `turbo.json` it might be for all
 /// workspaces or just one.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
@@ -42,6 +36,12 @@ impl<'a> fmt::Display for TaskId<'a> {
             "{}{TASK_DELIMITER}{}",
             self.package, self.task
         ))
+    }
+}
+
+impl<'a> From<TaskId<'a>> for String {
+    fn from(value: TaskId<'a>) -> Self {
+        value.to_string()
     }
 }
 

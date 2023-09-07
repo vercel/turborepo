@@ -242,7 +242,7 @@ mod test {
 
     #[tokio::test]
     async fn test_multiple_tasks() {
-        let summary = ExecutionSummary::new();
+        let summary = ExecutionSummary::new("turbo run build".to_string(), None, Local::now());
         let mut tasks = Vec::new();
         {
             let tracker = summary.tracker(TaskId::new("foo", "build"));
@@ -288,12 +288,15 @@ mod test {
 
     #[tokio::test]
     async fn test_timing() {
-        let summary = ExecutionSummary::new();
+        let summary = ExecutionSummary::new("turbo run build".to_string(), None, Local::now());
         let tracker = summary.tracker(TaskId::new("foo", "build"));
         let post_construction_time = Local::now();
+        let sleep_duration = Duration::milliseconds(5);
+        tokio::time::sleep(sleep_duration.to_std().unwrap()).await;
+
         let tracker = tracker.start().await;
-        let sleep_duration = Duration::from_millis(5);
-        tokio::time::sleep(sleep_duration).await;
+
+        tokio::time::sleep(sleep_duration.to_std().unwrap()).await;
         let summary = tracker.build_succeeded(0).await;
         assert!(
             post_construction_time < summary.started_at,

@@ -4,8 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
-use itertools::Itertools;
-use petgraph::visit::{depth_first_search, EdgeRef, Reversed};
+use petgraph::visit::{depth_first_search, Reversed};
 use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;

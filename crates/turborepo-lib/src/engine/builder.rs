@@ -40,7 +40,7 @@ pub struct EngineBuilder<'a> {
     package_graph: &'a PackageGraph,
     is_single: bool,
     turbo_jsons: Option<HashMap<WorkspaceName, TurboJson>>,
-    workspaces: Vec<&'a WorkspaceName>,
+    workspaces: Vec<WorkspaceName>,
     tasks: Vec<TaskName<'static>>,
     root_enabled_tasks: HashSet<TaskName<'static>>,
     tasks_only: bool,
@@ -86,7 +86,7 @@ impl<'a> EngineBuilder<'a> {
         self
     }
 
-    pub fn with_workspaces(mut self, workspaces: Vec<&'a WorkspaceName>) -> Self {
+    pub fn with_workspaces(mut self, workspaces: Vec<WorkspaceName>) -> Self {
         self.workspaces = workspaces;
         self
     }

@@ -570,12 +570,12 @@ mod test {
 
         let state = child.state.read().await;
 
-        let expected = if cfg!(unix) {
+        let _expected = if cfg!(unix) {
             ChildExit::KilledExternal
         } else {
             ChildExit::Finished(Some(1))
         };
 
-        assert_matches!(&*state, ChildState::Exited(expected));
+        assert_matches!(&*state, ChildState::Exited(_expected));
     }
 }

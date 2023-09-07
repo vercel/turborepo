@@ -12,7 +12,7 @@ use std::{
 
 use anyhow::{anyhow, Context as ErrorContext, Result};
 pub use cache::{RunCache, TaskCache};
-use chrono::{DateTime, Local};
+use chrono::Local;
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tracing::{debug, info};
@@ -36,7 +36,7 @@ use crate::{
     process::ProcessManager,
     run::{
         global_hash::get_global_hash_inputs,
-        summary::{GlobalHashSummary, Meta},
+        summary::{GlobalHashSummary, RunSummary},
     },
     task_graph::Visitor,
     task_hash::PackageInputsHashes,
@@ -166,7 +166,7 @@ impl<'a> Run<'a> {
                 .collect(),
         ))
         .with_tasks_only(opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.iter().collect())
+        .with_workspaces(filtered_pkgs.iter().cloned().collect())
         .with_tasks(
             opts.run_opts
                 .tasks
@@ -212,7 +212,6 @@ impl<'a> Run<'a> {
 
         let mut global_hash_inputs = get_global_hash_inputs(
             !opts.run_opts.single_package,
-            root_workspace,
             &root_external_dependencies_hash,
             &self.base.repo_root,
             pkg_dep_graph.package_manager(),
@@ -279,23 +278,22 @@ impl<'a> Run<'a> {
 
         visitor.visit(engine.clone()).await?;
 
-        println!("done");
-
+        let pass_through_env = global_hash_inputs.pass_through_env.unwrap_or_default();
         let resolved_pass_through_env_vars =
-            env_at_execution_start.from_wildcards(&global_hash_inputs.pass_through_env)?;
+            env_at_execution_start.from_wildcards(pass_through_env)?;
 
         let global_hash_summary = GlobalHashSummary::new(
             global_hash_inputs.global_cache_key,
             global_hash_inputs.global_file_hash_map,
             &root_external_dependencies_hash,
             global_hash_inputs.env,
-            global_hash_inputs.pass_through_env,
+            pass_through_env,
             global_hash_inputs.dot_env,
             global_hash_inputs.resolved_env_vars.unwrap_or_default(),
             resolved_pass_through_env_vars,
         );
 
-        let mut run_summary = Meta::new_run_summary(
+        let mut run_summary = RunSummary::new(
             start_at,
             &self.base.repo_root,
             opts.scope_opts.pkg_inference_root.as_deref(),
@@ -307,7 +305,7 @@ impl<'a> Run<'a> {
             "todo".to_string(),
         );
 
-        run_summary.close(0, &*pkg_dep_graph, self.base.ui)?;
+        run_summary.close(0, &pkg_dep_graph, self.base.ui)?;
 
         Ok(())
     }
