@@ -1,5 +1,6 @@
 mod color_selector;
 mod logs;
+mod output;
 mod prefixed;
 
 use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
@@ -12,6 +13,7 @@ use thiserror::Error;
 pub use crate::{
     color_selector::ColorSelector,
     logs::{replay_logs, LogWriter},
+    output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
 };
 
