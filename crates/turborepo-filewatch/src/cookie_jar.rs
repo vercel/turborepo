@@ -121,7 +121,7 @@ async fn watch_cookies(
             event = file_events.recv() => {
                 match flatten_event(event) {
                     Ok(event) => {
-                        if event.kind == EventKind::Create(notify::event::CreateKind::File) {
+                        if matches!(event.kind, EventKind::Create(_)) {
                             let mut watches = watches.lock().expect("mutex poisoned");
                             for path in event.paths {
                                 let abs_path: &AbsoluteSystemPath = path
