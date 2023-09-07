@@ -29,7 +29,6 @@ use crate::count_hash_set::CountHashSet;
 /// start on different depths of the graph.
 pub struct BottomTree<T, I: IsEnabled> {
     height: u8,
-    is_blue: bool,
     state: Mutex<BottomTreeState<T, I>>,
 }
 
@@ -43,10 +42,9 @@ pub struct BottomTreeState<T, I: IsEnabled> {
 }
 
 impl<T: Default, I: IsEnabled> BottomTree<T, I> {
-    pub fn new(height: u8, is_blue: bool) -> Self {
+    pub fn new(height: u8) -> Self {
         Self {
             height,
-            is_blue,
             state: Mutex::new(BottomTreeState {
                 data: T::default(),
                 left_bottom_upper: None,
@@ -151,7 +149,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             (ChildLocation::Left, _) | (ChildLocation::Inner, false) => {
                 // the left/inner child has lost a child
                 // this means this node has lost a inner child
-                self.remove_child_of_child_inner(context, child_of_child, child_of_child_hash);
+                self.remove_child_of_child_inner(context, child_of_child);
             }
             (ChildLocation::Inner, true) => {
                 // the inner blue child has lost a child
@@ -201,7 +199,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         self: &Arc<Self>,
         context: &C,
         child_of_child: &I,
-        child_of_child_hash: u32,
     ) {
         if self.height == 0 {
             remove_upper_from_item_ref(context, child_of_child, &self, ChildLocation::Inner);

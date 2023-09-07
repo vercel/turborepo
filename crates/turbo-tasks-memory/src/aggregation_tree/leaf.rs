@@ -171,12 +171,11 @@ pub fn bottom_tree<C: AggregationContext>(
     let mut result = None;
     {
         let mut item = context.item(reference);
-        let is_blue = ((item.hash() >> height >> 1) & 1) == 0;
         let leaf = item.leaf();
         if let Some(bottom_tree) = leaf.bottom_trees.get(&height) {
             return bottom_tree.clone();
         }
-        new_bottom_tree = Arc::new(BottomTree::new(height, is_blue));
+        new_bottom_tree = Arc::new(BottomTree::new(height));
         leaf.bottom_trees.insert(height, new_bottom_tree.clone());
         if height == 0 {
             result = Some(add_upper_to_item_step_1::<C>(
