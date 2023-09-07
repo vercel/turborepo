@@ -28,7 +28,11 @@ use turbopath::PathRelation;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 #[cfg(feature = "manual_recursive_watch")]
 use {
-    notify::event::{CreateKind, EventAttributes},
+    notify::{
+        event::{CreateKind, EventAttributes},
+        ErrorKind,
+    },
+    std::io,
     walkdir::WalkDir,
 };
 
@@ -146,6 +150,13 @@ async fn watch_events(
             Some(event) = recv_file_events.recv().into_future() => {
                 match event {
                     Ok(mut event) => {
+                        // Note that we need to filter relevant events
+                        // before doing manual recursive watching so that
+                        // we don't try to add watches to siblings of the
+                        // directories on our path to the root.
+                        #[cfg(feature = "watch_ancestors")]
+                        filter_relevant(&watch_root, &mut event);
+
                         #[cfg(feature = "manual_recursive_watch")]
                         {
                             if event.kind == EventKind::Create(CreateKind::Folder) {
@@ -157,8 +168,6 @@ async fn watch_events(
                                 }
                             }
                         }
-                        #[cfg(feature = "watch_ancestors")]
-                        filter_relevant(&watch_root, &mut event);
                         // we don't care if we fail to send, it just means no one is currently watching
                         let _ = broadcast_sender.send(Ok(event));
                     },
@@ -239,6 +248,15 @@ fn watch_recursively(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result
 }
 
 #[cfg(feature = "manual_recursive_watch")]
+fn is_not_found(err: &notify::Error) -> bool {
+    if let ErrorKind::Io(ref io_err) = err.kind {
+        io_err.kind() == io::ErrorKind::NotFound
+    } else {
+        false
+    }
+}
+
+#[cfg(feature = "manual_recursive_watch")]
 fn watch_recursively(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(), WatchError> {
     // Don't synthesize initial events
     manually_add_recursive_watches(root.as_std_path(), watcher, None)
@@ -254,7 +272,13 @@ fn manually_add_recursive_watches(
     for dir in WalkDir::new(root).follow_links(false).into_iter() {
         let dir = dir?;
         if dir.file_type().is_dir() {
-            watcher.watch(dir.path(), RecursiveMode::NonRecursive)?;
+            match watcher.watch(dir.path(), RecursiveMode::NonRecursive) {
+                Ok(()) => {}
+                // If we try to watch a non-existent path, we can just skip
+                // it.
+                Err(e) if is_not_found(&e) => continue,
+                Err(e) => return Err(e.into()),
+            }
         }
         if let Some(sender) = sender.as_ref() {
             let create_kind = if dir.file_type().is_dir() {
