@@ -16,7 +16,8 @@ pub struct PrefixedUI<W> {
     ui: UI,
     output_prefix: StyledObject<String>,
     warn_prefix: StyledObject<String>,
-    output: W,
+    out: W,
+    err: W,
 }
 
 impl<W: Write> PrefixedUI<W> {
@@ -24,13 +25,15 @@ impl<W: Write> PrefixedUI<W> {
         ui: UI,
         output_prefix: StyledObject<String>,
         warn_prefix: StyledObject<String>,
-        output: W,
+        out: W,
+        err: W,
     ) -> Self {
         Self {
             ui,
             output_prefix,
             warn_prefix,
-            output,
+            out,
+            err,
         }
     }
 
@@ -39,7 +42,7 @@ impl<W: Write> PrefixedUI<W> {
         // because we don't want our entire program to crash
         // due to a log failure.
         if let Err(err) = writeln!(
-            self.output,
+            self.out,
             "{}{}",
             self.ui.apply(self.output_prefix.clone()),
             message
@@ -53,7 +56,7 @@ impl<W: Write> PrefixedUI<W> {
         // because we don't want our entire program to crash
         // due to a log failure.
         if let Err(err) = writeln!(
-            self.output,
+            self.err,
             "{}{}",
             self.ui.apply(self.warn_prefix.clone()),
             message
@@ -96,5 +99,58 @@ impl<W: Write> Write for PrefixedWriter<W> {
 
     fn flush(&mut self) -> std::io::Result<()> {
         self.writer.flush()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_outputs_writes_to_out() {
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+
+        let output_prefix = crate::BOLD.apply_to("output".to_string());
+        let warn_prefix = crate::MAGENTA.apply_to("warn".to_string());
+        {
+            let mut prefixed_ui = PrefixedUI::new(
+                UI::new(false),
+                output_prefix,
+                warn_prefix,
+                &mut out,
+                &mut err,
+            );
+            prefixed_ui.output("all good");
+        }
+
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "\u{1b}[1moutput\u{1b}[0mall good\n",
+        );
+    }
+
+    #[test]
+    fn test_warn_writes_to_err() {
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+
+        let output_prefix = crate::BOLD.apply_to("output".to_string());
+        let warn_prefix = crate::MAGENTA.apply_to("warn".to_string());
+        {
+            let mut prefixed_ui = PrefixedUI::new(
+                UI::new(false),
+                output_prefix,
+                warn_prefix,
+                &mut out,
+                &mut err,
+            );
+            prefixed_ui.warn("be careful!");
+        }
+
+        assert_eq!(
+            String::from_utf8(err).unwrap(),
+            "\u{1b}[35mwarn\u{1b}[0mbe careful!\n"
+        );
     }
 }

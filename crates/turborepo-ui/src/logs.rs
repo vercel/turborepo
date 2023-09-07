@@ -155,11 +155,13 @@ mod tests {
     fn test_replay_logs() -> Result<()> {
         let ui = UI::new(false);
         let mut output = Vec::new();
+        let mut err = Vec::new();
         let mut prefixed_ui = PrefixedUI::new(
             ui,
             CYAN.apply_to(">".to_string()),
             BOLD.apply_to(">!".to_string()),
             &mut output,
+            &mut err,
         );
         let dir = tempdir()?;
         let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
