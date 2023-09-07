@@ -876,64 +876,80 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> bool {
+        let mut context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut schedule_task = false;
-        let mut dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
         {
-            let mut state = self.full_state_mut();
+            let mut job = None;
+            let mut dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
+            {
+                let mut state = self.full_state_mut();
 
-            state
-                .stats
-                .register_execution(duration, turbo_tasks.program_duration_until(instant));
-            match state.state_type {
-                InProgress {
-                    ref mut event,
-                    count_as_finished,
-                } => {
-                    let event = event.take();
-                    let mut dependencies = take(&mut dependencies);
-                    // This will stay here for longer, so make sure to not consume too much memory
-                    dependencies.shrink_to_fit();
-                    for cells in state.cells.values_mut() {
-                        cells.shrink_to_fit();
+                state
+                    .stats
+                    .register_execution(duration, turbo_tasks.program_duration_until(instant));
+                match state.state_type {
+                    InProgress {
+                        ref mut event,
+                        count_as_finished,
+                    } => {
+                        let event = event.take();
+                        let mut dependencies = take(&mut dependencies);
+                        // This will stay here for longer, so make sure to not consume too much
+                        // memory
+                        dependencies.shrink_to_fit();
+                        for cells in state.cells.values_mut() {
+                            cells.shrink_to_fit();
+                        }
+                        state.cells.shrink_to_fit();
+                        state.stateful = stateful;
+                        state.state_type = Done { dependencies };
+                        if !count_as_finished {
+                            job = Some((
+                                state.aggregation_leaf.add_children_job(
+                                    &context,
+                                    state.children.iter().cloned().collect::<Vec<_>>(),
+                                ),
+                                state.aggregation_leaf.change_job(
+                                    &context,
+                                    TaskChange {
+                                        unfinished: -1,
+                                        #[cfg(feature = "track_unfinished")]
+                                        unfinished_tasks_update: vec![(self.id, -1)],
+                                        ..Default::default()
+                                    },
+                                ),
+                            ));
+                        }
+                        event.notify(usize::MAX);
                     }
-                    state.cells.shrink_to_fit();
-                    state.stateful = stateful;
-                    state.state_type = Done { dependencies };
-                    if !count_as_finished {
-                        state.aggregation_leaf.change(
-                            &TaskAggregationContext::new(turbo_tasks, backend),
-                            &TaskChange {
-                                unfinished: -1,
-                                #[cfg(feature = "track_unfinished")]
-                                unfinished_tasks_update: vec![(self.id, -1)],
-                                ..Default::default()
-                            },
-                        );
+                    InProgressDirty { ref mut event } => {
+                        let event = event.take();
+                        state.state_type = Scheduled { event };
+                        schedule_task = true;
                     }
-                    event.notify(usize::MAX);
-                }
-                InProgressDirty { ref mut event } => {
-                    let event = event.take();
-                    state.state_type = Scheduled { event };
-                    schedule_task = true;
-                }
-                Dirty { .. } | Scheduled { .. } | Done { .. } => {
-                    panic!(
-                        "Task execution completed in unexpected state {}",
-                        Task::state_string(&state)
-                    )
-                }
-            };
-        }
-        if !dependencies.is_empty() {
-            self.clear_dependencies(dependencies, backend, turbo_tasks);
+                    Dirty { .. } | Scheduled { .. } | Done { .. } => {
+                        panic!(
+                            "Task execution completed in unexpected state {}",
+                            Task::state_string(&state)
+                        )
+                    }
+                };
+            }
+            if let Some((job1, job2)) = job {
+                (job1)();
+                (job2)();
+            }
+
+            if !dependencies.is_empty() {
+                self.clear_dependencies(dependencies, backend, turbo_tasks);
+            }
         }
 
         if let TaskType::Once(_) = self.ty {
             // unset the root type, so tasks below are no longer active
-            let mut context = TaskAggregationContext::new(turbo_tasks, backend);
             context.aggregation_info(self.id).lock().root_type = None;
         }
+        context.apply_queued_updates();
 
         schedule_task
     }
@@ -1318,20 +1334,8 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
-        let mut context = TaskAggregationContext::new(turbo_tasks, backend);
-        {
-            let mut job = None;
-            {
-                let mut state = self.full_state_mut();
-                if state.children.insert(child_id) {
-                    job = Some(state.aggregation_leaf.add_child_job(&context, &child_id));
-                }
-            }
-            if let Some(job) = job {
-                (job)();
-            }
-        }
-        context.apply_queued_updates();
+        let mut state = self.full_state_mut();
+        state.children.insert(child_id);
     }
 
     pub(crate) fn get_or_wait_output<T, F: FnOnce(&mut Output) -> Result<T>>(
