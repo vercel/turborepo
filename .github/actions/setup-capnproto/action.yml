@@ -7,7 +7,7 @@ runs:
     - name: "Setup capnproto for Linux"
       if: runner.os == 'Linux'
       shell: bash
-      run: sudo apt-get update && sudo apt-get install capnproto
+      run: sudo apt-get -y update && sudo apt-get install -y capnproto
 
     - name: "Setup capnproto for macos"
       if: runner.os == 'macOS'
