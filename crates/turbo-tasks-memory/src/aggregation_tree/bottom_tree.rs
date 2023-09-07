@@ -63,7 +63,7 @@ struct SplitChildren<'a, I> {
 
 impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     fn is_blue(&self, hash: u32) -> bool {
-        hash >> self.height & 1 == 0
+        (hash.rotate_right(self.height as u32 * 4) & 15) == 0
     }
 
     fn split_children<'a>(
