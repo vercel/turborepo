@@ -10,6 +10,7 @@ import {
 import {
   getAvailablePackageManagers,
   createProject,
+  DownloadError,
   logger,
 } from "@turbo/utils";
 import { tryGitCommit, tryGitInit } from "../../utils/git";
@@ -33,8 +34,15 @@ function handleErrors(err: unknown) {
   } else if (err instanceof ConvertError && err.type !== "unknown") {
     error(chalk.red(err.message));
     process.exit(1);
-    // handle unknown errors (no special handling, just re-throw to catch at root)
-  } else {
+    // handle download errors from @turbo/utils
+  } else if (err instanceof DownloadError) {
+    error(chalk.red("Unable to download template from Github"));
+    error(chalk.red(err.message));
+    process.exit(1);
+  }
+
+  // handle unknown errors (no special handling, just re-throw to catch at root)
+  else {
     throw err;
   }
 }
@@ -85,12 +93,20 @@ export async function create(
 
   const { example, examplePath } = opts;
   const exampleName = example && example !== "default" ? example : "basic";
-  const { hasPackageJson, availableScripts, repoInfo } = await createProject({
-    appPath: root,
-    example: exampleName,
-    isDefaultExample: isDefaultExample(exampleName),
-    examplePath,
-  });
+
+  let projectData = {} as Awaited<ReturnType<typeof createProject>>;
+  try {
+    projectData = await createProject({
+      appPath: root,
+      example: exampleName,
+      isDefaultExample: isDefaultExample(exampleName),
+      examplePath,
+    });
+  } catch (err) {
+    handleErrors(err);
+  }
+
+  const { hasPackageJson, availableScripts, repoInfo } = projectData;
 
   // create a new git repo after creating the project
   tryGitInit(root, `feat(create-turbo): create ${exampleName}`);
