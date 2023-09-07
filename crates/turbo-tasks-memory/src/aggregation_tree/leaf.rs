@@ -250,7 +250,7 @@ pub fn top_tree<C: AggregationContext>(
         leaf.top_trees.insert(depth, new_top_tree.clone());
         new_top_tree
     };
-    let bottom_tree = bottom_tree(context, reference, (depth + 1) * 4);
+    let bottom_tree = bottom_tree(context, reference, depth + 4);
     bottom_tree.add_top_tree_upper(context, &new_top_tree);
     new_top_tree
 }
