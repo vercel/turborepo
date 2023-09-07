@@ -1,0 +1,62 @@
+# CLI benchmark, compares main and PR branch with criterion.
+# Comment with text containing `!bench_cli`, a new result will be commented at the bottom of this PR.
+
+name: CLI Benchmark
+
+on:
+  issue_comment:
+    types: [created]
+
+env:
+  RUST_LOG: info
+
+jobs:
+  bench:
+    permissions:
+      pull-requests: write
+    name: Bench
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '!bench_cli')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Main Branch
+        uses: actions/checkout@v3
+        with:
+          clean: false
+          ref: main
+
+      - name: Benchmark Main Branch
+        run: |
+          cargo bench --bench hashes -- --noplot --save-baseline main
+
+      - name: Get PR SHA
+        id: sha
+        uses: actions/github-script@v6
+        with:
+          result-encoding: string
+          script: |
+            const response = await github.request(context.payload.issue.pull_request.url);
+            return response.data.head.sha;
+
+      - name: Checkout PR Branch
+        uses: actions/checkout@v3
+        with:
+          submodules: false
+          ref: ${{ steps.sha.outputs.result }}
+
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          target: ${{ runner.os }}
+
+      - name: Benchmark PR Branch
+        run: |
+          cargo bench --bench hashes -- --noplot --load-baseline new --baseline main > benchmark.md
+
+      - name: Write a new comment
+        # Check if the event is not triggered by a fork
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: peter-evans/create-or-update-comment@v3
+        continue-on-error: true
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body-file: benchmark.md
