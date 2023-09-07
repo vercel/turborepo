@@ -28,12 +28,14 @@ impl<T: Default> TopTree<T> {
 }
 
 impl<T> TopTree<T> {
-    pub(super) fn add_children_of_child<C: AggregationContext<Info = T>>(
+    pub(super) fn add_children_of_child<'a, C: AggregationContext<Info = T>>(
         self: &Arc<Self>,
         context: &C,
-        children: &[(u32, &C::ItemRef)],
-    ) {
-        for (_, child) in children {
+        children: impl IntoIterator<Item = &'a C::ItemRef>,
+    ) where
+        C::ItemRef: 'a,
+    {
+        for child in children {
             top_tree(context, child, self.depth + 1).add_upper(context, self);
         }
     }

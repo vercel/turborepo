@@ -66,10 +66,16 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         hash >> self.height & 1 == 0
     }
 
-    fn split_children<'a>(&self, children: &[(u32, &'a I)]) -> SplitChildren<'a, I> {
-        let mut blue = Vec::with_capacity(children.len());
-        let mut white = Vec::with_capacity(children.len());
-        for &(hash, child) in children {
+    fn split_children<'a>(
+        &self,
+        children: impl IntoIterator<Item = (u32, &'a I)>,
+    ) -> SplitChildren<'a, I> {
+        let children = children.into_iter();
+        let size_hint = children.size_hint();
+        let cap = size_hint.1.unwrap_or(size_hint.0);
+        let mut blue = Vec::with_capacity(cap);
+        let mut white = Vec::with_capacity(cap);
+        for (hash, child) in children {
             if self.is_blue(hash) {
                 blue.push((hash, child));
             } else {
@@ -79,17 +85,19 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         SplitChildren { blue, white }
     }
 
-    pub fn add_children_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn add_children_of_child<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         context: &C,
         child_location: ChildLocation,
-        mut children: &[(u32, &'_ I)],
-    ) {
+        children: impl IntoIterator<Item = (u32, &'a I)>,
+    ) where
+        I: 'a,
+    {
         match child_location {
             ChildLocation::Left => {
                 // the left child has new children
                 // this means it's a inner child of this node
-                self.add_children_of_child_inner(context, &children);
+                self.add_children_of_child_inner(context, children.into_iter().map(|(_, c)| c));
             }
             ChildLocation::Inner => {
                 // the inner child has new children
@@ -97,7 +105,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 // and blue children need to propagate up
                 let SplitChildren { blue, white } = self.split_children(children);
                 if !white.is_empty() {
-                    self.add_children_of_child_inner(context, &white);
+                    self.add_children_of_child_inner(context, white.iter().map(|&(_, c)| c));
                 }
                 if !blue.is_empty() {
                     self.add_children_of_child_following(context, blue);
@@ -114,38 +122,43 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         let mut left_bottom_upper = None;
         let mut inner_bottom_uppers = Vec::new();
         let mut state = self.state.lock();
-        children.retain(|&(hash, child)| state.following.add(child.clone()));
+        children.retain(|&(_, child)| state.following.add(child.clone()));
         if children.is_empty() {
             return;
         }
         left_bottom_upper = state.left_bottom_upper.clone();
         inner_bottom_uppers.extend(state.inner_bottom_upper.iter().cloned());
         for TopRef { upper } in state.top_upper.iter() {
-            upper.add_children_of_child(context, &children);
+            upper.add_children_of_child(context, children.iter().map(|&(_, c)| c));
         }
         drop(state);
         if let Some(upper) = left_bottom_upper {
-            upper.add_children_of_child(context, ChildLocation::Left, &children);
+            upper.add_children_of_child(context, ChildLocation::Left, children.iter().copied());
         }
         for BottomRef { upper } in inner_bottom_uppers {
-            upper.add_children_of_child(context, ChildLocation::Inner, &children);
+            upper.add_children_of_child(context, ChildLocation::Inner, children.iter().copied());
         }
     }
 
-    fn add_children_of_child_inner<C: AggregationContext<Info = T, ItemRef = I>>(
+    fn add_children_of_child_inner<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         context: &C,
-        children: &[(u32, &I)],
-    ) {
+        children: impl IntoIterator<Item = &'a I>,
+    ) where
+        I: 'a,
+    {
         if self.height == 0 {
-            for &(_, child) in children {
+            for child in children {
                 add_upper_to_item_ref(context, child, &self, ChildLocation::Inner);
             }
         } else {
-            children
-                .iter()
-                .map(|&(_, child)| bottom_tree(context, child, self.height - 1))
-                .for_each(|tree| tree.add_bottom_tree_upper(context, &self, ChildLocation::Inner));
+            for child in children {
+                bottom_tree(context, child, self.height - 1).add_bottom_tree_upper(
+                    context,
+                    &self,
+                    ChildLocation::Inner,
+                );
+            }
         }
     }
 
@@ -319,12 +332,10 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             if let Some(change) = context.info_to_add_change(&state.data) {
                 upper.child_change(context, &change);
             }
-            let children = state
-                .following
-                .iter()
-                .map(|item| (context.hash(item), item))
-                .collect::<Vec<_>>();
-            upper.add_children_of_child(context, location, &children);
+            let children = state.following.iter().cloned().collect::<Vec<_>>();
+            drop(state);
+            let children = children.iter().map(|item| (context.hash(item), item));
+            upper.add_children_of_child(context, location, children);
         }
     }
 
@@ -487,8 +498,12 @@ pub fn add_upper_to_item_step_2<C: AggregationContext>(
         context.on_add_change(&change);
         upper.child_change(context, &change);
     }
-    for child in children {
-        upper.add_child_of_child(context, location, &child, context.hash(&child))
+    if !children.is_empty() {
+        upper.add_children_of_child(
+            context,
+            location,
+            children.iter().map(|child| (context.hash(&child), child)),
+        )
     }
 }
 

@@ -37,13 +37,36 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     {
         let children = children
             .into_iter()
-            .map(|child| (context.hash(child), child))
-            .collect::<Vec<_>>();
-        if let Some(upper) = self.left_upper.as_ref() {
-            upper.add_children_of_child(context, ChildLocation::Left, &children);
-        }
-        for BottomRef { upper } in self.inner_upper.iter() {
-            upper.add_children_of_child(context, ChildLocation::Inner, &children);
+            .map(|child| (context.hash(child), child));
+        // Only collect the children into a Vec when neccessary
+        if self.inner_upper.is_empty() {
+            if let Some(upper) = self.left_upper.as_ref() {
+                upper.add_children_of_child(context, ChildLocation::Left, children);
+            }
+        } else {
+            if let Some(upper) = self.left_upper.as_ref() {
+                let children = children.collect::<Vec<_>>();
+                upper.add_children_of_child(context, ChildLocation::Left, children.iter().copied());
+                for BottomRef { upper } in self.inner_upper.iter() {
+                    upper.add_children_of_child(
+                        context,
+                        ChildLocation::Inner,
+                        children.iter().copied(),
+                    );
+                }
+            } else if self.inner_upper.len() == 1 {
+                let BottomRef { upper } = self.inner_upper.iter().next().unwrap();
+                upper.add_children_of_child(context, ChildLocation::Inner, children);
+            } else {
+                let children = children.collect::<Vec<_>>();
+                for BottomRef { upper } in self.inner_upper.iter() {
+                    upper.add_children_of_child(
+                        context,
+                        ChildLocation::Inner,
+                        children.iter().copied(),
+                    );
+                }
+            }
         }
     }
 
@@ -74,10 +97,14 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
                 .map(|child| (context.hash(child), child))
                 .collect::<Vec<_>>();
             if let Some(upper) = left_upper {
-                upper.add_children_of_child(context, ChildLocation::Left, &children);
+                upper.add_children_of_child(context, ChildLocation::Left, children.iter().copied());
             }
             for BottomRef { upper } in inner_upper {
-                upper.add_children_of_child(context, ChildLocation::Inner, &children);
+                upper.add_children_of_child(
+                    context,
+                    ChildLocation::Inner,
+                    children.iter().copied(),
+                );
             }
         }
     }
