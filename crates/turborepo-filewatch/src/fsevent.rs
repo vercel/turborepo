@@ -30,6 +30,7 @@ use std::{
     thread,
 };
 
+use fs::core_foundation::Boolean;
 use fsevent_sys as fs;
 use fsevent_sys::core_foundation as cf;
 use notify::{
@@ -281,6 +282,9 @@ extern "C" {
     fn CFRunLoopIsWaiting(runloop: cf::CFRunLoopRef) -> cf::Boolean;
 }
 
+// CoreFoundation false value
+const FALSE: Boolean = 0x0;
+
 impl FsEventWatcher {
     fn from_event_handler(event_handler: Arc<Mutex<dyn EventHandler>>) -> Result<Self> {
         Ok(FsEventWatcher {
@@ -480,7 +484,7 @@ impl FsEventWatcher {
                         cur_runloop,
                         cf::kCFRunLoopDefaultMode,
                     );
-                    if fs::FSEventStreamStart(stream) == 0x0 {
+                    if fs::FSEventStreamStart(stream) == FALSE {
                         panic!("FSEventStream failed to start");
                     }
 
