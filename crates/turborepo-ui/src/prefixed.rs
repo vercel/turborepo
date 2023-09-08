@@ -28,6 +28,8 @@ impl<W: Write> PrefixedUI<W> {
         out: W,
         err: W,
     ) -> Self {
+        let output_prefix = ui.apply(output_prefix);
+        let warn_prefix = ui.apply(warn_prefix);
         Self {
             ui,
             output_prefix,
@@ -41,12 +43,7 @@ impl<W: Write> PrefixedUI<W> {
         // There's no reason to propagate this error
         // because we don't want our entire program to crash
         // due to a log failure.
-        if let Err(err) = writeln!(
-            self.out,
-            "{}{}",
-            self.ui.apply(self.output_prefix.clone()),
-            message
-        ) {
+        if let Err(err) = writeln!(self.out, "{}{}", self.output_prefix, message) {
             error!("cannot write to logs: {:?}", err);
         }
     }
@@ -55,12 +52,7 @@ impl<W: Write> PrefixedUI<W> {
         // There's no reason to propagate this error
         // because we don't want our entire program to crash
         // due to a log failure.
-        if let Err(err) = writeln!(
-            self.err,
-            "{}{}",
-            self.ui.apply(self.warn_prefix.clone()),
-            message
-        ) {
+        if let Err(err) = writeln!(self.err, "{}{}", self.warn_prefix, message) {
             error!("cannot write to logs: {:?}", err);
         }
     }
