@@ -22,7 +22,10 @@ use std::{
 
 use command_group::AsyncCommandGroup;
 pub use tokio::process::Command;
-use tokio::sync::{mpsc, watch, RwLock};
+use tokio::{
+    join,
+    sync::{mpsc, watch, RwLock},
+};
 use tracing::{debug, info};
 
 /// Represents all the information needed to run a child process.
@@ -248,8 +251,10 @@ impl Child {
     }
 
     /// Perform a graceful shutdown of the `Child` process.
-    pub async fn stop(&mut self) {
-        {
+    pub async fn stop(&mut self) -> Option<i32> {
+        let mut watch = self.exit_channel.clone();
+
+        let fut = async {
             let state = self.state.read().await;
             let child = match Self::child_channel(&state) {
                 Some(child) => child,
@@ -259,14 +264,24 @@ impl Child {
             // if this fails, it's because the channel is dropped (toctou)
             // we can just ignore it
             child.stop().await.ok();
-        }
+        };
 
-        self.wait().await;
+        let (_, code) = join! {
+            fut,
+            async {
+                watch.changed().await.ok()?;
+                *watch.borrow()
+            }
+        };
+
+        code
     }
 
     /// Kill the `Child` process immediately.
-    pub async fn kill(&mut self) {
-        {
+    pub async fn kill(&mut self) -> Option<i32> {
+        let mut watch = self.exit_channel.clone();
+
+        let fut = async {
             let rw_lock_read_guard = self.state.read().await;
             let child = match Self::child_channel(&rw_lock_read_guard) {
                 Some(child) => child,
@@ -276,9 +291,17 @@ impl Child {
             // if this fails, it's because the channel is dropped (toctou)
             // we can just ignore it
             child.kill().await.ok();
-        }
+        };
 
-        self.wait().await;
+        let (_, code) = join! {
+            fut,
+            async {
+                watch.changed().await.ok()?;
+                *watch.borrow()
+            }
+        };
+
+        code
     }
 
     fn pid(&self) -> Option<u32> {
