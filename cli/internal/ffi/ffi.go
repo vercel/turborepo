@@ -225,29 +225,6 @@ func toPackageManager(packageManager string) ffi_proto.PackageManager {
 	}
 }
 
-// RecursiveCopy copies src and its contents to dst
-func RecursiveCopy(src string, dst string) error {
-	req := ffi_proto.RecursiveCopyRequest{
-		Src: src,
-		Dst: dst,
-	}
-	reqBuf := Marshal(&req)
-	resBuf := C.recursive_copy(reqBuf)
-	reqBuf.Free()
-
-	resp := ffi_proto.RecursiveCopyResponse{}
-	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
-		panic(err)
-	}
-	// Error is optional, so a nil value means no error was set
-	// GetError() papers over the difference and returns the zero
-	// value if it isn't set, so we need to check the value directly.
-	if resp.Error != nil {
-		return errors.New(*resp.Error)
-	}
-	return nil
-}
-
 // GlobalChange checks if there are any differences between lockfiles that would completely invalidate
 // the cache.
 func GlobalChange(packageManager string, prevContents []byte, currContents []byte) bool {
