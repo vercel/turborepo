@@ -1,15 +1,14 @@
-import path from "path";
+import path from "node:path";
+import childProcess from "node:child_process";
 import chalk from "chalk";
-import childProcess from "child_process";
-import { setupTestFixtures, spyConsole } from "@turbo/test-utils";
-import { create } from "../src/commands/create";
-import type { CreateCommandArgument } from "../src/commands/create/types";
+import { setupTestFixtures, spyConsole, spyExit } from "@turbo/test-utils";
 import { logger } from "@turbo/utils";
 import type { PackageManager } from "@turbo/workspaces";
-
 // imports for mocks
 import * as turboWorkspaces from "@turbo/workspaces";
 import * as turboUtils from "@turbo/utils";
+import type { CreateCommandArgument } from "../src/commands/create/types";
+import { create } from "../src/commands/create";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
 jest.mock("@turbo/workspaces", () => ({
@@ -24,6 +23,7 @@ describe("create-turbo", () => {
   });
 
   const mockConsole = spyConsole();
+  const mockExit = spyExit();
 
   test.each<{ packageManager: PackageManager }>([
     { packageManager: "yarn" },
@@ -97,4 +97,62 @@ describe("create-turbo", () => {
       mockExecSync.mockRestore();
     }
   );
+
+  test.only("throws correct error message when a download error is encountered", async () => {
+    const { root } = useFixture({ fixture: `create-turbo` });
+    const packageManager = "pnpm";
+    const mockAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        npm: "8.19.2",
+        yarn: "1.22.10",
+        pnpm: "7.22.2",
+      });
+
+    const mockCreateProject = jest
+      .spyOn(turboUtils, "createProject")
+      .mockRejectedValue(new turboUtils.DownloadError("Could not connect"));
+
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
+
+    const mockExecSync = jest
+      .spyOn(childProcess, "execSync")
+      .mockImplementation(() => {
+        return "success";
+      });
+
+    await create(
+      root as CreateCommandArgument,
+      packageManager as CreateCommandArgument,
+      {
+        skipInstall: true,
+        example: "default",
+      }
+    );
+
+    expect(mockConsole.error).toHaveBeenCalledTimes(2);
+    expect(mockConsole.error).toHaveBeenNthCalledWith(
+      1,
+      logger.turboRed.bold(">>>"),
+      chalk.red("Unable to download template from Github")
+    );
+    expect(mockConsole.error).toHaveBeenNthCalledWith(
+      2,
+      logger.turboRed.bold(">>>"),
+      chalk.red("Could not connect")
+    );
+    expect(mockExit.exit).toHaveBeenCalledWith(1);
+
+    mockAvailablePackageManagers.mockRestore();
+    mockCreateProject.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
+    mockExecSync.mockRestore();
+  });
 });

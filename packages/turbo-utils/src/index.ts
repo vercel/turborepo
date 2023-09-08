@@ -17,7 +17,7 @@ export {
   downloadAndExtractExample,
 } from "./examples";
 export { isWriteable } from "./isWriteable";
-export { createProject } from "./createProject";
+export { createProject, DownloadError } from "./createProject";
 export { convertCase } from "./convertCase";
 
 export * as logger from "./logger";

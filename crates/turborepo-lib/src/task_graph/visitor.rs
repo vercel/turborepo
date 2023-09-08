@@ -8,12 +8,16 @@ use crate::{
     engine::{Engine, ExecutionOptions},
     opts::Opts,
     package_graph::{PackageGraph, WorkspaceName},
-    run::task_id::{self, TaskId},
+    run::{
+        task_id::{self, TaskId},
+        RunCache,
+    },
 };
 
 // This holds the whole world
 pub struct Visitor<'a> {
     package_graph: Arc<PackageGraph>,
+    run_cache: Arc<RunCache>,
     opts: &'a Opts<'a>,
 }
 
@@ -35,9 +39,10 @@ pub enum Error {
 }
 
 impl<'a> Visitor<'a> {
-    pub fn new(package_graph: Arc<PackageGraph>, opts: &'a Opts) -> Self {
+    pub fn new(package_graph: Arc<PackageGraph>, run_cache: Arc<RunCache>, opts: &'a Opts) -> Self {
         Self {
             package_graph,
+            run_cache,
             opts,
         }
     }
@@ -63,6 +68,10 @@ impl<'a> Visitor<'a> {
                     package_name: package_name.clone(),
                     task_id: info.clone(),
                 })?;
+            let workspace_dir = self
+                .package_graph
+                .workspace_dir(&package_name)
+                .unwrap_or_else(|| panic!("no directory for workspace {package_name}"));
 
             let command = package_json.scripts.get(info.task()).cloned();
 
@@ -78,15 +87,20 @@ impl<'a> Visitor<'a> {
                 _ => (),
             }
 
-            let _task_def = engine
+            let task_def = engine
                 .task_definition(&info)
                 .ok_or(Error::MissingDefinition)?;
+
+            let task_cache =
+                self.run_cache
+                    .task_cache(task_def, workspace_dir, info.clone(), "fake");
 
             tasks.push(tokio::spawn(async move {
                 println!(
                     "Executing {info}: {}",
                     command.as_deref().unwrap_or("no script def")
                 );
+                let _task_cache = task_cache;
                 callback.send(Ok(())).unwrap();
             }));
         }

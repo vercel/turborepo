@@ -217,7 +217,7 @@ jobs:
           - host: ubuntu-latest
             container: ubuntu:xenial
             container-options: "--platform=linux/amd64 --rm"
-            container-setup: "apt-get update && apt-get install -y curl musl-tools"
+            container-setup: "apt-get update && apt-get install -y curl musl-tools sudo"
             target: "x86_64-unknown-linux-musl"
             setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev"
           - host: ubuntu-latest
@@ -296,6 +296,9 @@ jobs:
         run: |
           git config --global user.name 'Turbobot'
           git config --global user.email 'turbobot@vercel.com'
+
+      - name: Setup capnproto
+        uses: ./.github/actions/setup-capnproto
 
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v3
