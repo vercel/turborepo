@@ -29,7 +29,7 @@ use crate::{
     opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
-    process::SharedProcessManager,
+    process::ProcessManager,
     run::global_hash::get_global_hash_inputs,
     task_graph::Visitor,
 };
@@ -37,12 +37,12 @@ use crate::{
 #[derive(Debug)]
 pub struct Run {
     base: CommandBase,
-    processes: SharedProcessManager,
+    processes: ProcessManager,
 }
 
 impl Run {
     pub fn new(base: CommandBase) -> Self {
-        let processes = SharedProcessManager::new();
+        let processes = ProcessManager::new();
         Self { base, processes }
     }
 
@@ -230,8 +230,7 @@ impl Run {
         ));
 
         // create one to remove dead code warnings
-        let proc_manager = SharedProcessManager::new();
-        proc_manager.start();
+        let proc_manager = ProcessManager::new();
 
         // proc_manager.spawn(command, timeout);
 
