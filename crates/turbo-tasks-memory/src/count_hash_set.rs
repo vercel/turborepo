@@ -6,7 +6,7 @@ use std::{
 };
 
 use auto_hash_map::{
-    map::{Entry, IntoIter, Iter},
+    map::{Entry, IntoIter, Iter, RawEntry},
     AutoMap,
 };
 
@@ -69,6 +69,12 @@ impl<T, H> CountHashSet<T, H> {
     }
 }
 
+pub enum RemoveIfEntryResult {
+    PartiallyRemoved,
+    Removed,
+    NotPresent,
+}
+
 impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
     /// Returns true, when the value has become visible from outside
     pub fn add_count(&mut self, item: T, count: usize) -> bool {
@@ -105,6 +111,25 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
     /// Returns true when the value has become visible from outside
     pub fn add(&mut self, item: T) -> bool {
         self.add_count(item, 1)
+    }
+
+    /// Returns true, when the value has been added. Returns false, when the
+    /// value was not part of the set before (positive or negative). The
+    /// visibility from outside will never change due to this method.
+    pub fn add_if_entry(&mut self, item: &T) -> bool {
+        match self.inner.raw_entry_mut(item) {
+            RawEntry::Occupied(mut e) => {
+                let value = e.get_mut();
+                *value += 1;
+                if *value == 0 {
+                    // it was negative and has become zero
+                    self.negative_entries -= 1;
+                    e.remove();
+                }
+                true
+            }
+            RawEntry::Vacant(_) => false,
+        }
     }
 
     /// Returns the current count of an item
@@ -147,6 +172,24 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
     /// Returns true, when the value is no longer visible from outside
     pub fn remove(&mut self, item: T) -> bool {
         self.remove_count(item, 1)
+    }
+
+    /// Removes an item if it is present.
+    pub fn remove_if_entry(&mut self, item: &T) -> RemoveIfEntryResult {
+        match self.inner.raw_entry_mut(item) {
+            RawEntry::Occupied(mut e) => {
+                let value = e.get_mut();
+                *value -= 1;
+                if *value == 0 {
+                    // It was positive and has become zero
+                    e.remove();
+                    RemoveIfEntryResult::Removed
+                } else {
+                    RemoveIfEntryResult::PartiallyRemoved
+                }
+            }
+            RawEntry::Vacant(_) => RemoveIfEntryResult::NotPresent,
+        }
     }
 
     pub fn iter(&self) -> CountHashSetIter<'_, T> {

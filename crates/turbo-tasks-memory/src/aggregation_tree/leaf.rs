@@ -4,7 +4,7 @@ use auto_hash_map::AutoMap;
 use nohash_hasher::{BuildNoHashHasher, IsEnabled};
 
 use super::{
-    bottom_tree::{add_upper_to_item_step_1, add_upper_to_item_step_2, BottomTree},
+    bottom_tree::{add_left_upper_to_item_step_1, add_left_upper_to_item_step_2, BottomTree},
     inner_refs::{BottomRef, ChildLocation},
     top_tree::TopTree,
     AggregationContext, AggregationItemLock,
@@ -41,22 +41,28 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         // Only collect the children into a Vec when neccessary
         if self.inner_upper.is_empty() {
             if let Some(upper) = self.left_upper.as_ref() {
-                upper.add_children_of_child(context, ChildLocation::Left, children);
+                upper.add_children_of_child(context, ChildLocation::Left, children, 0);
             }
         } else {
             if let Some(upper) = self.left_upper.as_ref() {
                 let children = children.collect::<Vec<_>>();
-                upper.add_children_of_child(context, ChildLocation::Left, children.iter().copied());
+                upper.add_children_of_child(
+                    context,
+                    ChildLocation::Left,
+                    children.iter().copied(),
+                    0,
+                );
                 for BottomRef { upper } in self.inner_upper.iter() {
                     upper.add_children_of_child(
                         context,
                         ChildLocation::Inner,
                         children.iter().copied(),
+                        0,
                     );
                 }
             } else if self.inner_upper.len() == 1 {
                 let BottomRef { upper } = self.inner_upper.iter().next().unwrap();
-                upper.add_children_of_child(context, ChildLocation::Inner, children);
+                upper.add_children_of_child(context, ChildLocation::Inner, children, 0);
             } else {
                 let children = children.collect::<Vec<_>>();
                 for BottomRef { upper } in self.inner_upper.iter() {
@@ -64,6 +70,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
                         context,
                         ChildLocation::Inner,
                         children.iter().copied(),
+                        0,
                     );
                 }
             }
@@ -73,10 +80,10 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     pub fn add_child<C: AggregationContext<Info = T, ItemRef = I>>(&self, context: &C, child: &I) {
         let hash = context.hash(child);
         if let Some(upper) = self.left_upper.as_ref() {
-            upper.add_child_of_child(context, ChildLocation::Left, child, hash);
+            upper.add_child_of_child(context, ChildLocation::Left, child, hash, 0);
         }
         for BottomRef { upper } in self.inner_upper.iter() {
-            upper.add_child_of_child(context, ChildLocation::Inner, child, hash);
+            upper.add_child_of_child(context, ChildLocation::Inner, child, hash, 0);
         }
     }
 
@@ -97,13 +104,19 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
                 .map(|child| (context.hash(child), child))
                 .collect::<Vec<_>>();
             if let Some(upper) = left_upper {
-                upper.add_children_of_child(context, ChildLocation::Left, children.iter().copied());
+                upper.add_children_of_child(
+                    context,
+                    ChildLocation::Left,
+                    children.iter().copied(),
+                    0,
+                );
             }
             for BottomRef { upper } in inner_upper {
                 upper.add_children_of_child(
                     context,
                     ChildLocation::Inner,
                     children.iter().copied(),
+                    0,
                 );
             }
         }
@@ -122,10 +135,10 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         move || {
             let hash = context.hash(child);
             if let Some(upper) = left_upper {
-                upper.add_child_of_child(context, ChildLocation::Left, child, hash);
+                upper.add_child_of_child(context, ChildLocation::Left, child, hash, 0);
             }
             for BottomRef { upper } in inner_upper {
-                upper.add_child_of_child(context, ChildLocation::Inner, child, hash);
+                upper.add_child_of_child(context, ChildLocation::Inner, child, hash, 0);
             }
         }
     }
@@ -135,12 +148,11 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         context: &C,
         child: &I,
     ) {
-        let hash = context.hash(child);
         if let Some(upper) = self.left_upper.as_ref() {
-            upper.remove_child_of_child(context, ChildLocation::Left, child, hash);
+            upper.remove_child_of_child(context, child);
         }
         for BottomRef { upper } in self.inner_upper.iter() {
-            upper.remove_child_of_child(context, ChildLocation::Inner, child, hash);
+            upper.remove_child_of_child(context, child);
         }
     }
 
@@ -223,12 +235,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     }
 
     #[must_use]
-    pub(super) fn remove_upper(
-        &mut self,
-        upper: &Arc<BottomTree<T, I>>,
-        location: ChildLocation,
-    ) -> bool {
-        debug_assert!(matches!(location, ChildLocation::Inner));
+    pub(super) fn remove_inner_upper(&mut self, upper: &Arc<BottomTree<T, I>>) -> bool {
         self.inner_upper.remove(BottomRef {
             upper: upper.clone(),
         })
@@ -271,7 +278,7 @@ pub fn bottom_tree<C: AggregationContext>(
         new_bottom_tree = Arc::new(BottomTree::new(height));
         leaf.bottom_trees.insert(height, new_bottom_tree.clone());
         if height == 0 {
-            result = Some(add_upper_to_item_step_1::<C>(
+            result = Some(add_left_upper_to_item_step_1::<C>(
                 &mut item,
                 &new_bottom_tree,
                 ChildLocation::Left,
@@ -279,14 +286,11 @@ pub fn bottom_tree<C: AggregationContext>(
         }
     }
     if let Some(result) = result {
-        add_upper_to_item_step_2(context, &new_bottom_tree, result);
+        add_left_upper_to_item_step_2(context, &new_bottom_tree, result);
     }
     if height != 0 {
-        bottom_tree(context, reference, height - 1).add_bottom_tree_upper(
-            context,
-            &new_bottom_tree,
-            ChildLocation::Left,
-        );
+        bottom_tree(context, reference, height - 1)
+            .add_left_bottom_tree_upper(context, &new_bottom_tree);
     }
     new_bottom_tree
 }

@@ -306,12 +306,12 @@ fn chain() {
         assert_eq!(aggregated.value, 25151);
     }
     // This should be way less the 100 to prove that we are reusing trees
-    assert_eq!(context.additions.load(Ordering::SeqCst), 12);
+    assert_eq!(context.additions.load(Ordering::SeqCst), 6);
     context.additions.store(0, Ordering::SeqCst);
 
     leaf.incr(&context);
     // This should be less the 20 to prove that we are reusing trees
-    assert_eq!(context.additions.load(Ordering::SeqCst), 10);
+    assert_eq!(context.additions.load(Ordering::SeqCst), 9);
     context.additions.store(0, Ordering::SeqCst);
 
     {
@@ -364,8 +364,8 @@ fn chain_double_connected() {
 
     {
         let aggregated = aggregation_info(&context, &current);
-        assert_eq!(aggregated.lock().value, 39868);
+        assert_eq!(aggregated.lock().value, 246593);
     }
-    assert_eq!(context.additions.load(Ordering::SeqCst), 521);
+    assert_eq!(context.additions.load(Ordering::SeqCst), 1467);
     context.additions.store(0, Ordering::SeqCst);
 }
