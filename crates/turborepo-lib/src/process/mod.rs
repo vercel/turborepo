@@ -17,8 +17,11 @@ use std::{
 };
 
 pub use child::Command;
+use futures::Future;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
+
+use self::child::Child;
 
 /// A process manager that is responsible for spawning and managing child
 /// processes. When the manager is Open, new child processes can be spawned
@@ -62,24 +65,7 @@ impl ProcessManager {
     /// systems this will send a SIGINT, and on windows it will just kill
     /// the process immediately.
     pub async fn stop(&self) {
-        self.is_closing
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-
-        let mut set = JoinSet::new();
-
-        {
-            let lock = self.children.lock().unwrap();
-            for child in lock.iter() {
-                let mut child = child.clone();
-                set.spawn(async move { child.stop().await });
-            }
-        }
-
-        debug!("waiting for {} processes to exit", set.len());
-
-        while let Some(out) = set.join_next().await {
-            trace!("process exited: {:?}", out);
-        }
+        self.close(|mut c| async move { c.stop().await }).await
     }
 
     /// Stop the process manager, waiting for all child processes to exit.
@@ -87,6 +73,15 @@ impl ProcessManager {
     /// If you want to set a timeout, use `tokio::time::timeout` and
     /// `Self::stop` if the timeout elapses.
     pub async fn wait(&self) {
+        self.close(|mut c| async move { c.wait().await }).await
+    }
+
+    /// Close the process manager, running the given callback on each child
+    async fn close<F, C>(&self, callback: F)
+    where
+        F: Fn(Child) -> C + Sync + Send + Copy + 'static,
+        C: Future<Output = Option<i32>> + Sync + Send + 'static,
+    {
         self.is_closing
             .store(true, std::sync::atomic::Ordering::Relaxed);
 
@@ -95,8 +90,8 @@ impl ProcessManager {
         {
             let lock = self.children.lock().unwrap();
             for child in lock.iter() {
-                let mut child = child.clone();
-                set.spawn(async move { child.wait().await });
+                let child = child.clone();
+                set.spawn(async move { callback(child).await });
             }
         }
 
@@ -109,7 +104,10 @@ impl ProcessManager {
         {
             // clean up the vec and re-open
             let mut lock = self.children.lock().unwrap();
-            std::mem::replace(vec![], lock);
+            // just allocate a new vec rather than clearing the old one
+            *lock = vec![];
+            self.is_closing
+                .store(false, std::sync::atomic::Ordering::Relaxed);
         }
     }
 }
@@ -204,16 +202,14 @@ mod test {
 
     #[tokio::test]
     async fn test_reuse_manager() {
-        let mut manager = ProcessManager::new();
+        let manager = ProcessManager::new();
         manager.spawn(get_command(), Duration::from_secs(2));
 
         sleep(Duration::from_millis(100)).await;
 
         manager.stop().await;
 
-        assert_matches!(manager.spawn(get_command(), Duration::from_secs(2)), None);
-
-        sleep(Duration::from_millis(100)).await;
+        assert!(manager.children.lock().unwrap().is_empty());
 
         // idempotent
         manager.stop().await;
