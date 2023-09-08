@@ -25,7 +25,7 @@ describe("turboIgnore()", () => {
   const mockExit = spyExit();
   const mockConsole = spyConsole();
 
-  it("throws error and allows build when exec fails", async () => {
+  it("throws error and allows build when exec fails", () => {
     const mockExec = jest
       .spyOn(child_process, "exec")
       .mockImplementation((command, options, callback) => {
@@ -39,9 +39,7 @@ describe("turboIgnore()", () => {
         return {} as unknown as ChildProcess;
       });
 
-    turboIgnore({
-      args: { workspace: "test-workspace" },
-    });
+    turboIgnore("test-workspace", {});
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx turbo run build --filter=test-workspace...[HEAD^] --dry=json",
@@ -57,7 +55,7 @@ describe("turboIgnore()", () => {
     mockExec.mockRestore();
   });
 
-  it("throws pretty error and allows build when exec fails", async () => {
+  it("throws pretty error and allows build when exec fails", () => {
     const mockExec = jest
       .spyOn(child_process, "exec")
       .mockImplementation((command, options, callback) => {
@@ -74,9 +72,7 @@ describe("turboIgnore()", () => {
         return {} as unknown as ChildProcess;
       });
 
-    turboIgnore({
-      args: { workspace: "test-workspace" },
-    });
+    turboIgnore("test-workspace", {});
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx turbo run build --filter=test-workspace...[HEAD^] --dry=json",
@@ -96,10 +92,15 @@ describe("turboIgnore()", () => {
     mockExec.mockRestore();
   });
 
-  it("throws pretty error and allows build when can't find previous sha", async () => {
+  it("throws pretty error and allows build when can't find previous sha", () => {
     process.env.VERCEL = "1";
     process.env.VERCEL_GIT_PREVIOUS_SHA = "too-far-back";
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
+
+    const mockExecSync = jest
+      .spyOn(child_process, "execSync")
+      .mockReturnValue("commit");
+
     const mockExec = jest
       .spyOn(child_process, "exec")
       .mockImplementation((command, options, callback) => {
@@ -116,9 +117,7 @@ describe("turboIgnore()", () => {
         return {} as unknown as ChildProcess;
       });
 
-    turboIgnore({
-      args: { workspace: "test-workspace" },
-    });
+    turboIgnore("test-workspace", {});
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx turbo run build --filter=test-workspace...[too-far-back] --dry=json",
@@ -135,10 +134,11 @@ describe("turboIgnore()", () => {
     );
 
     expectBuild(mockExit);
+    mockExecSync.mockRestore();
     mockExec.mockRestore();
   });
 
-  it("throws pretty error and allows build when fallback fails", async () => {
+  it("throws pretty error and allows build when fallback fails", () => {
     const mockExec = jest
       .spyOn(child_process, "exec")
       .mockImplementation((command, options, callback) => {
@@ -155,9 +155,7 @@ describe("turboIgnore()", () => {
         return {} as unknown as ChildProcess;
       });
 
-    turboIgnore({
-      args: { workspace: "test-workspace", fallback: "HEAD^" },
-    });
+    turboIgnore("test-workspace", { fallback: "HEAD^" });
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx turbo run build --filter=test-workspace...[HEAD^] --dry=json",
@@ -177,12 +175,8 @@ describe("turboIgnore()", () => {
     mockExec.mockRestore();
   });
 
-  it("skips checks and allows build when no workspace can be found", async () => {
-    turboIgnore({
-      args: {
-        directory: "__fixtures__/no-app",
-      },
-    });
+  it("skips checks and allows build when no workspace can be found", () => {
+    turboIgnore(undefined, { directory: "__fixtures__/no-app" });
     validateLogs(
       [
         () => [
@@ -198,12 +192,8 @@ describe("turboIgnore()", () => {
     expectBuild(mockExit);
   });
 
-  it("skips checks and allows build when a workspace with no name is found", async () => {
-    turboIgnore({
-      args: {
-        directory: "__fixtures__/invalid-app",
-      },
-    });
+  it("skips checks and allows build when a workspace with no name is found", () => {
+    turboIgnore(undefined, { directory: "__fixtures__/invalid-app" });
     validateLogs(
       [
         () => [
@@ -217,10 +207,8 @@ describe("turboIgnore()", () => {
     expectBuild(mockExit);
   });
 
-  it("skips checks and allows build when no monorepo root can be found", async () => {
-    turboIgnore({
-      args: { directory: "/" },
-    });
+  it("skips checks and allows build when no monorepo root can be found", () => {
+    turboIgnore(undefined, { directory: "/" });
     expectBuild(mockExit);
     expect(mockConsole.error).toHaveBeenLastCalledWith(
       "≫  ",
@@ -228,11 +216,9 @@ describe("turboIgnore()", () => {
     );
   });
 
-  it("skips checks and allows build when TURBO_FORCE is set", async () => {
+  it("skips checks and allows build when TURBO_FORCE is set", () => {
     process.env.TURBO_FORCE = "true";
-    turboIgnore({
-      args: { workspace: "test-workspace" },
-    });
+    turboIgnore(undefined, { directory: "test-workspace" });
     expect(mockConsole.log).toHaveBeenNthCalledWith(
       2,
       "≫  ",
@@ -241,16 +227,11 @@ describe("turboIgnore()", () => {
     expectBuild(mockExit);
   });
 
-  it("allows build when no comparison is returned", async () => {
+  it("allows build when no comparison is returned", () => {
     process.env.VERCEL = "1";
     process.env.VERCEL_GIT_PREVIOUS_SHA = "";
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
-    turboIgnore({
-      args: {
-        workspace: "test-app",
-        directory: "__fixtures__/app",
-      },
-    });
+    turboIgnore("test-app", { directory: "__fixtures__/app" });
     expect(mockConsole.log).toHaveBeenNthCalledWith(
       4,
       "≫  ",
@@ -259,10 +240,15 @@ describe("turboIgnore()", () => {
     expectBuild(mockExit);
   });
 
-  it("skips build for `previousDeploy` comparison with no changes", async () => {
+  it("skips build for `previousDeploy` comparison with no changes", () => {
     process.env.VERCEL = "1";
     process.env.VERCEL_GIT_PREVIOUS_SHA = "last-deployed-sha";
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
+
+    const mockExecSync = jest
+      .spyOn(child_process, "execSync")
+      .mockReturnValue("commit");
+
     const mockExec = jest
       .spyOn(child_process, "exec")
       .mockImplementation((command, options, callback) => {
@@ -275,17 +261,13 @@ describe("turboIgnore()", () => {
         }
         return {} as unknown as ChildProcess;
       });
-    turboIgnore({
-      args: {
-        directory: "__fixtures__/app",
-      },
-    });
+    turboIgnore(undefined, { directory: "__fixtures__/app" });
     validateLogs(
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
         'Inferred "test-app" as workspace from "package.json"',
         'Using "build" as the task as it was unspecified',
-        `Found previous deployment ("last-deployed-sha") for \"test-app\" on branch \"my-branch\"`,
+        `Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"`,
         "Analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
         "This project and its dependencies are not affected",
         () => expect.stringContaining("⏭ Ignoring the change"),
@@ -295,13 +277,19 @@ describe("turboIgnore()", () => {
     );
 
     expectIgnore(mockExit);
+    mockExecSync.mockRestore();
     mockExec.mockRestore();
   });
 
-  it("allows build for `previousDeploy` comparison with changes", async () => {
+  it("allows build for `previousDeploy` comparison with changes", () => {
     process.env.VERCEL = "1";
     process.env.VERCEL_GIT_PREVIOUS_SHA = "last-deployed-sha";
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
+
+    const mockExecSync = jest
+      .spyOn(child_process, "execSync")
+      .mockReturnValue("commit");
+
     const mockExec = jest
       .spyOn(child_process, "exec")
       .mockImplementation((command, options, callback) => {
@@ -314,11 +302,9 @@ describe("turboIgnore()", () => {
         }
         return {} as unknown as ChildProcess;
       });
-    turboIgnore({
-      args: {
-        task: "workspace#build",
-        directory: "__fixtures__/app",
-      },
+    turboIgnore(undefined, {
+      task: "workspace#build",
+      directory: "__fixtures__/app",
     });
     validateLogs(
       [
@@ -335,13 +321,19 @@ describe("turboIgnore()", () => {
     );
 
     expectBuild(mockExit);
+    mockExecSync.mockRestore();
     mockExec.mockRestore();
   });
 
-  it("allows build for `previousDeploy` comparison with single dependency change", async () => {
+  it("allows build for `previousDeploy` comparison with single dependency change", () => {
     process.env.VERCEL = "1";
     process.env.VERCEL_GIT_PREVIOUS_SHA = "last-deployed-sha";
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
+
+    const mockExecSync = jest
+      .spyOn(child_process, "execSync")
+      .mockReturnValue("commit");
+
     const mockExec = jest
       .spyOn(child_process, "exec")
       .mockImplementation((command, options, callback) => {
@@ -354,11 +346,7 @@ describe("turboIgnore()", () => {
         }
         return {} as unknown as ChildProcess;
       });
-    turboIgnore({
-      args: {
-        directory: "__fixtures__/app",
-      },
-    });
+    turboIgnore(undefined, { directory: "__fixtures__/app" });
     validateLogs(
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
@@ -374,13 +362,19 @@ describe("turboIgnore()", () => {
     );
 
     expectBuild(mockExit);
+    mockExecSync.mockRestore();
     mockExec.mockRestore();
   });
 
-  it("allows build for `previousDeploy` comparison with multiple dependency changes", async () => {
+  it("allows build for `previousDeploy` comparison with multiple dependency changes", () => {
     process.env.VERCEL = "1";
     process.env.VERCEL_GIT_PREVIOUS_SHA = "last-deployed-sha";
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
+
+    const mockExecSync = jest
+      .spyOn(child_process, "execSync")
+      .mockReturnValue("commit");
+
     const mockExec = jest
       .spyOn(child_process, "exec")
       .mockImplementation((command, options, callback) => {
@@ -393,11 +387,7 @@ describe("turboIgnore()", () => {
         }
         return {} as unknown as ChildProcess;
       });
-    turboIgnore({
-      args: {
-        directory: "__fixtures__/app",
-      },
-    });
+    turboIgnore(undefined, { directory: "__fixtures__/app" });
     validateLogs(
       [
         "Using Turborepo to determine if this project is affected by the commit...\n",
@@ -413,10 +403,62 @@ describe("turboIgnore()", () => {
     );
 
     expectBuild(mockExit);
+    mockExecSync.mockRestore();
     mockExec.mockRestore();
   });
 
-  it("throws error and allows build when json cannot be parsed", async () => {
+  it("allows build for unavailable `previousDeploy` comparison with fallback", () => {
+    process.env.VERCEL = "1";
+    process.env.VERCEL_GIT_PREVIOUS_SHA = "last-deployed-sha";
+    process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
+
+    const mockExecSync = jest
+      .spyOn(child_process, "execSync")
+      .mockImplementation((cmd: string) => {
+        if (cmd.includes("git cat-file")) {
+          throw new Error("fatal: Not a valid object name last-deployed-sha");
+        }
+        return "";
+      });
+
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(
+            null,
+            '{"packages":["test-app"],"tasks":[]}',
+            "stderr"
+          ) as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+    turboIgnore(undefined, {
+      task: "workspace#build",
+      fallback: "HEAD^2",
+      directory: "__fixtures__/app",
+    });
+    validateLogs(
+      [
+        "Using Turborepo to determine if this project is affected by the commit...\n",
+        'Inferred "test-app" as workspace from "package.json"',
+        'Using "workspace#build" as the task from the arguments',
+        'Previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch" is unreachable.',
+        "Falling back to ref HEAD^2",
+        'Analyzing results of `npx turbo run "workspace#build" --filter=test-app...[HEAD^2] --dry=json`',
+        'This commit affects "test-app"',
+        () => expect.stringContaining("✓ Proceeding with deployment"),
+      ],
+      mockConsole.log,
+      { prefix: "≫  " }
+    );
+
+    expectBuild(mockExit);
+    mockExecSync.mockRestore();
+    mockExec.mockRestore();
+  });
+
+  it("throws error and allows build when json cannot be parsed", () => {
     const mockExec = jest
       .spyOn(child_process, "exec")
       .mockImplementation((command, options, callback) => {
@@ -426,11 +468,7 @@ describe("turboIgnore()", () => {
         return {} as unknown as ChildProcess;
       });
 
-    turboIgnore({
-      args: {
-        directory: "__fixtures__/app",
-      },
-    });
+    turboIgnore(undefined, { directory: "__fixtures__/app" });
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx turbo run build --filter=test-app...[HEAD^] --dry=json",
@@ -449,7 +487,7 @@ describe("turboIgnore()", () => {
     mockExec.mockRestore();
   });
 
-  it("throws error and allows build when stdout is null", async () => {
+  it("throws error and allows build when stdout is null", () => {
     const mockExec = jest
       .spyOn(child_process, "exec")
       .mockImplementation((command, options, callback) => {
@@ -463,11 +501,7 @@ describe("turboIgnore()", () => {
         return {} as unknown as ChildProcess;
       });
 
-    turboIgnore({
-      args: {
-        directory: "__fixtures__/app",
-      },
-    });
+    turboIgnore(undefined, { directory: "__fixtures__/app" });
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx turbo run build --filter=test-app...[HEAD^] --dry=json",
@@ -486,15 +520,11 @@ describe("turboIgnore()", () => {
     mockExec.mockRestore();
   });
 
-  it("skips when commit message contains a skip string", async () => {
+  it("skips when commit message contains a skip string", () => {
     process.env.VERCEL = "1";
     process.env.VERCEL_GIT_COMMIT_MESSAGE = "[vercel skip]";
 
-    turboIgnore({
-      args: {
-        directory: "__fixtures__/app",
-      },
-    });
+    turboIgnore(undefined, { directory: "__fixtures__/app" });
 
     validateLogs(
       [
@@ -511,15 +541,11 @@ describe("turboIgnore()", () => {
     expectIgnore(mockExit);
   });
 
-  it("deploys when commit message contains a deploy string", async () => {
+  it("deploys when commit message contains a deploy string", () => {
     process.env.VERCEL = "1";
     process.env.VERCEL_GIT_COMMIT_MESSAGE = "[vercel deploy]";
 
-    turboIgnore({
-      args: {
-        directory: "__fixtures__/app",
-      },
-    });
+    turboIgnore(undefined, { directory: "__fixtures__/app" });
 
     validateLogs(
       [
@@ -536,11 +562,15 @@ describe("turboIgnore()", () => {
     expectBuild(mockExit);
   });
 
-  it("runs full turbo-ignore check when commit message contains a conflicting string", async () => {
+  it("runs full turbo-ignore check when commit message contains a conflicting string", () => {
     process.env.VERCEL = "1";
     process.env.VERCEL_GIT_COMMIT_MESSAGE = "[vercel deploy] [vercel skip]";
     process.env.VERCEL_GIT_PREVIOUS_SHA = "last-deployed-sha";
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
+
+    const mockExecSync = jest
+      .spyOn(child_process, "execSync")
+      .mockReturnValue("commit");
 
     const mockExec = jest
       .spyOn(child_process, "exec")
@@ -555,11 +585,7 @@ describe("turboIgnore()", () => {
         return {} as unknown as ChildProcess;
       });
 
-    turboIgnore({
-      args: {
-        directory: "__fixtures__/app",
-      },
-    });
+    turboIgnore(undefined, { directory: "__fixtures__/app" });
 
     validateLogs(
       [
@@ -567,7 +593,7 @@ describe("turboIgnore()", () => {
         'Inferred "test-app" as workspace from "package.json"',
         'Using "build" as the task as it was unspecified',
         "Conflicting commit messages found: [vercel deploy] and [vercel skip]",
-        `Found previous deployment ("last-deployed-sha") for \"test-app\" on branch \"my-branch\"`,
+        `Found previous deployment ("last-deployed-sha") for "test-app" on branch "my-branch"`,
         "Analyzing results of `npx turbo run build --filter=test-app...[last-deployed-sha] --dry=json`",
         "This project and its dependencies are not affected",
         () => expect.stringContaining("⏭ Ignoring the change"),
@@ -577,6 +603,7 @@ describe("turboIgnore()", () => {
     );
 
     expectIgnore(mockExit);
+    mockExecSync.mockRestore();
     mockExec.mockRestore();
   });
 });
