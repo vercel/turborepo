@@ -104,53 +104,40 @@ impl<W: Write> Write for PrefixedWriter<W> {
 
 #[cfg(test)]
 mod test {
+    use test_case::test_case;
+
     use super::*;
 
-    #[test]
-    fn test_outputs_writes_to_out() {
-        let mut out = Vec::new();
-        let mut err = Vec::new();
-
-        let output_prefix = crate::BOLD.apply_to("output".to_string());
-        let warn_prefix = crate::MAGENTA.apply_to("warn".to_string());
-        {
-            let mut prefixed_ui = PrefixedUI::new(
-                UI::new(false),
-                output_prefix,
-                warn_prefix,
-                &mut out,
-                &mut err,
-            );
-            prefixed_ui.output("all good");
-        }
-
-        assert_eq!(
-            String::from_utf8(out).unwrap(),
-            "\u{1b}[1moutput\u{1b}[0mall good\n",
-        );
+    fn prefixed_ui<W: Write>(out: W, err: W, ui: UI) -> PrefixedUI<W> {
+        let output_prefix = crate::BOLD.apply_to("output ".to_string());
+        let warn_prefix = crate::MAGENTA.apply_to("warn ".to_string());
+        PrefixedUI::new(ui, output_prefix, warn_prefix, out, err)
     }
 
-    #[test]
-    fn test_warn_writes_to_err() {
+    #[derive(Debug, Clone, Copy)]
+    enum OutputCall {
+        Output,
+        Warn,
+    }
+
+    #[test_case(false, "\u{1b}[1moutput \u{1b}[0mall good\n", OutputCall::Output)]
+    #[test_case(true, "output all good\n", OutputCall::Output)]
+    #[test_case(false, "\u{1b}[35mwarn \u{1b}[0mbe careful!\n", OutputCall::Warn)]
+    #[test_case(true, "warn be careful!\n", OutputCall::Warn)]
+    fn test_prefix_ui_outputs(strip_ansi: bool, expected: &str, call: OutputCall) {
         let mut out = Vec::new();
         let mut err = Vec::new();
 
-        let output_prefix = crate::BOLD.apply_to("output".to_string());
-        let warn_prefix = crate::MAGENTA.apply_to("warn".to_string());
-        {
-            let mut prefixed_ui = PrefixedUI::new(
-                UI::new(false),
-                output_prefix,
-                warn_prefix,
-                &mut out,
-                &mut err,
-            );
-            prefixed_ui.warn("be careful!");
+        let mut prefixed_ui = prefixed_ui(&mut out, &mut err, UI::new(strip_ansi));
+        match call {
+            OutputCall::Output => prefixed_ui.output("all good"),
+            OutputCall::Warn => prefixed_ui.warn("be careful!"),
         }
 
-        assert_eq!(
-            String::from_utf8(err).unwrap(),
-            "\u{1b}[35mwarn\u{1b}[0mbe careful!\n"
-        );
+        let buffer = match call {
+            OutputCall::Output => out,
+            OutputCall::Warn => err,
+        };
+        assert_eq!(String::from_utf8(buffer).unwrap(), expected);
     }
 }
