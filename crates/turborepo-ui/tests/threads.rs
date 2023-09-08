@@ -72,13 +72,9 @@ fn echo_task(
     let output_prefix = Style::new().apply_to(format!("{task_name} > "));
     let warn_prefix = Style::new().apply_to(format!("{task_name} warning > "));
     let ui = UI::new(true);
-    let mut prefix_ui = PrefixedUI::new(
-        ui,
-        output_prefix.clone(),
-        warn_prefix,
-        client.stdout(),
-        client.stderr(),
-    );
+    let mut prefix_ui = PrefixedUI::new(ui, client.stdout(), client.stderr())
+        .with_output_prefix(output_prefix.clone())
+        .with_warn_prefix(warn_prefix);
 
     prefix_ui.output(format!("running {task_name}"));
 

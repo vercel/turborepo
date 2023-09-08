@@ -3,7 +3,7 @@ use std::{
     io::Write,
 };
 
-use console::StyledObject;
+use console::{Style, StyledObject};
 use tracing::error;
 
 use crate::UI;
@@ -14,29 +14,33 @@ use crate::UI;
 /// want for replaying logs.
 pub struct PrefixedUI<W> {
     ui: UI,
-    output_prefix: StyledObject<String>,
-    warn_prefix: StyledObject<String>,
+    output_prefix: Option<StyledObject<String>>,
+    warn_prefix: Option<StyledObject<String>>,
     out: W,
     err: W,
+    default_prefix: StyledObject<String>,
 }
 
 impl<W: Write> PrefixedUI<W> {
-    pub fn new(
-        ui: UI,
-        output_prefix: StyledObject<String>,
-        warn_prefix: StyledObject<String>,
-        out: W,
-        err: W,
-    ) -> Self {
-        let output_prefix = ui.apply(output_prefix);
-        let warn_prefix = ui.apply(warn_prefix);
+    pub fn new(ui: UI, out: W, err: W) -> Self {
         Self {
             ui,
-            output_prefix,
-            warn_prefix,
             out,
             err,
+            output_prefix: None,
+            warn_prefix: None,
+            default_prefix: Style::new().apply_to(String::new()),
         }
+    }
+
+    pub fn with_output_prefix(mut self, output_prefix: StyledObject<String>) -> Self {
+        self.output_prefix = Some(self.ui.apply(output_prefix));
+        self
+    }
+
+    pub fn with_warn_prefix(mut self, warn_prefix: StyledObject<String>) -> Self {
+        self.warn_prefix = Some(self.ui.apply(warn_prefix));
+        self
     }
 
     pub fn output(&mut self, message: impl Display) {
@@ -51,7 +55,9 @@ impl<W: Write> PrefixedUI<W> {
         let prefix = match command {
             Command::Output => &self.output_prefix,
             Command::Warn => &self.warn_prefix,
-        };
+        }
+        .as_ref()
+        .unwrap_or(&self.default_prefix);
         let writer = match command {
             Command::Output => &mut self.out,
             Command::Warn => &mut self.err,
@@ -118,7 +124,9 @@ mod test {
     fn prefixed_ui<W: Write>(out: W, err: W, ui: UI) -> PrefixedUI<W> {
         let output_prefix = crate::BOLD.apply_to("output ".to_string());
         let warn_prefix = crate::MAGENTA.apply_to("warn ".to_string());
-        PrefixedUI::new(ui, output_prefix, warn_prefix, out, err)
+        PrefixedUI::new(ui, out, err)
+            .with_output_prefix(output_prefix)
+            .with_warn_prefix(warn_prefix)
     }
 
     #[test_case(false, "\u{1b}[1moutput \u{1b}[0mall good\n", Command::Output)]
