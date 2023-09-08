@@ -151,7 +151,7 @@ impl<'a> Visitor<'a> {
 
             let task_cache =
                 self.run_cache
-                    .task_cache(task_definition, workspace_dir, info.clone(), "fake");
+                    .task_cache(task_definition, workspace_dir, info.clone(), &task_hash);
 
             tasks.push(tokio::spawn(async move {
                 println!(

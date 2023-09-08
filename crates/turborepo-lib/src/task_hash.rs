@@ -42,13 +42,6 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
 }
 
-#[derive(Debug)]
-struct PackageFileHashInputs<'a> {
-    task_id: TaskId<'static>,
-    task_definition: &'a TaskDefinition,
-    workspace_name: WorkspaceName,
-}
-
 impl TaskHashable<'_> {
     fn calculate_task_hash(mut self) -> String {
         if matches!(self.env_mode, ResolvedEnvMode::Loose) {
@@ -61,9 +54,8 @@ impl TaskHashable<'_> {
 
 #[derive(Debug, Default)]
 pub struct PackageInputsHashes {
-    // We make the TaskId a String for serialization purposes
-    hashes: HashMap<String, String>,
-    expanded_hashes: HashMap<String, FileHashes>,
+    hashes: HashMap<TaskId<'static>, String>,
+    expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
 }
 
 impl PackageInputsHashes {
@@ -95,19 +87,10 @@ impl PackageInputsHashes {
                 // TODO: Look into making WorkspaceName take a Cow
                 let workspace_name = WorkspaceName::Other(task_id.package().to_string());
 
-                let package_file_hash_inputs = PackageFileHashInputs {
-                    task_id: task_id.clone(),
-                    task_definition,
-                    workspace_name,
-                };
-
                 let pkg = match workspaces
-                    .get(&package_file_hash_inputs.workspace_name)
-                    .ok_or_else(|| {
-                        Error::MissingPackageJson(
-                            package_file_hash_inputs.workspace_name.to_string(),
-                        )
-                    }) {
+                    .get(&workspace_name)
+                    .ok_or_else(|| Error::MissingPackageJson(workspace_name.to_string()))
+                {
                     Ok(pkg) => pkg,
                     Err(err) => return Some(Err(err)),
                 };
@@ -120,22 +103,17 @@ impl PackageInputsHashes {
                 let mut hash_object = match scm.get_package_file_hashes(
                     repo_root,
                     package_path,
-                    &package_file_hash_inputs.task_definition.inputs,
+                    &task_definition.inputs,
                 ) {
                     Ok(hash_object) => hash_object,
                     Err(err) => return Some(Err(err.into())),
                 };
 
-                if !package_file_hash_inputs.task_definition.dot_env.is_empty() {
-                    let package_path = pkg
-                        .package_json_path
-                        .parent()
-                        .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
+                if !task_definition.dot_env.is_empty() {
                     let absolute_package_path = repo_root.resolve(package_path);
                     let dot_env_object = match scm.hash_existing_of(
                         &absolute_package_path,
-                        package_file_hash_inputs
-                            .task_definition
+                        task_definition
                             .dot_env
                             .iter()
                             .map(|p| p.to_anchored_system_path_buf()),
@@ -151,9 +129,11 @@ impl PackageInputsHashes {
 
                 let file_hashes = FileHashes(hash_object);
                 let hash = file_hashes.clone().hash();
-                let task_id = package_file_hash_inputs.task_id.to_string();
 
-                Some(Ok(((task_id.clone(), hash), (task_id, file_hashes))))
+                Some(Ok((
+                    (task_id.clone(), hash),
+                    (task_id.clone(), file_hashes),
+                )))
             })
             .collect::<Result<_, _>>()?;
 
@@ -212,7 +192,7 @@ impl<'a> TaskHasher<'a> {
         let hash_of_files = self
             .package_inputs_hashes
             .hashes
-            .get(&task_id.to_string())
+            .get(&task_id)
             .ok_or_else(|| Error::MissingPackageFileHash(task_id.to_string()))?;
         let mut explicit_env_var_map = EnvironmentVariableMap::default();
         let mut all_env_var_map = EnvironmentVariableMap::default();
@@ -234,7 +214,7 @@ impl<'a> TaskHasher<'a> {
                     .collect::<Vec<_>>();
 
                 if let Some(exclude_prefix) =
-                    self.env_at_execution_start.get("TURBOREPO_EXCLUDE_PREFIX")
+                    self.env_at_execution_start.get("TURBO_CI_VENDOR_ENV_KEY")
                 {
                     if !exclude_prefix.is_empty() {
                         let computed_exclude = format!("!{}*", exclude_prefix);
