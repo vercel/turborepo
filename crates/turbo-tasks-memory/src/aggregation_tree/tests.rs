@@ -364,8 +364,15 @@ fn chain_double_connected() {
     let current = NodeRef(current2);
 
     println!("digraph {{");
-    for i in 0..3 {
-        print_graph(&context, &current, i, |item| {
+    let start = 0;
+    let end = 4;
+    for i in start..end {
+        print_graph(&context, &current, i, false, |item| {
+            format!("{}", item.0.inner.lock().value)
+        });
+    }
+    for i in start + 1..end + 1 {
+        print_graph(&context, &current, i, true, |item| {
             format!("{}", item.0.inner.lock().value)
         });
     }
@@ -373,13 +380,8 @@ fn chain_double_connected() {
 
     {
         let aggregated = aggregation_info(&context, &current);
-        assert_eq!(aggregated.lock().value, 15050);
+        assert_eq!(aggregated.lock().value, 42978);
     }
-
-    {
-        let aggregated = aggregation_info(&context, &current);
-        assert_eq!(aggregated.lock().value, 294935);
-    }
-    assert_eq!(context.additions.load(Ordering::SeqCst), 1448);
+    assert_eq!(context.additions.load(Ordering::SeqCst), 297);
     context.additions.store(0, Ordering::SeqCst);
 }

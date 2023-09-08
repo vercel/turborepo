@@ -13,7 +13,8 @@ use super::{
     inner_refs::{BottomRef, ChildLocation, TopRef},
     leaf::{add_inner_upper_to_item, bottom_tree, remove_inner_upper_from_item},
     top_tree::TopTree,
-    AggregationContext, MAX_INNER_UPPERS,
+    AggregationContext, FORCE_LEFT_CHILD_AS_INNER, MAX_INNER_UPPERS, MAX_NESTING_LEVEL,
+    USE_BLUE_NODES,
 };
 use crate::count_hash_set::{CountHashSet, RemoveIfEntryResult};
 
@@ -69,7 +70,7 @@ struct SplitChildren<'a, I> {
 
 impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     fn is_blue(&self, hash: u32) -> bool {
-        (hash.rotate_right(self.height as u32 * 2) & 3) == 0
+        USE_BLUE_NODES && (hash.rotate_right(self.height as u32) & 1) == 0
     }
 
     fn split_children<'a>(
@@ -119,6 +120,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 self.add_children_of_child_inner(
                     context,
                     children.into_iter().map(|(_, c)| c),
+                    FORCE_LEFT_CHILD_AS_INNER,
                     nesting_level,
                 );
             }
@@ -126,7 +128,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 // the inner child has new children
                 // this means white children are inner children of this node
                 // and blue children need to propagate up
-                if nesting_level > 4 {
+                if nesting_level > MAX_NESTING_LEVEL {
                     self.add_children_of_child_following(context, children.into_iter().collect());
                     return;
                 }
@@ -136,6 +138,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                     self.add_children_of_child_inner(
                         context,
                         white.iter().map(|&(_, c)| c),
+                        false,
                         nesting_level,
                     );
                 }
@@ -179,6 +182,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         self: &Arc<Self>,
         context: &C,
         children: impl IntoIterator<Item = &'a I>,
+        force_inner: bool,
         nesting_level: u8,
     ) where
         I: 'a,
@@ -186,7 +190,8 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         let mut following = Vec::new();
         if self.height == 0 {
             for child in children {
-                let can_be_inner = add_inner_upper_to_item(context, child, &self, nesting_level);
+                let can_be_inner =
+                    add_inner_upper_to_item(context, child, &self, force_inner, nesting_level);
                 if !can_be_inner {
                     following.push((context.hash(child), child));
                 }
@@ -194,7 +199,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         } else {
             for child in children {
                 let can_be_inner = bottom_tree(context, child, self.height - 1)
-                    .add_inner_bottom_tree_upper(context, &self, true, nesting_level);
+                    .add_inner_bottom_tree_upper(context, &self, force_inner, nesting_level);
                 if !can_be_inner {
                     following.push((context.hash(child), child));
                 }
@@ -222,7 +227,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                     context,
                     child_of_child,
                     child_of_child_hash,
-                    true,
+                    FORCE_LEFT_CHILD_AS_INNER,
                     nesting_level,
                 );
             }
@@ -306,7 +311,8 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     ) {
         let can_be_inner;
         if self.height == 0 {
-            can_be_inner = add_inner_upper_to_item(context, child_of_child, &self, nesting_level);
+            can_be_inner =
+                add_inner_upper_to_item(context, child_of_child, &self, force_inner, nesting_level);
         } else {
             can_be_inner = bottom_tree(context, child_of_child, self.height - 1)
                 .add_inner_bottom_tree_upper(context, &self, force_inner, nesting_level);
@@ -393,7 +399,10 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         nesting_level: u8,
     ) -> bool {
         let mut state = self.state.lock();
-        if !force_inner && state.inner_bottom_upper.len() >= MAX_INNER_UPPERS {
+        if !force_inner
+            && (state.inner_bottom_upper.len() >= MAX_INNER_UPPERS
+                || state.left_bottom_upper.is_some())
+        {
             return state
                 .inner_bottom_upper
                 .add_if_entry(&BottomRef::ref_cast(upper));
@@ -533,12 +542,15 @@ pub fn print_graph<C: AggregationContext>(
     context: &C,
     entry: &C::ItemRef,
     height: u8,
+    color_upper: bool,
     name_fn: impl Fn(&C::ItemRef) -> String,
 ) {
     use std::fmt::Write;
-    println!("subgraph cluster_{} {{", height);
-    println!("label = \"Level {}\";", height);
-    println!("color = \"black\";");
+    if !color_upper {
+        println!("subgraph cluster_{} {{", height);
+        println!("label = \"Level {}\";", height);
+        println!("color = \"black\";");
+    }
     let mut edges = String::new();
     let tree = bottom_tree(context, entry, height);
     let mut queue = VecDeque::new();
@@ -547,26 +559,31 @@ pub fn print_graph<C: AggregationContext>(
     queue.push_back((entry.clone(), tree));
     while let Some((item, tree)) = queue.pop_front() {
         let name = name_fn(&item);
-        println!(r#""{} {}" [label="{}"]"#, height, name, name);
-        if height != 0 {
-            writeln!(edges, r#""{} {}" [color="red"]"#, height - 1, name,).unwrap();
+        if color_upper {
+            println!(r#""{} {}" [color="red"]"#, height - 1, name);
+        } else {
+            println!(r#""{} {}" [label="{}"]"#, height, name, name);
         }
         let state = tree.state.lock();
         for next in state.following.iter() {
-            writeln!(
-                edges,
-                r#""{} {}" -> "{} {}""#,
-                height,
-                name,
-                height,
-                name_fn(next)
-            )
-            .unwrap();
+            if !color_upper {
+                writeln!(
+                    edges,
+                    r#""{} {}" -> "{} {}""#,
+                    height,
+                    name,
+                    height,
+                    name_fn(next)
+                )
+                .unwrap();
+            }
             if visited.insert(next.clone()) {
                 queue.push_back((next.clone(), bottom_tree(context, next, height)));
             }
         }
     }
-    println!("}}");
-    print!("{}", edges);
+    if !color_upper {
+        println!("}}");
+        print!("{}", edges);
+    }
 }

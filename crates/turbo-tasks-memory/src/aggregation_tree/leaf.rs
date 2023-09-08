@@ -276,12 +276,14 @@ pub fn add_inner_upper_to_item<C: AggregationContext>(
     context: &C,
     reference: &C::ItemRef,
     upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
+    force_inner: bool,
     nesting_level: u8,
 ) -> bool {
     let (change, children) = {
         let mut item = context.item(reference);
         let leaf = item.leaf();
-        if leaf.inner_upper.len() >= MAX_INNER_UPPERS {
+        if !force_inner && (leaf.inner_upper.len() >= MAX_INNER_UPPERS || leaf.left_upper.is_some())
+        {
             return leaf.inner_upper.add_if_entry(BottomRef::ref_cast(upper));
         }
         let new = leaf.inner_upper.add(BottomRef {
