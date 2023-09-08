@@ -1,12 +1,13 @@
 import { log } from "logger";
-import { CounterButton, NewTabLink } from "ui";
+import { CounterButton, Link } from "ui";
 
 export const metadata = {
   title: "Store | Kitchen Sink",
 };
 
-export default function Store() {
-  log("Hey! This is Home.");
+export default function Store(): JSX.Element {
+  log("Hey! This is the Store page.");
+
   return (
     <div className="container">
       <h1 className="title">
@@ -16,8 +17,13 @@ export default function Store() {
       <CounterButton />
       <p className="description">
         Built With{" "}
-        <NewTabLink href="https://turbo.build/repo">Turborepo</NewTabLink> +{" "}
-        <NewTabLink href="https://nextjs.org/">Next.js</NewTabLink>
+        <Link href="https://turbo.build/repo" newTab>
+          Turborepo
+        </Link>
+        {" & "}
+        <Link href="https://nextjs.org/" newTab>
+          Next.js
+        </Link>
       </p>
     </div>
   );

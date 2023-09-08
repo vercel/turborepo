@@ -7,6 +7,7 @@
     "clean": "rm -rf .next",
     "dev": "next dev -p 3002",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
     "start": "next start"
   },
   "dependencies": {
@@ -17,12 +18,11 @@
     "ui": "workspace:*"
   },
   "devDependencies": {
-    "@types/jest": "^26.0.22",
     "@types/node": "^17.0.12",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
+    "@types/react": "^18.2.21",
+    "@types/react-dom": "^18.2.7",
     "eslint-config-custom": "workspace:*",
     "tsconfig": "workspace:*",
-    "typescript": "^4.8.3"
+    "typescript": "^5.2.2"
   }
 }
