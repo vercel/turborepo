@@ -10,10 +10,13 @@ use std::collections::HashMap;
 
 use capnp::message::{Builder, HeapAllocator};
 pub use traits::TurboHash;
+use turborepo_env::ResolvedEnvMode;
 
-use crate::cli::EnvMode;
+use crate::{cli::EnvMode, task_graph::TaskOutputs};
 
 mod proto_capnp {
+    use turborepo_env::ResolvedEnvMode;
+
     use crate::cli::EnvMode;
 
     include!(concat!(env!("OUT_DIR"), "/src/hash/proto_capnp.rs"));
@@ -28,58 +31,54 @@ mod proto_capnp {
         }
     }
 
-    impl From<EnvMode> for task_hashable::EnvMode {
-        fn from(value: EnvMode) -> Self {
+    impl From<ResolvedEnvMode> for task_hashable::EnvMode {
+        fn from(value: ResolvedEnvMode) -> Self {
             match value {
-                EnvMode::Infer => task_hashable::EnvMode::Infer,
-                EnvMode::Loose => task_hashable::EnvMode::Loose,
-                EnvMode::Strict => task_hashable::EnvMode::Strict,
+                ResolvedEnvMode::Loose => task_hashable::EnvMode::Loose,
+                ResolvedEnvMode::Strict => task_hashable::EnvMode::Strict,
             }
         }
     }
 }
 
-struct TaskHashable {
+pub struct TaskHashable<'a> {
     // hashes
-    global_hash: String,
-    task_dependency_hashes: Vec<String>,
-    hash_of_files: String,
-    external_deps_hash: String,
+    pub(crate) global_hash: &'a str,
+    pub(crate) task_dependency_hashes: Vec<String>,
+    pub(crate) hash_of_files: &'a str,
+    pub(crate) external_deps_hash: String,
 
     // task
-    package_dir: turbopath::RelativeUnixPathBuf,
-    task: String,
-    outputs: TaskOutputs,
-    pass_thru_args: Vec<String>,
+    pub(crate) package_dir: turbopath::RelativeUnixPathBuf,
+    pub(crate) task: &'a str,
+    pub(crate) outputs: TaskOutputs,
+    pub(crate) pass_through_args: &'a [String],
 
     // env
-    env: Vec<String>,
-    resolved_env_vars: EnvVarPairs,
-    pass_thru_env: Vec<String>,
-    env_mode: EnvMode,
-    dot_env: Vec<turbopath::RelativeUnixPathBuf>,
+    pub(crate) env: &'a [String],
+    pub(crate) resolved_env_vars: EnvVarPairs,
+    pub(crate) pass_through_env: &'a [String],
+    pub(crate) env_mode: ResolvedEnvMode,
+    pub(crate) dot_env: &'a [turbopath::RelativeUnixPathBuf],
 }
 
 #[derive(Debug)]
-pub struct GlobalHashable {
+pub struct GlobalHashable<'a> {
     pub global_cache_key: &'static str,
     pub global_file_hash_map: HashMap<turbopath::RelativeUnixPathBuf, String>,
     pub root_external_dependencies_hash: String,
-    pub env: Vec<String>,
+    pub env: &'a [String],
     pub resolved_env_vars: Vec<String>,
-    pub pass_through_env: Vec<String>,
+    pub pass_through_env: &'a [String],
     pub env_mode: EnvMode,
     pub framework_inference: bool,
-    pub dot_env: Vec<turbopath::RelativeUnixPathBuf>,
-}
-
-struct TaskOutputs {
-    inclusions: Vec<String>,
-    exclusions: Vec<String>,
+    pub dot_env: &'a [turbopath::RelativeUnixPathBuf],
 }
 
 pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
-struct FileHashes(HashMap<turbopath::RelativeUnixPathBuf, String>);
+
+#[derive(Debug, Clone)]
+pub struct FileHashes(pub HashMap<turbopath::RelativeUnixPathBuf, String>);
 
 impl From<TaskOutputs> for Builder<HeapAllocator> {
     fn from(value: TaskOutputs) -> Self {
@@ -192,17 +191,17 @@ impl From<FileHashes> for Builder<HeapAllocator> {
 
 type EnvVarPairs = Vec<String>;
 
-impl From<TaskHashable> for Builder<HeapAllocator> {
+impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
     fn from(task_hashable: TaskHashable) -> Self {
         let mut message =
             ::capnp::message::TypedBuilder::<proto_capnp::task_hashable::Owned>::new_default();
         let mut builder = message.init_root();
 
-        builder.set_global_hash(&task_hashable.global_hash);
+        builder.set_global_hash(task_hashable.global_hash);
         builder.set_package_dir(&task_hashable.package_dir.to_string());
-        builder.set_hash_of_files(&task_hashable.hash_of_files);
+        builder.set_hash_of_files(task_hashable.hash_of_files);
         builder.set_external_deps_hash(&task_hashable.external_deps_hash);
-        builder.set_task(&task_hashable.task);
+        builder.set_task(task_hashable.task);
         builder.set_env_mode(task_hashable.env_mode.into());
 
         {
@@ -224,8 +223,8 @@ impl From<TaskHashable> for Builder<HeapAllocator> {
         {
             let mut pass_thru_args_builder = builder
                 .reborrow()
-                .init_pass_thru_args(task_hashable.pass_thru_args.len() as u32);
-            for (i, arg) in task_hashable.pass_thru_args.iter().enumerate() {
+                .init_pass_thru_args(task_hashable.pass_through_args.len() as u32);
+            for (i, arg) in task_hashable.pass_through_args.iter().enumerate() {
                 pass_thru_args_builder.set(i as u32, arg);
             }
         }
@@ -240,8 +239,8 @@ impl From<TaskHashable> for Builder<HeapAllocator> {
         {
             let mut pass_thru_env_builder = builder
                 .reborrow()
-                .init_pass_thru_env(task_hashable.pass_thru_env.len() as u32);
-            for (i, env) in task_hashable.pass_thru_env.iter().enumerate() {
+                .init_pass_thru_env(task_hashable.pass_through_env.len() as u32);
+            for (i, env) in task_hashable.pass_through_env.iter().enumerate() {
                 pass_thru_env_builder.set(i as u32, env);
             }
         }
@@ -281,7 +280,7 @@ impl From<TaskHashable> for Builder<HeapAllocator> {
     }
 }
 
-impl From<GlobalHashable> for Builder<HeapAllocator> {
+impl<'a> From<GlobalHashable<'a>> for Builder<HeapAllocator> {
     fn from(hashable: GlobalHashable) -> Self {
         let mut message =
             ::capnp::message::TypedBuilder::<proto_capnp::global_hashable::Owned>::new_default();
@@ -372,6 +371,7 @@ impl From<GlobalHashable> for Builder<HeapAllocator> {
 #[cfg(test)]
 mod test {
     use test_case::test_case;
+    use turborepo_env::ResolvedEnvMode;
     use turborepo_lockfiles::Package;
 
     use super::{
@@ -382,22 +382,22 @@ mod test {
     #[test]
     fn task_hashable() {
         let task_hashable = TaskHashable {
-            global_hash: "global_hash".to_string(),
+            global_hash: "global_hash",
             task_dependency_hashes: vec!["task_dependency_hash".to_string()],
             package_dir: turbopath::RelativeUnixPathBuf::new("package_dir").unwrap(),
-            hash_of_files: "hash_of_files".to_string(),
+            hash_of_files: "hash_of_files",
             external_deps_hash: "external_deps_hash".to_string(),
-            task: "task".to_string(),
+            task: "task",
             outputs: TaskOutputs {
                 inclusions: vec!["inclusions".to_string()],
                 exclusions: vec!["exclusions".to_string()],
             },
-            pass_thru_args: vec!["pass_thru_args".to_string()],
-            env: vec!["env".to_string()],
+            pass_through_args: &["pass_thru_args".to_string()],
+            env: &["env".to_string()],
             resolved_env_vars: vec![],
-            pass_thru_env: vec!["pass_thru_env".to_string()],
-            env_mode: EnvMode::Infer,
-            dot_env: vec![turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
+            pass_through_env: &["pass_thru_env".to_string()],
+            env_mode: ResolvedEnvMode::Loose,
+            dot_env: &[turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 
         assert_eq!(task_hashable.hash(), "ff765ee2f83bc034");
@@ -414,13 +414,13 @@ mod test {
             .into_iter()
             .collect(),
             root_external_dependencies_hash: "0000000000000000".to_string(),
-            env: vec!["env".to_string()],
+            env: &["env".to_string()],
             resolved_env_vars: vec![],
-            pass_through_env: vec!["pass_through_env".to_string()],
+            pass_through_env: &["pass_through_env".to_string()],
             env_mode: EnvMode::Infer,
             framework_inference: true,
 
-            dot_env: vec![turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
+            dot_env: &[turbopath::RelativeUnixPathBuf::new("dotenv".to_string()).unwrap()],
         };
 
         assert_eq!(global_hash.hash(), "c0ddf8138bd686e8");

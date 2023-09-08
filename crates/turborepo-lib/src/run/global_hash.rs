@@ -26,35 +26,35 @@ const GLOBAL_CACHE_KEY: &str = "You don't understand! I coulda had class. I coul
 enum GlobalHashError {}
 
 #[derive(Debug, Default)]
-pub struct GlobalHashableInputs {
+pub struct GlobalHashableInputs<'a> {
     global_cache_key: &'static str,
     global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
     root_external_dependencies_hash: String,
-    env: Vec<String>,
+    env: &'a [String],
     // Only Option to allow #[derive(Default)]
     resolved_env_vars: Option<DetailedMap>,
-    pass_through_env: Vec<String>,
+    pass_through_env: &'a [String],
     env_mode: EnvMode,
     framework_inference: bool,
-    dot_env: Vec<RelativeUnixPathBuf>,
+    dot_env: &'a [RelativeUnixPathBuf],
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn get_global_hash_inputs<L: ?Sized + Lockfile>(
+pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     root_workspace: &WorkspaceInfo,
     root_path: &AbsoluteSystemPath,
     package_manager: &PackageManager,
     lockfile: Option<&L>,
-    global_file_dependencies: Vec<String>,
+    global_file_dependencies: &'a [String],
     env_at_execution_start: &EnvironmentVariableMap,
-    global_env: Vec<String>,
-    global_pass_through_env: Vec<String>,
+    global_env: &'a [String],
+    global_pass_through_env: &'a [String],
     env_mode: EnvMode,
     framework_inference: bool,
-    dot_env: Vec<RelativeUnixPathBuf>,
-) -> Result<GlobalHashableInputs> {
+    dot_env: &'a [RelativeUnixPathBuf],
+) -> Result<GlobalHashableInputs<'a>> {
     let global_hashable_env_vars =
-        get_global_hashable_env_vars(env_at_execution_start, &global_env)?;
+        get_global_hashable_env_vars(env_at_execution_start, global_env)?;
 
     debug!(
         "global hash env vars {:?}",
@@ -68,7 +68,7 @@ pub fn get_global_hash_inputs<L: ?Sized + Lockfile>(
 
         let files = globwalk::globwalk(
             root_path,
-            &global_file_dependencies,
+            global_file_dependencies,
             &globs.raw_exclusions,
             WalkType::All,
         )?;
@@ -122,14 +122,14 @@ pub fn get_global_hash_inputs<L: ?Sized + Lockfile>(
     })
 }
 
-impl GlobalHashableInputs {
+impl<'a> GlobalHashableInputs<'a> {
     pub fn calculate_global_hash_from_inputs(mut self) -> String {
         match self.env_mode {
             EnvMode::Infer if !self.pass_through_env.is_empty() => {
                 self.env_mode = EnvMode::Strict;
             }
             EnvMode::Loose => {
-                self.pass_through_env = Vec::new();
+                self.pass_through_env = &[];
             }
             _ => {}
         }
