@@ -75,8 +75,6 @@ lto = "off"
 [workspace.dependencies]
 async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
-# swc_ecma_loader = { version = "0.43.24", features = ["cache"] }
-
 browserslist-rs = { version = "0.12.2" }
 
 # Temporarily downgrading these to avoid breaking changes stemming from using
