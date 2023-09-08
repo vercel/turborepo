@@ -2,7 +2,7 @@
 #![feature(async_fn_in_trait)]
 
 use anyhow::Result;
-use turbo_tasks::{unit, Completion, TryJoinIterExt, TurboTasks, Vc};
+use turbo_tasks::{Completion, TryJoinIterExt, TurboTasks, Vc};
 use turbo_tasks_memory::MemoryBackend;
 use turbo_tasks_testing::register;
 
