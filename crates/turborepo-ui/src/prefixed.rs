@@ -16,6 +16,7 @@ pub struct PrefixedUI<W> {
     ui: UI,
     output_prefix: Option<StyledObject<String>>,
     warn_prefix: Option<StyledObject<String>>,
+    error_prefix: Option<StyledObject<String>>,
     out: W,
     err: W,
     default_prefix: StyledObject<String>,
@@ -29,6 +30,7 @@ impl<W: Write> PrefixedUI<W> {
             err,
             output_prefix: None,
             warn_prefix: None,
+            error_prefix: None,
             default_prefix: Style::new().apply_to(String::new()),
         }
     }
@@ -43,6 +45,11 @@ impl<W: Write> PrefixedUI<W> {
         self
     }
 
+    pub fn with_error_prefix(mut self, error_prefix: StyledObject<String>) -> Self {
+        self.error_prefix = Some(self.ui.apply(error_prefix));
+        self
+    }
+
     pub fn output(&mut self, message: impl Display) {
         self.write_line(message, Command::Output)
     }
@@ -51,16 +58,21 @@ impl<W: Write> PrefixedUI<W> {
         self.write_line(message, Command::Warn)
     }
 
+    pub fn error(&mut self, message: impl Display) {
+        self.write_line(message, Command::Error)
+    }
+
     fn write_line(&mut self, message: impl Display, command: Command) {
         let prefix = match command {
             Command::Output => &self.output_prefix,
             Command::Warn => &self.warn_prefix,
+            Command::Error => &self.error_prefix,
         }
         .as_ref()
         .unwrap_or(&self.default_prefix);
         let writer = match command {
             Command::Output => &mut self.out,
-            Command::Warn => &mut self.err,
+            Command::Warn | Command::Error => &mut self.err,
         };
 
         // There's no reason to propagate this error
@@ -77,6 +89,7 @@ impl<W: Write> PrefixedUI<W> {
 enum Command {
     Output,
     Warn,
+    Error,
 }
 
 /// Wraps a writer with a prefix before the actual message.
@@ -127,12 +140,15 @@ mod test {
         PrefixedUI::new(ui, out, err)
             .with_output_prefix(output_prefix)
             .with_warn_prefix(warn_prefix)
+            .with_error_prefix(crate::MAGENTA.apply_to("error ".to_string()))
     }
 
     #[test_case(false, "\u{1b}[1moutput \u{1b}[0mall good\n", Command::Output)]
     #[test_case(true, "output all good\n", Command::Output)]
     #[test_case(false, "\u{1b}[35mwarn \u{1b}[0mbe careful!\n", Command::Warn)]
     #[test_case(true, "warn be careful!\n", Command::Warn)]
+    #[test_case(false, "\u{1b}[35merror \u{1b}[0mit blew up\n", Command::Error)]
+    #[test_case(true, "error it blew up\n", Command::Error)]
     fn test_prefix_ui_outputs(strip_ansi: bool, expected: &str, cmd: Command) {
         let mut out = Vec::new();
         let mut err = Vec::new();
@@ -141,11 +157,12 @@ mod test {
         match cmd {
             Command::Output => prefixed_ui.output("all good"),
             Command::Warn => prefixed_ui.warn("be careful!"),
+            Command::Error => prefixed_ui.error("it blew up"),
         }
 
         let buffer = match cmd {
             Command::Output => out,
-            Command::Warn => err,
+            Command::Warn | Command::Error => err,
         };
         assert_eq!(String::from_utf8(buffer).unwrap(), expected);
     }
