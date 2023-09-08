@@ -192,7 +192,7 @@ impl<'a> TaskHasher<'a> {
         let hash_of_files = self
             .package_inputs_hashes
             .hashes
-            .get(&task_id)
+            .get(task_id)
             .ok_or_else(|| Error::MissingPackageFileHash(task_id.to_string()))?;
         let mut explicit_env_var_map = EnvironmentVariableMap::default();
         let mut all_env_var_map = EnvironmentVariableMap::default();
