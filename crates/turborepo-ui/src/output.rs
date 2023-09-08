@@ -147,6 +147,8 @@ impl<W: Write> OutputClient<W> {
             self.behavior,
             OutputClientBehavior::InMemoryBuffer | OutputClientBehavior::Grouped
         ) {
+            // This reconstruction is necessary to change the type of bytes from
+            // SinkBytes<'a> to SinkBytes<'static>
             let bytes = SinkBytes {
                 destination: bytes.destination,
                 buffer: bytes.buffer.to_vec().into(),
