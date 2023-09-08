@@ -42,7 +42,10 @@ use super::{
     endpoint::SocketOpenError,
     proto::{self},
 };
-use crate::{daemon::bump_timeout_layer::BumpTimeoutLayer, get_version};
+use crate::{
+    daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket},
+    get_version,
+};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -113,6 +116,13 @@ pub async fn serve<S>(
 where
     S: Future<Output = CloseReason>,
 {
+    let running = Arc::new(AtomicBool::new(true));
+    let (_pid_lock, stream) = match listen_socket(daemon_root.clone(), running.clone()).await {
+        Ok((pid_lock, stream)) => (pid_lock, stream),
+        Err(e) => return CloseReason::SocketOpenError(e),
+    };
+    trace!("acquired connection stream for socket");
+
     let watcher_repo_root = repo_root.to_owned();
     let (watcher_tx, watcher_rx) = watch::channel(None);
     let (trigger_shutdown, shutdown_signal) = {
@@ -155,7 +165,6 @@ where
             reason = external_shutdown => gprc_shutdown_tx.send(reason).ok(),
         };
     };
-    let running = Arc::new(AtomicBool::new(true));
 
     let service = TurboGrpcService {
         shutdown: trigger_shutdown,
@@ -164,31 +173,17 @@ where
         start_time: Instant::now(),
         log_file,
     };
-    let (_lock, server_fut) =
-        {
-            let (lock, stream) =
-                match crate::daemon::endpoint::listen_socket(daemon_root.clone(), running.clone())
-                    .await
-                {
-                    Ok(val) => val,
-                    Err(e) => panic!("{}", e), //return CloseReason::SocketOpenError(e),
-                };
+    let server_fut = {
+        let service = ServiceBuilder::new()
+            .layer(BumpTimeoutLayer::new(bump_timeout.clone()))
+            .service(crate::daemon::proto::turbod_server::TurbodServer::new(
+                service,
+            ));
 
-            trace!("acquired connection stream for socket");
-
-            let service = ServiceBuilder::new()
-                .layer(BumpTimeoutLayer::new(bump_timeout.clone()))
-                .service(crate::daemon::proto::turbod_server::TurbodServer::new(
-                    service,
-                ));
-
-            (
-                lock,
-                Server::builder()
-                    .add_service(service)
-                    .serve_with_incoming_shutdown(stream, shutdown_fut),
-            )
-        };
+        Server::builder()
+            .add_service(service)
+            .serve_with_incoming_shutdown(stream, shutdown_fut)
+    };
     // Wait for the server to exit.
     let _ = server_fut.await;
     trace!("gRPC server exited");
