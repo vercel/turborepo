@@ -246,36 +246,37 @@ impl GlobTracker {
     }
 
     fn handle_path_change(&mut self, path: &RelativeUnixPath) {
-        self.glob_statuses.retain(|glob_str, (glob, hash_globs)| {
-            // If this is not a match, we aren't modifying this glob, bail early and mark
-            // for retention.
-            if !glob.is_match(path) {
-                return true;
-            }
-            // We have a match. Check which hashes need invalidation.
-            hash_globs.retain(|hash| {
-                let Some(glob_set) = self.hash_globs.get_mut(hash) else {
-                    return true;
-                };
-                // If we match an exclusion, don't invalidate this hash
-                if glob_set.exclude.is_match(path) {
+        self.glob_statuses
+            .retain(|glob_str, (glob, hashes_for_glob)| {
+                // If this is not a match, we aren't modifying this glob, bail early and mark
+                // for retention.
+                if !glob.is_match(path) {
                     return true;
                 }
-                // We didn't match any exclusions. Safe to invalidate this hash
-                let remove_hash = if let Some(globs_for_hash) = self.hash_globs.get_mut(hash) {
-                    globs_for_hash.include.remove(glob_str);
-                    globs_for_hash.include.is_empty()
-                } else {
+                // We have a match. Check which hashes need invalidation.
+                hashes_for_glob.retain(|hash| {
+                    let Some(glob_set) = self.hash_globs.get_mut(hash) else {
+                        // This shouldn't ever happen, but if we aren't tracking this hash at
+                        // all, we don't need to keep it in the set of hashes that are relevant
+                        // for this glob.
+                        return false;
+                    };
+                    // If we match an exclusion, don't invalidate this hash
+                    if glob_set.exclude.is_match(path) {
+                        return true;
+                    }
+                    // We didn't match an exclusion, we can remove this glob
+                    glob_set.include.remove(glob_str);
+
+                    // We removed the last include, we can stop tracking this hash
+                    if glob_set.include.is_empty() {
+                        self.hash_globs.remove(hash);
+                    }
+
                     false
-                };
-                // If we removed the last glob for this hash, drop the hash entirely
-                if remove_hash {
-                    self.hash_globs.remove(hash);
-                }
-                false
+                });
+                !hashes_for_glob.is_empty()
             });
-            !hash_globs.is_empty()
-        });
     }
 }
 
