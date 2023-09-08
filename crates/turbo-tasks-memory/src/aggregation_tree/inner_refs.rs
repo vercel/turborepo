@@ -4,6 +4,7 @@ use std::{
 };
 
 use nohash_hasher::IsEnabled;
+use ref_cast::RefCast;
 
 use super::{bottom_tree::BottomTree, top_tree::TopTree};
 
@@ -13,6 +14,8 @@ pub enum ChildLocation {
     Inner,
 }
 
+#[derive(RefCast)]
+#[repr(transparent)]
 pub struct TopRef<T> {
     pub upper: Arc<TopTree<T>>,
 }
@@ -33,6 +36,8 @@ impl<T> PartialEq for TopRef<T> {
 
 impl<T> Eq for TopRef<T> {}
 
+#[derive(RefCast)]
+#[repr(transparent)]
 pub struct BottomRef<T, I: IsEnabled> {
     pub upper: Arc<BottomTree<T, I>>,
 }

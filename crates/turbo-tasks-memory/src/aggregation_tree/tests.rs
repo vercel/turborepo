@@ -11,6 +11,7 @@ use nohash_hasher::IsEnabled;
 use parking_lot::{Mutex, MutexGuard};
 
 use super::{aggregation_info, AggregationContext, AggregationItemLock, AggregationTreeLeaf};
+use crate::aggregation_tree::bottom_tree::print_graph;
 
 struct Node {
     hash: u32,
@@ -362,10 +363,23 @@ fn chain_double_connected() {
     }
     let current = NodeRef(current2);
 
+    println!("digraph {{");
+    for i in 0..3 {
+        print_graph(&context, &current, i, |item| {
+            format!("{}", item.0.inner.lock().value)
+        });
+    }
+    println!("}}");
+
     {
         let aggregated = aggregation_info(&context, &current);
-        assert_eq!(aggregated.lock().value, 246593);
+        assert_eq!(aggregated.lock().value, 15050);
     }
-    assert_eq!(context.additions.load(Ordering::SeqCst), 1467);
+
+    {
+        let aggregated = aggregation_info(&context, &current);
+        assert_eq!(aggregated.lock().value, 294935);
+    }
+    assert_eq!(context.additions.load(Ordering::SeqCst), 1448);
     context.additions.store(0, Ordering::SeqCst);
 }

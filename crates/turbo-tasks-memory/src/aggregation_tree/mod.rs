@@ -38,6 +38,8 @@ use nohash_hasher::IsEnabled;
 use self::{leaf::top_tree, top_tree::TopTree};
 pub use self::{leaf::AggregationTreeLeaf, top_tree::AggregationInfoGuard};
 
+pub(self) const MAX_INNER_UPPERS: usize = 5;
+
 pub trait AggregationContext {
     type ItemLock<'a>: AggregationItemLock<
         ItemRef = Self::ItemRef,

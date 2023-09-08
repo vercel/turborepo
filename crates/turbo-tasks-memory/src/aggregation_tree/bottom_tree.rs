@@ -1,13 +1,19 @@
-use std::{hash::Hash, ops::ControlFlow, sync::Arc};
+use std::{
+    collections::{HashSet, VecDeque},
+    hash::Hash,
+    ops::ControlFlow,
+    sync::Arc,
+};
 
 use nohash_hasher::{BuildNoHashHasher, IsEnabled};
 use parking_lot::{Mutex, MutexGuard};
+use ref_cast::RefCast;
 
 use super::{
     inner_refs::{BottomRef, ChildLocation, TopRef},
-    leaf::bottom_tree,
+    leaf::{add_inner_upper_to_item, bottom_tree, remove_inner_upper_from_item},
     top_tree::TopTree,
-    AggregationContext, AggregationItemLock,
+    AggregationContext, MAX_INNER_UPPERS,
 };
 use crate::count_hash_set::{CountHashSet, RemoveIfEntryResult};
 
@@ -150,15 +156,13 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         context: &C,
         mut children: Vec<(u32, &I)>,
     ) {
-        let mut left_bottom_upper = None;
-        let mut inner_bottom_uppers = Vec::new();
         let mut state = self.state.lock();
         children.retain(|&(_, child)| state.following.add(child.clone()));
         if children.is_empty() {
             return;
         }
-        left_bottom_upper = state.left_bottom_upper.clone();
-        inner_bottom_uppers.extend(state.inner_bottom_upper.iter().cloned());
+        let left_bottom_upper = state.left_bottom_upper.clone();
+        let inner_bottom_uppers = state.inner_bottom_upper.iter().cloned().collect::<Vec<_>>();
         for TopRef { upper } in state.top_upper.iter() {
             upper.add_children_of_child(context, children.iter().map(|&(_, c)| c));
         }
@@ -179,18 +183,25 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     ) where
         I: 'a,
     {
+        let mut following = Vec::new();
         if self.height == 0 {
             for child in children {
-                add_inner_upper_to_item(context, child, &self, nesting_level);
+                let can_be_inner = add_inner_upper_to_item(context, child, &self, nesting_level);
+                if !can_be_inner {
+                    following.push((context.hash(child), child));
+                }
             }
         } else {
             for child in children {
-                bottom_tree(context, child, self.height - 1).add_inner_bottom_tree_upper(
-                    context,
-                    &self,
-                    nesting_level,
-                );
+                let can_be_inner = bottom_tree(context, child, self.height - 1)
+                    .add_inner_bottom_tree_upper(context, &self, true, nesting_level);
+                if !can_be_inner {
+                    following.push((context.hash(child), child));
+                }
             }
+        }
+        if !following.is_empty() {
+            self.add_children_of_child_following(context, following);
         }
     }
 
@@ -202,28 +213,40 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         child_of_child_hash: u32,
         nesting_level: u8,
     ) {
-        let is_blue = self.is_blue(child_of_child_hash);
-        match (child_location, is_blue) {
-            (ChildLocation::Left, _) => {
+        match child_location {
+            ChildLocation::Left => {
                 // the left child has a new child
                 // this means it's a inner child of this node
                 // We always want to aggregate over at least connectivity 1
-                self.add_child_of_child_inner(context, child_of_child, nesting_level);
+                self.add_child_of_child_inner(
+                    context,
+                    child_of_child,
+                    child_of_child_hash,
+                    true,
+                    nesting_level,
+                );
             }
-            (ChildLocation::Inner, false) if nesting_level <= 4 => {
-                // the inner child has a new child
-                // but it's not a blue node and we are not too deep
-                // this means it's a inner child of this node
-                // if it's not already a following child
-                if !self.add_child_of_child_if_following(child_of_child) {
-                    self.add_child_of_child_inner(context, child_of_child, nesting_level);
+            ChildLocation::Inner => {
+                if nesting_level <= 4 && !self.is_blue(child_of_child_hash) {
+                    // the inner child has a new child
+                    // but it's not a blue node and we are not too deep
+                    // this means it's a inner child of this node
+                    // if it's not already a following child
+                    if !self.add_child_of_child_if_following(child_of_child) {
+                        self.add_child_of_child_inner(
+                            context,
+                            child_of_child,
+                            child_of_child_hash,
+                            false,
+                            nesting_level,
+                        );
+                    }
+                } else {
+                    // the inner child has a new child
+                    // this means we need to propagate the change up
+                    // and store them in our own list
+                    self.add_child_of_child_following(context, child_of_child, child_of_child_hash);
                 }
-            }
-            (ChildLocation::Inner, _) => {
-                // the inner child has a new child
-                // this means we need to propagate the change up
-                // and store them in our own list
-                self.add_child_of_child_following(context, child_of_child, child_of_child_hash);
             }
         }
     }
@@ -277,16 +300,19 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         self: &Arc<Self>,
         context: &C,
         child_of_child: &I,
+        child_of_child_hash: u32,
+        force_inner: bool,
         nesting_level: u8,
     ) {
+        let can_be_inner;
         if self.height == 0 {
-            add_inner_upper_to_item(context, child_of_child, &self, nesting_level);
+            can_be_inner = add_inner_upper_to_item(context, child_of_child, &self, nesting_level);
         } else {
-            bottom_tree(context, child_of_child, self.height - 1).add_inner_bottom_tree_upper(
-                context,
-                &self,
-                nesting_level,
-            );
+            can_be_inner = bottom_tree(context, child_of_child, self.height - 1)
+                .add_inner_bottom_tree_upper(context, &self, force_inner, nesting_level);
+        }
+        if !can_be_inner {
+            self.add_child_of_child_following(context, child_of_child, child_of_child_hash);
         }
     }
 
@@ -305,15 +331,15 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         context: &C,
         child_of_child: &I,
     ) -> bool {
-        let mut left_bottom_upper = None;
-        let mut inner_bottom_upper = Vec::new();
+        let left_bottom_upper;
+        let inner_bottom_upper;
         let mut state = self.state.lock();
         match state.following.remove_if_entry(child_of_child) {
             RemoveIfEntryResult::PartiallyRemoved => return true,
             RemoveIfEntryResult::NotPresent => return false,
             RemoveIfEntryResult::Removed => {
                 left_bottom_upper = state.left_bottom_upper.clone();
-                inner_bottom_upper.extend(state.inner_bottom_upper.iter().cloned());
+                inner_bottom_upper = state.inner_bottom_upper.iter().cloned().collect::<Vec<_>>();
                 for TopRef { upper } in state.top_upper.iter() {
                     upper.remove_child_of_child(context, child_of_child);
                 }
@@ -358,13 +384,20 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         upper.add_children_of_child(context, ChildLocation::Left, children, 1);
     }
 
+    #[must_use]
     pub(super) fn add_inner_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         context: &C,
         upper: &Arc<BottomTree<T, I>>,
+        force_inner: bool,
         nesting_level: u8,
-    ) {
+    ) -> bool {
         let mut state = self.state.lock();
+        if !force_inner && state.inner_bottom_upper.len() >= MAX_INNER_UPPERS {
+            return state
+                .inner_bottom_upper
+                .add_if_entry(&BottomRef::ref_cast(upper));
+        }
         let new = state.inner_bottom_upper.add(BottomRef {
             upper: upper.clone(),
         });
@@ -377,6 +410,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             let children = children.iter().map(|item| (context.hash(item), item));
             upper.add_children_of_child(context, ChildLocation::Inner, children, nesting_level + 1);
         }
+        true
     }
 
     pub(super) fn remove_inner_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
@@ -495,94 +529,44 @@ fn propagate_change_to_upper<C: AggregationContext>(
     }
 }
 
-pub fn add_inner_upper_to_item<C: AggregationContext>(
+pub fn print_graph<C: AggregationContext>(
     context: &C,
-    reference: &C::ItemRef,
-    upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
-    nesting_level: u8,
+    entry: &C::ItemRef,
+    height: u8,
+    name_fn: impl Fn(&C::ItemRef) -> String,
 ) {
-    let (change, children) = {
-        let mut item = context.item(reference);
-        if item.leaf().add_upper(upper, ChildLocation::Inner) {
-            let change = item.get_add_change();
-            (
-                change,
-                item.children().map(|r| r.into_owned()).collect::<Vec<_>>(),
-            )
-        } else {
-            return;
+    use std::fmt::Write;
+    println!("subgraph cluster_{} {{", height);
+    println!("label = \"Level {}\";", height);
+    println!("color = \"black\";");
+    let mut edges = String::new();
+    let tree = bottom_tree(context, entry, height);
+    let mut queue = VecDeque::new();
+    let mut visited = HashSet::new();
+    visited.insert(entry.clone());
+    queue.push_back((entry.clone(), tree));
+    while let Some((item, tree)) = queue.pop_front() {
+        let name = name_fn(&item);
+        println!(r#""{} {}" [label="{}"]"#, height, name, name);
+        if height != 0 {
+            writeln!(edges, r#""{} {}" [color="red"]"#, height - 1, name,).unwrap();
         }
-    };
-    if let Some(change) = change {
-        context.on_add_change(&change);
-        upper.child_change(context, &change);
-    }
-    if !children.is_empty() {
-        upper.add_children_of_child(
-            context,
-            ChildLocation::Inner,
-            children.iter().map(|child| (context.hash(&child), child)),
-            nesting_level + 1,
-        )
-    }
-}
-
-#[must_use]
-pub fn add_left_upper_to_item_step_1<C: AggregationContext>(
-    item: &mut C::ItemLock<'_>,
-    upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
-    location: ChildLocation,
-) -> (Option<C::ItemChange>, Vec<C::ItemRef>) {
-    if item.leaf().add_upper(upper, ChildLocation::Left) {
-        let change = item.get_add_change();
-        (change, item.children().map(|r| r.into_owned()).collect())
-    } else {
-        (None, Vec::new())
-    }
-}
-
-pub fn add_left_upper_to_item_step_2<C: AggregationContext>(
-    context: &C,
-    upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
-    step_1_result: (Option<C::ItemChange>, Vec<C::ItemRef>),
-) {
-    let (change, children) = step_1_result;
-    if let Some(change) = change {
-        context.on_add_change(&change);
-        upper.child_change(context, &change);
-    }
-    if !children.is_empty() {
-        upper.add_children_of_child(
-            context,
-            ChildLocation::Left,
-            children.iter().map(|child| (context.hash(&child), child)),
-            1,
-        )
-    }
-}
-
-pub fn remove_inner_upper_from_item<C: AggregationContext>(
-    context: &C,
-    reference: &C::ItemRef,
-    upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
-) {
-    let (change, children) = {
-        let mut item = context.item(reference);
-        if item.leaf().remove_inner_upper(upper) {
-            let change = item.get_remove_change();
-            (
-                change,
-                item.children().map(|r| r.into_owned()).collect::<Vec<_>>(),
+        let state = tree.state.lock();
+        for next in state.following.iter() {
+            writeln!(
+                edges,
+                r#""{} {}" -> "{} {}""#,
+                height,
+                name,
+                height,
+                name_fn(next)
             )
-        } else {
-            return;
+            .unwrap();
+            if visited.insert(next.clone()) {
+                queue.push_back((next.clone(), bottom_tree(context, next, height)));
+            }
         }
-    };
-    if let Some(change) = change {
-        context.on_remove_change(&change);
-        upper.child_change(context, &change);
     }
-    for child in children {
-        upper.remove_child_of_child(context, &child)
-    }
+    println!("}}");
+    print!("{}", edges);
 }

@@ -1,4 +1,5 @@
 use std::{
+    borrow::Borrow,
     collections::hash_map::RandomState,
     fmt::{Debug, Formatter},
     hash::{BuildHasher, Hash},
@@ -116,7 +117,11 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
     /// Returns true, when the value has been added. Returns false, when the
     /// value was not part of the set before (positive or negative). The
     /// visibility from outside will never change due to this method.
-    pub fn add_if_entry(&mut self, item: &T) -> bool {
+    pub fn add_if_entry<Q>(&mut self, item: &Q) -> bool
+    where
+        T: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
         match self.inner.raw_entry_mut(item) {
             RawEntry::Occupied(mut e) => {
                 let value = e.get_mut();
