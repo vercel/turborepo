@@ -40,22 +40,37 @@ impl<W: Write> PrefixedUI<W> {
     }
 
     pub fn output(&mut self, message: impl Display) {
-        // There's no reason to propagate this error
-        // because we don't want our entire program to crash
-        // due to a log failure.
-        if let Err(err) = writeln!(self.out, "{}{}", self.output_prefix, message) {
-            error!("cannot write to logs: {:?}", err);
-        }
+        self.write_line(message, Command::Output)
     }
 
     pub fn warn(&mut self, message: impl Display) {
+        self.write_line(message, Command::Warn)
+    }
+
+    fn write_line(&mut self, message: impl Display, command: Command) {
+        let prefix = match command {
+            Command::Output => &self.output_prefix,
+            Command::Warn => &self.warn_prefix,
+        };
+        let writer = match command {
+            Command::Output => &mut self.out,
+            Command::Warn => &mut self.err,
+        };
+
         // There's no reason to propagate this error
         // because we don't want our entire program to crash
         // due to a log failure.
-        if let Err(err) = writeln!(self.err, "{}{}", self.warn_prefix, message) {
+        if let Err(err) = writeln!(writer, "{}{}", prefix, message) {
             error!("cannot write to logs: {:?}", err);
         }
     }
+}
+
+//
+#[derive(Debug, Clone, Copy)]
+enum Command {
+    Output,
+    Warn,
 }
 
 /// Wraps a writer with a prefix before the actual message.
@@ -106,29 +121,23 @@ mod test {
         PrefixedUI::new(ui, output_prefix, warn_prefix, out, err)
     }
 
-    #[derive(Debug, Clone, Copy)]
-    enum OutputCall {
-        Output,
-        Warn,
-    }
-
-    #[test_case(false, "\u{1b}[1moutput \u{1b}[0mall good\n", OutputCall::Output)]
-    #[test_case(true, "output all good\n", OutputCall::Output)]
-    #[test_case(false, "\u{1b}[35mwarn \u{1b}[0mbe careful!\n", OutputCall::Warn)]
-    #[test_case(true, "warn be careful!\n", OutputCall::Warn)]
-    fn test_prefix_ui_outputs(strip_ansi: bool, expected: &str, call: OutputCall) {
+    #[test_case(false, "\u{1b}[1moutput \u{1b}[0mall good\n", Command::Output)]
+    #[test_case(true, "output all good\n", Command::Output)]
+    #[test_case(false, "\u{1b}[35mwarn \u{1b}[0mbe careful!\n", Command::Warn)]
+    #[test_case(true, "warn be careful!\n", Command::Warn)]
+    fn test_prefix_ui_outputs(strip_ansi: bool, expected: &str, cmd: Command) {
         let mut out = Vec::new();
         let mut err = Vec::new();
 
         let mut prefixed_ui = prefixed_ui(&mut out, &mut err, UI::new(strip_ansi));
-        match call {
-            OutputCall::Output => prefixed_ui.output("all good"),
-            OutputCall::Warn => prefixed_ui.warn("be careful!"),
+        match cmd {
+            Command::Output => prefixed_ui.output("all good"),
+            Command::Warn => prefixed_ui.warn("be careful!"),
         }
 
-        let buffer = match call {
-            OutputCall::Output => out,
-            OutputCall::Warn => err,
+        let buffer = match cmd {
+            Command::Output => out,
+            Command::Warn => err,
         };
         assert_eq!(String::from_utf8(buffer).unwrap(), expected);
     }
