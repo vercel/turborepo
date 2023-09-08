@@ -173,8 +173,11 @@ pub async fn daemon_server(
         }
         CloseReason::Interrupt
     });
+    // TODO: be more methodical about this choice:
+    let cookie_dir = base.repo_root.join_component(".git");
     let reason = crate::daemon::serve(
         &base.repo_root,
+        cookie_dir,
         &daemon_root,
         log_file,
         timeout,
