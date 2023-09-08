@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use super::{Error, Lockfile, Package};
 
@@ -10,7 +10,7 @@ type Map<K, V> = std::collections::BTreeMap<K, V>;
 // we change graph traversal now
 // resolve_package should only be used now for converting initial contents
 // of workspace package.json into a set of node ids
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct NpmLockfile {
     #[serde(rename = "lockfileVersion")]
     lockfile_version: i32,
@@ -99,6 +99,57 @@ impl Lockfile for NpmLockfile {
             })
             .transpose()
     }
+
+    fn subgraph(
+        &self,
+        workspace_packages: &[String],
+        packages: &[String],
+    ) -> Result<Box<dyn Lockfile>, Error> {
+        let mut pruned_packages = Map::new();
+        for pkg_key in packages {
+            let pkg = self.get_package(pkg_key)?;
+            pruned_packages.insert(pkg_key.to_string(), pkg.clone());
+        }
+        if let Some(root) = self.packages.get("") {
+            pruned_packages.insert("".into(), root.clone());
+        }
+        for workspace in workspace_packages {
+            let pkg = self.get_package(workspace)?;
+            pruned_packages.insert(workspace.to_string(), pkg.clone());
+
+            for (key, entry) in &self.packages {
+                if entry.resolved.as_deref() == Some(workspace) {
+                    pruned_packages.insert(key.clone(), entry.clone());
+                    break;
+                }
+            }
+        }
+        Ok(Box::new(Self {
+            lockfile_version: 3,
+            packages: pruned_packages,
+            dependencies: Map::default(),
+            other: self.other.clone(),
+        }))
+    }
+
+    fn encode(&self) -> Result<Vec<u8>, crate::Error> {
+        Ok(serde_json::to_vec_pretty(&self)?)
+    }
+
+    fn global_change_key(&self) -> Vec<u8> {
+        let mut buf = vec![b'n', b'p', b'm', 0];
+
+        serde_json::to_writer(
+            &mut buf,
+            &json!({
+                "requires": &self.other.get("requires"),
+                "version": &self.lockfile_version,
+            }),
+        )
+        .expect("writing to Vec cannot fail");
+
+        buf
+    }
 }
 
 impl NpmLockfile {
@@ -123,38 +174,6 @@ impl NpmLockfile {
         self.packages
             .get(pkg_str)
             .ok_or_else(|| Error::MissingPackage(pkg_str.to_string()))
-    }
-
-    pub fn subgraph(
-        &self,
-        workspace_packages: &[String],
-        packages: &[String],
-    ) -> Result<Self, Error> {
-        let mut pruned_packages = Map::new();
-        for pkg_key in packages {
-            let pkg = self.get_package(pkg_key)?;
-            pruned_packages.insert(pkg_key.to_string(), pkg.clone());
-        }
-        if let Some(root) = self.packages.get("") {
-            pruned_packages.insert("".into(), root.clone());
-        }
-        for workspace in workspace_packages {
-            let pkg = self.get_package(workspace)?;
-            pruned_packages.insert(workspace.to_string(), pkg.clone());
-
-            for (key, entry) in &self.packages {
-                if entry.resolved.as_deref() == Some(workspace) {
-                    pruned_packages.insert(key.clone(), entry.clone());
-                    break;
-                }
-            }
-        }
-        Ok(Self {
-            lockfile_version: 3,
-            packages: pruned_packages,
-            dependencies: Map::default(),
-            other: self.other.clone(),
-        })
     }
 
     fn possible_npm_deps(key: &str, dep: &str) -> Vec<String> {
@@ -200,7 +219,7 @@ pub fn npm_subgraph(
 ) -> Result<Vec<u8>, Error> {
     let lockfile = NpmLockfile::load(contents)?;
     let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
-    let new_contents = serde_json::to_vec_pretty(&pruned_lockfile)?;
+    let new_contents = pruned_lockfile.encode()?;
 
     Ok(new_contents)
 }

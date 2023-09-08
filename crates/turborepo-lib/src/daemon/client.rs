@@ -7,19 +7,19 @@ use super::{
     connector::{DaemonConnector, DaemonConnectorError},
     endpoint::SocketOpenError,
 };
-use crate::get_version;
+use crate::{get_version, globwatcher::HashGlobSetupError};
 
 pub mod proto {
     tonic::include_proto!("turbodprotocol");
 }
 
-#[derive(Debug)]
-pub struct DaemonClient<T> {
+#[derive(Debug, Clone)]
+pub struct DaemonClient<T: Clone> {
     client: TurbodClient<tonic::transport::Channel>,
     connect_settings: T,
 }
 
-impl<T> DaemonClient<T> {
+impl<T: Clone> DaemonClient<T> {
     /// Interrogate the server for its version.
     pub(super) async fn handshake(&mut self) -> Result<(), DaemonError> {
         let _ret = self
@@ -70,7 +70,6 @@ impl DaemonClient<DaemonConnector> {
         self.stop().await?.connect().await.map_err(Into::into)
     }
 
-    #[allow(dead_code)]
     pub async fn get_changed_outputs(
         &mut self,
         hash: String,
@@ -90,12 +89,14 @@ impl DaemonClient<DaemonConnector> {
         hash: String,
         output_globs: Vec<String>,
         output_exclusion_globs: Vec<String>,
+        time_saved: u64,
     ) -> Result<(), DaemonError> {
         self.client
             .notify_outputs_written(proto::NotifyOutputsWrittenRequest {
                 hash,
                 output_globs,
                 output_exclusion_globs,
+                time_saved,
             })
             .await?;
 
@@ -145,22 +146,26 @@ pub enum DaemonError {
     DaemonConnect(#[from] DaemonConnectorError),
     /// The timeout specified was invalid.
     #[error("invalid timeout specified ({0})")]
+    #[allow(dead_code)]
     InvalidTimeout(String),
     /// The server is unable to start file watching.
     #[error("unable to start file watching")]
-    FileWatching(#[from] notify::Error),
+    SetupFileWatching(#[from] HashGlobSetupError),
 
     #[error("unable to display output: {0}")]
     DisplayError(#[from] serde_json::Error),
 
     #[error("unable to construct log file name: {0}")]
     InvalidLogFile(#[from] time::Error),
+
+    #[error("unable to complete daemon clean")]
+    CleanFailed,
 }
 
 impl From<Status> for DaemonError {
     fn from(status: Status) -> DaemonError {
         match status.code() {
-            Code::FailedPrecondition => DaemonError::VersionMismatch,
+            Code::FailedPrecondition | Code::Unimplemented => DaemonError::VersionMismatch,
             Code::Unavailable => DaemonError::Unavailable,
             c => DaemonError::GrpcFailure(c),
         }

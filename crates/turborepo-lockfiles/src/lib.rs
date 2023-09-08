@@ -1,9 +1,10 @@
-#![feature(once_cell)]
+#![deny(clippy::all)]
 
 mod berry;
 mod error;
 mod npm;
 mod pnpm;
+mod yarn1;
 
 use std::collections::{HashMap, HashSet};
 
@@ -12,6 +13,8 @@ pub use error::Error;
 pub use npm::*;
 pub use pnpm::{pnpm_global_change, pnpm_subgraph, PnpmLockfile};
 use serde::Serialize;
+use turbopath::RelativeUnixPathBuf;
+pub use yarn1::{yarn_subgraph, Yarn1Lockfile};
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
@@ -22,7 +25,7 @@ pub struct Package {
 // This trait will only be used when migrating the Go lockfile implementations
 // to Rust. Once the migration is complete we will leverage petgraph for doing
 // our graph calculations.
-pub trait Lockfile {
+pub trait Lockfile: Send + Sync {
     // Given a workspace, a package it imports and version returns the key, resolved
     // version, and if it was found
     fn resolve_package(
@@ -34,9 +37,32 @@ pub trait Lockfile {
     // Given a lockfile key return all (prod/dev/optional) dependencies of that
     // package
     fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error>;
+
+    fn subgraph(
+        &self,
+        workspace_packages: &[String],
+        packages: &[String],
+    ) -> Result<Box<dyn Lockfile>, Error>;
+
+    fn encode(&self) -> Result<Vec<u8>, Error>;
+
+    /// All patch files referenced in the lockfile
+    fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+        Ok(Vec::new())
+    }
+
+    /// Present a global change key which is compared against two lockfiles
+    ///
+    /// Impl notes: please prefix this key with some magic identifier
+    /// to prevent clashes. we are not worried about inter-version
+    /// compatibility so these keys don't need to be stable. They are
+    /// ephemeral.
+    fn global_change_key(&self) -> Vec<u8>;
 }
 
-pub fn all_transitive_closures<L: Lockfile + Sync>(
+/// Takes a lockfile, and a map of workspace directory paths -> (package name,
+/// version) and calculates the transitive closures for all of them
+pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspaces: HashMap<String, HashMap<String, String>>,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
@@ -50,7 +76,7 @@ pub fn all_transitive_closures<L: Lockfile + Sync>(
 }
 
 // this should get replaced by petgraph in the future :)
-pub fn transitive_closure<L: Lockfile>(
+pub fn transitive_closure<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspace_path: &str,
     unresolved_deps: HashMap<String, String>,
@@ -66,7 +92,7 @@ pub fn transitive_closure<L: Lockfile>(
     Ok(transitive_deps)
 }
 
-fn transitive_closure_helper<L: Lockfile>(
+fn transitive_closure_helper<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspace_path: &str,
     unresolved_deps: HashMap<String, impl AsRef<str>>,

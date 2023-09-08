@@ -102,7 +102,7 @@ func TestSpecialCharacters(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := gitHashObject(tt.rootPath, tt.filesToHash)
+			got, err := GetHashesForFiles(tt.rootPath, tt.filesToHash)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("gitHashObject() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -114,9 +114,27 @@ func TestSpecialCharacters(t *testing.T) {
 	}
 }
 
+// getTraversePath gets the distance of the current working directory to the repository root.
+// This is used to convert repo-relative paths to cwd-relative paths.
+//
+// `git rev-parse --show-cdup` always returns Unix paths, even on Windows.
+func getTraversePathInTests(rootPath turbopath.AbsoluteSystemPath) (turbopath.RelativeUnixPath, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-cdup")
+	cmd.Dir = rootPath.ToString()
+
+	traversePath, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+
+	trimmedTraversePath := strings.TrimSuffix(string(traversePath), "\n")
+
+	return turbopath.RelativeUnixPathFromUpstream(trimmedTraversePath), nil
+}
+
 func Test_gitHashObject(t *testing.T) {
 	fixturePath := getFixture(1)
-	traversePath, err := getTraversePath(fixturePath)
+	traversePath, err := getTraversePathInTests(fixturePath)
 	if err != nil {
 		return
 	}
@@ -169,49 +187,13 @@ func Test_gitHashObject(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := gitHashObject(tt.rootPath, tt.filesToHash)
+			got, err := GetHashesForFiles(tt.rootPath, tt.filesToHash)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("gitHashObject() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("gitHashObject() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_getTraversePath(t *testing.T) {
-	fixturePath := getFixture(1)
-
-	tests := []struct {
-		name     string
-		rootPath turbopath.AbsoluteSystemPath
-		want     turbopath.RelativeUnixPath
-		wantErr  bool
-	}{
-		{
-			name:     "From fixture location",
-			rootPath: fixturePath,
-			want:     turbopath.RelativeUnixPath("../../../"),
-			wantErr:  false,
-		},
-		{
-			name:     "Traverse out of git repo",
-			rootPath: fixturePath.UntypedJoin("..", "..", "..", ".."),
-			want:     "",
-			wantErr:  true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := getTraversePath(tt.rootPath)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getTraversePath() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getTraversePath() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -285,6 +267,15 @@ func TestGetPackageDeps(t *testing.T) {
 	rootFilePath := repoRoot.UntypedJoin("new-root-file")
 	err = rootFilePath.WriteFile([]byte("new-root bytes"), 0644)
 	assert.NilError(t, err, "WriteFile")
+
+	// PackageDepsOptions are parameters for getting git hashes for a filesystem
+	type PackageDepsOptions struct {
+		// PackagePath is the folder path to derive the package dependencies from. This is typically the folder
+		// containing package.json. If omitted, the default value is the current working directory.
+		PackagePath turbopath.AnchoredSystemPath
+
+		InputPatterns []string
+	}
 
 	tests := []struct {
 		opts     *PackageDepsOptions
@@ -372,15 +363,6 @@ func TestGetPackageDeps(t *testing.T) {
 	}
 }
 
-func Test_memoizedGetTraversePath(t *testing.T) {
-	fixturePath := getFixture(1)
-
-	gotOne, _ := memoizedGetTraversePath(fixturePath)
-	gotTwo, _ := memoizedGetTraversePath(fixturePath)
-
-	assert.Check(t, gotOne == gotTwo, "The strings are identical.")
-}
-
 func Test_getPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 	rootIgnore := strings.Join([]string{
 		"ignoreme",
@@ -465,7 +447,7 @@ func Test_getPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 	pkg := &fs.PackageJSON{
 		Dir: pkgName,
 	}
-	hashes, err := getPackageFileHashesFromProcessingGitIgnore(repoRoot, pkg.Dir, []string{})
+	hashes, err := GetPackageFileHashes(repoRoot, pkg.Dir, []string{})
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
@@ -492,7 +474,7 @@ func Test_getPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 	}
 
 	count = 0
-	justFileHashes, err := getPackageFileHashesFromProcessingGitIgnore(repoRoot, pkg.Dir, []string{filepath.FromSlash("**/*file"), "!" + filepath.FromSlash("some-dir/excluded-file")})
+	justFileHashes, err := GetPackageFileHashes(repoRoot, pkg.Dir, []string{filepath.FromSlash("**/*file"), "!" + filepath.FromSlash("some-dir/excluded-file")})
 	if err != nil {
 		t.Fatalf("failed to calculate manual hashes: %v", err)
 	}
@@ -618,7 +600,14 @@ func Test_manuallyHashFiles(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := manuallyHashFiles(tt.args.rootPath, tt.args.files, tt.args.allowMissing)
+			var got map[turbopath.AnchoredUnixPath]string
+			var err error
+			if tt.args.allowMissing {
+				got, err = GetHashesForExistingFiles(tt.args.rootPath, tt.args.files)
+			} else {
+				got, err = GetHashesForFiles(tt.args.rootPath, tt.args.files)
+			}
+			//got, err := manuallyHashFiles(tt.args.rootPath, tt.args.files, tt.args.allowMissing)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("manuallyHashFiles() error = %v, wantErr %v", err, tt.wantErr)
 				return

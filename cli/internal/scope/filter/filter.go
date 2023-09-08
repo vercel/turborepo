@@ -335,7 +335,7 @@ func (r *Resolver) filterSubtreesWithSelector(selector *TargetSelector) (util.Se
 	for name, pkg := range r.WorkspaceInfos.PackageJSONs {
 		if parentDir == "" {
 			entryPackages.Add(name)
-		} else if matches, err := doublestar.PathMatch(parentDir.ToString(), pkg.Dir.RestoreAnchor(r.Cwd).ToString()); err != nil {
+		} else if matches, err := doublestar.PathMatch(r.Cwd.Join(parentDir).ToString(), pkg.Dir.RestoreAnchor(r.Cwd).ToString()); err != nil {
 			return nil, fmt.Errorf("failed to resolve directory relationship %v contains %v: %v", selector.parentDir, pkg.Dir, err)
 		} else if matches {
 			entryPackages.Add(name)

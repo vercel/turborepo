@@ -1,11 +1,11 @@
 use std::{collections::HashMap, env};
 
-use anyhow::Result;
 use config::Config;
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use super::{write_to_disk, MappedEnvironment};
+use crate::config::Error;
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
@@ -18,15 +18,61 @@ pub struct RepoConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
-struct RepoConfigValue {
+pub struct RepoConfigValue {
+    #[serde(alias = "apiUrl")]
+    #[serde(alias = "ApiUrl")]
+    #[serde(alias = "APIURL")]
     #[serde(rename = "apiurl")]
-    api_url: Option<String>,
+    pub(crate) api_url: Option<String>,
+
+    #[serde(alias = "loginUrl")]
+    #[serde(alias = "LoginUrl")]
+    #[serde(alias = "LOGINURL")]
     #[serde(rename = "loginurl")]
-    login_url: Option<String>,
+    pub(crate) login_url: Option<String>,
+
+    #[serde(alias = "teamSlug")]
+    #[serde(alias = "TeamSlug")]
+    #[serde(alias = "TEAMSLUG")]
     #[serde(rename = "teamslug")]
-    team_slug: Option<String>,
+    pub(crate) team_slug: Option<String>,
+
+    #[serde(alias = "teamId")]
+    #[serde(alias = "TeamId")]
+    #[serde(alias = "TEAMID")]
     #[serde(rename = "teamid")]
-    team_id: Option<String>,
+    pub(crate) team_id: Option<String>,
+
+    pub(crate) spaces: Option<SpacesConfigValue>,
+}
+
+// This is identical to RepoConfigValue; it's a clone of the behavior allowing
+// separate configuration.
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
+pub struct SpacesConfigValue {
+    #[serde(alias = "apiUrl")]
+    #[serde(alias = "ApiUrl")]
+    #[serde(alias = "APIURL")]
+    #[serde(rename = "apiurl")]
+    pub(crate) api_url: Option<String>,
+
+    #[serde(alias = "loginUrl")]
+    #[serde(alias = "LoginUrl")]
+    #[serde(alias = "LOGINURL")]
+    #[serde(rename = "loginurl")]
+    pub(crate) login_url: Option<String>,
+
+    #[serde(alias = "teamSlug")]
+    #[serde(alias = "TeamSlug")]
+    #[serde(alias = "TEAMSLUG")]
+    #[serde(rename = "teamslug")]
+    pub(crate) team_slug: Option<String>,
+
+    #[serde(alias = "teamId")]
+    #[serde(alias = "TeamId")]
+    #[serde(alias = "TEAMID")]
+    #[serde(rename = "teamid")]
+    pub(crate) team_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -65,7 +111,7 @@ impl RepoConfig {
     /// Sets the team id and clears the team slug, since it may have been from
     /// an old team
     #[allow(dead_code)]
-    pub fn set_team_id(&mut self, team_id: Option<String>) -> Result<()> {
+    pub fn set_team_id(&mut self, team_id: Option<String>) -> Result<(), Error> {
         self.disk_config.team_slug = None;
         self.config.team_slug = None;
         self.disk_config.team_id = team_id.clone();
@@ -73,8 +119,64 @@ impl RepoConfig {
         self.write_to_disk()
     }
 
-    fn write_to_disk(&self) -> Result<()> {
-        write_to_disk(&self.path.as_path(), &self.disk_config)
+    #[allow(dead_code)]
+    pub fn space_api_url(&self) -> &str {
+        if let Some(space_config) = &self.config.spaces {
+            space_config.api_url.as_deref().unwrap_or(DEFAULT_API_URL)
+        } else {
+            self.api_url()
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn space_login_url(&self) -> &str {
+        if let Some(space_config) = &self.config.spaces {
+            space_config
+                .login_url
+                .as_deref()
+                .unwrap_or(DEFAULT_LOGIN_URL)
+        } else {
+            self.login_url()
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn space_team_slug(&self) -> Option<&str> {
+        if let Some(space_config) = &self.config.spaces {
+            space_config.team_slug.as_deref()
+        } else {
+            self.team_slug()
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn space_team_id(&self) -> Option<&str> {
+        if let Some(space_config) = &self.config.spaces {
+            space_config.team_id.as_deref()
+        } else {
+            self.team_id()
+        }
+    }
+
+    /// Sets the team id and clears the team slug, since it may have been from
+    /// an old team
+    #[allow(dead_code)]
+    pub fn set_space_team_id(&mut self, team_id: Option<String>) -> Result<(), Error> {
+        if let (Some(space_config), Some(space_disk_config)) =
+            (&mut self.config.spaces, &mut self.disk_config.spaces)
+        {
+            space_disk_config.team_slug = None;
+            space_config.team_slug = None;
+            space_disk_config.team_id = team_id.clone();
+            space_config.team_id = team_id;
+            self.write_to_disk()
+        } else {
+            self.set_team_id(team_id)
+        }
+    }
+
+    fn write_to_disk(&self) -> Result<(), Error> {
+        write_to_disk(self.path.as_path(), &self.disk_config)
     }
 }
 
@@ -119,7 +221,7 @@ impl RepoConfigLoader {
     }
 
     #[allow(dead_code)]
-    pub fn load(self) -> Result<RepoConfig> {
+    pub fn load(self) -> Result<RepoConfig, Error> {
         let Self {
             path,
             api,
@@ -129,7 +231,7 @@ impl RepoConfigLoader {
         } = self;
         let raw_disk_config = Config::builder()
             .add_source(
-                config::File::with_name(path.to_string_lossy().as_ref())
+                config::File::with_name(path.as_str())
                     .format(config::FileFormat::Json)
                     .required(false),
             )
@@ -178,7 +280,9 @@ impl RepoConfigLoader {
 mod test {
     use std::io::Write;
 
+    use anyhow::Result;
     use tempfile::NamedTempFile;
+    use test_case::test_case;
 
     use super::*;
 
@@ -196,10 +300,26 @@ mod test {
         Ok(())
     }
 
+    #[test_case("teamSlug" ; "lowerCamelCase")]
+    #[test_case("teamslug" ; "lowercase")]
+    #[test_case("TeamSlug" ; "CamelCase")]
+    #[test_case("TEAMSLUG" ; "ALLCAPS")]
+    fn test_repo_config_with_different_cases(field_name: &str) -> Result<()> {
+        let mut config_file = NamedTempFile::new()?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
+        writeln!(&mut config_file, "{{\"{}\": \"123\"}}", field_name)?;
+
+        let config = RepoConfigLoader::new(config_path).load()?;
+
+        assert_eq!(config.team_slug(), Some("123"));
+
+        Ok(())
+    }
+
     #[test]
     fn test_repo_config_with_team_and_api_flags() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
-        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
         writeln!(&mut config_file, "{{\"teamId\": \"123\"}}")?;
 
         let config = RepoConfigLoader::new(config_path)
@@ -234,7 +354,7 @@ mod test {
     #[test]
     fn test_team_override_clears_id() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
-        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
         writeln!(&mut config_file, "{{\"teamId\": \"123\"}}")?;
         let loader = RepoConfigLoader::new(config_path).with_team_slug(Some("foo".into()));
 
@@ -248,7 +368,7 @@ mod test {
     #[test]
     fn test_set_team_clears_id() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
-        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
         // We will never pragmatically write the "teamslug" field as camelCase,
         // but viper is case insensitive and we want to keep this functionality.
         writeln!(&mut config_file, "{{\"teamSlug\": \"my-team\"}}")?;
@@ -267,7 +387,7 @@ mod test {
     #[test]
     fn test_repo_env_variable() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
-        let config_path = AbsoluteSystemPathBuf::new(config_file.path())?;
+        let config_path = AbsoluteSystemPathBuf::try_from(config_file.path())?;
         writeln!(&mut config_file, "{{\"teamslug\": \"other-team\"}}")?;
         let login_url = "http://my-login-url";
         let api_url = "http://my-api";

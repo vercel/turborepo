@@ -1,8 +1,9 @@
-use std::fs::File;
+use std::fs;
 
 use anyhow::{Context, Result};
+use turborepo_ui::GREY;
 
-use crate::{cli::LinkTarget, commands::CommandBase, config::TurboJson, ui::GREY};
+use crate::{cli::LinkTarget, commands::CommandBase, rewrite_json};
 
 enum UnlinkSpacesResult {
     Unlinked,
@@ -10,32 +11,41 @@ enum UnlinkSpacesResult {
 }
 
 fn unlink_remote_caching(base: &mut CommandBase) -> Result<()> {
-    base.delete_repo_config_file()
-        .context("could not unlink. Something went wrong")?;
+    let repo_config: &mut crate::config::RepoConfig = base.repo_config_mut()?;
+    let needs_disabling = repo_config.team_id().is_some() || repo_config.team_slug().is_some();
 
-    println!(
-        "{}",
-        base.ui.apply(GREY.apply_to("> Disabled Remote Caching"))
-    );
+    let output = if needs_disabling {
+        repo_config.set_team_id(None)?;
+        "> Disabled Remote Caching"
+    } else {
+        "> No Remote Caching config found"
+    };
+
+    println!("{}", base.ui.apply(GREY.apply_to(output)));
 
     Ok(())
 }
 
 fn unlink_spaces(base: &mut CommandBase) -> Result<()> {
+    let repo_config: &mut crate::config::RepoConfig = base.repo_config_mut()?;
+    let needs_disabling =
+        repo_config.space_team_id().is_some() || repo_config.space_team_slug().is_some();
+
+    if needs_disabling {
+        repo_config.set_space_team_id(None)?;
+    }
+
+    // Space config is _also_ in turbo.json.
     let result =
         remove_spaces_from_turbo_json(base).context("could not unlink. Something went wrong")?;
 
-    match result {
-        UnlinkSpacesResult::Unlinked => {
-            println!("{}", base.ui.apply(GREY.apply_to("> Unlinked Spaces")));
-        }
-        UnlinkSpacesResult::NoSpacesFound => {
-            println!(
-                "{}",
-                base.ui.apply(GREY.apply_to("> No Spaces config found"))
-            );
-        }
-    }
+    let output = match (needs_disabling, result) {
+        (_, UnlinkSpacesResult::Unlinked) => "> Unlinked Spaces",
+        (true, _) => "> Unlinked Spaces",
+        (false, UnlinkSpacesResult::NoSpacesFound) => "> No Spaces config found",
+    };
+
+    println!("{}", base.ui.apply(GREY.apply_to(output)));
 
     Ok(())
 }
@@ -54,24 +64,13 @@ pub fn unlink(base: &mut CommandBase, target: LinkTarget) -> Result<()> {
 
 fn remove_spaces_from_turbo_json(base: &CommandBase) -> Result<UnlinkSpacesResult> {
     let turbo_json_path = base.repo_root.join_component("turbo.json");
+    let turbo_json = fs::read_to_string(&turbo_json_path)?;
 
-    let turbo_json_file = File::open(&turbo_json_path).context("unable to open turbo.json file")?;
-    let mut turbo_json: TurboJson = serde_json::from_reader(turbo_json_file)?;
-    let has_spaces_id = turbo_json
-        .experimental_spaces
-        .unwrap_or_default()
-        .id
-        .is_some();
-    // remove the spaces config
-    // TODO: in the future unlink should possible just remove the spaces id
-    turbo_json.experimental_spaces = None;
-
-    // write turbo_json back to file
-    let config_file = File::create(&turbo_json_path)?;
-    serde_json::to_writer_pretty(&config_file, &turbo_json)?;
-
-    match has_spaces_id {
-        true => Ok(UnlinkSpacesResult::Unlinked),
-        false => Ok(UnlinkSpacesResult::NoSpacesFound),
+    let output = rewrite_json::unset_path(&turbo_json, &["experimentalSpaces", "id"])?;
+    if let Some(output) = output {
+        fs::write(turbo_json_path, output)?;
+        Ok(UnlinkSpacesResult::Unlinked)
+    } else {
+        Ok(UnlinkSpacesResult::NoSpacesFound)
     }
 }

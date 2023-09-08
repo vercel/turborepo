@@ -78,7 +78,7 @@ Next, we need to scaffold Storybook:
 
       ```shell
       cd workshop
-      pnpx sb init --skip-install
+      pnpm dlx sb init --skip-install
       pnpm install --save-dev @storybook/cli   # Manually install deps and CLI
       ```
 
@@ -209,15 +209,3 @@ Your `dev` and `build` tasks will now include Storybook, allowing you to develop
 Let's deploy your Storybook project.
 
 In the "Build and Development Settings" on the General tab of your project settings, change your "Output Directory" to `storybook-static`.
-
-Additionally, at the time of this writing, Storybook cannot be ran on Node 18, the Vercel default. In the `package.json` of your `workshop` app, add an `engines` field to make sure that this project runs on Node 16:
-
-```json filename="apps/workshop/package.json"
-{
-  // ...
-  "engines": {
-    "node": "16"
-  }
-}
-
-```

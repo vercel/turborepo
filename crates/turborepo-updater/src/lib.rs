@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 use std::{fmt, time::Duration};
 
 use console::style;

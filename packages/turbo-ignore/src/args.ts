@@ -1,11 +1,12 @@
 import pkg from "../package.json";
-import { TurboIgnoreArgs } from "./types";
+import type { TurboIgnoreArgs } from "./types";
 import {
   skipAllCommits,
   forceAllCommits,
   skipWorkspaceCommits,
   forceWorkspaceCommits,
 } from "./checkCommit";
+import { log } from "./logger";
 
 export const help = `
 turbo-ignore
@@ -41,28 +42,24 @@ ${[...forceAllCommits, ...forceWorkspaceCommits({ workspace: "<workspace>" })]
 
 // simple args parser because we don't want to pull in a dependency
 // and we don't need many features
-export default function parseArgs({
-  argv,
-}: {
-  argv: Array<string>;
-}): TurboIgnoreArgs {
+export function parseArgs({ argv }: { argv: Array<string> }): TurboIgnoreArgs {
   const args: TurboIgnoreArgs = { directory: process.cwd() };
 
   // find all flags
   const flags = new Set(
     argv
-      .filter((args) => args.startsWith("-"))
+      .filter((arg) => arg.startsWith("-"))
       .map((flag) => flag.replace(/-/g, ""))
   );
 
   // handle help flag and exit
   if (flags.has("help") || flags.has("h")) {
-    console.log(help);
+    log(help);
     process.exit(0);
   }
   // handle version flag and exit
   if (flags.has("version") || flags.has("v")) {
-    console.log(pkg.version);
+    log(pkg.version);
     process.exit(0);
   }
 

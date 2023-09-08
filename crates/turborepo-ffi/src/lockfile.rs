@@ -4,7 +4,9 @@ use std::{
 };
 
 use thiserror::Error;
-use turborepo_lockfiles::{self, BerryLockfile, LockfileData, NpmLockfile, Package, PnpmLockfile};
+use turborepo_lockfiles::{
+    self, BerryLockfile, Lockfile, LockfileData, NpmLockfile, Package, PnpmLockfile, Yarn1Lockfile,
+};
 
 use super::{proto, Buffer};
 
@@ -51,6 +53,7 @@ fn transitive_closure_inner(buf: Buffer) -> Result<proto::WorkspaceDependencies,
         proto::PackageManager::Npm => npm_transitive_closure_inner(request),
         proto::PackageManager::Berry => berry_transitive_closure_inner(request),
         proto::PackageManager::Pnpm => pnpm_transitive_closure_inner(request),
+        proto::PackageManager::Yarn => yarn_transitive_closure_inner(request),
     }
 }
 
@@ -82,7 +85,7 @@ fn berry_transitive_closure_inner(
     let resolutions =
         resolutions.map(|r| turborepo_lockfiles::BerryManifest::with_resolutions(r.resolutions));
     let data = LockfileData::from_bytes(contents.as_slice())?;
-    let lockfile = BerryLockfile::new(&data, resolutions.as_ref())?;
+    let lockfile = BerryLockfile::new(data, resolutions)?;
     let dependencies = turborepo_lockfiles::all_transitive_closures(
         &lockfile,
         workspaces.into_iter().map(|(k, v)| (k, v.into())).collect(),
@@ -99,6 +102,23 @@ fn pnpm_transitive_closure_inner(
         ..
     } = request;
     let lockfile = PnpmLockfile::from_bytes(contents.as_slice())?;
+    let dependencies = turborepo_lockfiles::all_transitive_closures(
+        &lockfile,
+        workspaces.into_iter().map(|(k, v)| (k, v.into())).collect(),
+    )?;
+    Ok(dependencies.into())
+}
+
+fn yarn_transitive_closure_inner(
+    request: proto::TransitiveDepsRequest,
+) -> Result<proto::WorkspaceDependencies, Error> {
+    let proto::TransitiveDepsRequest {
+        contents,
+        workspaces,
+        ..
+    } = request;
+    let lockfile =
+        Yarn1Lockfile::from_bytes(contents.as_slice()).map_err(turborepo_lockfiles::Error::from)?;
     let dependencies = turborepo_lockfiles::all_transitive_closures(
         &lockfile,
         workspaces.into_iter().map(|(k, v)| (k, v.into())).collect(),
@@ -141,6 +161,7 @@ fn subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
         proto::PackageManager::Pnpm => {
             turborepo_lockfiles::pnpm_subgraph(&contents, &workspaces, &packages)?
         }
+        proto::PackageManager::Yarn => turborepo_lockfiles::yarn_subgraph(&contents, &packages)?,
     };
     Ok(contents)
 }
@@ -162,20 +183,20 @@ fn patches_internal(buf: Buffer) -> Result<proto::Patches, Error> {
     let patches = match request.package_manager() {
         proto::PackageManager::Berry => {
             let data = LockfileData::from_bytes(&request.contents)?;
-            let lockfile = BerryLockfile::new(&data, None)?;
+            let lockfile = BerryLockfile::new(data, None)?;
             Ok(lockfile
-                .patches()
+                .patches()?
                 .into_iter()
-                .map(|p| {
-                    p.to_str()
-                        .expect("patch coming from yarn.lock isn't valid utf8")
-                        .to_string()
-                })
+                .map(|p| p.to_string())
                 .collect::<Vec<_>>())
         }
         proto::PackageManager::Pnpm => {
             let lockfile = PnpmLockfile::from_bytes(&request.contents)?;
-            Ok(lockfile.patches())
+            Ok(lockfile
+                .patches()?
+                .into_iter()
+                .map(|p| p.to_string())
+                .collect())
         }
         pm => Err(Error::UnsupportedPackageManager(pm)),
     }?;
@@ -205,6 +226,7 @@ fn global_change_inner(buf: Buffer) -> Result<bool, Error> {
             &request.prev_contents,
             &request.curr_contents,
         )?),
+        proto::PackageManager::Yarn => Ok(false),
     }
 }
 
@@ -248,6 +270,7 @@ impl fmt::Display for proto::PackageManager {
             proto::PackageManager::Npm => "npm",
             proto::PackageManager::Berry => "berry",
             proto::PackageManager::Pnpm => "pnpm",
+            proto::PackageManager::Yarn => "yarn",
         })
     }
 }

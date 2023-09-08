@@ -41,10 +41,11 @@ pub async fn listen_socket(
 > {
     let pid_path = path.join_component("turbod.pid");
     let sock_path = path.join_component("turbod.sock");
-    let mut lock = pidlock::Pidlock::new(pid_path.as_path().to_owned());
+    let mut lock = pidlock::Pidlock::new(pid_path.as_std_path().to_owned());
 
     trace!("acquiring pidlock");
     // this will fail if the pid is already owned
+    // todo: make sure we fall back and handle this
     lock.acquire()?;
     std::fs::remove_file(&sock_path).ok();
 
@@ -189,7 +190,7 @@ mod test {
     use crate::daemon::endpoint::SocketOpenError;
 
     fn pid_path(tmp_path: &Path) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf::new(tmp_path.join("turbod.pid")).unwrap()
+        AbsoluteSystemPathBuf::try_from(tmp_path.join("turbod.pid")).unwrap()
     }
 
     #[tokio::test]
@@ -204,6 +205,9 @@ mod test {
         let result = listen_socket(pid_path, running).await;
 
         // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
+
+        // todo: update this test to gracefully connect if the lock file exists but has
+        // no process
         if let Err(err) = result {
             assert_matches!(err, SocketOpenError::LockError(PidlockError::LockExists(_)));
         } else {
@@ -224,13 +228,17 @@ mod test {
 
         let mut child = Command::new(node_bin).spawn().unwrap();
         pid_path
-            .create_with_contents(format!("{}", child.id()).as_ref())
+            .create_with_contents(format!("{}", child.id()))
             .unwrap();
 
         let running = Arc::new(AtomicBool::new(true));
         let result = listen_socket(pid_path, running).await;
 
         // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
+
+        // todo: update this test. we should delete the socket file first, remove the
+        // pid file, and start a new daemon. the old one should just time
+        // out, and this should not error.
         if let Err(err) = result {
             assert_matches!(err, SocketOpenError::LockError(PidlockError::LockExists(_)));
         } else {

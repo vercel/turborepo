@@ -48,8 +48,14 @@ type RunOpts struct {
 	// logPrefix controls whether we should print a prefix in task logs
 	LogPrefix string
 
+	// The order of the logs, either 'grouped' or 'stream'
+	LogOrder string
+
 	// Whether turbo should create a run summary
 	Summarize bool
 
 	ExperimentalSpaceID string
+
+	// Whether this run is in Github Actions
+	IsGithubActions bool
 }

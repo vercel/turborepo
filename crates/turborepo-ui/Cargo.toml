@@ -1,0 +1,20 @@
+[package]
+name = "turborepo-ui"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dev-dependencies]
+anyhow = { workspace = true }
+tempfile = { workspace = true }
+
+[dependencies]
+atty = { workspace = true }
+console = { workspace = true }
+indicatif = { workspace = true }
+lazy_static = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+turbopath = { workspace = true }
+turborepo-ci = { workspace = true }

@@ -4,10 +4,12 @@ use anyhow::Result;
 use async_trait::async_trait;
 use swc_core::{
     base::SwcComments,
-    common::{chain, util::take::Take, Mark, SourceMap},
+    common::{chain, comments::Comments, util::take::Take, Mark, SourceMap},
     ecma::{
         ast::{Module, ModuleItem, Program, Script},
-        preset_env::{self, Targets},
+        preset_env::{
+            Targets, {self},
+        },
         transforms::{
             base::{feature::FeatureFlag, helpers::inject_helpers, Assumptions},
             react::react,
@@ -15,28 +17,28 @@ use swc_core::{
         visit::{FoldWith, VisitMutWith},
     },
 };
-use turbo_tasks::primitives::{OptionStringVc, StringVc};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::{ValueDefault, Vc};
+use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
-    environment::EnvironmentVc,
-    issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc},
+    environment::Environment,
+    issue::{Issue, IssueSeverity},
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub enum EcmascriptInputTransform {
     CommonJs,
-    Plugin(TransformPluginVc),
-    PresetEnv(EnvironmentVc),
+    Plugin(Vc<TransformPlugin>),
+    PresetEnv(Vc<Environment>),
     React {
         #[serde(default)]
         development: bool,
         #[serde(default)]
         refresh: bool,
         // swc.jsc.transform.react.importSource
-        import_source: OptionStringVc,
+        import_source: Vc<Option<String>>,
         // swc.jsc.transform.react.runtime,
-        runtime: OptionStringVc,
+        runtime: Vc<Option<String>>,
     },
     // These options are subset of swc_core::ecma::transforms::typescript::Config, but
     // it doesn't derive `Copy` so repeating values in here
@@ -76,11 +78,13 @@ pub trait CustomTransformer: Debug {
 pub struct TransformPlugin(#[turbo_tasks(trace_ignore)] Box<dyn CustomTransformer + Send + Sync>);
 
 #[turbo_tasks::value(transparent)]
-pub struct OptionTransformPlugin(Option<TransformPluginVc>);
+pub struct OptionTransformPlugin(Option<Vc<TransformPlugin>>);
 
-impl Default for OptionTransformPluginVc {
-    fn default() -> Self {
-        OptionTransformPluginVc::cell(None)
+#[turbo_tasks::value_impl]
+impl ValueDefault for OptionTransformPlugin {
+    #[turbo_tasks::function]
+    fn value_default() -> Vc<Self> {
+        Vc::cell(None)
     }
 }
 
@@ -96,17 +100,17 @@ impl CustomTransformer for TransformPlugin {
 pub struct EcmascriptInputTransforms(Vec<EcmascriptInputTransform>);
 
 #[turbo_tasks::value_impl]
-impl EcmascriptInputTransformsVc {
+impl EcmascriptInputTransforms {
     #[turbo_tasks::function]
-    pub fn empty() -> Self {
-        EcmascriptInputTransformsVc::cell(Vec::new())
+    pub fn empty() -> Vc<Self> {
+        Vc::cell(Vec::new())
     }
 
     #[turbo_tasks::function]
-    pub async fn extend(self, other: EcmascriptInputTransformsVc) -> Result<Self> {
+    pub async fn extend(self: Vc<Self>, other: Vc<EcmascriptInputTransforms>) -> Result<Vc<Self>> {
         let mut transforms = self.await?.clone_value();
         transforms.extend(other.await?.clone_value());
-        Ok(EcmascriptInputTransformsVc::cell(transforms))
+        Ok(Vc::cell(transforms))
     }
 }
 
@@ -118,7 +122,7 @@ pub struct TransformContext<'a> {
     pub file_path_str: &'a str,
     pub file_name_str: &'a str,
     pub file_name_hash: u128,
-    pub file_path: FileSystemPathVc,
+    pub file_path: Vc<FileSystemPath>,
 }
 
 impl EcmascriptInputTransform {
@@ -169,16 +173,22 @@ impl EcmascriptInputTransform {
                     ..Default::default()
                 };
 
-                program.visit_mut_with(&mut react(
+                // Explicit type annotation to ensure that we don't duplicate transforms in the
+                // final binary
+                program.visit_mut_with(&mut react::<&dyn Comments>(
                     source_map.clone(),
-                    Some(comments.clone()),
+                    Some(&comments),
                     config,
                     top_level_mark,
                     unresolved_mark,
                 ));
             }
             EcmascriptInputTransform::CommonJs => {
-                program.visit_mut_with(&mut swc_core::ecma::transforms::module::common_js(
+                // Explicit type annotation to ensure that we don't duplicate transforms in the
+                // final binary
+                program.visit_mut_with(&mut swc_core::ecma::transforms::module::common_js::<
+                    &dyn Comments,
+                >(
                     unresolved_mark,
                     swc_core::ecma::transforms::module::util::Config {
                         allow_top_level_this: true,
@@ -188,7 +198,7 @@ impl EcmascriptInputTransform {
                         ..Default::default()
                     },
                     swc_core::ecma::transforms::base::feature::FeatureFlag::all(),
-                    Some(comments.clone()),
+                    Some(&comments),
                 ));
             }
             EcmascriptInputTransform::PresetEnv(env) => {
@@ -209,17 +219,19 @@ impl EcmascriptInputTransform {
                 {
                     Program::Module(Module {
                         span,
-                        body: body.drain(..).map(|stmt| ModuleItem::Stmt(stmt)).collect(),
+                        body: body.drain(..).map(ModuleItem::Stmt).collect(),
                         shebang,
                     })
                 } else {
                     module_program
                 };
 
+                // Explicit type annotation to ensure that we don't duplicate transforms in the
+                // final binary
                 *program = module_program.fold_with(&mut chain!(
-                    preset_env::preset_env(
+                    preset_env::preset_env::<&'_ dyn Comments>(
                         top_level_mark,
-                        Some(comments.clone()),
+                        Some(&comments),
                         config,
                         Assumptions::default(),
                         &mut FeatureFlag::empty(),
@@ -228,26 +240,25 @@ impl EcmascriptInputTransform {
                 ));
             }
             EcmascriptInputTransform::TypeScript {
-                use_define_for_class_fields,
+                // TODO(WEB-1213)
+                use_define_for_class_fields: _use_define_for_class_fields,
             } => {
-                use swc_core::ecma::transforms::typescript::{strip_with_config, Config};
-                let config = Config {
-                    use_define_for_class_fields: *use_define_for_class_fields,
-                    ..Default::default()
-                };
+                use swc_core::ecma::transforms::typescript::strip_with_config;
+                let config = Default::default();
                 program.visit_mut_with(&mut strip_with_config(config, top_level_mark));
             }
             EcmascriptInputTransform::Decorators {
                 is_legacy,
                 is_ecma: _,
                 emit_decorators_metadata,
-                use_define_for_class_fields,
+                // TODO(WEB-1213)
+                use_define_for_class_fields: _use_define_for_class_fields,
             } => {
                 use swc_core::ecma::transforms::proposal::decorators::{decorators, Config};
                 let config = Config {
                     legacy: *is_legacy,
                     emit_metadata: *emit_decorators_metadata,
-                    use_define_for_class_fields: *use_define_for_class_fields,
+                    ..Default::default()
                 };
 
                 let p = std::mem::replace(program, Program::Module(Module::dummy()));
@@ -277,33 +288,33 @@ pub fn remove_shebang(program: &mut Program) {
 
 #[turbo_tasks::value(shared)]
 pub struct UnsupportedServerActionIssue {
-    pub context: FileSystemPathVc,
+    pub file_path: Vc<FileSystemPath>,
 }
 
 #[turbo_tasks::value_impl]
 impl Issue for UnsupportedServerActionIssue {
     #[turbo_tasks::function]
-    fn severity(&self) -> IssueSeverityVc {
+    fn severity(&self) -> Vc<IssueSeverity> {
         IssueSeverity::Error.into()
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> StringVc {
-        StringVc::cell("unsupported".to_string())
+    fn category(&self) -> Vc<String> {
+        Vc::cell("unsupported".to_string())
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> StringVc {
-        StringVc::cell("Server actions (\"use server\") are not yet supported in Turbopack".into())
+    fn title(&self) -> Vc<String> {
+        Vc::cell("Server actions (\"use server\") are not yet supported in Turbopack".into())
     }
 
     #[turbo_tasks::function]
-    fn context(&self) -> FileSystemPathVc {
-        self.context
+    fn file_path(&self) -> Vc<FileSystemPath> {
+        self.file_path
     }
 
     #[turbo_tasks::function]
-    async fn description(&self) -> Result<StringVc> {
-        Ok(StringVc::cell("".to_string()))
+    async fn description(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell("".to_string()))
     }
 }

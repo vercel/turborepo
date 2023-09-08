@@ -9,6 +9,7 @@
 //! watch for a full round trip through the filesystem to ensure the watcher is
 //! up to date.
 
+#![allow(clippy::all)]
 #![deny(
     missing_docs,
     missing_debug_implementations,
@@ -17,11 +18,12 @@
     unused_must_use,
     unsafe_code
 )]
-#![feature(drain_filter)]
+#![feature(extract_if)]
 
 use std::{
     collections::HashMap,
     fs::File,
+    io,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -34,18 +36,36 @@ use itertools::Itertools;
 use merge_streams::MergeStreams;
 pub use notify::{Event, Watcher};
 pub use stop_token::{stream::StreamExt, StopSource, StopToken, TimedOutError};
+use thiserror::Error;
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender},
     watch,
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{error, event, span, trace, warn, Level};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
+
+/// WatchError wraps errors produced by GlobWatcher
+#[derive(Debug, Error)]
+pub enum WatchError {
+    // TODO: find a generic way to include the path in these errors
+    /// PathError wraps errors encountered dealing with paths while filewatching
+    #[error("Filewatching encountered a path error: {0}")]
+    PathError(#[from] PathError),
+    /// IO wraps IO errors encountered while attempting to watch the filesystem
+    #[error("Filewatching encountered an IO Error: {0}")]
+    IO(#[from] io::Error),
+    /// Backend wraps errors produced from the underlying filewatching
+    /// implementation.
+    #[error("Filewatching backend error: {0}")]
+    Backend(#[from] notify::Error),
+}
 
 /// A wrapper around notify that allows for glob-based watching.
 #[derive(Debug)]
 pub struct GlobWatcher {
     stream: UnboundedReceiver<Event>,
-    flush_dir: PathBuf,
+    flush_dir: AbsoluteSystemPathBuf,
 
     config: UnboundedReceiver<WatcherCommand>,
     setup_handle: tokio::task::JoinHandle<Result<(), notify::Error>>,
@@ -57,14 +77,13 @@ impl GlobWatcher {
     /// see the module-level documentation.
     #[tracing::instrument]
     pub fn new(
-        flush_dir: PathBuf,
-    ) -> Result<(Self, WatchConfig<notify::RecommendedWatcher>), notify::Error> {
+        flush_dir: &AbsoluteSystemPath,
+    ) -> Result<(Self, WatchConfig<notify::RecommendedWatcher>), WatchError> {
         let (send_event, receive_event) = tokio::sync::mpsc::unbounded_channel();
         let (send_config, receive_config) = tokio::sync::mpsc::unbounded_channel();
 
-        // even if this fails, we may still be able to continue
-        std::fs::create_dir_all(&flush_dir).ok();
-        let flush_dir = flush_dir.canonicalize()?;
+        flush_dir.create_dir_all()?;
+        let flush_dir = flush_dir.to_realpath()?;
 
         let watcher = notify::recommended_watcher(move |event: Result<Event, notify::Error>| {
             let span = span!(tracing::Level::TRACE, "watcher");
@@ -93,23 +112,22 @@ impl GlobWatcher {
         // so we just fire and forget a thread to do it in the
         // background, to cut our startup time in half.
         let flush = watcher.clone();
-        let path = flush_dir.as_path().to_owned();
+        let flush_watch_path = flush_dir.clone();
         let (setup_broadcaster, setup_receiver) = watch::channel(None);
         let setup_handle = tokio::task::spawn_blocking(move || {
-            if let Err(e) = flush
-                .lock()
-                .expect("only fails if poisoned")
-                .watch(&path, notify::RecursiveMode::Recursive)
-            {
+            if let Err(e) = flush.lock().expect("only fails if poisoned").watch(
+                flush_watch_path.as_std_path(),
+                notify::RecursiveMode::Recursive,
+            ) {
                 warn!("failed to watch flush dir: {}", e);
                 if setup_broadcaster.send(Some(false)).is_err() {
-                    trace!("setup channel shut down before setup completed");
+                    trace!("failed to notify failed flush watch");
                 }
                 Err(e)
             } else {
-                trace!("watching flush dir: {:?}", path);
+                trace!("watching flush dir: {:?}", flush_watch_path);
                 if setup_broadcaster.send(Some(true)).is_err() {
-                    trace!("setup channel shut down before setup completed");
+                    trace!("failed to notify successful flush watch");
                 }
                 Ok(())
             }
@@ -196,7 +214,7 @@ impl GlobWatcher {
                                 // requestor. flushes should not be considered as events.
                                 for flush_id in e
                                     .paths
-                                    .drain_filter(|p| p.starts_with(flush_dir.as_path()))
+                                    .extract_if(|p| p.starts_with(flush_dir.as_path()))
                                     .filter_map(|p| {
                                         get_flush_id(
                                             p.strip_prefix(flush_dir.as_path())
@@ -231,7 +249,7 @@ impl GlobWatcher {
                             Either::Right(Ok(WatcherCommand::Flush(tx))) => {
                                 // create file in flush dir
                                 let flush_id = flush_id.fetch_add(1, Ordering::SeqCst);
-                                let flush_file = flush_dir.join(flush_id.to_string());
+                                let flush_file = flush_dir.join_component(&flush_id.to_string());
                                 if let Err(e) = File::create(flush_file) {
                                     warn!("failed to create flush file: {}", e);
                                 } else {
@@ -294,7 +312,7 @@ impl<T: Watcher> WatchConfig<T> {
     pub async fn include(&self, relative_to: &Path, glob: &str) -> Result<(), ConfigError> {
         trace!("including {:?}", glob);
 
-        glob_to_paths(&glob)
+        glob_to_paths(glob)
             .iter()
             .map(|p| relative_to.join(p))
             .map(|p| {
@@ -361,7 +379,7 @@ impl<T: Watcher> WatchConfig<T> {
     pub async fn exclude(&self, relative_to: &Path, glob: &str) {
         trace!("excluding {:?}", glob);
 
-        for p in glob_to_paths(&glob).iter().map(|p| relative_to.join(p)) {
+        for p in glob_to_paths(glob).iter().map(|p| relative_to.join(p)) {
             // we don't care if this fails, it's just a best-effort
             self.watcher
                 .lock()
@@ -413,25 +431,25 @@ enum GlobSymbol<'a> {
 /// specified in minimatch glob syntax.
 ///
 /// syntax:
-/// ?		Matches any single character.
+/// ?    Matches any single character.
 ///
 /// *      Matches zero or more characters, except for path separators.
 ///
-/// **		Matches zero or more characters, including path separators.
+/// **      Matches zero or more characters, including path separators.
 ///         Must match a complete path segment.
 ///
-/// [ab]	Matches one of the characters contained in the brackets.
+/// [ab]    Matches one of the characters contained in the brackets.
 ///         Character ranges, e.g. [a-z] are also supported. Use [!ab] or [^ab]
 ///         to match any character except those contained in the brackets.
 ///
-/// {a,b}	Matches one of the patterns contained in the braces. Any of the
+/// {a,b}   Matches one of the patterns contained in the braces. Any of the
 ///         wildcard characters can be used in the sub-patterns. Braces may
 ///         be nested up to 10 levels deep.
 ///
-/// !		When at the start of the glob, this negates the result.
+/// !       When at the start of the glob, this negates the result.
 ///         Multiple ! characters negate the glob multiple times.
 ///
-/// \		A backslash character may be used to escape any special characters.
+/// \       A backslash character may be used to escape any special characters.
 ///
 /// Of these, we only handle `{` and escaping.
 ///
@@ -442,7 +460,7 @@ fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
     let chunks = glob_to_symbols(glob).group_by(|s| s != &GlobSymbol::PathSeperator);
     let chunks = chunks
         .into_iter()
-        .filter_map(|(not_sep, chunk)| (not_sep).then(|| chunk));
+        .filter_map(|(not_sep, chunk)| (not_sep).then_some(chunk));
 
     // multi cartisian product allows us to get all the possible combinations
     // of path components for each chunk. for example, if we have a glob
@@ -455,10 +473,10 @@ fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
     chunks
         .map(symbols_to_combinations) // yield all the possible segments for each glob chunk
         .take_while(|c| c.is_some()) // if any segment has no possible paths, we can stop
-        .filter_map(|chunk| chunk)
+        .flatten()
         .multi_cartesian_product() // get all the possible combinations of path segments
         .map(|chunks| {
-            let prefix = if glob.starts_with("/") { "/" } else { "" };
+            let prefix = if glob.starts_with('/') { "/" } else { "" };
             std::iter::once(prefix)
                 .chain(chunks.iter().map(|s| s.as_str()))
                 .collect::<PathBuf>()

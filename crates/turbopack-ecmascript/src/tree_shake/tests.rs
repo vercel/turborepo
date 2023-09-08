@@ -17,7 +17,9 @@ use swc_core::{
         codegen::text_writer::JsWriter,
         parser::parse_file_as_module,
     },
-    testing::{self, fixture, NormalizedOutput},
+    testing::{
+        fixture, NormalizedOutput, {self},
+    },
 };
 
 use super::{
@@ -43,8 +45,8 @@ struct TestConfig {
 
 fn run(input: PathBuf) {
     let config = input.with_file_name("config.json");
-    let config = std::fs::read_to_string(&config).unwrap_or_else(|_| "{}".into());
-    let config = serde_json::from_str::<TestConfig>(&config).unwrap_or_else(|e| {
+    let config = std::fs::read_to_string(config).unwrap_or_else(|_| "{}".into());
+    let config = serde_json::from_str::<TestConfig>(&config).unwrap_or_else(|_e| {
         panic!("failed to parse config.json: {}", config);
     });
 
@@ -198,7 +200,6 @@ fn run(input: PathBuf) {
                     let key = match e {
                         ItemIdGroupKind::ModuleEvaluation => Key::ModuleEvaluation,
                         ItemIdGroupKind::Export(e) => Key::Export(e.0.to_string()),
-                        _ => continue,
                     };
 
                     let index = entrypoints[&key];

@@ -1,10 +1,9 @@
-import path from "path";
-import fs from "fs-extra";
+import path from "node:path";
+import { writeFileSync, mkdirSync } from "fs-extra";
 import chalk from "chalk";
-import { logger } from "@turbo/utils";
+import { logger, type PackageJson, type DependencyGroups } from "@turbo/utils";
 import { gatherAddRequirements } from "../utils/gatherAddRequirements";
 import type { TurboGeneratorArguments } from "./types";
-import type { PackageJson, DependencyGroups } from "../types";
 
 export async function generate({ project, opts }: TurboGeneratorArguments) {
   const { name, location, dependencies } = await gatherAddRequirements({
@@ -17,7 +16,10 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
     version: "0.0.0",
     private: true,
     scripts: {
-      build: "turbo build",
+      dev: "echo 'Add dev script here'",
+      build: "echo 'Add build script here'",
+      test: "echo 'Add test script here'",
+      lint: "echo 'Add lint script here'",
     },
   };
 
@@ -30,19 +32,19 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
   });
 
   // write the directory
-  fs.mkdirSync(location.absolute, { recursive: true });
+  mkdirSync(location.absolute, { recursive: true });
 
   // create package.json
-  fs.writeFileSync(
+  writeFileSync(
     path.join(location.absolute, "package.json"),
     JSON.stringify(packageJson, null, 2)
   );
 
   // create README
-  fs.writeFileSync(path.join(location.absolute, "README.md"), `# \`${name}\``);
+  writeFileSync(path.join(location.absolute, "README.md"), `# \`${name}\``);
 
-  console.log();
-  console.log(
+  logger.log();
+  logger.log(
     `${chalk.bold(logger.turboGradient(">>> Success!"))} Created ${name} at "${
       location.relative
     }"`

@@ -1,27 +1,28 @@
 use std::{sync::Arc, time::Duration};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use mime::TEXT_HTML_UTF_8;
-use turbo_tasks::{get_invalidator, TurboTasks, TurboTasksBackendApi, Value};
+use turbo_tasks::{get_invalidator, TurboTasks, TurboTasksBackendApi, Value, Vc};
 use turbo_tasks_fs::File;
 use turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
     viz, MemoryBackend,
 };
-use turbopack_core::asset::AssetContentVc;
+use turbopack_core::{asset::AssetContent, version::VersionedContentExt};
 use turbopack_dev_server::source::{
-    ContentSource, ContentSourceContentVc, ContentSourceData, ContentSourceDataFilter,
-    ContentSourceDataVary, ContentSourceResultVc, ContentSourceVc, NeededData,
+    route_tree::{BaseSegment, RouteTree, RouteTrees, RouteType},
+    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceDataFilter,
+    ContentSourceDataVary, GetContentSourceContent,
 };
 
 #[turbo_tasks::value(serialization = "none", eq = "manual", cell = "new", into = "new")]
 pub struct TurboTasksSource {
     #[turbo_tasks(debug_ignore, trace_ignore)]
-    pub turbo_tasks: Arc<TurboTasks<MemoryBackend>>,
+    turbo_tasks: Arc<TurboTasks<MemoryBackend>>,
 }
 
-impl TurboTasksSourceVc {
-    pub fn new(turbo_tasks: Arc<TurboTasks<MemoryBackend>>) -> Self {
+impl TurboTasksSource {
+    pub fn new(turbo_tasks: Arc<TurboTasks<MemoryBackend>>) -> Vc<Self> {
         Self::cell(TurboTasksSource { turbo_tasks })
     }
 }
@@ -31,12 +32,51 @@ const INVALIDATION_INTERVAL: Duration = Duration::from_secs(3);
 #[turbo_tasks::value_impl]
 impl ContentSource for TurboTasksSource {
     #[turbo_tasks::function]
+    fn get_routes(self: Vc<Self>) -> Vc<RouteTree> {
+        Vc::<RouteTrees>::cell(vec![
+            RouteTree::new_route(
+                vec![BaseSegment::Static("graph".to_string())],
+                RouteType::Exact,
+                Vc::upcast(self),
+            ),
+            RouteTree::new_route(
+                vec![BaseSegment::Static("call-graph".to_string())],
+                RouteType::Exact,
+                Vc::upcast(self),
+            ),
+            RouteTree::new_route(
+                vec![BaseSegment::Static("table".to_string())],
+                RouteType::Exact,
+                Vc::upcast(self),
+            ),
+            RouteTree::new_route(
+                vec![BaseSegment::Static("reset".to_string())],
+                RouteType::Exact,
+                Vc::upcast(self),
+            ),
+        ])
+        .merge()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl GetContentSourceContent for TurboTasksSource {
+    #[turbo_tasks::function]
+    fn vary(&self) -> Vc<ContentSourceDataVary> {
+        ContentSourceDataVary {
+            query: Some(ContentSourceDataFilter::All),
+            ..Default::default()
+        }
+        .cell()
+    }
+
+    #[turbo_tasks::function]
     async fn get(
-        self_vc: TurboTasksSourceVc,
-        path: &str,
+        self: Vc<Self>,
+        path: String,
         data: Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
-        let this = self_vc.await?;
+    ) -> Result<Vc<ContentSourceContent>> {
+        let this = self.await?;
         let tt = &this.turbo_tasks;
         let invalidator = get_invalidator();
         tokio::spawn({
@@ -45,7 +85,7 @@ impl ContentSource for TurboTasksSource {
                 invalidator.invalidate();
             }
         });
-        let html = match path {
+        let html = match path.as_str() {
             "graph" => {
                 let mut stats = Stats::new();
                 let b = tt.backend();
@@ -72,29 +112,21 @@ impl ContentSource for TurboTasksSource {
                 viz::graph::wrap_html(&graph)
             }
             "table" => {
-                if let Some(query) = &data.query {
-                    let mut stats = Stats::new();
-                    let b = tt.backend();
-                    let active_only = query.contains_key("active");
-                    let include_unloaded = query.contains_key("unloaded");
-                    b.with_all_cached_tasks(|task| {
-                        stats.add_id_conditional(b, task, |_, info| {
-                            (include_unloaded || !info.unloaded) && (!active_only || info.active)
-                        });
+                let Some(query) = &data.query else {
+                    bail!("Missing query");
+                };
+                let mut stats = Stats::new();
+                let b = tt.backend();
+                let active_only = query.contains_key("active");
+                let include_unloaded = query.contains_key("unloaded");
+                b.with_all_cached_tasks(|task| {
+                    stats.add_id_conditional(b, task, |_, info| {
+                        (include_unloaded || !info.unloaded) && (!active_only || info.active)
                     });
-                    let tree = stats.treeify(ReferenceType::Dependency);
-                    let table = viz::table::create_table(tree, tt.stats_type());
-                    viz::table::wrap_html(&table)
-                } else {
-                    return Ok(ContentSourceResultVc::need_data(Value::new(NeededData {
-                        source: self_vc.into(),
-                        path: path.to_string(),
-                        vary: ContentSourceDataVary {
-                            query: Some(ContentSourceDataFilter::All),
-                            ..Default::default()
-                        },
-                    })));
-                }
+                });
+                let tree = stats.treeify(ReferenceType::Dependency);
+                let table = viz::table::create_table(tree, tt.stats_type());
+                viz::table::wrap_html(&table)
             }
             "reset" => {
                 let b = tt.backend();
@@ -103,13 +135,11 @@ impl ContentSource for TurboTasksSource {
                 });
                 "Done".to_string()
             }
-            _ => return Ok(ContentSourceResultVc::not_found()),
+            _ => bail!("Unknown path: {}", path),
         };
-        Ok(ContentSourceResultVc::exact(
-            ContentSourceContentVc::static_content(
-                AssetContentVc::from(File::from(html).with_content_type(TEXT_HTML_UTF_8)).into(),
-            )
-            .into(),
+        Ok(ContentSourceContent::static_content(
+            AssetContent::file(File::from(html).with_content_type(TEXT_HTML_UTF_8).into())
+                .versioned(),
         ))
     }
 }

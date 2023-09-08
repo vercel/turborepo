@@ -36,6 +36,7 @@ Setup
     "frameworkInference",
     "globalCacheInputs",
     "id",
+    "monorepo",
     "packages",
     "scm",
     "tasks",

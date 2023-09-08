@@ -1,22 +1,37 @@
 #![allow(dead_code)]
 
-mod graph;
-mod package_graph;
-pub mod pipeline;
+mod cache;
+mod global_hash;
 mod scope;
-mod task_id;
+mod summary;
+pub mod task_id;
+use std::{
+    io::{BufWriter, IsTerminal},
+    sync::Arc,
+};
 
-use anyhow::{Context as ErrorContext, Result};
-use graph::CompleteGraph;
+use anyhow::{anyhow, Context as ErrorContext, Result};
+pub use cache::{RunCache, TaskCache};
+use itertools::Itertools;
 use tracing::{debug, info};
+use turbopath::AbsoluteSystemPathBuf;
+use turborepo_cache::{http::APIAuth, AsyncCache};
+use turborepo_env::EnvironmentVariableMap;
+use turborepo_scm::SCM;
+use turborepo_ui::ColorSelector;
 
+use self::task_id::TaskName;
 use crate::{
     commands::CommandBase,
+    config::TurboJson,
     daemon::DaemonConnector,
+    engine::EngineBuilder,
     manager::Manager,
-    opts::Opts,
+    opts::{GraphOpts, Opts},
+    package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
-    run::{package_graph::PackageGraph, task_id::ROOT_PKG_NAME},
+    run::global_hash::get_global_hash_inputs,
+    task_graph::Visitor,
 };
 
 #[derive(Debug)]
@@ -36,27 +51,38 @@ impl Run {
     }
 
     fn opts(&self) -> Result<Opts> {
-        Ok(self.base.args().try_into()?)
+        self.base.args().try_into()
     }
 
     pub async fn run(&mut self) -> Result<()> {
         let _start_at = std::time::Instant::now();
         let package_json_path = self.base.repo_root.join_component("package.json");
-        let root_package_json = PackageJson::load(package_json_path.as_absolute_path())
-            .context("failed to read package.json")?;
-        let targets = self.targets();
+        let root_package_json =
+            PackageJson::load(&package_json_path).context("failed to read package.json")?;
         let mut opts = self.opts()?;
 
-        let _is_structured_output = opts.run_opts.graph_dot || opts.run_opts.dry_run_json;
+        let _is_structured_output = opts.run_opts.graph.is_some() || opts.run_opts.dry_run_json;
 
-        let pkg_dep_graph = if opts.run_opts.single_package {
-            PackageGraph::build_single_package_graph(root_package_json)?
-        } else {
-            PackageGraph::build_multi_package_graph(&self.base.repo_root, &root_package_json)?
-        };
+        let is_single_package = opts.run_opts.single_package;
+
+        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+            .with_single_package_mode(opts.run_opts.single_package)
+            .build()?;
+
+        let root_turbo_json =
+            TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
+
+        opts.cache_opts.remote_cache_opts = root_turbo_json.remote_cache_options.clone();
+
+        if opts.run_opts.experimental_space_id.is_none() {
+            opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
+        }
+
         // There's some warning handling code in Go that I'm ignoring
+        let is_ci_and_not_tty = turborepo_ci::is_ci() && !std::io::stdout().is_terminal();
 
-        if self.base.ui.is_ci() && !opts.run_opts.no_daemon {
+        let mut daemon = None;
+        if is_ci_and_not_tty && !opts.run_opts.no_daemon {
             info!("skipping turbod since we appear to be in a non-interactive context");
         } else if !opts.run_opts.no_daemon {
             let connector = DaemonConnector {
@@ -68,81 +94,146 @@ impl Run {
 
             let client = connector.connect().await?;
             debug!("running in daemon mode");
-            opts.runcache_opts.output_watcher = Some(client);
+            daemon = Some(client);
         }
 
         pkg_dep_graph
             .validate()
             .context("Invalid package dependency graph")?;
 
-        let g = CompleteGraph::new(
-            pkg_dep_graph.workspace_graph.clone(),
-            pkg_dep_graph.workspace_infos.clone(),
-            self.base.repo_root.as_absolute_path(),
-        );
+        let scm = SCM::new(&self.base.repo_root);
 
-        let is_single_package = opts.run_opts.single_package;
-        let turbo_json = g.get_turbo_config_from_workspace(ROOT_PKG_NAME, is_single_package)?;
+        let filtered_pkgs = {
+            let mut filtered_pkgs = scope::resolve_packages(
+                &opts.scope_opts,
+                &self.base.repo_root,
+                &pkg_dep_graph,
+                &scm,
+            )?;
 
-        opts.cache_opts.remote_cache_opts = turbo_json.remote_cache_opts.clone();
+            if filtered_pkgs.len() != pkg_dep_graph.len() {
+                for target in self.targets() {
+                    let task_name = TaskName::from(target.as_str());
+                    if root_turbo_json.pipeline.contains_key(&task_name) {
+                        filtered_pkgs.insert(WorkspaceName::Root);
+                        break;
+                    }
+                }
+            };
 
-        if opts.run_opts.experimental_space_id.is_none() {
-            opts.run_opts.experimental_space_id = turbo_json.space_id.clone();
-        }
+            filtered_pkgs
+        };
 
-        let pipeline = &turbo_json.pipeline;
+        let env_at_execution_start = EnvironmentVariableMap::infer();
 
-        let mut filtered_pkgs =
-            scope::resolve_packages(&opts.scope_opts, &self.base, &pkg_dep_graph)?;
+        let repo_config = self.base.repo_config()?;
+        let team_id = repo_config.team_id();
+        let team_slug = repo_config.team_slug();
 
-        if filtered_pkgs.len() == pkg_dep_graph.len() {
-            for target in targets {
-                let key = task_id::root_task_id(target);
-                if pipeline.contains_key(&key) {
-                    filtered_pkgs.insert(task_id::ROOT_PKG_NAME.to_string());
-                    break;
+        let token = self.base.user_config()?.token();
+
+        let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
+            team_id: team_id.to_string(),
+            token: token.to_string(),
+            team_slug: team_slug.map(|s| s.to_string()),
+        });
+
+        let async_cache = AsyncCache::new(
+            &opts.cache_opts,
+            &self.base.repo_root,
+            self.base.api_client()?,
+            api_auth,
+        )?;
+
+        info!("created cache");
+        let engine = EngineBuilder::new(
+            &self.base.repo_root,
+            &pkg_dep_graph,
+            opts.run_opts.single_package,
+        )
+        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
+        .with_turbo_jsons(Some(
+            Some((WorkspaceName::Root, root_turbo_json.clone()))
+                .into_iter()
+                .collect(),
+        ))
+        .with_tasks_only(opts.run_opts.only)
+        .with_workspaces(filtered_pkgs.into_iter().collect())
+        .with_tasks(
+            opts.run_opts
+                .tasks
+                .iter()
+                .map(|task| TaskName::from(task.as_str()).into_owned()),
+        )
+        .build()?;
+
+        engine
+            .validate(&pkg_dep_graph, opts.run_opts.concurrency)
+            .map_err(|errors| {
+                anyhow!(
+                    "error preparing engine: Invalid persistent task configuration:\n{}",
+                    errors
+                        .into_iter()
+                        .map(|e| e.to_string())
+                        .sorted()
+                        .join("\n")
+                )
+            })?;
+
+        if let Some(graph_opts) = opts.run_opts.graph {
+            match graph_opts {
+                GraphOpts::File(graph_file) => {
+                    let graph_file =
+                        AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
+                    let file = graph_file.open()?;
+                    let _writer = BufWriter::new(file);
+                    todo!("Need to implement different format support");
+                }
+                GraphOpts::Stdout => {
+                    engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?
                 }
             }
+            return Ok(());
         }
 
+        let root_workspace = pkg_dep_graph
+            .workspace_info(&WorkspaceName::Root)
+            .expect("must have root workspace");
+
+        let global_hash_inputs = get_global_hash_inputs(
+            root_workspace,
+            &self.base.repo_root,
+            pkg_dep_graph.package_manager(),
+            pkg_dep_graph.lockfile(),
+            root_turbo_json.global_deps,
+            &env_at_execution_start,
+            root_turbo_json.global_env,
+            root_turbo_json.global_pass_through_env,
+            opts.run_opts.env_mode,
+            opts.run_opts.framework_inference,
+            root_turbo_json.global_dot_env,
+        )?;
+
+        let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
+
+        debug!("global hash: {}", global_hash);
+
+        let color_selector = ColorSelector::default();
+
+        let runcache = Arc::new(RunCache::new(
+            async_cache,
+            &self.base.repo_root,
+            &opts.runcache_opts,
+            color_selector,
+            daemon,
+            self.base.ui,
+        ));
+
+        let pkg_dep_graph = Arc::new(pkg_dep_graph);
+        let engine = Arc::new(engine);
+        let visitor = Visitor::new(pkg_dep_graph, runcache, &opts);
+        visitor.visit(engine).await?;
+
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::fs;
-
-    use anyhow::Result;
-    use tempfile::tempdir;
-    use turbopath::AbsoluteSystemPathBuf;
-
-    use crate::{
-        cli::{Command, RunArgs},
-        commands::CommandBase,
-        get_version,
-        run::Run,
-        ui::UI,
-        Args,
-    };
-
-    #[tokio::test]
-    async fn test_run() -> Result<()> {
-        let dir = tempdir()?;
-        let repo_root = AbsoluteSystemPathBuf::new(dir.path())?;
-        let mut args = Args::default();
-        let mut run_args = RunArgs::default();
-        // Daemon does not work with run stub yet
-        run_args.no_daemon = true;
-        args.command = Some(Command::Run(Box::new(run_args)));
-
-        let ui = UI::infer();
-
-        // Add package.json
-        fs::write(repo_root.join_component("package.json"), "{}")?;
-
-        let base = CommandBase::new(args, repo_root, get_version(), ui)?;
-        let mut run = Run::new(base);
-        run.run().await
     }
 }

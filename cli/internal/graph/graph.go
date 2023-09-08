@@ -4,13 +4,13 @@ package graph
 import (
 	gocontext "context"
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
+	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/nodes"
 	"github.com/vercel/turbo/cli/internal/runsummary"
@@ -123,8 +123,15 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 		expandedInputs := g.TaskHashTracker.GetExpandedInputs(packageTask)
 		framework := g.TaskHashTracker.GetFramework(taskID)
 
-		logFile := repoRelativeLogFile(pkgDir, taskName)
-		packageTask.LogFile = logFile
+		logFileAbsolutePath := taskLogFile(g.RepoRoot, pkgDir, taskName)
+
+		var logFileRelativePath string
+		if logRelative, err := logFileAbsolutePath.RelativeTo(g.RepoRoot); err == nil {
+			logFileRelativePath = logRelative.ToString()
+		}
+
+		// Give packageTask a string version of the logFile relative to root.
+		packageTask.LogFile = logFileRelativePath
 		packageTask.Command = command
 
 		envVarPassThroughMap, err := g.TaskHashTracker.EnvAtExecutionStart.FromWildcards(taskDefinition.PassThroughEnv)
@@ -145,7 +152,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			Dir:                    pkgDir.ToString(),
 			Outputs:                taskDefinition.Outputs.Inclusions,
 			ExcludedOutputs:        taskDefinition.Outputs.Exclusions,
-			LogFile:                logFile,
+			LogFileRelativePath:    logFileRelativePath,
 			ResolvedTaskDefinition: taskDefinition,
 			ExpandedInputs:         expandedInputs,
 			ExpandedOutputs:        []turbopath.AnchoredSystemPath{},
@@ -158,8 +165,8 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 					Env:            specifiedEnvVarsPresentation,
 					PassThroughEnv: taskDefinition.PassThroughEnv,
 				},
-				Configured:  envVars.BySource.Explicit.ToSecretHashable(),
-				Inferred:    envVars.BySource.Matching.ToSecretHashable(),
+				Configured:  env.EnvironmentVariableMap(envVars.BySource.Explicit).ToSecretHashable(),
+				Inferred:    env.EnvironmentVariableMap(envVars.BySource.Matching).ToSecretHashable(),
 				PassThrough: envVarPassThroughMap.ToSecretHashable(),
 			},
 			DotEnv:           taskDefinition.DotEnv,
@@ -228,10 +235,10 @@ func (g *CompleteGraph) GetPackageJSONFromWorkspace(workspaceName string) (*fs.P
 	return nil, fmt.Errorf("No package.json for %s", workspaceName)
 }
 
-// repoRelativeLogFile returns the path to the log file for this task execution as a
-// relative path from the root of the monorepo.
-func repoRelativeLogFile(dir turbopath.AnchoredSystemPath, taskName string) string {
-	return filepath.Join(dir.ToStringDuringMigration(), ".turbo", fmt.Sprintf("turbo-%v.log", taskName))
+// taskLogFile returns the path to the log file for this task execution as an absolute path
+func taskLogFile(root turbopath.AbsoluteSystemPath, dir turbopath.AnchoredSystemPath, taskName string) turbopath.AbsoluteSystemPath {
+	pkgDir := dir.RestoreAnchor(root)
+	return pkgDir.UntypedJoin(".turbo", fmt.Sprintf("turbo-%v.log", taskName))
 }
 
 // getTaskGraphAncestors gets all the ancestors for a given task in the graph.

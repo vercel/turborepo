@@ -91,11 +91,11 @@ type ResourceIdentifier = {
 };
 
 type ClientMessageSubscribe = {
-  type: "subscribe";
+  type: "turbopack-subscribe";
 } & ResourceIdentifier;
 
 type ClientMessageUnsubscribe = {
-  type: "unsubscribe";
+  type: "turbopack-unsubscribe";
 } & ResourceIdentifier;
 
 type ClientMessage = ClientMessageSubscribe | ClientMessageUnsubscribe;
@@ -127,7 +127,7 @@ type IssueSource = {
 
 type Issue = {
   severity: IssueSeverity;
-  context: string;
+  file_path: string;
   category: string;
 
   title: string;

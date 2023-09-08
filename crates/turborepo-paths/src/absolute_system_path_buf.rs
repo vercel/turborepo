@@ -1,27 +1,38 @@
 use std::{
-    borrow::{Borrow, Cow},
-    ffi::OsStr,
-    fmt, fs,
+    borrow::Borrow,
+    fmt,
     io::{self, Write},
-    path::{Components, Path, PathBuf},
+    ops::Deref,
+    path::{Path, PathBuf},
 };
 
+use camino::{Utf8Components, Utf8Path, Utf8PathBuf};
+use fs_err as fs;
+use path_clean::PathClean;
 use serde::Serialize;
 
-use crate::{AbsoluteSystemPath, AnchoredSystemPathBuf, IntoSystem, PathError, RelativeUnixPath};
+use crate::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathError};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
-pub struct AbsoluteSystemPathBuf(pub(crate) PathBuf);
+pub struct AbsoluteSystemPathBuf(pub(crate) Utf8PathBuf);
 
 impl Borrow<AbsoluteSystemPath> for AbsoluteSystemPathBuf {
     fn borrow(&self) -> &AbsoluteSystemPath {
         let path = self.as_path();
-        unsafe { &*(path as *const Path as *const AbsoluteSystemPath) }
+        unsafe { &*(path as *const Utf8Path as *const AbsoluteSystemPath) }
     }
 }
 
 impl AsRef<AbsoluteSystemPath> for AbsoluteSystemPathBuf {
     fn as_ref(&self) -> &AbsoluteSystemPath {
+        self
+    }
+}
+
+impl Deref for AbsoluteSystemPathBuf {
+    type Target = AbsoluteSystemPath;
+
+    fn deref(&self) -> &Self::Target {
         self.borrow()
     }
 }
@@ -42,27 +53,52 @@ impl AbsoluteSystemPathBuf {
     ///
     /// ```
     /// use std::path::{Path, PathBuf};
+    /// use camino::Utf8Path;
     /// use turbopath::AbsoluteSystemPathBuf;
     /// #[cfg(windows)]
-    /// let path = PathBuf::from("C:/Users/user");
+    /// let path = "C:/Users/user";
     /// #[cfg(not(windows))]
-    /// let path = PathBuf::from("/Users/user");
+    /// let path = "/Users/user";
     ///
     /// let absolute_path = AbsoluteSystemPathBuf::new(path).unwrap();
     ///
     /// #[cfg(windows)]
-    /// assert_eq!(absolute_path.as_path(), Path::new("C:\\Users\\user"));
+    /// assert_eq!(absolute_path.as_path(), Utf8Path::new("C:\\Users\\user"));
     /// #[cfg(not(windows))]
-    /// assert_eq!(absolute_path.as_path(), Path::new("/Users/user"));
+    /// assert_eq!(absolute_path.as_path(), Utf8Path::new("/Users/user"));
     /// ```
-    pub fn new(unchecked_path: impl Into<PathBuf>) -> Result<Self, PathError> {
+    pub fn new(unchecked_path: impl Into<String>) -> Result<Self, PathError> {
         let unchecked_path = unchecked_path.into();
-        if !unchecked_path.is_absolute() {
-            return Err(PathError::NotAbsolute(unchecked_path).into());
+        if !Path::new(&unchecked_path).is_absolute() {
+            return Err(PathError::NotAbsolute(unchecked_path));
         }
+        Ok(AbsoluteSystemPathBuf(unchecked_path.into()))
+    }
 
-        let system_path = unchecked_path.into_system()?;
-        Ok(AbsoluteSystemPathBuf(system_path))
+    pub fn from_unknown(base: &AbsoluteSystemPath, unknown: impl Into<Utf8PathBuf>) -> Self {
+        // we have an absolute system path and an unknown kind of system path.
+        let unknown: Utf8PathBuf = unknown.into();
+        if unknown.is_absolute() {
+            Self(unknown)
+        } else {
+            Self(
+                base.as_path()
+                    .join(unknown)
+                    .as_std_path()
+                    .clean()
+                    .try_into()
+                    .expect("clean should produce valid UTF-8"),
+            )
+        }
+    }
+
+    pub fn from_cwd(unknown: impl Into<Utf8PathBuf>) -> Result<Self, PathError> {
+        let cwd = Self::cwd()?;
+        Ok(Self::from_unknown(&cwd, unknown))
+    }
+
+    pub fn cwd() -> Result<Self, PathError> {
+        Ok(Self(Utf8PathBuf::try_from(std::env::current_dir()?)?))
     }
 
     /// Anchors `path` at `self`.
@@ -83,7 +119,7 @@ impl AbsoluteSystemPathBuf {
     ///   let base = AbsoluteSystemPathBuf::new("/Users/user").unwrap();
     ///   let anchored_path = AbsoluteSystemPathBuf::new("/Users/user/Documents").unwrap();
     ///   let anchored_path = base.anchor(&anchored_path).unwrap();
-    ///   assert_eq!(anchored_path.to_str().unwrap(), "Documents");
+    ///   assert_eq!(anchored_path.as_str(), "Documents");
     /// }
     ///
     /// #[cfg(windows)]
@@ -91,7 +127,7 @@ impl AbsoluteSystemPathBuf {
     ///   let base = AbsoluteSystemPathBuf::new("C:\\Users\\user").unwrap();
     ///   let anchored_path = AbsoluteSystemPathBuf::new("C:\\Users\\user\\Documents").unwrap();
     ///   let anchored_path = base.anchor(&anchored_path).unwrap();
-    ///  assert_eq!(anchored_path.to_str().unwrap(), "Documents");
+    ///  assert_eq!(anchored_path.as_str(), "Documents");
     /// }
     /// ```
     pub fn anchor(
@@ -101,52 +137,16 @@ impl AbsoluteSystemPathBuf {
         AnchoredSystemPathBuf::new(self, path)
     }
 
-    /// Resolves `path` with `self` as anchor.
-    ///
-    /// # Arguments
-    ///
-    /// * `path`: The path to be anchored at `self`
-    ///
-    /// returns: AbsoluteSystemPathBuf
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::path::Path;
-    /// use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-    /// #[cfg(not(windows))]
-    /// let absolute_path = AbsoluteSystemPathBuf::new("/Users/user").unwrap();
-    /// #[cfg(windows)]
-    /// let absolute_path = AbsoluteSystemPathBuf::new("C:\\Users\\user").unwrap();
-    ///
-    /// let anchored_path = Path::new("Documents").try_into().unwrap();
-    /// let resolved_path = absolute_path.resolve(&anchored_path);
-    ///
-    /// #[cfg(not(windows))]
-    /// assert_eq!(resolved_path.as_path(), Path::new("/Users/user/Documents"));
-    /// #[cfg(windows)]
-    /// assert_eq!(resolved_path.as_path(), Path::new("C:\\Users\\user\\Documents"));
-    /// ```
-    pub fn resolve(&self, path: &AnchoredSystemPathBuf) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf(self.0.join(path.as_path()))
-    }
-
-    pub fn as_path(&self) -> &Path {
+    pub fn as_path(&self) -> &Utf8Path {
         self.0.as_path()
     }
 
-    pub fn as_absolute_path(&self) -> &AbsoluteSystemPath {
-        self.borrow()
-    }
-
-    pub fn components(&self) -> Components<'_> {
+    pub fn components(&self) -> Utf8Components<'_> {
         self.0.components()
     }
 
-    pub fn parent(&self) -> Option<Self> {
-        self.0
-            .parent()
-            .map(|p| AbsoluteSystemPathBuf(p.to_path_buf()))
+    pub fn parent(&self) -> Option<&AbsoluteSystemPath> {
+        self.0.parent().map(AbsoluteSystemPath::new_unchecked)
     }
 
     pub fn starts_with<P: AsRef<Path>>(&self, base: P) -> bool {
@@ -155,21 +155,6 @@ impl AbsoluteSystemPathBuf {
 
     pub fn ends_with<P: AsRef<Path>>(&self, child: P) -> bool {
         self.0.ends_with(child.as_ref())
-    }
-
-    pub fn join_component(&self, segment: &str) -> Self {
-        self.as_absolute_path().join_component(segment)
-    }
-
-    pub fn join_components(&self, segments: &[&str]) -> Self {
-        self.as_absolute_path().join_components(segments)
-    }
-
-    pub fn join_unix_path(
-        &self,
-        unix_path: impl AsRef<RelativeUnixPath>,
-    ) -> Result<AbsoluteSystemPathBuf, PathError> {
-        self.as_absolute_path().join_unix_path(unix_path)
     }
 
     pub fn ensure_dir(&self) -> Result<(), io::Error> {
@@ -200,23 +185,17 @@ impl AbsoluteSystemPathBuf {
         Ok(self.0.symlink_metadata()?.permissions().readonly())
     }
 
-    pub fn create_with_contents(&self, contents: &str) -> Result<(), io::Error> {
+    pub fn create_with_contents<B: AsRef<[u8]>>(&self, contents: B) -> Result<(), io::Error> {
         let mut f = fs::File::create(self.0.as_path())?;
-        write!(f, "{}", contents)?;
+        f.write_all(contents.as_ref())?;
         Ok(())
     }
 
-    pub fn to_str(&self) -> Result<&str, PathError> {
-        self.0
-            .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(self.0.to_string_lossy().to_string()))
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
     }
 
-    pub fn to_string_lossy(&self) -> Cow<'_, str> {
-        self.0.to_string_lossy()
-    }
-
-    pub fn file_name(&self) -> Option<&OsStr> {
+    pub fn file_name(&self) -> Option<&str> {
         self.0.file_name()
     }
 
@@ -224,43 +203,63 @@ impl AbsoluteSystemPathBuf {
         self.0.exists()
     }
 
-    pub fn extension(&self) -> Option<&OsStr> {
+    pub fn try_exists(&self) -> Result<bool, PathError> {
+        // try_exists is an experimental API and not yet in fs_err
+        Ok(std::fs::try_exists(&self.0)?)
+    }
+
+    pub fn extension(&self) -> Option<&str> {
         self.0.extension()
     }
+}
 
-    pub fn open(&self) -> Result<fs::File, PathError> {
-        Ok(fs::File::open(&self.0)?)
+impl TryFrom<PathBuf> for AbsoluteSystemPathBuf {
+    type Error = PathError;
+
+    fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
+        let path_str = path
+            .to_str()
+            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
+
+        Self::new(Utf8PathBuf::from(path_str))
     }
+}
 
-    pub fn to_realpath(&self) -> Result<Self, PathError> {
-        let realpath = dunce::canonicalize(&self.0)?;
-        Ok(Self(realpath))
+impl TryFrom<&Path> for AbsoluteSystemPathBuf {
+    type Error = PathError;
+
+    fn try_from(path: &Path) -> Result<Self, Self::Error> {
+        let path_str = path
+            .to_str()
+            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
+
+        Self::new(Utf8PathBuf::from(path_str))
     }
+}
 
-    pub fn symlink_to_file(&self, target: impl AsRef<Path>) -> Result<(), PathError> {
-        self.as_absolute_path().symlink_to_file(target)
-    }
+impl TryFrom<&str> for AbsoluteSystemPathBuf {
+    type Error = PathError;
 
-    pub fn symlink_to_dir(&self, target: impl AsRef<Path>) -> Result<(), PathError> {
-        self.as_absolute_path().symlink_to_dir(target)
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new(Utf8PathBuf::from(value))
     }
 }
 
 impl From<AbsoluteSystemPathBuf> for PathBuf {
     fn from(path: AbsoluteSystemPathBuf) -> Self {
-        path.0
+        path.0.into_std_path_buf()
     }
 }
 
 impl fmt::Display for AbsoluteSystemPathBuf {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.display().fmt(f)
+        write!(f, "{}", self.0.as_str())
     }
 }
 
 impl AsRef<Path> for AbsoluteSystemPathBuf {
     fn as_ref(&self) -> &Path {
-        self.0.as_path()
+        self.0.as_std_path()
     }
 }
 
@@ -289,8 +288,7 @@ mod tests {
         assert_eq!(
             AbsoluteSystemPathBuf::new("/some/dir")
                 .unwrap()
-                .as_absolute_path()
-                .join_unix_path(&tail)
+                .join_unix_path(tail)
                 .unwrap(),
             AbsoluteSystemPathBuf::new("/some/other").unwrap(),
         );
@@ -318,7 +316,6 @@ mod tests {
         assert_eq!(
             AbsoluteSystemPathBuf::new("C:\\some\\dir")
                 .unwrap()
-                .as_absolute_path()
                 .join_unix_path(&tail)
                 .unwrap(),
             AbsoluteSystemPathBuf::new("C:\\some\\other").unwrap(),

@@ -1,26 +1,19 @@
-use std::{
-    env::{self, current_dir},
-    io, mem,
-    path::{Path, PathBuf},
-    process,
-};
+use std::{env, io, mem, path::Path, process};
 
 use anyhow::{anyhow, Result};
+use camino::Utf8PathBuf;
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
-use dunce::canonicalize as fs_canonicalize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_ui::UI;
 
-#[cfg(feature = "run-stub")]
-use crate::commands::run;
 use crate::{
-    commands::{bin, daemon, generate, link, login, logout, unlink, CommandBase},
+    commands::{bin, daemon, generate, info, link, login, logout, prune, unlink, CommandBase},
     get_version,
     shim::{RepoMode, RepoState},
     tracing::TurboSubscriber,
-    ui::UI,
     Payload,
 };
 
@@ -28,7 +21,7 @@ use crate::{
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, ValueEnum)]
 pub enum OutputLogsMode {
     #[serde(rename = "full")]
     Full,
@@ -45,6 +38,22 @@ pub enum OutputLogsMode {
 impl Default for OutputLogsMode {
     fn default() -> Self {
         Self::Full
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
+pub enum LogOrder {
+    #[serde(rename = "auto")]
+    Auto,
+    #[serde(rename = "stream")]
+    Stream,
+    #[serde(rename = "grouped")]
+    Grouped,
+}
+
+impl Default for LogOrder {
+    fn default() -> Self {
+        Self::Auto
     }
 }
 
@@ -93,7 +102,7 @@ pub struct Args {
     pub cpu_profile: Option<String>,
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
-    pub cwd: Option<PathBuf>,
+    pub cwd: Option<Utf8PathBuf>,
     /// Specify a file to save a pprof heap profile
     #[clap(long, global = true, value_parser)]
     pub heap: Option<String>,
@@ -180,6 +189,9 @@ pub enum DaemonCommand {
     },
     /// Stops the turbo daemon
     Stop,
+    /// Stops the turbo daemon if it is already running, and removes any stale
+    /// daemon state
+    Clean,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
@@ -266,17 +278,6 @@ pub enum Command {
         #[serde(flatten)]
         command: Option<DaemonCommand>,
     },
-    /// Link your local directory to a Vercel organization and enable remote
-    /// caching.
-    Link {
-        /// Do not create or modify .gitignore (default false)
-        #[clap(long)]
-        no_gitignore: bool,
-
-        /// Specify what should be linked (default "remote cache")
-        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
-        target: LinkTarget,
-    },
     /// Generate a new app / package
     #[clap(aliases = ["g", "gen"])]
     Generate {
@@ -298,7 +299,20 @@ pub enum Command {
 
         #[clap(subcommand)]
         #[serde(skip)]
-        command: Option<GenerateCommand>,
+        command: Option<Box<GenerateCommand>>,
+    },
+    #[clap(hide = true)]
+    Info { workspace: Option<String> },
+    /// Link your local directory to a Vercel organization and enable remote
+    /// caching.
+    Link {
+        /// Do not create or modify .gitignore (default false)
+        #[clap(long)]
+        no_gitignore: bool,
+
+        /// Specify what should be linked (default "remote cache")
+        #[clap(long, value_enum, default_value_t = LinkTarget::RemoteCache)]
+        target: LinkTarget,
     },
     /// Login to your Vercel account
     Login {
@@ -398,7 +412,7 @@ pub enum GenerateCommand {
 pub struct RunArgs {
     /// Override the filesystem cache directory.
     #[clap(long)]
-    pub cache_dir: Option<String>,
+    pub cache_dir: Option<Utf8PathBuf>,
     /// Set the number of concurrent cache operations (default 10)
     #[clap(long, default_value_t = 10)]
     pub cache_workers: u32,
@@ -418,7 +432,7 @@ pub struct RunArgs {
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
-    /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference#--filter
+    /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
     #[clap(short = 'F', long, action = ArgAction::Append)]
     pub filter: Vec<String>,
     /// Ignore the existing cache (to force execution)
@@ -465,6 +479,14 @@ pub struct RunArgs {
     /// output. (default full)
     #[clap(long, value_enum)]
     pub output_logs: Option<OutputLogsMode>,
+
+    /// Set type of task output order. Use "stream" to show
+    /// output as soon as it is available. Use "grouped" to
+    /// show output when a command has finished execution. Use "auto" to let
+    /// turbo decide based on its own heuristics. (default auto)
+    #[clap(long, env = "TURBO_LOG_ORDER", value_enum, default_value_t = LogOrder::Auto)]
+    pub log_order: LogOrder,
+
     #[clap(long, hide = true)]
     pub only: bool,
     /// Execute all tasks in parallel.
@@ -479,7 +501,7 @@ pub struct RunArgs {
     pub profile: Option<String>,
     /// Ignore the local filesystem cache for all tasks. Only
     /// allow reading and caching artifacts using the remote cache.
-    #[clap(long)]
+    #[clap(long, env = "TURBO_REMOTE_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
     pub remote_only: bool,
     /// Specify package(s) to act as entry points for task execution.
     /// Supports globs.
@@ -493,11 +515,17 @@ pub struct RunArgs {
     /// Generate a summary of the turbo run
     #[clap(long, env = "TURBO_RUN_SUMMARY", default_missing_value = "true")]
     pub summarize: Option<Option<bool>>,
-    /// Use "none" to remove prefixes from task logs. Note that tasks running
-    /// in parallel interleave their logs and prefix is the only way
-    /// to identify which task produced a log.
-    #[clap(long, value_enum)]
-    pub log_prefix: Option<LogPrefix>,
+
+    /// Use "none" to remove prefixes from task logs. Use "task" to get task id
+    /// prefixing. Use "auto" to let turbo decide how to prefix the logs
+    /// based on the execution environment. In most cases this will be the same
+    /// as "task". Note that tasks running in parallel interleave their
+    /// logs, so removing prefixes can make it difficult to associate logs
+    /// with tasks. Use --log-order=grouped to prevent interleaving. (default
+    /// auto)
+    #[clap(long, value_enum, default_value_t = LogPrefix::Auto)]
+    pub log_prefix: LogPrefix,
+
     // NOTE: The following two are hidden because clap displays them in the help text incorrectly:
     // > Usage: turbo [OPTIONS] [TASKS]... [-- <FORWARDED_ARGS>...] [COMMAND]
     #[clap(hide = true)]
@@ -508,12 +536,27 @@ pub struct RunArgs {
     // Pass a string to enable posting Run Summaries to Vercel
     #[clap(long, hide = true)]
     pub experimental_space_id: Option<String>,
+
+    /// Opt-in to the rust codepath for running turbo
+    /// rather than using the go shim
+    #[clap(long, env, hide = true, default_value_t = false)]
+    pub experimental_rust_codepath: bool,
 }
 
-#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum LogPrefix {
+    #[serde(rename = "auto")]
+    Auto,
     #[serde(rename = "none")]
     None,
+    #[serde(rename = "task")]
+    Task,
+}
+
+impl Default for LogPrefix {
+    fn default() -> Self {
+        Self::Auto
+    }
 }
 
 /// Runs the CLI by parsing arguments with clap, then either calling Rust code
@@ -537,33 +580,45 @@ pub enum LogPrefix {
 #[tokio::main]
 pub async fn run(
     repo_state: Option<RepoState>,
-    logger: &TurboSubscriber,
+    #[allow(unused_variables)] logger: &TurboSubscriber,
     ui: UI,
 ) -> Result<Payload> {
     let mut cli_args = Args::new()?;
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
-    if cli_args.command.is_none() {
-        if let Some(run_args) = mem::take(&mut cli_args.run_args) {
-            cli_args.command = Some(Command::Run(Box::new(run_args)));
-        } else {
-            return Err(anyhow!("No command specified"));
+    let mut command = if let Some(command) = mem::take(&mut cli_args.command) {
+        command
+    } else {
+        let run_args = mem::take(&mut cli_args.run_args).ok_or(anyhow!("No command specified"))?;
+        if run_args.tasks.is_empty() {
+            let mut cmd = <Args as CommandFactory>::command();
+            let _ = cmd.print_help();
+            process::exit(1);
         }
+
+        Command::Run(Box::new(run_args))
     };
 
-    // If this is a run command, and we know the actual invocation path, set the
-    // inference root, as long as the user hasn't overridden the cwd
-    if cli_args.cwd.is_none() {
-        if let Some(Command::Run(run_args)) = &mut cli_args.command {
+    // Set some run flags if we have the data and are executing a Run
+    if let Command::Run(run_args) = &mut command {
+        // Don't overwrite the flag if it's already been set for whatever reason
+        run_args.single_package = run_args.single_package
+            || repo_state
+                .as_ref()
+                .map(|repo_state| matches!(repo_state.mode, RepoMode::SinglePackage))
+                .unwrap_or(false);
+        // If this is a run command, and we know the actual invocation path, set the
+        // inference root, as long as the user hasn't overridden the cwd
+        if cli_args.cwd.is_none() {
             if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
                 let invocation_path = Path::new(&invocation_dir);
 
                 // If repo state doesn't exist, we're either local turbo running at the root
-                // (current_dir), or inference failed If repo state does exist,
-                // we're global turbo, and want to calculate package inference based on the repo
-                // root
-                let this_dir = current_dir()?;
-                let repo_root = repo_state.as_ref().map(|r| &r.root).unwrap_or(&this_dir);
+                // (cwd), or inference failed.
+                // If repo state does exist, we're global turbo, and want to calculate
+                // package inference based on the repo root
+                let this_dir = AbsoluteSystemPathBuf::cwd()?;
+                let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
                 if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
                     debug!("pkg_inference_root set to \"{}\"", relative_path.display());
                     let utf8_path = relative_path
@@ -577,31 +632,86 @@ pub async fn run(
         }
     }
 
-    // Do this after the above, since we're now always setting cwd.
-    if let Some(repo_state) = repo_state {
-        if let Some(Command::Run(run_args)) = &mut cli_args.command {
-            run_args.single_package = matches!(repo_state.mode, RepoMode::SinglePackage);
-        }
-        cli_args.cwd = Some(repo_state.root);
-    }
+    let cwd = repo_state
+        .as_ref()
+        .map(|state| state.root.as_path())
+        .or(cli_args.cwd.as_deref());
 
-    let repo_root = if let Some(cwd) = &cli_args.cwd {
-        let canonical_cwd = fs_canonicalize(cwd)?;
-        // Update on clap_args so that Go gets a canonical path.
-        cli_args.cwd = Some(canonical_cwd.clone());
-        canonical_cwd
+    let repo_root = if let Some(cwd) = cwd {
+        AbsoluteSystemPathBuf::from_cwd(cwd)?
     } else {
-        current_dir()?
+        AbsoluteSystemPathBuf::cwd()?
     };
 
-    // a non-absolute repo root is a bug
-    let repo_root = AbsoluteSystemPathBuf::new(repo_root).expect("repo_root is not absolute");
-
     let version = get_version();
+
+    cli_args.command = Some(command);
+    cli_args.cwd = Some(repo_root.as_path().to_owned());
 
     match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
             bin::run()?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        #[allow(unused_variables)]
+        Command::Daemon { command, idle_time } => {
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
+
+            match command {
+                Some(command) => daemon::daemon_client(command, &base).await,
+                #[cfg(not(feature = "go-daemon"))]
+                None => daemon::daemon_server(&base, idle_time, logger).await,
+                #[cfg(feature = "go-daemon")]
+                None => {
+                    return Ok(Payload::Go(Box::new(base)));
+                }
+            }?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Generate {
+            tag,
+            generator_name,
+            config,
+            root,
+            args,
+            command,
+        } => {
+            // build GeneratorCustomArgs struct
+            let args = GeneratorCustomArgs {
+                generator_name: generator_name.clone(),
+                config: config.clone(),
+                root: root.clone(),
+                args: args.clone(),
+            };
+
+            generate::run(tag, command, &args)?;
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Info { workspace } => {
+            let workspace = workspace.clone();
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            info::run(&mut base, workspace.as_deref())?;
+
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Link {
+            no_gitignore,
+            target,
+        } => {
+            if cli_args.test_run {
+                println!("Link test run successful");
+                return Ok(Payload::Rust(Ok(0)));
+            }
+
+            let modify_gitignore = !*no_gitignore;
+            let to = *target;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+
+            if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
+                error!("error: {}", err.to_string())
+            }
 
             Ok(Payload::Rust(Ok(0)))
         }
@@ -629,25 +739,6 @@ pub async fn run(
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Link {
-            no_gitignore,
-            target,
-        } => {
-            if cli_args.test_run {
-                println!("Link test run successful");
-                return Ok(Payload::Rust(Ok(0)));
-            }
-
-            let modify_gitignore = !*no_gitignore;
-            let to = *target;
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
-
-            if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
-                error!("error: {}", err.to_string())
-            }
-
-            Ok(Payload::Rust(Ok(0)))
-        }
         Command::Unlink { target } => {
             if cli_args.test_run {
                 println!("Unlink test run successful");
@@ -661,58 +752,45 @@ pub async fn run(
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Generate {
-            tag,
-            generator_name,
-            config,
-            root,
-            args,
-            command,
-        } => {
-            // build GeneratorCustomArgs struct
-            let args = GeneratorCustomArgs {
-                generator_name: generator_name.clone(),
-                config: config.clone(),
-                root: root.clone(),
-                args: args.clone(),
-            };
-
-            generate::run(tag, command, &args)?;
-            Ok(Payload::Rust(Ok(0)))
-        }
-        Command::Daemon { command, idle_time } => {
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
-
-            match command {
-                Some(command) => daemon::daemon_client(command, &base).await,
-                #[cfg(not(feature = "go-daemon"))]
-                None => daemon::daemon_server(&base, idle_time, logger).await,
-                #[cfg(feature = "go-daemon")]
-                None => {
-                    return Ok(Payload::Go(Box::new(base)));
-                }
-            }?;
-
-            Ok(Payload::Rust(Ok(0)))
-        }
         #[cfg(feature = "run-stub")]
         Command::Run(args) => {
-            let base = CommandBase::new(cli_args, repo_root, version, ui)?;
-            run::run(base).await?;
-
-            Ok(Payload::Rust(Ok(0)))
-        }
-        #[cfg(not(feature = "run-stub"))]
-        Command::Run(args) => {
+            // in the case of enabling the run stub, we want to be able to opt-in
+            // to the rust codepath for running turbo
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
             }
-            let base = CommandBase::new(cli_args, repo_root, version, UI::new(true))?;
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
+
+            if args.experimental_rust_codepath {
+                use crate::commands::run;
+                run::run(base).await?;
+                Ok(Payload::Rust(Ok(0)))
+            } else {
+                Ok(Payload::Go(Box::new(base)))
+            }
+        }
+        #[cfg(not(feature = "run-stub"))]
+        Command::Run(args) => {
+            if args.experimental_rust_codepath {
+                tracing::warn!("rust codepath enabled, but not compiled with support");
+            }
+            if args.tasks.is_empty() {
+                return Err(anyhow!("at least one task must be specified"));
+            }
+            let base = CommandBase::new(cli_args, repo_root, version, ui)?;
             Ok(Payload::Go(Box::new(base)))
         }
-        Command::Prune { .. } => {
-            let base = CommandBase::new(cli_args, repo_root, version, UI::new(true))?;
-            Ok(Payload::Go(Box::new(base)))
+        Command::Prune {
+            scope,
+            docker,
+            output_dir,
+        } => {
+            let scope = scope.clone();
+            let docker = *docker;
+            let output_dir = output_dir.clone();
+            let base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            prune::prune(&base, &scope, docker, &output_dir)?;
+            Ok(Payload::Rust(Ok(0)))
         }
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
@@ -724,8 +802,7 @@ pub async fn run(
 
 #[cfg(test)]
 mod test {
-    use std::path::PathBuf;
-
+    use camino::Utf8PathBuf;
     use clap::Parser;
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
@@ -741,6 +818,7 @@ mod test {
         RunArgs {
             cache_workers: 10,
             output_logs: None,
+            remote_only: false,
             framework_inference: true,
             ..RunArgs::default()
         }
@@ -780,7 +858,9 @@ mod test {
 
     use anyhow::Result;
 
-    use crate::cli::{Args, Command, DryRunMode, EnvMode, OutputLogsMode, RunArgs, Verbosity};
+    use crate::cli::{
+        Args, Command, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, RunArgs, Verbosity,
+    };
 
     #[test]
     fn test_parse_run() -> Result<()> {
@@ -930,7 +1010,7 @@ mod test {
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
                     tasks: vec!["build".to_string()],
-                    cache_dir: Some("foobar".to_string()),
+                    cache_dir: Some(Utf8PathBuf::from("foobar")),
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
@@ -1247,6 +1327,78 @@ mod test {
         );
 
         assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--log-order", "stream"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    log_order: LogOrder::Stream,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--log-order", "grouped"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    log_order: LogOrder::Grouped,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--log-prefix", "auto"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    log_prefix: LogPrefix::Auto,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--log-prefix", "none"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    log_prefix: LogPrefix::None,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--log-prefix", "task"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    log_prefix: LogPrefix::Task,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    log_order: LogOrder::Auto,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--parallel"]).unwrap(),
             Args {
                 command: Some(Command::Run(Box::new(RunArgs {
@@ -1270,6 +1422,20 @@ mod test {
             }
         );
 
+        // remote-only flag tests
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    remote_only: false,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "remote_only default to false"
+        );
+
         assert_eq!(
             Args::try_parse_from(["turbo", "run", "build", "--remote-only"]).unwrap(),
             Args {
@@ -1279,7 +1445,34 @@ mod test {
                     ..get_default_run_args()
                 }))),
                 ..Args::default()
-            }
+            },
+            "remote_only with no value, means true"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--remote-only", "true"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    remote_only: true,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "remote_only=true works"
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "run", "build", "--remote-only", "false"]).unwrap(),
+            Args {
+                command: Some(Command::Run(Box::new(RunArgs {
+                    tasks: vec!["build".to_string()],
+                    remote_only: false,
+                    ..get_default_run_args()
+                }))),
+                ..Args::default()
+            },
+            "remote_only=false works"
         );
 
         assert_eq!(
@@ -1348,7 +1541,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Bin {}),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -1371,7 +1564,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Login { sso_team: None }),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -1385,7 +1578,7 @@ mod test {
                 command: Some(Command::Login {
                     sso_team: Some("my-team".to_string()),
                 }),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -1408,7 +1601,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Logout {}),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -1435,7 +1628,7 @@ mod test {
                 command: Some(Command::Unlink {
                     target: crate::cli::LinkTarget::RemoteCache,
                 }),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -1464,7 +1657,7 @@ mod test {
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(default_prune),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }
@@ -1531,7 +1724,7 @@ mod test {
                     docker: true,
                     output_dir: "dist".to_string(),
                 }),
-                cwd: Some(PathBuf::from("../examples/with-yarn")),
+                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
         }

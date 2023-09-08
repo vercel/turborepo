@@ -1,56 +1,47 @@
-use std::{borrow::Borrow, fmt::Debug, io::Write};
+use std::{
+    borrow::Borrow,
+    fmt,
+    fmt::{Display, Formatter},
+    ops::Deref,
+};
 
-use bstr::{BStr, BString, ByteSlice};
+use camino::Utf8Path;
+use serde::{Deserialize, Serialize};
 
 use crate::{PathError, RelativeUnixPath};
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+// This is necessary to perform validation on the string during deserialization
+#[serde(try_from = "String", into = "String")]
+pub struct RelativeUnixPathBuf(pub(crate) String);
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct RelativeUnixPathBuf(BString);
+impl Display for RelativeUnixPathBuf {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
 
 impl RelativeUnixPathBuf {
-    pub fn new(path: impl Into<Vec<u8>>) -> Result<Self, PathError> {
-        let bytes: Vec<u8> = path.into();
-        if bytes.first() == Some(&b'/') {
-            return Err(PathError::not_relative_error(&bytes).into());
+    pub fn new(path: impl Into<String>) -> Result<Self, PathError> {
+        let path_string = path.into();
+        if path_string.starts_with('/') || Utf8Path::new(&path_string).is_absolute() {
+            return Err(PathError::NotRelative(path_string));
         }
-        Ok(Self(BString::new(bytes)))
+
+        Ok(Self(path_string))
     }
 
-    pub fn as_str(&self) -> Result<&str, PathError> {
-        let s = self.0.to_str().or_else(|_| {
-            Err(PathError::InvalidUnicode(
-                self.0.as_bytes().to_str_lossy().to_string(),
-            ))
-        })?;
-        Ok(s)
+    pub fn into_inner(self) -> String {
+        self.0
     }
 
-    // write_escaped_bytes writes this path to the given writer in the form
-    // "<escaped path>", where escaped_path is the path with '"' and '\n'
-    // characters escaped with '\'.
-    pub fn write_escaped_bytes<W: Write>(&self, writer: &mut W) -> Result<(), PathError> {
-        writer.write_all(&[b'\"'])?;
-        // i is our pointer into self.0, and to_escape_index is a pointer to the next
-        // byte to be escaped. Each time we find a byte to be escaped, we write
-        // out everything from i to to_escape_index, then the escape byte, '\\',
-        // then the byte-to-be-escaped. Finally we set i to 1 + to_escape_index
-        // to move our pointer past the byte we just escaped.
-        let mut i: usize = 0;
-        for (to_escaped_index, byte) in self
-            .0
-            .iter()
-            .enumerate()
-            .filter(|(_, byte)| **byte == b'\"' || **byte == b'\n')
-        {
-            writer.write_all(&self.0[i..to_escaped_index])?;
-            writer.write_all(&[b'\\', *byte])?;
-            i = to_escaped_index + 1;
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    pub fn make_canonical_for_tar(&mut self, is_dir: bool) {
+        if is_dir && !self.0.ends_with('/') {
+            self.0.push('/');
         }
-        if i < self.0.len() {
-            writer.write_all(&self.0[i..])?;
-        }
-        writer.write_all(&[b'\"'])?;
-        Ok(())
     }
 
     pub fn strip_prefix(&self, prefix: &RelativeUnixPathBuf) -> Result<Self, PathError> {
@@ -72,9 +63,9 @@ impl RelativeUnixPathBuf {
 
         // We now know that this path starts with the prefix, and that this path's
         // length is greater than the prefix's length
-        if self.0[prefix_len] != b'/' {
-            let prefix_str = prefix.0.to_str_lossy().into_owned();
-            let this = self.0.to_str_lossy().into_owned();
+        if self.0.as_bytes()[prefix_len] != b'/' {
+            let prefix_str = prefix.0.clone();
+            let this = self.0.clone();
             return Err(PathError::PrefixError(prefix_str, this));
         }
 
@@ -92,21 +83,20 @@ impl RelativeUnixPathBufTestExt for RelativeUnixPathBuf {
     // path. *If* we end up needing or wanting this method outside of tests, we
     // will need to implement .clean() for the result.
     fn join(&self, tail: &RelativeUnixPathBuf) -> Self {
-        let buffer = Vec::with_capacity(self.0.len() + 1 + tail.0.len());
-        let mut path = BString::new(buffer);
-        if self.0.len() > 0 {
-            path.extend_from_slice(&self.0);
-            path.push(b'/');
+        if self.0.is_empty() {
+            return tail.clone();
         }
-        path.extend_from_slice(&tail.0);
-        Self(path)
+        let mut joined = self.0.clone();
+        joined.push('/');
+        joined.push_str(&tail.0);
+        Self(joined)
     }
 }
 
 impl Borrow<RelativeUnixPath> for RelativeUnixPathBuf {
     fn borrow(&self) -> &RelativeUnixPath {
-        let inner: &BStr = &self.0.borrow();
-        unsafe { &*(inner as *const BStr as *const RelativeUnixPath) }
+        let inner: &str = self.0.borrow();
+        unsafe { &*(inner as *const str as *const RelativeUnixPath) }
     }
 }
 
@@ -116,33 +106,47 @@ impl AsRef<RelativeUnixPath> for RelativeUnixPathBuf {
     }
 }
 
-impl Debug for RelativeUnixPathBuf {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.as_str() {
-            Ok(s) => write!(f, "{}", s),
-            Err(_) => write!(f, "Non-utf8 {:?}", self.0),
-        }
+impl Deref for RelativeUnixPathBuf {
+    type Target = RelativeUnixPath;
+
+    fn deref(&self) -> &Self::Target {
+        self.borrow()
+    }
+}
+
+impl TryFrom<String> for RelativeUnixPathBuf {
+    type Error = PathError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+// From<String> should not be implemented for RelativeUnixPathBuf as validation
+// may fail
+#[allow(clippy::from_over_into)]
+impl Into<String> for RelativeUnixPathBuf {
+    fn into(self) -> String {
+        self.0
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::io::BufWriter;
-    #[cfg(windows)]
-    use std::path::Path;
+    use serde_json::json;
 
     use super::*;
 
     #[test]
     fn test_relative_unix_path_buf() {
         let path = RelativeUnixPathBuf::new("foo/bar").unwrap();
-        assert_eq!(path.as_str().unwrap(), "foo/bar");
+        assert_eq!(path.as_str(), "foo/bar");
     }
 
     #[test]
     fn test_relative_unix_path_buf_with_extension() {
         let path = RelativeUnixPathBuf::new("foo/bar.txt").unwrap();
-        assert_eq!(path.as_str().unwrap(), "foo/bar.txt");
+        assert_eq!(path.as_str(), "foo/bar.txt");
     }
 
     #[test]
@@ -150,7 +154,7 @@ mod tests {
         let head = RelativeUnixPathBuf::new("some/path").unwrap();
         let tail = RelativeUnixPathBuf::new("child/leaf").unwrap();
         let combined = head.join(&tail);
-        assert_eq!(combined.as_str().unwrap(), "some/path/child/leaf");
+        assert_eq!(combined.as_str(), "some/path/child/leaf");
     }
 
     #[test]
@@ -181,24 +185,34 @@ mod tests {
     }
 
     #[test]
-    fn test_write_escaped() {
-        let input = "\"quote\"\nnewline\n".as_bytes();
-        let expected = "\"\\\"quote\\\"\\\nnewline\\\n\"".as_bytes();
-        let mut buffer = Vec::new();
-        {
-            let mut writer = BufWriter::new(&mut buffer);
-            let path = RelativeUnixPathBuf::new(input).unwrap();
-            path.write_escaped_bytes(&mut writer).unwrap();
-        }
-        assert_eq!(buffer.as_slice(), expected);
-    }
-
-    #[test]
     fn test_relative_unix_path_buf_errors() {
         assert!(RelativeUnixPathBuf::new("/foo/bar").is_err());
         // Note: this shouldn't be an error, this is a valid relative unix path
         // #[cfg(windows)]
         // assert!(RelativeUnixPathBuf::new(PathBuf::from("C:\\foo\\bar")).
         // is_err());
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    struct TestSchema {
+        field: RelativeUnixPathBuf,
+    }
+
+    #[test]
+    fn test_roundtrip() {
+        let path = "relative/unix/path\\evil";
+        let value = json!({ "field": path });
+        let foo: TestSchema = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(foo.field.deref(), RelativeUnixPath::new(path).unwrap());
+        assert_eq!(serde_json::to_value(foo).unwrap(), value);
+    }
+
+    #[test]
+    fn test_deserialization_fails_on_absolute() {
+        let foo: Result<TestSchema, _> = serde_json::from_value(json!({"field": "/absolute/path"}));
+        let Err(e) = foo else {
+            panic!("expected absolute path deserialization to fail")
+        };
+        assert_eq!(e.to_string(), "Path is not relative: /absolute/path");
     }
 }

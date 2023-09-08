@@ -13,10 +13,10 @@
 //! globs, and to query for changes for those globs.
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, Mutex as StdMutux,
     },
     time::{Duration, Instant},
 };
@@ -32,7 +32,7 @@ use tokio::{
 };
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
-use tracing::error;
+use tracing::{error, trace};
 use turbopath::AbsoluteSystemPathBuf;
 
 use super::{
@@ -47,20 +47,26 @@ use crate::{
 };
 
 pub struct DaemonServer<T: Watcher> {
+    #[allow(dead_code)]
     daemon_root: AbsoluteSystemPathBuf,
     log_file: AbsoluteSystemPathBuf,
 
     start_time: Instant,
+    #[allow(dead_code)]
     timeout: Arc<BumpTimeout>,
 
     watcher: Arc<HashGlobWatcher<T>>,
     shutdown: Mutex<Option<Sender<()>>>,
+    #[allow(dead_code)]
     shutdown_rx: Option<Receiver<()>>,
 
     running: Arc<AtomicBool>,
+
+    times_saved: Arc<std::sync::Mutex<HashMap<String, u64>>>,
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum CloseReason {
     Timeout,
     Shutdown,
@@ -80,8 +86,8 @@ impl DaemonServer<notify::RecommendedWatcher> {
         let daemon_root = base.daemon_file_root();
 
         let watcher = Arc::new(HashGlobWatcher::new(
-            AbsoluteSystemPathBuf::new(base.repo_root.clone()).expect("valid repo root"),
-            daemon_root.join_component("flush").as_path().to_owned(),
+            &base.repo_root,
+            &daemon_root.join_component("flush"),
         )?);
 
         let (send_shutdown, recv_shutdown) = tokio::sync::oneshot::channel::<()>();
@@ -98,6 +104,7 @@ impl DaemonServer<notify::RecommendedWatcher> {
             shutdown_rx: Some(recv_shutdown),
 
             running: Arc::new(AtomicBool::new(true)),
+            times_saved: Arc::new(StdMutux::new(HashMap::new())),
         })
     }
 }
@@ -174,6 +181,8 @@ impl<T: Watcher + Send + 'static> DaemonServer<T> {
                 Err(e) => return CloseReason::SocketOpenError(e),
             };
 
+            trace!("acquired connection stream for socket");
+
             let service = ServiceBuilder::new()
                 .layer(BumpTimeoutLayer::new(self.timeout.clone()))
                 .service(crate::daemon::proto::turbod_server::TurbodServer::new(self));
@@ -218,8 +227,13 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         &self,
         request: tonic::Request<proto::HelloRequest>,
     ) -> Result<tonic::Response<proto::HelloResponse>, tonic::Status> {
-        if request.into_inner().version != get_version() {
-            return Err(tonic::Status::unimplemented("version mismatch"));
+        let client_version = request.into_inner().version;
+        let server_version = get_version();
+        if client_version != server_version {
+            return Err(tonic::Status::failed_precondition(format!(
+                "version mismatch. Client {} Server {}",
+                client_version, server_version
+            )));
         } else {
             Ok(tonic::Response::new(proto::HelloResponse {}))
         }
@@ -244,7 +258,7 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         Ok(tonic::Response::new(proto::StatusResponse {
             daemon_status: Some(proto::DaemonStatus {
                 uptime_msec: self.start_time.elapsed().as_millis() as u64,
-                log_file: self.log_file.to_str().unwrap().to_string(),
+                log_file: self.log_file.to_string(),
             }),
         }))
     }
@@ -255,6 +269,10 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
     ) -> Result<tonic::Response<proto::NotifyOutputsWrittenResponse>, tonic::Status> {
         let inner = request.into_inner();
 
+        {
+            let mut times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            times_saved.insert(inner.hash.clone(), inner.time_saved);
+        }
         match self
             .watcher
             .watch_globs(
@@ -277,17 +295,21 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         request: tonic::Request<proto::GetChangedOutputsRequest>,
     ) -> Result<tonic::Response<proto::GetChangedOutputsResponse>, tonic::Status> {
         let inner = request.into_inner();
+        let hash = Arc::new(inner.hash);
         let changed = self
             .watcher
-            .changed_globs(
-                &Arc::new(inner.hash),
-                HashSet::from_iter(inner.output_globs),
-            )
+            .changed_globs(&hash, HashSet::from_iter(inner.output_globs))
             .await;
+
+        let time_saved = {
+            let times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            times_saved.get(hash.as_str()).copied().unwrap_or_default()
+        };
 
         match changed {
             Ok(changed) => Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
                 changed_output_globs: changed.into_iter().collect(),
+                time_saved,
             })),
             Err(e) => {
                 error!("flush directory operation failed: {:?}", e);
@@ -310,9 +332,10 @@ mod test {
 
     use tokio::select;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_ui::UI;
 
     use super::DaemonServer;
-    use crate::{commands::CommandBase, ui::UI, Args};
+    use crate::{commands::CommandBase, Args};
 
     // the windows runner starts a new thread to accept uds requests,
     // so we need a multi-threaded runtime
@@ -320,7 +343,7 @@ mod test {
     #[tracing_test::traced_test]
     async fn lifecycle() {
         let tempdir = tempfile::tempdir().unwrap();
-        let path = AbsoluteSystemPathBuf::new(tempdir.path()).unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
 
         tracing::info!("start");
 
@@ -363,7 +386,7 @@ mod test {
     #[tracing_test::traced_test]
     async fn timeout() {
         let tempdir = tempfile::tempdir().unwrap();
-        let path = AbsoluteSystemPathBuf::new(tempdir.path()).unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
 
         let daemon = DaemonServer::new(
             &CommandBase::new(

@@ -56,6 +56,8 @@ runs:
       shell: bash
       run: echo "::add-matcher::${{ github.action_path }}/matchers.json"
 
+    - uses: rui314/setup-mold@v1
+
     - name: "Setup Rust Cache"
       uses: Swatinem/rust-cache@v2
       with:
@@ -65,9 +67,9 @@ runs:
         save-if: ${{ github.ref == 'refs/heads/main' && inputs.save-cache || 'false' }}
 
     - name: "Install cargo-sweep"
-      uses: baptiste0928/cargo-install@v1
+      uses: taiki-e/install-action@v2
       with:
-        crate: cargo-sweep
+        tool: cargo-sweep,cargo-groups
 
     - name: "Run cargo-sweep"
       uses: ./.github/actions/cargo-sweep

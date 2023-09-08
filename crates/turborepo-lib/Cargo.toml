@@ -7,7 +7,7 @@ license = "MPL-2.0"
 [features]
 # Allows configuring a specific tls backend for reqwest.
 # See top level Cargo.toml for more details.
-default = ["rustls-tls"]
+default = ["rustls-tls", "go-daemon"]
 native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
 rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
 run-stub = []
@@ -27,10 +27,10 @@ pretty_assertions = { workspace = true }
 rand = { workspace = true }
 tempdir = "0.3.7"
 tempfile = { workspace = true }
-test-case = "3.0.0"
+test-case = { workspace = true }
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 tracing.workspace = true
-vercel-api-mock = { workspace = true }
+turborepo-vercel-api-mock = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
@@ -43,32 +43,33 @@ clap_complete = { workspace = true }
 command-group = { version = "2.1.0", features = ["with-tokio"] }
 config = "0.13"
 console = { workspace = true }
-ctrlc = { version = "3.2.5", features = ["termination"] }
+ctrlc = { version = "3.4.0", features = ["termination"] }
 dialoguer = { workspace = true, features = ["fuzzy-select"] }
 directories = "4.0.1"
 dirs-next = "2.0.0"
 dunce = { workspace = true }
 futures = "0.3.26"
-glob-match = "0.2.1"
 globwatch = { path = "../turborepo-globwatch" }
 hex = "0.4.3"
 hostname = "0.3.1"
 humantime = "2.1.0"
 indicatif = { workspace = true }
 itertools = { workspace = true }
+json_comments = "0.2.1"
+jsonc-parser = { version = "0.21.0" }
 lazy_static = { workspace = true }
 libc = "0.2.140"
 notify = "5.1"
 petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
 prost = "0.11.6"
-reqwest = { workspace = true, default_features = false, features = ["json"] }
+reqwest = { workspace = true, default-features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
-sha2 = "0.10.6"
+sha2 = { workspace = true }
 shared_child = "1.0.0"
 sysinfo = "0.27.7"
 thiserror = "1.0.38"
@@ -80,12 +81,18 @@ tokio-util = { version = "0.7.7", features = ["compat"] }
 tonic = { version = "0.8.3", features = ["transport"] }
 tonic-reflection = { version = "0.6.0", optional = true }
 tower = "0.4.13"
+turborepo-fs = { path = "../turborepo-fs" }
+turborepo-vercel-api = { path = "../turborepo-vercel-api" }
 uds_windows = "1.0.2"
 url = "2.3.1"
 
+camino = "1.1.4"
+capnp = "0.17.2"
 const_format = "0.2.30"
+globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 go-parse-duration = "0.1.1"
 is-terminal = "0.4.7"
+lazy-regex = "2.5.0"
 node-semver = "2.1.0"
 num_cpus = "1.15.0"
 owo-colors.workspace = true
@@ -97,6 +104,15 @@ tracing.workspace = true
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }
 turborepo-api-client = { workspace = true }
+turborepo-cache = { workspace = true }
+turborepo-ci = { workspace = true }
+turborepo-env = { workspace = true }
+turborepo-filewatch = { path = "../turborepo-filewatch" }
+turborepo-lockfiles = { workspace = true }
+turborepo-scm = { workspace = true }
+turborepo-ui = { workspace = true }
+twox-hash = "1.6.3"
+wax = { workspace = true }
 webbrowser = { workspace = true }
 which = { workspace = true }
 
@@ -106,4 +122,5 @@ uds_windows = "1.0.2"
 async-io = "1.12.0"
 
 [build-dependencies]
+capnpc = "0.17.2"
 tonic-build = "0.8.4"

@@ -3,13 +3,13 @@ package run
 import (
 	gocontext "context"
 	"fmt"
-	"os"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/vercel/turbo/cli/internal/analytics"
 	"github.com/vercel/turbo/cli/internal/cache"
+	"github.com/vercel/turbo/cli/internal/ci"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/context"
 	"github.com/vercel/turbo/cli/internal/core"
@@ -34,10 +34,10 @@ import (
 // ExecuteRun executes the run command
 func ExecuteRun(ctx gocontext.Context, helper *cmdutil.Helper, signalWatcher *signals.Watcher, executionState *turbostate.ExecutionState) error {
 	base, err := helper.GetCmdBase(executionState)
-	LogTag(base.Logger)
 	if err != nil {
 		return err
 	}
+	LogTag(base.Logger)
 	tasks := executionState.CLIArgs.Command.Run.Tasks
 	passThroughArgs := executionState.CLIArgs.Command.Run.PassThroughArgs
 	opts, err := optsFromArgs(&executionState.CLIArgs)
@@ -93,12 +93,14 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 		}
 		opts.runOpts.Concurrency = concurrency
 	}
+
 	opts.runOpts.Parallel = runPayload.Parallel
 	opts.runOpts.Profile = runPayload.Profile
 	opts.runOpts.ContinueOnError = runPayload.ContinueExecution
 	opts.runOpts.Only = runPayload.Only
 	opts.runOpts.NoDaemon = runPayload.NoDaemon
 	opts.runOpts.SinglePackage = args.Command.Run.SinglePackage
+	opts.runOpts.LogOrder = args.Command.Run.LogOrder
 
 	// See comment on Graph in turbostate.go for an explanation on Graph's representation.
 	// If flag is passed...
@@ -127,8 +129,10 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 }
 
 func configureRun(base *cmdutil.CmdBase, opts *Opts, signalWatcher *signals.Watcher) *run {
-	if os.Getenv("TURBO_REMOTE_ONLY") == "true" {
-		opts.cacheOpts.SkipFilesystem = true
+	if opts.runOpts.LogOrder == "auto" && ci.Constant() == "GITHUB_ACTIONS" {
+		opts.runOpts.LogOrder = "grouped"
+		opts.runOpts.LogPrefix = "none"
+		opts.runOpts.IsGithubActions = true
 	}
 
 	processes := process.NewManager(base.Logger.Named("processes"))
@@ -360,11 +364,11 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	// the tasks that we expect to run based on the user command.
 	summary := runsummary.NewRunSummary(
 		startAt,
-		r.base.UI,
 		r.base.RepoRoot,
 		rs.Opts.scopeOpts.PackageInferenceRoot,
 		r.base.TurboVersion,
 		r.base.APIClient,
+		r.base.SpacesAPIClient,
 		rs.Opts.runOpts,
 		packagesInScope,
 		globalEnvMode,
@@ -391,7 +395,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 			engine,
 			taskHashTracker,
 			turboCache,
-			turboJSON,
 			globalEnvMode,
 			globalHashInputs.resolvedEnvVars.All,
 			resolvedPassThroughEnvVars,
@@ -408,7 +411,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		engine,
 		taskHashTracker,
 		turboCache,
-		turboJSON,
 		globalEnvMode,
 		globalHashInputs.resolvedEnvVars.All,
 		resolvedPassThroughEnvVars,
@@ -424,12 +426,20 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
 	apiClient := r.base.APIClient
 	var analyticsSink analytics.Sink
+
 	if apiClient.IsLinked() {
 		analyticsSink = apiClient
 	} else {
 		r.opts.cacheOpts.SkipRemote = true
 		analyticsSink = analytics.NullSink
 	}
+
+	// After we know if its _possible_ to enable remote cache, check the config
+	// and dsiable it if wanted.
+	if !r.opts.cacheOpts.RemoteCacheOpts.Enabled {
+		r.opts.cacheOpts.SkipRemote = true
+	}
+
 	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.base.Logger.Named("analytics"))
 	return analyticsClient
 }
@@ -474,9 +484,13 @@ func buildTaskGraphEngine(
 		return nil, fmt.Errorf("Invalid task dependency graph:\n%v", err)
 	}
 
-	// Check that no tasks would be blocked by a persistent task
-	if err := engine.ValidatePersistentDependencies(g, rs.Opts.runOpts.Concurrency); err != nil {
-		return nil, fmt.Errorf("Invalid persistent task configuration:\n%v", err)
+	// Check that no tasks would be blocked by a persistent task. Note that the
+	// parallel flag ignores both concurrency and dependencies, so in that scenario
+	// we don't need to validate.
+	if !rs.Opts.runOpts.Parallel {
+		if err := engine.ValidatePersistentDependencies(g, rs.Opts.runOpts.Concurrency); err != nil {
+			return nil, fmt.Errorf("Invalid persistent task configuration:\n%v", err)
+		}
 	}
 
 	return engine, nil

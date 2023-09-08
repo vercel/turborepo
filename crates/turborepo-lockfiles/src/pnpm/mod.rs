@@ -5,6 +5,8 @@ mod ser;
 
 pub use data::{pnpm_global_change, PnpmLockfile};
 
+use crate::Lockfile;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("error parsing dependency path: {0}")]
@@ -38,6 +40,6 @@ pub fn pnpm_subgraph(
 ) -> Result<Vec<u8>, crate::Error> {
     let lockfile = PnpmLockfile::from_bytes(contents)?;
     let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
-    let new_contents = serde_yaml::to_string(&pruned_lockfile)?.into_bytes();
+    let new_contents = pruned_lockfile.encode()?;
     Ok(new_contents)
 }

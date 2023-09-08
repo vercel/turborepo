@@ -19,22 +19,33 @@ export const turboLoader = (text: string) =>
     },
   });
 
-export const info = (...args: any[]) => {
-  console.log(turboBlue.bold(">>>"), ...args);
+export const info = (...args: Array<unknown>) => {
+  log(turboBlue.bold(">>>"), ...args);
 };
 
-export const error = (...args: any[]) => {
-  console.error(turboRed.bold(">>>"), ...args);
+export const bold = (...args: Array<string>) => {
+  log(chalk.bold(...args));
 };
 
-export const warn = (...args: any[]) => {
+export const dimmed = (...args: Array<string>) => {
+  log(chalk.dim(...args));
+};
+
+export const item = (...args: Array<unknown>) => {
+  log(turboBlue.bold("  •"), ...args);
+};
+
+export const log = (...args: Array<unknown>) => {
+  // eslint-disable-next-line no-console -- logger
+  console.log(...args);
+};
+
+export const warn = (...args: Array<unknown>) => {
+  // eslint-disable-next-line no-console -- warn logger
   console.error(yellow.bold(">>>"), ...args);
 };
 
-export const dimmed = (...args: any[]) => {
-  console.log(chalk.dim(...args));
-};
-
-export const item = (...args: any[]) => {
-  console.log(turboBlue.bold("  •"), ...args);
+export const error = (...args: Array<unknown>) => {
+  // eslint-disable-next-line no-console -- error logger
+  console.error(turboRed.bold(">>>"), ...args);
 };

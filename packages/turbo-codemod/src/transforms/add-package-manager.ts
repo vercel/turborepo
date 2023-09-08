@@ -1,10 +1,9 @@
-import path from "path";
-import fs from "fs-extra";
-
-import getPackageManager from "../utils/getPackageManager";
-import getPackageManagerVersion from "../utils/getPackageManagerVersion";
-import getTransformerHelpers from "../utils/getTransformerHelpers";
-import { TransformerResults } from "../runner";
+import path from "node:path";
+import { readJsonSync } from "fs-extra";
+import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
+import { type PackageJson, getAvailablePackageManagers } from "@turbo/utils";
+import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import type { TransformerResults } from "../runner";
 import type { TransformerArgs } from "../types";
 
 // transformer details
@@ -12,10 +11,10 @@ const TRANSFORMER = "add-package-manager";
 const DESCRIPTION = "Set the `packageManager` key in root `package.json` file";
 const INTRODUCED_IN = "1.1.0";
 
-export function transformer({
+export async function transformer({
   root,
   options,
-}: TransformerArgs): TransformerResults {
+}: TransformerArgs): Promise<TransformerResults> {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
@@ -23,25 +22,27 @@ export function transformer({
   });
 
   log.info(`Set "packageManager" key in root "package.json" file...`);
-  const packageManager = getPackageManager({ directory: root });
-  if (!packageManager) {
+  let project: Project;
+  try {
+    project = await getWorkspaceDetails({ root });
+  } catch (e) {
     return runner.abortTransform({
       reason: `Unable to determine package manager for ${root}`,
     });
   }
 
-  // handle workspaces...
-  let version = null;
-  try {
-    version = getPackageManagerVersion(packageManager, root);
-  } catch (err) {
+  const availablePackageManagers = await getAvailablePackageManagers();
+  const { packageManager } = project;
+  const version = availablePackageManagers[packageManager];
+  if (!version) {
     return runner.abortTransform({
       reason: `Unable to determine package manager version for ${root}`,
     });
   }
+
   const pkgManagerString = `${packageManager}@${version}`;
   const rootPackageJsonPath = path.join(root, "package.json");
-  const rootPackageJson = fs.readJsonSync(rootPackageJsonPath);
+  const rootPackageJson = readJsonSync(rootPackageJsonPath) as PackageJson;
   const allWorkspaces = [
     {
       name: "package.json",
@@ -66,10 +67,11 @@ export function transformer({
 }
 
 const transformerMeta = {
-  name: `${TRANSFORMER}: ${DESCRIPTION}`,
-  value: TRANSFORMER,
+  name: TRANSFORMER,
+  description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
   transformer,
 };
 
+// eslint-disable-next-line import/no-default-export -- transforms require default export
 export default transformerMeta;

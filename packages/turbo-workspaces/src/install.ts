@@ -3,9 +3,9 @@ import ora from "ora";
 import { satisfies } from "semver";
 import { ConvertError } from "./errors";
 import { Logger } from "./logger";
-import {
+import type {
   PackageManager,
-  PackageManagerDetails,
+  RequestedPackageManagerDetails,
   PackageManagerInstallDetails,
   InstallArgs,
 } from "./types";
@@ -70,20 +70,21 @@ export const PACKAGE_MANAGERS: Record<
   ],
 };
 
-export function getPackageManagerMeta(packageManager: PackageManagerDetails) {
+export function getPackageManagerMeta(
+  packageManager: RequestedPackageManagerDetails
+) {
   const { version, name } = packageManager;
   if (version) {
     return PACKAGE_MANAGERS[name].find((manager) =>
       satisfies(version, manager.semver)
     );
-  } else {
-    return PACKAGE_MANAGERS[name].find((manager) => {
-      return manager.default;
-    });
   }
+  return PACKAGE_MANAGERS[name].find((manager) => {
+    return manager.default;
+  });
 }
 
-export default async function install(args: InstallArgs) {
+export async function install(args: InstallArgs) {
   const { to, logger, options } = args;
 
   const installLogger = logger ?? new Logger(options);
@@ -96,11 +97,13 @@ export default async function install(args: InstallArgs) {
   }
 
   installLogger.subStep(
-    `running "${packageManager.command} ${packageManager.installArgs}"`
+    `running "${packageManager.command} ${packageManager.installArgs.join(
+      " "
+    )}"`
   );
   if (!options?.dry) {
     let spinner;
-    if (installLogger?.interactive) {
+    if (installLogger.interactive) {
       spinner = ora({
         text: "installing dependencies...",
         spinner: {

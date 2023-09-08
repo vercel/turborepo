@@ -1,13 +1,13 @@
-import getCodemodsForMigration from "../src/commands/migrate/steps/getTransformsForMigration";
+import { getTransformsForMigration } from "../src/commands/migrate/steps/getTransformsForMigration";
 
 describe("get-transforms-for-migration", () => {
   test("ordering", () => {
-    let results = getCodemodsForMigration({
+    const results = getTransformsForMigration({
       fromVersion: "1.0.0",
       toVersion: "1.10.0",
     });
 
-    expect(results.map((transform) => transform.value)).toEqual([
+    expect(results.map((transform) => transform.name)).toEqual([
       "add-package-manager",
       "create-turbo-config",
       "migrate-env-var-dependencies",

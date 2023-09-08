@@ -16,4 +16,10 @@ pub enum Error {
     UnsupportedNpmVersion,
     #[error(transparent)]
     Pnpm(#[from] crate::pnpm::Error),
+    #[error(transparent)]
+    Yarn1(#[from] crate::yarn1::Error),
+    #[error(transparent)]
+    Berry(#[from] crate::berry::Error),
+    #[error("lockfile contains invalid path: {0}")]
+    Path(#[from] turbopath::PathError),
 }

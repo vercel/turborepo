@@ -1,37 +1,41 @@
-import fs from "fs-extra";
-import path from "path";
-import inquirer from "inquirer";
+import path from "node:path";
+import { readJsonSync } from "fs-extra";
+import { prompt, Separator } from "inquirer";
 import { minimatch } from "minimatch";
 import validName from "validate-npm-package-name";
 import type { Project, Workspace } from "@turbo/workspaces";
-import { validateDirectory, logger } from "@turbo/utils";
+import {
+  validateDirectory,
+  logger,
+  type DependencyGroups,
+  type PackageJson,
+} from "@turbo/utils";
 import { getWorkspaceStructure } from "../../utils/getWorkspaceStructure";
 import type { WorkspaceType } from "../../generators/types";
 import { getWorkspaceList } from "../../utils/getWorkspaceList";
-import type { DependencyGroups, PackageJson } from "../../types";
 
 export async function name({
   override,
   suggestion,
-  type,
+  workspaceType,
 }: {
   override?: string;
   suggestion?: string;
-  type: WorkspaceType;
+  workspaceType: WorkspaceType;
 }): Promise<{ answer: string }> {
   const { validForNewPackages } = validName(override || "");
   if (override && validForNewPackages) {
     return { answer: override };
   }
-  return inquirer.prompt<{ answer: string }>({
+  return prompt<{ answer: string }>({
     type: "input",
     name: "answer",
     default: suggestion,
     validate: (input: string) => {
-      const { validForNewPackages } = validName(input);
-      return validForNewPackages || `Invalid ${type} name`;
+      const { validForNewPackages: isValid } = validName(input);
+      return isValid || `Invalid ${workspaceType} name`;
     },
-    message: `What is the name of the ${type}?`,
+    message: `What is the name of the ${workspaceType}?`,
   });
 }
 
@@ -46,7 +50,7 @@ export async function type({
     return { answer: override };
   }
 
-  return inquirer.prompt<{ answer: WorkspaceType }>({
+  return prompt<{ answer: WorkspaceType }>({
     type: "list",
     name: "answer",
     message: message ?? `What type of workspace should be added?`,
@@ -64,18 +68,20 @@ export async function type({
 }
 
 export async function location({
-  type,
-  name,
+  workspaceType,
+  workspaceName,
   destination,
   project,
 }: {
-  type: "app" | "package";
-  name: string;
+  workspaceType: WorkspaceType;
+  workspaceName: string;
   destination?: string;
   project: Project;
 }): Promise<{ absolute: string; relative: string }> {
   // handle names with scopes
-  const nameAsPath = name.includes("/") ? name.split("/")[1] : name;
+  const nameAsPath = workspaceName.includes("/")
+    ? workspaceName.split("/")[1]
+    : workspaceName;
 
   // handle destination option (NOTE: this intentionally allows adding packages to non workspace directories)
   if (destination) {
@@ -89,21 +95,24 @@ export async function location({
   }
 
   // build default name based on what is being added
-  let newWorkspaceLocation: string | undefined = undefined;
+  let newWorkspaceLocation: string | undefined;
   const workspaceStructure = getWorkspaceStructure({ project });
 
-  if (type === "app" && workspaceStructure.hasRootApps) {
+  if (workspaceType === "app" && workspaceStructure.hasRootApps) {
     newWorkspaceLocation = `${project.paths.root}/apps/${nameAsPath}`;
-  } else if (type === "package" && workspaceStructure.hasRootPackages) {
+  } else if (
+    workspaceType === "package" &&
+    workspaceStructure.hasRootPackages
+  ) {
     newWorkspaceLocation = `${project.paths.root}/packages/${nameAsPath}`;
   }
 
-  const { answer } = await inquirer.prompt<{
+  const { answer } = await prompt<{
     answer: string;
   }>({
     type: "input",
     name: "answer",
-    message: `Where should "${name}" be added?`,
+    message: `Where should "${workspaceName}" be added?`,
     default: newWorkspaceLocation
       ? path.relative(project.paths.root, newWorkspaceLocation)
       : undefined,
@@ -135,36 +144,36 @@ export async function location({
 export async function source({
   override,
   workspaces,
-  name,
+  workspaceName,
 }: {
   override?: string;
-  workspaces: Array<Workspace | inquirer.Separator>;
-  name: string;
+  workspaces: Array<Workspace | Separator>;
+  workspaceName: string;
 }) {
   if (override) {
-    const source = workspaces.find((workspace) => {
-      if (workspace instanceof inquirer.Separator) {
+    const workspaceSource = workspaces.find((workspace) => {
+      if (workspace instanceof Separator) {
         return false;
       }
       return workspace.name === override;
     }) as Workspace | undefined;
-    if (source) {
-      return { answer: source };
+    if (workspaceSource) {
+      return { answer: workspaceSource };
     }
     logger.warn(`Workspace "${override}" not found`);
-    console.log();
+    logger.log();
   }
 
-  const sourceAnswer = await inquirer.prompt<{
+  const sourceAnswer = await prompt<{
     answer: Workspace;
   }>({
     type: "list",
     name: "answer",
     loop: false,
     pageSize: 25,
-    message: `Which workspace should "${name}" start from?`,
+    message: `Which workspace should "${workspaceName}" start from?`,
     choices: workspaces.map((choice) => {
-      if (choice instanceof inquirer.Separator) {
+      if (choice instanceof Separator) {
         return choice;
       }
       return {
@@ -178,14 +187,14 @@ export async function source({
 }
 
 export async function dependencies({
-  name,
+  workspaceName,
   project,
-  source,
+  workspaceSource,
   showAllDependencies,
 }: {
-  name: string;
+  workspaceName: string;
   project: Project;
-  source?: Workspace;
+  workspaceSource?: Workspace;
   showAllDependencies?: boolean;
 }) {
   const selectedDependencies: DependencyGroups = {
@@ -195,18 +204,18 @@ export async function dependencies({
     optionalDependencies: {},
   };
   const { answer: addDependencies } = await confirm({
-    message: `Add workspace dependencies to "${name}"?`,
+    message: `Add workspace dependencies to "${workspaceName}"?`,
   });
   if (!addDependencies) {
     return selectedDependencies;
   }
 
-  const { answer: dependencyGroups } = await inquirer.prompt<{
+  const { answer: dependencyGroups } = await prompt<{
     answer: Array<keyof DependencyGroups>;
   }>({
     type: "checkbox",
     name: "answer",
-    message: `Select all dependencies types to modify for "${name}"`,
+    message: `Select all dependencies types to modify for "${workspaceName}"`,
     loop: false,
     choices: [
       { name: "dependencies", value: "dependencies" },
@@ -217,29 +226,29 @@ export async function dependencies({
   });
 
   // supported workspace dependencies (apps can never be dependencies)
-  let depChoices = getWorkspaceList({
+  const depChoices = getWorkspaceList({
     project,
     type: "package",
     showAllDependencies,
   });
 
-  const sourcePackageJson = source
-    ? (fs.readJsonSync(source.paths.packageJson) as PackageJson)
+  const sourcePackageJson = workspaceSource
+    ? (readJsonSync(workspaceSource.paths.packageJson) as PackageJson)
     : undefined;
 
-  for (let group of dependencyGroups) {
-    const { answer: selected } = await inquirer.prompt<{
+  for (const group of dependencyGroups) {
+    // eslint-disable-next-line no-await-in-loop -- we want to ask this question group by group
+    const { answer: selected } = await prompt<{
       answer: Array<string>;
     }>({
       type: "checkbox",
       name: "answer",
-      default:
-        sourcePackageJson && Object.keys(sourcePackageJson?.[group] || {}),
+      default: sourcePackageJson && Object.keys(sourcePackageJson[group] || {}),
       pageSize: 15,
-      message: `Which packages should be added as ${group} to "${name}?`,
+      message: `Which packages should be added as ${group} to "${workspaceName}?`,
       loop: false,
       choices: depChoices.map((choice) => {
-        if (choice instanceof inquirer.Separator) {
+        if (choice instanceof Separator) {
           return choice;
         }
         return {
@@ -276,7 +285,7 @@ export async function dependencies({
 }
 
 export async function confirm({ message }: { message: string }) {
-  return await inquirer.prompt<{ answer: boolean }>({
+  return prompt<{ answer: boolean }>({
     type: "confirm",
     name: "answer",
     message,

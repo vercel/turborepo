@@ -15,7 +15,7 @@ bench_against_node_nft = []
 
 [dependencies]
 anyhow = { workspace = true }
-async-recursion = "1.0.2"
+async-recursion = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 lazy_static = { workspace = true }
@@ -37,6 +37,7 @@ turbopack-json = { workspace = true }
 turbopack-mdx = { workspace = true }
 turbopack-node = { workspace = true }
 turbopack-static = { workspace = true }
+turbopack-wasm = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio"] }

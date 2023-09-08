@@ -9,7 +9,9 @@ use regex::Regex;
 use turbopack_bench::{
     bundlers::{Bundler, RenderType},
     util::{
-        npm::{self, NpmPackage},
+        npm::{
+            NpmPackage, {self},
+        },
         wait_for_match,
     },
 };
@@ -55,9 +57,11 @@ impl Bundler for Turbopack {
         let mut proc = Command::new(binary)
             .args([
                 "dev",
+                "--dir",
                 test_dir
                     .to_str()
                     .ok_or_else(|| anyhow!("failed to convert test directory path to string"))?,
+                "src/index",
                 "--no-open",
                 "--port",
                 "0",

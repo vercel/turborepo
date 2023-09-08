@@ -1,9 +1,9 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use swc_core::ecma::ast::Program;
-use turbo_tasks::primitives::StringVc;
-use turbo_tasks_fs::FileSystemPathVc;
-use turbopack_core::issue::{Issue, IssueSeverity, IssueSeverityVc, IssueVc};
+use turbo_tasks::Vc;
+use turbo_tasks_fs::FileSystemPath;
+use turbopack_core::issue::{Issue, IssueSeverity};
 use turbopack_ecmascript::{CustomTransformer, TransformContext};
 
 /// A wrapper around an SWC's ecma transform wasm plugin module bytes, allowing
@@ -30,9 +30,9 @@ pub struct SwcPluginModule(
 
 impl SwcPluginModule {
     pub fn new(plugin_name: &str, plugin_bytes: Vec<u8>) -> Self {
-        Self {
-            #[cfg(feature = "swc_ecma_transform_plugin")]
-            0: {
+        #[cfg(feature = "swc_ecma_transform_plugin")]
+        {
+            Self({
                 use swc_core::plugin_runner::plugin_module_bytes::{
                     CompiledPluginModuleBytes, RawPluginModuleBytes,
                 };
@@ -40,45 +40,50 @@ impl SwcPluginModule {
                     plugin_name.to_string(),
                     plugin_bytes,
                 ))
-            },
-            #[cfg(not(feature = "swc_ecma_transform_plugin"))]
-            0: (),
+            })
+        }
+
+        #[cfg(not(feature = "swc_ecma_transform_plugin"))]
+        {
+            let _ = plugin_name;
+            let _ = plugin_bytes;
+            Self(())
         }
     }
 }
 
 #[turbo_tasks::value(shared)]
 struct UnsupportedSwcEcmaTransformPluginsIssue {
-    pub context: FileSystemPathVc,
+    pub file_path: Vc<FileSystemPath>,
 }
 
 #[turbo_tasks::value_impl]
 impl Issue for UnsupportedSwcEcmaTransformPluginsIssue {
     #[turbo_tasks::function]
-    fn severity(&self) -> IssueSeverityVc {
+    fn severity(&self) -> Vc<IssueSeverity> {
         IssueSeverity::Warning.into()
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> StringVc {
-        StringVc::cell("transform".to_string())
+    fn category(&self) -> Vc<String> {
+        Vc::cell("transform".to_string())
     }
 
     #[turbo_tasks::function]
-    async fn title(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
-            "Unsupported SWC EcmaScript transform plugins on this platform."
-        )))
+    async fn title(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(
+            "Unsupported SWC EcmaScript transform plugins on this platform.".to_string(),
+        ))
     }
 
     #[turbo_tasks::function]
-    fn context(&self) -> FileSystemPathVc {
-        self.context
+    fn file_path(&self) -> Vc<FileSystemPath> {
+        self.file_path
     }
 
     #[turbo_tasks::function]
-    fn description(&self) -> StringVc {
-        StringVc::cell(
+    fn description(&self) -> Vc<String> {
+        Vc::cell(
             "Turbopack does not yet support running SWC EcmaScript transform plugins on this \
              platform."
                 .to_string(),
@@ -90,18 +95,19 @@ impl Issue for UnsupportedSwcEcmaTransformPluginsIssue {
 #[derive(Debug)]
 pub struct SwcEcmaTransformPluginsTransformer {
     #[cfg(feature = "swc_ecma_transform_plugin")]
-    plugins: Vec<(SwcPluginModuleVc, serde_json::Value)>,
+    plugins: Vec<(Vc<SwcPluginModule>, serde_json::Value)>,
 }
 
 impl SwcEcmaTransformPluginsTransformer {
     #[cfg(feature = "swc_ecma_transform_plugin")]
-    pub fn new(plugins: Vec<(SwcPluginModuleVc, serde_json::Value)>) -> Self {
+    pub fn new(plugins: Vec<(Vc<SwcPluginModule>, serde_json::Value)>) -> Self {
         Self { plugins }
     }
 
     // [TODO] Due to WEB-1102 putting this module itself behind compile time feature
     // doesn't work. Instead allow to instantiate dummy instance.
     #[cfg(not(feature = "swc_ecma_transform_plugin"))]
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {}
     }
@@ -151,13 +157,13 @@ impl CustomTransformer for SwcEcmaTransformPluginsTransformer {
                 let mut leading =
                     swc_core::common::comments::SingleThreadedCommentsMapInner::default();
                 ctx.comments.leading.as_ref().into_iter().for_each(|c| {
-                    leading.insert(c.key().clone(), c.value().clone());
+                    leading.insert(*c.key(), c.value().clone());
                 });
 
                 let mut trailing =
                     swc_core::common::comments::SingleThreadedCommentsMapInner::default();
                 ctx.comments.trailing.as_ref().into_iter().for_each(|c| {
-                    trailing.insert(c.key().clone(), c.value().clone());
+                    trailing.insert(*c.key(), c.value().clone());
                 });
 
                 Some(SingleThreadedComments::from_leading_and_trailing(
@@ -193,13 +199,16 @@ impl CustomTransformer for SwcEcmaTransformPluginsTransformer {
                     // still have to construct from raw bytes internally to perform actual
                     // transform.
                     for (_plugin_name, plugin_config, plugin_module) in plugins.drain(..) {
+                        let runtime =
+                            swc_core::plugin_runner::wasix_runtime::build_wasi_runtime(None);
                         let mut transform_plugin_executor =
                             swc_core::plugin_runner::create_plugin_transform_executor(
-                                &ctx.source_map,
+                                ctx.source_map,
                                 &ctx.unresolved_mark,
                                 &transform_metadata_context,
                                 plugin_module,
                                 Some(plugin_config),
+                                runtime,
                             );
 
                         serialized_program = transform_plugin_executor
@@ -214,12 +223,13 @@ impl CustomTransformer for SwcEcmaTransformPluginsTransformer {
 
         #[cfg(not(feature = "swc_ecma_transform_plugin"))]
         {
-            let issue: UnsupportedSwcEcmaTransformPluginsIssueVc =
-                UnsupportedSwcEcmaTransformPluginsIssue {
-                    context: ctx.file_path,
-                }
-                .into();
-            issue.as_issue().emit();
+            use turbopack_core::issue::IssueExt;
+
+            UnsupportedSwcEcmaTransformPluginsIssue {
+                file_path: ctx.file_path,
+            }
+            .cell()
+            .emit();
         }
 
         Ok(())

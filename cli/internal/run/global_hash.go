@@ -35,34 +35,20 @@ type GlobalHashableInputs struct {
 	dotEnv               turbopath.AnchoredUnixPathArray
 }
 
-type globalHashable struct {
-	globalCacheKey       string
-	globalFileHashMap    map[turbopath.AnchoredUnixPath]string
-	rootExternalDepsHash string
-	env                  []string
-	resolvedEnvVars      env.EnvironmentVariablePairs
-	passThroughEnv       []string
-	envMode              util.EnvMode
-	frameworkInference   bool
-
-	// NOTE! This field is _explicitly_ ordered and should not be sorted.
-	dotEnv turbopath.AnchoredUnixPathArray
-}
-
 // calculateGlobalHash is a transformation of GlobalHashableInputs.
 // It's used for the situations where we have an `EnvMode` specified
 // as that is not compatible with existing global hashes.
 func calculateGlobalHash(full GlobalHashableInputs) (string, error) {
-	return fs.HashObject(globalHashable{
-		globalCacheKey:       full.globalCacheKey,
-		globalFileHashMap:    full.globalFileHashMap,
-		rootExternalDepsHash: full.rootExternalDepsHash,
-		env:                  full.env,
-		resolvedEnvVars:      full.resolvedEnvVars.All.ToHashable(),
-		passThroughEnv:       full.passThroughEnv,
-		envMode:              full.envMode,
-		frameworkInference:   full.frameworkInference,
-		dotEnv:               full.dotEnv,
+	return fs.HashGlobal(fs.GlobalHashable{
+		GlobalCacheKey:       full.globalCacheKey,
+		GlobalFileHashMap:    full.globalFileHashMap,
+		RootExternalDepsHash: full.rootExternalDepsHash,
+		Env:                  full.env,
+		ResolvedEnvVars:      full.resolvedEnvVars.All.ToHashable(),
+		PassThroughEnv:       full.passThroughEnv,
+		EnvMode:              full.envMode,
+		FrameworkInference:   full.frameworkInference,
+		DotEnv:               full.dotEnv,
 	})
 }
 
@@ -107,39 +93,7 @@ func getGlobalHashInputs(
 	frameworkInference bool,
 	dotEnv turbopath.AnchoredUnixPathArray,
 ) (GlobalHashableInputs, error) {
-	// Calculate env var dependencies
-
-	// Our "inferred" env var maps
-	defaultEnvVarMap, err := envAtExecutionStart.FromWildcards(_defaultEnvVars)
-	if err != nil {
-		return GlobalHashableInputs{}, err
-	}
-	userEnvVarSet, err := envAtExecutionStart.FromWildcardsUnresolved(globalEnv)
-	if err != nil {
-		return GlobalHashableInputs{}, err
-	}
-
-	allEnvVarMap := env.EnvironmentVariableMap{}
-	allEnvVarMap.Union(userEnvVarSet.Inclusions)
-	allEnvVarMap.Union(defaultEnvVarMap)
-	allEnvVarMap.Difference(userEnvVarSet.Exclusions)
-
-	explicitEnvVarMap := env.EnvironmentVariableMap{}
-	explicitEnvVarMap.Union(userEnvVarSet.Inclusions)
-	explicitEnvVarMap.Difference(userEnvVarSet.Exclusions)
-
-	matchingEnvVarMap := env.EnvironmentVariableMap{}
-	matchingEnvVarMap.Union(defaultEnvVarMap)
-	matchingEnvVarMap.Difference(userEnvVarSet.Exclusions)
-
-	globalHashableEnvVars := env.DetailedMap{
-		All: allEnvVarMap,
-		BySource: env.BySource{
-			Explicit: explicitEnvVarMap,
-			Matching: matchingEnvVarMap,
-		},
-	}
-
+	globalHashableEnvVars, err := getGlobalHashableEnvVars(envAtExecutionStart, globalEnv)
 	if err != nil {
 		return GlobalHashableInputs{}, err
 	}

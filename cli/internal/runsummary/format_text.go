@@ -8,13 +8,13 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 // FormatAndPrintText prints a Run Summary to the Terminal UI
-func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog) error {
-	ui := rsm.ui
+func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog, ui cli.Ui) error {
 	summary := rsm.RunSummary
 
 	rsm.normalize() // normalize data
@@ -82,7 +82,7 @@ func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog) error {
 
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Command\t=\t%s\t${RESET}", task.Command))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs, ", ")))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFile))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFileRelativePath))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(task.Dependencies, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(task.Dependents, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inputs Files Considered\t=\t%d\t${RESET}", len(task.ExpandedInputs)))

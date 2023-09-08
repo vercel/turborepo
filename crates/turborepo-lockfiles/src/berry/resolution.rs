@@ -22,21 +22,24 @@ pub enum Error {
     UnexpectedEOI,
     #[error("unexpected token")]
     UnexpectedToken(Rule),
+    #[error("invalid identifier used as specifier: {0}")]
+    InvalidSpecifier(#[from] super::identifiers::Error),
 }
 
 /// A resolution that can appear in the resolutions field of the top level
 /// package.json
-#[derive(Debug, PartialEq, Clone, Copy, Eq, Default, PartialOrd, Ord, Hash)]
-pub struct Resolution<'a> {
-    from: Option<Specifier<'a>>,
-    descriptor: Specifier<'a>,
+#[derive(Debug, PartialEq, Clone, Eq, PartialOrd, Ord, Hash)]
+pub struct Resolution {
+    from: Option<Specifier>,
+    descriptor: Specifier,
 }
 
 // This is essentially an Ident with an optional semver range
-#[derive(Debug, PartialEq, Clone, Copy, Eq, Default, PartialOrd, Ord, Hash)]
-struct Specifier<'a> {
-    full_name: &'a str,
-    description: Option<&'a str>,
+#[derive(Debug, PartialEq, Clone, Eq, PartialOrd, Ord, Hash)]
+struct Specifier {
+    full_name: String,
+    description: Option<String>,
+    ident: Ident<'static>,
 }
 
 #[derive(Parser)]
@@ -82,17 +85,15 @@ fn parse_specifier(specifier: Pair<'_, Rule>) -> Result<Option<Specifier>, Error
             let mut parts = specifier.into_inner();
             let full_name = parts.next().ok_or(Error::UnexpectedEOI)?.as_str();
             let description = parts.next().map(|p| p.as_str());
-            Ok(Some(Specifier {
-                full_name,
-                description,
-            }))
+            let spec = Specifier::new(full_name, description)?;
+            Ok(Some(spec))
         }
         Rule::EOI => Ok(None),
         _ => Err(Error::UnexpectedToken(specifier.as_rule())),
     }
 }
 
-impl<'a> Resolution<'a> {
+impl Resolution {
     /// Returns a new descriptor if an override is applicable
     // reference: version that this resolution resolves to
     // locator: package that depends on the dependency
@@ -108,50 +109,30 @@ impl<'a> Resolution<'a> {
         if let Some(from) = &self.from {
             let from_ident = from.ident();
             // If the from doesn't match the locator we skip
-            if from_ident != locator.ident {
+            if from_ident != &locator.ident {
                 return None;
             }
 
-            let mut from_locator = Locator {
-                ident: from_ident,
-                reference: from
-                    .description
-                    .map_or_else(|| locator.reference.to_string(), |desc| desc.to_string())
-                    .into(),
-            };
-
-            // we now insert the default protocol if one isn't present
-            if Version::parse(&from_locator.reference).is_ok()
-                || tag_regex().is_match(&from_locator.reference)
-            {
-                let reference = from_locator.reference.to_mut();
-                reference.insert_str(0, "npm:");
-            }
-
-            // If the normalized from locator doesn't match the package we're currently
-            // processing, we skip
-            if &from_locator != locator {
-                return None;
+            // Since we have already checked the ident portion of the locator for equality
+            // we can avoid an allocation caused by constructing a locator by just checking
+            // the reference portion.
+            if let Some(desc) = &from.description {
+                if !Self::eq_with_protocol(&locator.reference, desc, "npm:") {
+                    return None;
+                }
             }
         }
 
         // Note: berry parses this as a locator even though it's an ident
         let resolution_ident = self.descriptor.ident();
-        if resolution_ident != dependency.ident {
+        if resolution_ident != &dependency.ident {
             return None;
         }
 
-        let resolution_descriptor = Descriptor {
-            ident: resolution_ident,
-            range: self
-                .descriptor
-                .description
-                .map_or_else(|| dependency.range.to_string(), |range| range.to_string())
-                .into(),
-        };
-
-        if &resolution_descriptor != dependency {
-            return None;
+        if let Some(resolution_range) = &self.descriptor.description {
+            if resolution_range != &dependency.range {
+                return None;
+            }
         }
 
         // We have a match an we now override the dependency
@@ -177,15 +158,50 @@ impl<'a> Resolution<'a> {
 
         Some(dependency_override)
     }
-}
 
-impl<'a> Specifier<'a> {
-    fn ident(&self) -> Ident<'a> {
-        Ident::try_from(self.full_name).expect("Invalid identifier in resolution")
+    // Checks if two references are equal with a default protocol
+    // Avoids any allocations
+    fn eq_with_protocol(
+        reference: &str,
+        incomplete_reference: &str,
+        default_protocol: &str,
+    ) -> bool {
+        match Version::parse(incomplete_reference).is_ok()
+            || tag_regex().is_match(incomplete_reference)
+        {
+            // We need to inject a protocol
+            true => {
+                if let Some(stripped_reference) = reference.strip_prefix(default_protocol) {
+                    stripped_reference == incomplete_reference
+                } else {
+                    // The reference doesn't use the default protocol so adding it to the incomplete
+                    // reference would result in the references being different
+                    false
+                }
+            }
+            // The protocol is already present
+            false => reference == incomplete_reference,
+        }
     }
 }
 
-impl fmt::Display for Resolution<'_> {
+impl Specifier {
+    pub fn new(full_name: &str, description: Option<&str>) -> Result<Specifier, Error> {
+        let ident = Ident::try_from(full_name)?.to_owned();
+
+        Ok(Specifier {
+            full_name: full_name.to_string(),
+            description: description.map(|s| s.to_string()),
+            ident,
+        })
+    }
+
+    pub fn ident(&self) -> &Ident<'static> {
+        &self.ident
+    }
+}
+
+impl fmt::Display for Resolution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(from) = &self.from {
             f.write_fmt(format_args!("{from}/"))?;
@@ -195,10 +211,10 @@ impl fmt::Display for Resolution<'_> {
     }
 }
 
-impl fmt::Display for Specifier<'_> {
+impl fmt::Display for Specifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.full_name)?;
-        if let Some(descriptor) = self.description {
+        f.write_str(&self.full_name)?;
+        if let Some(descriptor) = &self.description {
             f.write_fmt(format_args!("@{descriptor}"))?;
         }
         Ok(())
@@ -207,6 +223,8 @@ impl fmt::Display for Specifier<'_> {
 
 #[cfg(test)]
 mod test {
+    use test_case::test_case;
+
     use super::*;
 
     #[test]
@@ -247,10 +265,7 @@ mod test {
             parse_resolution("relay-compiler").unwrap(),
             Resolution {
                 from: None,
-                descriptor: Specifier {
-                    full_name: "relay-compiler",
-                    description: None
-                }
+                descriptor: Specifier::new("relay-compiler", None).unwrap()
             }
         )
     }
@@ -261,10 +276,7 @@ mod test {
             parse_resolution("@babel/core").unwrap(),
             Resolution {
                 from: None,
-                descriptor: Specifier {
-                    full_name: "@babel/core",
-                    description: None
-                }
+                descriptor: Specifier::new("@babel/core", None,).unwrap()
             }
         )
     }
@@ -274,28 +286,16 @@ mod test {
         assert_eq!(
             parse_resolution("webpack/memory-fs").unwrap(),
             Resolution {
-                from: Some(Specifier {
-                    full_name: "webpack",
-                    description: None
-                }),
-                descriptor: Specifier {
-                    full_name: "memory-fs",
-                    description: None
-                }
+                from: Some(Specifier::new("webpack", None).unwrap()),
+                descriptor: Specifier::new("memory-fs", None).unwrap()
             }
         );
 
         assert_eq!(
             parse_resolution("is-even/is-odd").unwrap(),
             Resolution {
-                from: Some(Specifier {
-                    full_name: "is-even",
-                    description: None
-                }),
-                descriptor: Specifier {
-                    full_name: "is-odd",
-                    description: None
-                }
+                from: Some(Specifier::new("is-even", None).unwrap()),
+                descriptor: Specifier::new("is-odd", None).unwrap()
             }
         );
     }
@@ -305,14 +305,8 @@ mod test {
         assert_eq!(
             parse_resolution("@babel/core@npm:7.0.0/@babel/generator").unwrap(),
             Resolution {
-                from: Some(Specifier {
-                    full_name: "@babel/core",
-                    description: Some("npm:7.0.0"),
-                }),
-                descriptor: Specifier {
-                    full_name: "@babel/generator",
-                    description: None
-                }
+                from: Some(Specifier::new("@babel/core", Some("npm:7.0.0"),).unwrap()),
+                descriptor: Specifier::new("@babel/generator", None).unwrap()
             }
         )
     }
@@ -329,5 +323,15 @@ mod test {
             dependency,
             Some(Descriptor::try_from("lodash@npm:4.17.21").unwrap())
         );
+    }
+
+    #[test_case("proto:1.0.0", "proto:1.0.0", true ; "identical")]
+    #[test_case("proto:1.0.0", "1.0.0", true ; "use default")]
+    #[test_case("proto:1.0.0", "other:1.0.0", false ; "different protocols")]
+    #[test_case("other:1.0.0", "1.0.0", false ; "non-default protocols")]
+    #[test_case("proto:1.0.0", "proto:1.2.3", false ; "mismatched ref")]
+    #[test_case("proto:1.0.0", "1.2.3", false ; "mismatched ref with protocol")]
+    fn test_reference_eq(a: &str, b: &str, expected: bool) {
+        assert_eq!(Resolution::eq_with_protocol(a, b, "proto:"), expected);
     }
 }

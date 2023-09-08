@@ -16,16 +16,13 @@ use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
-use turborepo_api_client::{APIClient, CachingStatus, Space, Team};
-
+use turborepo_api_client::APIClient;
 #[cfg(not(test))]
-use crate::ui::CYAN;
-use crate::{
-    cli::LinkTarget,
-    commands::CommandBase,
-    config::{SpacesJson, TurboJson},
-    ui::{BOLD, GREY, UNDERLINE},
-};
+use turborepo_ui::CYAN;
+use turborepo_ui::{BOLD, GREY, UNDERLINE};
+use turborepo_vercel_api::{CachingStatus, Space, Team};
+
+use crate::{cli::LinkTarget, commands::CommandBase, rewrite_json};
 
 #[derive(Clone)]
 pub(crate) enum SelectedTeam<'a> {
@@ -45,7 +42,7 @@ pub(crate) const REMOTE_CACHING_INFO: &str = "  Remote Caching shares your cache
   This results in faster build times and deployments for your team.";
 pub(crate) const REMOTE_CACHING_URL: &str =
     "https://turbo.build/repo/docs/core-concepts/remote-caching";
-pub(crate) const SPACES_URL: &str = "https://vercel.com/docs/spaces";
+pub(crate) const SPACES_URL: &str = "https://vercel.com/docs/workflow-collaboration/vercel-spaces";
 
 /// Verifies that caching status for a team is enabled, or prompts the user to
 /// enable it.
@@ -115,7 +112,7 @@ pub async fn link(
 ) -> Result<()> {
     let homedir_path = home_dir().ok_or_else(|| anyhow!("could not find home directory."))?;
     let homedir = homedir_path.to_string_lossy();
-    let repo_root_with_tilde = base.repo_root.to_string_lossy().replacen(&*homedir, "~", 1);
+    let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
     let api_client = base.api_client()?;
     let token = base.user_config()?.token().ok_or_else(|| {
         anyhow!(
@@ -205,8 +202,31 @@ pub async fn link(
                 return Err(anyhow!("canceled"));
             }
 
+            let user_response = api_client
+                .get_user(token)
+                .await
+                .context("could not get user information")?;
+
+            let user_display_name = user_response
+                .user
+                .name
+                .as_deref()
+                .unwrap_or(user_response.user.username.as_str());
+
+            let teams_response = api_client
+                .get_teams(token)
+                .await
+                .context("could not get team information")?;
+
+            let selected_team = select_team(base, &teams_response.teams, user_display_name)?;
+
+            let team_id = match selected_team {
+                SelectedTeam::User => user_response.user.id.as_str(),
+                SelectedTeam::Team(team) => team.id.as_str(),
+            };
+
             let spaces_response = api_client
-                .get_spaces(token, base.repo_config()?.team_id())
+                .get_spaces(token, Some(team_id))
                 .await
                 .context("could not get spaces information")?;
 
@@ -223,6 +243,11 @@ pub async fn link(
                     err
                 )
             })?;
+
+            fs::create_dir_all(base.repo_root.join_component(".turbo"))
+                .context("could not create .turbo directory")?;
+            base.repo_config_mut()?
+                .set_space_team_id(Some(team_id.to_string()))?;
 
             println!(
                 "
@@ -420,56 +445,43 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<()> {
 
 fn add_space_id_to_turbo_json(base: &CommandBase, space_id: &str) -> Result<()> {
     let turbo_json_path = base.repo_root.join_component("turbo.json");
+    let turbo_json = fs::read_to_string(&turbo_json_path)?;
+    let space_id_json_value = format!("\"{}\"", space_id);
 
-    if !turbo_json_path.exists() {
-        return Err(anyhow!("turbo.json not found."));
-    }
+    let output = rewrite_json::set_path(
+        &turbo_json,
+        &["experimentalSpaces", "id"],
+        &space_id_json_value,
+    )?;
 
-    let turbo_json_file = File::open(&turbo_json_path)?;
-    let mut turbo_json: TurboJson = serde_json::from_reader(turbo_json_file)?;
-    match turbo_json.experimental_spaces {
-        Some(mut spaces_config) => {
-            spaces_config.id = Some(space_id.to_string());
-            turbo_json.experimental_spaces = Some(spaces_config);
-        }
-        None => {
-            turbo_json.experimental_spaces = Some(SpacesJson {
-                id: Some(space_id.to_string()),
-                other: None,
-            });
-        }
-    }
-
-    // write turbo_json back to file
-    let config_file = File::create(&turbo_json_path)?;
-    serde_json::to_writer_pretty(&config_file, &turbo_json)?;
+    fs::write(turbo_json_path, output)?;
 
     Ok(())
 }
 
 #[cfg(test)]
 mod test {
-    use std::fs;
+    use std::{cell::OnceCell, fs};
 
+    use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
-    use tokio::sync::OnceCell;
     use turbopath::AbsoluteSystemPathBuf;
-    use vercel_api_mock::start_test_server;
+    use turborepo_ui::UI;
+    use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
         cli::LinkTarget,
         commands::{link, CommandBase},
-        config::{ClientConfigLoader, RepoConfigLoader, TurboJson, UserConfigLoader},
-        ui::UI,
+        config::{ClientConfigLoader, RawTurboJSON, RepoConfigLoader, UserConfigLoader},
         Args,
     };
 
     #[tokio::test]
-    async fn test_link_remote_cache() {
+    async fn test_link_remote_cache() -> Result<()> {
         let user_config_file = NamedTempFile::new().unwrap();
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
         let repo_config_file = NamedTempFile::new().unwrap();
-        let repo_config_path = AbsoluteSystemPathBuf::new(repo_config_file.path()).unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::try_from(repo_config_file.path()).unwrap();
         fs::write(
             repo_config_file.path(),
             r#"{ "apiurl": "http://localhost:3000" }"#,
@@ -479,11 +491,14 @@ mod test {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
-            repo_root: Default::default(),
+            repo_root: AbsoluteSystemPathBuf::new(
+                TempDir::new().unwrap().into_path().to_string_lossy(),
+            )
+            .unwrap(),
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_path_buf())
+                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
                     .with_token(Some("token".to_string()))
                     .load()
                     .unwrap(),
@@ -506,9 +521,11 @@ mod test {
         handle.abort();
         let team_id = base.repo_config().unwrap().team_id();
         assert!(
-            team_id == Some(vercel_api_mock::EXPECTED_USER_ID)
-                || team_id == Some(vercel_api_mock::EXPECTED_TEAM_ID)
+            team_id == Some(turborepo_vercel_api_mock::EXPECTED_USER_ID)
+                || team_id == Some(turborepo_vercel_api_mock::EXPECTED_TEAM_ID)
         );
+
+        Ok(())
     }
 
     #[tokio::test]
@@ -519,7 +536,7 @@ mod test {
 
         // repo config
         let repo_config_file = NamedTempFile::new().unwrap();
-        let repo_config_path = AbsoluteSystemPathBuf::new(repo_config_file.path()).unwrap();
+        let repo_config_path = AbsoluteSystemPathBuf::try_from(repo_config_file.path()).unwrap();
         fs::write(
             repo_config_file.path(),
             r#"{ "apiurl": "http://localhost:3000" }"#,
@@ -529,11 +546,12 @@ mod test {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
-            repo_root: AbsoluteSystemPathBuf::new(TempDir::new().unwrap().into_path()).unwrap(),
+            repo_root: AbsoluteSystemPathBuf::try_from(TempDir::new().unwrap().into_path())
+                .unwrap(),
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_path_buf())
+                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
                     .with_token(Some("token".to_string()))
                     .load()
                     .unwrap(),
@@ -565,11 +583,11 @@ mod test {
         handle.abort();
 
         // verify space id is added to turbo.json
-        let turbo_json_file = fs::File::open(&turbo_json_file).unwrap();
-        let turbo_json: TurboJson = serde_json::from_reader(turbo_json_file).unwrap();
+        let turbo_json_contents = fs::read_to_string(&turbo_json_file).unwrap();
+        let turbo_json: RawTurboJSON = serde_json::from_str(&turbo_json_contents).unwrap();
         assert_eq!(
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
-            vercel_api_mock::EXPECTED_SPACE_ID
+            turborepo_vercel_api_mock::EXPECTED_SPACE_ID
         );
     }
 }

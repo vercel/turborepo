@@ -26,10 +26,11 @@ use tokio::{
     sync::{OwnedSemaphorePermit, Semaphore},
     time::{sleep, timeout},
 };
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::Vc;
+use turbo_tasks_fs::{json::parse_json_with_source_context, FileSystemPath};
 use turbopack_ecmascript::magic_identifier::unmangle_identifiers;
 
-use crate::{source_map::apply_source_mapping, AssetsForSourceMappingVc};
+use crate::{source_map::apply_source_mapping, AssetsForSourceMapping};
 
 #[derive(Clone, Copy)]
 pub enum FormattingMode {
@@ -72,9 +73,9 @@ enum NodeJsPoolProcess {
 struct SpawnedNodeJsPoolProcess {
     child: Child,
     listener: TcpListener,
-    assets_for_source_mapping: AssetsForSourceMappingVc,
-    assets_root: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
+    assets_for_source_mapping: Vc<AssetsForSourceMapping>,
+    assets_root: Vc<FileSystemPath>,
+    project_dir: Vc<FileSystemPath>,
     shared_stdout: SharedOutputSet,
     shared_stderr: SharedOutputSet,
     debug: bool,
@@ -83,11 +84,12 @@ struct SpawnedNodeJsPoolProcess {
 struct RunningNodeJsPoolProcess {
     child: Option<Child>,
     connection: TcpStream,
-    assets_for_source_mapping: AssetsForSourceMappingVc,
-    assets_root: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
+    assets_for_source_mapping: Vc<AssetsForSourceMapping>,
+    assets_root: Vc<FileSystemPath>,
+    project_dir: Vc<FileSystemPath>,
     stdout_handler: OutputStreamHandler<ChildStdout, Stdout>,
     stderr_handler: OutputStreamHandler<ChildStderr, Stderr>,
+    debug: bool,
 }
 
 impl RunningNodeJsPoolProcess {
@@ -140,9 +142,9 @@ static MARKER_STR: &str = "TURBOPACK_OUTPUT_";
 struct OutputStreamHandler<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> {
     stream: BufReader<R>,
     shared: SharedOutputSet,
-    assets_for_source_mapping: AssetsForSourceMappingVc,
-    root: FileSystemPathVc,
-    project_dir: FileSystemPathVc,
+    assets_for_source_mapping: Vc<AssetsForSourceMapping>,
+    root: Vc<FileSystemPath>,
+    project_dir: Vc<FileSystemPath>,
     final_stream: W,
 }
 
@@ -178,9 +180,9 @@ impl<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> OutputStreamHandler<R, W> {
 
         async fn write_source_mapped_final<W: AsyncWrite + Unpin>(
             bytes: &[u8],
-            assets_for_source_mapping: AssetsForSourceMappingVc,
-            root: FileSystemPathVc,
-            project_dir: FileSystemPathVc,
+            assets_for_source_mapping: Vc<AssetsForSourceMapping>,
+            root: Vc<FileSystemPath>,
+            project_dir: Vc<FileSystemPath>,
             final_stream: &mut W,
         ) -> Result<()> {
             if let Ok(text) = std::str::from_utf8(bytes) {
@@ -325,9 +327,9 @@ impl NodeJsPoolProcess {
         cwd: &Path,
         env: &HashMap<String, String>,
         entrypoint: &Path,
-        assets_for_source_mapping: AssetsForSourceMappingVc,
-        assets_root: FileSystemPathVc,
-        project_dir: FileSystemPathVc,
+        assets_for_source_mapping: Vc<AssetsForSourceMapping>,
+        assets_root: Vc<FileSystemPath>,
+        project_dir: Vc<FileSystemPath>,
         shared_stdout: SharedOutputSet,
         shared_stderr: SharedOutputSet,
         debug: bool,
@@ -468,6 +470,7 @@ impl NodeJsPoolProcess {
                     project_dir,
                     stdout_handler,
                     stderr_handler,
+                    debug,
                 }
             }
             NodeJsPoolProcess::Running(running) => running,
@@ -479,21 +482,27 @@ impl RunningNodeJsPoolProcess {
     async fn recv(&mut self) -> Result<Vec<u8>> {
         let connection = &mut self.connection;
         async fn with_timeout<T, E: Into<anyhow::Error>>(
+            debug: bool,
             future: impl Future<Output = Result<T, E>> + Send,
         ) -> Result<T> {
-            timeout(Duration::from_secs(60), future)
-                .await
-                .context("timeout while receiving message from process")?
-                .map_err(Into::into)
+            if debug {
+                future.await.map_err(Into::into)
+            } else {
+                timeout(Duration::from_secs(60), future)
+                    .await
+                    .context("timeout while receiving message from process")?
+                    .map_err(Into::into)
+            }
         }
+        let debug = self.debug;
         let recv_future = async move {
-            let packet_len = with_timeout(connection.read_u32())
+            let packet_len = with_timeout(debug, connection.read_u32())
                 .await
                 .context("reading packet length")?
                 .try_into()
                 .context("storing packet length")?;
             let mut packet_data = vec![0; packet_len];
-            with_timeout(connection.read_exact(&mut packet_data))
+            with_timeout(debug, connection.read_exact(&mut packet_data))
                 .await
                 .context("reading packet data")?;
             Ok::<_, anyhow::Error>(packet_data)
@@ -541,9 +550,9 @@ pub struct NodeJsPool {
     cwd: PathBuf,
     entrypoint: PathBuf,
     env: HashMap<String, String>,
-    pub assets_for_source_mapping: AssetsForSourceMappingVc,
-    pub assets_root: FileSystemPathVc,
-    pub project_dir: FileSystemPathVc,
+    pub assets_for_source_mapping: Vc<AssetsForSourceMapping>,
+    pub assets_root: Vc<FileSystemPath>,
+    pub project_dir: Vc<FileSystemPath>,
     #[turbo_tasks(trace_ignore, debug_ignore)]
     processes: Arc<Mutex<Vec<NodeJsPoolProcess>>>,
     #[turbo_tasks(trace_ignore, debug_ignore)]
@@ -562,9 +571,9 @@ impl NodeJsPool {
         cwd: PathBuf,
         entrypoint: PathBuf,
         env: HashMap<String, String>,
-        assets_for_source_mapping: AssetsForSourceMappingVc,
-        assets_root: FileSystemPathVc,
-        project_dir: FileSystemPathVc,
+        assets_for_source_mapping: Vc<AssetsForSourceMapping>,
+        assets_root: Vc<FileSystemPath>,
+        project_dir: Vc<FileSystemPath>,
         concurrency: usize,
         debug: bool,
     ) -> Self {
@@ -660,7 +669,8 @@ impl NodeJsOperation {
                 process.recv().await.context("failed to receive message")
             })
             .await?;
-        serde_json::from_slice(&message).context("failed to deserialize message")
+        let message = std::str::from_utf8(&message).context("message is not valid UTF-8")?;
+        parse_json_with_source_context(message).context("failed to deserialize message")
     }
 
     pub async fn send<M>(&mut self, message: M) -> Result<()>

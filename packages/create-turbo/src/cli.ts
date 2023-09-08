@@ -1,12 +1,19 @@
 #!/usr/bin/env node
 
+import http from "node:http";
+import https from "node:https";
 import chalk from "chalk";
 import { Command } from "commander";
-import notifyUpdate from "./utils/notifyUpdate";
 import { logger } from "@turbo/utils";
-
-import { create } from "./commands";
+import { ProxyAgent } from "proxy-agent";
 import cliPkg from "../package.json";
+import { notifyUpdate } from "./utils/notifyUpdate";
+import { create } from "./commands";
+
+// Support http proxy vars
+const agent = new ProxyAgent();
+http.globalAgent = agent;
+https.globalAgent = agent;
 
 const createTurboCli = new Command();
 
@@ -28,6 +35,10 @@ createTurboCli
     false
   )
   .option(
+    "--turbo-version <version>",
+    "Use a specific version of turbo (default: latest)"
+  )
+  .option(
     "-e, --example [name]|[github-url]",
     `
   An example to bootstrap the app with. You can use an example name
@@ -44,22 +55,18 @@ createTurboCli
   --example-path foo/bar
 `
   )
-  .version(cliPkg.version, "-v, --version", "output the current version")
-  .helpOption()
+  .version(cliPkg.version, "-v, --version", "Output the current version")
+  .helpOption("-h, --help", "Display help for command")
   .action(create);
 
 createTurboCli
   .parseAsync()
   .then(notifyUpdate)
   .catch(async (reason) => {
-    console.log();
-    if (reason.command) {
-      logger.error(`${chalk.bold(reason.command)} has failed.`);
-    } else {
-      logger.error("Unexpected error. Please report it as a bug:");
-      console.log(reason);
-    }
-    console.log();
+    logger.log();
+    logger.error("Unexpected error. Please report it as a bug:");
+    logger.log(reason);
+    logger.log();
     await notifyUpdate();
     process.exit(1);
   });

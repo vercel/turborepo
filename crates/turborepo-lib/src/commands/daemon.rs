@@ -1,5 +1,6 @@
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
+use camino::Utf8PathBuf;
 use pidlock::PidlockError::AlreadyOwned;
 use time::{format_description, OffsetDateTime};
 use tracing::{trace, warn};
@@ -18,28 +19,33 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
         DaemonCommand::Status { .. } => (false, false),
         DaemonCommand::Restart | DaemonCommand::Stop => (false, true),
         DaemonCommand::Start => (true, true),
+        DaemonCommand::Clean => (false, true),
     };
+
+    let pid_file = base.daemon_file_root().join_component("turbod.pid");
+    let sock_file = base.daemon_file_root().join_component("turbod.sock");
 
     let connector = DaemonConnector {
         can_start_server,
         can_kill_server,
-        pid_file: base.daemon_file_root().join_component("turbod.pid"),
-        sock_file: base.daemon_file_root().join_component("turbod.sock"),
+        pid_file: pid_file.clone(),
+        sock_file: sock_file.clone(),
     };
-
-    let mut client = connector.connect().await?;
 
     match command {
         DaemonCommand::Restart => {
+            let client = connector.connect().await?;
             client.restart().await?;
         }
         // connector.connect will have already started the daemon if needed,
         // so this is a no-op
         DaemonCommand::Start => {}
         DaemonCommand::Stop => {
+            let client = connector.connect().await?;
             client.stop().await?;
         }
         DaemonCommand::Status { json } => {
+            let mut client = connector.connect().await?;
             let status = client.status().await?;
             let log_file = log_filename(&status.log_file)?;
             let status = DaemonStatus {
@@ -51,13 +57,60 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             if *json {
                 println!("{}", serde_json::to_string_pretty(&status)?);
             } else {
-                println!("Daemon log file: {}", status.log_file.to_string_lossy());
+                println!("Daemon log file: {}", status.log_file);
                 println!(
                     "Daemon uptime: {}s",
                     humantime::format_duration(Duration::from_millis(status.uptime_ms))
                 );
-                println!("Daemon pid file: {}", status.pid_file.to_string_lossy());
-                println!("Daemon socket file: {}", status.sock_file.to_string_lossy());
+                println!("Daemon pid file: {}", status.pid_file);
+                println!("Daemon socket file: {}", status.sock_file);
+            }
+        }
+        DaemonCommand::Clean => {
+            // try to connect and shutdown the daemon
+            let client = connector.connect().await;
+            match client {
+                Ok(client) => match client.stop().await {
+                    Ok(_) => {
+                        tracing::trace!("successfully stopped the daemon");
+                    }
+                    Err(e) => {
+                        tracing::trace!("unable to stop the daemon: {:?}", e);
+                    }
+                },
+                Err(e) => {
+                    tracing::trace!("unable to connect to the daemon: {:?}", e);
+                }
+            }
+
+            // remove pid and sock files
+            let mut success = true;
+            trace!("cleaning up daemon files");
+            // if the pid_file and sock_file still exist, remove them:
+            if pid_file.exists() {
+                let result = std::fs::remove_file(pid_file.clone());
+                // ignore this error
+                if let Err(e) = result {
+                    println!("Failed to remove pid file: {}", e);
+                    println!("Please remove manually: {}", pid_file);
+                    success = false;
+                }
+            }
+            if sock_file.exists() {
+                let result = std::fs::remove_file(sock_file.clone());
+                // ignore this error
+                if let Err(e) = result {
+                    println!("Failed to remove socket file: {}", e);
+                    println!("Please remove manually: {}", sock_file);
+                    success = false;
+                }
+            }
+
+            if success {
+                println!("Done");
+            } else {
+                // return error
+                return Err(DaemonError::CleanFailed);
             }
         }
     };
@@ -85,7 +138,9 @@ pub async fn daemon_server(
         let directories = directories::ProjectDirs::from("com", "turborepo", "turborepo")
             .expect("user has a home dir");
 
-        let folder = AbsoluteSystemPathBuf::new(directories.data_dir()).expect("absolute");
+        let folder =
+            AbsoluteSystemPathBuf::new(directories.data_dir().to_str().expect("UTF-8 path"))
+                .expect("absolute");
 
         let log_folder = folder.join_component("logs");
         let log_file =
@@ -133,7 +188,7 @@ pub struct DaemonStatus {
     pub uptime_ms: u64,
     // this comes from the daemon server, so we trust that
     // it is correct
-    pub log_file: PathBuf,
+    pub log_file: Utf8PathBuf,
     pub pid_file: turbopath::AbsoluteSystemPathBuf,
     pub sock_file: turbopath::AbsoluteSystemPathBuf,
 }

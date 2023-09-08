@@ -1,83 +1,50 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::Vc;
 use turbo_tasks_fs::File;
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
+    asset::{Asset, AssetContent},
     chunk::Chunk,
-    ident::AssetIdentVc,
-    reference::{AssetReference, AssetReferenceVc},
-    resolve::{ResolveResult, ResolveResultVc},
-    source_map::{GenerateSourceMap, SourceMapVc},
+    ident::AssetIdent,
+    output::OutputAsset,
+    source_map::{GenerateSourceMap, SourceMap},
 };
 
-use super::chunk::SingleItemCssChunkVc;
+use super::chunk::SingleItemCssChunk;
 
 /// Represents the source map of a single item CSS chunk.
 #[turbo_tasks::value]
 pub struct SingleItemCssChunkSourceMapAsset {
-    chunk: SingleItemCssChunkVc,
+    chunk: Vc<SingleItemCssChunk>,
 }
 
 #[turbo_tasks::value_impl]
-impl SingleItemCssChunkSourceMapAssetVc {
+impl SingleItemCssChunkSourceMapAsset {
     #[turbo_tasks::function]
-    pub fn new(chunk: SingleItemCssChunkVc) -> Self {
+    pub fn new(chunk: Vc<SingleItemCssChunk>) -> Vc<Self> {
         SingleItemCssChunkSourceMapAsset { chunk }.cell()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl OutputAsset for SingleItemCssChunkSourceMapAsset {
+    #[turbo_tasks::function]
+    async fn ident(&self) -> Result<Vc<AssetIdent>> {
+        Ok(AssetIdent::from_path(
+            self.chunk.path().append(".map".to_string()),
+        ))
     }
 }
 
 #[turbo_tasks::value_impl]
 impl Asset for SingleItemCssChunkSourceMapAsset {
     #[turbo_tasks::function]
-    async fn ident(&self) -> Result<AssetIdentVc> {
-        Ok(AssetIdentVc::from_path(self.chunk.path().append(".map")))
-    }
-
-    #[turbo_tasks::function]
-    async fn content(&self) -> Result<AssetContentVc> {
+    async fn content(&self) -> Result<Vc<AssetContent>> {
         let sm = if let Some(sm) = *self.chunk.generate_source_map().await? {
             sm
         } else {
-            SourceMapVc::empty()
+            SourceMap::empty()
         };
         let sm = sm.to_rope().await?;
-        Ok(File::from(sm).into())
-    }
-}
-
-/// A reference to a [`SingleItemCssChunkSourceMapAsset`], used to inform the
-/// dev server/build system of the presence of the source map
-#[turbo_tasks::value]
-pub struct SingleItemCssChunkSourceMapAssetReference {
-    chunk: SingleItemCssChunkVc,
-}
-
-#[turbo_tasks::value_impl]
-impl SingleItemCssChunkSourceMapAssetReferenceVc {
-    #[turbo_tasks::function]
-    pub fn new(chunk: SingleItemCssChunkVc) -> Self {
-        SingleItemCssChunkSourceMapAssetReference { chunk }.cell()
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl AssetReference for SingleItemCssChunkSourceMapAssetReference {
-    #[turbo_tasks::function]
-    async fn resolve_reference(&self) -> Result<ResolveResultVc> {
-        let source_maps = vec![SingleItemCssChunkSourceMapAsset { chunk: self.chunk }
-            .cell()
-            .into()];
-        Ok(ResolveResult::assets_with_references(source_maps, vec![]).cell())
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ValueToString for SingleItemCssChunkSourceMapAssetReference {
-    #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
-            "source maps for {}",
-            self.chunk.path().to_string().await?
-        )))
+        Ok(AssetContent::file(File::from(sm).into()))
     }
 }

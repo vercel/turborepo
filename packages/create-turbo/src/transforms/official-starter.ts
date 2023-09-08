@@ -1,23 +1,28 @@
-import path from "path";
-import fs from "fs-extra";
+import path from "node:path";
+import { readJsonSync, writeJsonSync, rmSync, existsSync } from "fs-extra";
+import type { PackageJson } from "@turbo/utils";
 import semverPrerelease from "semver/functions/prerelease";
 import cliPkgJson from "../../package.json";
 import { isDefaultExample } from "../utils/isDefaultExample";
-import { TransformInput, TransformResult } from "./types";
+import type { TransformInput, TransformResult } from "./types";
 import { TransformError } from "./errors";
 
 const meta = {
   name: "official-starter",
 };
 
-// applied to "official starter" examples (those hosted within vercel/turbo/examples)
+/**
+ * Transform applied to "official starter" examples (those hosted within vercel/turbo/examples)
+ **/
+
+// eslint-disable-next-line @typescript-eslint/require-await -- must match transform function signature
 export async function transform(args: TransformInput): TransformResult {
-  const { prompts, example } = args;
+  const { prompts, example, opts } = args;
 
   const defaultExample = isDefaultExample(example.name);
   const isOfficialStarter =
     !example.repo ||
-    (example.repo?.username === "vercel" && example.repo?.name === "turbo");
+    (example.repo.username === "vercel" && example.repo.name === "turbo");
 
   if (!isOfficialStarter) {
     return { result: "not-applicable", ...meta };
@@ -26,17 +31,21 @@ export async function transform(args: TransformInput): TransformResult {
   // paths
   const rootPackageJsonPath = path.join(prompts.root, "package.json");
   const rootMetaJsonPath = path.join(prompts.root, "meta.json");
-  const hasPackageJson = fs.existsSync(rootPackageJsonPath);
+  const hasPackageJson = existsSync(rootPackageJsonPath);
 
   // 1. remove meta file (used for generating the examples page on turbo.build)
   try {
-    fs.rmSync(rootMetaJsonPath, { force: true });
-  } catch (_err) {}
+    rmSync(rootMetaJsonPath, { force: true });
+  } catch (_err) {
+    // do nothing
+  }
 
   if (hasPackageJson) {
     let packageJsonContent;
     try {
-      packageJsonContent = fs.readJsonSync(rootPackageJsonPath);
+      packageJsonContent = readJsonSync(rootPackageJsonPath) as
+        | PackageJson
+        | undefined;
     } catch {
       throw new TransformError("Unable to read package.json", {
         transform: meta.name,
@@ -50,14 +59,23 @@ export async function transform(args: TransformInput): TransformResult {
         packageJsonContent.name = prompts.projectName;
       }
 
-      // if we're using a pre-release version of create-turbo, install turbo canary instead of latest
-      const shouldUsePreRelease = semverPrerelease(cliPkgJson.version) !== null;
-      if (shouldUsePreRelease && packageJsonContent?.devDependencies?.turbo) {
-        packageJsonContent.devDependencies.turbo = "canary";
+      if (packageJsonContent.devDependencies?.turbo) {
+        const shouldUsePreRelease =
+          semverPrerelease(cliPkgJson.version) !== null;
+        // if the user specified a turbo version, use that
+        if (opts.turboVersion) {
+          packageJsonContent.devDependencies.turbo = opts.turboVersion;
+          // if we're using a pre-release version of create-turbo, use turbo canary
+        } else if (shouldUsePreRelease) {
+          packageJsonContent.devDependencies.turbo = "canary";
+          // otherwise, use the latest stable version
+        } else {
+          packageJsonContent.devDependencies.turbo = "latest";
+        }
       }
 
       try {
-        fs.writeJsonSync(rootPackageJsonPath, packageJsonContent, {
+        writeJsonSync(rootPackageJsonPath, packageJsonContent, {
           spaces: 2,
         });
       } catch (err) {

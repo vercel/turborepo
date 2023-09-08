@@ -1,5 +1,7 @@
 use std::{
-    io::{self, BufRead, BufReader, Read, Write},
+    io::{
+        BufRead, BufReader, Read, Write, {self},
+    },
     panic::UnwindSafe,
     process::Command,
     time::{Duration, Instant},
@@ -88,6 +90,7 @@ pub async fn create_browser() -> Browser {
     let with_head = read_env_bool("TURBOPACK_BENCH_WITH_HEAD");
     let with_devtools = read_env_bool("TURBOPACK_BENCH_DEVTOOLS");
     let mut builder = BrowserConfig::builder();
+    builder = builder.no_sandbox();
     if with_head {
         builder = builder.with_head();
     }

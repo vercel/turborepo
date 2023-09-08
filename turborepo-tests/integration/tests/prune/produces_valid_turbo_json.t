@@ -12,22 +12,12 @@ Make sure that the internal util package is part of the prune output
 Make sure we prune tasks that reference a pruned workspace
   $ cat out/turbo.json | jq
   {
-    "globalPassThroughEnv": null,
-    "globalDotEnv": null,
+    "$schema": "https://turbo.build/schema.json",
     "pipeline": {
       "build": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "persistent": false,
-        "env": [],
-        "passThroughEnv": null,
-        "dotEnv": null
+        "outputs": []
       }
-    },
-    "remoteCache": {}
+    }
   }
 
 Verify turbo can read the produced turbo.json

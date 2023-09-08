@@ -7,13 +7,13 @@ package ffi
 
 // #include "bindings.h"
 //
-// #cgo darwin,arm64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_arm64  -lz -liconv -framework Security
-// #cgo darwin,amd64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_amd64  -lz -liconv -framework Security
-// #cgo linux,arm64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lunwind
-// #cgo linux,amd64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lunwind
-// #cgo linux,arm64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lz
-// #cgo linux,amd64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lz
-// #cgo windows,amd64 LDFLAGS: -L${SRCDIR} -lturborepo_ffi_windows_amd64 -lole32 -lbcrypt -lws2_32 -luserenv
+// #cgo darwin,arm64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_arm64  -lz -liconv -framework Security -framework CoreFoundation
+// #cgo darwin,amd64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_amd64  -lz -liconv -framework Security -framework CoreFoundation
+// #cgo linux,arm64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lunwind -lm
+// #cgo linux,amd64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lunwind -lm
+// #cgo linux,arm64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lz -lm
+// #cgo linux,amd64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lz -lm
+// #cgo windows,amd64 LDFLAGS: -L${SRCDIR} -lturborepo_ffi_windows_amd64 -lole32 -lbcrypt -lws2_32 -luserenv -lntdll
 import "C"
 
 import (
@@ -218,59 +218,11 @@ func toPackageManager(packageManager string) ffi_proto.PackageManager {
 		return ffi_proto.PackageManager_BERRY
 	case "pnpm":
 		return ffi_proto.PackageManager_PNPM
+	case "yarn":
+		return ffi_proto.PackageManager_YARN
 	default:
 		panic(fmt.Sprintf("Invalid package manager string: %s", packageManager))
 	}
-}
-
-// Subgraph returns the contents of a lockfile subgraph
-func Subgraph(packageManager string, content []byte, workspaces []string, packages []string, resolutions map[string]string) ([]byte, error) {
-	var additionalData *ffi_proto.AdditionalBerryData
-	if resolutions != nil {
-		additionalData = &ffi_proto.AdditionalBerryData{Resolutions: resolutions}
-	}
-	req := ffi_proto.SubgraphRequest{
-		Contents:       content,
-		Workspaces:     workspaces,
-		Packages:       packages,
-		PackageManager: toPackageManager(packageManager),
-		Resolutions:    additionalData,
-	}
-	reqBuf := Marshal(&req)
-	resBuf := C.subgraph(reqBuf)
-	reqBuf.Free()
-
-	resp := ffi_proto.SubgraphResponse{}
-	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
-		panic(err)
-	}
-
-	if err := resp.GetError(); err != "" {
-		return nil, errors.New(err)
-	}
-
-	return resp.GetContents(), nil
-}
-
-// Patches returns all patch files referenced in the lockfile
-func Patches(content []byte, packageManager string) []string {
-	req := ffi_proto.PatchesRequest{
-		Contents:       content,
-		PackageManager: toPackageManager(packageManager),
-	}
-	reqBuf := Marshal(&req)
-	resBuf := C.patches(reqBuf)
-	reqBuf.Free()
-
-	resp := ffi_proto.PatchesResponse{}
-	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
-		panic(err)
-	}
-	if err := resp.GetError(); err != "" {
-		panic(err)
-	}
-
-	return resp.GetPatches().GetPatches()
 }
 
 // RecursiveCopy copies src and its contents to dst
@@ -305,7 +257,7 @@ func GlobalChange(packageManager string, prevContents []byte, currContents []byt
 		CurrContents:   currContents,
 	}
 	reqBuf := Marshal(&req)
-	resBuf := C.patches(reqBuf)
+	resBuf := C.global_change(reqBuf)
 	reqBuf.Free()
 
 	resp := ffi_proto.GlobalChangeResponse{}
@@ -341,18 +293,42 @@ func VerifySignature(teamID []byte, hash string, artifactBody []byte, expectedTa
 	return resp.GetVerified(), nil
 }
 
-// GetPackageFileHashesFromGitIndex proxies to rust to use git to hash the files in a package.
-// It does not support additional files, it just hashes the non-ignored files in the package.
-func GetPackageFileHashesFromGitIndex(rootPath string, packagePath string) (map[string]string, error) {
-	req := ffi_proto.GetPackageFileHashesFromGitIndexRequest{
+// GetPackageFileHashes proxies to rust for hashing the files in a package
+func GetPackageFileHashes(rootPath string, packagePath string, inputs []string) (map[string]string, error) {
+	req := ffi_proto.GetPackageFileHashesRequest{
 		TurboRoot:   rootPath,
 		PackagePath: packagePath,
+		Inputs:      inputs,
 	}
 	reqBuf := Marshal(&req)
-	resBuf := C.get_package_file_hashes_from_git_index(reqBuf)
+	resBuf := C.get_package_file_hashes(reqBuf)
 	reqBuf.Free()
 
-	resp := ffi_proto.GetPackageFileHashesFromGitIndexResponse{}
+	resp := ffi_proto.GetPackageFileHashesResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+
+	hashes := resp.GetHashes()
+	return hashes.GetHashes(), nil
+}
+
+// GetHashesForFiles proxies to rust for hashing a given set of files
+func GetHashesForFiles(rootPath string, files []string, allowMissing bool) (map[string]string, error) {
+	req := ffi_proto.GetHashesForFilesRequest{
+		TurboRoot:    rootPath,
+		Files:        files,
+		AllowMissing: allowMissing,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_hashes_for_files(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetHashesForFilesResponse{}
 	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
 		panic(err)
 	}
@@ -362,4 +338,64 @@ func GetPackageFileHashesFromGitIndex(rootPath string, packagePath string) (map[
 	}
 	hashes := resp.GetHashes()
 	return hashes.GetHashes(), nil
+}
+
+// FromWildcards returns an EnvironmentVariableMap containing the variables
+// in the environment which match an array of wildcard patterns.
+func FromWildcards(environmentMap map[string]string, wildcardPatterns []string) (map[string]string, error) {
+	if wildcardPatterns == nil {
+		return nil, nil
+	}
+	req := ffi_proto.FromWildcardsRequest{
+		EnvVars: &ffi_proto.EnvVarMap{
+			Map: environmentMap,
+		},
+		WildcardPatterns: wildcardPatterns,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.from_wildcards(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.FromWildcardsResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+	envVarMap := resp.GetEnvVars().GetMap()
+	// If the map is nil, return an empty map instead of nil
+	// to match with existing Go code.
+	if envVarMap == nil {
+		return map[string]string{}, nil
+	}
+	return envVarMap, nil
+}
+
+// GetGlobalHashableEnvVars calculates env var dependencies
+func GetGlobalHashableEnvVars(envAtExecutionStart map[string]string, globalEnv []string) (*ffi_proto.DetailedMap, error) {
+	req := ffi_proto.GetGlobalHashableEnvVarsRequest{
+		EnvAtExecutionStart: &ffi_proto.EnvVarMap{Map: envAtExecutionStart},
+		GlobalEnv:           globalEnv,
+	}
+	reqBuf := Marshal(&req)
+	resBuf := C.get_global_hashable_env_vars(reqBuf)
+	reqBuf.Free()
+
+	resp := ffi_proto.GetGlobalHashableEnvVarsResponse{}
+	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
+		panic(err)
+	}
+
+	if err := resp.GetError(); err != "" {
+		return nil, errors.New(err)
+	}
+
+	respDetailedMap := resp.GetDetailedMap()
+	if respDetailedMap == nil {
+		return nil, nil
+	}
+
+	return respDetailedMap, nil
 }

@@ -1,7 +1,10 @@
 import { logger } from "@turbo/utils";
 import { getProject } from "../../utils/getProject";
-import { copy, empty } from "../../generators";
-import { TurboGeneratorOptions, WorkspaceType } from "../../generators/types";
+import { copy as GenFromCopy, empty as GenEmpty } from "../../generators";
+import type {
+  TurboGeneratorOptions,
+  WorkspaceType,
+} from "../../generators/types";
 
 export interface TurboGeneratorCLIOptions {
   name?: string;
@@ -18,7 +21,7 @@ export interface TurboGeneratorCLIOptions {
 
 // convert CLI options to generator options
 function parse(opts: TurboGeneratorCLIOptions): TurboGeneratorOptions {
-  const { empty, copy, ...rest } = opts;
+  const { copy, ...rest } = opts;
   const method = copy === true || typeof copy === "string" ? "copy" : "empty";
   const source = typeof copy === "string" ? copy : "";
   const sourceType =
@@ -43,7 +46,7 @@ export async function workspace(opts: TurboGeneratorCLIOptions) {
   const project = await getProject(opts);
   const generatorOpts = parse(opts);
 
-  console.log();
+  logger.log();
   const args = {
     project,
     opts: generatorOpts,
@@ -55,11 +58,11 @@ export async function workspace(opts: TurboGeneratorCLIOptions) {
     } else {
       logger.info(`Copy an existing workspace from "${project.name}"`);
     }
-    console.log();
-    await copy(args);
+    logger.log();
+    await GenFromCopy(args);
   } else {
     logger.info(`Add an empty workspace to "${project.name}"`);
-    console.log();
-    await empty(args);
+    logger.log();
+    await GenEmpty(args);
   }
 }

@@ -1,11 +1,10 @@
 import { getAvailablePackageManagers } from "@turbo/utils";
-import getWorkspaceDetails from "./getWorkspaceDetails";
+import { getWorkspaceDetails } from "./getWorkspaceDetails";
 import { convertProject } from "./convert";
 import { Logger } from "./logger";
-import install, { getPackageManagerMeta } from "./install";
+import { install, getPackageManagerMeta } from "./install";
 import { ConvertError } from "./errors";
-import MANAGERS from "./managers";
-
+import { MANAGERS } from "./managers";
 import type {
   PackageManager,
   Options,
@@ -31,9 +30,9 @@ async function convert({
   ]);
   await convertProject({
     project,
-    to: {
+    convertTo: {
       name: to,
-      version: availablePackageManagers[to].version as PackageManager,
+      version: availablePackageManagers[to],
     },
     logger,
     options,

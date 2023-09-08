@@ -26,6 +26,22 @@ function commonJsRequireContext(
   return commonJsRequire(sourceModule, entry.id());
 }
 
+async function loadWebAssembly(
+  _source: SourceInfo,
+  _id: ModuleId,
+  _importsObj: any
+): Promise<Exports> {
+  throw new Error("loading WebAssembly is not supported");
+}
+
+
+async function loadWebAssemblyModule(
+  _source: SourceInfo,
+  _id: ModuleId,
+): Promise<any> {
+  throw new Error("loading WebAssembly is not supported");
+}
+
 (() => {
   BACKEND = {
     // The "none" runtime expects all chunks within the same chunk group to be
@@ -50,7 +66,10 @@ function commonJsRequireContext(
         // modules.
         registerChunkRunner(
           chunkPath,
-          params.otherChunks,
+          params.otherChunks.filter((chunk) =>
+            // The none runtime can only handle JS chunks, so we only wait for these
+            getChunkPath(chunk).endsWith(".js")
+          ),
           params.runtimeModuleIds
         );
       }

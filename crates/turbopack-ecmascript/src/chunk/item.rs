@@ -2,57 +2,58 @@ use std::io::Write;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{primitives::StringVc, trace::TraceRawVcs, Value, ValueToString};
+use turbo_tasks::{trace::TraceRawVcs, Upcast, Value, ValueToString, Vc};
 use turbo_tasks_fs::rope::Rope;
 use turbopack_core::{
-    asset::AssetVc,
     chunk::{
-        availability_info::AvailabilityInfo, available_assets::AvailableAssetsVc, ChunkItem,
-        ChunkItemVc, ChunkableAssetVc, ChunkingContext, ChunkingContextVc, FromChunkableAsset,
-        ModuleIdVc,
+        availability_info::AvailabilityInfo, available_modules::AvailableAssets, ChunkItem,
+        ChunkableModule, ChunkingContext, FromChunkableModule, ModuleId,
     },
-    code_builder::{CodeBuilder, CodeVc},
+    code_builder::{Code, CodeBuilder},
     error::PrettyPrintError,
-    issue::{code_gen::CodeGenerationIssue, IssueSeverity},
+    issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity},
+    module::Module,
 };
 
-use super::{
-    context::EcmascriptChunkingContextVc, placeable::EcmascriptChunkPlaceableVc,
-    EcmascriptChunkPlaceable, EcmascriptChunkingContext,
-};
+use super::{EcmascriptChunkPlaceable, EcmascriptChunkingContext};
 use crate::{
-    manifest::{chunk_asset::ManifestChunkAssetVc, loader_item::ManifestLoaderItemVc},
+    manifest::{chunk_asset::ManifestChunkAsset, loader_item::ManifestLoaderItem},
+    references::async_module::{AsyncModuleOptions, OptionAsyncModuleOptions},
     utils::FormatIter,
-    EcmascriptModuleContentVc, ParseResultSourceMapVc,
+    EcmascriptModuleContent, ParseResultSourceMap,
 };
 
 #[turbo_tasks::value(shared)]
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct EcmascriptChunkItemContent {
     pub inner_code: Rope,
-    pub source_map: Option<ParseResultSourceMapVc>,
+    pub source_map: Option<Vc<ParseResultSourceMap>>,
     pub options: EcmascriptChunkItemOptions,
     pub placeholder_for_future_extensions: (),
 }
 
 #[turbo_tasks::value_impl]
-impl EcmascriptChunkItemContentVc {
+impl EcmascriptChunkItemContent {
     #[turbo_tasks::function]
     pub async fn new(
-        content: EcmascriptModuleContentVc,
-        context: EcmascriptChunkingContextVc,
-    ) -> Result<Self> {
-        let refresh = *context.has_react_refresh().await?;
-        let externals = *context.environment().node_externals().await?;
+        content: Vc<EcmascriptModuleContent>,
+        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        async_module_options: Vc<OptionAsyncModuleOptions>,
+    ) -> Result<Vc<Self>> {
+        let refresh = *chunking_context.has_react_refresh().await?;
+        let externals = *chunking_context.environment().node_externals().await?;
 
         let content = content.await?;
         Ok(EcmascriptChunkItemContent {
             inner_code: content.inner_code.clone(),
             source_map: content.source_map,
             options: if content.is_esm {
+                let async_module = async_module_options.await?.clone_value();
+
                 EcmascriptChunkItemOptions {
                     refresh,
                     externals,
+                    async_module,
                     ..Default::default()
                 }
             } else {
@@ -72,7 +73,7 @@ impl EcmascriptChunkItemContentVc {
     }
 
     #[turbo_tasks::function]
-    pub async fn module_factory(self) -> Result<CodeVc> {
+    pub async fn module_factory(self: Vc<Self>) -> Result<Vc<Code>> {
         let this = self.await?;
         let mut args = vec![
             "r: __turbopack_require__",
@@ -83,13 +84,17 @@ impl EcmascriptChunkItemContentVc {
             "n: __turbopack_export_namespace__",
             "c: __turbopack_cache__",
             "l: __turbopack_load__",
-            "j: __turbopack_cjs__",
+            "j: __turbopack_dynamic__",
             "g: global",
             // HACK
             "__dirname",
         ];
+        if this.options.async_module.is_some() {
+            args.push("a: __turbopack_async_module__");
+        }
         if this.options.externals {
             args.push("x: __turbopack_external_require__");
+            args.push("y: __turbopack_external_import__");
         }
         if this.options.refresh {
             args.push("k: __turbopack_refresh__");
@@ -100,6 +105,10 @@ impl EcmascriptChunkItemContentVc {
         if this.options.exports {
             args.push("e: exports");
         }
+        if this.options.wasm {
+            args.push("w: __turbopack_wasm__");
+            args.push("u: __turbopack_wasm_module__");
+        }
         let mut code = CodeBuilder::default();
         let args = FormatIter(|| args.iter().copied().intersperse(", "));
         if this.options.this {
@@ -108,8 +117,23 @@ impl EcmascriptChunkItemContentVc {
             write!(code, "(({{ {} }}) => (() => {{\n\n", args,)?;
         }
 
-        let source_map = this.source_map.map(|sm| sm.as_generate_source_map());
+        if this.options.async_module.is_some() {
+            code += "__turbopack_async_module__(async (__turbopack_handle_async_dependencies__, \
+                     __turbopack_async_result__) => { try {";
+        }
+
+        let source_map = this.source_map.map(Vc::upcast);
         code.push_source(&this.inner_code, source_map);
+
+        if let Some(opts) = &this.options.async_module {
+            write!(
+                code,
+                "__turbopack_async_result__();\n}} catch(e) {{ __turbopack_async_result__(e); }} \
+                 }}, {});",
+                opts.has_top_level_await
+            )?;
+        }
+
         if this.options.this {
             code += "\n}.call(this) })";
         } else {
@@ -133,77 +157,108 @@ pub struct EcmascriptChunkItemOptions {
     /// Whether this chunk item's module factory should include a
     /// `__turbopack_external_require__` argument.
     pub externals: bool,
+    /// Whether this chunk item's module is async (either has a top level await
+    /// or is importing async modules).
+    pub async_module: Option<AsyncModuleOptions>,
     pub this: bool,
+    /// Whether this chunk item's module factory should include
+    /// `__turbopack_wasm__` to load WebAssembly.
+    pub wasm: bool,
     pub placeholder_for_future_extensions: (),
 }
 
 #[turbo_tasks::value_trait]
 pub trait EcmascriptChunkItem: ChunkItem {
-    fn content(&self) -> EcmascriptChunkItemContentVc;
+    fn content(self: Vc<Self>) -> Vc<EcmascriptChunkItemContent>;
     fn content_with_availability_info(
-        &self,
+        self: Vc<Self>,
         _availability_info: Value<AvailabilityInfo>,
-    ) -> EcmascriptChunkItemContentVc {
+    ) -> Vc<EcmascriptChunkItemContent> {
         self.content()
     }
-    fn chunking_context(&self) -> EcmascriptChunkingContextVc;
+    fn chunking_context(self: Vc<Self>) -> Vc<Box<dyn EcmascriptChunkingContext>>;
 }
 
-#[turbo_tasks::value_impl]
-impl EcmascriptChunkItemVc {
+pub trait EcmascriptChunkItemExt: Send {
     /// Returns the module id of this chunk item.
-    #[turbo_tasks::function]
-    pub fn id(self) -> ModuleIdVc {
-        self.chunking_context().chunk_item_id(self)
+    fn id(self: Vc<Self>) -> Vc<ModuleId>;
+
+    /// Generates the module factory for this chunk item.
+    fn code(self: Vc<Self>, availability_info: Value<AvailabilityInfo>) -> Vc<Code>;
+}
+
+impl<T> EcmascriptChunkItemExt for T
+where
+    T: Upcast<Box<dyn EcmascriptChunkItem>>,
+{
+    /// Returns the module id of this chunk item.
+    fn id(self: Vc<Self>) -> Vc<ModuleId> {
+        let chunk_item = Vc::upcast(self);
+        chunk_item.chunking_context().chunk_item_id(chunk_item)
     }
 
     /// Generates the module factory for this chunk item.
-    #[turbo_tasks::function]
-    pub async fn code(self, availability_info: Value<AvailabilityInfo>) -> Result<CodeVc> {
-        Ok(
-            match self
-                .content_with_availability_info(availability_info)
-                .module_factory()
-                .resolve()
-                .await
-            {
-                Ok(factory) => factory,
-                Err(error) => {
-                    let id = self.id().to_string().await;
-                    let id = id.as_ref().map_or_else(|_| "unknown", |id| &**id);
-                    let error = error.context(format!(
-                        "An error occurred while generating the chunk item {}",
-                        id
-                    ));
-                    let error_message = format!("{}", PrettyPrintError(&error));
-                    let js_error_message = serde_json::to_string(&error_message)?;
-                    let issue = CodeGenerationIssue {
-                        severity: IssueSeverity::Error.cell(),
-                        path: self.asset_ident().path(),
-                        title: StringVc::cell("Code generation for chunk item errored".to_string()),
-                        message: StringVc::cell(error_message),
-                    }
-                    .cell();
-                    issue.as_issue().emit();
-                    let mut code = CodeBuilder::default();
-                    code += "(() => {{\n\n";
-                    writeln!(code, "throw new Error({error});", error = &js_error_message)?;
-                    code += "\n}})";
-                    code.build().cell()
-                }
-            },
-        )
+    fn code(self: Vc<Self>, availability_info: Value<AvailabilityInfo>) -> Vc<Code> {
+        module_factory_with_code_generation_issue(Vc::upcast(self), availability_info)
     }
 }
 
+#[turbo_tasks::function]
+async fn module_factory_with_code_generation_issue(
+    chunk_item: Vc<Box<dyn EcmascriptChunkItem>>,
+    availability_info: Value<AvailabilityInfo>,
+) -> Result<Vc<Code>> {
+    Ok(
+        match chunk_item
+            .content_with_availability_info(availability_info)
+            .module_factory()
+            .resolve()
+            .await
+        {
+            Ok(factory) => factory,
+            Err(error) => {
+                let id = chunk_item.id().to_string().await;
+                let id = id.as_ref().map_or_else(|_| "unknown", |id| &**id);
+                let error = error.context(format!(
+                    "An error occurred while generating the chunk item {}",
+                    id
+                ));
+                let error_message = format!("{}", PrettyPrintError(&error));
+                let js_error_message = serde_json::to_string(&error_message)?;
+                CodeGenerationIssue {
+                    severity: IssueSeverity::Error.cell(),
+                    path: chunk_item.asset_ident().path(),
+                    title: Vc::cell("Code generation for chunk item errored".to_string()),
+                    message: Vc::cell(error_message),
+                }
+                .cell()
+                .emit();
+                let mut code = CodeBuilder::default();
+                code += "(() => {{\n\n";
+                writeln!(code, "throw new Error({error});", error = &js_error_message)?;
+                code += "\n}})";
+                code.build().cell()
+            }
+        },
+    )
+}
+
 #[async_trait::async_trait]
-impl FromChunkableAsset for EcmascriptChunkItemVc {
-    async fn from_asset(context: ChunkingContextVc, asset: AssetVc) -> Result<Option<Self>> {
-        let Some(placeable) = EcmascriptChunkPlaceableVc::resolve_from(asset).await? else {
+impl FromChunkableModule for Box<dyn EcmascriptChunkItem> {
+    async fn from_asset(
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+        module: Vc<Box<dyn Module>>,
+    ) -> Result<Option<Vc<Self>>> {
+        let Some(placeable) =
+            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(module).await?
+        else {
             return Ok(None);
         };
 
-        let Some(context) = EcmascriptChunkingContextVc::resolve_from(context).await? else {
+        let Some(context) =
+            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+                .await?
+        else {
             return Ok(None);
         };
 
@@ -211,11 +266,14 @@ impl FromChunkableAsset for EcmascriptChunkItemVc {
     }
 
     async fn from_async_asset(
-        context: ChunkingContextVc,
-        asset: ChunkableAssetVc,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+        module: Vc<Box<dyn ChunkableModule>>,
         availability_info: Value<AvailabilityInfo>,
-    ) -> Result<Option<Self>> {
-        let Some(context) = EcmascriptChunkingContextVc::resolve_from(context).await? else {
+    ) -> Result<Option<Vc<Self>>> {
+        let Some(context) =
+            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+                .await?
+        else {
             return Ok(None);
         };
 
@@ -224,26 +282,26 @@ impl FromChunkableAsset for EcmascriptChunkItemVc {
             AvailabilityInfo::Root {
                 current_availability_root,
             } => AvailabilityInfo::Inner {
-                available_assets: AvailableAssetsVc::new(vec![current_availability_root]),
-                current_availability_root: asset.as_asset(),
+                available_modules: AvailableAssets::new(vec![current_availability_root]),
+                current_availability_root: Vc::upcast(module),
             },
             AvailabilityInfo::Inner {
-                available_assets,
+                available_modules,
                 current_availability_root,
             } => AvailabilityInfo::Inner {
-                available_assets: available_assets.with_roots(vec![current_availability_root]),
-                current_availability_root: asset.as_asset(),
+                available_modules: available_modules.with_roots(vec![current_availability_root]),
+                current_availability_root: Vc::upcast(module),
             },
         };
 
         let manifest_asset =
-            ManifestChunkAssetVc::new(asset, context, Value::new(next_availability_info));
-        Ok(Some(ManifestLoaderItemVc::new(manifest_asset).into()))
+            ManifestChunkAsset::new(module, context, Value::new(next_availability_info));
+        Ok(Some(Vc::upcast(ManifestLoaderItem::new(manifest_asset))))
     }
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct EcmascriptChunkItemsChunk(Vec<EcmascriptChunkItemVc>);
+pub struct EcmascriptChunkItemsChunk(Vec<Vc<Box<dyn EcmascriptChunkItem>>>);
 
 #[turbo_tasks::value(transparent)]
-pub struct EcmascriptChunkItems(pub(super) Vec<EcmascriptChunkItemVc>);
+pub struct EcmascriptChunkItems(pub(super) Vec<Vc<Box<dyn EcmascriptChunkItem>>>);

@@ -199,44 +199,16 @@ func (c *APIClient) addTeamParam(params *url.Values) {
 }
 
 // JSONPatch sends a byte array (json.marshalled payload) to a given endpoint with PATCH
-func (c *APIClient) JSONPatch(endpoint string, body []byte) ([]byte, error) {
-	resp, err := c.request(endpoint, http.MethodPatch, body)
-	if err != nil {
-		return nil, err
-	}
-
-	rawResponse, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s", string(rawResponse))
-	}
-
-	return rawResponse, nil
+func (c *APIClient) JSONPatch(ctx context.Context, endpoint string, body []byte) ([]byte, error) {
+	return c.request(ctx, endpoint, http.MethodPatch, body)
 }
 
 // JSONPost sends a byte array (json.marshalled payload) to a given endpoint with POST
-func (c *APIClient) JSONPost(endpoint string, body []byte) ([]byte, error) {
-	resp, err := c.request(endpoint, http.MethodPost, body)
-	if err != nil {
-		return nil, err
-	}
-
-	rawResponse, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response %v", err)
-	}
-
-	// For non 200/201 status codes, return the response body as an error
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return nil, fmt.Errorf("%s", string(rawResponse))
-	}
-
-	return rawResponse, nil
+func (c *APIClient) JSONPost(ctx context.Context, endpoint string, body []byte) ([]byte, error) {
+	return c.request(ctx, endpoint, http.MethodPost, body)
 }
 
-func (c *APIClient) request(endpoint string, method string, body []byte) (*http.Response, error) {
+func (c *APIClient) request(ctx context.Context, endpoint string, method string, body []byte) ([]byte, error) {
 	if err := c.okToRequest(); err != nil {
 		return nil, err
 	}
@@ -266,6 +238,7 @@ func (c *APIClient) request(endpoint string, method string, body []byte) (*http.
 	if err != nil {
 		return nil, err
 	}
+	req.WithContext(ctx)
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
@@ -289,5 +262,15 @@ func (c *APIClient) request(endpoint string, method string, body []byte) (*http.
 		return nil, fmt.Errorf("response from %s is nil, something went wrong", requestURL)
 	}
 
-	return resp, nil
+	rawResponse, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response %v", err)
+	}
+
+	// For non 200/201 status codes, return the response body as an error
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("%s", string(rawResponse))
+	}
+
+	return rawResponse, nil
 }

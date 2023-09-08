@@ -1,32 +1,32 @@
+pub(crate) mod custom_module_type;
 pub mod module_options_context;
 pub mod module_rule;
 pub mod rule_condition;
 
 use anyhow::{Context, Result};
+pub use custom_module_type::CustomModuleType;
 pub use module_options_context::*;
 pub use module_rule::*;
 pub use rule_condition::*;
-use turbo_tasks::primitives::OptionStringVc;
-use turbo_tasks_fs::{glob::GlobVc, FileSystemPathVc};
+use turbo_tasks::Vc;
+use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 use turbopack_core::{
-    reference_type::{ReferenceType, UrlReferenceSubType},
-    resolve::options::{ImportMap, ImportMapVc, ImportMapping, ImportMappingVc},
-    source_transform::SourceTransformsVc,
+    reference_type::{CssReferenceSubType, ReferenceType, UrlReferenceSubType},
+    resolve::options::{ImportMap, ImportMapping},
 };
-use turbopack_css::{CssInputTransform, CssInputTransformsVc};
-use turbopack_ecmascript::{
-    EcmascriptInputTransform, EcmascriptInputTransformsVc, EcmascriptOptions, SpecifiedModuleType,
-};
+use turbopack_css::{CssInputTransform, CssModuleAssetType};
+use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptOptions, SpecifiedModuleType};
 use turbopack_mdx::MdxTransformOptions;
-use turbopack_node::transforms::{postcss::PostCssTransformVc, webpack::WebpackLoadersVc};
+use turbopack_node::transforms::{postcss::PostCssTransform, webpack::WebpackLoaders};
+use turbopack_wasm::source::WebAssemblySourceType;
 
 use crate::evaluate_context::node_evaluate_asset_context;
 
 #[turbo_tasks::function]
 async fn package_import_map_from_import_mapping(
-    package_name: &str,
-    package_mapping: ImportMappingVc,
-) -> Result<ImportMapVc> {
+    package_name: String,
+    package_mapping: Vc<ImportMapping>,
+) -> Result<Vc<ImportMap>> {
     let mut import_map = ImportMap::default();
     import_map.insert_exact_alias(
         format!("@vercel/turbopack/{}", package_name),
@@ -37,13 +37,13 @@ async fn package_import_map_from_import_mapping(
 
 #[turbo_tasks::function]
 async fn package_import_map_from_context(
-    package_name: &str,
-    context_path: FileSystemPathVc,
-) -> Result<ImportMapVc> {
+    package_name: String,
+    context_path: Vc<FileSystemPath>,
+) -> Result<Vc<ImportMap>> {
     let mut import_map = ImportMap::default();
     import_map.insert_exact_alias(
         format!("@vercel/turbopack/{}", package_name),
-        ImportMapping::PrimaryAlternative(package_name.to_string(), Some(context_path)).cell(),
+        ImportMapping::PrimaryAlternative(package_name, Some(context_path)).cell(),
     );
     Ok(import_map.cell())
 }
@@ -54,12 +54,12 @@ pub struct ModuleOptions {
 }
 
 #[turbo_tasks::value_impl]
-impl ModuleOptionsVc {
+impl ModuleOptions {
     #[turbo_tasks::function]
     pub async fn new(
-        path: FileSystemPathVc,
-        context: ModuleOptionsContextVc,
-    ) -> Result<ModuleOptionsVc> {
+        path: Vc<FileSystemPath>,
+        module_options_context: Vc<ModuleOptionsContext>,
+    ) -> Result<Vc<ModuleOptions>> {
         let ModuleOptionsContext {
             enable_jsx,
             enable_types,
@@ -68,6 +68,7 @@ impl ModuleOptionsVc {
             ref decorators,
             enable_mdx,
             enable_mdx_rs,
+            enable_raw_css,
             ref enable_postcss_transform,
             ref enable_webpack_loaders,
             preset_env_versions,
@@ -76,13 +77,13 @@ impl ModuleOptionsVc {
             execution_context,
             ref rules,
             ..
-        } = *context.await?;
+        } = *module_options_context.await?;
         if !rules.is_empty() {
             let path_value = path.await?;
 
             for (condition, new_context) in rules.iter() {
                 if condition.matches(&path_value).await? {
-                    return Ok(ModuleOptionsVc::new(path, *new_context));
+                    return Ok(ModuleOptions::new(path, *new_context));
                 }
             }
         }
@@ -101,7 +102,7 @@ impl ModuleOptionsVc {
                         .output_transforms
                         .iter()
                         .cloned()
-                        .map(|plugin| EcmascriptInputTransform::Plugin(plugin))
+                        .map(EcmascriptInputTransform::Plugin)
                         .collect(),
                 )
             } else {
@@ -120,8 +121,8 @@ impl ModuleOptionsVc {
             transforms.push(EcmascriptInputTransform::React {
                 development: jsx.development,
                 refresh: jsx.react_refresh,
-                import_source: OptionStringVc::cell(jsx.import_source.clone()),
-                runtime: OptionStringVc::cell(jsx.runtime.clone()),
+                import_source: Vc::cell(jsx.import_source.clone()),
+                runtime: Vc::cell(jsx.runtime.clone()),
             });
         }
 
@@ -159,14 +160,14 @@ impl ModuleOptionsVc {
             None
         };
 
-        let vendor_transforms = EcmascriptInputTransformsVc::cell(vec![]);
+        let vendor_transforms = Vc::cell(vec![]);
         let ts_app_transforms = if let Some(transform) = &ts_transform {
             let base_transforms = if let Some(decorators_transform) = &decorators_transform {
                 vec![decorators_transform.clone(), transform.clone()]
             } else {
                 vec![transform.clone()]
             };
-            EcmascriptInputTransformsVc::cell(
+            Vc::cell(
                 base_transforms
                     .iter()
                     .cloned()
@@ -175,11 +176,11 @@ impl ModuleOptionsVc {
                     .collect(),
             )
         } else {
-            EcmascriptInputTransformsVc::cell(transforms.clone())
+            Vc::cell(transforms.clone())
         };
 
-        let css_transforms = CssInputTransformsVc::cell(vec![CssInputTransform::Nested]);
-        let mdx_transforms = EcmascriptInputTransformsVc::cell(
+        let css_transforms = Vc::cell(vec![CssInputTransform::Nested]);
+        let mdx_transforms = Vc::cell(
             if let Some(transform) = &ts_transform {
                 if let Some(decorators_transform) = &decorators_transform {
                     vec![decorators_transform.clone(), transform.clone()]
@@ -204,7 +205,7 @@ impl ModuleOptionsVc {
         // Since typescript transform (`ts_app_transforms`) needs to apply decorators
         // _before_ stripping types, we create ts_app_transforms first in a
         // specific order with typescript, then apply decorators to app_transforms.
-        let app_transforms = EcmascriptInputTransformsVc::cell(
+        let app_transforms = Vc::cell(
             if let Some(decorators_transform) = &decorators_transform {
                 vec![decorators_transform.clone()]
             } else {
@@ -222,58 +223,17 @@ impl ModuleOptionsVc {
                 ModuleRuleCondition::ResourcePathEndsWith(".json".to_string()),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Json)],
             ),
-            ModuleRule::new(
-                ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
-                [
-                    if let Some(options) = enable_postcss_transform {
-                        let execution_context = execution_context
-                            .context("execution_context is required for the postcss_transform")?
-                            .with_layer("postcss");
-
-                        let import_map = if let Some(postcss_package) = options.postcss_package {
-                            package_import_map_from_import_mapping("postcss", postcss_package)
-                        } else {
-                            package_import_map_from_context("postcss", path)
-                        };
-                        Some(ModuleRuleEffect::SourceTransforms(
-                            SourceTransformsVc::cell(vec![PostCssTransformVc::new(
-                                node_evaluate_asset_context(
-                                    execution_context,
-                                    Some(import_map),
-                                    None,
-                                ),
-                                execution_context,
-                            )
-                            .into()]),
-                        ))
-                    } else {
-                        None
-                    },
-                    Some(ModuleRuleEffect::ModuleType(ModuleType::Css(
-                        css_transforms,
-                    ))),
-                ]
-                .into_iter()
-                .flatten()
-                .collect(),
-            ),
-            ModuleRule::new(
-                ModuleRuleCondition::ResourcePathEndsWith(".module.css".to_string()),
-                vec![ModuleRuleEffect::ModuleType(ModuleType::CssModule(
-                    css_transforms,
-                ))],
-            ),
-            ModuleRule::new(
+            ModuleRule::new_all(
                 ModuleRuleCondition::any(vec![
                     ModuleRuleCondition::ResourcePathEndsWith(".js".to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(".jsx".to_string()),
                 ]),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: app_transforms,
-                    options: ecmascript_options.clone(),
+                    options: ecmascript_options,
                 })],
             ),
-            ModuleRule::new(
+            ModuleRule::new_all(
                 ModuleRuleCondition::ResourcePathEndsWith(".mjs".to_string()),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: app_transforms,
@@ -283,7 +243,7 @@ impl ModuleOptionsVc {
                     },
                 })],
             ),
-            ModuleRule::new(
+            ModuleRule::new_all(
                 ModuleRuleCondition::ResourcePathEndsWith(".cjs".to_string()),
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: app_transforms,
@@ -293,7 +253,7 @@ impl ModuleOptionsVc {
                     },
                 })],
             ),
-            ModuleRule::new(
+            ModuleRule::new_all(
                 ModuleRuleCondition::any(vec![
                     ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
@@ -301,16 +261,16 @@ impl ModuleOptionsVc {
                 vec![if enable_types {
                     ModuleRuleEffect::ModuleType(ModuleType::TypescriptWithTypes {
                         transforms: ts_app_transforms,
-                        options: ecmascript_options.clone(),
+                        options: ecmascript_options,
                     })
                 } else {
                     ModuleRuleEffect::ModuleType(ModuleType::Typescript {
                         transforms: ts_app_transforms,
-                        options: ecmascript_options.clone(),
+                        options: ecmascript_options,
                     })
                 }],
             ),
-            ModuleRule::new(
+            ModuleRule::new_all(
                 ModuleRuleCondition::any(vec![
                     ModuleRuleCondition::ResourcePathEndsWith(".mts".to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(".mtsx".to_string()),
@@ -333,7 +293,7 @@ impl ModuleOptionsVc {
                     })
                 }],
             ),
-            ModuleRule::new(
+            ModuleRule::new_all(
                 ModuleRuleCondition::any(vec![
                     ModuleRuleCondition::ResourcePathEndsWith(".cts".to_string()),
                     ModuleRuleCondition::ResourcePathEndsWith(".ctsx".to_string()),
@@ -361,7 +321,7 @@ impl ModuleOptionsVc {
                 vec![ModuleRuleEffect::ModuleType(
                     ModuleType::TypescriptDeclaration {
                         transforms: vendor_transforms,
-                        options: ecmascript_options.clone(),
+                        options: ecmascript_options,
                     },
                 )],
             ),
@@ -381,10 +341,26 @@ impl ModuleOptionsVc {
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Static)],
             ),
             ModuleRule::new(
+                ModuleRuleCondition::any(vec![ModuleRuleCondition::ResourcePathEndsWith(
+                    ".wasm".to_string(),
+                )]),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::WebAssembly {
+                    source_ty: WebAssemblySourceType::Binary,
+                })],
+            ),
+            ModuleRule::new(
+                ModuleRuleCondition::any(vec![ModuleRuleCondition::ResourcePathEndsWith(
+                    ".wat".to_string(),
+                )]),
+                vec![ModuleRuleEffect::ModuleType(ModuleType::WebAssembly {
+                    source_ty: WebAssemblySourceType::Text,
+                })],
+            ),
+            ModuleRule::new(
                 ModuleRuleCondition::ResourcePathHasNoExtension,
                 vec![ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                     transforms: vendor_transforms,
-                    options: ecmascript_options.clone(),
+                    options: ecmascript_options,
                 })],
             ),
             ModuleRule::new(
@@ -395,6 +371,130 @@ impl ModuleOptionsVc {
             ),
         ];
 
+        if enable_raw_css {
+            rules.extend([
+                ModuleRule::new(
+                    ModuleRuleCondition::all(vec![ModuleRuleCondition::ResourcePathEndsWith(
+                        ".css".to_string(),
+                    )]),
+                    vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
+                        ty: CssModuleAssetType::Default,
+                        transforms: css_transforms,
+                    })],
+                ),
+                ModuleRule::new(
+                    ModuleRuleCondition::all(vec![ModuleRuleCondition::ResourcePathEndsWith(
+                        ".module.css".to_string(),
+                    )]),
+                    vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
+                        ty: CssModuleAssetType::Module,
+                        transforms: css_transforms,
+                    })],
+                ),
+            ]);
+        } else {
+            rules.extend([
+                ModuleRule::new(
+                    ModuleRuleCondition::all(vec![
+                        ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
+                        // Only create a global CSS asset if not `@import`ed from CSS already.
+                        ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(
+                            ReferenceType::Css(CssReferenceSubType::AtImport),
+                        )),
+                    ]),
+                    [
+                        if let Some(options) = enable_postcss_transform {
+                            let execution_context = execution_context
+                                .context("execution_context is required for the postcss_transform")?
+                                .with_layer("postcss".to_string());
+
+                            let import_map = if let Some(postcss_package) = options.postcss_package
+                            {
+                                package_import_map_from_import_mapping(
+                                    "postcss".to_string(),
+                                    postcss_package,
+                                )
+                            } else {
+                                package_import_map_from_context("postcss".to_string(), path)
+                            };
+                            Some(ModuleRuleEffect::SourceTransforms(Vc::cell(vec![
+                                Vc::upcast(PostCssTransform::new(
+                                    node_evaluate_asset_context(
+                                        execution_context,
+                                        Some(import_map),
+                                        None,
+                                    ),
+                                    execution_context,
+                                )),
+                            ])))
+                        } else {
+                            None
+                        },
+                        Some(ModuleRuleEffect::ModuleType(ModuleType::CssGlobal)),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+                ),
+                ModuleRule::new(
+                    ModuleRuleCondition::all(vec![
+                        ModuleRuleCondition::ResourcePathEndsWith(".module.css".to_string()),
+                        // Only create a module CSS asset if not `@import`ed from CSS already.
+                        // NOTE: `composes` references should not be treated as `@import`s and
+                        // should also create a module CSS asset.
+                        ModuleRuleCondition::not(ModuleRuleCondition::ReferenceType(
+                            ReferenceType::Css(CssReferenceSubType::AtImport),
+                        )),
+                    ]),
+                    vec![ModuleRuleEffect::ModuleType(ModuleType::CssModule)],
+                ),
+                ModuleRule::new(
+                    ModuleRuleCondition::all(vec![
+                        ModuleRuleCondition::ResourcePathEndsWith(".css".to_string()),
+                        // Create a normal CSS asset if `@import`ed from CSS already.
+                        ModuleRuleCondition::ReferenceType(ReferenceType::Css(
+                            CssReferenceSubType::AtImport,
+                        )),
+                    ]),
+                    vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
+                        ty: CssModuleAssetType::Default,
+                        transforms: css_transforms,
+                    })],
+                ),
+                ModuleRule::new(
+                    ModuleRuleCondition::all(vec![
+                        ModuleRuleCondition::ResourcePathEndsWith(".module.css".to_string()),
+                        // Create a normal CSS asset if `@import`ed from CSS already.
+                        ModuleRuleCondition::ReferenceType(ReferenceType::Css(
+                            CssReferenceSubType::AtImport,
+                        )),
+                    ]),
+                    vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
+                        ty: CssModuleAssetType::Module,
+                        transforms: css_transforms,
+                    })],
+                ),
+                ModuleRule::new_internal(
+                    ModuleRuleCondition::all(vec![ModuleRuleCondition::ResourcePathEndsWith(
+                        ".css".to_string(),
+                    )]),
+                    vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
+                        ty: CssModuleAssetType::Default,
+                        transforms: css_transforms,
+                    })],
+                ),
+                ModuleRule::new_internal(
+                    ModuleRuleCondition::all(vec![ModuleRuleCondition::ResourcePathEndsWith(
+                        ".module.css".to_string(),
+                    )]),
+                    vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
+                        ty: CssModuleAssetType::Module,
+                        transforms: css_transforms,
+                    })],
+                ),
+            ]);
+        }
+
         if enable_mdx || enable_mdx_rs.is_some() {
             let (jsx_runtime, jsx_import_source) = if let Some(enable_jsx) = enable_jsx {
                 let jsx = enable_jsx.await?;
@@ -404,7 +504,7 @@ impl ModuleOptionsVc {
             };
 
             let mdx_options = enable_mdx_rs
-                .unwrap_or(MdxTransformModuleOptionsVc::default())
+                .unwrap_or(MdxTransformModuleOptions::default())
                 .await?;
 
             let mdx_transform_options = (MdxTransformOptions {
@@ -432,36 +532,41 @@ impl ModuleOptionsVc {
             let webpack_loaders_options = webpack_loaders_options.await?;
             let execution_context = execution_context
                 .context("execution_context is required for webpack_loaders")?
-                .with_layer("webpack_loaders");
+                .with_layer("webpack_loaders".to_string());
             let import_map = if let Some(loader_runner_package) =
                 webpack_loaders_options.loader_runner_package
             {
-                package_import_map_from_import_mapping("loader-runner", loader_runner_package)
+                package_import_map_from_import_mapping(
+                    "loader-runner".to_string(),
+                    loader_runner_package,
+                )
             } else {
-                package_import_map_from_context("loader-runner", path)
+                package_import_map_from_context("loader-runner".to_string(), path)
             };
             for (glob, rule) in webpack_loaders_options.rules.await?.iter() {
                 rules.push(ModuleRule::new(
                     ModuleRuleCondition::All(vec![
-                        if !glob.contains("/") {
-                            ModuleRuleCondition::ResourceBasePathGlob(GlobVc::new(glob).await?)
+                        if !glob.contains('/') {
+                            ModuleRuleCondition::ResourceBasePathGlob(
+                                Glob::new(glob.clone()).await?,
+                            )
                         } else {
                             ModuleRuleCondition::ResourcePathGlob {
                                 base: execution_context.project_path().await?,
-                                glob: GlobVc::new(glob).await?,
+                                glob: Glob::new(glob.clone()).await?,
                             }
                         },
-                        ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualAsset),
+                        ModuleRuleCondition::not(ModuleRuleCondition::ResourceIsVirtualSource),
                     ]),
                     vec![
                         // By default, loaders are expected to return ecmascript code.
                         // This can be overriden by specifying e. g. `as: "*.css"` in the rule.
                         ModuleRuleEffect::ModuleType(ModuleType::Ecmascript {
                             transforms: app_transforms,
-                            options: ecmascript_options.clone(),
+                            options: ecmascript_options,
                         }),
-                        ModuleRuleEffect::SourceTransforms(SourceTransformsVc::cell(vec![
-                            WebpackLoadersVc::new(
+                        ModuleRuleEffect::SourceTransforms(Vc::cell(vec![Vc::upcast(
+                            WebpackLoaders::new(
                                 node_evaluate_asset_context(
                                     execution_context,
                                     Some(import_map),
@@ -470,9 +575,8 @@ impl ModuleOptionsVc {
                                 execution_context,
                                 rule.loaders,
                                 rule.rename_as.clone(),
-                            )
-                            .into(),
-                        ])),
+                            ),
+                        )])),
                     ],
                 ));
             }
@@ -480,6 +584,6 @@ impl ModuleOptionsVc {
 
         rules.extend(custom_rules.iter().cloned());
 
-        Ok(ModuleOptionsVc::cell(ModuleOptions { rules }))
+        Ok(ModuleOptions::cell(ModuleOptions { rules }))
     }
 }

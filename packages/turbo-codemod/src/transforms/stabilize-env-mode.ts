@@ -1,12 +1,11 @@
-import path from "path";
-import fs from "fs-extra";
-import { getTurboConfigs } from "@turbo/utils";
+import path from "node:path";
+import { readJsonSync, existsSync } from "fs-extra";
+import { type PackageJson, getTurboConfigs } from "@turbo/utils";
 import type { Schema as TurboJsonSchema } from "@turbo/types";
-
+import type { RootSchema } from "@turbo/types/src/types/config";
 import type { TransformerArgs } from "../types";
-import getTransformerHelpers from "../utils/getTransformerHelpers";
-import { TransformerResults } from "../runner";
-import { RootSchema } from "@turbo/types/src/types/config";
+import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import type { TransformerResults } from "../runner";
 
 // transformer details
 const TRANSFORMER = "stabilize-env-mode";
@@ -15,10 +14,10 @@ const DESCRIPTION =
 const INTRODUCED_IN = "1.10.0";
 
 function migrateRootConfig(config: RootSchema) {
-  let oldConfig = config.experimentalGlobalPassThroughEnv;
-  let newConfig = config.globalPassThroughEnv;
+  const oldConfig = config.experimentalGlobalPassThroughEnv;
+  const newConfig = config.globalPassThroughEnv;
   // Set to an empty array is meaningful, so we have undefined as an option here.
-  let output: string[] | undefined;
+  let output: Array<string> | undefined;
   if (Array.isArray(oldConfig) || Array.isArray(newConfig)) {
     output = [];
 
@@ -48,11 +47,11 @@ function migrateRootConfig(config: RootSchema) {
 
 function migrateTaskConfigs(config: TurboJsonSchema) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
-    let oldConfig = taskDef.experimentalPassThroughEnv;
-    let newConfig = taskDef.passThroughEnv;
+    const oldConfig = taskDef.experimentalPassThroughEnv;
+    const newConfig = taskDef.passThroughEnv;
 
     // Set to an empty array is meaningful, so we have undefined as an option here.
-    let output: string[] | undefined;
+    let output: Array<string> | undefined;
     if (Array.isArray(oldConfig) || Array.isArray(newConfig)) {
       output = [];
 
@@ -98,7 +97,7 @@ export function transformer({
   let packageJSON = {};
 
   try {
-    packageJSON = fs.readJSONSync(packageJsonPath);
+    packageJSON = readJsonSync(packageJsonPath) as PackageJson;
   } catch (e) {
     // readJSONSync probably failed because the file doesn't exist
   }
@@ -114,13 +113,13 @@ export function transformer({
     "Rewriting `experimentalPassThroughEnv` and `experimentalGlobalPassThroughEnv`"
   );
   const turboConfigPath = path.join(root, "turbo.json");
-  if (!fs.existsSync(turboConfigPath)) {
+  if (!existsSync(turboConfigPath)) {
     return runner.abortTransform({
       reason: `No turbo.json found at ${root}. Is the path correct?`,
     });
   }
 
-  const turboJson: RootSchema = fs.readJsonSync(turboConfigPath);
+  const turboJson = readJsonSync(turboConfigPath) as TurboJsonSchema;
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateRootConfig(turboJson),
@@ -129,10 +128,10 @@ export function transformer({
   // find and migrate any workspace configs
   const allTurboJsons = getTurboConfigs(root);
   allTurboJsons.forEach((workspaceConfig) => {
-    const { config, turboConfigPath, isRootConfig } = workspaceConfig;
+    const { config, turboConfigPath: filePath, isRootConfig } = workspaceConfig;
     if (!isRootConfig) {
       runner.modifyFile({
-        filePath: turboConfigPath,
+        filePath,
         after: migrateTaskConfigs(config),
       });
     }
@@ -142,10 +141,11 @@ export function transformer({
 }
 
 const transformerMeta = {
-  name: `${TRANSFORMER}: ${DESCRIPTION}`,
-  value: TRANSFORMER,
+  name: TRANSFORMER,
+  description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
   transformer,
 };
 
+// eslint-disable-next-line import/no-default-export -- transforms require default export
 export default transformerMeta;

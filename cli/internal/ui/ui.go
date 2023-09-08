@@ -10,7 +10,6 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/mattn/go-isatty"
-	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/ci"
 )
 
@@ -87,35 +86,4 @@ func (into *stripAnsiWriter) Write(p []byte) (int, error) {
 	// wrappedWrite.Write call succeeded we will return len(p) as the number of bytes
 	// written.
 	return len(p), nil
-}
-
-// Default returns the default colored ui
-func Default() *cli.ColoredUi {
-	return BuildColoredUi(ColorModeUndefined)
-}
-
-func BuildColoredUi(colorMode ColorMode) *cli.ColoredUi {
-	colorMode = applyColorMode(colorMode)
-
-	var outWriter, errWriter io.Writer
-
-	if colorMode == ColorModeSuppressed {
-		outWriter = &stripAnsiWriter{wrappedWriter: os.Stdout}
-		errWriter = &stripAnsiWriter{wrappedWriter: os.Stderr}
-	} else {
-		outWriter = os.Stdout
-		errWriter = os.Stderr
-	}
-
-	return &cli.ColoredUi{
-		Ui: &cli.BasicUi{
-			Reader:      os.Stdin,
-			Writer:      outWriter,
-			ErrorWriter: errWriter,
-		},
-		OutputColor: cli.UiColorNone,
-		InfoColor:   cli.UiColorNone,
-		WarnColor:   cli.UiColor{Code: int(color.FgYellow), Bold: false},
-		ErrorColor:  cli.UiColorRed,
-	}
 }

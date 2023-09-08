@@ -1,8 +1,6 @@
 package runsummary
 
 import (
-	"os"
-
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -23,30 +21,31 @@ type TaskCacheSummary struct {
 // Importantly, it adds the derived keys of `source` and `status` based on
 // the local/remote booleans. It would be nice if these were just included
 // from upstream, but that is a more invasive change.
-func NewTaskCacheSummary(itemStatus cache.ItemStatus, timeSaved *int) TaskCacheSummary {
+func NewTaskCacheSummary(itemStatus cache.ItemStatus) TaskCacheSummary {
 	status := cache.CacheEventMiss
-	if itemStatus.Local || itemStatus.Remote {
+	if itemStatus.Hit {
 		status = cache.CacheEventHit
 	}
-
 	var source string
-	if itemStatus.Local {
-		source = cache.CacheSourceFS
-	} else if itemStatus.Remote {
-		source = cache.CacheSourceRemote
+	if itemStatus.Hit {
+		source = itemStatus.Source
 	}
 
 	cs := TaskCacheSummary{
-		// copy these over
-		Local:  itemStatus.Local,
-		Remote: itemStatus.Remote,
-		Status: status,
-		Source: source,
+		Status:    status,
+		Source:    source,
+		TimeSaved: itemStatus.TimeSaved,
 	}
-	// add in a dereferences timeSaved, should be 0 if nil
-	if timeSaved != nil {
-		cs.TimeSaved = *timeSaved
-	}
+
+	// Assign these deprecated fields Local and Remote based on the information available
+	// in the itemStatus. Note that these fields are problematic, because an ItemStatus isn't always
+	// the composite of both local and remote caches. That means that an ItemStatus might say it
+	// was a local cache hit, and we return remote: false here. That's misleading because it does
+	// not mean that there is no remote cache hit, it _could_ mean that we never checked the remote
+	// cache. These fields are being deprecated for this reason.
+	cs.Local = itemStatus.Hit && itemStatus.Source == cache.CacheSourceFS
+	cs.Remote = itemStatus.Hit && itemStatus.Source == cache.CacheSourceRemote
+
 	return cs
 }
 
@@ -66,7 +65,7 @@ type TaskSummary struct {
 	CommandArguments       []string                              `json:"cliArguments"`
 	Outputs                []string                              `json:"outputs"`
 	ExcludedOutputs        []string                              `json:"excludedOutputs"`
-	LogFile                string                                `json:"logFile"`
+	LogFileRelativePath    string                                `json:"logFile"`
 	Dir                    string                                `json:"directory,omitempty"`
 	Dependencies           []string                              `json:"dependencies"`
 	Dependents             []string                              `json:"dependents"`
@@ -77,15 +76,6 @@ type TaskSummary struct {
 	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
 	DotEnv                 turbopath.AnchoredUnixPathArray       `json:"dotEnv"`
 	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
-}
-
-// GetLogs reads the Logfile and returns the data
-func (ts *TaskSummary) GetLogs() []byte {
-	bytes, err := os.ReadFile(ts.LogFile)
-	if err != nil {
-		return []byte{}
-	}
-	return bytes
 }
 
 // TaskEnvConfiguration contains the environment variable inputs for a task

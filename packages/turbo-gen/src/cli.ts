@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 
+import http from "node:http";
+import https from "node:https";
 import chalk from "chalk";
 import { Argument, Command, Option } from "commander";
-import notifyUpdate from "./utils/notifyUpdate";
 import { logger } from "@turbo/utils";
-
-import { workspace, run, raw } from "./commands";
+import { ProxyAgent } from "proxy-agent";
 import cliPkg from "../package.json";
+import { notifyUpdate } from "./utils/notifyUpdate";
+import { workspace, run, raw } from "./commands";
 import { GeneratorError } from "./utils/error";
+
+// Support http proxy vars
+const agent = new ProxyAgent();
+http.globalAgent = agent;
+https.globalAgent = agent;
 
 const turboGenCli = new Command();
 
@@ -111,14 +118,14 @@ turboGenCli
   .parseAsync()
   .then(notifyUpdate)
   .catch(async (error) => {
-    console.log();
+    logger.log();
     if (error instanceof GeneratorError) {
       logger.error(error.message);
     } else {
       logger.error("Unexpected error. Please report it as a bug:");
-      console.log(error.message);
+      logger.log(error);
     }
-    console.log();
+    logger.log();
     await notifyUpdate();
     process.exit(1);
   });

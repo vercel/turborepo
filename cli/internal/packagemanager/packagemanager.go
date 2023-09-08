@@ -40,7 +40,7 @@ type PackageManager struct {
 
 	// The separator that the Package Manger uses to identify arguments that
 	// should be passed through to the underlying script.
-	ArgSeparator []string
+	ArgSeparator func(userArgs []string) []string
 
 	// Return the list of workspace glob
 	getWorkspaceGlobs func(rootpath turbopath.AbsoluteSystemPath) ([]string, error)

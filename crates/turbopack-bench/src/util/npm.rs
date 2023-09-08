@@ -1,6 +1,10 @@
 use std::{
-    fs::{self, File},
-    io::{self, Write},
+    fs::{
+        File, {self},
+    },
+    io::{
+        Write, {self},
+    },
     path::Path,
 };
 
@@ -42,7 +46,14 @@ pub fn install(install_dir: &Path, packages: &[NpmPackage<'_>]) -> Result<()> {
             .write_all(format!("{:#}", package_json).as_bytes())?;
     }
 
-    let mut args = vec!["install".to_owned(), "--force".to_owned()];
+    let mut args = vec![
+        "install".to_owned(),
+        "--force".to_owned(),
+        // install-links will copy local dependencies into the node_modules folder instead of
+        // symlinking, which fixes our root detection.
+        "--install-links".to_owned(),
+        "true".to_owned(),
+    ];
     args.append(
         &mut packages
             .iter()

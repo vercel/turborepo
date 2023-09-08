@@ -1,20 +1,21 @@
 use std::fmt::Display;
 
 use indexmap::IndexMap;
+use turbo_tasks::Vc;
 
-use crate::{asset::AssetVc, resolve::ModulePartVc};
+use crate::{module::Module, resolve::ModulePart};
 
 /// Named references to inner assets. Modules can used them to allow to
 /// per-module aliases of some requests to already created module assets.
 /// Name is usually in UPPER_CASE to make it clear that this is an inner asset.
 #[turbo_tasks::value(transparent)]
-pub struct InnerAssets(IndexMap<String, AssetVc>);
+pub struct InnerAssets(IndexMap<String, Vc<Box<dyn Module>>>);
 
 #[turbo_tasks::value_impl]
-impl InnerAssetsVc {
+impl InnerAssets {
     #[turbo_tasks::function]
-    pub fn empty() -> Self {
-        InnerAssetsVc::cell(IndexMap::new())
+    pub fn empty() -> Vc<Self> {
+        Vc::cell(IndexMap::new())
     }
 }
 
@@ -34,7 +35,7 @@ pub enum CommonJsReferenceSubType {
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Default, Clone, PartialOrd, Ord, Hash)]
 pub enum EcmaScriptModulesReferenceSubType {
-    ImportPart(ModulePartVc),
+    ImportPart(Vc<ModulePart>),
     Custom(u8),
     #[default]
     Undefined,
@@ -45,6 +46,12 @@ pub enum EcmaScriptModulesReferenceSubType {
 pub enum CssReferenceSubType {
     AtImport,
     Compose,
+    /// Reference from any asset to a CSS-parseable asset.
+    ///
+    /// This marks the boundary between non-CSS and CSS assets. The Next.js App
+    /// Router implementation uses this to inject client references in-between
+    /// Global/Module CSS assets and the underlying CSS assets.
+    Internal,
     Custom(u8),
     Undefined,
 }
@@ -65,6 +72,8 @@ pub enum TypeScriptReferenceSubType {
     Undefined,
 }
 
+// TODO(sokra) this was next.js specific values. We want to solve this in a
+// different way.
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub enum EntryReferenceSubType {
@@ -74,6 +83,7 @@ pub enum EntryReferenceSubType {
     AppPage,
     AppRoute,
     AppClientComponent,
+    Middleware,
     Runtime,
     Custom(u8),
     Undefined,
@@ -88,7 +98,7 @@ pub enum ReferenceType {
     Url(UrlReferenceSubType),
     TypeScript(TypeScriptReferenceSubType),
     Entry(EntryReferenceSubType),
-    Internal(InnerAssetsVc),
+    Internal(Vc<InnerAssets>),
     Custom(u8),
     Undefined,
 }
@@ -150,5 +160,15 @@ impl ReferenceType {
             }
             ReferenceType::Undefined => true,
         }
+    }
+
+    /// Returns true if this reference type is internal. This will be used in
+    /// combination with [`ModuleRuleCondition::Internal`] to determine if a
+    /// rule should be applied to an internal asset/reference.
+    pub fn is_internal(&self) -> bool {
+        matches!(
+            self,
+            ReferenceType::Internal(_) | ReferenceType::Css(CssReferenceSubType::Internal)
+        )
     }
 }

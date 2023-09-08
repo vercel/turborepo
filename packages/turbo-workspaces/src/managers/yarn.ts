@@ -1,8 +1,8 @@
-import fs from "fs-extra";
-import path from "path";
+import path from "node:path";
+import { existsSync, writeJSONSync, rmSync, rm } from "fs-extra";
 import { ConvertError } from "../errors";
-import updateDependencies from "../updateDependencies";
-import {
+import { updateDependencies } from "../updateDependencies";
+import type {
   DetectArgs,
   ReadArgs,
   CreateArgs,
@@ -10,6 +10,7 @@ import {
   ConvertArgs,
   CleanArgs,
   Project,
+  ManagerHandler,
 } from "../types";
 import {
   getMainStep,
@@ -18,6 +19,7 @@ import {
   expandPaths,
   expandWorkspaces,
   getWorkspacePackageManager,
+  parseWorkspacePackages,
 } from "../utils";
 
 /**
@@ -26,12 +28,13 @@ import {
  *  1. yarn.lock
  *  2. packageManager field in package.json
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- must match the detect type signature
 async function detect(args: DetectArgs): Promise<boolean> {
   const lockFile = path.join(args.workspaceRoot, "yarn.lock");
   const packageManager = getWorkspacePackageManager({
     workspaceRoot: args.workspaceRoot,
   });
-  return fs.existsSync(lockFile) || packageManager === "yarn";
+  return existsSync(lockFile) || packageManager === "yarn";
 }
 
 /**
@@ -47,6 +50,9 @@ async function read(args: ReadArgs): Promise<Project> {
 
   const packageJson = getPackageJson(args);
   const { name, description } = getWorkspaceInfo(args);
+  const workspaceGlobs = parseWorkspacePackages({
+    workspaces: packageJson.workspaces,
+  });
   return {
     name,
     description,
@@ -56,9 +62,9 @@ async function read(args: ReadArgs): Promise<Project> {
       lockFile: "yarn.lock",
     }),
     workspaceData: {
-      globs: packageJson.workspaces || [],
+      globs: workspaceGlobs,
       workspaces: expandWorkspaces({
-        workspaceGlobs: packageJson.workspaces,
+        workspaceGlobs,
         ...args,
       }),
     },
@@ -73,6 +79,7 @@ async function read(args: ReadArgs): Promise<Project> {
  *  2. Setting the packageManager field in package.json
  *  3. Updating all workspace package.json dependencies to ensure correct format
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- must match the create type signature
 async function create(args: CreateArgs): Promise<void> {
   const { project, to, logger, options } = args;
   const hasWorkspaces = project.workspaceData.globs.length > 0;
@@ -103,7 +110,7 @@ async function create(args: CreateArgs): Promise<void> {
     packageJson.workspaces = project.workspaceData.globs;
 
     if (!options?.dry) {
-      fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+      writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
     }
 
     // root dependencies
@@ -117,13 +124,11 @@ async function create(args: CreateArgs): Promise<void> {
 
     // workspace dependencies
     logger.workspaceHeader();
-    project.workspaceData.workspaces.forEach((workspace) =>
-      updateDependencies({ workspace, project, to, logger, options })
-    );
-  } else {
-    if (!options?.dry) {
-      fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
-    }
+    project.workspaceData.workspaces.forEach((workspace) => {
+      updateDependencies({ workspace, project, to, logger, options });
+    });
+  } else if (!options?.dry) {
+    writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
   }
 }
 
@@ -156,7 +161,7 @@ async function remove(args: RemoveArgs): Promise<void> {
   delete packageJson.packageManager;
 
   if (!options?.dry) {
-    fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+    writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
 
     // collect all workspace node_modules directories
     const allModulesDirs = [
@@ -166,9 +171,7 @@ async function remove(args: RemoveArgs): Promise<void> {
     try {
       logger.subStep(`removing "node_modules"`);
       await Promise.all(
-        allModulesDirs.map((dir) =>
-          fs.rm(dir, { recursive: true, force: true })
-        )
+        allModulesDirs.map((dir) => rm(dir, { recursive: true, force: true }))
       );
     } catch (err) {
       throw new ConvertError("Failed to remove node_modules", {
@@ -183,6 +186,7 @@ async function remove(args: RemoveArgs): Promise<void> {
  * from this package manager that were needed for install,
  * but not required after migration
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- must match the clean type signature
 async function clean(args: CleanArgs): Promise<void> {
   const { project, logger, options } = args;
 
@@ -190,7 +194,7 @@ async function clean(args: CleanArgs): Promise<void> {
     `removing ${path.relative(project.paths.root, project.paths.lockfile)}`
   );
   if (!options?.dry) {
-    fs.rmSync(project.paths.lockfile, { force: true });
+    rmSync(project.paths.lockfile, { force: true });
   }
 }
 
@@ -199,18 +203,19 @@ async function clean(args: CleanArgs): Promise<void> {
  *
  * If this is not possible, the non yarn lockfile is removed
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- must match the convertLock type signature
 async function convertLock(args: ConvertArgs): Promise<void> {
   const { project, options } = args;
 
   if (project.packageManager !== "yarn") {
     // remove the lockfile
     if (!options?.dry) {
-      fs.rmSync(project.paths.lockfile, { force: true });
+      rmSync(project.paths.lockfile, { force: true });
     }
   }
 }
 
-const yarn = {
+export const yarn: ManagerHandler = {
   detect,
   read,
   create,
@@ -218,5 +223,3 @@ const yarn = {
   clean,
   convertLock,
 };
-
-export default yarn;

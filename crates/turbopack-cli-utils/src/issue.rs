@@ -11,13 +11,11 @@ use std::{
 use anyhow::{anyhow, Result};
 use crossterm::style::{StyledContent, Stylize};
 use owo_colors::{OwoColorize as _, Style};
-use turbo_tasks::{
-    primitives::BoolVc, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
-};
+use turbo_tasks::{RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt, Vc};
 use turbo_tasks_fs::{source_context::get_source_context, FileLinesContent};
 use turbopack_core::issue::{
-    CapturedIssues, IssueReporter, IssueReporterVc, IssueSeverity, PlainIssue,
-    PlainIssueProcessingPathItem, PlainIssueProcessingPathItemReadRef, PlainIssueSource,
+    CapturedIssues, Issue, IssueReporter, IssueSeverity, PlainIssue, PlainIssueProcessingPathItem,
+    PlainIssueSource,
 };
 
 use crate::source_context::format_source_context_lines;
@@ -80,7 +78,7 @@ fn severity_to_style(severity: IssueSeverity) -> Style {
 }
 
 fn format_source_content(source: &PlainIssueSource, formatted_issue: &mut String) {
-    if let FileLinesContent::Lines(lines) = source.asset.content.lines() {
+    if let FileLinesContent::Lines(lines) = source.asset.content.lines_ref() {
         let start_line = source.start.line;
         let end_line = source.end.line;
         let start_column = source.start.column;
@@ -92,14 +90,14 @@ fn format_source_content(source: &PlainIssueSource, formatted_issue: &mut String
 }
 
 fn format_optional_path(
-    path: &Option<Vec<PlainIssueProcessingPathItemReadRef>>,
+    path: &Option<Vec<ReadRef<PlainIssueProcessingPathItem>>>,
     formatted_issue: &mut String,
 ) -> Result<()> {
     if let Some(path) = path {
         let mut last_context = None;
         for item in path.iter().rev() {
             let PlainIssueProcessingPathItem {
-                ref context,
+                file_path: ref context,
                 ref description,
             } = **item;
             if let Some(context) = context {
@@ -140,7 +138,7 @@ pub fn format_issue(
     let severity = plain_issue.severity;
     // TODO CLICKABLE PATHS
     let context_path = plain_issue
-        .context
+        .file_path
         .replace("[project]", &current_dir.to_string_lossy())
         .replace("/./", "/")
         .replace("\\\\?\\", "");
@@ -189,7 +187,7 @@ pub fn format_issue(
         "{} - [{}] {}",
         severity.style(severity_to_style(severity)),
         category,
-        plain_issue.context
+        plain_issue.file_path
     )
     .unwrap();
 
@@ -335,9 +333,9 @@ impl PartialEq for ConsoleUi {
 }
 
 #[turbo_tasks::value_impl]
-impl ConsoleUiVc {
+impl ConsoleUi {
     #[turbo_tasks::function]
-    pub fn new(options: TransientInstance<LogOptions>) -> Self {
+    pub fn new(options: TransientInstance<LogOptions>) -> Vc<Self> {
         ConsoleUi {
             options: (*options).clone(),
             seen: Arc::new(Mutex::new(SeenIssues::new())),
@@ -353,7 +351,8 @@ impl IssueReporter for ConsoleUi {
         &self,
         issues: TransientInstance<ReadRef<CapturedIssues>>,
         source: TransientValue<RawVc>,
-    ) -> Result<BoolVc> {
+        min_failing_severity: Vc<IssueSeverity>,
+    ) -> Result<Vc<bool>> {
         let issues = &*issues;
         let LogOptions {
             ref current_dir,
@@ -389,11 +388,12 @@ impl IssueReporter for ConsoleUi {
             }
 
             let severity = plain_issue.severity;
-            if severity == IssueSeverity::Fatal {
+            if severity <= *min_failing_severity.await? {
                 has_fatal = true;
             }
 
-            let context_path = make_relative_to_cwd(&plain_issue.context, project_dir, current_dir);
+            let context_path =
+                make_relative_to_cwd(&plain_issue.file_path, project_dir, current_dir);
             let category = &plain_issue.category;
             let title = &plain_issue.title;
             let processing_path = &*plain_issue.processing_path;
@@ -529,7 +529,7 @@ impl IssueReporter for ConsoleUi {
             }
         }
 
-        Ok(BoolVc::cell(has_fatal))
+        Ok(Vc::cell(has_fatal))
     }
 }
 

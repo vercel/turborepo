@@ -1,52 +1,105 @@
-use std::path::PathBuf;
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
-use bstr::BStr;
+use camino::{Utf8Path, Utf8PathBuf};
 
-use crate::PathError;
+use crate::{AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
-pub struct RelativeUnixPath {
-    inner: BStr,
+pub struct RelativeUnixPath(str);
+
+impl Display for RelativeUnixPath {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", &self.0)
+    }
 }
 
 impl RelativeUnixPath {
-    pub fn new<P: AsRef<BStr>>(value: &P) -> Result<&Self, PathError> {
+    pub fn new<'a, P: AsRef<str> + 'a>(value: P) -> Result<&'a Self, PathError> {
         let path = value.as_ref();
-        if path.first() == Some(&b'/') {
-            return Err(PathError::not_relative_error(path).into());
+        if path.starts_with('/') {
+            return Err(PathError::NotRelative(path.to_string()));
         }
         // copied from stdlib path.rs: relies on the representation of
-        // RelativeUnixPath being just a BStr, the same way Path relies on
+        // RelativeUnixPath being just a str, the same way Path relies on
         // just being an OsStr
-        Ok(unsafe { &*(path as *const BStr as *const Self) })
+        Ok(unsafe { &*(path as *const str as *const Self) })
     }
 
-    pub(crate) fn to_system_path_buf(&self) -> Result<PathBuf, PathError> {
+    pub(crate) fn to_system_path_buf(&self) -> Utf8PathBuf {
         #[cfg(unix)]
         {
-            // On unix, unix paths are already system paths. Copy the bytes
+            // On unix, unix paths are already system paths. Copy the string
             // but skip validation.
-            use std::{ffi::OsString, os::unix::prelude::OsStringExt};
-            Ok(PathBuf::from(OsString::from_vec(self.inner.to_vec())))
+            Utf8PathBuf::from(&self.0)
         }
 
         #[cfg(windows)]
         {
-            let system_path_bytes = self
-                .inner
-                .iter()
-                .map(|byte| if *byte == b'/' { b'\\' } else { *byte })
-                .collect::<Vec<u8>>();
-            let system_path_string = String::from_utf8(system_path_bytes).map_err(|err| {
-                PathError::InvalidUnicode(String::from_utf8_lossy(err.as_bytes()).to_string())
-            })?;
-            Ok(PathBuf::from(system_path_string))
+            let system_path_string = self.0.replace('/', "\\");
+            Utf8PathBuf::from(system_path_string)
         }
+    }
+
+    pub fn to_anchored_system_path_buf(&self) -> AnchoredSystemPathBuf {
+        AnchoredSystemPathBuf(self.to_system_path_buf())
+    }
+
+    pub fn to_owned(&self) -> RelativeUnixPathBuf {
+        RelativeUnixPathBuf(self.0.to_owned())
+    }
+
+    pub fn strip_prefix(
+        &self,
+        prefix: impl AsRef<RelativeUnixPath>,
+    ) -> Result<&RelativeUnixPath, PathError> {
+        let stripped_path = self
+            .0
+            .strip_prefix(&prefix.as_ref().0)
+            .ok_or_else(|| PathError::NotParent(prefix.as_ref().to_string(), self.to_string()))?;
+
+        // Remove leading '/' if present
+        let stripped_path = stripped_path.strip_prefix('/').unwrap_or(stripped_path);
+
+        Ok(unsafe { &*(stripped_path as *const str as *const Self) })
+    }
+
+    // NOTE: This only applies to full path components. If you
+    // want to check a file extension, use `RelativeUnixPathBuf::extension`.
+    pub fn ends_with(&self, suffix: impl AsRef<str>) -> bool {
+        self.0.ends_with(suffix.as_ref())
+    }
+
+    pub fn extension(&self) -> Option<&str> {
+        Utf8Path::new(&self.0).extension()
     }
 }
 
 impl AsRef<RelativeUnixPath> for RelativeUnixPath {
     fn as_ref(&self) -> &RelativeUnixPath {
         self
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::AnchoredSystemPath;
+
+    #[test]
+    fn test_to_anchored_system_path_buf() {
+        let path = RelativeUnixPath::new("foo/bar/baz").unwrap();
+        let expected = AnchoredSystemPath::new(if cfg!(windows) {
+            // Unix path separators should be converted
+            "foo\\bar\\baz"
+        } else {
+            // Unix paths already have correct separators
+            "foo/bar/baz"
+        })
+        .unwrap();
+        assert_eq!(&*path.to_anchored_system_path_buf(), expected);
     }
 }

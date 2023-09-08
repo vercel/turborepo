@@ -1,23 +1,36 @@
 #![feature(assert_matches)]
 #![feature(box_patterns)]
+#![feature(error_generic_member_access)]
+#![feature(provide_any)]
+#![feature(hash_extract_if)]
+#![feature(option_get_or_insert_default)]
+#![feature(once_cell_try)]
+#![deny(clippy::all)]
+// Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
+#![allow(clippy::needless_pass_by_ref_mut)]
 
 mod child;
 mod cli;
 mod commands;
 mod config;
 mod daemon;
+mod engine;
 mod execution_state;
+mod framework;
 pub(crate) mod globwatcher;
+pub mod graph;
+mod hash;
 mod manager;
 mod opts;
+mod package_graph;
 mod package_json;
 mod package_manager;
+mod rewrite_json;
 mod run;
 mod shim;
+mod task_graph;
 mod tracing;
-mod ui;
 
-use ::tracing::error;
 use anyhow::Result;
 pub use child::spawn_child;
 
@@ -45,7 +58,9 @@ pub fn main() -> Payload {
     match shim::run() {
         Ok(payload) => payload,
         Err(err) => {
-            error!("{}", err.to_string());
+            // This raw print matches the Go behavior, once we no longer care
+            // about matching formatting we should remove this.
+            println!("Turbo error: {err}");
             Payload::Rust(Err(err))
         }
     }
