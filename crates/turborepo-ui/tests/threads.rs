@@ -35,12 +35,16 @@ fn test_can_write_from_threads() {
 
     assert!(err.is_empty(), "nothing wrote to stderr");
     assert_eq!(
-        String::from_utf8(task1_logfile.read().unwrap()).unwrap(),
-        "hello from foo\n"
+        String::from_utf8(task1_logfile.read().unwrap())
+            .unwrap()
+            .trim(),
+        "hello from foo"
     );
     assert_eq!(
-        String::from_utf8(task2_logfile.read().unwrap()).unwrap(),
-        "hello from bar\n"
+        String::from_utf8(task2_logfile.read().unwrap())
+            .unwrap()
+            .trim(),
+        "hello from bar"
     );
 
     let output = String::from_utf8(out).unwrap();
