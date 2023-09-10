@@ -38,9 +38,10 @@ use nohash_hasher::IsEnabled;
 use self::{leaf::top_tree, top_tree::TopTree};
 pub use self::{leaf::AggregationTreeLeaf, top_tree::AggregationInfoGuard};
 
-pub(self) const MAX_INNER_UPPERS: usize = 10;
-pub(self) const FORCE_LEFT_CHILD_AS_INNER: bool = true;
-pub(self) const MAX_NESTING_LEVEL: u8 = 10;
+pub(self) const MAX_INNER_UPPERS: usize = 50;
+pub(self) const FORCE_LEFT_CHILD_CHILD_AS_INNER: bool = false;
+pub(self) const LEFT_CHILD_CHILD_USE_BLUE: bool = true;
+pub(self) const MAX_NESTING_LEVEL: u8 = 15;
 pub(self) const USE_BLUE_NODES: bool = true;
 
 pub trait AggregationContext {

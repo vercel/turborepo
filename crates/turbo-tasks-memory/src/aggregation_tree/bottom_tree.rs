@@ -13,8 +13,8 @@ use super::{
     inner_refs::{BottomRef, ChildLocation, TopRef},
     leaf::{add_inner_upper_to_item, bottom_tree, remove_inner_upper_from_item},
     top_tree::TopTree,
-    AggregationContext, FORCE_LEFT_CHILD_AS_INNER, MAX_INNER_UPPERS, MAX_NESTING_LEVEL,
-    USE_BLUE_NODES,
+    AggregationContext, FORCE_LEFT_CHILD_CHILD_AS_INNER, LEFT_CHILD_CHILD_USE_BLUE,
+    MAX_INNER_UPPERS, MAX_NESTING_LEVEL, USE_BLUE_NODES,
 };
 use crate::count_hash_set::{CountHashSet, RemoveIfEntryResult};
 
@@ -70,7 +70,8 @@ struct SplitChildren<'a, I> {
 
 impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     fn is_blue(&self, hash: u32) -> bool {
-        USE_BLUE_NODES && (hash.rotate_right(self.height as u32) & 1) == 0
+        let height = self.height;
+        is_blue(hash, height)
     }
 
     fn split_children<'a>(
@@ -89,17 +90,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 white.push((hash, child));
             }
         }
-        if !white.is_empty() {
-            let state = self.state.lock();
-            white.retain(|&(hash, child)| {
-                if state.following.get(child) > 0 {
-                    blue.push((hash, child));
-                    false
-                } else {
-                    true
-                }
-            });
-        }
         SplitChildren { blue, white }
     }
 
@@ -114,15 +104,31 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     {
         match child_location {
             ChildLocation::Left => {
-                // the left child has new children
-                // this means it's a inner child of this node
-                // We always want to aggregate over at least connectivity 1
-                self.add_children_of_child_inner(
-                    context,
-                    children.into_iter().map(|(_, c)| c),
-                    FORCE_LEFT_CHILD_AS_INNER,
-                    nesting_level,
-                );
+                if LEFT_CHILD_CHILD_USE_BLUE {
+                    let SplitChildren { blue, mut white } = self.split_children(children);
+                    if !blue.is_empty() {
+                        self.add_children_of_child_following(context, blue);
+                    }
+                    if !white.is_empty() {
+                        self.add_children_of_child_if_following(&mut white);
+                        self.add_children_of_child_inner(
+                            context,
+                            white.iter().map(|&(_, c)| c),
+                            FORCE_LEFT_CHILD_CHILD_AS_INNER,
+                            nesting_level,
+                        );
+                    }
+                } else {
+                    // the left child has new children
+                    // this means it's a inner child of this node
+                    // We always want to aggregate over at least connectivity 1
+                    self.add_children_of_child_inner(
+                        context,
+                        children.into_iter().map(|(_, c)| c),
+                        FORCE_LEFT_CHILD_CHILD_AS_INNER,
+                        nesting_level,
+                    );
+                }
             }
             ChildLocation::Inner => {
                 // the inner child has new children
@@ -133,6 +139,9 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                     return;
                 }
                 let SplitChildren { blue, mut white } = self.split_children(children);
+                if !blue.is_empty() {
+                    self.add_children_of_child_following(context, blue);
+                }
                 if !white.is_empty() {
                     self.add_children_of_child_if_following(&mut white);
                     self.add_children_of_child_inner(
@@ -141,9 +150,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                         false,
                         nesting_level,
                     );
-                }
-                if !blue.is_empty() {
-                    self.add_children_of_child_following(context, blue);
                 }
             }
         }
@@ -220,6 +226,13 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     ) {
         match child_location {
             ChildLocation::Left => {
+                if LEFT_CHILD_CHILD_USE_BLUE && self.is_blue(child_of_child_hash) {
+                    // the left child has a new child
+                    // and it's a blue node
+                    // this means it's a following child of this node
+                    self.add_child_of_child_following(context, child_of_child, child_of_child_hash);
+                    return;
+                }
                 // the left child has a new child
                 // this means it's a inner child of this node
                 // We always want to aggregate over at least connectivity 1
@@ -227,7 +240,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                     context,
                     child_of_child,
                     child_of_child_hash,
-                    FORCE_LEFT_CHILD_AS_INNER,
+                    FORCE_LEFT_CHILD_CHILD_AS_INNER,
                     nesting_level,
                 );
             }
@@ -519,6 +532,10 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     }
 }
 
+fn is_blue(hash: u32, height: u8) -> bool {
+    USE_BLUE_NODES && (hash.rotate_right(height as u32) & 1) == 0
+}
+
 fn propagate_change_to_upper<C: AggregationContext>(
     state: &mut MutexGuard<BottomTreeState<C::Info, C::ItemRef>>,
     context: &C,
@@ -547,9 +564,9 @@ pub fn print_graph<C: AggregationContext>(
 ) {
     use std::fmt::Write;
     if !color_upper {
-        println!("subgraph cluster_{} {{", height);
-        println!("label = \"Level {}\";", height);
-        println!("color = \"black\";");
+        print!("subgraph cluster_{} {{", height);
+        print!("label = \"Level {}\";", height);
+        print!("color = \"black\";");
     }
     let mut edges = String::new();
     let tree = bottom_tree(context, entry, height);
@@ -560,16 +577,21 @@ pub fn print_graph<C: AggregationContext>(
     while let Some((item, tree)) = queue.pop_front() {
         let name = name_fn(&item);
         if color_upper {
-            println!(r#""{} {}" [color="red"]"#, height - 1, name);
+            print!(r#""{} {}" [color=red];"#, height - 1, name);
+        } else if is_blue(context.hash(&item), height + 1) {
+            print!(
+                r#""{} {}" [label="{}", style=filled, fillcolor=lightblue];"#,
+                height, name, name
+            );
         } else {
-            println!(r#""{} {}" [label="{}"]"#, height, name, name);
+            print!(r#""{} {}" [label="{}"];"#, height, name, name);
         }
         let state = tree.state.lock();
         for next in state.following.iter() {
             if !color_upper {
-                writeln!(
+                write!(
                     edges,
-                    r#""{} {}" -> "{} {}""#,
+                    r#""{} {}" -> "{} {}";"#,
                     height,
                     name,
                     height,
@@ -584,6 +606,6 @@ pub fn print_graph<C: AggregationContext>(
     }
     if !color_upper {
         println!("}}");
-        print!("{}", edges);
+        println!("{}", edges);
     }
 }
