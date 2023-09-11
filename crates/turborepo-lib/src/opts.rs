@@ -71,7 +71,7 @@ pub struct RunOpts<'a> {
     pub(crate) no_daemon: bool,
     pub(crate) single_package: bool,
     pub log_prefix: LogPrefix,
-    pub log_order: LogOrder,
+    pub log_order: ResolvedLogOrder,
     summarize: Option<Option<bool>>,
     pub(crate) experimental_space_id: Option<String>,
     pub is_github_actions: bool,
@@ -81,6 +81,12 @@ pub struct RunOpts<'a> {
 pub enum GraphOpts<'a> {
     Stdout,
     File(&'a str),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ResolvedLogOrder {
+    Stream,
+    Grouped,
 }
 
 const DEFAULT_CONCURRENCY: u32 = 10;
@@ -101,13 +107,14 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
             f => GraphOpts::File(f),
         });
 
-        let (is_github_actions, log_order, log_prefix) =
-            match (args.log_order, turborepo_ci::Vendor::get_constant()) {
-                (LogOrder::Auto, Some("GITHUB_ACTIONS")) => {
-                    (true, LogOrder::Grouped, LogPrefix::None)
-                }
-                _ => (false, args.log_order, args.log_prefix),
-            };
+        let (is_github_actions, log_order, log_prefix) = match args.log_order {
+            LogOrder::Auto if turborepo_ci::Vendor::get_constant() == Some("GITHUB_ACTIONS") => {
+                (true, ResolvedLogOrder::Grouped, LogPrefix::None)
+            }
+            // Streaming is the default behavior except when running on GitHub Actions
+            LogOrder::Auto | LogOrder::Stream => (false, ResolvedLogOrder::Stream, args.log_prefix),
+            LogOrder::Grouped => (false, ResolvedLogOrder::Grouped, args.log_prefix),
+        };
 
         Ok(Self {
             tasks: args.tasks.as_slice(),
