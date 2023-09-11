@@ -1,7 +1,6 @@
 use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
-use auto_hash_map::AutoMap;
-use nohash_hasher::{BuildNoHashHasher, IsEnabled};
+use nohash_hasher::IsEnabled;
 use ref_cast::RefCast;
 
 use super::{
@@ -13,8 +12,8 @@ use super::{
 use crate::count_hash_set::CountHashSet;
 
 pub struct AggregationTreeLeaf<T, I: IsEnabled> {
-    top_trees: AutoMap<u8, Arc<TopTree<T>>, BuildNoHashHasher<u8>>,
-    bottom_trees: AutoMap<u8, Arc<BottomTree<T, I>>, BuildNoHashHasher<u8>>,
+    top_trees: Vec<Option<Arc<TopTree<T>>>>,
+    bottom_trees: Vec<Option<Arc<BottomTree<T, I>>>>,
     left_upper: Option<Arc<BottomTree<T, I>>>,
     inner_upper: CountHashSet<BottomRef<T, I>>,
 }
@@ -22,8 +21,8 @@ pub struct AggregationTreeLeaf<T, I: IsEnabled> {
 impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     pub fn new() -> Self {
         Self {
-            top_trees: AutoMap::with_hasher(),
-            bottom_trees: AutoMap::with_hasher(),
+            top_trees: Vec::new(),
+            bottom_trees: Vec::new(),
             left_upper: None,
             inner_upper: CountHashSet::new(),
         }
@@ -219,6 +218,23 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     }
 }
 
+fn get_or_create_in_vec<T>(
+    vec: &mut Vec<Option<T>>,
+    index: usize,
+    create: impl FnOnce() -> T,
+) -> (&mut T, bool) {
+    if vec.len() <= index {
+        vec.resize_with(index + 1, || None);
+    }
+    let item = &mut vec[index];
+    if item.is_none() {
+        *item = Some(create());
+        (item.as_mut().unwrap(), true)
+    } else {
+        (item.as_mut().unwrap(), false)
+    }
+}
+
 pub fn top_tree<C: AggregationContext>(
     context: &C,
     reference: &C::ItemRef,
@@ -227,12 +243,13 @@ pub fn top_tree<C: AggregationContext>(
     let new_top_tree = {
         let mut item = context.item(reference);
         let leaf = item.leaf();
-        if let Some(top_tree) = leaf.top_trees.get(&depth) {
-            return top_tree.clone();
+        let (tree, new) = get_or_create_in_vec(&mut leaf.top_trees, depth as usize, || {
+            Arc::new(TopTree::new(depth))
+        });
+        if !new {
+            return tree.clone();
         }
-        let new_top_tree = Arc::new(TopTree::new(depth));
-        leaf.top_trees.insert(depth, new_top_tree.clone());
-        new_top_tree
+        tree.clone()
     };
     let bottom_tree = bottom_tree(context, reference, depth + 4);
     bottom_tree.add_top_tree_upper(context, &new_top_tree);
@@ -249,11 +266,13 @@ pub fn bottom_tree<C: AggregationContext>(
     {
         let mut item = context.item(reference);
         let leaf = item.leaf();
-        if let Some(bottom_tree) = leaf.bottom_trees.get(&height) {
-            return bottom_tree.clone();
+        let (tree, new) = get_or_create_in_vec(&mut leaf.bottom_trees, height as usize, || {
+            Arc::new(BottomTree::new(reference.clone(), height))
+        });
+        if !new {
+            return tree.clone();
         }
-        new_bottom_tree = Arc::new(BottomTree::new(reference.clone(), height));
-        leaf.bottom_trees.insert(height, new_bottom_tree.clone());
+        new_bottom_tree = tree.clone();
         if height == 0 {
             result = Some(add_left_upper_to_item_step_1::<C>(
                 &mut item,
