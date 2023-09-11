@@ -41,7 +41,6 @@ pub async fn listen_socket(
 > {
     let pid_path = path.join_component("turbod.pid");
     let sock_path = path.join_component("turbod.sock");
-    println!("SOCK {}", sock_path);
     let mut lock = pidlock::Pidlock::new(pid_path.as_std_path().to_owned());
 
     trace!("acquiring pidlock");

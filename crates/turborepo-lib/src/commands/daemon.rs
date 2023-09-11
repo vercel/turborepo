@@ -164,8 +164,6 @@ pub async fn daemon_server(
         .map_err(|_| DaemonError::InvalidTimeout(idle_time.to_owned()))
         .map(|d| Duration::from_nanos(d as u64))?;
 
-    // let server = crate::daemon::DaemonServer::new(base, timeout, log_file)?;
-    // let reason = server.serve().await;
     let daemon_root = base.daemon_file_root();
     let exit_signal = ctrl_c().map(|result| {
         if let Err(e) = result {

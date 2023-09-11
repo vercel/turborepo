@@ -105,6 +105,9 @@ async fn start_filewatching(
     Ok(())
 }
 
+/// run a gRPC server providing the Turbod interface. external_shutdown
+/// can be used to deliver a signal to shutdown the server. This is expected
+/// to be wired to signal handling.
 pub async fn serve<S>(
     repo_root: &AbsoluteSystemPath,
     cookie_dir: AbsoluteSystemPathBuf,
@@ -124,7 +127,13 @@ where
     trace!("acquired connection stream for socket");
 
     let watcher_repo_root = repo_root.to_owned();
+    // watcher_rx holds the filewatching instance once it has initialized. This
+    // allows us to start the gRPC server without waiting for the potentially
+    // expensive filewatching startup time.
     let (watcher_tx, watcher_rx) = watch::channel(None);
+    // A oneshot to trigger the shutdown of the gRPC server. This is handed out
+    // to components internal to the server process such as root watching, as
+    // well as available to the gRPC server itself to handle the shutdown RPC.
     let (trigger_shutdown, shutdown_signal) = {
         let (tx, rx) = oneshot::channel::<()>();
         (Arc::new(Mutex::new(Some(tx))), rx)
@@ -141,6 +150,9 @@ where
             }
         }
     });
+    // exit_root_watch delivers a signal to the root watch loop to exit.
+    // In the event that the server shuts down via some other mechanism, this
+    // cleans up root watching task.
     let (exit_root_watch, root_watch_exit_signal) = oneshot::channel();
     let watch_root_handle = tokio::task::spawn(watch_root(
         watcher_rx.clone(),
@@ -162,6 +174,9 @@ where
         };
     };
 
+    // Run the actual service. It takes ownership of the struct given to it,
+    // so we use a private struct with just the pieces of state needed to handle
+    // RPCs.
     let service = TurboGrpcService {
         shutdown: trigger_shutdown,
         watcher_rx,
@@ -181,18 +196,22 @@ where
             .serve_with_incoming_shutdown(stream, shutdown_fut)
     };
     // Wait for the server to exit.
+    // This can be triggered by timeout, root watcher, or an RPC
     let _ = server_fut.await;
     trace!("gRPC server exited");
+    // Ensure our timer will exit
     running.store(false, Ordering::SeqCst);
     // We expect to have a signal from the grpc server on what triggered the exit
     let close_reason = shutdown_reason.await.unwrap_or(CloseReason::ServerClosed);
     // Now that the server has exited, the TurboGrpcService instance should be
     // dropped. The root watcher still has a reference to a receiver, keeping
-    // the filewatcher alive. We don't care if we fail to send, root watching
-    // may have exited already
+    // the filewatcher alive. Trigger the root watcher to exit. We don't care
+    // if we fail to send, root watching may have exited already
     let _ = exit_root_watch.send(());
     let _ = watch_root_handle.await;
     trace!("root watching exited");
+    // Clean up the filewatching handle in the event that we never even got
+    // started with filewatching. Again, we don't care about the error here.
     let _ = fw_handle.await;
     trace!("filewatching handle joined");
     close_reason
