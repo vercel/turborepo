@@ -49,6 +49,7 @@ struct NodeAggregationContext<'a> {
     additions: AtomicU32,
     #[allow(dead_code)]
     something_with_lifetime: &'a u32,
+    add_value: bool,
 }
 
 #[derive(Clone)]
@@ -142,7 +143,9 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
         if info.value != 0 {
             self.additions.fetch_add(1, Ordering::SeqCst);
         }
-        info.value += change.value;
+        if self.add_value {
+            info.value += change.value;
+        }
         Some(change.clone())
     }
 
@@ -220,6 +223,7 @@ fn chain() {
     let context = NodeAggregationContext {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
+        add_value: true,
     };
     let leaf = Arc::new(Node {
         hash: hash(0),
@@ -333,6 +337,7 @@ fn chain_double_connected() {
     let context = NodeAggregationContext {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
+        add_value: true,
     };
     let leaf = Arc::new(Node {
         hash: hash(1),
@@ -375,19 +380,21 @@ fn chain_double_connected() {
     context.additions.store(0, Ordering::SeqCst);
 }
 
+const RECT_SIZE: usize = 100;
+const RECT_MULT: usize = 100;
+
 #[test]
 fn rectangle_tree() {
     let something_with_lifetime = 0;
     let context = NodeAggregationContext {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
+        add_value: false,
     };
     let mut nodes: Vec<Vec<Arc<Node>>> = Vec::new();
-    const SIZE: usize = 50;
-    const MULT: usize = 100;
-    for y in 0..SIZE {
+    for y in 0..RECT_SIZE {
         let mut line: Vec<Arc<Node>> = Vec::new();
-        for x in 0..SIZE {
+        for x in 0..RECT_SIZE {
             let mut children = Vec::new();
             if x > 0 {
                 children.push(line[x - 1].clone());
@@ -395,7 +402,7 @@ fn rectangle_tree() {
             if y > 0 {
                 children.push(nodes[y - 1][x].clone());
             }
-            let value = (x + y * MULT) as u32;
+            let value = (x + y * RECT_MULT) as u32;
             let node = Arc::new(Node {
                 hash: hash(value),
                 inner: Mutex::new(NodeInner {
@@ -409,7 +416,60 @@ fn rectangle_tree() {
         nodes.push(line);
     }
 
-    let root = NodeRef(nodes[SIZE - 1][SIZE - 1].clone());
+    let root = NodeRef(nodes[RECT_SIZE - 1][RECT_SIZE - 1].clone());
+
+    print(&context, &root);
+}
+
+#[test]
+fn rectangle_adding_tree() {
+    let something_with_lifetime = 0;
+    let context = NodeAggregationContext {
+        additions: AtomicU32::new(0),
+        something_with_lifetime: &something_with_lifetime,
+        add_value: false,
+    };
+    let mut nodes: Vec<Vec<Arc<Node>>> = Vec::new();
+
+    fn add_child(parent: &Arc<Node>, node: &Arc<Node>, context: &NodeAggregationContext<'_>) {
+        let node_ref = NodeRef(node.clone());
+        let mut state = parent.inner.lock();
+        state.children.push(node.clone());
+        let job = state.aggregation_leaf.add_child_job(context, &node_ref);
+        drop(state);
+        job();
+    }
+    for y in 0..RECT_SIZE {
+        let mut line: Vec<Arc<Node>> = Vec::new();
+        for x in 0..RECT_SIZE {
+            let value = (x + y * RECT_MULT) as u32;
+            let node = Arc::new(Node {
+                hash: hash(value),
+                inner: Mutex::new(NodeInner {
+                    children: Vec::new(),
+                    aggregation_leaf: AggregationTreeLeaf::new(),
+                    value,
+                }),
+            });
+            line.push(node.clone());
+            if x > 0 {
+                let parent = &line[x - 1];
+                add_child(parent, &node, &context);
+            }
+            if y > 0 {
+                let parent = &nodes[y - 1][x];
+                add_child(parent, &node, &context);
+            }
+            if x == 0 && y == 0 {
+                aggregation_info(&context, &NodeRef(node.clone()))
+                    .lock()
+                    .active = true;
+            }
+        }
+        nodes.push(line);
+    }
+
+    let root = NodeRef(nodes[0][0].clone());
 
     print(&context, &root);
 }
