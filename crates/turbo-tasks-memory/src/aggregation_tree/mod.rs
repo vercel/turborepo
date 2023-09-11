@@ -24,6 +24,7 @@
 //!   aggregated). Since all communication is strictly upwards there is no down
 //!   relationship for that.
 
+mod bottom_connection;
 mod bottom_tree;
 mod inner_refs;
 mod leaf;
