@@ -13,7 +13,7 @@ import {
   DownloadError,
   logger,
 } from "@turbo/utils";
-import { tryGitCommit, tryGitInit } from "../../utils/git";
+import { tryGitCommit, tryGitInit, tryGitAdd } from "../../utils/git";
 import { isOnline } from "../../utils/isOnline";
 import { transforms } from "../../transforms";
 import { TransformError } from "../../transforms/errors";
@@ -137,7 +137,10 @@ export async function create(
           },
           opts,
         });
+
         if (transformResult.result === "success") {
+          // add first to ensure any transforms that add new files are included
+          tryGitAdd();
           tryGitCommit(
             `feat(create-turbo): apply ${transformResult.name} transform`
           );

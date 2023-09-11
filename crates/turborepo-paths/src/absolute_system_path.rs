@@ -7,7 +7,7 @@ use std::os::windows::fs::{symlink_dir, symlink_file};
 use std::{
     fmt,
     fs::{File, Metadata, OpenOptions, Permissions},
-    io,
+    io::{self, Write},
     path::{Path, PathBuf},
 };
 
@@ -159,6 +159,14 @@ impl AbsoluteSystemPath {
             fs::set_permissions(&self.0, permissions)?;
         }
 
+        Ok(())
+    }
+
+    /// create_with_contents will create or truncate a file, then write the
+    /// given contents to it
+    pub fn create_with_contents<B: AsRef<[u8]>>(&self, contents: B) -> Result<(), io::Error> {
+        let mut f = fs::File::create(&self.0)?;
+        f.write_all(contents.as_ref())?;
         Ok(())
     }
 

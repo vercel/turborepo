@@ -84,6 +84,12 @@ impl AsRef<RelativeUnixPath> for RelativeUnixPath {
     }
 }
 
+impl<'a> From<&'a RelativeUnixPath> for wax::CandidatePath<'a> {
+    fn from(path: &'a RelativeUnixPath) -> Self {
+        path.0.into()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

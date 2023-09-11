@@ -89,6 +89,18 @@ export function tryGitCommit(message: string): boolean {
   }
 }
 
+export function tryGitAdd(): void {
+  try {
+    gitAddAll();
+  } catch (err) {
+    // do nothing
+  }
+}
+
+function gitAddAll() {
+  execSync("git add -A", { stdio: "ignore" });
+}
+
 function gitCommit(message: string) {
   execSync(
     `git commit --author="Turbobot <turbobot@vercel.com>" -am "${message}"`,

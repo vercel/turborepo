@@ -2415,15 +2415,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "file-id"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13be71e6ca82e91bc0cb862bebaac0b2d1924a5a1d970c822b2f98b63fda8c3"
-dependencies = [
- "winapi-util",
-]
-
-[[package]]
 name = "filetime"
 version = "0.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4575,18 +4566,6 @@ dependencies = [
  "mio 0.8.6",
  "walkdir",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "notify-debouncer-full"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "416969970ec751a5d702a88c6cd19ac1332abe997fce43f96db0418550426241"
-dependencies = [
- "file-id",
- "notify 6.1.1",
- "parking_lot",
- "walkdir",
 ]
 
 [[package]]
@@ -9818,7 +9797,6 @@ dependencies = [
  "itertools",
  "libc",
  "notify 6.1.1",
- "notify-debouncer-full",
  "tempfile",
  "thiserror",
  "tokio",
@@ -9826,6 +9804,7 @@ dependencies = [
  "tracing",
  "turbopath",
  "walkdir",
+ "wax",
 ]
 
 [[package]]
