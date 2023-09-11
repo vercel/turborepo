@@ -1,8 +1,8 @@
 import * as React from "react";
-import "./App.css";
-import { CounterButton, NewTabLink } from "ui";
+import { CounterButton, Link } from "ui";
+import "./styles.css";
 
-function App() {
+function App(): JSX.Element {
   return (
     <div className="container">
       <h1 className="title">
@@ -12,8 +12,13 @@ function App() {
       <CounterButton />
       <p className="description">
         Built With{" "}
-        <NewTabLink href="https://turbo.build/repo">Turborepo</NewTabLink> +{" "}
-        <NewTabLink href="https://vitejs.dev/">Vite</NewTabLink>
+        <Link href="https://turbo.build/repo" newTab>
+          Turborepo
+        </Link>
+        {" & "}
+        <Link href="https://vitejs.dev/" newTab>
+          Vite
+        </Link>
       </p>
     </div>
   );

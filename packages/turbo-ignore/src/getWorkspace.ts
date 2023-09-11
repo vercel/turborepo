@@ -2,9 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import type { PackageJson } from "@turbo/utils";
 import { error, info } from "./logger";
-import type { TurboIgnoreArgs } from "./types";
+import type { TurboIgnoreOptions } from "./types";
 
-export function getWorkspace(args: TurboIgnoreArgs): string | null {
+export function getWorkspace(args: TurboIgnoreOptions): string | null {
   const { directory = process.cwd(), workspace } = args;
 
   // if the workspace is provided via args, use that

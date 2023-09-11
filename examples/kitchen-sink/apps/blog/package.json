@@ -5,28 +5,30 @@
   "sideEffects": false,
   "scripts": {
     "build": "remix build",
-    "dev": "remix dev"
+    "dev": "remix dev",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint app/"
   },
   "dependencies": {
-    "@remix-run/node": "^1.13.0",
-    "@remix-run/react": "^1.13.0",
-    "@remix-run/serve": "^1.13.0",
-    "@remix-run/server-runtime": "^1.13.0",
-    "@vercel/analytics": "^0.1.10",
-    "@vercel/remix-entry-server": "^0.1.0",
+    "@remix-run/node": "^1.19.3",
+    "@remix-run/react": "^1.19.3",
+    "@remix-run/serve": "^1.19.3",
+    "@remix-run/server-runtime": "^1.19.3",
+    "@vercel/analytics": "^0.1.11",
+    "@vercel/remix-entry-server": "^0.1.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "ui": "workspace:*"
   },
   "devDependencies": {
-    "@remix-run/dev": "^1.13.0",
-    "@types/react": "^18.0.25",
-    "@types/react-dom": "^18.0.11",
-    "eslint": "^8.28.0",
-    "typescript": "^4.9.3",
-    "tsconfig": "workspace:*"
+    "@remix-run/dev": "^1.19.3",
+    "@types/react": "^18.2.21",
+    "@types/react-dom": "^18.2.7",
+    "eslint-config-custom": "workspace:*",
+    "tsconfig": "workspace:*",
+    "typescript": "^5.2.2"
   },
   "engines": {
-    "node": ">=14"
+    "node": ">=18"
   }
 }

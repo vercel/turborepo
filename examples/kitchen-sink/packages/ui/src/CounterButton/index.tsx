@@ -1,7 +1,8 @@
-import * as React from "react";
+import { useState } from "react";
 
-export const CounterButton = () => {
-  const [count, setCount] = React.useState(0);
+export function CounterButton(): JSX.Element {
+  const [count, setCount] = useState(0);
+
   return (
     <div
       style={{
@@ -25,6 +26,9 @@ export const CounterButton = () => {
       </p>
       <div>
         <button
+          onClick={() => {
+            setCount((c) => c + 1);
+          }}
           style={{
             background: "black",
             color: "white",
@@ -35,11 +39,10 @@ export const CounterButton = () => {
             cursor: "pointer",
           }}
           type="button"
-          onClick={() => setCount((c) => c + 1)}
         >
           Count: {count}
         </button>
       </div>
     </div>
   );
-};
+}

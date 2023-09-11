@@ -76,14 +76,20 @@ lto = "off"
 async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.12.2" }
-mdxjs = { version = "0.1.15" }
-modularize_imports = { version = "0.38.0" }
-styled_components = { version = "0.65.0" }
-styled_jsx = { version = "0.42.0" }
-swc_core = { version = "0.82.10" }
-swc_emotion = { version = "0.41.0" }
-swc_relay = { version = "0.13.0" }
-testing = { version = "0.34.1" }
+
+# Temporarily downgrading these to avoid breaking changes stemming from using
+# lightning_css in later versions styled_jsx >= 0.37.0
+mdxjs = "=0.1.14"
+modularize_imports = { version = "=0.33.0" }
+styled_components = { version = "=0.60.0" }
+styled_jsx = { version = "=0.37.0" }
+swc_core = { version = "=0.79.55", features = [
+  "ecma_loader_lru",
+  "ecma_loader_parking_lot",
+] }
+swc_emotion = { version = "=0.36.0" }
+swc_relay = { version = "=0.8.0" }
+testing = { version = "0.33.21" }
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
