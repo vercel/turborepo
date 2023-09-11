@@ -169,7 +169,7 @@ impl Child {
     /// Start a child process, returning a handle that can be used to interact
     /// with it. The command will be started immediately.
     pub fn spawn(mut command: Command, shutdown_style: ShutdownStyle) -> Self {
-        let mut group = command.group().spawn().expect("failed to start child");
+        let group = command.group().spawn().expect("failed to start child");
 
         let gid = group.id();
         let mut child = group.into_inner();
@@ -213,10 +213,12 @@ impl Child {
 
                     match state {
                         ChildState::Exited(exit) => {
-                            // ignore the send error, the channel is dropped anyways
+                            // ignore the send error, failure means the channel is dropped
                             exit_tx.send(Some(exit)).ok();
                         }
-                        _ => {}
+                        ChildState::Running(_) => {
+                            debug_assert!(false, "child state should not be running after shutdown");
+                        }
                     }
 
                     {
@@ -231,7 +233,7 @@ impl Child {
                         // if we hit this case, it means that the child process was killed
                         // by someone else, and we should report that it was killed
                         Ok(None) => ChildExit::KilledExternal,
-                        Err(e) => ChildExit::Failed,
+                        Err(_e) => ChildExit::Failed,
                     };
                     {
                         let mut task_state = task_state.write().await;

@@ -119,7 +119,6 @@ impl ProcessManager {
 
 #[cfg(test)]
 mod test {
-    use std::assert_matches::assert_matches;
 
     use futures::{stream::FuturesUnordered, StreamExt};
     use test_case::test_case;
@@ -137,14 +136,14 @@ mod test {
 
     #[tokio::test]
     async fn test_basic() {
-        let mut manager = ProcessManager::new();
+        let manager = ProcessManager::new();
         manager.spawn(get_command(), Duration::from_secs(2));
         manager.stop().await;
     }
 
     #[tokio::test]
     async fn test_multiple() {
-        let mut manager = ProcessManager::new();
+        let manager = ProcessManager::new();
 
         manager.spawn(get_command(), Duration::from_secs(2));
         manager.spawn(get_command(), Duration::from_secs(2));
@@ -157,7 +156,7 @@ mod test {
 
     #[tokio::test]
     async fn test_closed() {
-        let mut manager = ProcessManager::new();
+        let manager = ProcessManager::new();
         manager.spawn(get_command(), Duration::from_secs(2));
         manager.stop().await;
 
@@ -170,7 +169,7 @@ mod test {
 
     #[tokio::test]
     async fn test_exit_code() {
-        let mut manager = ProcessManager::new();
+        let manager = ProcessManager::new();
         let mut child = manager
             .spawn(get_command(), Duration::from_secs(2))
             .expect("running");
@@ -186,7 +185,7 @@ mod test {
     #[tokio::test]
     #[traced_test]
     async fn test_message_after_stop() {
-        let mut manager = ProcessManager::new();
+        let manager = ProcessManager::new();
         let mut child = manager
             .spawn(get_command(), Duration::from_secs(2))
             .expect("running");
@@ -233,10 +232,11 @@ mod test {
                 let mut command = super::child::Command::new("sleep");
                 command.arg("1");
 
-                let mut child = manager.spawn(command, Duration::from_secs(1)).unwrap();
-                let exit = child.wait().await;
-
-                return exit;
+                manager
+                    .spawn(command, Duration::from_secs(1))
+                    .unwrap()
+                    .wait()
+                    .await
             }));
         }
 
