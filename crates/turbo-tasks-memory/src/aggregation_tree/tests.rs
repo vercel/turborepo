@@ -129,7 +129,7 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
         reference.0.hash
     }
 
-    fn item(&self, reference: &Self::ItemRef) -> Self::ItemLock<'_> {
+    fn item<'b>(&'b self, reference: &Self::ItemRef) -> Self::ItemLock<'b> {
         let r = reference.0.clone();
         let guard = r.inner.lock();
         NodeGuard {
@@ -258,6 +258,8 @@ fn chain() {
     assert_eq!(context.additions.load(Ordering::SeqCst), 100);
     context.additions.store(0, Ordering::SeqCst);
 
+    print(&context, &current);
+
     {
         let root_info = leaf
             .inner
@@ -307,7 +309,7 @@ fn chain() {
         assert_eq!(aggregated.value, 25151);
     }
     // This should be way less the 100 to prove that we are reusing trees
-    assert_eq!(context.additions.load(Ordering::SeqCst), 6);
+    assert_eq!(context.additions.load(Ordering::SeqCst), 1);
     context.additions.store(0, Ordering::SeqCst);
 
     leaf.incr(&context);
@@ -363,25 +365,29 @@ fn chain_double_connected() {
     }
     let current = NodeRef(current2);
 
+    print(&context, &current);
+
+    {
+        let aggregated = aggregation_info(&context, &current);
+        assert_eq!(aggregated.lock().value, 8037);
+    }
+    assert_eq!(context.additions.load(Ordering::SeqCst), 174);
+    context.additions.store(0, Ordering::SeqCst);
+}
+
+fn print(context: &NodeAggregationContext<'_>, current: &NodeRef) {
     println!("digraph {{");
     let start = 0;
-    let end = 4;
+    let end = 3;
     for i in start..end {
-        print_graph(&context, &current, i, false, |item| {
+        print_graph(context, current, i, false, |item| {
             format!("{}", item.0.inner.lock().value)
         });
     }
     for i in start + 1..end + 1 {
-        print_graph(&context, &current, i, true, |item| {
+        print_graph(context, current, i, true, |item| {
             format!("{}", item.0.inner.lock().value)
         });
     }
-    println!("}}");
-
-    {
-        let aggregated = aggregation_info(&context, &current);
-        assert_eq!(aggregated.lock().value, 42978);
-    }
-    assert_eq!(context.additions.load(Ordering::SeqCst), 297);
-    context.additions.store(0, Ordering::SeqCst);
+    println!("\n}}");
 }
