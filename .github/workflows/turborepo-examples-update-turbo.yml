@@ -1,0 +1,30 @@
+name: Update Turbo in examples
+on:
+  push:
+    branches: [main]
+    paths:
+      - "version.txt"
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout code
+      - uses: actions/checkout@v3
+
+      # Setup node and package managers
+      - uses: ./.github/actions/setup-node
+        with:
+          package-install: false
+
+      # Run script to update examples
+      - name: Run script
+        run: |
+          git checkout -B update/update-turbo-in-examples
+          node ./scripts/bump-turbo.mjs
+          gh pr create
