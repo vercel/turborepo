@@ -212,6 +212,82 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
     }
 }
 
+impl<T: Eq + Hash + Clone, H: BuildHasher + Default> CountHashSet<T, H> {
+    /// Returns true, when the value has become visible from outside
+    pub fn add_clonable_count(&mut self, item: &T, count: usize) -> bool {
+        match self.inner.raw_entry_mut(item) {
+            RawEntry::Occupied(mut e) => {
+                let value = e.get_mut();
+                let old = *value;
+                *value += count as isize;
+                if old > 0 {
+                    // it was positive before
+                    false
+                } else if *value > 0 {
+                    // it was negative and has become positive
+                    self.negative_entries -= 1;
+                    true
+                } else if *value == 0 {
+                    // it was negative and has become zero
+                    self.negative_entries -= 1;
+                    e.remove();
+                    false
+                } else {
+                    // it was and still is negative
+                    false
+                }
+            }
+            RawEntry::Vacant(e) => {
+                // it was zero and is now positive
+                e.insert(item.clone(), count as isize);
+                true
+            }
+        }
+    }
+
+    /// Returns true when the value has become visible from outside
+    pub fn add_clonable(&mut self, item: &T) -> bool {
+        self.add_clonable_count(item, 1)
+    }
+
+    /// Returns true when the value is no longer visible from outside
+    pub fn remove_clonable_count(&mut self, item: &T, count: usize) -> bool {
+        match self.inner.raw_entry_mut(item) {
+            RawEntry::Occupied(mut e) => {
+                let value = e.get_mut();
+                let old = *value;
+                *value -= count as isize;
+                if *value > 0 {
+                    // It was and still is positive
+                    false
+                } else if *value == 0 {
+                    // It was positive and has become zero
+                    e.remove();
+                    true
+                } else if old > 0 {
+                    // It was positive and is negative now
+                    self.negative_entries += 1;
+                    true
+                } else {
+                    // It was and still is negative
+                    false
+                }
+            }
+            RawEntry::Vacant(e) => {
+                // It was zero and is negative now
+                e.insert(item.clone(), -(count as isize));
+                self.negative_entries += 1;
+                false
+            }
+        }
+    }
+
+    /// Returns true, when the value is no longer visible from outside
+    pub fn remove_clonable(&mut self, item: &T) -> bool {
+        self.remove_clonable_count(item, 1)
+    }
+}
+
 fn filter<'a, T>((k, v): (&'a T, &'a isize)) -> Option<&'a T> {
     if *v > 0 {
         Some(k)

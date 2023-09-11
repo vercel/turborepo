@@ -54,7 +54,7 @@ impl<T: Default, I: IsEnabled> BottomTree<T, I> {
             item,
             state: Mutex::new(BottomTreeState {
                 data: T::default(),
-                bottom_upper: BottomConnection::Inner(CountHashSet::new()),
+                bottom_upper: BottomConnection::new(),
                 top_upper: CountHashSet::new(),
                 following: CountHashSet::new(),
             }),
@@ -172,7 +172,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         mut children: Vec<(u32, &I)>,
     ) {
         let mut state = self.state.lock();
-        children.retain(|&(_, child)| state.following.add(child.clone()));
+        children.retain(|&(_, child)| state.following.add_clonable(child));
         if children.is_empty() {
             return;
         }
@@ -247,7 +247,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 );
             }
             ChildLocation::Inner => {
-                if nesting_level <= 4 && !self.is_blue(child_of_child_hash) {
+                if nesting_level <= MAX_NESTING_LEVEL && !self.is_blue(child_of_child_hash) {
                     // the inner child has a new child
                     // but it's not a blue node and we are not too deep
                     // this means it's a inner child of this node
@@ -283,7 +283,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         child_of_child_hash: u32,
     ) {
         let mut state = self.state.lock();
-        if !state.following.add(child_of_child.clone()) {
+        if !state.following.add_clonable(child_of_child) {
             // Already connect, nothing more to do
             return;
         }
@@ -299,14 +299,16 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         force_inner: bool,
         nesting_level: u8,
     ) {
-        let can_be_inner;
-        if self.height == 0 {
-            can_be_inner =
-                add_inner_upper_to_item(context, child_of_child, &self, force_inner, nesting_level);
+        let can_be_inner = if self.height == 0 {
+            add_inner_upper_to_item(context, child_of_child, &self, force_inner, nesting_level)
         } else {
-            can_be_inner = bottom_tree(context, child_of_child, self.height - 1)
-                .add_inner_bottom_tree_upper(context, &self, force_inner, nesting_level);
-        }
+            bottom_tree(context, child_of_child, self.height - 1).add_inner_bottom_tree_upper(
+                context,
+                &self,
+                force_inner,
+                nesting_level,
+            )
+        };
         if !can_be_inner {
             self.add_child_of_child_following(context, child_of_child, child_of_child_hash);
         }
@@ -343,7 +345,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         child_of_child: &I,
     ) -> bool {
         let mut state = self.state.lock();
-        if !state.following.remove(child_of_child.clone()) {
+        if !state.following.remove_clonable(child_of_child) {
             // no present, nothing to do
             return false;
         }
@@ -357,8 +359,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         child_of_child: &I,
     ) {
         let can_remove_inner = if self.height == 0 {
-            remove_inner_upper_from_item(context, child_of_child, &self);
-            true
+            remove_inner_upper_from_item(context, child_of_child, &self)
         } else {
             bottom_tree(context, child_of_child, self.height - 1)
                 .remove_inner_bottom_tree_upper(context, &self)
@@ -375,9 +376,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     ) {
         let mut state = self.state.lock();
         let old_inner = state.bottom_upper.set_left_upper(upper);
-        if let Some(change) = context.info_to_add_change(&state.data) {
-            upper.child_change(context, &change);
-        }
+        let add_change = context.info_to_add_change(&state.data);
         let children = state.following.iter().cloned().collect::<Vec<_>>();
         let following_for_old_uppers = (!old_inner.is_empty())
             .then(|| state.following.iter().cloned().collect::<Vec<_>>())
@@ -388,8 +387,13 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             .flatten();
 
         drop(state);
-        let children = children.iter().map(|item| (context.hash(item), item));
-        upper.add_children_of_child(context, ChildLocation::Left, children, 1);
+        if let Some(change) = add_change {
+            upper.child_change(context, &change);
+        }
+        if !children.is_empty() {
+            let children = children.iter().map(|item| (context.hash(item), item));
+            upper.add_children_of_child(context, ChildLocation::Left, children, 1);
+        }
 
         // Convert this node into a following node for all old (inner) uppers
         //
@@ -410,38 +414,44 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         //
         for (BottomRef { upper: old_upper }, count) in old_inner.into_counts() {
             let item = &self.item;
-            let mut upper_state = old_upper.state.lock();
-            if count > 0 {
-                // add as following
-                if upper_state
-                    .following
-                    .add_count(item.clone(), count as usize)
-                {
-                    propagate_new_following_to_uppers(
-                        upper_state,
-                        context,
-                        item,
-                        context.hash(item),
-                    );
-                } else {
-                    drop(upper_state);
-                }
-                // remove from self
-                if let Some(change) = remove_change.as_ref() {
-                    old_upper.child_change(context, change);
-                }
-                for following in following_for_old_uppers.iter() {
-                    // TODO use children of child method
-                    old_upper.remove_child_of_child(context, following);
-                }
+            old_upper.migrate_old_inner(
+                context,
+                item,
+                count,
+                &remove_change,
+                &following_for_old_uppers,
+            );
+        }
+    }
+
+    pub(super) fn migrate_old_inner<C: AggregationContext<Info = T, ItemRef = I>>(
+        self: &Arc<Self>,
+        context: &C,
+        item: &I,
+        count: isize,
+        remove_change: &Option<C::ItemChange>,
+        following: &[I],
+    ) {
+        let mut state = self.state.lock();
+        if count > 0 {
+            // add as following
+            if state.following.add_count(item.clone(), count as usize) {
+                propagate_new_following_to_uppers(state, context, item, context.hash(item));
             } else {
-                // remove count from following instead
-                if upper_state
-                    .following
-                    .remove_count(item.clone(), -count as usize)
-                {
-                    propagate_lost_following_to_uppers(upper_state, context, item);
-                }
+                drop(state);
+            }
+            // remove from self
+            if let Some(change) = remove_change.as_ref() {
+                self.child_change(context, change);
+            }
+            for following in following.iter() {
+                // TODO use children of child method
+                self.remove_child_of_child(context, following);
+            }
+        } else {
+            // remove count from following instead
+            if state.following.remove_count(item.clone(), -count as usize) {
+                propagate_lost_following_to_uppers(state, context, item);
             }
         }
     }
@@ -461,9 +471,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         if !force_inner && inner.len() >= MAX_INNER_UPPERS {
             return inner.add_if_entry(&BottomRef::ref_cast(upper));
         }
-        let new = inner.add(BottomRef {
-            upper: upper.clone(),
-        });
+        let new = inner.add_clonable(BottomRef::ref_cast(upper));
         if new {
             if let Some(change) = context.info_to_add_change(&state.data) {
                 upper.child_change(context, &change);
@@ -507,9 +515,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         let BottomConnection::Inner(inner) = &mut state.bottom_upper else {
             return false;
         };
-        let removed = inner.remove(BottomRef {
-            upper: upper.clone(),
-        });
+        let removed = inner.remove_clonable(BottomRef::ref_cast(upper));
         if removed {
             if let Some(change) = context.info_to_remove_change(&state.data) {
                 // TODO move this out of the state lock
@@ -530,9 +536,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         upper: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
-        let new = state.top_upper.add(TopRef {
-            upper: upper.clone(),
-        });
+        let new = state.top_upper.add_clonable(TopRef::ref_cast(upper));
         if new {
             if let Some(change) = context.info_to_add_change(&state.data) {
                 upper.child_change(context, &change);
@@ -550,9 +554,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         upper: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
-        let removed = state.top_upper.remove(TopRef {
-            upper: upper.clone(),
-        });
+        let removed = state.top_upper.remove_clonable(TopRef::ref_cast(upper));
         if removed {
             if let Some(change) = context.info_to_remove_change(&state.data) {
                 upper.child_change(context, &change);
@@ -604,23 +606,9 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 break;
             }
         }
-        match &state.bottom_upper {
-            BottomConnection::Left(upper) => {
-                let info = upper.get_root_info(context, root_info_type);
-                if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
-                    return result;
-                }
-            }
-            BottomConnection::Inner(list) => {
-                for BottomRef { upper } in list.iter() {
-                    let info = upper.get_root_info(context, root_info_type);
-                    if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
-                        return result;
-                    }
-                }
-            }
-        }
-        result
+        state
+            .bottom_upper
+            .get_root_info(context, root_info_type, result)
     }
 }
 

@@ -1,4 +1,4 @@
-use std::{hash::Hash, sync::Arc};
+use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
 use nohash_hasher::{BuildNoHashHasher, IsEnabled};
 
@@ -15,6 +15,17 @@ pub enum BottomConnection<T, I: IsEnabled> {
 }
 
 impl<T, I: IsEnabled> BottomConnection<T, I> {
+    pub(super) fn new() -> Self {
+        Self::Inner(CountHashSet::new())
+    }
+
+    pub(super) fn is_unset(&self) -> bool {
+        match self {
+            Self::Left(_) => false,
+            Self::Inner(list) => list.is_unset(),
+        }
+    }
+
     pub(super) fn as_cloned_uppers(&self) -> BottomUppers<T, I> {
         match self {
             Self::Left(upper) => BottomUppers::Left(upper.clone()),
@@ -22,6 +33,7 @@ impl<T, I: IsEnabled> BottomConnection<T, I> {
         }
     }
 
+    #[must_use]
     pub(super) fn set_left_upper(
         &mut self,
         upper: &Arc<BottomTree<T, I>>,
@@ -39,6 +51,50 @@ impl<T, I: IsEnabled> BottomConnection<T, I> {
             }
             BottomConnection::Inner(_) => unreachable!("Must that a left child"),
         }
+    }
+}
+
+impl<T, I: IsEnabled + Eq + Hash + Clone> BottomConnection<T, I> {
+    pub(super) fn child_change<C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &C,
+        change: &C::ItemChange,
+    ) {
+        match self {
+            BottomConnection::Left(upper) => {
+                upper.child_change(context, change);
+            }
+            BottomConnection::Inner(list) => {
+                for BottomRef { upper } in list.iter() {
+                    upper.child_change(context, change);
+                }
+            }
+        }
+    }
+
+    pub(super) fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &C,
+        root_info_type: &C::RootInfoType,
+        mut result: C::RootInfo,
+    ) -> C::RootInfo {
+        match &self {
+            BottomConnection::Left(upper) => {
+                let info = upper.get_root_info(context, root_info_type);
+                if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
+                    return result;
+                }
+            }
+            BottomConnection::Inner(list) => {
+                for BottomRef { upper } in list.iter() {
+                    let info = upper.get_root_info(context, root_info_type);
+                    if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
+                        return result;
+                    }
+                }
+            }
+        }
+        result
     }
 }
 
@@ -116,6 +172,23 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
             BottomUppers::Inner(list) => {
                 for BottomRef { upper } in list {
                     upper.remove_child_of_child(context, child_of_child);
+                }
+            }
+        }
+    }
+
+    pub(super) fn child_change<C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &C,
+        change: &C::ItemChange,
+    ) {
+        match self {
+            BottomUppers::Left(upper) => {
+                upper.child_change(context, change);
+            }
+            BottomUppers::Inner(list) => {
+                for BottomRef { upper } in list {
+                    upper.child_change(context, change);
                 }
             }
         }

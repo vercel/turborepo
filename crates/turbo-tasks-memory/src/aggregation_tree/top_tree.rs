@@ -1,6 +1,7 @@
 use std::{mem::transmute, ops::ControlFlow, sync::Arc};
 
 use parking_lot::{Mutex, MutexGuard};
+use ref_cast::RefCast;
 
 use super::{inner_refs::TopRef, leaf::top_tree, AggregationContext};
 use crate::count_hash_set::CountHashSet;
@@ -62,9 +63,7 @@ impl<T> TopTree<T> {
         upper: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
-        if state.upper.add(TopRef {
-            upper: upper.clone(),
-        }) {
+        if state.upper.add_clonable(TopRef::ref_cast(upper)) {
             if let Some(change) = context.info_to_add_change(&state.data) {
                 upper.child_change(context, &change);
             }
@@ -77,9 +76,7 @@ impl<T> TopTree<T> {
         upper: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
-        if state.upper.remove(TopRef {
-            upper: upper.clone(),
-        }) {
+        if state.upper.remove_clonable(TopRef::ref_cast(upper)) {
             if let Some(change) = context.info_to_remove_change(&state.data) {
                 upper.child_change(context, &change);
             }

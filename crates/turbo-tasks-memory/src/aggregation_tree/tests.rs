@@ -383,7 +383,7 @@ fn rectangle_tree() {
         something_with_lifetime: &something_with_lifetime,
     };
     let mut nodes: Vec<Vec<Arc<Node>>> = Vec::new();
-    const SIZE: usize = 30;
+    const SIZE: usize = 50;
     const MULT: usize = 100;
     for y in 0..SIZE {
         let mut line: Vec<Arc<Node>> = Vec::new();
