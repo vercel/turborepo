@@ -820,7 +820,7 @@ importers:
         specifier: workspace:*
         version: link:../eslint-config
       '@turbo/test-utils':
-        specifier: workspace:^0.0.0
+        specifier: workspace:*
         version: link:../turbo-test-utils
       '@turbo/tsconfig':
         specifier: workspace:*
@@ -837,6 +837,9 @@ importers:
       '@types/node':
         specifier: ^18.17.2
         version: 18.17.4
+      commander:
+        specifier: ^11.0.0
+        version: 11.0.0
       jest:
         specifier: ^27.4.3
         version: 27.5.1(ts-node@10.9.1)
@@ -3082,7 +3085,7 @@ packages:
     resolution: {integrity: sha512-hKlIQpFugdRlWj0wcEG9I8JyVm/osdsE72zwMBGnmCw/jf7U63vjOjfxMe/gRuvllCf/AvoGHEkR5jPufcO+bw==}
     engines: {node: '>=8'}
     peerDependencies:
-      next: ^10.0.8 || ^11.0 || ^12.0 || ^13.0
+      next: ^13.4.12
       react: 16.x || 17.x || 18.x
       webpack: '>= 4.0.0'
     peerDependenciesMeta:
@@ -5087,6 +5090,11 @@ packages:
     resolution: {integrity: sha512-zS5PnTI22FIRM6ylNW8G4Ap0IEOyk62fhLSD0+uHRT9McRCLGpkVNvao4bjimpK/GShynyQkFFxHhwMcETmduA==}
     engines: {node: '>=14'}
     dev: false
+
+  /commander@11.0.0:
+    resolution: {integrity: sha512-9HMlXtt/BNoYr8ooyjjNRdIilOTkVJXB+GhxMTtOKwk0R4j4lS4NpjuqmRxroBfnfTSHQIHQB7wryHhXarNjmQ==}
+    engines: {node: '>=16'}
+    dev: true
 
   /commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
@@ -10612,7 +10620,7 @@ packages:
   /next-seo@5.15.0(next@13.4.12)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-LGbcY91yDKGMb7YI+28n3g+RuChUkt6pXNpa8FkfKkEmNiJkeRDEXTnnjVtwT9FmMhG6NH8qwHTelGrlYm9rgg==}
     peerDependencies:
-      next: ^8.1.1-canary.54 || >=9.0.0
+      next: ^13.4.12
       react: '>=16.0.0'
       react-dom: '>=16.0.0'
     dependencies:
@@ -10624,7 +10632,7 @@ packages:
   /next-themes@0.2.1(next@13.4.12)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-B+AKNfYNIzh0vqQQKqQItTS8evEouKD7H5Hj3kmuPERwddR2TxvDSFZuTj6T7Jfn1oyeUyJMydPl1Bkxkh0W7A==}
     peerDependencies:
-      next: '*'
+      next: ^13.4.12
       react: '*'
       react-dom: '*'
     dependencies:
@@ -10678,7 +10686,7 @@ packages:
   /nextra-theme-docs@2.1.0(next@13.4.12)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-0Fn0EsGaKa9We2+CkN9LPtT6F21w4wbihuv0/Vg2YowpAdu5nslsDIhtg66CRET5U5007xE5GG8NLwWaCHQhhg==}
     peerDependencies:
-      next: '>=9.5.3'
+      next: ^13.4.12
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
     dependencies:
@@ -10704,7 +10712,7 @@ packages:
   /nextra@2.1.0(next@13.4.12)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-8bq/TW8wv8H8D6UAokb9WKhnYeoxKG7c8ikWF1n6k3kOO9m0PLG+guTwqkWre28jJyziljc3i/Fnr3k4HiB9Ow==}
     peerDependencies:
-      next: '>=9.5.3'
+      next: ^13.4.12
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
     dependencies:

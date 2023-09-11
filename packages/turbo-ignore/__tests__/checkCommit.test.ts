@@ -1,4 +1,3 @@
-// eslint-disable-next-line camelcase
 import child_process from "node:child_process";
 import { mockEnv } from "@turbo/test-utils";
 import { checkCommit } from "../src/checkCommit";

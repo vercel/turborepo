@@ -17,8 +17,7 @@
   "files": [
     "dist"
   ],
-  "main": "dist/index.js",
-  "bin": "dist/index.js",
+  "bin": "dist/cli.js",
   "scripts": {
     "build": "tsup",
     "test": "jest",
@@ -28,12 +27,13 @@
   },
   "devDependencies": {
     "@turbo/eslint-config": "workspace:*",
-    "@turbo/test-utils": "workspace:^0.0.0",
+    "@turbo/test-utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
     "@turbo/types": "workspace:*",
     "@turbo/utils": "workspace:*",
     "@types/jest": "^27.4.0",
     "@types/node": "^18.17.2",
+    "commander": "^11.0.0",
     "jest": "^27.4.3",
     "ts-jest": "^27.1.1",
     "tsup": "^5.12.1",
