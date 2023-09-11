@@ -1,16 +1,15 @@
 use std::{hash::Hash, sync::Arc};
 
-use nohash_hasher::{BuildNoHashHasher, IsEnabled};
+use nohash_hasher::IsEnabled;
 use ref_cast::RefCast;
 
 use super::{
-    bottom_connection::BottomConnection,
+    bottom_connection::{BottomConnection, DistanceCountMap},
     bottom_tree::BottomTree,
     inner_refs::{BottomRef, ChildLocation},
     top_tree::TopTree,
-    AggregationContext, AggregationItemLock, MAX_INNER_UPPERS,
+    AggregationContext, AggregationItemLock,
 };
-use crate::count_hash_set::CountHashSet;
 
 pub struct AggregationTreeLeaf<T, I: IsEnabled> {
     top_trees: Vec<Option<Arc<TopTree<T>>>>,
@@ -39,7 +38,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         let uppers = self.upper.as_cloned_uppers();
         move || {
             let children = children.iter().map(|child| (context.hash(child), child));
-            uppers.add_children_of_child(context, children, 0);
+            uppers.add_children_of_child(context, children);
         }
     }
 
@@ -54,7 +53,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         let uppers = self.upper.as_cloned_uppers();
         move || {
             let hash = context.hash(child);
-            uppers.add_child_of_child(context, child, hash, 0);
+            uppers.add_child_of_child(context, child, hash);
         }
     }
 
@@ -187,7 +186,6 @@ pub fn add_inner_upper_to_item<C: AggregationContext>(
     context: &C,
     reference: &C::ItemRef,
     upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
-    force_inner: bool,
     nesting_level: u8,
 ) -> bool {
     let (change, children) = {
@@ -196,10 +194,7 @@ pub fn add_inner_upper_to_item<C: AggregationContext>(
         let BottomConnection::Inner(inner) = &mut leaf.upper else {
             return false;
         };
-        if !force_inner && inner.len() >= MAX_INNER_UPPERS {
-            return inner.add_if_entry(BottomRef::ref_cast(upper));
-        }
-        let new = inner.add_clonable(BottomRef::ref_cast(upper));
+        let new = inner.add_clonable(BottomRef::ref_cast(upper), nesting_level);
         if new {
             let change = item.get_add_change();
             (
@@ -232,15 +227,15 @@ fn add_left_upper_to_item_step_1<C: AggregationContext>(
 ) -> (
     Option<C::ItemChange>,
     Vec<C::ItemRef>,
-    CountHashSet<BottomRef<C::Info, C::ItemRef>, BuildNoHashHasher<BottomRef<C::Info, C::ItemRef>>>,
+    DistanceCountMap<BottomRef<C::Info, C::ItemRef>>,
     Option<C::ItemChange>,
     Vec<C::ItemRef>,
 ) {
     let old_inner = item.leaf().upper.set_left_upper(upper);
-    let remove_change_for_old_inner = (!old_inner.is_empty())
+    let remove_change_for_old_inner = (!old_inner.is_unset())
         .then(|| item.get_remove_change())
         .flatten();
-    let children_for_old_inner = (!old_inner.is_empty())
+    let children_for_old_inner = (!old_inner.is_unset())
         .then(|| {
             item.children()
                 .map(|child| child.into_owned())
@@ -263,10 +258,7 @@ fn add_left_upper_to_item_step_2<C: AggregationContext>(
     step_1_result: (
         Option<C::ItemChange>,
         Vec<C::ItemRef>,
-        CountHashSet<
-            BottomRef<C::Info, C::ItemRef>,
-            BuildNoHashHasher<BottomRef<C::Info, C::ItemRef>>,
-        >,
+        DistanceCountMap<BottomRef<C::Info, C::ItemRef>>,
         Option<C::ItemChange>,
         Vec<C::ItemRef>,
     ),

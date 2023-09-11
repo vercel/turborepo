@@ -12,8 +12,7 @@ use super::{
         remove_left_upper_from_item,
     },
     top_tree::TopTree,
-    AggregationContext, FORCE_LEFT_CHILD_CHILD_AS_INNER, LEFT_CHILD_CHILD_USE_BLUE,
-    MAX_INNER_UPPERS, MAX_NESTING_LEVEL, USE_BLUE_NODES,
+    AggregationContext, LEFT_CHILD_CHILD_USE_BLUE, MAX_NESTING_LEVEL, USE_BLUE_NODES,
 };
 use crate::count_hash_set::{CountHashSet, RemoveIfEntryResult};
 
@@ -115,7 +114,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                         self.add_children_of_child_inner(
                             context,
                             white.iter().map(|&(_, c)| c),
-                            FORCE_LEFT_CHILD_CHILD_AS_INNER,
                             nesting_level,
                         );
                     }
@@ -129,7 +127,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                             debug_assert!(c != &self.item);
                             c
                         }),
-                        FORCE_LEFT_CHILD_CHILD_AS_INNER,
                         nesting_level,
                     );
                 }
@@ -153,7 +150,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                     self.add_children_of_child_inner(
                         context,
                         white.iter().map(|&(_, c)| c),
-                        false,
                         nesting_level,
                     );
                 }
@@ -182,14 +178,13 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         for TopRef { upper } in top_upper {
             upper.add_children_of_child(context, children.iter().map(|&(_, c)| c));
         }
-        buttom_uppers.add_children_of_child(context, children.iter().copied(), 0);
+        buttom_uppers.add_children_of_child(context, children.iter().copied());
     }
 
     fn add_children_of_child_inner<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         context: &C,
         children: impl IntoIterator<Item = &'a I>,
-        force_inner: bool,
         nesting_level: u8,
     ) where
         I: 'a,
@@ -197,8 +192,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         let mut following = Vec::new();
         if self.height == 0 {
             for child in children {
-                let can_be_inner =
-                    add_inner_upper_to_item(context, child, &self, force_inner, nesting_level);
+                let can_be_inner = add_inner_upper_to_item(context, child, &self, nesting_level);
                 if !can_be_inner {
                     following.push((context.hash(child), child));
                 }
@@ -206,7 +200,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         } else {
             for child in children {
                 let can_be_inner = bottom_tree(context, child, self.height - 1)
-                    .add_inner_bottom_tree_upper(context, &self, force_inner, nesting_level);
+                    .add_inner_bottom_tree_upper(context, &self, nesting_level);
                 if !can_be_inner {
                     following.push((context.hash(child), child));
                 }
@@ -242,7 +236,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                     context,
                     child_of_child,
                     child_of_child_hash,
-                    FORCE_LEFT_CHILD_CHILD_AS_INNER,
                     nesting_level,
                 );
             }
@@ -257,7 +250,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                             context,
                             child_of_child,
                             child_of_child_hash,
-                            false,
                             nesting_level,
                         );
                     }
@@ -296,16 +288,14 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         context: &C,
         child_of_child: &I,
         child_of_child_hash: u32,
-        force_inner: bool,
         nesting_level: u8,
     ) {
         let can_be_inner = if self.height == 0 {
-            add_inner_upper_to_item(context, child_of_child, &self, force_inner, nesting_level)
+            add_inner_upper_to_item(context, child_of_child, &self, nesting_level)
         } else {
             bottom_tree(context, child_of_child, self.height - 1).add_inner_bottom_tree_upper(
                 context,
                 &self,
-                force_inner,
                 nesting_level,
             )
         };
@@ -378,11 +368,11 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         let old_inner = state.bottom_upper.set_left_upper(upper);
         let add_change = context.info_to_add_change(&state.data);
         let children = state.following.iter().cloned().collect::<Vec<_>>();
-        let following_for_old_uppers = (!old_inner.is_empty())
+        let following_for_old_uppers = (!old_inner.is_unset())
             .then(|| state.following.iter().cloned().collect::<Vec<_>>())
             .unwrap_or_default();
 
-        let remove_change = (!old_inner.is_empty())
+        let remove_change = (!old_inner.is_unset())
             .then(|| context.info_to_remove_change(&state.data))
             .flatten();
 
@@ -461,17 +451,13 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         &self,
         context: &C,
         upper: &Arc<BottomTree<T, I>>,
-        force_inner: bool,
         nesting_level: u8,
     ) -> bool {
         let mut state = self.state.lock();
         let BottomConnection::Inner(inner) = &mut state.bottom_upper else {
             return false;
         };
-        if !force_inner && inner.len() >= MAX_INNER_UPPERS {
-            return inner.add_if_entry(&BottomRef::ref_cast(upper));
-        }
-        let new = inner.add_clonable(BottomRef::ref_cast(upper));
+        let new = inner.add_clonable(BottomRef::ref_cast(upper), nesting_level);
         if new {
             if let Some(change) = context.info_to_add_change(&state.data) {
                 upper.child_change(context, &change);
@@ -640,7 +626,7 @@ fn propagate_new_following_to_uppers<C: AggregationContext>(
     for TopRef { upper } in top_upper {
         upper.add_child_of_child(context, child_of_child);
     }
-    bottom_uppers.add_child_of_child(context, child_of_child, child_of_child_hash, 0);
+    bottom_uppers.add_child_of_child(context, child_of_child, child_of_child_hash);
 }
 
 fn is_blue(hash: u32, height: u8) -> bool {
@@ -655,16 +641,7 @@ fn propagate_change_to_upper<C: AggregationContext>(
     let Some(change) = change else {
         return;
     };
-    match &state.bottom_upper {
-        BottomConnection::Left(upper) => {
-            upper.child_change(context, &change);
-        }
-        BottomConnection::Inner(list) => {
-            for BottomRef { upper } in list.iter() {
-                upper.child_change(context, &change);
-            }
-        }
-    }
+    state.bottom_upper.child_change(context, &change);
     for TopRef { upper } in state.top_upper.iter() {
         upper.child_change(context, &change);
     }

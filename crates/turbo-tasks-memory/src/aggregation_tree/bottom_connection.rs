@@ -1,5 +1,6 @@
 use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
+use auto_hash_map::{map::RawEntry, AutoMap};
 use nohash_hasher::{BuildNoHashHasher, IsEnabled};
 
 use super::{
@@ -7,16 +8,89 @@ use super::{
     inner_refs::{BottomRef, ChildLocation},
     AggregationContext,
 };
-use crate::count_hash_set::CountHashSet;
+
+struct BottomRefInfo {
+    count: isize,
+    distance: u8,
+}
+
+pub struct DistanceCountMap<T: IsEnabled> {
+    map: AutoMap<T, BottomRefInfo, BuildNoHashHasher<T>>,
+}
+
+impl<T: IsEnabled + Eq + Hash + Clone> DistanceCountMap<T> {
+    pub fn new() -> Self {
+        Self {
+            map: AutoMap::with_hasher(),
+        }
+    }
+
+    pub fn is_unset(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&T, u8)> {
+        self.map
+            .iter()
+            .filter(|(_, info)| info.count > 0)
+            .map(|(item, &BottomRefInfo { distance, .. })| (item, distance))
+    }
+
+    pub fn add_clonable(&mut self, item: &T, distance: u8) -> bool {
+        match self.map.raw_entry_mut(item) {
+            RawEntry::Occupied(e) => {
+                let info = e.into_mut();
+                info.count += 1;
+                if distance < info.distance {
+                    info.distance = distance;
+                }
+                false
+            }
+            RawEntry::Vacant(e) => {
+                e.insert(item.clone(), BottomRefInfo { count: 1, distance });
+                true
+            }
+        }
+    }
+
+    pub fn remove_clonable(&mut self, item: &T) -> bool {
+        match self.map.raw_entry_mut(item) {
+            RawEntry::Occupied(mut e) => {
+                let info = e.get_mut();
+                info.count -= 1;
+                if info.count == 0 {
+                    e.remove();
+                    true
+                } else {
+                    false
+                }
+            }
+            RawEntry::Vacant(e) => {
+                e.insert(
+                    item.clone(),
+                    BottomRefInfo {
+                        count: -1,
+                        distance: 0,
+                    },
+                );
+                false
+            }
+        }
+    }
+
+    pub fn into_counts(self) -> impl Iterator<Item = (T, isize)> {
+        self.map.into_iter().map(|(item, info)| (item, info.count))
+    }
+}
 
 pub enum BottomConnection<T, I: IsEnabled> {
     Left(Arc<BottomTree<T, I>>),
-    Inner(CountHashSet<BottomRef<T, I>, BuildNoHashHasher<BottomRef<T, I>>>),
+    Inner(DistanceCountMap<BottomRef<T, I>>),
 }
 
 impl<T, I: IsEnabled> BottomConnection<T, I> {
     pub(super) fn new() -> Self {
-        Self::Inner(CountHashSet::new())
+        Self::Inner(DistanceCountMap::new())
     }
 
     pub(super) fn is_unset(&self) -> bool {
@@ -29,7 +103,12 @@ impl<T, I: IsEnabled> BottomConnection<T, I> {
     pub(super) fn as_cloned_uppers(&self) -> BottomUppers<T, I> {
         match self {
             Self::Left(upper) => BottomUppers::Left(upper.clone()),
-            Self::Inner(upper) => BottomUppers::Inner(upper.iter().cloned().collect()),
+            Self::Inner(upper) => BottomUppers::Inner(
+                upper
+                    .iter()
+                    .map(|(item, distance)| (item.clone(), distance))
+                    .collect(),
+            ),
         }
     }
 
@@ -37,7 +116,7 @@ impl<T, I: IsEnabled> BottomConnection<T, I> {
     pub(super) fn set_left_upper(
         &mut self,
         upper: &Arc<BottomTree<T, I>>,
-    ) -> CountHashSet<BottomRef<T, I>, BuildNoHashHasher<BottomRef<T, I>>> {
+    ) -> DistanceCountMap<BottomRef<T, I>> {
         match std::mem::replace(self, BottomConnection::Left(upper.clone())) {
             BottomConnection::Left(_) => unreachable!("Can't have two left children"),
             BottomConnection::Inner(old_inner) => old_inner,
@@ -45,7 +124,7 @@ impl<T, I: IsEnabled> BottomConnection<T, I> {
     }
 
     pub(super) fn unset_left_upper(&mut self, upper: &Arc<BottomTree<T, I>>) {
-        match std::mem::replace(self, BottomConnection::Inner(CountHashSet::new())) {
+        match std::mem::replace(self, BottomConnection::Inner(DistanceCountMap::new())) {
             BottomConnection::Left(old_upper) => {
                 debug_assert!(Arc::ptr_eq(&old_upper, upper));
             }
@@ -65,7 +144,7 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomConnection<T, I> {
                 upper.child_change(context, change);
             }
             BottomConnection::Inner(list) => {
-                for BottomRef { upper } in list.iter() {
+                for (BottomRef { upper }, _) in list.iter() {
                     upper.child_change(context, change);
                 }
             }
@@ -86,7 +165,7 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomConnection<T, I> {
                 }
             }
             BottomConnection::Inner(list) => {
-                for BottomRef { upper } in list.iter() {
+                for (BottomRef { upper }, _) in list.iter() {
                     let info = upper.get_root_info(context, root_info_type);
                     if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
                         return result;
@@ -100,7 +179,7 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomConnection<T, I> {
 
 pub enum BottomUppers<T, I: IsEnabled> {
     Left(Arc<BottomTree<T, I>>),
-    Inner(Vec<BottomRef<T, I>>),
+    Inner(Vec<(BottomRef<T, I>, u8)>),
 }
 
 impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
@@ -108,21 +187,20 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
         &self,
         context: &C,
         children: impl IntoIterator<Item = (u32, &'a I)> + Clone,
-        nesting_level: u8,
     ) where
         I: 'a,
     {
         match self {
             BottomUppers::Left(upper) => {
-                upper.add_children_of_child(context, ChildLocation::Left, children, nesting_level);
+                upper.add_children_of_child(context, ChildLocation::Left, children, 0);
             }
             BottomUppers::Inner(list) => {
-                for BottomRef { upper } in list {
+                for &(BottomRef { ref upper }, nesting_level) in list {
                     upper.add_children_of_child(
                         context,
                         ChildLocation::Inner,
                         children.clone(),
-                        nesting_level,
+                        nesting_level + 1,
                     );
                 }
             }
@@ -134,7 +212,6 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
         context: &C,
         child_of_child: &I,
         child_of_child_hash: u32,
-        nesting_level: u8,
     ) {
         match self {
             BottomUppers::Left(upper) => {
@@ -143,17 +220,17 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
                     ChildLocation::Left,
                     child_of_child,
                     child_of_child_hash,
-                    nesting_level,
+                    0,
                 );
             }
             BottomUppers::Inner(list) => {
-                for BottomRef { upper } in list {
+                for &(BottomRef { ref upper }, nesting_level) in list.iter() {
                     upper.add_child_of_child(
                         context,
                         ChildLocation::Inner,
                         child_of_child,
                         child_of_child_hash,
-                        nesting_level,
+                        nesting_level + 1,
                     );
                 }
             }
@@ -170,7 +247,7 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
                 upper.remove_child_of_child(context, child_of_child);
             }
             BottomUppers::Inner(list) => {
-                for BottomRef { upper } in list {
+                for (BottomRef { upper }, _) in list {
                     upper.remove_child_of_child(context, child_of_child);
                 }
             }
@@ -187,7 +264,7 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
                 upper.child_change(context, change);
             }
             BottomUppers::Inner(list) => {
-                for BottomRef { upper } in list {
+                for (BottomRef { upper }, _) in list {
                     upper.child_change(context, change);
                 }
             }
