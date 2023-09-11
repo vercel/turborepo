@@ -70,7 +70,7 @@ pub struct RunOpts<'a> {
     pub graph: Option<GraphOpts<'a>>,
     pub(crate) no_daemon: bool,
     pub(crate) single_package: bool,
-    pub log_prefix: LogPrefix,
+    pub log_prefix: ResolvedLogPrefix,
     pub log_order: ResolvedLogOrder,
     summarize: Option<Option<bool>>,
     pub(crate) experimental_space_id: Option<String>,
@@ -87,6 +87,12 @@ pub enum GraphOpts<'a> {
 pub enum ResolvedLogOrder {
     Stream,
     Grouped,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ResolvedLogPrefix {
+    Task,
+    None,
 }
 
 const DEFAULT_CONCURRENCY: u32 = 10;
@@ -108,12 +114,17 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
         });
 
         let (is_github_actions, log_order, log_prefix) = match args.log_order {
+            // TODO: We currently don't respect the user's input if they ask for task prefixes on
+            // GitHub Actions and forcibly strip tasks from their logs even if they specify
+            // that they want it. This should be fixed in Go and Rust at the same time.
             LogOrder::Auto if turborepo_ci::Vendor::get_constant() == Some("GITHUB_ACTIONS") => {
-                (true, ResolvedLogOrder::Grouped, LogPrefix::None)
+                (true, ResolvedLogOrder::Grouped, ResolvedLogPrefix::None)
             }
             // Streaming is the default behavior except when running on GitHub Actions
-            LogOrder::Auto | LogOrder::Stream => (false, ResolvedLogOrder::Stream, args.log_prefix),
-            LogOrder::Grouped => (false, ResolvedLogOrder::Grouped, args.log_prefix),
+            LogOrder::Auto | LogOrder::Stream => {
+                (false, ResolvedLogOrder::Stream, args.log_prefix.into())
+            }
+            LogOrder::Grouped => (false, ResolvedLogOrder::Grouped, args.log_prefix.into()),
         };
 
         Ok(Self {
@@ -160,6 +171,16 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32> {
              than or equal to 1: {}",
             concurrency_raw
         )),
+    }
+}
+
+impl From<LogPrefix> for ResolvedLogPrefix {
+    fn from(value: LogPrefix) -> Self {
+        match value {
+            // We default to task-prefixed logs
+            LogPrefix::Auto | LogPrefix::Task => ResolvedLogPrefix::Task,
+            LogPrefix::None => ResolvedLogPrefix::None,
+        }
     }
 }
 
