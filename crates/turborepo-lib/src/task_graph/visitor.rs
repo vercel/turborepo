@@ -1,10 +1,14 @@
-use std::sync::{Arc, OnceLock};
+use std::{
+    io::stdout,
+    sync::{Arc, OnceLock},
+};
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::sync::mpsc;
 use tracing::debug;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
+use turborepo_ui::{OutputClient, OutputSink};
 
 use crate::{
     cli::EnvMode,
@@ -26,6 +30,7 @@ pub struct Visitor<'a> {
     opts: &'a Opts<'a>,
     task_hasher: TaskHasher<'a>,
     global_env_mode: EnvMode,
+    sink: OutputSink<StdWriter>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -63,6 +68,7 @@ impl<'a> Visitor<'a> {
             env_at_execution_start,
             global_hash,
         );
+        let sink = Self::sink(opts);
 
         Self {
             run_cache,
@@ -70,6 +76,7 @@ impl<'a> Visitor<'a> {
             opts,
             task_hasher,
             global_env_mode,
+            sink,
         }
     }
 
@@ -153,6 +160,8 @@ impl<'a> Visitor<'a> {
                 self.run_cache
                     .task_cache(task_definition, workspace_dir, info.clone(), &task_hash);
 
+            let output_client = self.output_client();
+
             tasks.push(tokio::spawn(async move {
                 println!(
                     "Executing {info}: {}",
@@ -171,6 +180,70 @@ impl<'a> Visitor<'a> {
         }
 
         Ok(())
+    }
+
+    fn sink(opts: &Opts) -> OutputSink<StdWriter> {
+        let err_writer = match matches!(
+            opts.run_opts.log_order,
+            crate::opts::ResolvedLogOrder::Grouped
+        ) && opts.run_opts.is_github_actions
+        {
+            // If we're running on Github Actions, force everything to stdout
+            // so as not to have out-of-order log lines
+            true => std::io::stdout().into(),
+            false => std::io::stderr().into(),
+        };
+        OutputSink::new(std::io::stdout().into(), err_writer)
+    }
+
+    fn output_client(&self) -> OutputClient<impl std::io::Write> {
+        let behavior = match self.opts.run_opts.log_order {
+            // TODO once run summary is implemented, we can skip keeping an in memory buffer if it
+            // is disabled
+            crate::opts::ResolvedLogOrder::Stream => {
+                turborepo_ui::OutputClientBehavior::InMemoryBuffer
+            }
+            crate::opts::ResolvedLogOrder::Grouped => turborepo_ui::OutputClientBehavior::Grouped,
+        };
+        self.sink.logger(behavior)
+    }
+}
+
+// A tiny enum that allows us to use the same type for stdout and stderr without
+// the use of Box<dyn Write>
+enum StdWriter {
+    Out(std::io::Stdout),
+    Err(std::io::Stderr),
+}
+
+impl StdWriter {
+    fn writer(&mut self) -> &mut dyn std::io::Write {
+        match self {
+            StdWriter::Out(out) => out,
+            StdWriter::Err(err) => err,
+        }
+    }
+}
+
+impl From<std::io::Stdout> for StdWriter {
+    fn from(value: std::io::Stdout) -> Self {
+        Self::Out(value)
+    }
+}
+
+impl From<std::io::Stderr> for StdWriter {
+    fn from(value: std::io::Stderr) -> Self {
+        Self::Err(value)
+    }
+}
+
+impl std::io::Write for StdWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.writer().write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.writer().flush()
     }
 }
 
