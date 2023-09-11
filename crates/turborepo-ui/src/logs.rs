@@ -156,13 +156,9 @@ mod tests {
         let ui = UI::new(false);
         let mut output = Vec::new();
         let mut err = Vec::new();
-        let mut prefixed_ui = PrefixedUI::new(
-            ui,
-            CYAN.apply_to(">".to_string()),
-            BOLD.apply_to(">!".to_string()),
-            &mut output,
-            &mut err,
-        );
+        let mut prefixed_ui = PrefixedUI::new(ui, &mut output, &mut err)
+            .with_output_prefix(CYAN.apply_to(">".to_string()))
+            .with_warn_prefix(BOLD.apply_to(">!".to_string()));
         let dir = tempdir()?;
         let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
         fs::write(&log_file_path, "\none fish\ntwo fish\nred fish\nblue fish")?;
