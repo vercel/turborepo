@@ -19,10 +19,7 @@ use notify::event::EventKind;
 use notify::{Config, RecommendedWatcher};
 use notify::{Event, EventHandler, RecursiveMode, Watcher};
 use thiserror::Error;
-use tokio::{
-    sync::{broadcast, mpsc},
-    task::JoinHandle,
-};
+use tokio::sync::{broadcast, mpsc};
 use tracing::warn;
 // windows -> no recursive watch, watch ancestors
 // linux -> recursive watch, watch ancestors
@@ -87,9 +84,7 @@ pub struct FileSystemWatcher {
     // of this struct is dropped. The task that is receiving events will exit,
     // dropping the other sender for the broadcast channel, causing all receivers
     // to be notified of a close.
-    exit_handle: Option<(tokio::sync::oneshot::Sender<()>, JoinHandle<()>)>,
-    // _exit_ch: tokio::sync::oneshot::Sender<()>,
-    // handle: JoinHandle<()>
+    _exit_ch: tokio::sync::oneshot::Sender<()>,
 }
 
 impl FileSystemWatcher {
@@ -101,9 +96,8 @@ impl FileSystemWatcher {
         let watcher = run_watcher(&watch_root, send_file_events)?;
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
         // Ensure we are ready to receive new events, not events for existing state
-        wait_for_cookie(&root, &mut recv_file_events).await?;
-        //futures::executor::block_on(wait_for_cookie(&root, &mut recv_file_events))?;
-        let handle = tokio::task::spawn(watch_events(
+        wait_for_cookie(root, &mut recv_file_events).await?;
+        tokio::task::spawn(watch_events(
             watcher,
             watch_root,
             recv_file_events,
@@ -112,9 +106,7 @@ impl FileSystemWatcher {
         ));
         Ok(Self {
             sender,
-            exit_handle: Some((exit_ch, handle)),
-            // _exit_ch: exit_ch,
-            // handle,
+            _exit_ch: exit_ch,
         })
     }
 
@@ -122,19 +114,6 @@ impl FileSystemWatcher {
         self.sender.subscribe()
     }
 }
-
-// impl Drop for FileSystemWatcher {
-//     fn drop(&mut self) {
-//         println!("DROPPING");
-//         if let Some((exit_ch, handle)) = self.exit_handle.take() {
-//             println!("FS WAITING");
-//             let _ = exit_ch.send(());
-//
-// tokio::runtime::Handle::current().block_on(handle).expect("done");
-//             //futures::executor::block_on(handle).expect("done");
-//         }
-//     }
-// }
 
 #[cfg(not(any(feature = "watch_ancestors", feature = "manual_recursive_watch")))]
 async fn watch_events(

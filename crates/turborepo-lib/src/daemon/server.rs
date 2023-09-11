@@ -135,14 +135,10 @@ where
     let fw_shutdown = trigger_shutdown.clone();
     let fw_handle = tokio::task::spawn(async move {
         if let Err(e) = start_filewatching(watcher_repo_root, cookie_dir, watcher_tx).await {
-            fw_shutdown
-                .lock()
-                .expect("mutex poisoned")
-                .take()
-                .map(|tx| {
-                    error!("filewatching failed to start: {}", e);
-                    let _ = tx.send(());
-                });
+            if let Some(tx) = fw_shutdown.lock().expect("mutex poisoned").take() {
+                error!("filewatching failed to start: {}", e);
+                let _ = tx.send(());
+            }
         }
     });
     let (exit_root_watch, root_watch_exit_signal) = oneshot::channel();
@@ -260,7 +256,7 @@ async fn wait_for_filewatching(
     mut rx: watch::Receiver<Option<Arc<FileWatching>>>,
     timeout: Duration,
 ) -> Result<Arc<FileWatching>, RpcError> {
-    if let Some(fw) = rx.borrow().as_ref().map(|fw| fw.clone()) {
+    if let Some(fw) = rx.borrow().as_ref().cloned() {
         return Ok(fw);
     }
     tokio::time::timeout(timeout, rx.changed())
@@ -270,7 +266,7 @@ async fn wait_for_filewatching(
     let result = rx
         .borrow()
         .as_ref()
-        .map(|fw| fw.clone())
+        .cloned()
         // This error should never happen, we got the change notification
         // above, and we only ever go from None to Some filewatcher
         .ok_or_else(|| RpcError::NoFileWatching)?;
