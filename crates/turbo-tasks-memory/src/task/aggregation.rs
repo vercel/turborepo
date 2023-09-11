@@ -219,7 +219,7 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
             .with_task(*reference, |task| task.aggregation_hash())
     }
 
-    fn item(&self, reference: &TaskId) -> Self::ItemLock<'_> {
+    fn item<'b>(&'b self, reference: &TaskId) -> Self::ItemLock<'b> {
         let task = self.backend.task(*reference);
         TaskGuard {
             id: *reference,

@@ -38,11 +38,11 @@ use nohash_hasher::IsEnabled;
 use self::{leaf::top_tree, top_tree::TopTree};
 pub use self::{leaf::AggregationTreeLeaf, top_tree::AggregationInfoGuard};
 
-pub(self) const MAX_INNER_UPPERS: usize = 50;
-pub(self) const FORCE_LEFT_CHILD_CHILD_AS_INNER: bool = false;
-pub(self) const LEFT_CHILD_CHILD_USE_BLUE: bool = true;
-pub(self) const MAX_NESTING_LEVEL: u8 = 15;
-pub(self) const USE_BLUE_NODES: bool = true;
+pub(self) const MAX_INNER_UPPERS: usize = 5;
+pub(self) const FORCE_LEFT_CHILD_CHILD_AS_INNER: bool = true;
+pub(self) const LEFT_CHILD_CHILD_USE_BLUE: bool = false;
+pub(self) const MAX_NESTING_LEVEL: u8 = 10;
+pub(self) const USE_BLUE_NODES: bool = false;
 
 pub trait AggregationContext {
     type ItemLock<'a>: AggregationItemLock<
@@ -59,7 +59,7 @@ pub trait AggregationContext {
     type RootInfoType;
 
     fn hash(&self, reference: &Self::ItemRef) -> u32;
-    fn item(&self, reference: &Self::ItemRef) -> Self::ItemLock<'_>;
+    fn item<'a>(&'a self, reference: &Self::ItemRef) -> Self::ItemLock<'a>;
 
     fn apply_change(
         &self,

@@ -1,9 +1,4 @@
-use std::{
-    collections::{HashSet, VecDeque},
-    hash::Hash,
-    ops::ControlFlow,
-    sync::Arc,
-};
+use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
 use nohash_hasher::{BuildNoHashHasher, IsEnabled};
 use parking_lot::{Mutex, MutexGuard};
@@ -11,7 +6,10 @@ use ref_cast::RefCast;
 
 use super::{
     inner_refs::{BottomRef, ChildLocation, TopRef},
-    leaf::{add_inner_upper_to_item, bottom_tree, remove_inner_upper_from_item},
+    leaf::{
+        add_inner_upper_to_item, bottom_tree, remove_inner_upper_from_item,
+        remove_left_upper_from_item,
+    },
     top_tree::TopTree,
     AggregationContext, FORCE_LEFT_CHILD_CHILD_AS_INNER, LEFT_CHILD_CHILD_USE_BLUE,
     MAX_INNER_UPPERS, MAX_NESTING_LEVEL, USE_BLUE_NODES,
@@ -36,26 +34,44 @@ use crate::count_hash_set::{CountHashSet, RemoveIfEntryResult};
 /// start on different depths of the graph.
 pub struct BottomTree<T, I: IsEnabled> {
     height: u8,
+    item: I,
     state: Mutex<BottomTreeState<T, I>>,
 }
 
+enum BottomTreeMode<T, I: IsEnabled> {
+    Left(Arc<BottomTree<T, I>>),
+    Inner(CountHashSet<BottomRef<T, I>, BuildNoHashHasher<BottomRef<T, I>>>),
+}
+
+enum BottomUppers<T, I: IsEnabled> {
+    Left(Arc<BottomTree<T, I>>),
+    Inner(Vec<BottomRef<T, I>>),
+}
+
+impl<T, I: IsEnabled> BottomTreeMode<T, I> {
+    fn as_cloned_uppers(&self) -> BottomUppers<T, I> {
+        match self {
+            Self::Left(upper) => BottomUppers::Left(upper.clone()),
+            Self::Inner(upper) => BottomUppers::Inner(upper.iter().cloned().collect()),
+        }
+    }
+}
 pub struct BottomTreeState<T, I: IsEnabled> {
     data: T,
-    left_bottom_upper: Option<Arc<BottomTree<T, I>>>,
-    inner_bottom_upper: CountHashSet<BottomRef<T, I>, BuildNoHashHasher<BottomRef<T, I>>>,
+    bottom_upper: BottomTreeMode<T, I>,
     top_upper: CountHashSet<TopRef<T>, BuildNoHashHasher<TopRef<T>>>,
     // TODO this can't become negative
     following: CountHashSet<I, BuildNoHashHasher<I>>,
 }
 
 impl<T: Default, I: IsEnabled> BottomTree<T, I> {
-    pub fn new(height: u8) -> Self {
+    pub fn new(item: I, height: u8) -> Self {
         Self {
             height,
+            item,
             state: Mutex::new(BottomTreeState {
                 data: T::default(),
-                left_bottom_upper: None,
-                inner_bottom_upper: CountHashSet::new(),
+                bottom_upper: BottomTreeMode::Inner(CountHashSet::new()),
                 top_upper: CountHashSet::new(),
                 following: CountHashSet::new(),
             }),
@@ -106,6 +122,8 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             ChildLocation::Left => {
                 if LEFT_CHILD_CHILD_USE_BLUE {
                     let SplitChildren { blue, mut white } = self.split_children(children);
+                    debug_assert!(!blue.iter().any(|&(_, c)| c == &self.item));
+                    debug_assert!(!white.iter().any(|&(_, c)| c == &self.item));
                     if !blue.is_empty() {
                         self.add_children_of_child_following(context, blue);
                     }
@@ -124,7 +142,10 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                     // We always want to aggregate over at least connectivity 1
                     self.add_children_of_child_inner(
                         context,
-                        children.into_iter().map(|(_, c)| c),
+                        children.into_iter().map(|(_, c)| {
+                            debug_assert!(c != &self.item);
+                            c
+                        }),
                         FORCE_LEFT_CHILD_CHILD_AS_INNER,
                         nesting_level,
                     );
@@ -139,6 +160,8 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                     return;
                 }
                 let SplitChildren { blue, mut white } = self.split_children(children);
+                debug_assert!(!blue.iter().any(|&(_, c)| c == &self.item));
+                debug_assert!(!white.iter().any(|&(_, c)| c == &self.item));
                 if !blue.is_empty() {
                     self.add_children_of_child_following(context, blue);
                 }
@@ -170,17 +193,31 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         if children.is_empty() {
             return;
         }
-        let left_bottom_upper = state.left_bottom_upper.clone();
-        let inner_bottom_uppers = state.inner_bottom_upper.iter().cloned().collect::<Vec<_>>();
-        for TopRef { upper } in state.top_upper.iter() {
+        let buttom_upper = state.bottom_upper.as_cloned_uppers();
+        let top_upper = state.top_upper.iter().cloned().collect::<Vec<_>>();
+        drop(state);
+        for TopRef { upper } in top_upper {
             upper.add_children_of_child(context, children.iter().map(|&(_, c)| c));
         }
-        drop(state);
-        if let Some(upper) = left_bottom_upper {
-            upper.add_children_of_child(context, ChildLocation::Left, children.iter().copied(), 0);
-        }
-        for BottomRef { upper } in inner_bottom_uppers {
-            upper.add_children_of_child(context, ChildLocation::Inner, children.iter().copied(), 0);
+        match buttom_upper {
+            BottomUppers::Left(upper) => {
+                upper.add_children_of_child(
+                    context,
+                    ChildLocation::Left,
+                    children.iter().copied(),
+                    0,
+                );
+            }
+            BottomUppers::Inner(list) => {
+                for BottomRef { upper } in list {
+                    upper.add_children_of_child(
+                        context,
+                        ChildLocation::Inner,
+                        children.iter().copied(),
+                        0,
+                    );
+                }
+            }
         }
     }
 
@@ -224,6 +261,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         child_of_child_hash: u32,
         nesting_level: u8,
     ) {
+        debug_assert!(child_of_child != &self.item);
         match child_location {
             ChildLocation::Left => {
                 if LEFT_CHILD_CHILD_USE_BLUE && self.is_blue(child_of_child_hash) {
@@ -286,32 +324,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             return;
         }
 
-        // TODO we want to check if child_of_child is already connected as inner child
-        // and convert that that
-        let left_bottom_upper = state.left_bottom_upper.clone();
-        let inner_bottom_uppers = state.inner_bottom_upper.iter().cloned().collect::<Vec<_>>();
-        for TopRef { upper } in state.top_upper.iter() {
-            upper.add_child_of_child(context, child_of_child);
-        }
-        drop(state);
-        if let Some(upper) = left_bottom_upper {
-            upper.add_child_of_child(
-                context,
-                ChildLocation::Left,
-                child_of_child,
-                child_of_child_hash,
-                0,
-            );
-        }
-        for BottomRef { upper } in inner_bottom_uppers {
-            upper.add_child_of_child(
-                context,
-                ChildLocation::Inner,
-                child_of_child,
-                child_of_child_hash,
-                0,
-            );
-        }
+        propagate_new_following_to_uppers(state, context, child_of_child, child_of_child_hash);
     }
 
     fn add_child_of_child_inner<C: AggregationContext<Info = T, ItemRef = I>>(
@@ -350,27 +363,27 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         context: &C,
         child_of_child: &I,
     ) -> bool {
-        let left_bottom_upper;
-        let inner_bottom_upper;
         let mut state = self.state.lock();
         match state.following.remove_if_entry(child_of_child) {
             RemoveIfEntryResult::PartiallyRemoved => return true,
             RemoveIfEntryResult::NotPresent => return false,
-            RemoveIfEntryResult::Removed => {
-                left_bottom_upper = state.left_bottom_upper.clone();
-                inner_bottom_upper = state.inner_bottom_upper.iter().cloned().collect::<Vec<_>>();
-                for TopRef { upper } in state.top_upper.iter() {
-                    upper.remove_child_of_child(context, child_of_child);
-                }
-            }
+            RemoveIfEntryResult::Removed => {}
         }
-        drop(state);
-        if let Some(upper) = left_bottom_upper {
-            upper.remove_child_of_child(context, child_of_child);
+        propagate_lost_following_to_uppers(state, context, child_of_child);
+        true
+    }
+
+    fn remove_child_of_child_following<C: AggregationContext<Info = T, ItemRef = I>>(
+        self: &Arc<Self>,
+        context: &C,
+        child_of_child: &I,
+    ) -> bool {
+        let mut state = self.state.lock();
+        if !state.following.remove(child_of_child.clone()) {
+            // no present, nothing to do
+            return false;
         }
-        for BottomRef { upper } in inner_bottom_upper {
-            upper.remove_child_of_child(context, child_of_child);
-        }
+        propagate_lost_following_to_uppers(state, context, child_of_child);
         true
     }
 
@@ -379,11 +392,15 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         context: &C,
         child_of_child: &I,
     ) {
-        if self.height == 0 {
+        let can_remove_inner = if self.height == 0 {
             remove_inner_upper_from_item(context, child_of_child, &self);
+            true
         } else {
             bottom_tree(context, child_of_child, self.height - 1)
-                .remove_inner_bottom_tree_upper(context, &self);
+                .remove_inner_bottom_tree_upper(context, &self)
+        };
+        if !can_remove_inner {
+            self.remove_child_of_child_following(context, child_of_child);
         }
     }
 
@@ -393,14 +410,80 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         upper: &Arc<BottomTree<T, I>>,
     ) {
         let mut state = self.state.lock();
-        state.left_bottom_upper = Some(upper.clone());
+        let old_inner =
+            match std::mem::replace(&mut state.bottom_upper, BottomTreeMode::Left(upper.clone())) {
+                BottomTreeMode::Left(_) => unreachable!("Can't have two left children"),
+                BottomTreeMode::Inner(old_inner) => old_inner,
+            };
         if let Some(change) = context.info_to_add_change(&state.data) {
             upper.child_change(context, &change);
         }
         let children = state.following.iter().cloned().collect::<Vec<_>>();
+        let following_for_old_uppers = (!old_inner.is_empty())
+            .then(|| state.following.iter().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+
+        let remove_change = (!old_inner.is_empty())
+            .then(|| context.info_to_remove_change(&state.data))
+            .flatten();
+
         drop(state);
         let children = children.iter().map(|item| (context.hash(item), item));
         upper.add_children_of_child(context, ChildLocation::Left, children, 1);
+
+        // Convert this node into a following node for all old (inner) uppers
+        //
+        // Old state:
+        // I1, I2
+        //      \
+        //       self
+        // Adding L as new left upper:
+        // I1, I2     L
+        //      \    /
+        //       self
+        // Final state: (I1 and I2 have L as following instead)
+        // I1, I2 ----> L
+        //             /
+        //         self
+        // I1 and I2 have "self" change removed since it's now part of L instead.
+        // L = upper, I1, I2 = old_inner
+        //
+        for (BottomRef { upper: old_upper }, count) in old_inner.into_counts() {
+            let item = &self.item;
+            let mut upper_state = old_upper.state.lock();
+            if count > 0 {
+                // add as following
+                if upper_state
+                    .following
+                    .add_count(item.clone(), count as usize)
+                {
+                    propagate_new_following_to_uppers(
+                        upper_state,
+                        context,
+                        item,
+                        context.hash(item),
+                    );
+                } else {
+                    drop(upper_state);
+                }
+                // remove from self
+                if let Some(change) = remove_change.as_ref() {
+                    old_upper.child_change(context, change);
+                }
+                for following in following_for_old_uppers.iter() {
+                    // TODO use children of child method
+                    old_upper.remove_child_of_child(context, following);
+                }
+            } else {
+                // remove count from following instead
+                if upper_state
+                    .following
+                    .remove_count(item.clone(), -count as usize)
+                {
+                    propagate_lost_following_to_uppers(upper_state, context, item);
+                }
+            }
+        }
     }
 
     #[must_use]
@@ -412,15 +495,13 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         nesting_level: u8,
     ) -> bool {
         let mut state = self.state.lock();
-        if !force_inner
-            && (state.inner_bottom_upper.len() >= MAX_INNER_UPPERS
-                || state.left_bottom_upper.is_some())
-        {
-            return state
-                .inner_bottom_upper
-                .add_if_entry(&BottomRef::ref_cast(upper));
+        let BottomTreeMode::Inner(inner) = &mut state.bottom_upper else {
+            return false;
+        };
+        if !force_inner && inner.len() >= MAX_INNER_UPPERS {
+            return inner.add_if_entry(&BottomRef::ref_cast(upper));
         }
-        let new = state.inner_bottom_upper.add(BottomRef {
+        let new = inner.add(BottomRef {
             upper: upper.clone(),
         });
         if new {
@@ -435,23 +516,60 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         true
     }
 
-    pub(super) fn remove_inner_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
-        &self,
+    pub(super) fn remove_left_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
+        self: &Arc<Self>,
         context: &C,
         upper: &Arc<BottomTree<T, I>>,
     ) {
         let mut state = self.state.lock();
-        let removed = state.inner_bottom_upper.remove(BottomRef {
+        match std::mem::replace(
+            &mut state.bottom_upper,
+            BottomTreeMode::Inner(CountHashSet::new()),
+        ) {
+            BottomTreeMode::Left(old_upper) => {
+                debug_assert!(Arc::ptr_eq(&old_upper, upper));
+            }
+            BottomTreeMode::Inner(_) => unreachable!("Must that a left child"),
+        }
+        if let Some(change) = context.info_to_remove_change(&state.data) {
+            upper.child_change(context, &change);
+        }
+        for following in state.following.iter() {
+            // TODO use children of child method
+            // TODO move this out of the state lock
+            upper.remove_child_of_child(context, following);
+        }
+        if state.top_upper.is_empty() {
+            drop(state);
+            self.remove_self_from_lower(context);
+        }
+    }
+
+    #[must_use]
+    pub(super) fn remove_inner_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &C,
+        upper: &Arc<BottomTree<T, I>>,
+    ) -> bool {
+        let mut state = self.state.lock();
+        let BottomTreeMode::Inner(inner) = &mut state.bottom_upper else {
+            return false;
+        };
+        let removed = inner.remove(BottomRef {
             upper: upper.clone(),
         });
         if removed {
             if let Some(change) = context.info_to_remove_change(&state.data) {
+                // TODO move this out of the state lock
                 upper.child_change(context, &change);
             }
             for following in state.following.iter() {
+                // TODO use children of child method
+                // TODO move this out of the state lock
                 upper.remove_child_of_child(context, following);
             }
         }
+        true
     }
 
     pub(super) fn add_top_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
@@ -475,7 +593,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
 
     #[allow(dead_code)]
     pub(super) fn remove_top_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
-        &self,
+        self: &Arc<Self>,
         context: &C,
         upper: &Arc<TopTree<T>>,
     ) {
@@ -490,6 +608,23 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             for following in state.following.iter() {
                 upper.remove_child_of_child(context, following);
             }
+            if state.top_upper.is_empty() && !matches!(state.bottom_upper, BottomTreeMode::Left(_))
+            {
+                drop(state);
+                self.remove_self_from_lower(context);
+            }
+        }
+    }
+
+    fn remove_self_from_lower(
+        self: &Arc<Self>,
+        context: &impl AggregationContext<Info = T, ItemRef = I>,
+    ) {
+        if self.height == 0 {
+            remove_left_upper_from_item(context, &self.item, self);
+        } else {
+            bottom_tree(context, &self.item, self.height - 1)
+                .remove_left_bottom_tree_upper(context, self);
         }
     }
 
@@ -516,24 +651,89 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 break;
             }
         }
-        if let Some(upper) = state.left_bottom_upper.as_ref() {
-            let info = upper.get_root_info(context, root_info_type);
-            if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
-                return result;
+        match &state.bottom_upper {
+            BottomTreeMode::Left(upper) => {
+                let info = upper.get_root_info(context, root_info_type);
+                if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
+                    return result;
+                }
             }
-        }
-        for BottomRef { upper } in state.inner_bottom_upper.iter() {
-            let info = upper.get_root_info(context, root_info_type);
-            if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
-                break;
+            BottomTreeMode::Inner(list) => {
+                for BottomRef { upper } in list.iter() {
+                    let info = upper.get_root_info(context, root_info_type);
+                    if context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
+                        return result;
+                    }
+                }
             }
         }
         result
     }
 }
 
+fn propagate_lost_following_to_uppers<C: AggregationContext>(
+    state: MutexGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
+    context: &C,
+    child_of_child: &C::ItemRef,
+) {
+    let bottom_uppers = state.bottom_upper.as_cloned_uppers();
+    let top_upper = state.top_upper.iter().cloned().collect::<Vec<_>>();
+    drop(state);
+    for TopRef { upper } in top_upper {
+        upper.remove_child_of_child(context, child_of_child);
+    }
+    match bottom_uppers {
+        BottomUppers::Left(upper) => {
+            upper.remove_child_of_child(context, child_of_child);
+        }
+        BottomUppers::Inner(list) => {
+            for BottomRef { upper } in list {
+                upper.remove_child_of_child(context, child_of_child);
+            }
+        }
+    }
+}
+
+fn propagate_new_following_to_uppers<C: AggregationContext>(
+    state: MutexGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
+    context: &C,
+    child_of_child: &C::ItemRef,
+    child_of_child_hash: u32,
+) {
+    // TODO we want to check if child_of_child is already connected as inner child
+    // and convert that that
+    let bottom_uppers = state.bottom_upper.as_cloned_uppers();
+    let top_upper = state.top_upper.iter().cloned().collect::<Vec<_>>();
+    drop(state);
+    for TopRef { upper } in top_upper {
+        upper.add_child_of_child(context, child_of_child);
+    }
+    match bottom_uppers {
+        BottomUppers::Left(upper) => {
+            upper.add_child_of_child(
+                context,
+                ChildLocation::Left,
+                child_of_child,
+                child_of_child_hash,
+                0,
+            );
+        }
+        BottomUppers::Inner(list) => {
+            for BottomRef { upper } in list {
+                upper.add_child_of_child(
+                    context,
+                    ChildLocation::Inner,
+                    child_of_child,
+                    child_of_child_hash,
+                    0,
+                );
+            }
+        }
+    }
+}
+
 fn is_blue(hash: u32, height: u8) -> bool {
-    USE_BLUE_NODES && (hash.rotate_right(height as u32) & 1) == 0
+    USE_BLUE_NODES && (hash.rotate_right(height as u32 * 2) & 3) == 0
 }
 
 fn propagate_change_to_upper<C: AggregationContext>(
@@ -544,17 +744,47 @@ fn propagate_change_to_upper<C: AggregationContext>(
     let Some(change) = change else {
         return;
     };
-    for BottomRef { upper } in state.inner_bottom_upper.iter() {
-        upper.child_change(context, &change);
-    }
-    if let Some(upper) = state.left_bottom_upper.as_ref() {
-        upper.child_change(context, &change);
+    match &state.bottom_upper {
+        BottomTreeMode::Left(upper) => {
+            upper.child_change(context, &change);
+        }
+        BottomTreeMode::Inner(list) => {
+            for BottomRef { upper } in list.iter() {
+                upper.child_change(context, &change);
+            }
+        }
     }
     for TopRef { upper } in state.top_upper.iter() {
         upper.child_change(context, &change);
     }
 }
 
+#[cfg(test)]
+fn visit_graph<C: AggregationContext>(
+    context: &C,
+    entry: &C::ItemRef,
+    height: u8,
+) -> (usize, usize) {
+    use std::collections::{HashSet, VecDeque};
+    let mut queue = VecDeque::new();
+    let mut visited = HashSet::new();
+    visited.insert(entry.clone());
+    queue.push_back(entry.clone());
+    let mut edges = 0;
+    while let Some(item) = queue.pop_front() {
+        let tree = bottom_tree(context, &item, height);
+        let state = tree.state.lock();
+        for next in state.following.iter() {
+            edges += 1;
+            if visited.insert(next.clone()) {
+                queue.push_back(next.clone());
+            }
+        }
+    }
+    (visited.len(), edges)
+}
+
+#[cfg(test)]
 pub fn print_graph<C: AggregationContext>(
     context: &C,
     entry: &C::ItemRef,
@@ -562,31 +792,45 @@ pub fn print_graph<C: AggregationContext>(
     color_upper: bool,
     name_fn: impl Fn(&C::ItemRef) -> String,
 ) {
-    use std::fmt::Write;
+    use std::{
+        collections::{HashSet, VecDeque},
+        fmt::Write,
+    };
+    let (nodes, edges) = visit_graph(context, entry, height);
     if !color_upper {
         print!("subgraph cluster_{} {{", height);
-        print!("label = \"Level {}\";", height);
+        print!(
+            "label = \"Level {}\\n{} nodes, {} edges\";",
+            height, nodes, edges
+        );
         print!("color = \"black\";");
     }
     let mut edges = String::new();
-    let tree = bottom_tree(context, entry, height);
     let mut queue = VecDeque::new();
     let mut visited = HashSet::new();
     visited.insert(entry.clone());
-    queue.push_back((entry.clone(), tree));
-    while let Some((item, tree)) = queue.pop_front() {
+    queue.push_back(entry.clone());
+    while let Some(item) = queue.pop_front() {
+        let tree = bottom_tree(context, &item, height);
         let name = name_fn(&item);
+        let mut label = format!("{}", name);
+        let state = tree.state.lock();
+        for (item, count) in state.following.counts() {
+            if *count < 0 {
+                label += "\\n";
+                label += &name_fn(item);
+            }
+        }
         if color_upper {
             print!(r#""{} {}" [color=red];"#, height - 1, name);
         } else if is_blue(context.hash(&item), height + 1) {
             print!(
                 r#""{} {}" [label="{}", style=filled, fillcolor=lightblue];"#,
-                height, name, name
+                height, name, label
             );
         } else {
-            print!(r#""{} {}" [label="{}"];"#, height, name, name);
+            print!(r#""{} {}" [label="{}"];"#, height, name, label);
         }
-        let state = tree.state.lock();
         for next in state.following.iter() {
             if !color_upper {
                 write!(
@@ -600,7 +844,7 @@ pub fn print_graph<C: AggregationContext>(
                 .unwrap();
             }
             if visited.insert(next.clone()) {
-                queue.push_back((next.clone(), bottom_tree(context, next, height)));
+                queue.push_back(next.clone());
             }
         }
     }

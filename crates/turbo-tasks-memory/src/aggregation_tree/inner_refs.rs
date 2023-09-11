@@ -36,6 +36,14 @@ impl<T> PartialEq for TopRef<T> {
 
 impl<T> Eq for TopRef<T> {}
 
+impl<T> Clone for TopRef<T> {
+    fn clone(&self) -> Self {
+        Self {
+            upper: self.upper.clone(),
+        }
+    }
+}
+
 #[derive(RefCast)]
 #[repr(transparent)]
 pub struct BottomRef<T, I: IsEnabled> {

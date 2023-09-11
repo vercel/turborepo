@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, hash::Hash, ops::ControlFlow, sync::Arc};
+use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
 use auto_hash_map::AutoMap;
 use nohash_hasher::{BuildNoHashHasher, IsEnabled};
@@ -252,7 +252,7 @@ pub fn bottom_tree<C: AggregationContext>(
         if let Some(bottom_tree) = leaf.bottom_trees.get(&height) {
             return bottom_tree.clone();
         }
-        new_bottom_tree = Arc::new(BottomTree::new(height));
+        new_bottom_tree = Arc::new(BottomTree::new(reference.clone(), height));
         leaf.bottom_trees.insert(height, new_bottom_tree.clone());
         if height == 0 {
             result = Some(add_left_upper_to_item_step_1::<C>(
@@ -343,6 +343,31 @@ fn add_left_upper_to_item_step_2<C: AggregationContext>(
             children.iter().map(|child| (context.hash(&child), child)),
             1,
         )
+    }
+}
+
+pub fn remove_left_upper_from_item<C: AggregationContext>(
+    context: &C,
+    reference: &C::ItemRef,
+    upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
+) {
+    let mut item = context.item(reference);
+    let leaf = &mut item.leaf();
+    debug_assert!(if let Some(left_upper) = leaf.left_upper.as_ref() {
+        Arc::ptr_eq(left_upper, upper)
+    } else {
+        false
+    });
+    leaf.left_upper = None;
+    let change = item.get_remove_change();
+    let children = item.children().map(|r| r.into_owned()).collect::<Vec<_>>();
+    drop(item);
+    if let Some(change) = change {
+        context.on_remove_change(&change);
+        upper.child_change(context, &change);
+    }
+    for child in children {
+        upper.remove_child_of_child(context, &child)
     }
 }
 
