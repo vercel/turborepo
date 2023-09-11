@@ -375,6 +375,45 @@ fn chain_double_connected() {
     context.additions.store(0, Ordering::SeqCst);
 }
 
+#[test]
+fn rectangle_tree() {
+    let something_with_lifetime = 0;
+    let context = NodeAggregationContext {
+        additions: AtomicU32::new(0),
+        something_with_lifetime: &something_with_lifetime,
+    };
+    let mut nodes: Vec<Vec<Arc<Node>>> = Vec::new();
+    const SIZE: usize = 30;
+    const MULT: usize = 100;
+    for y in 0..SIZE {
+        let mut line: Vec<Arc<Node>> = Vec::new();
+        for x in 0..SIZE {
+            let mut children = Vec::new();
+            if x > 0 {
+                children.push(line[x - 1].clone());
+            }
+            if y > 0 {
+                children.push(nodes[y - 1][x].clone());
+            }
+            let value = (x + y * MULT) as u32;
+            let node = Arc::new(Node {
+                hash: hash(value),
+                inner: Mutex::new(NodeInner {
+                    children,
+                    aggregation_leaf: AggregationTreeLeaf::new(),
+                    value,
+                }),
+            });
+            line.push(node.clone());
+        }
+        nodes.push(line);
+    }
+
+    let root = NodeRef(nodes[SIZE - 1][SIZE - 1].clone());
+
+    print(&context, &root);
+}
+
 fn print(context: &NodeAggregationContext<'_>, current: &NodeRef) {
     println!("digraph {{");
     let start = 0;
