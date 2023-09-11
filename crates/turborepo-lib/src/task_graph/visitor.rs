@@ -1,14 +1,15 @@
 use std::{
-    io::stdout,
+    borrow::Cow,
+    io::Write,
     sync::{Arc, OnceLock},
 };
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::sync::mpsc;
-use tracing::debug;
+use tracing::{debug, error};
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
-use turborepo_ui::{OutputClient, OutputSink};
+use turborepo_ui::{ColorSelector, OutputClient, OutputSink, PrefixedUI};
 
 use crate::{
     cli::EnvMode,
@@ -31,6 +32,7 @@ pub struct Visitor<'a> {
     task_hasher: TaskHasher<'a>,
     global_env_mode: EnvMode,
     sink: OutputSink<StdWriter>,
+    color_cache: ColorSelector,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -69,6 +71,7 @@ impl<'a> Visitor<'a> {
             global_hash,
         );
         let sink = Self::sink(opts);
+        let color_cache = ColorSelector::default();
 
         Self {
             run_cache,
@@ -77,6 +80,7 @@ impl<'a> Visitor<'a> {
             task_hasher,
             global_env_mode,
             sink,
+            color_cache,
         }
     }
 
@@ -160,14 +164,22 @@ impl<'a> Visitor<'a> {
                 self.run_cache
                     .task_cache(task_definition, workspace_dir, info.clone(), &task_hash);
 
+            // TODO(gsoltis): if/when we fix https://github.com/vercel/turbo/issues/937
+            // the following block should never get hit. In the meantime, keep it after
+            // hashing so that downstream tasks can count on the hash existing
+            //
+            // bail if the script doesn't exist
+            let Some(command) = command else { continue };
+
             let output_client = self.output_client();
+            let prefix = self.prefix(&info);
+            let pretty_prefix = self.color_cache.prefix_with_color(&task_hash, &prefix);
 
             tasks.push(tokio::spawn(async move {
-                println!(
-                    "Executing {info}: {}",
-                    command.as_deref().unwrap_or("no script def")
-                );
                 let _task_cache = task_cache;
+                if let Err(e) = writeln!(output_client.stdout(), "{pretty_prefix}{command}") {
+                    error!("unable to write to output: {e}");
+                };
                 callback.send(Ok(())).unwrap();
             }));
         }
@@ -206,6 +218,18 @@ impl<'a> Visitor<'a> {
             crate::opts::ResolvedLogOrder::Grouped => turborepo_ui::OutputClientBehavior::Grouped,
         };
         self.sink.logger(behavior)
+    }
+
+    fn prefix<'b>(&self, task_id: &'b TaskId) -> Cow<'b, str> {
+        match self.opts.run_opts.log_prefix {
+            crate::opts::ResolvedLogPrefix::Task if self.opts.run_opts.single_package => {
+                task_id.task().into()
+            }
+            crate::opts::ResolvedLogPrefix::Task => {
+                format!("{}:{}", task_id.package(), task_id.task()).into()
+            }
+            crate::opts::ResolvedLogPrefix::None => "".into(),
+        }
     }
 }
 
