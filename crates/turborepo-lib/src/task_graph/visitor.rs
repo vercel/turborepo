@@ -4,12 +4,13 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
+use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::sync::mpsc;
 use tracing::{debug, error};
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
-use turborepo_ui::{ColorSelector, OutputClient, OutputSink, PrefixedUI};
+use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
 
 use crate::{
     cli::EnvMode,
@@ -33,6 +34,7 @@ pub struct Visitor<'a> {
     global_env_mode: EnvMode,
     sink: OutputSink<StdWriter>,
     color_cache: ColorSelector,
+    ui: UI,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -55,6 +57,10 @@ pub enum Error {
 }
 
 impl<'a> Visitor<'a> {
+    // Disabling this lint until we stop adding state to the visitor.
+    // Once we have the full picture we will go about grouping these pieces of data
+    // together
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         package_graph: Arc<PackageGraph>,
         run_cache: Arc<RunCache>,
@@ -63,6 +69,7 @@ impl<'a> Visitor<'a> {
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
         global_env_mode: EnvMode,
+        ui: UI,
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,
@@ -81,6 +88,7 @@ impl<'a> Visitor<'a> {
             global_env_mode,
             sink,
             color_cache,
+            ui,
         }
     }
 
@@ -97,6 +105,7 @@ impl<'a> Visitor<'a> {
 
         while let Some(message) = node_stream.recv().await {
             let crate::engine::Message { info, callback } = message;
+            let is_github_actions = self.opts.run_opts.is_github_actions;
             let package_name = WorkspaceName::from(info.package());
             let workspace_dir =
                 self.package_graph
@@ -174,12 +183,13 @@ impl<'a> Visitor<'a> {
             let output_client = self.output_client();
             let prefix = self.prefix(&info);
             let pretty_prefix = self.color_cache.prefix_with_color(&task_hash, &prefix);
+            let ui = self.ui;
 
             tasks.push(tokio::spawn(async move {
                 let _task_cache = task_cache;
-                if let Err(e) = writeln!(output_client.stdout(), "{pretty_prefix}{command}") {
-                    error!("unable to write to output: {e}");
-                };
+                let mut prefixed_ui =
+                    Self::prefixed_ui(ui, is_github_actions, &output_client, pretty_prefix);
+                prefixed_ui.output(command);
                 callback.send(Ok(())).unwrap();
             }));
         }
@@ -230,6 +240,27 @@ impl<'a> Visitor<'a> {
             }
             crate::opts::ResolvedLogPrefix::None => "".into(),
         }
+    }
+
+    fn prefixed_ui<W: Write>(
+        ui: UI,
+        is_github_actions: bool,
+        client: &OutputClient<W>,
+        prefix: StyledObject<String>,
+    ) -> PrefixedUI<OutputWriter<'_, W>> {
+        let mut prefixed_ui = PrefixedUI::new(ui, client.stdout(), client.stderr())
+            .with_output_prefix(prefix.clone())
+            // TODO: we can probably come up with a more ergonomic way to achieve this
+            .with_error_prefix(
+                Style::new().apply_to(format!("{}ERROR: ", ui.apply(prefix.clone()))),
+            )
+            .with_warn_prefix(prefix);
+        if is_github_actions {
+            prefixed_ui = prefixed_ui
+                .with_error_prefix(Style::new().apply_to("[ERROR]".to_string()))
+                .with_warn_prefix(Style::new().apply_to("[WARN]".to_string()));
+        }
+        prefixed_ui
     }
 }
 
