@@ -6,11 +6,11 @@
     "dev": "gatsby develop",
     "build": "gatsby build",
     "start": "gatsby develop",
-    "lint": "tsc --noEmit && eslint src/**/*.ts*"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
   },
   "dependencies": {
-    "eslint": "7.32.0",
-    "gatsby": "^5.7.0",
+    "gatsby": "^5.12.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "ui": "workspace:*"
@@ -19,11 +19,10 @@
     "@types/node": "^18.15.0",
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.11",
-    "babel-eslint": "^10.1.0",
     "eslint-config-custom": "workspace:*",
     "gatsby-plugin-compile-es6-packages": "^2.1.1",
     "gatsby-plugin-pnpm": "^1.2.10",
     "tsconfig": "workspace:*",
-    "typescript": "^4.9.5"
+    "typescript": "^5.2.2"
   }
 }

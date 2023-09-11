@@ -1,4 +1,3 @@
 module.exports = {
-  root: true,
-  extends: ["custom/react"],
+  extends: ["custom/gatsby"],
 };
