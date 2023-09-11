@@ -259,6 +259,11 @@ impl GlobTracker {
                         // This shouldn't ever happen, but if we aren't tracking this hash at
                         // all, we don't need to keep it in the set of hashes that are relevant
                         // for this glob.
+                        debug_assert!(
+                            false,
+                            "A glob is referencing a hash that we are not tracking. This is most \
+                             likely an internal bookkeeping error in globwatcher.rs"
+                        );
                         return false;
                     };
                     // If we match an exclusion, don't invalidate this hash
