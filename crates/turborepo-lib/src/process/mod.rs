@@ -21,7 +21,7 @@ use futures::Future;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
 
-use self::child::Child;
+use self::child::{Child, ChildExit};
 
 /// A process manager that is responsible for spawning and managing child
 /// processes. When the manager is Open, new child processes can be spawned
@@ -77,10 +77,15 @@ impl ProcessManager {
     }
 
     /// Close the process manager, running the given callback on each child
+    ///
+    /// note: this is designed to be called multiple times, ie calling close
+    /// with two different strategies will propagate both signals to the child
+    /// processes. clearing the task queue and re-enabling spawning are both
+    /// idempotent operations
     async fn close<F, C>(&self, callback: F)
     where
         F: Fn(Child) -> C + Sync + Send + Copy + 'static,
-        C: Future<Output = Option<i32>> + Sync + Send + 'static,
+        C: Future<Output = Option<ChildExit>> + Sync + Send + 'static,
     {
         self.is_closing
             .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -88,7 +93,7 @@ impl ProcessManager {
         let mut set = JoinSet::new();
 
         {
-            let lock = self.children.lock().unwrap();
+            let lock = self.children.lock().expect("not poisoned");
             for child in lock.iter() {
                 let child = child.clone();
                 set.spawn(async move { callback(child).await });
@@ -103,7 +108,7 @@ impl ProcessManager {
 
         {
             // clean up the vec and re-open
-            let mut lock = self.children.lock().unwrap();
+            let mut lock = self.children.lock().expect("not poisoned");
             // just allocate a new vec rather than clearing the old one
             *lock = vec![];
             self.is_closing
@@ -173,7 +178,7 @@ mod test {
         sleep(Duration::from_millis(100)).await;
 
         let code = child.wait().await;
-        assert_eq!(code, Some(0));
+        assert_eq!(code, Some(ChildExit::Finished(Some(0))));
 
         manager.stop().await;
     }
@@ -188,8 +193,8 @@ mod test {
 
         sleep(Duration::from_millis(100)).await;
 
-        let code = child.wait().await;
-        assert_eq!(code, Some(0));
+        let exit = child.wait().await;
+        assert_eq!(exit, Some(ChildExit::Finished(Some(0))));
 
         manager.stop().await;
 
@@ -215,10 +220,10 @@ mod test {
         manager.stop().await;
     }
 
-    #[test_case("stop", None)]
-    #[test_case("wait", Some(0))]
+    #[test_case("stop", ChildExit::Finished(None))]
+    #[test_case("wait", ChildExit::Finished(Some(0)))]
     #[tokio::test]
-    async fn test_stop_multiple_tasks_shared(strat: &str, expected: Option<i32>) {
+    async fn test_stop_multiple_tasks_shared(strat: &str, expected: ChildExit) {
         let manager = ProcessManager::new();
         let tasks = FuturesUnordered::new();
 
@@ -246,7 +251,7 @@ mod test {
 
         // tasks return proper exit code
         assert!(
-            tasks.all(|v| async { v.unwrap() == expected }).await,
+            tasks.all(|v| async { v.unwrap() == Some(expected) }).await,
             "not all tasks returned the correct code: {:?}",
             expected
         );
