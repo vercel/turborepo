@@ -317,7 +317,9 @@ async fn watch_root(
                     return Ok(());
                 };
                 let should_trigger_shutdown = match event {
-                    Ok(event) if event.paths.iter().any(|p| p == (&root as &AbsoluteSystemPath)) => true,
+                    // filewatching can throw some weird events, so check that the root is actually gone
+                    // before triggering a shutdown
+                    Ok(event) if event.paths.iter().any(|p| p == (&root as &AbsoluteSystemPath)) => !root.exists(),
                     Ok(_) => false,
                     Err(_) => true
                 };
