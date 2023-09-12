@@ -58,6 +58,7 @@ const config: DocsThemeConfig = {
   },
   toc: {
     float: true,
+    backToTop: true,
     extraContent: ExtraContent,
   },
   // font: false,
