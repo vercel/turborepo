@@ -121,8 +121,9 @@ func getGlobalHashInputs(
 	if lockFile == nil {
 		// If we don't have lockfile information available, add the specfile and lockfile to global deps
 		globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Specfile))
-		if rootpath.UntypedJoin(packageManager.Lockfile).Exists() {
-			globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Lockfile))
+		lockfilePath := packageManager.GetLockfilePath(rootpath)
+		if lockfilePath.Exists() {
+			globalDeps.Add(lockfilePath)
 		}
 	}
 

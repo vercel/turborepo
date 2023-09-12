@@ -2,18 +2,26 @@ package packagemanager
 
 import (
 	"fmt"
+	"os/exec"
 
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
+const command = "bun"
+const bunLockfile = "bun.lockb"
+
+func getLockfilePath(rootPath turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+	return rootPath.UntypedJoin(bunLockfile)
+}
+
 var nodejsBun = PackageManager{
 	Name:       "nodejs-bun",
 	Slug:       "bun",
-	Command:    "bun",
+	Command:    command,
 	Specfile:   "package.json",
-	Lockfile:   "bun.lockb",
+	Lockfile:   bunLockfile,
 	PackageDir: "node_modules",
 	ArgSeparator: func(userArgs []string) []string {
 		// Bun swallows a single "--" token. If the user is passing "--", we need
@@ -48,7 +56,23 @@ var nodejsBun = PackageManager{
 	},
 
 	canPrune: func(cwd turbopath.AbsoluteSystemPath) (bool, error) {
-		return false, nil
+		return true, nil
+	},
+
+	GetLockfileName: func(rootPath turbopath.AbsoluteSystemPath) string {
+		return bunLockfile
+	},
+
+	GetLockfilePath: func(rootPath turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+		return getLockfilePath(rootPath)
+	},
+
+	GetLockfileContents: func(projectDirectory turbopath.AbsoluteSystemPath) ([]byte, error) {
+		lockfilePath := getLockfilePath(projectDirectory)
+		cmd := exec.Command(command, lockfilePath.ToString())
+		cmd.Dir = projectDirectory.ToString()
+
+		return cmd.Output()
 	},
 
 	UnmarshalLockfile: func(_rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {
