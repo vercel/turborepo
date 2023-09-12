@@ -28,17 +28,20 @@ use self::child::{Child, ChildExit};
 /// using `spawn`. When the manager is Closed, all currently-running children
 /// will be closed, and no new children can be spawned.
 #[derive(Debug, Clone)]
-pub struct ProcessManager {
-    is_closing: Arc<AtomicBool>,
-    children: Arc<Mutex<Vec<child::Child>>>,
+pub struct ProcessManager(Arc<Mutex<ProcessManagerInner>>);
+
+#[derive(Debug)]
+struct ProcessManagerInner {
+    is_closing: bool,
+    children: Vec<child::Child>,
 }
 
 impl ProcessManager {
     pub fn new() -> Self {
-        ProcessManager {
-            is_closing: Arc::new(AtomicBool::new(false)),
-            children: Arc::new(Mutex::new(Vec::new())),
-        }
+        Self(Arc::new(Mutex::new(ProcessManagerInner {
+            is_closing: false,
+            children: Vec::new(),
+        })))
     }
 }
 
@@ -50,14 +53,12 @@ impl ProcessManager {
     ///
     /// If spawn returns None,
     pub fn spawn(&self, command: child::Command, stop_timeout: Duration) -> Option<child::Child> {
-        if self.is_closing.load(std::sync::atomic::Ordering::Relaxed) {
+        let mut lock = self.0.lock().unwrap();
+        if lock.is_closing {
             return None;
         }
         let child = child::Child::spawn(command, child::ShutdownStyle::Graceful(stop_timeout));
-        {
-            let mut lock = self.children.lock().unwrap();
-            lock.push(child.clone());
-        }
+        lock.children.push(child.clone());
         Some(child)
     }
 
@@ -87,14 +88,12 @@ impl ProcessManager {
         F: Fn(Child) -> C + Sync + Send + Copy + 'static,
         C: Future<Output = Option<ChildExit>> + Sync + Send + 'static,
     {
-        self.is_closing
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-
         let mut set = JoinSet::new();
 
         {
-            let lock = self.children.lock().expect("not poisoned");
-            for child in lock.iter() {
+            let mut lock = self.0.lock().expect("not poisoned");
+            lock.is_closing = true;
+            for child in lock.children.iter() {
                 let child = child.clone();
                 set.spawn(async move { callback(child).await });
             }
@@ -107,12 +106,11 @@ impl ProcessManager {
         }
 
         {
-            // clean up the vec and re-open
-            let mut lock = self.children.lock().expect("not poisoned");
+            let mut lock = self.0.lock().expect("not poisoned");
+
             // just allocate a new vec rather than clearing the old one
-            *lock = vec![];
-            self.is_closing
-                .store(false, std::sync::atomic::Ordering::Relaxed);
+            lock.children = vec![];
+            lock.is_closing = false;
         }
     }
 }
