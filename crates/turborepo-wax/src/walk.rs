@@ -422,7 +422,7 @@ impl Negation {
 ///
 /// [`Glob::walk`]: crate::Glob::walk
 #[cfg_attr(docsrs, doc(cfg(feature = "walk")))]
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum LinkBehavior {
     /// Read the symbolic link file itself.
     ///
@@ -477,7 +477,7 @@ pub enum LinkBehavior {
 /// [`Glob`]: crate::Glob
 /// [`Glob::walk`]: crate::Glob::walk
 #[cfg_attr(docsrs, doc(cfg(feature = "walk")))]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct WalkBehavior {
     // TODO: Consider using a dedicated type for this field. Using primitive
     //       types does not interact well with conversions used in `walk` APIs.
