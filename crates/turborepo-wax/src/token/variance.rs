@@ -292,11 +292,7 @@ impl<'t> Add for InvariantText<'t> {
             (None, None) => InvariantText::new(),
         };
         InvariantText {
-            fragments: left
-                .into_iter()
-                .chain(middle.into_iter())
-                .chain(right.into_iter())
-                .collect(),
+            fragments: left.into_iter().chain(middle).chain(right).collect(),
         }
     }
 }
