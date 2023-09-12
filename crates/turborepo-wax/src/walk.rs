@@ -422,7 +422,7 @@ impl Negation {
 ///
 /// [`Glob::walk`]: crate::Glob::walk
 #[cfg_attr(docsrs, doc(cfg(feature = "walk")))]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum LinkBehavior {
     /// Read the symbolic link file itself.
     ///
@@ -432,6 +432,7 @@ pub enum LinkBehavior {
     /// ignored and traversal will **not** follow the link.
     ///
     /// [`WalkEntry`]: crate::WalkEntry
+    #[default]
     ReadFile,
     /// Read the target of the symbolic link.
     ///
@@ -445,12 +446,6 @@ pub enum LinkBehavior {
     ///
     /// [`WalkEntry`]: crate::WalkEntry
     ReadTarget,
-}
-
-impl Default for LinkBehavior {
-    fn default() -> Self {
-        LinkBehavior::ReadFile
-    }
 }
 
 /// Configuration for matching [`Glob`]s against directory trees.
