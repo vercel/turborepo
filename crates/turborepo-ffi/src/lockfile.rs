@@ -5,7 +5,8 @@ use std::{
 
 use thiserror::Error;
 use turborepo_lockfiles::{
-    self, BerryLockfile, Lockfile, LockfileData, NpmLockfile, Package, PnpmLockfile, Yarn1Lockfile,
+    self, BerryLockfile, BunLockfile, Lockfile, LockfileData, NpmLockfile, Package, PnpmLockfile,
+    Yarn1Lockfile,
 };
 
 use super::{proto, Buffer};
@@ -54,6 +55,7 @@ fn transitive_closure_inner(buf: Buffer) -> Result<proto::WorkspaceDependencies,
         proto::PackageManager::Berry => berry_transitive_closure_inner(request),
         proto::PackageManager::Pnpm => pnpm_transitive_closure_inner(request),
         proto::PackageManager::Yarn => yarn_transitive_closure_inner(request),
+        proto::PackageManager::Bun => bun_transitive_closure_inner(request),
     }
 }
 
@@ -126,6 +128,23 @@ fn yarn_transitive_closure_inner(
     Ok(dependencies.into())
 }
 
+fn bun_transitive_closure_inner(
+    request: proto::TransitiveDepsRequest,
+) -> Result<proto::WorkspaceDependencies, Error> {
+    let proto::TransitiveDepsRequest {
+        contents,
+        workspaces,
+        ..
+    } = request;
+    let lockfile =
+        BunLockfile::from_bytes(contents.as_slice()).map_err(turborepo_lockfiles::Error::from)?;
+    let dependencies = turborepo_lockfiles::all_transitive_closures(
+        &lockfile,
+        workspaces.into_iter().map(|(k, v)| (k, v.into())).collect(),
+    )?;
+    Ok(dependencies.into())
+}
+
 #[no_mangle]
 pub extern "C" fn subgraph(buf: Buffer) -> Buffer {
     use proto::subgraph_response::Response;
@@ -162,6 +181,7 @@ fn subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
             turborepo_lockfiles::pnpm_subgraph(&contents, &workspaces, &packages)?
         }
         proto::PackageManager::Yarn => turborepo_lockfiles::yarn_subgraph(&contents, &packages)?,
+        proto::PackageManager::Bun => turborepo_lockfiles::bun_subgraph(&contents, &packages)?,
     };
     Ok(contents)
 }
@@ -227,6 +247,7 @@ fn global_change_inner(buf: Buffer) -> Result<bool, Error> {
             &request.curr_contents,
         )?),
         proto::PackageManager::Yarn => Ok(false),
+        proto::PackageManager::Bun => Ok(false),
     }
 }
 
@@ -271,6 +292,7 @@ impl fmt::Display for proto::PackageManager {
             proto::PackageManager::Berry => "berry",
             proto::PackageManager::Pnpm => "pnpm",
             proto::PackageManager::Yarn => "yarn",
+            proto::PackageManager::Bun => "bun",
         })
     }
 }

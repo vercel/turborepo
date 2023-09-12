@@ -64,6 +64,7 @@ var packageManagers = []PackageManager{
 	nodejsNpm,
 	nodejsPnpm,
 	nodejsPnpm6,
+	nodejsBun,
 }
 
 // GetPackageManager reads the package manager name sent by the Rust side
@@ -71,6 +72,8 @@ func GetPackageManager(name string) (packageManager *PackageManager, err error) 
 	switch name {
 	case "yarn":
 		return &nodejsYarn, nil
+	case "bun":
+		return &nodejsBun, nil
 	case "berry":
 		return &nodejsBerry, nil
 	case "npm":

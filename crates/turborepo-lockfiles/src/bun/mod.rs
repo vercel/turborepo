@@ -19,7 +19,7 @@ pub enum Error {
     NonUTF8(#[from] std::str::Utf8Error),
 }
 
-pub struct Yarn1Lockfile {
+pub struct BunLockfile {
     inner: Map<String, Entry>,
 }
 
@@ -36,14 +36,14 @@ struct Entry {
     optional_dependencies: Option<Map<String, String>>,
 }
 
-impl Yarn1Lockfile {
+impl BunLockfile {
     pub fn from_bytes(input: &[u8]) -> Result<Self, super::Error> {
         let input = std::str::from_utf8(input).map_err(Error::from)?;
         Self::from_str(input)
     }
 }
 
-impl FromStr for Yarn1Lockfile {
+impl FromStr for BunLockfile {
     type Err = super::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -53,7 +53,7 @@ impl FromStr for Yarn1Lockfile {
     }
 }
 
-impl Lockfile for Yarn1Lockfile {
+impl Lockfile for BunLockfile {
     fn resolve_package(
         &self,
         _workspace_path: &str,
@@ -113,8 +113,8 @@ impl Lockfile for Yarn1Lockfile {
     }
 }
 
-pub fn yarn_subgraph(contents: &[u8], packages: &[String]) -> Result<Vec<u8>, crate::Error> {
-    let lockfile = Yarn1Lockfile::from_bytes(contents)?;
+pub fn bun_subgraph(contents: &[u8], packages: &[String]) -> Result<Vec<u8>, crate::Error> {
+    let lockfile = BunLockfile::from_bytes(contents)?;
     let pruned_lockfile = lockfile.subgraph(&[], packages)?;
     pruned_lockfile.encode()
 }
@@ -151,13 +151,13 @@ mod test {
     #[test_case(MINIMAL ; "minimal lockfile")]
     #[test_case(FULL ; "full lockfile")]
     fn test_roundtrip(input: &str) {
-        let lockfile = Yarn1Lockfile::from_str(input).unwrap();
+        let lockfile = BunLockfile::from_str(input).unwrap();
         assert_eq!(input, lockfile.to_string());
     }
 
     #[test]
     fn test_key_splitting() {
-        let lockfile = Yarn1Lockfile::from_str(FULL).unwrap();
+        let lockfile = BunLockfile::from_str(FULL).unwrap();
         for key in [
             "@babel/types@^7.18.10",
             "@babel/types@^7.18.6",
