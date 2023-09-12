@@ -48,7 +48,6 @@ use std::{
     str::{self, FromStr},
 };
 
-use itertools::Position;
 #[cfg(feature = "miette")]
 use miette::Diagnostic;
 use regex::Regex;
@@ -95,53 +94,6 @@ trait StrExt {
 impl StrExt for str {
     fn has_casing(&self) -> bool {
         self.chars().any(CharExt::has_casing)
-    }
-}
-
-trait PositionExt<T> {
-    fn as_tuple(&self) -> (Position<()>, &T);
-
-    fn map<U, F>(self, f: F) -> Position<U>
-    where
-        F: FnMut(T) -> U;
-
-    fn interior_borrow<B>(&self) -> Position<&B>
-    where
-        T: Borrow<B>;
-}
-
-impl<T> PositionExt<T> for Position<T> {
-    fn as_tuple(&self) -> (Position<()>, &T) {
-        match *self {
-            Position::First(ref item) => (Position::First(()), item),
-            Position::Middle(ref item) => (Position::Middle(()), item),
-            Position::Last(ref item) => (Position::Last(()), item),
-            Position::Only(ref item) => (Position::Only(()), item),
-        }
-    }
-
-    fn map<U, F>(self, mut f: F) -> Position<U>
-    where
-        F: FnMut(T) -> U,
-    {
-        match self {
-            Position::First(item) => Position::First(f(item)),
-            Position::Middle(item) => Position::Middle(f(item)),
-            Position::Last(item) => Position::Last(f(item)),
-            Position::Only(item) => Position::Only(f(item)),
-        }
-    }
-
-    fn interior_borrow<B>(&self) -> Position<&B>
-    where
-        T: Borrow<B>,
-    {
-        match *self {
-            Position::First(ref item) => Position::First(item.borrow()),
-            Position::Middle(ref item) => Position::Middle(item.borrow()),
-            Position::Last(ref item) => Position::Last(item.borrow()),
-            Position::Only(ref item) => Position::Only(item.borrow()),
-        }
     }
 }
 
@@ -737,7 +689,7 @@ impl<'t> Glob<'t> {
     ///
     /// let path: &Path = /* ... */ // Candidate path.
     /// # Path::new("");
-    ///     
+    ///
     /// let directory = Path::new("."); // Working directory.
     /// let (prefix, glob) = Glob::new("../../src/**").unwrap().partition();
     /// let prefix = dunce::canonicalize(directory.join(&prefix)).unwrap();
