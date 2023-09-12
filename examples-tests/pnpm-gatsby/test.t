@@ -25,6 +25,6 @@
   \xe2\x80\xa2 Remote caching disabled (esc)
   
    Tasks:    5 successful, 5 total
-  Cached:    3 cached, 5 total
-    Time:\s*[\.0-9ms]+  (re)
+  Cached:    5 cached, 5 total
+    Time:\s*[\.0-9ms]+ >>> FULL TURBO (re)
   
