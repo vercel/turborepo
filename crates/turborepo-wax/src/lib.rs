@@ -1129,7 +1129,7 @@ where
 ///
 /// // Do not allow patterns in `name`.
 /// let expression = format!("{}{}", "**/", wax::escape(&name));
-/// if let glob = Glob::new(&expression) { /* ... */ }
+/// if let Ok(glob) = Glob::new(&expression) { /* ... */ }
 /// ```
 ///
 /// Sometimes part of a path contains numerous meta-characters. This function
