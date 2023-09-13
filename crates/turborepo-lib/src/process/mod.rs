@@ -211,7 +211,7 @@ mod test {
 
         manager.stop().await;
 
-        assert!(manager.children.lock().unwrap().is_empty());
+        assert!(manager.0.lock().unwrap().children.is_empty());
 
         // idempotent
         manager.stop().await;
