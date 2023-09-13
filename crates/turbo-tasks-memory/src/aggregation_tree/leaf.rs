@@ -160,7 +160,7 @@ pub fn bottom_tree<C: AggregationContext>(
     reference: &C::ItemRef,
     height: u8,
 ) -> Arc<BottomTree<C::Info, C::ItemRef>> {
-    let span;
+    let _span;
     let new_bottom_tree;
     let mut result = None;
     {
@@ -173,7 +173,7 @@ pub fn bottom_tree<C: AggregationContext>(
             return tree.clone();
         }
         new_bottom_tree = tree.clone();
-        span = (height > 1).then(|| tracing::trace_span!("bottom_tree", height).entered());
+        _span = (height > 1).then(|| tracing::trace_span!("bottom_tree", height).entered());
 
         if height == 0 {
             result = Some(add_left_upper_to_item_step_1::<C>(
