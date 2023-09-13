@@ -56,7 +56,7 @@ var nodejsBun = PackageManager{
 	},
 
 	canPrune: func(cwd turbopath.AbsoluteSystemPath) (bool, error) {
-		return true, nil
+		return false, nil
 	},
 
 	GetLockfileName: func(rootPath turbopath.AbsoluteSystemPath) string {

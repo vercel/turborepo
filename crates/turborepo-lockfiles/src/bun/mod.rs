@@ -5,7 +5,6 @@ use serde::Deserialize;
 use crate::Lockfile;
 
 mod de;
-mod ser;
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
@@ -17,6 +16,8 @@ pub enum Error {
     SymlStructure(#[from] serde_json::Error),
     #[error("unexpected non-utf8 yarn.lock")]
     NonUTF8(#[from] std::str::Utf8Error),
+    #[error("Turborepo cannot serialize Bun lockfiles.")]
+    NotImplemented(),
 }
 
 pub struct BunLockfile {
@@ -105,18 +106,12 @@ impl Lockfile for BunLockfile {
     }
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
-        Ok(self.to_string().into_bytes())
+        Err(crate::Error::Bun(Error::NotImplemented()))
     }
 
     fn global_change_key(&self) -> Vec<u8> {
-        vec![b'y', b'a', b'r', b'n', 0]
+        vec![b'b', b'u', b'n', 0]
     }
-}
-
-pub fn bun_subgraph(contents: &[u8], packages: &[String]) -> Result<Vec<u8>, crate::Error> {
-    let lockfile = BunLockfile::from_bytes(contents)?;
-    let pruned_lockfile = lockfile.subgraph(&[], packages)?;
-    pruned_lockfile.encode()
 }
 
 impl Entry {
@@ -140,20 +135,8 @@ fn possible_keys<'a>(name: &'a str, version: &'a str) -> impl Iterator<Item = St
 
 #[cfg(test)]
 mod test {
-    use pretty_assertions::assert_eq;
-    use test_case::test_case;
-
     use super::*;
-
-    const MINIMAL: &str = include_str!("../../fixtures/yarn1.lock");
     const FULL: &str = include_str!("../../fixtures/yarn1full.lock");
-
-    #[test_case(MINIMAL ; "minimal lockfile")]
-    #[test_case(FULL ; "full lockfile")]
-    fn test_roundtrip(input: &str) {
-        let lockfile = BunLockfile::from_str(input).unwrap();
-        assert_eq!(input, lockfile.to_string());
-    }
 
     #[test]
     fn test_key_splitting() {

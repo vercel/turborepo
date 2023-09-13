@@ -181,7 +181,9 @@ fn subgraph_inner(buf: Buffer) -> Result<Vec<u8>, Error> {
             turborepo_lockfiles::pnpm_subgraph(&contents, &workspaces, &packages)?
         }
         proto::PackageManager::Yarn => turborepo_lockfiles::yarn_subgraph(&contents, &packages)?,
-        proto::PackageManager::Bun => turborepo_lockfiles::bun_subgraph(&contents, &packages)?,
+        proto::PackageManager::Bun => {
+            return Err(Error::UnsupportedPackageManager(proto::PackageManager::Bun))
+        }
     };
     Ok(contents)
 }
