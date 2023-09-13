@@ -186,7 +186,7 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
     pub(super) fn add_children_of_child<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         context: &C,
-        children: impl IntoIterator<Item = (u32, &'a I)> + Clone,
+        children: impl IntoIterator<Item = &'a I> + Clone,
     ) where
         I: 'a,
     {
@@ -211,17 +211,10 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
         &self,
         context: &C,
         child_of_child: &I,
-        child_of_child_hash: u32,
     ) {
         match self {
             BottomUppers::Left(upper) => {
-                upper.add_child_of_child(
-                    context,
-                    ChildLocation::Left,
-                    child_of_child,
-                    child_of_child_hash,
-                    0,
-                );
+                upper.add_child_of_child(context, ChildLocation::Left, child_of_child, 0);
             }
             BottomUppers::Inner(list) => {
                 for &(BottomRef { ref upper }, nesting_level) in list.iter() {
@@ -229,7 +222,6 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
                         context,
                         ChildLocation::Inner,
                         child_of_child,
-                        child_of_child_hash,
                         nesting_level + 1,
                     );
                 }
@@ -249,6 +241,25 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
             BottomUppers::Inner(list) => {
                 for (BottomRef { upper }, _) in list {
                     upper.remove_child_of_child(context, child_of_child);
+                }
+            }
+        }
+    }
+
+    pub(super) fn remove_children_of_child<'a, C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &C,
+        children: impl IntoIterator<Item = &'a I> + Clone,
+    ) where
+        I: 'a,
+    {
+        match self {
+            BottomUppers::Left(upper) => {
+                upper.remove_children_of_child(context, children);
+            }
+            BottomUppers::Inner(list) => {
+                for (BottomRef { upper }, _) in list {
+                    upper.remove_children_of_child(context, children.clone());
                 }
             }
         }

@@ -11,7 +11,7 @@ use std::{
         Debug, Display, Formatter, {self},
     },
     future::Future,
-    hash::{BuildHasher, BuildHasherDefault, Hash, Hasher},
+    hash::Hash,
     mem::{replace, take},
     pin::Pin,
     sync::Arc,
@@ -22,7 +22,6 @@ use anyhow::Result;
 use auto_hash_map::{AutoMap, AutoSet};
 use nohash_hasher::BuildNoHashHasher;
 use parking_lot::{Mutex, RwLock};
-use rustc_hash::FxHasher;
 use stats::TaskStats;
 use tokio::task_local;
 use turbo_tasks::{
@@ -77,10 +76,7 @@ enum TaskType {
     Once(Box<OnceTaskFn>),
 
     /// A normal persistent task
-    Persistent {
-        ty: Arc<PersistentTaskType>,
-        aggregation_hash: u32,
-    },
+    Persistent { ty: Arc<PersistentTaskType> },
 }
 
 enum TaskTypeForDescription {
@@ -418,13 +414,7 @@ impl Task {
         task_type: Arc<PersistentTaskType>,
         stats_type: StatsType,
     ) -> Self {
-        let mut hasher: FxHasher = BuildHasherDefault::default().build_hasher();
-        task_type.hash(&mut hasher);
-        let aggregation_hash = hasher.finish() as u32;
-        let ty = TaskType::Persistent {
-            ty: task_type,
-            aggregation_hash,
-        };
+        let ty = TaskType::Persistent { ty: task_type };
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
@@ -475,15 +465,6 @@ impl Task {
             TaskType::Persistent { .. } => true,
             TaskType::Root(_) => false,
             TaskType::Once(_) => false,
-        }
-    }
-
-    pub(crate) fn aggregation_hash(&self) -> u32 {
-        match self.ty {
-            TaskType::Root(_) | TaskType::Once(_) => 0,
-            TaskType::Persistent {
-                aggregation_hash, ..
-            } => aggregation_hash,
         }
     }
 
@@ -677,56 +658,54 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Option<TaskExecutionSpec> {
         let mut context = TaskAggregationContext::new(turbo_tasks, backend);
-        let mut state = self.full_state_mut();
-        if !self.try_start_execution(&mut state, &mut context, turbo_tasks, backend) {
-            return None;
+        let future;
+        {
+            let mut state = self.full_state_mut();
+            let mut remove_job = None;
+            let mut change_job;
+            match state.state_type {
+                Done { .. } | InProgress { .. } | InProgressDirty { .. } => {
+                    // should not start in this state
+                    return None;
+                }
+                Scheduled { ref mut event } => {
+                    state.state_type = InProgress {
+                        event: event.take(),
+                        count_as_finished: false,
+                    };
+                    state.stats.increment_executions();
+                    if !state.children.is_empty() {
+                        let children = take(&mut state.children).into_iter().collect();
+                        remove_job = Some(
+                            state
+                                .aggregation_leaf
+                                .remove_children_job(&context, children),
+                        );
+                    }
+                    let mut change = TaskChange::default();
+                    if let Some(collectibles) = state.collectibles.take_collectibles() {
+                        for ((trait_type, value), count) in collectibles.into_iter() {
+                            change.collectibles.push((trait_type, value, -count));
+                        }
+                    }
+                    change_job = state.aggregation_leaf.change_job(&context, change);
+                }
+                Dirty { .. } => {
+                    let state_type = Task::state_string(&*state);
+                    panic!(
+                        "{:?} execution started in unexpected state {}",
+                        self, state_type
+                    )
+                }
+            };
+            future = self.make_execution_future(state, backend, turbo_tasks);
+            if let Some(job) = remove_job {
+                (job)();
+            }
+            (change_job)();
         }
-        let future = self.make_execution_future(state, backend, turbo_tasks);
+        context.apply_queued_updates();
         Some(TaskExecutionSpec { future })
-    }
-
-    /// Tries to change the state to InProgress and returns true if it was
-    /// possible.
-    fn try_start_execution(
-        &self,
-        state: &mut TaskState,
-        context: &mut TaskAggregationContext<'_>,
-        _turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-        _backend: &MemoryBackend,
-    ) -> bool {
-        match state.state_type {
-            Done { .. } | InProgress { .. } | InProgressDirty { .. } => {
-                // should not start in this state
-                return false;
-            }
-            Scheduled { ref mut event } => {
-                state.state_type = InProgress {
-                    event: event.take(),
-                    count_as_finished: false,
-                };
-                state.stats.increment_executions();
-                if !state.children.is_empty() {
-                    let set = take(&mut state.children);
-                    for child in set {
-                        state.aggregation_leaf.remove_child(context, &child);
-                    }
-                }
-                let mut change = TaskChange::default();
-                if let Some(collectibles) = state.collectibles.take_collectibles() {
-                    for ((trait_type, value), count) in collectibles.into_iter() {
-                        change.collectibles.push((trait_type, value, -count));
-                    }
-                }
-            }
-            Dirty { .. } => {
-                let state_type = Task::state_string(&*state);
-                panic!(
-                    "{:?} execution started in unexpected state {}",
-                    self, state_type
-                )
-            }
-        };
-        true
     }
 
     /// Prepares task execution and returns a future that will execute the task.
@@ -1342,7 +1321,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Result<Result<T, EventListener>> {
-        let context = TaskAggregationContext::new(turbo_tasks, backend);
+        let mut context = TaskAggregationContext::new(turbo_tasks, backend);
         let aggregation_when_strongly_consistent =
             strongly_consistent.then(|| aggregation_info(&context, &self.id));
         let mut state = self.full_state_mut();
@@ -1350,11 +1329,16 @@ impl Task {
             {
                 let aggregation = aggregation.lock();
                 if aggregation.unfinished > 0 {
-                    return Ok(Err(aggregation.unfinished_event.listen_with_note(note)));
+                    let listener = aggregation.unfinished_event.listen_with_note(note);
+                    drop(aggregation);
+                    drop(state);
+                    context.apply_queued_updates();
+
+                    return Ok(Err(listener));
                 }
             }
         }
-        match state.state_type {
+        let result = match state.state_type {
             Done { .. } => {
                 let result = func(&mut state.output)?;
                 drop(state);
@@ -1367,7 +1351,7 @@ impl Task {
                 let listener = event.listen_with_note(note);
                 state.state_type = Scheduled { event };
                 state.aggregation_leaf.change(
-                    &TaskAggregationContext::new(turbo_tasks, backend),
+                    &context,
                     &TaskChange {
                         dirty_tasks_update: vec![(self.id, -1)],
                         ..Default::default()
@@ -1383,7 +1367,9 @@ impl Task {
                 drop(state);
                 Ok(Err(listener))
             }
-        }
+        };
+        context.apply_queued_updates();
+        result
     }
 
     pub(crate) fn read_collectibles(

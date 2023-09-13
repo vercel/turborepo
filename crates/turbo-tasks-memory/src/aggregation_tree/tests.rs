@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    hash::{Hash, Hasher},
+    hash::Hash,
     sync::{
         atomic::{AtomicU32, Ordering},
         Arc,
@@ -14,7 +14,6 @@ use super::{aggregation_info, AggregationContext, AggregationItemLock, Aggregati
 use crate::aggregation_tree::bottom_tree::print_graph;
 
 struct Node {
-    hash: u32,
     inner: Mutex<NodeInner>,
 }
 
@@ -93,10 +92,6 @@ impl AggregationItemLock for NodeGuard {
             .map(|child| Cow::Owned(NodeRef(child.clone())))
     }
 
-    fn hash(&self) -> u32 {
-        self.node.hash
-    }
-
     fn get_remove_change(&self) -> Option<Change> {
         let change = Change {
             value: -(self.guard.value as i32),
@@ -125,10 +120,6 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
     type Info = Aggregated;
     type ItemRef = NodeRef;
     type ItemChange = Change;
-
-    fn hash(&self, reference: &Self::ItemRef) -> u32 {
-        reference.0.hash
-    }
 
     fn item<'b>(&'b self, reference: &Self::ItemRef) -> Self::ItemLock<'b> {
         let r = reference.0.clone();
@@ -211,12 +202,6 @@ struct Aggregated {
     active: bool,
 }
 
-fn hash(i: u32) -> u32 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    i.hash(&mut hasher);
-    hasher.finish() as u32
-}
-
 #[test]
 fn chain() {
     let something_with_lifetime = 0;
@@ -226,7 +211,6 @@ fn chain() {
         add_value: true,
     };
     let leaf = Arc::new(Node {
-        hash: hash(0),
         inner: Mutex::new(NodeInner {
             children: vec![],
             aggregation_leaf: AggregationTreeLeaf::new(),
@@ -236,7 +220,6 @@ fn chain() {
     let mut current = leaf.clone();
     for i in 1..=100 {
         current = Arc::new(Node {
-            hash: hash(i),
             inner: Mutex::new(NodeInner {
                 children: vec![current],
                 aggregation_leaf: AggregationTreeLeaf::new(),
@@ -298,7 +281,6 @@ fn chain() {
 
     let i = 101;
     let current = Arc::new(Node {
-        hash: hash(i),
         inner: Mutex::new(NodeInner {
             children: vec![current.0],
             aggregation_leaf: AggregationTreeLeaf::new(),
@@ -340,7 +322,6 @@ fn chain_double_connected() {
         add_value: true,
     };
     let leaf = Arc::new(Node {
-        hash: hash(1),
         inner: Mutex::new(NodeInner {
             children: vec![],
             aggregation_leaf: AggregationTreeLeaf::new(),
@@ -349,7 +330,6 @@ fn chain_double_connected() {
     });
     let mut current = leaf.clone();
     let mut current2 = Arc::new(Node {
-        hash: hash(2),
         inner: Mutex::new(NodeInner {
             children: vec![leaf.clone()],
             aggregation_leaf: AggregationTreeLeaf::new(),
@@ -358,7 +338,6 @@ fn chain_double_connected() {
     });
     for i in 3..=100 {
         let new_node = Arc::new(Node {
-            hash: hash(i),
             inner: Mutex::new(NodeInner {
                 children: vec![current, current2.clone()],
                 aggregation_leaf: AggregationTreeLeaf::new(),
@@ -404,7 +383,6 @@ fn rectangle_tree() {
             }
             let value = (x + y * RECT_MULT) as u32;
             let node = Arc::new(Node {
-                hash: hash(value),
                 inner: Mutex::new(NodeInner {
                     children,
                     aggregation_leaf: AggregationTreeLeaf::new(),
@@ -444,7 +422,6 @@ fn rectangle_adding_tree() {
         for x in 0..RECT_SIZE {
             let value = (x + y * RECT_MULT) as u32;
             let node = Arc::new(Node {
-                hash: hash(value),
                 inner: Mutex::new(NodeInner {
                     children: Vec::new(),
                     aggregation_leaf: AggregationTreeLeaf::new(),

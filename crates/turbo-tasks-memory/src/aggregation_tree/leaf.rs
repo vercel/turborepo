@@ -39,8 +39,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         let uppers = self.upper.as_cloned_uppers();
         move || {
             let _span = tracing::trace_span!("aggregation_tree leaf add_children").entered();
-            let children = children.iter().map(|child| (context.hash(child), child));
-            uppers.add_children_of_child(context, children);
+            uppers.add_children_of_child(context, &children);
         }
     }
 
@@ -55,8 +54,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         let uppers = self.upper.as_cloned_uppers();
         move || {
             let _span = tracing::trace_span!("aggregation_tree leaf add_child").entered();
-            let hash = context.hash(child);
-            uppers.add_child_of_child(context, child, hash);
+            uppers.add_child_of_child(context, child);
         }
     }
 
@@ -69,6 +67,22 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         self.upper
             .as_cloned_uppers()
             .remove_child_of_child(context, child);
+    }
+
+    pub fn remove_children_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        context: &'a C,
+        children: Vec<I>,
+    ) -> impl FnOnce() + 'a
+    where
+        T: 'a,
+        I: 'a,
+    {
+        let uppers = self.upper.as_cloned_uppers();
+        move || {
+            let _span = tracing::trace_span!("aggregation_tree leaf remove_children").entered();
+            uppers.remove_children_of_child(context, children.iter())
+        }
     }
 
     pub fn change<C: AggregationContext<Info = T, ItemRef = I>>(
@@ -221,12 +235,7 @@ pub fn add_inner_upper_to_item<C: AggregationContext>(
         upper.child_change(context, &change);
     }
     if !children.is_empty() {
-        upper.add_children_of_child(
-            context,
-            ChildLocation::Inner,
-            children.iter().map(|child| (context.hash(&child), child)),
-            nesting_level + 1,
-        )
+        upper.add_children_of_child(context, ChildLocation::Inner, &children, nesting_level + 1)
     }
     true
 }
@@ -281,12 +290,7 @@ fn add_left_upper_to_item_step_2<C: AggregationContext>(
         upper.child_change(context, &change);
     }
     if !children.is_empty() {
-        upper.add_children_of_child(
-            context,
-            ChildLocation::Left,
-            children.iter().map(|child| (context.hash(&child), child)),
-            1,
-        )
+        upper.add_children_of_child(context, ChildLocation::Left, &children, 1)
     }
     for (BottomRef { upper: old_upper }, count) in old_inner.into_counts() {
         old_upper.migrate_old_inner(

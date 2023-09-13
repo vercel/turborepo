@@ -57,6 +57,18 @@ impl<T> TopTree<T> {
         top_tree(context, child_of_child, self.depth + 1).remove_upper(context, self);
     }
 
+    pub(super) fn remove_children_of_child<'a, C: AggregationContext<Info = T>>(
+        self: &Arc<Self>,
+        context: &C,
+        children: impl IntoIterator<Item = &'a C::ItemRef>,
+    ) where
+        C::ItemRef: 'a,
+    {
+        for child in children {
+            top_tree(context, child, self.depth + 1).remove_upper(context, self);
+        }
+    }
+
     pub(super) fn add_upper<C: AggregationContext<Info = T>>(
         &self,
         context: &C,
