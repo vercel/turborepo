@@ -260,6 +260,7 @@ impl Run {
             &env_at_execution_start,
             &global_hash,
             global_env_mode,
+            self.base.ui,
         );
 
         visitor.visit(engine.clone()).await?;

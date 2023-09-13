@@ -114,14 +114,6 @@ func (pm PackageManager) GetWorkspaceIgnores(rootpath turbopath.AbsoluteSystemPa
 	return pm.getWorkspaceIgnores(pm, rootpath)
 }
 
-// CanPrune returns if turbo can produce a pruned workspace. Can error if fs issues occur
-func (pm PackageManager) CanPrune(projectDirectory turbopath.AbsoluteSystemPath) (bool, error) {
-	if pm.canPrune != nil {
-		return pm.canPrune(projectDirectory)
-	}
-	return false, nil
-}
-
 // ReadLockfile will read the applicable lockfile into memory
 func (pm PackageManager) ReadLockfile(projectDirectory turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (lockfile.Lockfile, error) {
 	if pm.UnmarshalLockfile == nil {
@@ -136,12 +128,4 @@ func (pm PackageManager) ReadLockfile(projectDirectory turbopath.AbsoluteSystemP
 		return nil, errors.Wrapf(err, "error in %v", pm.Lockfile)
 	}
 	return lf, nil
-}
-
-// PrunePatchedPackages will alter the provided pkgJSON to only reference the provided patches
-func (pm PackageManager) PrunePatchedPackages(pkgJSON *fs.PackageJSON, patches []turbopath.AnchoredUnixPath) error {
-	if pm.prunePatches != nil {
-		return pm.prunePatches(pkgJSON, patches)
-	}
-	return nil
 }

@@ -12,7 +12,9 @@ export interface NonFatalError {
 
 export type NonFatalErrors = Record<NonFatalErrorKey, NonFatalError>;
 
-export interface TurboIgnoreArgs {
+export type TurboIgnoreArg = string | undefined;
+
+export interface TurboIgnoreOptions {
   // the working directory to use when looking for a workspace
   directory?: string;
   // the workspace to check for changes

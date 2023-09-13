@@ -2,14 +2,11 @@ package fs
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
-	"gotest.tools/v3/fs"
 )
 
 func TestCopyFile(t *testing.T) {
@@ -99,100 +96,4 @@ func TestCopyOrLinkFileWithPerms(t *testing.T) {
 	info, err := dstFilePath.Lstat()
 	assert.NilError(t, err, "Lstat")
 	assert.Equal(t, info.Mode(), readonlyMode, "expected dest to have matching permissions")
-}
-
-func TestRecursiveCopy(t *testing.T) {
-	// Directory layout:
-	//
-	// <src>/
-	//   b
-	//   child/
-	//     a
-	//     link -> ../b
-	//     broken -> missing
-	//     circle -> ../child
-	src := fs.NewDir(t, "recursive-copy-or-link")
-	dst := fs.NewDir(t, "recursive-copy-or-link-dist")
-	childDir := filepath.Join(src.Path(), "child")
-	err := os.Mkdir(childDir, os.ModeDir|0777)
-	assert.NilError(t, err, "Mkdir")
-	aPath := filepath.Join(childDir, "a")
-	aFile, err := os.Create(aPath)
-	assert.NilError(t, err, "Create")
-	_, err = aFile.WriteString("hello")
-	assert.NilError(t, err, "WriteString")
-	assert.NilError(t, aFile.Close(), "Close")
-
-	bPath := filepath.Join(src.Path(), "b")
-	bFile, err := os.Create(bPath)
-	assert.NilError(t, err, "Create")
-	_, err = bFile.WriteString("bFile")
-	assert.NilError(t, err, "WriteString")
-	assert.NilError(t, bFile.Close(), "Close")
-
-	srcLinkPath := filepath.Join(childDir, "link")
-	assert.NilError(t, os.Symlink(filepath.FromSlash("../b"), srcLinkPath), "Symlink")
-
-	srcBrokenLinkPath := filepath.Join(childDir, "broken")
-	assert.NilError(t, os.Symlink("missing", srcBrokenLinkPath), "Symlink")
-	circlePath := filepath.Join(childDir, "circle")
-	assert.NilError(t, os.Symlink(filepath.FromSlash("../child"), circlePath), "Symlink")
-
-	err = RecursiveCopy(turbopath.AbsoluteSystemPathFromUpstream(src.Path()), turbopath.AbsoluteSystemPathFromUpstream(dst.Path()))
-	assert.NilError(t, err, "RecursiveCopy")
-	// For ensure multiple times copy will not broken
-	err = RecursiveCopy(turbopath.AbsoluteSystemPathFromUpstream(src.Path()), turbopath.AbsoluteSystemPathFromUpstream(dst.Path()))
-	assert.NilError(t, err, "RecursiveCopy")
-
-	dstChildDir := filepath.Join(dst.Path(), "child")
-	assertDirMatches(t, childDir, dstChildDir)
-	dstAPath := filepath.Join(dst.Path(), "child", "a")
-	assertFileMatches(t, aPath, dstAPath)
-	dstBPath := filepath.Join(dst.Path(), "b")
-	assertFileMatches(t, bPath, dstBPath)
-	dstLinkPath := filepath.Join(dst.Path(), "child", "link")
-	dstLinkDest, err := os.Readlink(dstLinkPath)
-	assert.NilError(t, err, "Readlink")
-	expectedLinkDest := filepath.FromSlash("../b")
-	if dstLinkDest != expectedLinkDest {
-		t.Errorf("Readlink got %v, want %v", dstLinkDest, expectedLinkDest)
-	}
-	dstBrokenLinkPath := filepath.Join(dst.Path(), "child", "broken")
-	brokenLinkExists := PathExists(dstBrokenLinkPath)
-	if brokenLinkExists {
-		t.Errorf("We cached a broken link at %v", dstBrokenLinkPath)
-	}
-	// Currently, we convert symlink-to-directory to empty-directory
-	// This is very likely not ideal behavior, but leaving this test here to verify
-	// that it is what we expect at this point in time.
-	dstCirclePath := filepath.Join(dst.Path(), "child", "circle")
-	circleStat, err := os.Lstat(dstCirclePath)
-	assert.NilError(t, err, "Lstat")
-	assert.Equal(t, circleStat.IsDir(), true)
-	entries, err := os.ReadDir(dstCirclePath)
-	assert.NilError(t, err, "ReadDir")
-	assert.Equal(t, len(entries), 0)
-}
-
-func assertFileMatches(t *testing.T, orig string, copy string) {
-	t.Helper()
-	origBytes, err := ioutil.ReadFile(orig)
-	assert.NilError(t, err, "ReadFile")
-	copyBytes, err := ioutil.ReadFile(copy)
-	assert.NilError(t, err, "ReadFile")
-	assert.DeepEqual(t, origBytes, copyBytes)
-	origStat, err := os.Lstat(orig)
-	assert.NilError(t, err, "Lstat")
-	copyStat, err := os.Lstat(copy)
-	assert.NilError(t, err, "Lstat")
-	assert.Equal(t, origStat.Mode(), copyStat.Mode())
-}
-
-func assertDirMatches(t *testing.T, orig string, copy string) {
-	t.Helper()
-	origStat, err := os.Lstat(orig)
-	assert.NilError(t, err, "Lstat")
-	copyStat, err := os.Lstat(copy)
-	assert.NilError(t, err, "Lstat")
-	assert.Equal(t, origStat.Mode(), copyStat.Mode())
 }
