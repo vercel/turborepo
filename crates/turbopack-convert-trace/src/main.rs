@@ -292,8 +292,8 @@ fn main() {
                     .map(|span| &*span.name)
                     .collect::<Vec<_>>();
                 if parents.len() > 10 {
-                    parents.drain(10..parents.len() - 10);
-                    parents.insert(10, "...")
+                    parents.drain(5..parents.len() - 5);
+                    parents.insert(5, "...")
                 }
                 let message = parents
                     .into_iter()
