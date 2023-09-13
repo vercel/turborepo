@@ -123,7 +123,7 @@ func getGlobalHashInputs(
 		globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Specfile))
 		lockfilePath := packageManager.GetLockfilePath(rootpath)
 		if lockfilePath.Exists() {
-			globalDeps.Add(lockfilePath)
+			globalDeps.Add(lockfilePath.ToString())
 		}
 	}
 

@@ -133,11 +133,11 @@ func (pm PackageManager) ReadLockfile(projectDirectory turbopath.AbsoluteSystemP
 	}
 	contents, err := pm.GetLockfileContents(projectDirectory)
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", pm.GetLockfilePath(projectDirectory), err)
+		return nil, fmt.Errorf("reading %s: %w", pm.GetLockfilePath(projectDirectory).ToString(), err)
 	}
 	lf, err := pm.UnmarshalLockfile(rootPackageJSON, contents)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error in %v", pm.GetLockfilePath(projectDirectory))
+		return nil, errors.Wrapf(err, "error in %v", pm.GetLockfilePath(projectDirectory).ToString())
 	}
 	return lf, nil
 }
