@@ -662,7 +662,7 @@ impl Task {
         {
             let mut state = self.full_state_mut();
             let mut remove_job = None;
-            let mut change_job;
+            let change_job;
             match state.state_type {
                 Done { .. } | InProgress { .. } | InProgressDirty { .. } => {
                     // should not start in this state
