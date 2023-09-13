@@ -168,6 +168,8 @@ describe("managers", () => {
             await expect(read).rejects.toThrow(`Not a pnpm project`);
           } else if (toManager === "yarn") {
             await expect(read).rejects.toThrow(`Not a yarn project`);
+          } else if (toManager === "bun") {
+            await expect(read).rejects.toThrow(`Not a bun project`);
           } else {
             await expect(read).rejects.toThrow(`Not an npm project`);
           }
@@ -194,6 +196,8 @@ describe("managers", () => {
           new RegExp(`^.*\/${directoryName}\/yarn.lock$`);
         } else if (fixtureManager === "npm") {
           new RegExp(`^.*\/${directoryName}\/package-lock.json$`);
+        } else if (fixtureManager === "bun") {
+          new RegExp(`^.*\/${directoryName}\/bun.lockb$`);
         } else {
           throw new Error("Invalid fixtureManager");
         }
@@ -246,6 +250,8 @@ describe("managers", () => {
             await expect(read).rejects.toThrow(`Not a pnpm project`);
           } else if (toManager === "yarn") {
             await expect(read).rejects.toThrow(`Not a yarn project`);
+          } else if (toManager === "bun") {
+            await expect(read).rejects.toThrow(`Not a bun project`);
           } else {
             await expect(read).rejects.toThrow(`Not an npm project`);
           }
@@ -272,6 +278,8 @@ describe("managers", () => {
           new RegExp(`^.*\/${directoryName}\/yarn.lock$`);
         } else if (fixtureManager === "npm") {
           new RegExp(`^.*\/${directoryName}\/package-lock.json$`);
+        } else if (fixtureManager === "bun") {
+          new RegExp(`^.*\/${directoryName}\/bun.lockb$`);
         } else {
           throw new Error("Invalid fixtureManager");
         }
@@ -343,6 +351,7 @@ describe("managers", () => {
 
         await MANAGERS[toManager].convertLock({
           project,
+          to: { name: toManager, version: "1.2.3" },
           logger: new Logger(),
           options: {
             interactive,

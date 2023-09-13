@@ -1,4 +1,4 @@
-import type { PackageManager } from "@turbo/workspaces";
+import type { PackageManager } from "@turbo/utils";
 import { getAvailablePackageManagers, validateDirectory } from "@turbo/utils";
 import inquirer from "inquirer";
 import type { CreateCommandArgument } from "./types";
@@ -52,10 +52,15 @@ export async function packageManager({
       // prompt for package manager if it wasn't provided as an argument, or if it was
       // provided, but isn't available (always allow npm)
       !manager || !availablePackageManagers[manager as PackageManager],
-    choices: ["npm", "pnpm", "yarn"].map((p) => ({
-      name: p,
-      value: p,
-      disabled: availablePackageManagers[p as PackageManager]
+    choices: [
+      { pm: "npm", label: "npm workspaces" },
+      { pm: "pnpm", label: "pnpm workspaces" },
+      { pm: "yarn", label: "yarn workspaces" },
+      { pm: "bun", label: "bun workspaces (beta)" },
+    ].map(({ pm, label }) => ({
+      name: label,
+      value: pm,
+      disabled: availablePackageManagers[pm as PackageManager]
         ? false
         : `not installed`,
     })),

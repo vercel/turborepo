@@ -1,10 +1,10 @@
+import type { PackageManager } from "@turbo/utils";
 import execa from "execa";
 import ora from "ora";
 import { satisfies } from "semver";
 import { ConvertError } from "./errors";
 import { Logger } from "./logger";
 import type {
-  PackageManager,
   RequestedPackageManagerDetails,
   PackageManagerInstallDetails,
   InstallArgs,
@@ -66,6 +66,18 @@ export const PACKAGE_MANAGERS: Record<
       version: "stable",
       executable: "yarn dlx",
       semver: ">=2",
+    },
+  ],
+  bun: [
+    {
+      name: "bun1",
+      template: "bun",
+      command: "bun",
+      installArgs: ["install"],
+      version: "1.x",
+      executable: "bunx",
+      semver: "<2",
+      default: true,
     },
   ],
 };

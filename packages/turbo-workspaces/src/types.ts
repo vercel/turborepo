@@ -1,6 +1,5 @@
+import type { PackageManager } from "@turbo/utils";
 import type { Logger } from "./logger";
-
-export type PackageManager = "npm" | "pnpm" | "yarn";
 
 export interface RequestedPackageManagerDetails {
   name: PackageManager;
@@ -72,6 +71,7 @@ export interface CleanArgs {
 
 export interface ConvertArgs {
   project: Project;
+  to: AvailablePackageManagerDetails;
   logger: Logger;
   options?: Options;
 }

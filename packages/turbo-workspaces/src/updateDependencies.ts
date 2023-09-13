@@ -37,6 +37,10 @@ function updateDependencyList({
   return { dependencyList, updated };
 }
 
+/**
+ * Convert workspace dependencies to the format that `to` requires. Only needed when pnpm is involved as
+ * it requires `workspace:*` and all the rest support `*`
+ */
 export function updateDependencies({
   project,
   workspace,
@@ -50,10 +54,10 @@ export function updateDependencies({
   logger: Logger;
   options?: Options;
 }): void {
-  // this step isn't required if moving between yarn / npm
+  // this step isn't required if moving between yarn / npm / bun
   if (
-    ["yarn", "npm"].includes(to.name) &&
-    ["yarn", "npm"].includes(project.packageManager)
+    ["yarn", "npm", "bun"].includes(to.name) &&
+    ["yarn", "npm", "bun"].includes(project.packageManager)
   ) {
     return;
   }

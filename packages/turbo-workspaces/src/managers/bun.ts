@@ -1,6 +1,5 @@
 import path from "node:path";
-import { writeJSONSync, writeFileSync, existsSync, rmSync, rm } from "fs-extra";
-import execa from "execa";
+import { existsSync, writeJSONSync, rmSync, rm } from "fs-extra";
 import { ConvertError } from "../errors";
 import { updateDependencies } from "../updateDependencies";
 import type {
@@ -15,59 +14,58 @@ import type {
 } from "../types";
 import {
   getMainStep,
-  expandPaths,
   getWorkspaceInfo,
-  expandWorkspaces,
-  getPnpmWorkspaces,
   getPackageJson,
+  expandPaths,
+  expandWorkspaces,
   getWorkspacePackageManager,
+  parseWorkspacePackages,
+  isCompatibleWithBunWorkspace,
 } from "../utils";
 
 /**
- * Check if a given project is using pnpm workspaces
+ * Check if a given project is using bun workspaces
  * Verify by checking for the existence of:
- *  1. pnpm-workspace.yaml
- *  2. pnpm-workspace.yaml
+ *  1. bun.lockb
+ *  2. packageManager field in package.json
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- must match the detect type signature
 async function detect(args: DetectArgs): Promise<boolean> {
-  const lockFile = path.join(args.workspaceRoot, "pnpm-lock.yaml");
-  const workspaceFile = path.join(args.workspaceRoot, "pnpm-workspace.yaml");
+  const lockFile = path.join(args.workspaceRoot, "bun.lockb");
   const packageManager = getWorkspacePackageManager({
     workspaceRoot: args.workspaceRoot,
   });
-  return (
-    existsSync(lockFile) ||
-    existsSync(workspaceFile) ||
-    packageManager === "pnpm"
-  );
+  return existsSync(lockFile) || packageManager === "bun";
 }
 
 /**
-  Read workspace data from pnpm workspaces into generic format
+  Read workspace data from bun workspaces into generic format
 */
 async function read(args: ReadArgs): Promise<Project> {
-  const isPnpm = await detect(args);
-  if (!isPnpm) {
-    throw new ConvertError("Not a pnpm project", {
+  const isBun = await detect(args);
+  if (!isBun) {
+    throw new ConvertError("Not a bun project", {
       type: "package_manager-unexpected",
     });
   }
 
+  const packageJson = getPackageJson(args);
   const { name, description } = getWorkspaceInfo(args);
+  const workspaceGlobs = parseWorkspacePackages({
+    workspaces: packageJson.workspaces,
+  });
   return {
     name,
     description,
-    packageManager: "pnpm",
+    packageManager: "bun",
     paths: expandPaths({
       root: args.workspaceRoot,
-      lockFile: "pnpm-lock.yaml",
-      workspaceConfig: "pnpm-workspace.yaml",
+      lockFile: "bun.lockb",
     }),
     workspaceData: {
-      globs: getPnpmWorkspaces(args),
+      globs: workspaceGlobs,
       workspaces: expandWorkspaces({
-        workspaceGlobs: getPnpmWorkspaces(args),
+        workspaceGlobs,
         ...args,
       }),
     },
@@ -75,45 +73,58 @@ async function read(args: ReadArgs): Promise<Project> {
 }
 
 /**
- * Create pnpm workspaces from generic format
+ * Create bun workspaces from generic format
  *
- * Creating pnpm workspaces involves:
- *  1. Create pnpm-workspace.yaml
- *  2. Setting the packageManager field in package.json
- *  3. Updating all workspace package.json dependencies to ensure correct format
+ * Creating bun workspaces involves:
+ *  1. Validating that the project can be converted to bun workspace
+ *  2. Adding the workspaces field in package.json
+ *  3. Setting the packageManager field in package.json
+ *  4. Updating all workspace package.json dependencies to ensure correct format
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- must match the create type signature
 async function create(args: CreateArgs): Promise<void> {
   const { project, to, logger, options } = args;
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
-  logger.mainStep(
-    getMainStep({ action: "create", packageManager: "pnpm", project })
-  );
-
-  const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
-  logger.rootHeader();
-  packageJson.packageManager = `${to.name}@${to.version}`;
-  logger.rootStep(
-    `adding "packageManager" field to ${project.name} root "package.json"`
-  );
-
-  // write the changes
-  if (!options?.dry) {
-    writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
-
-    if (hasWorkspaces) {
-      logger.rootStep(`adding "pnpm-workspace.yaml"`);
-      writeFileSync(
-        path.join(project.paths.root, "pnpm-workspace.yaml"),
-        `packages:\n${project.workspaceData.globs
-          .map((w) => `  - "${w}"`)
-          .join("\n")}`
-      );
-    }
+  if (!isCompatibleWithBunWorkspace({ project })) {
+    throw new ConvertError(
+      "Unable to convert project to bun - workspace globs unsupported",
+      {
+        type: "bun-workspace_glob_error",
+      }
+    );
   }
 
+  logger.mainStep(
+    getMainStep({ packageManager: "bun", action: "create", project })
+  );
+  const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
+  logger.rootHeader();
+
+  // package manager
+  logger.rootStep(
+    `adding "packageManager" field to ${path.relative(
+      project.paths.root,
+      project.paths.packageJson
+    )}`
+  );
+  // TODO: This technically isn't valid as part of the spec (yet)
+  packageJson.packageManager = `${to.name}@${to.version}`;
+
   if (hasWorkspaces) {
+    // workspaces field
+    logger.rootStep(
+      `adding "workspaces" field to ${path.relative(
+        project.paths.root,
+        project.paths.packageJson
+      )}`
+    );
+    packageJson.workspaces = project.workspaceData.globs;
+
+    if (!options?.dry) {
+      writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+    }
+
     // root dependencies
     updateDependencies({
       workspace: { name: "root", paths: project.paths },
@@ -128,31 +139,32 @@ async function create(args: CreateArgs): Promise<void> {
     project.workspaceData.workspaces.forEach((workspace) => {
       updateDependencies({ workspace, project, to, logger, options });
     });
+  } else if (!options?.dry) {
+    writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
   }
 }
 
 /**
- * Remove pnpm workspace data
+ * Remove bun workspace data
  *
- * Cleaning up from pnpm involves:
- *  1. Removing the pnpm-workspace.yaml file
- *  2. Removing the pnpm-lock.yaml file
- *  3. Removing the node_modules directory
+ * Removing bun workspaces involves:
+ *  1. Removing the workspaces field from package.json
+ *  2. Removing the node_modules directory
  */
 async function remove(args: RemoveArgs): Promise<void> {
   const { project, logger, options } = args;
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    getMainStep({ action: "remove", packageManager: "pnpm", project })
+    getMainStep({ packageManager: "bun", action: "remove", project })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
 
-  if (project.paths.workspaceConfig && hasWorkspaces) {
-    logger.subStep(`removing "pnpm-workspace.yaml"`);
-    if (!options?.dry) {
-      rmSync(project.paths.workspaceConfig, { force: true });
-    }
+  if (hasWorkspaces) {
+    logger.subStep(
+      `removing "workspaces" field in ${project.name} root "package.json"`
+    );
+    delete packageJson.workspaces;
   }
 
   logger.subStep(
@@ -168,7 +180,6 @@ async function remove(args: RemoveArgs): Promise<void> {
       project.paths.nodeModules,
       ...project.workspaceData.workspaces.map((w) => w.paths.nodeModules),
     ];
-
     try {
       logger.subStep(`removing "node_modules"`);
       await Promise.all(
@@ -200,42 +211,23 @@ async function clean(args: CleanArgs): Promise<void> {
 }
 
 /**
- * Attempts to convert an existing, non pnpm lockfile to a pnpm lockfile
+ * Attempts to convert an existing, non bun lockfile to a bun lockfile
  *
- * If this is not possible, the non pnpm lockfile is removed
+ * If this is not possible, the non bun lockfile is removed
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- must match the convertLock type signature
 async function convertLock(args: ConvertArgs): Promise<void> {
-  const { project, logger, options, to } = args;
+  const { project, options } = args;
 
-  if (project.packageManager !== "pnpm") {
-    // pnpm does not support importing a bun lockfile
-    if (to.name !== "bun") {
-      logger.subStep(
-        `converting ${path.relative(
-          project.paths.root,
-          project.paths.lockfile
-        )} to pnpm-lock.yaml`
-      );
-
-      if (!options?.dry && existsSync(project.paths.lockfile)) {
-        try {
-          await execa("pnpm", ["import"], {
-            stdio: "ignore",
-            cwd: project.paths.root,
-          });
-        } catch (err) {
-          // do nothing
-        }
-      }
-    }
-
+  if (project.packageManager !== "bun") {
+    // remove the lockfile
     if (!options?.dry) {
       rmSync(project.paths.lockfile, { force: true });
     }
   }
 }
 
-export const pnpm: ManagerHandler = {
+export const bun: ManagerHandler = {
   detect,
   read,
   create,
