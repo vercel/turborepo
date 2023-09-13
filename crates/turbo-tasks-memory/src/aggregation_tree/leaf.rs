@@ -52,6 +52,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     {
         let uppers = self.upper.as_cloned_uppers();
         move || {
+            let span = tracing::trace_span!("add_child").entered();
             let hash = context.hash(child);
             uppers.add_child_of_child(context, child, hash);
         }
@@ -126,7 +127,7 @@ fn get_or_create_in_vec<T>(
     }
 }
 
-#[tracing::instrument(skip(context, reference))]
+#[tracing::instrument(level = Level::TRACE, skip(context, reference))]
 pub fn top_tree<C: AggregationContext>(
     context: &C,
     reference: &C::ItemRef,
