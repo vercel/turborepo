@@ -25,7 +25,7 @@ use futures::Future;
 use thiserror::Error;
 use tokio::{
     select,
-    sync::{oneshot, watch},
+    sync::{mpsc, oneshot, watch},
 };
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
@@ -131,23 +131,18 @@ where
     // allows us to start the gRPC server without waiting for the potentially
     // expensive filewatching startup time.
     let (watcher_tx, watcher_rx) = watch::channel(None);
-    // A oneshot to trigger the shutdown of the gRPC server. This is handed out
+    // A channel to trigger the shutdown of the gRPC server. This is handed out
     // to components internal to the server process such as root watching, as
     // well as available to the gRPC server itself to handle the shutdown RPC.
-    let (trigger_shutdown, shutdown_signal) = {
-        let (tx, rx) = oneshot::channel::<()>();
-        (Arc::new(Mutex::new(Some(tx))), rx)
-    };
+    let (trigger_shutdown, mut shutdown_signal) = mpsc::channel::<()>(1);
 
     // watch receivers as a group own the filewatcher, which will exit when
     // all references are dropped.
     let fw_shutdown = trigger_shutdown.clone();
     let fw_handle = tokio::task::spawn(async move {
         if let Err(e) = start_filewatching(watcher_repo_root, cookie_dir, watcher_tx).await {
-            if let Some(tx) = fw_shutdown.lock().expect("mutex poisoned").take() {
-                error!("filewatching failed to start: {}", e);
-                let _ = tx.send(());
-            }
+            error!("filewatching failed to start: {}", e);
+            let _ = fw_shutdown.send(()).await;
         }
     });
     // exit_root_watch delivers a signal to the root watch loop to exit.
@@ -165,12 +160,12 @@ where
     let timeout_fut = bump_timeout.wait();
 
     // when one of these futures complete, let the server gracefully shutdown
-    let (gprc_shutdown_tx, shutdown_reason) = oneshot::channel();
+    let (grpc_shutdown_tx, shutdown_reason) = oneshot::channel();
     let shutdown_fut = async move {
         select! {
-            _ = shutdown_signal => gprc_shutdown_tx.send(CloseReason::Shutdown).ok(),
-            _ = timeout_fut => gprc_shutdown_tx.send(CloseReason::Timeout).ok(),
-            reason = external_shutdown => gprc_shutdown_tx.send(reason).ok(),
+            _ = shutdown_signal.recv() => grpc_shutdown_tx.send(CloseReason::Shutdown).ok(),
+            _ = timeout_fut => grpc_shutdown_tx.send(CloseReason::Timeout).ok(),
+            reason = external_shutdown => grpc_shutdown_tx.send(reason).ok(),
         };
     };
 
@@ -218,7 +213,8 @@ where
 }
 
 struct TurboGrpcService {
-    shutdown: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    //shutdown: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    shutdown: mpsc::Sender<()>,
     watcher_rx: watch::Receiver<Option<Arc<FileWatching>>>,
     times_saved: Arc<Mutex<HashMap<String, u64>>>,
     start_time: Instant,
@@ -226,12 +222,8 @@ struct TurboGrpcService {
 }
 
 impl TurboGrpcService {
-    fn trigger_shutdown(&self) {
-        self.shutdown
-            .lock()
-            .expect("mutex poisoned")
-            .take()
-            .map(|s| s.send(()));
+    async fn trigger_shutdown(&self) {
+        let _ = self.shutdown.send(()).await;
     }
 
     async fn wait_for_filewatching(&self) -> Result<Arc<FileWatching>, RpcError> {
@@ -295,7 +287,7 @@ async fn wait_for_filewatching(
 async fn watch_root(
     filewatching_access: watch::Receiver<Option<Arc<FileWatching>>>,
     root: AbsoluteSystemPathBuf,
-    trigger_shutdown: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    trigger_shutdown: mpsc::Sender<()>,
     mut exit_signal: oneshot::Receiver<()>,
 ) -> Result<(), WatchError> {
     let mut recv_events = {
@@ -325,7 +317,9 @@ async fn watch_root(
                 };
                 if should_trigger_shutdown {
                     warn!("Root watcher triggering shutdown");
-                    trigger_shutdown.lock().expect("mutex poisoned").take().map(|s| s.send(()));
+                    // We don't care if a shutdown has already been triggered,
+                    // so we can ignore the error.
+                    let _ = trigger_shutdown.send(()).await;
                     return Ok(());
                 }
             }
@@ -355,7 +349,7 @@ impl proto::turbod_server::Turbod for TurboGrpcService {
         &self,
         _request: tonic::Request<proto::ShutdownRequest>,
     ) -> Result<tonic::Response<proto::ShutdownResponse>, tonic::Status> {
-        self.trigger_shutdown();
+        self.trigger_shutdown().await;
 
         // if Some(Ok), then the server is shutting down now
         // if Some(Err), then the server is already shutting down
