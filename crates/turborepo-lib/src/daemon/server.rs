@@ -187,6 +187,7 @@ where
             ));
 
         Server::builder()
+            .timeout(Duration::from_millis(100))
             .add_service(service)
             .serve_with_incoming_shutdown(stream, shutdown_fut)
     };

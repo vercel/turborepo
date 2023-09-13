@@ -5,7 +5,7 @@ use futures::FutureExt;
 use pidlock::PidlockError::AlreadyOwned;
 use time::{format_description, OffsetDateTime};
 use tokio::signal::ctrl_c;
-use tracing::{trace, warn};
+use tracing::{error, trace, warn};
 use turbopath::AbsoluteSystemPathBuf;
 
 use super::CommandBase;
@@ -39,9 +39,12 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             let client = connector.connect().await?;
             client.restart().await?;
         }
-        // connector.connect will have already started the daemon if needed,
-        // so this is a no-op
-        DaemonCommand::Start => {}
+        DaemonCommand::Start => {
+            // We don't care about the client, but we do care that we can connect
+            // which ensures that daemon is started if it wasn't already.
+            let _ = connector.connect().await?;
+            println!("Daemon is running");
+        }
         DaemonCommand::Stop => {
             let client = connector.connect().await?;
             client.stop().await?;
