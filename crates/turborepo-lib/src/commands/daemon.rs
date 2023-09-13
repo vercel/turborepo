@@ -171,8 +171,10 @@ pub async fn daemon_server(
         }
         CloseReason::Interrupt
     });
-    // TODO: be more methodical about this choice:
-    let cookie_dir = base.repo_root.join_component(".git");
+    // We already store logs in .turbo and recommend it be gitignore'd.
+    // Watchman uses .git, but we can't guarantee that git is present _or_
+    // that the turbo root is the same as the git root.
+    let cookie_dir = base.repo_root.join_component(".turbo");
     let reason = crate::daemon::serve(
         &base.repo_root,
         cookie_dir,
