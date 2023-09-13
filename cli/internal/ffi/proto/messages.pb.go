@@ -196,6 +196,7 @@ type GlobResp struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Response:
+	//
 	//	*GlobResp_Files
 	//	*GlobResp_Error
 	Response isGlobResp_Response `protobuf_oneof:"response"`
@@ -394,6 +395,7 @@ type ChangedFilesResp struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Response:
+	//
 	//	*ChangedFilesResp_Files
 	//	*ChangedFilesResp_Error
 	Response isChangedFilesResp_Response `protobuf_oneof:"response"`
@@ -584,6 +586,7 @@ type PreviousContentResp struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Response:
+	//
 	//	*PreviousContentResp_Content
 	//	*PreviousContentResp_Error
 	Response isPreviousContentResp_Response `protobuf_oneof:"response"`
@@ -884,6 +887,7 @@ type TransitiveDepsResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Response:
+	//
 	//	*TransitiveDepsResponse_Dependencies
 	//	*TransitiveDepsResponse_Error
 	Response isTransitiveDepsResponse_Response `protobuf_oneof:"response"`
@@ -1200,6 +1204,7 @@ type SubgraphResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Response:
+	//
 	//	*SubgraphResponse_Contents
 	//	*SubgraphResponse_Error
 	Response isSubgraphResponse_Response `protobuf_oneof:"response"`
@@ -1335,6 +1340,7 @@ type PatchesResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Response:
+	//
 	//	*PatchesResponse_Patches
 	//	*PatchesResponse_Error
 	Response isPatchesResponse_Response `protobuf_oneof:"response"`
@@ -1753,6 +1759,7 @@ type VerifySignatureResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Response:
+	//
 	//	*VerifySignatureResponse_Verified
 	//	*VerifySignatureResponse_Error
 	Response isVerifySignatureResponse_Response `protobuf_oneof:"response"`
@@ -1896,6 +1903,7 @@ type GetPackageFileHashesResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Response:
+	//
 	//	*GetPackageFileHashesResponse_Hashes
 	//	*GetPackageFileHashesResponse_Error
 	Response isGetPackageFileHashesResponse_Response `protobuf_oneof:"response"`
@@ -2039,6 +2047,7 @@ type GetHashesForFilesResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Response:
+	//
 	//	*GetHashesForFilesResponse_Hashes
 	//	*GetHashesForFilesResponse_Error
 	Response isGetHashesForFilesResponse_Response `protobuf_oneof:"response"`
@@ -2221,6 +2230,7 @@ type FromWildcardsResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Response:
+	//
 	//	*FromWildcardsResponse_EnvVars
 	//	*FromWildcardsResponse_Error
 	Response isFromWildcardsResponse_Response `protobuf_oneof:"response"`
@@ -2513,6 +2523,7 @@ type GetGlobalHashableEnvVarsResponse struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Response:
+	//
 	//	*GetGlobalHashableEnvVarsResponse_DetailedMap
 	//	*GetGlobalHashableEnvVarsResponse_Error
 	Response isGetGlobalHashableEnvVarsResponse_Response `protobuf_oneof:"response"`

@@ -12,7 +12,8 @@
 mod child;
 
 use std::{
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    io,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -51,14 +52,22 @@ impl ProcessManager {
     /// The handle of the child can be either waited or stopped by the caller,
     /// as well as the entire process manager.
     ///
-    /// If spawn returns None,
-    pub fn spawn(&self, command: child::Command, stop_timeout: Duration) -> Option<child::Child> {
+    /// If spawn returns None, the process manager is closed and the child
+    /// process was not spawned. If spawn returns Some(Err), the process
+    /// manager is open, but the child process failed to spawn.
+    pub fn spawn(
+        &self,
+        command: child::Command,
+        stop_timeout: Duration,
+    ) -> Option<io::Result<child::Child>> {
         let mut lock = self.0.lock().unwrap();
         if lock.is_closing {
             return None;
         }
         let child = child::Child::spawn(command, child::ShutdownStyle::Graceful(stop_timeout));
-        lock.children.push(child.clone());
+        if let Ok(child) = &child {
+            lock.children.push(child.clone());
+        }
         Some(child)
     }
 
@@ -170,7 +179,8 @@ mod test {
         let manager = ProcessManager::new();
         let mut child = manager
             .spawn(get_command(), Duration::from_secs(2))
-            .expect("running");
+            .unwrap()
+            .unwrap();
 
         sleep(Duration::from_millis(100)).await;
 
@@ -186,7 +196,8 @@ mod test {
         let manager = ProcessManager::new();
         let mut child = manager
             .spawn(get_command(), Duration::from_secs(2))
-            .expect("running");
+            .unwrap()
+            .unwrap();
 
         sleep(Duration::from_millis(100)).await;
 
@@ -211,13 +222,13 @@ mod test {
 
         manager.stop().await;
 
-        assert!(manager.children.lock().unwrap().is_empty());
+        assert!(manager.0.lock().unwrap().children.is_empty());
 
         // idempotent
         manager.stop().await;
     }
 
-    #[test_case("stop", ChildExit::Finished(None))]
+    #[test_case("stop", if cfg!(windows) {ChildExit::Killed} else {ChildExit::Finished(None)})] // windows doesn't support graceful stop
     #[test_case("wait", ChildExit::Finished(Some(0)))]
     #[tokio::test]
     async fn test_stop_multiple_tasks_shared(strat: &str, expected: ChildExit) {
@@ -227,11 +238,9 @@ mod test {
         for _ in 0..10 {
             let manager = manager.clone();
             tasks.push(tokio::spawn(async move {
-                let mut command = super::child::Command::new("sleep");
-                command.arg("1");
-
                 manager
-                    .spawn(command, Duration::from_secs(1))
+                    .spawn(get_command(), Duration::from_secs(1))
+                    .unwrap()
                     .unwrap()
                     .wait()
                     .await
@@ -259,10 +268,7 @@ mod test {
     async fn test_wait_multiple_tasks() {
         let manager = ProcessManager::new();
 
-        let mut command = super::child::Command::new("sleep");
-        command.arg("1");
-
-        manager.spawn(command, Duration::from_secs(1));
+        manager.spawn(get_command(), Duration::from_secs(1));
 
         // let the task start
         tokio::time::sleep(Duration::from_millis(50)).await;

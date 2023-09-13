@@ -16,6 +16,7 @@
 //! them when the manager is closed.
 
 use std::{
+    io,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -47,6 +48,9 @@ impl ChildState {
 pub enum ChildExit {
     Finished(Option<i32>),
     Killed,
+    /// The child process was killed by someone else. Note that on
+    /// windows, it is not possible to distinguish between whether
+    /// the process exited normally or was killed
     KilledExternal,
     Failed,
 }
@@ -115,8 +119,10 @@ impl ShutdownStyle {
                 #[cfg(windows)]
                 {
                     debug!("timeout not supported on windows, killing");
-                    child.kill().await?;
-                    Ok(ChildState::Killed)
+                    match child.kill().await {
+                        Ok(_) => ChildState::Exited(ChildExit::Killed),
+                        Err(_) => ChildState::Exited(ChildExit::Failed),
+                    }
                 }
             }
             ShutdownStyle::Kill => match child.kill().await {
@@ -168,8 +174,8 @@ pub enum ChildCommand {
 impl Child {
     /// Start a child process, returning a handle that can be used to interact
     /// with it. The command will be started immediately.
-    pub fn spawn(mut command: Command, shutdown_style: ShutdownStyle) -> Self {
-        let group = command.group().spawn().expect("failed to start child");
+    pub fn spawn(mut command: Command, shutdown_style: ShutdownStyle) -> io::Result<Self> {
+        let group = command.group().spawn()?;
 
         let gid = group.id();
         let mut child = group.into_inner();
@@ -227,6 +233,7 @@ impl Child {
                     }
                 }
                 status = child.wait() => {
+                    debug!("child process exited normally");
                     // the child process exited
                     let child_exit = match status.map(|s| s.code()) {
                         Ok(Some(c)) => ChildExit::Finished(Some(c)),
@@ -246,10 +253,10 @@ impl Child {
                 }
             }
 
-            debug!("child process exited");
+            debug!("child process stopped");
         });
 
-        Self {
+        Ok(Self {
             pid,
             gid,
             state,
@@ -257,7 +264,7 @@ impl Child {
             stdin: Arc::new(Mutex::new(stdin)),
             stdout: Arc::new(Mutex::new(stdout)),
             stderr: Arc::new(Mutex::new(stderr)),
-        }
+        })
     }
 
     /// Wait for the `Child` to exit, returning the exit code.
@@ -357,7 +364,7 @@ mod test {
     async fn test_pid() {
         let mut cmd = Command::new("node");
         cmd.args(["./test/scripts/hello_world.js"]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         assert_matches!(child.pid(), Some(_));
         child.stop().await;
@@ -376,7 +383,7 @@ mod test {
             cmd
         };
 
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         {
             let state = child.state.read().await;
@@ -398,7 +405,7 @@ mod test {
         let mut cmd = Command::new("node");
         cmd.args(["./test/scripts/hello_world.js"]);
         cmd.stdout(Stdio::piped());
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -429,7 +436,7 @@ mod test {
         cmd.args(["./test/scripts/stdin_stdout.js"]);
         cmd.stdout(Stdio::piped());
         cmd.stdin(Stdio::piped());
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill);
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut stdout = child.stdout().unwrap();
 
@@ -464,7 +471,8 @@ mod test {
             cmd
         };
 
-        let mut child = Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500)));
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500))).unwrap();
 
         // give it a moment to register the signal handler
         tokio::time::sleep(STARTUP_DELAY).await;
@@ -486,7 +494,8 @@ mod test {
             cmd
         };
 
-        let mut child = Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500)));
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500))).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -512,7 +521,8 @@ mod test {
             cmd
         };
 
-        let mut child = Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500)));
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500))).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -522,11 +532,31 @@ mod test {
                 libc::kill(pid as i32, libc::SIGINT);
             }
         }
+        #[cfg(windows)]
+        if let Some(pid) = child.pid() {
+            unsafe {
+                println!("killing");
+                winapi::um::processthreadsapi::TerminateProcess(
+                    winapi::um::processthreadsapi::OpenProcess(
+                        winapi::um::winnt::PROCESS_TERMINATE,
+                        0,
+                        pid,
+                    ),
+                    3,
+                );
+            }
+        }
 
         child.wait().await;
 
         let state = child.state.read().await;
 
-        assert_matches!(&*state, ChildState::Exited(ChildExit::KilledExternal));
+        let expected = if cfg!(unix) {
+            ChildExit::KilledExternal
+        } else {
+            ChildExit::Finished(Some(1))
+        };
+
+        assert_matches!(&*state, ChildState::Exited(expected));
     }
 }
