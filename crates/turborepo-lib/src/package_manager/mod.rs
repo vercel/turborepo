@@ -577,6 +577,7 @@ mod tests {
             PackageManager::Berry,
             PackageManager::Yarn,
             PackageManager::Npm,
+            PackageManager::Bun,
         ] {
             let found = mgr.get_package_jsons(&with_yarn).unwrap();
             let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found);
@@ -700,6 +701,13 @@ mod tests {
                 expected_version: "111.0.1".to_owned(),
                 expected_error: false,
             },
+            TestCase {
+                name: "supports bun".to_owned(),
+                package_manager: "bun@1.0.1".to_owned(),
+                expected_manager: "bun".to_owned(),
+                expected_version: "1.0.1".to_owned(),
+                expected_error: false,
+            },
         ];
 
         for case in tests {
@@ -738,6 +746,10 @@ mod tests {
         package_json.package_manager = Some("pnpm@7.2.0".to_string());
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, Some(PackageManager::Pnpm));
+
+        package_json.package_manager = Some("bun@1.0.1".to_string());
+        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        assert_eq!(package_manager, Some(PackageManager::Bun));
 
         Ok(())
     }
