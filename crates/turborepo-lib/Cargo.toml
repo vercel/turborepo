@@ -96,6 +96,10 @@ lazy-regex = "2.5.0"
 node-semver = "2.1.0"
 num_cpus = "1.15.0"
 owo-colors.workspace = true
+pprof = { version = "0.12.1", features = [
+  "flamegraph",
+  "frame-pointer",
+], optional = true }
 rayon = "1.7.0"
 regex.workspace = true
 tracing-appender = "0.2.2"

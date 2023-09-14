@@ -50,6 +50,9 @@ pub struct TurboSubscriber {
 
     #[cfg(feature = "tracing-chrome")]
     chrome_guard: tracing_chrome::FlushGuard,
+
+    #[cfg(feature = "pprof")]
+    pprof_guard: pprof::ProfilerGuard<'static>,
 }
 
 impl TurboSubscriber {
@@ -104,6 +107,13 @@ impl TurboSubscriber {
             (registry.with(chrome_layer), guard)
         };
 
+        #[cfg(feature = "pprof")]
+        let pprof_guard = pprof::ProfilerGuardBuilder::default()
+            .frequency(1000)
+            .blocklist(&["libc", "libgcc", "pthread", "vdso"])
+            .build()
+            .unwrap();
+
         registry.init();
 
         Self {
@@ -111,6 +121,8 @@ impl TurboSubscriber {
             guard: Mutex::new(None),
             #[cfg(feature = "tracing-chrome")]
             chrome_guard,
+            #[cfg(feature = "pprof")]
+            pprof_guard,
         }
     }
 
@@ -130,6 +142,17 @@ impl TurboSubscriber {
         self.guard.lock().expect("not poisoned").replace(guard);
 
         Ok(())
+    }
+}
+
+impl Drop for TurboSubscriber {
+    fn drop(&mut self) {
+        // drop the guard so that the non-blocking file writer stops
+        #[cfg(feature = "pprof")]
+        if let Ok(report) = self.pprof_guard.report().build() {
+            let file = std::fs::File::create("flamegraph.svg").unwrap();
+            report.flamegraph(file).unwrap();
+        };
     }
 }
 
