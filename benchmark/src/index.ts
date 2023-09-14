@@ -9,7 +9,7 @@ const REPO_ORIGIN = "https://github.com/gsoltis/large-monorepo.git";
 const REPO_PATH = path.join(process.cwd(), REPO_ROOT);
 const REPETITIONS = 5;
 
-const DEFAULT_EXEC_OPTS = { stdio: "ignore" as const, cwd: REPO_PATH };
+const DEFAULT_EXEC_OPTS = { stdio: "inherit" as const, cwd: REPO_PATH };
 const TURBO_BIN = path.resolve(path.join("..", "target", "release", "turbo"));
 const DEFAULT_CACHE_PATH = path.join(
   REPO_PATH,
@@ -79,7 +79,9 @@ function cleanBuild(): Timing[] {
     // clean first, we'll leave the cache in place for subsequent builds
     cleanTurboCache();
     const start = new Date().getTime();
+
     cp.execSync(`${TURBO_BIN} run build${concurrency}`, DEFAULT_EXEC_OPTS);
+
     const end = new Date().getTime();
     const timing = end - start;
     timings.push(timing);
