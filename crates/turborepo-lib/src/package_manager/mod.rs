@@ -497,7 +497,7 @@ impl PackageManager {
                 Box::new(turborepo_lockfiles::Yarn1Lockfile::from_bytes(contents)?)
             }
             PackageManager::Bun => {
-                Box::new(turborepo_lockfiles::Yarn1Lockfile::from_bytes(contents)?)
+                Box::new(turborepo_lockfiles::BunLockfile::from_bytes(contents)?)
             }
             PackageManager::Berry => Box::new(turborepo_lockfiles::BerryLockfile::load(
                 contents,
