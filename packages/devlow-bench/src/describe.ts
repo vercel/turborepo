@@ -159,7 +159,7 @@ export async function reportMeasurement(
     if (!prev) {
       throw new Error(`No measurement named ${relativeTo} found`);
     }
-    if (prev.unit !== "ms") {
+    if (prev.unit !== unit) {
       throw new Error(
         `Measurement ${relativeTo} is not a "${unit}" measurement`
       );
