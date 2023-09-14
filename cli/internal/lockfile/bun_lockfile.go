@@ -12,14 +12,14 @@ type BunLockfile struct {
 var _ Lockfile = (*BunLockfile)(nil)
 
 // ResolvePackage Given a package and version returns the key, resolved version, and if it was found
-func (l *BunLockfile) ResolvePackage(_workspacePath turbopath.AnchoredUnixPath, name string, version string) (Package, error) {
+func (l *BunLockfile) ResolvePackage(_ turbopath.AnchoredUnixPath, _ string, _ string) (Package, error) {
 	// This is only used when doing calculating the transitive deps, but Rust
 	// implementations do this calculation on the Rust side.
 	panic("Unreachable")
 }
 
 // AllDependencies Given a lockfile key return all (dev/optional/peer) dependencies of that package
-func (l *BunLockfile) AllDependencies(key string) (map[string]string, bool) {
+func (l *BunLockfile) AllDependencies(_ string) (map[string]string, bool) {
 	// This is only used when doing calculating the transitive deps, but Rust
 	// implementations do this calculation on the Rust side.
 	panic("Unreachable")
