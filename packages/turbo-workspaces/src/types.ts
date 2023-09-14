@@ -1,6 +1,11 @@
 import type { PackageManager } from "@turbo/utils";
 import type { Logger } from "./logger";
 
+export interface Manager {
+  name: PackageManager;
+  lock: string;
+}
+
 export interface RequestedPackageManagerDetails {
   name: PackageManager;
   version?: string;

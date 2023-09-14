@@ -70,13 +70,13 @@ export const PACKAGE_MANAGERS: Record<
   ],
   bun: [
     {
-      name: "bun1",
+      name: "bun",
       template: "bun",
       command: "bun",
       installArgs: ["install"],
-      version: "1.x",
+      version: "latest",
       executable: "bunx",
-      semver: "<2",
+      semver: "^1.0.1",
       default: true,
     },
   ],

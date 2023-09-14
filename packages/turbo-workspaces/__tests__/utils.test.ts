@@ -1,5 +1,5 @@
 import type { Project } from "../src/types";
-import { isCompatibleWithBunWorkspace } from "../src/utils";
+import { isCompatibleWithBunWorkspaces } from "../src/utils";
 
 describe("utils", () => {
   describe("isCompatibleWithBunWorkspace", () => {
@@ -12,7 +12,7 @@ describe("utils", () => {
       { globs: ["apps/*", "packages/*/utils/*"], expected: false },
       { globs: ["internal-*/*"], expected: false },
     ])("should return $result when given %globs", ({ globs, expected }) => {
-      const result = isCompatibleWithBunWorkspace({
+      const result = isCompatibleWithBunWorkspaces({
         project: {
           workspaceData: { globs },
         } as Project,

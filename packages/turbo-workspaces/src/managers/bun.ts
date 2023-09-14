@@ -11,6 +11,7 @@ import type {
   CleanArgs,
   Project,
   ManagerHandler,
+  Manager,
 } from "../types";
 import {
   getMainStep,
@@ -20,8 +21,14 @@ import {
   expandWorkspaces,
   getWorkspacePackageManager,
   parseWorkspacePackages,
-  isCompatibleWithBunWorkspace,
+  isCompatibleWithBunWorkspaces,
+  removeLockFile,
 } from "../utils";
+
+const PACKAGE_MANAGER_DETAILS: Manager = {
+  name: "bun",
+  lock: "bun.lockb",
+};
 
 /**
  * Check if a given project is using bun workspaces
@@ -31,11 +38,13 @@ import {
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- must match the detect type signature
 async function detect(args: DetectArgs): Promise<boolean> {
-  const lockFile = path.join(args.workspaceRoot, "bun.lockb");
+  const lockFile = path.join(args.workspaceRoot, PACKAGE_MANAGER_DETAILS.lock);
   const packageManager = getWorkspacePackageManager({
     workspaceRoot: args.workspaceRoot,
   });
-  return existsSync(lockFile) || packageManager === "bun";
+  return (
+    existsSync(lockFile) || packageManager === PACKAGE_MANAGER_DETAILS.name
+  );
 }
 
 /**
@@ -57,10 +66,10 @@ async function read(args: ReadArgs): Promise<Project> {
   return {
     name,
     description,
-    packageManager: "bun",
+    packageManager: PACKAGE_MANAGER_DETAILS.name,
     paths: expandPaths({
       root: args.workspaceRoot,
-      lockFile: "bun.lockb",
+      lockFile: PACKAGE_MANAGER_DETAILS.lock,
     }),
     workspaceData: {
       globs: workspaceGlobs,
@@ -86,7 +95,7 @@ async function create(args: CreateArgs): Promise<void> {
   const { project, to, logger, options } = args;
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
-  if (!isCompatibleWithBunWorkspace({ project })) {
+  if (!isCompatibleWithBunWorkspaces({ project })) {
     throw new ConvertError(
       "Unable to convert project to bun - workspace globs unsupported",
       {
@@ -96,7 +105,11 @@ async function create(args: CreateArgs): Promise<void> {
   }
 
   logger.mainStep(
-    getMainStep({ packageManager: "bun", action: "create", project })
+    getMainStep({
+      packageManager: PACKAGE_MANAGER_DETAILS.name,
+      action: "create",
+      project,
+    })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
   logger.rootHeader();
@@ -156,7 +169,11 @@ async function remove(args: RemoveArgs): Promise<void> {
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    getMainStep({ packageManager: "bun", action: "remove", project })
+    getMainStep({
+      packageManager: PACKAGE_MANAGER_DETAILS.name,
+      action: "remove",
+      project,
+    })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
 
@@ -219,11 +236,23 @@ async function clean(args: CleanArgs): Promise<void> {
 async function convertLock(args: ConvertArgs): Promise<void> {
   const { project, options } = args;
 
-  if (project.packageManager !== "bun") {
-    // remove the lockfile
-    if (!options?.dry) {
-      rmSync(project.paths.lockfile, { force: true });
-    }
+  // handle moving lockfile from `packageManager` to npm
+  switch (project.packageManager) {
+    case "pnpm":
+      // can't convert from pnpm to bun - just remove the lock
+      removeLockFile({ project, options });
+      break;
+    case "bun":
+      // we're already using bun, so we don't need to convert
+      break;
+    case "npm":
+      // can't convert from npm to bun - just remove the lock
+      removeLockFile({ project, options });
+      break;
+    case "yarn":
+      // can't convert from yarn to bun - just remove the lock
+      removeLockFile({ project, options });
+      break;
   }
 }
 
