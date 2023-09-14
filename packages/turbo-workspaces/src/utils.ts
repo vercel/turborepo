@@ -168,6 +168,7 @@ function expandWorkspaces({
         onlyFiles: true,
         absolute: true,
         cwd: workspaceRoot,
+        ignore: ["**/node_modules/**"],
       });
     })
     .map((workspacePackageJson) => {
