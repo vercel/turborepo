@@ -356,12 +356,12 @@ impl ImportMap {
         // TODO lookup pattern
         if let Some(request_string) = request.await?.request() {
             if let Some(result) = self.map.lookup(&request_string).next() {
-                return Ok(import_mapping_to_result(
+                return import_mapping_to_result(
                     result.try_join_into_self().await?.into_owned(),
                     lookup_path,
                     request,
                 )
-                .await?);
+                .await;
             }
         }
         Ok(ImportMapResult::NoEntry)

@@ -1328,7 +1328,7 @@ async fn resolve_into_folder(
                         )
                     })?;
                 let request = Request::parse(Value::new(str.into()));
-                return Ok(resolve_internal_boxed(package_path, request, options).await?);
+                return resolve_internal_boxed(package_path, request, options).await;
             }
             ResolveIntoPackage::MainField(name) => {
                 if let Some(package_json) = &*read_package_json(package_json_path).await? {
