@@ -158,7 +158,7 @@ impl<'a> SCMChangeDetector<'a> {
         let lockfile_path = self
             .pkg_graph
             .package_manager()
-            .lockfile_path(self.turbo_root)?;
+            .lockfile_path(self.turbo_root);
 
         let matcher = wax::Glob::new(lockfile_path.as_str())?;
 
@@ -184,8 +184,6 @@ impl<'a> SCMChangeDetector<'a> {
 pub enum ChangeDetectError {
     #[error("SCM error: {0}")]
     Scm(#[from] turborepo_scm::Error),
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
     #[error("Wax error: {0}")]
     Wax(#[from] wax::BuildError),
     #[error("Package manager error: {0}")]

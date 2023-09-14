@@ -7,7 +7,6 @@ use std::{
     backtrace,
     fmt::{self, Display},
     fs,
-    process::Command,
 };
 
 use globwalk::fix_glob_pattern;
@@ -20,7 +19,6 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_lockfiles::Lockfile;
 use turborepo_ui::{UI, UNDERLINE};
 use wax::{Any, Glob, Pattern};
-use which::which;
 
 use crate::{
     package_json::PackageJson,
@@ -454,22 +452,6 @@ impl PackageManager {
         }
     }
 
-    pub fn lockfile_path(
-        &self,
-        root_path: &AbsoluteSystemPath,
-    ) -> Result<AbsoluteSystemPathBuf, std::io::Error> {
-        match self {
-            PackageManager::Bun => bun::get_lockfile_path(root_path),
-            PackageManager::Npm => Ok(root_path.join_component(npm::LOCKFILE)),
-            PackageManager::Pnpm | PackageManager::Pnpm6 => {
-                Ok(root_path.join_component(pnpm::LOCKFILE))
-            }
-            PackageManager::Yarn | PackageManager::Berry => {
-                Ok(root_path.join_component(yarn::LOCKFILE))
-            }
-        }
-    }
-
     pub fn workspace_configuration_path(&self) -> Option<&'static str> {
         match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => Some("pnpm-workspace.yaml"),
@@ -485,17 +467,7 @@ impl PackageManager {
         root_path: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
-        let lockfile_path = self.lockfile_path(root_path)?;
-        let contents = match self {
-            PackageManager::Bun => {
-                Command::new(which("bun")?)
-                    .arg(lockfile_path.to_string())
-                    .current_dir(root_path.to_string())
-                    .output()?
-                    .stdout
-            }
-            _ => lockfile_path.read()?,
-        };
+        let contents = root_path.join_component(self.lockfile_name()).read()?;
         self.parse_lockfile(root_package_json, &contents)
     }
 
@@ -542,6 +514,10 @@ impl PackageManager {
                 unreachable!("bun, npm, and yarn 1 don't have a concept of patches")
             }
         }
+    }
+
+    pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+        turbo_root.join_component(self.lockfile_name())
     }
 }
 
