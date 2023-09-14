@@ -7,6 +7,7 @@ use std::{
     backtrace,
     fmt::{self, Display},
     fs,
+    process::Command,
 };
 
 use globwalk::fix_glob_pattern;
@@ -19,6 +20,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_lockfiles::Lockfile;
 use turborepo_ui::{UI, UNDERLINE};
 use wax::{Any, Glob, Pattern};
+use which::which;
 
 use crate::{
     package_json::PackageJson,
@@ -467,7 +469,17 @@ impl PackageManager {
         root_path: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
-        let contents = root_path.join_component(self.lockfile_name()).read()?;
+        let lockfile_path = self.lockfile_path(root_path);
+        let contents = match self {
+            PackageManager::Bun => {
+                Command::new(which("bun")?)
+                    .arg(lockfile_path.to_string())
+                    .current_dir(root_path.to_string())
+                    .output()?
+                    .stdout
+            }
+            _ => lockfile_path.read()?,
+        };
         self.parse_lockfile(root_package_json, &contents)
     }
 
