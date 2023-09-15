@@ -205,7 +205,7 @@ func calculateInference(repoRoot turbopath.AbsoluteSystemPath, pkgInferencePath 
 	}, nil
 }
 
-func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd turbopath.AbsoluteSystemPath, ctx *context.Context) scope_filter.PackagesChangedInRange {
+func (o *Opts) getPackageChangeFunc(scm scm.SCM, repoRoot turbopath.AbsoluteSystemPath, ctx *context.Context) scope_filter.PackagesChangedInRange {
 	return func(fromRef string, toRef string) (util.Set, error) {
 		// We could filter changed files at the git level, since it's possible
 		// that the changes we're interested in are scoped, but we need to handle
@@ -213,7 +213,7 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd turbopath.AbsoluteSystemPat
 		// scope changed files more deeply if we know there are no global dependencies.
 		var changedFiles []string
 		if fromRef != "" {
-			scmChangedFiles, err := scm.ChangedFiles(fromRef, toRef, cwd.ToStringDuringMigration())
+			scmChangedFiles, err := scm.ChangedFiles(fromRef, toRef, repoRoot.ToStringDuringMigration())
 			if err != nil {
 				return nil, err
 			}
@@ -239,7 +239,7 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd turbopath.AbsoluteSystemPat
 		}
 		changedPkgs := getChangedPackages(filteredChangedFiles, ctx.WorkspaceInfos)
 
-		if lockfileChanges, fullChanges := getChangesFromLockfile(scm, ctx, changedFiles, fromRef); !fullChanges {
+		if lockfileChanges, fullChanges := getChangesFromLockfile(repoRoot, scm, ctx, changedFiles, fromRef); !fullChanges {
 			for _, pkg := range lockfileChanges {
 				changedPkgs.Add(pkg)
 			}
@@ -251,8 +251,8 @@ func (o *Opts) getPackageChangeFunc(scm scm.SCM, cwd turbopath.AbsoluteSystemPat
 	}
 }
 
-func getChangesFromLockfile(scm scm.SCM, ctx *context.Context, changedFiles []string, fromRef string) ([]string, bool) {
-	lockfileFilter, err := filter.Compile([]string{ctx.PackageManager.Lockfile})
+func getChangesFromLockfile(repoRoot turbopath.AbsoluteSystemPath, scm scm.SCM, ctx *context.Context, changedFiles []string, fromRef string) ([]string, bool) {
+	lockfileFilter, err := filter.Compile([]string{ctx.PackageManager.GetLockfileName(repoRoot)})
 	if err != nil {
 		panic(fmt.Sprintf("Lockfile is invalid glob: %v", err))
 	}
@@ -271,7 +271,8 @@ func getChangesFromLockfile(scm scm.SCM, ctx *context.Context, changedFiles []st
 		return nil, true
 	}
 
-	prevContents, err := scm.PreviousContent(fromRef, ctx.PackageManager.Lockfile)
+	// FIXME: If you move your bun lockfile then we don't track that move into the history.
+	prevContents, err := scm.PreviousContent(fromRef, ctx.PackageManager.GetLockfileName(repoRoot))
 	if err != nil {
 		// unable to reconstruct old lockfile, assume everything changed
 		return nil, true

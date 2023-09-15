@@ -40,6 +40,8 @@ pub enum Error {
     MissingWorkspace(WorkspaceName),
     #[error("Cannot prune without parsed lockfile")]
     MissingLockfile,
+    #[error("Prune is not supported for Bun")]
+    BunUnsupported,
 }
 
 // Files that should be copied from root and if they're required for install
@@ -70,6 +72,13 @@ pub fn prune(
     output_dir: &str,
 ) -> Result<(), Error> {
     let prune = Prune::new(base, scope, docker, output_dir)?;
+
+    if matches!(
+        prune.package_graph.package_manager(),
+        crate::package_manager::PackageManager::Bun
+    ) {
+        return Err(Error::BunUnsupported);
+    }
 
     println!(
         "Generating pruned monorepo for {} in {}",

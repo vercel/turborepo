@@ -26,6 +26,7 @@ func Test_GetWorkspaces(t *testing.T) {
 	repoRoot, err := fs.GetCwd(cwd)
 	assert.NilError(t, err, "GetCwd")
 	rootPath := map[string]turbopath.AbsoluteSystemPath{
+		"nodejs-bun":   repoRoot.UntypedJoin("../../../examples/with-yarn"),
 		"nodejs-npm":   repoRoot.UntypedJoin("../../../examples/with-yarn"),
 		"nodejs-berry": repoRoot.UntypedJoin("../../../examples/with-yarn"),
 		"nodejs-yarn":  repoRoot.UntypedJoin("../../../examples/with-yarn"),
@@ -34,6 +35,13 @@ func Test_GetWorkspaces(t *testing.T) {
 	}
 
 	want := map[string][]string{
+		"nodejs-bun": {
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/apps/docs/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/apps/web/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/packages/eslint-config-custom/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/packages/tsconfig/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/packages/ui/package.json")),
+		},
 		"nodejs-npm": {
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/apps/docs/package.json")),
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/apps/web/package.json")),
@@ -117,6 +125,7 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 	cwd, err := fs.GetCwd(cwdRaw)
 	assert.NilError(t, err, "GetCwd")
 	want := map[string][]string{
+		"nodejs-bun":   {"**/node_modules", "**/.git"},
 		"nodejs-npm":   {"**/node_modules/**"},
 		"nodejs-berry": {"**/node_modules", "**/.git", "**/.yarn"},
 		"nodejs-yarn":  {"apps/*/node_modules/**", "packages/*/node_modules/**"},
