@@ -160,7 +160,11 @@ impl<'a> SCMChangeDetector<'a> {
             .package_manager()
             .lockfile_path(self.turbo_root);
 
-        let matcher = wax::Glob::new(lockfile_path.as_str())?;
+        let lockfile_path_relative = lockfile_path
+            .anchor(self.turbo_root)
+            .expect("was created above");
+
+        let matcher = wax::Glob::new(lockfile_path_relative.as_str())?;
 
         if !changed_files.iter().any(|f| matcher.is_match(f.as_path())) {
             return Ok(vec![]);
