@@ -354,16 +354,27 @@ mod test {
         process::Command,
     };
     use tracing_test::traced_test;
+    use turbopath::AbsoluteSystemPathBuf;
 
     use super::{Child, ChildState};
     use crate::process::child::{ChildExit, ShutdownStyle};
 
     const STARTUP_DELAY: Duration = Duration::from_millis(500);
 
+    fn find_script_dir() -> AbsoluteSystemPathBuf {
+        let cwd = AbsoluteSystemPathBuf::cwd().unwrap();
+        let mut root = cwd;
+        while !root.join_component(".git").exists() {
+            root = root.parent().unwrap().to_owned();
+        }
+        root.join_components(&["crates", "turborepo-lib", "test", "scripts"])
+    }
+
     #[tokio::test]
     async fn test_pid() {
+        let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
-        cmd.args(["./test/scripts/hello_world.js"]);
+        cmd.args([script.as_std_path()]);
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         assert_matches!(child.pid(), Some(_));
@@ -377,8 +388,9 @@ mod test {
     #[traced_test]
     async fn test_spawn() {
         let cmd = {
+            let script = find_script_dir().join_component("hello_world.js");
             let mut cmd = Command::new("node");
-            cmd.args(["./test/scripts/hello_world.js"]);
+            cmd.args([script.as_std_path()]);
             cmd.stdout(Stdio::piped());
             cmd
         };
@@ -402,8 +414,9 @@ mod test {
     #[tokio::test]
     #[traced_test]
     async fn test_stdout() {
+        let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
-        cmd.args(["./test/scripts/hello_world.js"]);
+        cmd.args([script.as_std_path()]);
         cmd.stdout(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
@@ -432,8 +445,9 @@ mod test {
 
     #[tokio::test]
     async fn test_stdio() {
+        let script = find_script_dir().join_component("stdin_stdout.js");
         let mut cmd = Command::new("node");
-        cmd.args(["./test/scripts/stdin_stdout.js"]);
+        cmd.args([script.as_std_path()]);
         cmd.stdout(Stdio::piped());
         cmd.stdin(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
@@ -466,8 +480,9 @@ mod test {
     #[traced_test]
     async fn test_graceful_shutdown_timeout() {
         let cmd = {
+            let script = find_script_dir().join_component("sleep_5_ignore.js");
             let mut cmd = Command::new("node");
-            cmd.args(["./test/scripts/sleep_5_ignore.js"]);
+            cmd.args([script.as_std_path()]);
             cmd
         };
 
@@ -489,8 +504,9 @@ mod test {
     #[traced_test]
     async fn test_graceful_shutdown() {
         let cmd = {
+            let script = find_script_dir().join_component("sleep_5_interruptable.js");
             let mut cmd = Command::new("node");
-            cmd.args(["./test/scripts/sleep_5_interruptable.js"]);
+            cmd.args([script.as_std_path()]);
             cmd
         };
 
@@ -516,8 +532,9 @@ mod test {
     #[traced_test]
     async fn test_detect_killed_someone_else() {
         let cmd = {
+            let script = find_script_dir().join_component("sleep_5_interruptable.js");
             let mut cmd = Command::new("node");
-            cmd.args(["./test/scripts/sleep_5_interruptable.js"]);
+            cmd.args([script.as_std_path()]);
             cmd
         };
 
