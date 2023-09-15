@@ -89,7 +89,7 @@ Setup
     "someargs"
   ]
   $ echo $FIRST_APP_BUILD | jq '.hashOfExternalDependencies'
-  "459c029558afe716"
+  "ccab0b28617f1f56"
   $ echo $FIRST_APP_BUILD | jq '.expandedOutputs'
   [
     "apps/my-app/.turbo/turbo-build.log"

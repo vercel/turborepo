@@ -6,7 +6,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turbo/cli/internal/filewatcher"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"gotest.tools/v3/assert"
 )
@@ -67,7 +66,7 @@ func TestTrackOutputs(t *testing.T) {
 
 	globWatcher := New(logger, repoRoot, _noopCookieWaiter)
 
-	globs := hash.TaskOutputs{
+	globs := fs.TaskOutputs{
 		Inclusions: []string{
 			"my-pkg/dist/**",
 			"my-pkg/.next/**",
@@ -143,18 +142,18 @@ func TestTrackMultipleHashes(t *testing.T) {
 
 	globWatcher := New(logger, repoRoot, _noopCookieWaiter)
 
-	globs := hash.TaskOutputs{
+	globs := fs.TaskOutputs{
 		Inclusions: []string{
 			"my-pkg/dist/**",
 			"my-pkg/.next/**",
 		},
 	}
 
-	hashToWatch := "the-hash"
-	err := globWatcher.WatchGlobs(hashToWatch, globs)
+	hash := "the-hash"
+	err := globWatcher.WatchGlobs(hash, globs)
 	assert.NilError(t, err, "WatchGlobs")
 
-	secondGlobs := hash.TaskOutputs{
+	secondGlobs := fs.TaskOutputs{
 		Inclusions: []string{
 			"my-pkg/.next/**",
 		},
@@ -165,7 +164,7 @@ func TestTrackMultipleHashes(t *testing.T) {
 	err = globWatcher.WatchGlobs(secondHash, secondGlobs)
 	assert.NilError(t, err, "WatchGlobs")
 
-	changed, err := globWatcher.GetChangedGlobs(hashToWatch, globs.Inclusions)
+	changed, err := globWatcher.GetChangedGlobs(hash, globs.Inclusions)
 	assert.NilError(t, err, "GetChangedGlobs")
 	assert.Equal(t, 0, len(changed), "Expected no changed paths")
 
@@ -179,7 +178,7 @@ func TestTrackMultipleHashes(t *testing.T) {
 		Path:      repoRoot.UntypedJoin("my-pkg", ".next", "cache", "foo"),
 	})
 
-	changed, err = globWatcher.GetChangedGlobs(hashToWatch, globs.Inclusions)
+	changed, err = globWatcher.GetChangedGlobs(hash, globs.Inclusions)
 	assert.NilError(t, err, "GetChangedGlobs")
 	assert.Equal(t, 1, len(changed), "Expected one changed path remaining")
 
@@ -207,7 +206,7 @@ func TestWatchSingleFile(t *testing.T) {
 
 	//watcher := newTestWatcher()
 	globWatcher := New(logger, repoRoot, _noopCookieWaiter)
-	globs := hash.TaskOutputs{
+	globs := fs.TaskOutputs{
 		Inclusions: []string{"my-pkg/.next/next-file"},
 		Exclusions: []string{},
 	}

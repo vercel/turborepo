@@ -18,7 +18,7 @@ Setup
   $ cat tmp-2.txt
   Global Hash Inputs
     Global Files                          = 1
-    External Dependencies Hash            = 459c029558afe716
+    External Dependencies Hash            = ccab0b28617f1f56
     Global Cache Key                      = You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.
     Global .env Files Considered          = 0
     Global Env Vars                       = SOME_ENV_VAR
@@ -32,7 +32,7 @@ Setup
   my-app#build
     Task                           = build                                                                                                                                                                         
     Package                        = my-app                                                                                                                                                                        
-    Hash                           = 0cd306aa8e337d8a                                                                                                                                                              
+    Hash                           = 0d1e6ee2c143211c                                                                                                                                                              
     Cached (Local)                 = false                                                                                                                                                                         
     Cached (Remote)                = false                                                                                                                                                                         
     Directory                      = apps/my-app                                                                                                                                                                   
@@ -53,7 +53,7 @@ Setup
   util#build
     Task                           = build                                                                                                                                                
     Package                        = util                                                                                                                                                 
-    Hash                           = 12af4a2f5c5af4e1                                                                                                                                     
+    Hash                           = 76ab904c7ecb2d51                                                                                                                                     
     Cached (Local)                 = false                                                                                                                                                
     Cached (Remote)                = false                                                                                                                                                
     Directory                      = packages/util                                                                                                                                        

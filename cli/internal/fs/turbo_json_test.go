@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 	"gotest.tools/v3/assert/cmp"
@@ -46,7 +45,7 @@ func Test_ReadTurboConfigDotEnvUndefined(t *testing.T) {
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
-				Outputs:                 hash.TaskOutputs{},
+				Outputs:                 TaskOutputs{},
 				Cache:                   true,
 				TopologicalDependencies: []string{},
 				TaskDependencies:        []string{},
@@ -81,7 +80,7 @@ func Test_ReadTurboConfigDotEnvNull(t *testing.T) {
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
-				Outputs:                 hash.TaskOutputs{},
+				Outputs:                 TaskOutputs{},
 				Cache:                   true,
 				TopologicalDependencies: []string{},
 				TaskDependencies:        []string{},
@@ -113,7 +112,7 @@ func Test_ReadTurboConfigDotEnvEmpty(t *testing.T) {
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
-				Outputs:                 hash.TaskOutputs{},
+				Outputs:                 TaskOutputs{},
 				Cache:                   true,
 				TopologicalDependencies: []string{},
 				TaskDependencies:        []string{},
@@ -146,7 +145,7 @@ func Test_ReadTurboConfigDotEnvPopulated(t *testing.T) {
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
-				Outputs:                 hash.TaskOutputs{},
+				Outputs:                 TaskOutputs{},
 				Cache:                   true,
 				TopologicalDependencies: []string{},
 				TaskDependencies:        []string{},
@@ -182,7 +181,7 @@ func Test_ReadTurboConfigPassThroughEnvUndefined(t *testing.T) {
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
-				Outputs:                 hash.TaskOutputs{},
+				Outputs:                 TaskOutputs{},
 				Cache:                   true,
 				TopologicalDependencies: []string{},
 				TaskDependencies:        []string{},
@@ -218,7 +217,7 @@ func Test_ReadTurboConfigPassThroughEnvNull(t *testing.T) {
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
-				Outputs:                 hash.TaskOutputs{},
+				Outputs:                 TaskOutputs{},
 				Cache:                   true,
 				TopologicalDependencies: []string{},
 				TaskDependencies:        []string{},
@@ -251,7 +250,7 @@ func Test_ReadTurboConfigPassThroughEnvEmpty(t *testing.T) {
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
-				Outputs:                 hash.TaskOutputs{},
+				Outputs:                 TaskOutputs{},
 				Cache:                   true,
 				TopologicalDependencies: []string{},
 				TaskDependencies:        []string{},
@@ -284,7 +283,7 @@ func Test_ReadTurboConfigPassThroughEnvPopulated(t *testing.T) {
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
-				Outputs:                 hash.TaskOutputs{},
+				Outputs:                 TaskOutputs{},
 				Cache:                   true,
 				TopologicalDependencies: []string{},
 				TaskDependencies:        []string{},
@@ -318,7 +317,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
-				Outputs:                 hash.TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
+				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				Cache:                   true,
 				TopologicalDependencies: []string{"build"},
 				TaskDependencies:        []string{},
@@ -332,7 +331,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
-				Outputs:                 hash.TaskOutputs{},
+				Outputs:                 TaskOutputs{},
 				Cache:                   true,
 				TopologicalDependencies: []string{},
 				TaskDependencies:        []string{},
@@ -346,7 +345,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
-				Outputs:                 hash.TaskOutputs{},
+				Outputs:                 TaskOutputs{},
 				Cache:                   false,
 				TopologicalDependencies: []string{},
 				TaskDependencies:        []string{},
@@ -360,7 +359,7 @@ func Test_ReadTurboConfig(t *testing.T) {
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
-				Outputs:                 hash.TaskOutputs{Inclusions: []string{"dist/**"}},
+				Outputs:                 TaskOutputs{Inclusions: []string{"dist/**"}},
 				Cache:                   false,
 				TopologicalDependencies: []string{"build", "publish"},
 				TaskDependencies:        []string{"admin#lint", "build"},
@@ -413,7 +412,7 @@ func Test_LoadTurboConfig_BothCorrectAndLegacy(t *testing.T) {
 			experimentalFields: util.SetFromStrings([]string{}),
 			experimental:       taskDefinitionExperiments{},
 			TaskDefinition: taskDefinitionHashable{
-				Outputs:                 hash.TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
+				Outputs:                 TaskOutputs{Inclusions: []string{".next/**", "dist/**"}, Exclusions: []string{"dist/assets/**"}},
 				Cache:                   true,
 				TopologicalDependencies: []string{"build"},
 				TaskDependencies:        []string{},
@@ -481,12 +480,12 @@ func Test_ReadTurboConfig_EnvDeclarations(t *testing.T) {
 func Test_TaskOutputsSort(t *testing.T) {
 	inclusions := []string{"foo/**", "bar"}
 	exclusions := []string{"special-file", ".hidden/**"}
-	taskOutputs := hash.TaskOutputs{Inclusions: inclusions, Exclusions: exclusions}
+	taskOutputs := TaskOutputs{Inclusions: inclusions, Exclusions: exclusions}
 	taskOutputs.Sort()
 	assertIsSorted(t, taskOutputs.Inclusions, "Inclusions")
 	assertIsSorted(t, taskOutputs.Exclusions, "Exclusions")
 
-	assert.True(t, cmp.DeepEqual(taskOutputs, hash.TaskOutputs{Inclusions: []string{"bar", "foo/**"}, Exclusions: []string{".hidden/**", "special-file"}})().Success())
+	assert.True(t, cmp.DeepEqual(taskOutputs, TaskOutputs{Inclusions: []string{"bar", "foo/**"}, Exclusions: []string{".hidden/**", "special-file"}})().Success())
 }
 
 // Helpers

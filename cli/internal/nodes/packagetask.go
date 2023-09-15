@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
@@ -35,11 +34,11 @@ func (pt *PackageTask) OutputPrefix(isSinglePackage bool) string {
 
 // HashableOutputs returns the package-relative globs for files to be considered outputs
 // of this task
-func (pt *PackageTask) HashableOutputs() hash.TaskOutputs {
+func (pt *PackageTask) HashableOutputs() fs.TaskOutputs {
 	inclusionOutputs := []string{fmt.Sprintf(".turbo/turbo-%v.log", pt.Task)}
 	inclusionOutputs = append(inclusionOutputs, pt.TaskDefinition.Outputs.Inclusions...)
 
-	hashable := hash.TaskOutputs{
+	hashable := fs.TaskOutputs{
 		Inclusions: inclusionOutputs,
 		Exclusions: pt.TaskDefinition.Outputs.Exclusions,
 	}
