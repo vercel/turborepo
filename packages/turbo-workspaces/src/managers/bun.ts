@@ -21,19 +21,19 @@ import {
   expandWorkspaces,
   getWorkspacePackageManager,
   parseWorkspacePackages,
+  isCompatibleWithBunWorkspaces,
   removeLockFile,
-  bunLockToYarnLock,
 } from "../utils";
 
 const PACKAGE_MANAGER_DETAILS: Manager = {
-  name: "yarn",
-  lock: "yarn.lock",
+  name: "bun",
+  lock: "bun.lockb",
 };
 
 /**
- * Check if a given project is using yarn workspaces
+ * Check if a given project is using bun workspaces
  * Verify by checking for the existence of:
- *  1. yarn.lock
+ *  1. bun.lockb
  *  2. packageManager field in package.json
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- must match the detect type signature
@@ -48,12 +48,12 @@ async function detect(args: DetectArgs): Promise<boolean> {
 }
 
 /**
-  Read workspace data from yarn workspaces into generic format
+  Read workspace data from bun workspaces into generic format
 */
 async function read(args: ReadArgs): Promise<Project> {
-  const isYarn = await detect(args);
-  if (!isYarn) {
-    throw new ConvertError("Not a yarn project", {
+  const isBun = await detect(args);
+  if (!isBun) {
+    throw new ConvertError("Not a bun project", {
       type: "package_manager-unexpected",
     });
   }
@@ -82,17 +82,27 @@ async function read(args: ReadArgs): Promise<Project> {
 }
 
 /**
- * Create yarn workspaces from generic format
+ * Create bun workspaces from generic format
  *
- * Creating yarn workspaces involves:
- *  1. Adding the workspaces field in package.json
- *  2. Setting the packageManager field in package.json
- *  3. Updating all workspace package.json dependencies to ensure correct format
+ * Creating bun workspaces involves:
+ *  1. Validating that the project can be converted to bun workspace
+ *  2. Adding the workspaces field in package.json
+ *  3. Setting the packageManager field in package.json
+ *  4. Updating all workspace package.json dependencies to ensure correct format
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- must match the create type signature
 async function create(args: CreateArgs): Promise<void> {
   const { project, to, logger, options } = args;
   const hasWorkspaces = project.workspaceData.globs.length > 0;
+
+  if (!isCompatibleWithBunWorkspaces({ project })) {
+    throw new ConvertError(
+      "Unable to convert project to bun - workspace globs unsupported",
+      {
+        type: "bun-workspace_glob_error",
+      }
+    );
+  }
 
   logger.mainStep(
     getMainStep({
@@ -111,6 +121,7 @@ async function create(args: CreateArgs): Promise<void> {
       project.paths.packageJson
     )}`
   );
+  // TODO: This technically isn't valid as part of the spec (yet)
   packageJson.packageManager = `${to.name}@${to.version}`;
 
   if (hasWorkspaces) {
@@ -147,9 +158,9 @@ async function create(args: CreateArgs): Promise<void> {
 }
 
 /**
- * Remove yarn workspace data
+ * Remove bun workspace data
  *
- * Removing yarn workspaces involves:
+ * Removing bun workspaces involves:
  *  1. Removing the workspaces field from package.json
  *  2. Removing the node_modules directory
  */
@@ -217,44 +228,35 @@ async function clean(args: CleanArgs): Promise<void> {
 }
 
 /**
- * Attempts to convert an existing, non yarn lockfile to a yarn lockfile
+ * Attempts to convert an existing, non bun lockfile to a bun lockfile
  *
- * If this is not possible, the non yarn lockfile is removed
+ * If this is not possible, the non bun lockfile is removed
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- must match the convertLock type signature
 async function convertLock(args: ConvertArgs): Promise<void> {
-  const { project, options, logger } = args;
+  const { project, options } = args;
 
-  const logLockConversionStep = (): void => {
-    logger.subStep(
-      `converting ${path.relative(
-        project.paths.root,
-        project.paths.lockfile
-      )} to ${PACKAGE_MANAGER_DETAILS.lock}`
-    );
-  };
-
-  // handle moving lockfile from `packageManager` to yarn
+  // handle moving lockfile from `packageManager` to npm
   switch (project.packageManager) {
     case "pnpm":
-      // can't convert from pnpm to yarn - just remove the lock
+      // can't convert from pnpm to bun - just remove the lock
       removeLockFile({ project, options });
       break;
     case "bun":
-      // convert from bun lockfile to yarn
-      logLockConversionStep();
-      await bunLockToYarnLock({ project, options });
+      // we're already using bun, so we don't need to convert
       break;
     case "npm":
-      // can't convert from npm to yarn - just remove the lock
+      // can't convert from npm to bun - just remove the lock
       removeLockFile({ project, options });
       break;
     case "yarn":
-      // we're already using yarn, so we don't need to convert
+      // can't convert from yarn to bun - just remove the lock
+      removeLockFile({ project, options });
       break;
   }
 }
 
-export const yarn: ManagerHandler = {
+export const bun: ManagerHandler = {
   detect,
   read,
   create,

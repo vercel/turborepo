@@ -67,7 +67,7 @@ export async function convertProject({
 
   logger.mainStep("Installing dependencies");
   if (!options?.skipInstall) {
-    await MANAGERS[to.name].convertLock({ project, logger, options });
+    await MANAGERS[to.name].convertLock({ project, to, logger, options });
     await install({ project, to, logger, options });
   } else {
     logger.subStep(chalk.yellow("Skipping install"));

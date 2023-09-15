@@ -1,14 +1,16 @@
 import path from "node:path";
-import { readJsonSync, existsSync, readFileSync } from "fs-extra";
+import execa from "execa";
+import {
+  readJsonSync,
+  existsSync,
+  readFileSync,
+  rmSync,
+  writeFile,
+} from "fs-extra";
 import { sync as globSync } from "fast-glob";
 import yaml from "js-yaml";
-import type { PackageJson } from "@turbo/utils";
-import type {
-  PackageManager,
-  Project,
-  Workspace,
-  WorkspaceInfo,
-} from "./types";
+import type { PackageJson, PackageManager } from "@turbo/utils";
+import type { Project, Workspace, WorkspaceInfo, Options } from "./types";
 import { ConvertError } from "./errors";
 
 // adapted from https://github.com/nodejs/corepack/blob/cae770694e62f15fed33dd8023649d77d96023c1/sources/specUtils.ts#L14
@@ -163,7 +165,7 @@ function expandWorkspaces({
   }
   return workspaceGlobs
     .flatMap((workspaceGlob) => {
-      const workspacePackageJsonGlob = `${workspaceGlob}/package.json`;
+      const workspacePackageJsonGlob = [`${workspaceGlob}/package.json`];
       return globSync(workspacePackageJsonGlob, {
         onlyFiles: true,
         absolute: true,
@@ -206,6 +208,81 @@ function getMainStep({
   } ${action === "remove" ? "from" : "to"} ${project.name}`;
 }
 
+/**
+ * At the time of writing, bun only support simple globs (can only end in /*) for workspaces. This means we can't convert all projects
+ * from other package manager workspaces to bun workspaces, we first have to validate that the globs are compatible.
+ *
+ * NOTE: It's possible a project could work with bun workspaces, but just not in the way its globs are currently defined. We will
+ * not change existing globs to make a project work with bun, we will only convert projects that are already compatible.
+ *
+ * This function matches the behavior of bun's glob validation: https://github.com/oven-sh/bun/blob/92e95c86dd100f167fb4cf8da1db202b5211d2c1/src/install/lockfile.zig#L2889
+ */
+function isCompatibleWithBunWorkspaces({
+  project,
+}: {
+  project: Project;
+}): boolean {
+  const validator = (glob: string) => {
+    if (glob.includes("*")) {
+      // no multi level globs
+      if (glob.includes("**")) {
+        return false;
+      }
+
+      // no * in the middle of a path
+      const withoutLastPathSegment = glob.split("/").slice(0, -1).join("/");
+      if (withoutLastPathSegment.includes("*")) {
+        return false;
+      }
+    }
+    // no fancy glob patterns
+    if (["!", "[", "]", "{", "}"].some((char) => glob.includes(char))) {
+      return false;
+    }
+
+    return true;
+  };
+
+  return project.workspaceData.globs.every(validator);
+}
+
+function removeLockFile({
+  project,
+  options,
+}: {
+  project: Project;
+  options?: Options;
+}) {
+  if (!options?.dry) {
+    // remove the lockfile
+    rmSync(project.paths.lockfile, { force: true });
+  }
+}
+
+async function bunLockToYarnLock({
+  project,
+  options,
+}: {
+  project: Project;
+  options?: Options;
+}) {
+  if (!options?.dry && existsSync(project.paths.lockfile)) {
+    try {
+      const { stdout } = await execa("bun", ["bun.lockb"], {
+        stdin: "ignore",
+        cwd: project.paths.root,
+      });
+      // write the yarn lockfile
+      await writeFile(path.join(project.paths.root, "yarn.lock"), stdout);
+    } catch (err) {
+      // do nothing
+    } finally {
+      // remove the old lockfile
+      rmSync(project.paths.lockfile, { force: true });
+    }
+  }
+}
+
 export {
   getPackageJson,
   getWorkspacePackageManager,
@@ -216,4 +293,7 @@ export {
   getPnpmWorkspaces,
   directoryInfo,
   getMainStep,
+  isCompatibleWithBunWorkspaces,
+  removeLockFile,
+  bunLockToYarnLock,
 };

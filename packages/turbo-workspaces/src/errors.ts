@@ -7,6 +7,7 @@ export type ConvertErrorType =
   | "package_manager-could_not_be_found"
   // package manager specific
   | "pnpm-workspace_parse_error"
+  | "bun-workspace_glob_error"
   // package.json
   | "package_json-parse_error"
   | "package_json-missing"
