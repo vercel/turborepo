@@ -11,12 +11,13 @@ use tracing_appender::{
     rolling::RollingFileAppender,
 };
 use tracing_subscriber::{
-    filter::Filtered,
+    filter::{self, Filtered},
     fmt::{
         self,
         format::{DefaultFields, Writer},
         FmtContext, FormatEvent, FormatFields,
     },
+    layer,
     prelude::*,
     registry::LookupSpan,
     reload::{self, Error, Handle},
@@ -30,11 +31,15 @@ type StdOutLog = Filtered<
     Registry,
 >;
 
-type DaemonLog = tracing_subscriber::fmt::Layer<
-    Layered,
-    DefaultFields,
-    tracing_subscriber::fmt::format::Format,
-    NonBlocking,
+type DaemonLogLayer = fmt::Layer<Layered, DefaultFields, fmt::format::Format, NonBlocking>;
+
+type FormatterLayer = fmt::Layer<Registry, DefaultFields, TurboFormatter>;
+type LayeredOnFormatter = layer::Layered<Filtered<FormatterLayer, EnvFilter, Registry>, Registry>;
+
+type DaemonLog = Filtered<
+    fmt::Layer<LayeredOnFormatter, DefaultFields, fmt::format::Format, NonBlocking>,
+    filter::targets::Targets,
+    LayeredOnFormatter,
 >;
 
 type Layered = tracing_subscriber::layer::Layered<StdOutLog, Registry>;
@@ -122,11 +127,18 @@ impl TurboSubscriber {
         let (file_writer, guard) = tracing_appender::non_blocking(appender);
         trace!("created non-blocking file writer");
 
-        let layer = tracing_subscriber::fmt::layer()
+        let filter = tracing_subscriber::filter::targets::Targets::new()
+            .with_default(Level::INFO)
+            .with_target("turborepo", Level::DEBUG);
+
+        let layer: DaemonLogLayer = tracing_subscriber::fmt::layer()
             .with_writer(file_writer)
             .with_ansi(false);
+        let layer: DaemonLog = layer.with_filter(filter);
 
-        self.update.reload(Some(layer))?;
+        self.update.modify(|l| {
+            l.replace(layer);
+        })?;
         self.guard.lock().expect("not poisoned").replace(guard);
 
         Ok(())

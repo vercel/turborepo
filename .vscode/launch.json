@@ -137,7 +137,7 @@
       "request": "launch",
       "preLaunchTask": "prepare turbo",
       "program": "${workspaceRoot}/target/debug/turbo",
-      "args": ["daemon"],
+      "args": ["--skip-infer", "daemon"],
       "cwd": "${workspaceRoot}"
     }
   ]
