@@ -219,9 +219,34 @@ mod test {
 
     use super::{ChangeDetectError, SCMChangeDetector};
 
+    #[cfg(unix)]
     #[test_case("/a/b/c", &["package.lock"], "/a/b/c/package.lock", Ok(true) ; "simple")]
     #[test_case("/a/b/c", &["a", "b", "c"], "/a/b/c/package.lock", Ok(false) ; "lockfile unchanged")]
     #[test_case("/a/b/c", &["package.lock"], "/a/b/outside-repo/package.json", Err(ChangeDetectError::LockfileNotInRepo) ; "different file")]
+    fn test_lockfile_changed(
+        turbo_root: &str,
+        changed_files: &[&str],
+        lockfile_path: &str,
+        expected: Result<bool, ChangeDetectError>,
+    ) {
+        let turbo_root = turbopath::AbsoluteSystemPathBuf::new(turbo_root).unwrap();
+        let lockfile_path = turbopath::AbsoluteSystemPathBuf::new(lockfile_path).unwrap();
+        let changed_files = changed_files
+            .iter()
+            .map(|s| turbopath::AnchoredSystemPathBuf::from_raw(s).unwrap())
+            .collect();
+        let changes =
+            SCMChangeDetector::lockfile_changed(&turbo_root, &changed_files, &lockfile_path);
+
+        // we don't want to implement PartialEq on the error type,
+        // so simply compare the debug representations
+        assert_eq!(format!("{:?}", changes), format!("{:?}", expected));
+    }
+
+    #[cfg(windows)]
+    #[test_case("C:\\\\a\\b\\c", &["package.lock"], "C:\\\\a\\b\\c\\package.lock", Ok(true) ; "simple")]
+    #[test_case("C:\\\\a\\b\\c", &["a", "b", "c"],  "C:\\\\a\\b\\c\\package.lock", Ok(false) ; "lockfile unchanged")]
+    #[test_case("C:\\\\a\\b\\c", &["package.lock"], "C:\\\\a\\b\\outside-repo\\package.json", Err(ChangeDetectError::LockfileNotInRepo) ; "different file")]
     fn test_lockfile_changed(
         turbo_root: &str,
         changed_files: &[&str],
