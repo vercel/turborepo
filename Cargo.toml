@@ -226,7 +226,8 @@ sourcemap = "6.0.2"
 syn = "1.0.107"
 tempfile = "3.3.0"
 test-case = "3.0.0"
-thiserror = "1.0.38"
+# pinned due to 1.0.45 requiring toolchain update
+thiserror = "<1.0.45"
 tiny-gradient = "0.1.0"
 tokio = "1.25.0"
 tokio-util = { version = "0.7.7", features = ["io"] }
