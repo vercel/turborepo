@@ -23,7 +23,6 @@ export { convertCase } from "./convertCase";
 export * as logger from "./logger";
 
 // types
-export type { PackageManagerAvailable } from "./managers";
 export type { RepoInfo } from "./examples";
 export type {
   TurboConfig,

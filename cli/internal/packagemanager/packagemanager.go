@@ -51,6 +51,15 @@ type PackageManager struct {
 	// Detect if Turbo knows how to produce a pruned workspace for the project
 	canPrune func(cwd turbopath.AbsoluteSystemPath) (bool, error)
 
+	// Gets lockfile name.
+	GetLockfileName func(projectDirectory turbopath.AbsoluteSystemPath) string
+
+	// Gets lockfile path.
+	GetLockfilePath func(projectDirectory turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath
+
+	// Read from disk a lockfile for a package manager.
+	GetLockfileContents func(projectDirectory turbopath.AbsoluteSystemPath) ([]byte, error)
+
 	// Read a lockfile for a given package manager
 	UnmarshalLockfile func(rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error)
 
@@ -64,6 +73,7 @@ var packageManagers = []PackageManager{
 	nodejsNpm,
 	nodejsPnpm,
 	nodejsPnpm6,
+	nodejsBun,
 }
 
 // GetPackageManager reads the package manager name sent by the Rust side
@@ -71,6 +81,8 @@ func GetPackageManager(name string) (packageManager *PackageManager, err error) 
 	switch name {
 	case "yarn":
 		return &nodejsYarn, nil
+	case "bun":
+		return &nodejsBun, nil
 	case "berry":
 		return &nodejsBerry, nil
 	case "npm":
@@ -119,13 +131,13 @@ func (pm PackageManager) ReadLockfile(projectDirectory turbopath.AbsoluteSystemP
 	if pm.UnmarshalLockfile == nil {
 		return nil, nil
 	}
-	contents, err := projectDirectory.UntypedJoin(pm.Lockfile).ReadFile()
+	contents, err := pm.GetLockfileContents(projectDirectory)
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", pm.Lockfile, err)
+		return nil, fmt.Errorf("reading %s: %w", pm.GetLockfilePath(projectDirectory).ToString(), err)
 	}
 	lf, err := pm.UnmarshalLockfile(rootPackageJSON, contents)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error in %v", pm.Lockfile)
+		return nil, errors.Wrapf(err, "error in %v", pm.GetLockfilePath(projectDirectory).ToString())
 	}
 	return lf, nil
 }

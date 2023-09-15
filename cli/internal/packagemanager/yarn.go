@@ -17,12 +17,14 @@ func (e *NoWorkspacesFoundError) Error() string {
 	return "package.json: no workspaces found. Turborepo requires Yarn workspaces to be defined in the root package.json"
 }
 
+const yarnLockfile = "yarn.lock"
+
 var nodejsYarn = PackageManager{
 	Name:       "nodejs-yarn",
 	Slug:       "yarn",
 	Command:    "yarn",
 	Specfile:   "package.json",
-	Lockfile:   "yarn.lock",
+	Lockfile:   yarnLockfile,
 	PackageDir: "node_modules",
 	ArgSeparator: func(userArgs []string) []string {
 		// Yarn warns and swallows a "--" token. If the user is passing "--", we need
@@ -77,6 +79,18 @@ var nodejsYarn = PackageManager{
 
 	canPrune: func(cwd turbopath.AbsoluteSystemPath) (bool, error) {
 		return true, nil
+	},
+
+	GetLockfileName: func(_ turbopath.AbsoluteSystemPath) string {
+		return yarnLockfile
+	},
+
+	GetLockfilePath: func(projectDirectory turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+		return projectDirectory.UntypedJoin(yarnLockfile)
+	},
+
+	GetLockfileContents: func(projectDirectory turbopath.AbsoluteSystemPath) ([]byte, error) {
+		return projectDirectory.UntypedJoin(yarnLockfile).ReadFile()
 	},
 
 	UnmarshalLockfile: func(_rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {

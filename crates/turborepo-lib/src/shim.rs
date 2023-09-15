@@ -299,6 +299,7 @@ pub struct LocalTurboState {
 
 impl LocalTurboState {
     // Hoisted strategy:
+    // - `bun install`
     // - `npm install`
     // - `yarn`
     // - `yarn install --flat`

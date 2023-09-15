@@ -530,7 +530,7 @@ func TestResolvePackages(t *testing.T) {
 			}, root, scm, &context.Context{
 				WorkspaceInfos: workspaceInfos,
 				WorkspaceNames: packageNames,
-				PackageManager: &packagemanager.PackageManager{Lockfile: tc.lockfile, UnmarshalLockfile: readLockfile},
+				PackageManager: &packagemanager.PackageManager{Lockfile: tc.lockfile, UnmarshalLockfile: readLockfile, GetLockfileName: func(_ turbopath.AbsoluteSystemPath) string { return tc.lockfile }},
 				WorkspaceGraph: graph,
 				RootNode:       "root",
 				Lockfile:       tc.currLockfile,

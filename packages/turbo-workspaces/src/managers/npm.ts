@@ -11,6 +11,7 @@ import type {
   Project,
   ConvertArgs,
   ManagerHandler,
+  Manager,
 } from "../types";
 import {
   getMainStep,
@@ -20,7 +21,13 @@ import {
   getWorkspacePackageManager,
   expandPaths,
   parseWorkspacePackages,
+  removeLockFile,
 } from "../utils";
+
+const PACKAGE_MANAGER_DETAILS: Manager = {
+  name: "npm",
+  lock: "package-lock.json",
+};
 
 /**
  * Check if a given project is using npm workspaces
@@ -30,11 +37,13 @@ import {
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- must match the detect type signature
 async function detect(args: DetectArgs): Promise<boolean> {
-  const lockFile = path.join(args.workspaceRoot, "package-lock.json");
+  const lockFile = path.join(args.workspaceRoot, PACKAGE_MANAGER_DETAILS.lock);
   const packageManager = getWorkspacePackageManager({
     workspaceRoot: args.workspaceRoot,
   });
-  return existsSync(lockFile) || packageManager === "npm";
+  return (
+    existsSync(lockFile) || packageManager === PACKAGE_MANAGER_DETAILS.name
+  );
 }
 
 /**
@@ -56,10 +65,10 @@ async function read(args: ReadArgs): Promise<Project> {
   return {
     name,
     description,
-    packageManager: "npm",
+    packageManager: PACKAGE_MANAGER_DETAILS.name,
     paths: expandPaths({
       root: args.workspaceRoot,
-      lockFile: "package-lock.json",
+      lockFile: PACKAGE_MANAGER_DETAILS.lock,
     }),
     workspaceData: {
       globs: workspaceGlobs,
@@ -85,7 +94,11 @@ async function create(args: CreateArgs): Promise<void> {
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    getMainStep({ packageManager: "npm", action: "create", project })
+    getMainStep({
+      packageManager: PACKAGE_MANAGER_DETAILS.name,
+      action: "create",
+      project,
+    })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
   logger.rootHeader();
@@ -144,7 +157,11 @@ async function remove(args: RemoveArgs): Promise<void> {
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    getMainStep({ packageManager: "npm", action: "remove", project })
+    getMainStep({
+      packageManager: PACKAGE_MANAGER_DETAILS.name,
+      action: "remove",
+      project,
+    })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
 
@@ -207,11 +224,23 @@ async function clean(args: CleanArgs): Promise<void> {
 async function convertLock(args: ConvertArgs): Promise<void> {
   const { project, options } = args;
 
-  if (project.packageManager !== "npm") {
-    // remove the lockfile
-    if (!options?.dry) {
-      rmSync(project.paths.lockfile, { force: true });
-    }
+  // handle moving lockfile from `packageManager` to npm
+  switch (project.packageManager) {
+    case "pnpm":
+      // can't convert from pnpm to npm - just remove the lock
+      removeLockFile({ project, options });
+      break;
+    case "bun":
+      // can't convert from bun to npm - just remove the lock
+      removeLockFile({ project, options });
+      break;
+    case "npm":
+      // we're already using npm, so we don't need to convert
+      break;
+    case "yarn":
+      // can't convert from yarn to npm - just remove the lock
+      removeLockFile({ project, options });
+      break;
   }
 }
 

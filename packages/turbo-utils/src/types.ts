@@ -1,5 +1,7 @@
 import type { Schema } from "@turbo/types";
 
+export type PackageManager = "npm" | "yarn" | "pnpm" | "bun";
+
 export type DependencyList = Record<string, string>;
 
 export interface DependencyGroups {

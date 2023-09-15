@@ -12,6 +12,7 @@ import type {
   CleanArgs,
   Project,
   ManagerHandler,
+  Manager,
 } from "../types";
 import {
   getMainStep,
@@ -21,7 +22,14 @@ import {
   getPnpmWorkspaces,
   getPackageJson,
   getWorkspacePackageManager,
+  removeLockFile,
+  bunLockToYarnLock,
 } from "../utils";
+
+const PACKAGE_MANAGER_DETAILS: Manager = {
+  name: "pnpm",
+  lock: "pnpm-lock.yaml",
+};
 
 /**
  * Check if a given project is using pnpm workspaces
@@ -31,7 +39,7 @@ import {
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- must match the detect type signature
 async function detect(args: DetectArgs): Promise<boolean> {
-  const lockFile = path.join(args.workspaceRoot, "pnpm-lock.yaml");
+  const lockFile = path.join(args.workspaceRoot, PACKAGE_MANAGER_DETAILS.lock);
   const workspaceFile = path.join(args.workspaceRoot, "pnpm-workspace.yaml");
   const packageManager = getWorkspacePackageManager({
     workspaceRoot: args.workspaceRoot,
@@ -39,7 +47,7 @@ async function detect(args: DetectArgs): Promise<boolean> {
   return (
     existsSync(lockFile) ||
     existsSync(workspaceFile) ||
-    packageManager === "pnpm"
+    packageManager === PACKAGE_MANAGER_DETAILS.name
   );
 }
 
@@ -58,10 +66,10 @@ async function read(args: ReadArgs): Promise<Project> {
   return {
     name,
     description,
-    packageManager: "pnpm",
+    packageManager: PACKAGE_MANAGER_DETAILS.name,
     paths: expandPaths({
       root: args.workspaceRoot,
-      lockFile: "pnpm-lock.yaml",
+      lockFile: PACKAGE_MANAGER_DETAILS.lock,
       workspaceConfig: "pnpm-workspace.yaml",
     }),
     workspaceData: {
@@ -88,7 +96,11 @@ async function create(args: CreateArgs): Promise<void> {
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    getMainStep({ action: "create", packageManager: "pnpm", project })
+    getMainStep({
+      action: "create",
+      packageManager: PACKAGE_MANAGER_DETAILS.name,
+      project,
+    })
   );
 
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
@@ -144,7 +156,11 @@ async function remove(args: RemoveArgs): Promise<void> {
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    getMainStep({ action: "remove", packageManager: "pnpm", project })
+    getMainStep({
+      action: "remove",
+      packageManager: PACKAGE_MANAGER_DETAILS.name,
+      project,
+    })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
 
@@ -205,25 +221,55 @@ async function clean(args: CleanArgs): Promise<void> {
  * If this is not possible, the non pnpm lockfile is removed
  */
 async function convertLock(args: ConvertArgs): Promise<void> {
-  const { project, logger, options } = args;
+  const { project, options, logger } = args;
 
-  if (project.packageManager !== "pnpm") {
+  const logLockConversionStep = (): void => {
     logger.subStep(
       `converting ${path.relative(
         project.paths.root,
         project.paths.lockfile
-      )} to pnpm-lock.yaml`
+      )} to ${PACKAGE_MANAGER_DETAILS.lock}`
     );
+  };
+
+  const importLockfile = async (): Promise<void> => {
     if (!options?.dry && existsSync(project.paths.lockfile)) {
       try {
-        await execa("pnpm", ["import"], {
+        await execa(PACKAGE_MANAGER_DETAILS.name, ["import"], {
           stdio: "ignore",
           cwd: project.paths.root,
         });
+      } catch (err) {
+        // do nothing
       } finally {
-        rmSync(project.paths.lockfile, { force: true });
+        removeLockFile({ project, options });
       }
     }
+  };
+
+  // handle moving lockfile from `packageManager` to npm
+  switch (project.packageManager) {
+    case "pnpm":
+      // we're already using pnpm, so we don't need to convert
+      break;
+    case "bun":
+      logLockConversionStep();
+      // convert bun -> yarn -> pnpm
+      await bunLockToYarnLock({ project, options });
+      await importLockfile();
+      // remove the intermediate yarn lockfile
+      rmSync(path.join(project.paths.root, "yarn.lock"), { force: true });
+      break;
+    case "npm":
+      // convert npm -> pnpm
+      logLockConversionStep();
+      await importLockfile();
+      break;
+    case "yarn":
+      // convert yarn -> pnpm
+      logLockConversionStep();
+      await importLockfile();
+      break;
   }
 }
 

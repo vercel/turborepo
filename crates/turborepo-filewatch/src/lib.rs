@@ -36,10 +36,10 @@ use {
     walkdir::WalkDir,
 };
 
-mod cookie_jar;
+pub mod cookie_jar;
 #[cfg(target_os = "macos")]
 mod fsevent;
-mod globwatcher;
+pub mod globwatcher;
 
 #[cfg(not(target_os = "macos"))]
 type Backend = RecommendedWatcher;
@@ -88,15 +88,15 @@ pub struct FileSystemWatcher {
 }
 
 impl FileSystemWatcher {
-    pub fn new(root: &AbsoluteSystemPath) -> Result<Self, WatchError> {
+    pub async fn new(root: &AbsoluteSystemPath) -> Result<Self, WatchError> {
         let (sender, _) = broadcast::channel(1024);
         let (send_file_events, mut recv_file_events) = mpsc::channel(1024);
         let watch_root = root.to_owned();
         let broadcast_sender = sender.clone();
-        let watcher = run_watcher(&watch_root, send_file_events).unwrap();
+        let watcher = run_watcher(&watch_root, send_file_events)?;
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
         // Ensure we are ready to receive new events, not events for existing state
-        futures::executor::block_on(wait_for_cookie(root, &mut recv_file_events))?;
+        wait_for_cookie(root, &mut recv_file_events).await?;
         tokio::task::spawn(watch_events(
             watcher,
             watch_root,
@@ -436,7 +436,7 @@ mod test {
         let sibling_path = parent_path.join_component("sibling");
         sibling_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
         let mut recv = watcher.subscribe();
 
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
@@ -494,7 +494,7 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
         let mut recv = watcher.subscribe();
 
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
@@ -536,7 +536,7 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -565,7 +565,7 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -597,7 +597,7 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -628,7 +628,7 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -669,7 +669,7 @@ mod test {
         let symlink_path = repo_root.join_component("symlink");
         symlink_path.symlink_to_dir(child_path.as_str()).unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -708,7 +708,7 @@ mod test {
         let symlink_path = repo_root.join_component("symlink");
         symlink_path.symlink_to_dir(child_path.as_str()).unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -752,7 +752,7 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -790,7 +790,7 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -811,7 +811,7 @@ mod test {
         let mut recv = {
             // create and immediately drop the watcher, which should trigger the exit
             // channel
-            let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+            let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
             watcher.subscribe()
         };
 

@@ -3,7 +3,7 @@ import childProcess from "node:child_process";
 import chalk from "chalk";
 import { setupTestFixtures, spyConsole, spyExit } from "@turbo/test-utils";
 import { logger } from "@turbo/utils";
-import type { PackageManager } from "@turbo/workspaces";
+import type { PackageManager } from "@turbo/utils";
 // imports for mocks
 import * as turboWorkspaces from "@turbo/workspaces";
 import * as turboUtils from "@turbo/utils";
@@ -29,6 +29,7 @@ describe("create-turbo", () => {
     { packageManager: "yarn" },
     { packageManager: "npm" },
     { packageManager: "pnpm" },
+    { packageManager: "bun" },
   ])(
     "outputs expected console messages when using $packageManager",
     async ({ packageManager }) => {
@@ -42,6 +43,7 @@ describe("create-turbo", () => {
           npm: "8.19.2",
           yarn: "1.22.10",
           pnpm: "7.22.2",
+          bun: "1.0.1",
         });
 
       const mockCreateProject = jest
@@ -98,7 +100,7 @@ describe("create-turbo", () => {
     }
   );
 
-  test.only("throws correct error message when a download error is encountered", async () => {
+  test("throws correct error message when a download error is encountered", async () => {
     const { root } = useFixture({ fixture: `create-turbo` });
     const packageManager = "pnpm";
     const mockAvailablePackageManagers = jest
@@ -107,6 +109,7 @@ describe("create-turbo", () => {
         npm: "8.19.2",
         yarn: "1.22.10",
         pnpm: "7.22.2",
+        bun: "1.0.1",
       });
 
     const mockCreateProject = jest
