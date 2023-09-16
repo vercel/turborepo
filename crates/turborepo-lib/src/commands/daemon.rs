@@ -5,7 +5,7 @@ use futures::FutureExt;
 use pidlock::PidlockError::AlreadyOwned;
 use time::{format_description, OffsetDateTime};
 use tokio::signal::ctrl_c;
-use tracing::{error, trace, warn};
+use tracing::{trace, warn};
 use turbopath::AbsoluteSystemPathBuf;
 
 use super::CommandBase;
@@ -177,7 +177,14 @@ pub async fn daemon_server(
     // We already store logs in .turbo and recommend it be gitignore'd.
     // Watchman uses .git, but we can't guarantee that git is present _or_
     // that the turbo root is the same as the git root.
-    let cookie_dir = base.repo_root.join_component(".turbo");
+    let cookie_dir = base.repo_root.join_components(&[".turbo", "cookies"]);
+    // We need to ensure that the cookie directory is cleared out first so
+    // that we can start over with cookies.
+    if cookie_dir.exists() {
+        cookie_dir
+            .remove_dir_all()
+            .map_err(|e| DaemonError::CookieDir(e, cookie_dir.clone()))?;
+    }
     cookie_dir
         .create_dir_all()
         .map_err(|e| DaemonError::CookieDir(e, cookie_dir.clone()))?;

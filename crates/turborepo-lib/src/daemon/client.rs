@@ -164,7 +164,7 @@ pub enum DaemonError {
     #[error("unable to complete daemon clean")]
     CleanFailed,
 
-    #[error("failed to create cookie dir {1}: {0}")]
+    #[error("failed to setup cookie dir {1}: {0}")]
     CookieDir(io::Error, AbsoluteSystemPathBuf),
 }
 

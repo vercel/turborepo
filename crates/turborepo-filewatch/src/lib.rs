@@ -20,7 +20,7 @@ use notify::{Config, RecommendedWatcher};
 use notify::{Event, EventHandler, RecursiveMode, Watcher};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
-use tracing::{debug, trace, warn};
+use tracing::{debug, warn};
 // windows -> no recursive watch, watch ancestors
 // linux -> recursive watch, watch ancestors
 #[cfg(feature = "watch_ancestors")]
@@ -33,6 +33,7 @@ use {
         ErrorKind,
     },
     std::io,
+    tracing::trace,
     walkdir::WalkDir,
 };
 
