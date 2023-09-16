@@ -7,12 +7,23 @@ import type { Project, Workspace } from "@turbo/workspaces";
 import {
   validateDirectory,
   logger,
+  type PackageManager,
   type DependencyGroups,
   type PackageJson,
 } from "@turbo/utils";
 import { getWorkspaceStructure } from "../../utils/getWorkspaceStructure";
 import type { WorkspaceType } from "../../generators/types";
 import { getWorkspaceList } from "../../utils/getWorkspaceList";
+
+const packageManagerWorkspaceDependencyValues: Record<
+  PackageManager,
+  "workspace:*" | "*"
+> = {
+  bun: "workspace:*",
+  pnpm: "workspace:*",
+  npm: "*",
+  yarn: "*",
+};
 
 export async function name({
   override,
@@ -265,7 +276,7 @@ export async function dependencies({
       selected.forEach((dep) => {
         if (!existingDependencyKeys.has(dep)) {
           newDependencyGroup[dep] =
-            project.packageManager === "pnpm" ? "workspace:*" : "*";
+            packageManagerWorkspaceDependencyValues[project.packageManager];
         }
       });
 
@@ -274,7 +285,8 @@ export async function dependencies({
       selectedDependencies[group] = selected.reduce(
         (acc, dep) => ({
           ...acc,
-          [dep]: project.packageManager === "pnpm" ? "workspace:*" : "*",
+          [dep]:
+            packageManagerWorkspaceDependencyValues[project.packageManager],
         }),
         {}
       );
