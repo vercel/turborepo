@@ -29,7 +29,7 @@ use tokio::{
 };
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
-use tracing::{error, trace, warn};
+use tracing::{error, info, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
     cookie_jar::CookieJar,
@@ -144,6 +144,7 @@ where
             error!("filewatching failed to start: {}", e);
             let _ = fw_shutdown.send(()).await;
         }
+        info!("filewatching started");
     });
     // exit_root_watch delivers a signal to the root watch loop to exit.
     // In the event that the server shuts down via some other mechanism, this
@@ -194,7 +195,7 @@ where
     // Wait for the server to exit.
     // This can be triggered by timeout, root watcher, or an RPC
     let _ = server_fut.await;
-    trace!("gRPC server exited");
+    info!("gRPC server exited");
     // Ensure our timer will exit
     running.store(false, Ordering::SeqCst);
     // We expect to have a signal from the grpc server on what triggered the exit
@@ -224,6 +225,7 @@ struct TurboGrpcService {
 
 impl TurboGrpcService {
     async fn trigger_shutdown(&self) {
+        info!("triggering shutdown");
         let _ = self.shutdown.send(()).await;
     }
 

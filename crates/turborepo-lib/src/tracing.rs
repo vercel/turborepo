@@ -87,7 +87,7 @@ impl TurboSubscriber {
         let (logrotate, update) = reload::Layer::new(Option::<DaemonLog>::None);
         let daemon_filter = tracing_subscriber::filter::targets::Targets::new()
             .with_default(Level::INFO)
-            .with_target("turborepo", Level::DEBUG);
+            .with_target("turborepo", Level::TRACE);
         let logrotate = logrotate.with_filter(daemon_filter);
 
         let registry = Registry::default().with(stdout).with(logrotate);

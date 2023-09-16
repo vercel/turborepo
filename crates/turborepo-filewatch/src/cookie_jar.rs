@@ -12,7 +12,7 @@ use tokio::{
     sync::{broadcast, oneshot},
     time::error::Elapsed,
 };
-use tracing::debug;
+use tracing::{debug, info};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
 
 use crate::NotifyError;
@@ -128,7 +128,9 @@ async fn watch_cookies(
                                     .as_path()
                                     .try_into()
                                     .expect("Non-absolute path from filewatching");
+                                info!("{} vs {} cookie", root, abs_path);
                                 if root.relation_to_path(abs_path) == PathRelation::Parent {
+                                    debug!("saw cookie: {}", abs_path);
                                     if let Some(responder) = watches.cookies.remove(&path) {
                                         if responder.send(Ok(())).is_err() {
                                             // Note that cookie waiters will time out if they don't get a
