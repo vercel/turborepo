@@ -32,7 +32,7 @@ use turbo_tasks::{
 };
 
 use crate::{
-    aggregation_tree::aggregation_info,
+    aggregation_tree::{aggregation_info, ensure_thresholds},
     cell::Cell,
     gc::{to_exp_u8, GcPriority, GcStats, GcTaskState},
     output::{Output, OutputContent},
@@ -402,7 +402,7 @@ enum TaskStateType {
 use TaskStateType::*;
 
 use self::{
-    aggregation::{RootInfoType, RootType, TaskAggregationTreeLeaf},
+    aggregation::{RootInfoType, RootType, TaskAggregationTreeLeaf, TaskGuard},
     meta_state::{
         FullTaskWriteGuard, TaskMetaState, TaskMetaStateReadGuard, TaskMetaStateWriteGuard,
     },
@@ -1299,14 +1299,22 @@ impl Task {
     ) {
         let mut context = TaskAggregationContext::new(turbo_tasks, backend);
         {
-            let mut job = None;
+            let job1;
+            let mut job2 = None;
             {
-                let mut state = self.full_state_mut();
+                let mut guard = TaskGuard {
+                    id: self.id,
+                    guard: self.state_mut(),
+                };
+                job1 = ensure_thresholds(&context, &mut guard);
+                let TaskGuard { guard, .. } = guard;
+                let mut state = TaskMetaStateWriteGuard::full_from(guard.into_inner(), self);
                 if state.children.insert(child_id) {
-                    job = Some(state.aggregation_leaf.add_child_job(&context, &child_id));
+                    job2 = Some(state.aggregation_leaf.add_child_job(&context, &child_id));
                 }
             }
-            if let Some(job) = job {
+            (job1)();
+            if let Some(job) = job2 {
                 (job)();
             }
         }

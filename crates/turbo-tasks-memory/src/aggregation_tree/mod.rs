@@ -37,7 +37,10 @@ use std::{borrow::Cow, hash::Hash, ops::ControlFlow, sync::Arc};
 use nohash_hasher::IsEnabled;
 
 use self::{leaf::top_tree, top_tree::TopTree};
-pub use self::{leaf::AggregationTreeLeaf, top_tree::AggregationInfoGuard};
+pub use self::{
+    leaf::{ensure_thresholds, AggregationTreeLeaf},
+    top_tree::AggregationInfoGuard,
+};
 
 pub(self) const MAX_NESTING_LEVEL: u8 = 10;
 pub(self) const CHILDREN_INNER_THRESHOLD: usize = 10000;
