@@ -394,9 +394,9 @@ mod test {
         let task_hashable = TaskHashable {
             global_hash: "global_hash",
             task_dependency_hashes: vec!["task_dependency_hash".to_string()],
-            package_dir: turbopath::RelativeUnixPathBuf::new("package_dir").unwrap(),
+            package_dir: Some(turbopath::RelativeUnixPathBuf::new("package_dir").unwrap()),
             hash_of_files: "hash_of_files",
-            external_deps_hash: "external_deps_hash".to_string(),
+            external_deps_hash: Some("external_deps_hash".to_string()),
             task: "task",
             outputs: TaskOutputs {
                 inclusions: vec!["inclusions".to_string()],
@@ -423,7 +423,7 @@ mod test {
             )]
             .into_iter()
             .collect(),
-            root_external_dependencies_hash: "0000000000000000".to_string(),
+            root_external_dependencies_hash: Some("0000000000000000".to_string()),
             env: &["env".to_string()],
             resolved_env_vars: vec![],
             pass_through_env: &["pass_through_env".to_string()],

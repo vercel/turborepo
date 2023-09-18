@@ -584,7 +584,7 @@ mod tests {
     ; "global dot env (unsorted)")]
     #[test_case(r#"{ "globalPassThroughEnv": ["GITHUB_TOKEN", "AWS_SECRET_KEY"] }"#,
         TurboJson {
-            global_pass_through_env: vec!["AWS_SECRET_KEY".to_string(), "GITHUB_TOKEN".to_string()],
+            global_pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string(), "GITHUB_TOKEN".to_string()]),
             ..TurboJson::default()
         }
     )]
@@ -614,9 +614,9 @@ mod tests {
                 "//#build".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
-                    task_definition: TaskDefinitionHashable {
+                    task_definition: TaskDefinitionStable {
                         cache: false,
-                        ..TaskDefinitionHashable::default()
+                        ..TaskDefinitionStable::default()
                     },
                     ..BookkeepingTaskDefinition::default()
                 }
@@ -649,9 +649,9 @@ mod tests {
                 "//#build".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
-                    task_definition: TaskDefinitionHashable {
+                    task_definition: TaskDefinitionStable {
                         cache: true,
-                        ..TaskDefinitionHashable::default()
+                        ..TaskDefinitionStable::default()
                     },
                     ..BookkeepingTaskDefinition::default()
                 }
@@ -660,9 +660,9 @@ mod tests {
                 "//#test".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
-                    task_definition: TaskDefinitionHashable {
+                    task_definition: TaskDefinitionStable {
                         cache: false,
-                        ..TaskDefinitionHashable::default()
+                        ..TaskDefinitionStable::default()
                     },
                     ..BookkeepingTaskDefinition::default()
                 }
@@ -703,7 +703,7 @@ mod tests {
             defined_fields: ["Persistent".to_string()].into_iter().collect(),
             experimental_fields: HashSet::new(),
             experimental: TaskDefinitionExperiments::default(),
-            task_definition: TaskDefinitionHashable::default()
+            task_definition: TaskDefinitionStable::default()
         }
     )]
     #[test_case(
@@ -743,7 +743,7 @@ mod tests {
             ].into_iter().collect(),
             experimental_fields: HashSet::new(),
             experimental: TaskDefinitionExperiments {},
-            task_definition: TaskDefinitionHashable {
+            task_definition: TaskDefinitionStable {
                 dot_env: vec![RelativeUnixPathBuf::new("package/a/.env").unwrap()],
                 env: vec!["OS".to_string()],
                 outputs: TaskOutputs {
@@ -753,7 +753,7 @@ mod tests {
                 cache: false,
                 inputs: vec!["package/a/src/**".to_string()],
                 output_mode: OutputLogsMode::Full,
-                pass_through_env: vec!["AWS_SECRET_KEY".to_string()],
+                pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
                 task_dependencies: vec!["cli#build".into()],
                 topological_dependencies: vec![],
                 persistent: true,

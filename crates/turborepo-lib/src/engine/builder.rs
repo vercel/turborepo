@@ -880,9 +880,10 @@ mod test {
             WorkspaceName::Root,
             turbo_json(json!({
                 "pipeline": {
-                    "libA#build": { "dependsOn": ["app1#compile", "app1#build"] },
+                    "libA#build": { "dependsOn": ["app1#compile", "app1#test"] },
                     "build": { "dependsOn": ["^build"] },
-                    "compile": { "dependsOn": ["^build"] }
+                    "compile": {},
+                    "test": {}
                 }
             })),
         )]
@@ -901,9 +902,10 @@ mod test {
             .unwrap();
 
         let expected = deps! {
+            "app1#compile" => ["___ROOT___"],
+            "app1#test" => ["___ROOT___"],
             "app1#build" => ["libA#build"],
-            "app1#compile" => ["libA#build"],
-            "libA#build" => ["app1#build", "app1#compile"]
+            "libA#build" => ["app1#compile", "app1#test"]
         };
         assert_eq!(all_dependencies(&engine), expected);
     }
