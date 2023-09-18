@@ -1,4 +1,4 @@
-use std::{hash::Hash, sync::Arc, time::Instant};
+use std::{hash::Hash, sync::Arc};
 
 use nohash_hasher::IsEnabled;
 use ref_cast::RefCast;
@@ -377,7 +377,6 @@ pub fn ensure_thresholds<'a, C: AggregationContext>(
     }
     || {
         if let Some((result, reference, new_bottom_tree, _span)) = result {
-            let start = Instant::now();
             add_left_upper_to_item_step_2(context, &reference, &new_bottom_tree, result);
         }
     }
