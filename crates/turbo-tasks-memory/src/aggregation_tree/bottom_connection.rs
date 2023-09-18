@@ -14,6 +14,7 @@ struct BottomRefInfo {
     distance: u8,
 }
 
+#[derive(Default)]
 pub struct DistanceCountMap<T: IsEnabled> {
     map: AutoMap<T, BottomRefInfo, BuildNoHashHasher<T>>,
 }
@@ -80,6 +81,10 @@ impl<T: IsEnabled + Eq + Hash + Clone> DistanceCountMap<T> {
 
     pub fn into_counts(self) -> impl Iterator<Item = (T, isize)> {
         self.map.into_iter().map(|(item, info)| (item, info.count))
+    }
+
+    pub fn len(&self) -> usize {
+        self.map.len()
     }
 }
 

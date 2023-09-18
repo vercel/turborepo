@@ -402,6 +402,17 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
         }
     }
 
+    fn reference(&self) -> &Self::ItemRef {
+        &self.id
+    }
+
+    fn number_of_children(&self) -> usize {
+        match self.guard {
+            TaskMetaStateWriteGuard::Full(ref guard) => guard.children.len(),
+            TaskMetaStateWriteGuard::Partial(_) | TaskMetaStateWriteGuard::Unloaded(_) => 0,
+        }
+    }
+
     fn children(&self) -> Self::ChildrenIter<'_> {
         match self.guard {
             TaskMetaStateWriteGuard::Full(ref guard) => {

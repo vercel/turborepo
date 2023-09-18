@@ -5,13 +5,15 @@ use std::{
         atomic::{AtomicU32, Ordering},
         Arc,
     },
+    time::Instant,
 };
 
 use nohash_hasher::IsEnabled;
 use parking_lot::{Mutex, MutexGuard};
+use ref_cast::RefCast;
 
 use super::{aggregation_info, AggregationContext, AggregationItemLock, AggregationTreeLeaf};
-use crate::aggregation_tree::bottom_tree::print_graph;
+use crate::aggregation_tree::{bottom_tree::print_graph, leaf::ensure_thresholds};
 
 struct Node {
     inner: Mutex<NodeInner>,
@@ -51,7 +53,8 @@ struct NodeAggregationContext<'a> {
     add_value: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, RefCast)]
+#[repr(transparent)]
 struct NodeRef(Arc<Node>);
 
 impl Hash for NodeRef {
@@ -75,14 +78,31 @@ struct NodeGuard {
     node: Arc<Node>,
 }
 
+impl NodeGuard {
+    unsafe fn new<'a>(guard: MutexGuard<'a, NodeInner>, node: Arc<Node>) -> Self {
+        NodeGuard {
+            guard: unsafe { std::mem::transmute(guard) },
+            node,
+        }
+    }
+}
+
 impl AggregationItemLock for NodeGuard {
     type Info = Aggregated;
     type ItemRef = NodeRef;
     type ItemChange = Change;
     type ChildrenIter<'a> = impl Iterator<Item = Cow<'a, NodeRef>> + 'a;
 
+    fn reference(&self) -> &Self::ItemRef {
+        NodeRef::ref_cast(&self.node)
+    }
+
     fn leaf(&mut self) -> &mut AggregationTreeLeaf<Aggregated, NodeRef> {
         &mut self.guard.aggregation_leaf
+    }
+
+    fn number_of_children(&self) -> usize {
+        self.guard.children.len()
     }
 
     fn children(&self) -> Self::ChildrenIter<'_> {
@@ -123,11 +143,8 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
 
     fn item<'b>(&'b self, reference: &Self::ItemRef) -> Self::ItemLock<'b> {
         let r = reference.0.clone();
-        let guard = r.inner.lock();
-        NodeGuard {
-            guard: unsafe { std::mem::transmute(guard) },
-            node: r,
-        }
+        let guard = reference.0.inner.lock();
+        unsafe { NodeGuard::new(guard, r) }
     }
 
     fn apply_change(&self, info: &mut Aggregated, change: &Change) -> Option<Change> {
@@ -449,6 +466,106 @@ fn rectangle_adding_tree() {
     let root = NodeRef(nodes[0][0].clone());
 
     print(&context, &root);
+}
+
+#[test]
+fn many_children() {
+    let something_with_lifetime = 0;
+    let context = NodeAggregationContext {
+        additions: AtomicU32::new(0),
+        something_with_lifetime: &something_with_lifetime,
+        add_value: false,
+    };
+    let mut roots: Vec<Arc<Node>> = Vec::new();
+    let mut children: Vec<Arc<Node>> = Vec::new();
+    const CHILDREN: u32 = 5000;
+    const ROOTS: u32 = 100;
+    let inner_node = Arc::new(Node {
+        inner: Mutex::new(NodeInner {
+            children: Vec::new(),
+            aggregation_leaf: AggregationTreeLeaf::new(),
+            value: 0,
+        }),
+    });
+    let start = Instant::now();
+    for i in 0..ROOTS {
+        let node = Arc::new(Node {
+            inner: Mutex::new(NodeInner {
+                children: Vec::new(),
+                aggregation_leaf: AggregationTreeLeaf::new(),
+                value: 10000 + i,
+            }),
+        });
+        roots.push(node.clone());
+        aggregation_info(&context, &NodeRef(node.clone()))
+            .lock()
+            .active = true;
+        connect_child(&context, &node, &inner_node);
+    }
+    println!("Roots: {:?}", start.elapsed());
+    let start = Instant::now();
+    for i in 0..CHILDREN {
+        let node = Arc::new(Node {
+            inner: Mutex::new(NodeInner {
+                children: Vec::new(),
+                aggregation_leaf: AggregationTreeLeaf::new(),
+                value: 20000 + i,
+            }),
+        });
+        children.push(node.clone());
+        connect_child(&context, &inner_node, &node);
+    }
+    println!("Children: {:?}", start.elapsed());
+    for _ in 0..10 {
+        let start = Instant::now();
+        for i in 0..ROOTS {
+            let node = Arc::new(Node {
+                inner: Mutex::new(NodeInner {
+                    children: Vec::new(),
+                    aggregation_leaf: AggregationTreeLeaf::new(),
+                    value: 30000 + i,
+                }),
+            });
+            roots.push(node.clone());
+            aggregation_info(&context, &NodeRef(node.clone()))
+                .lock()
+                .active = true;
+            connect_child(&context, &node, &inner_node);
+        }
+        println!("Roots: {:?}", start.elapsed());
+        let start = Instant::now();
+        for i in 0..CHILDREN {
+            let node = Arc::new(Node {
+                inner: Mutex::new(NodeInner {
+                    children: Vec::new(),
+                    aggregation_leaf: AggregationTreeLeaf::new(),
+                    value: 40000 + i,
+                }),
+            });
+            children.push(node.clone());
+            connect_child(&context, &inner_node, &node);
+        }
+        println!("Children: {:?}", start.elapsed());
+    }
+
+    let root = NodeRef(roots[0].clone());
+
+    print(&context, &root);
+}
+
+fn connect_child(context: &NodeAggregationContext<'_>, parent: &Arc<Node>, child: &Arc<Node>) {
+    let state = parent.inner.lock();
+    let node_ref = NodeRef(child.clone());
+    let mut node_guard = unsafe { NodeGuard::new(state, parent.clone()) };
+    let job1 = ensure_thresholds(context, &mut node_guard);
+    let NodeGuard {
+        guard: mut state, ..
+    } = node_guard;
+    state.children.push(child.clone());
+    let job2 = state.aggregation_leaf.add_child_job(context, &node_ref);
+    drop(state);
+    job1();
+    job2();
 }
 
 fn print(context: &NodeAggregationContext<'_>, current: &NodeRef) {

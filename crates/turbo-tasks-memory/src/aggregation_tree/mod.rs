@@ -40,6 +40,7 @@ use self::{leaf::top_tree, top_tree::TopTree};
 pub use self::{leaf::AggregationTreeLeaf, top_tree::AggregationInfoGuard};
 
 pub(self) const MAX_NESTING_LEVEL: u8 = 10;
+pub(self) const CHILDREN_INNER_THRESHOLD: usize = 10000;
 
 pub trait AggregationContext {
     type ItemLock<'a>: AggregationItemLock<
@@ -96,7 +97,9 @@ pub trait AggregationItemLock {
     type ChildrenIter<'a>: Iterator<Item = Cow<'a, Self::ItemRef>> + 'a
     where
         Self: 'a;
+    fn reference(&self) -> &Self::ItemRef;
     fn leaf(&mut self) -> &mut AggregationTreeLeaf<Self::Info, Self::ItemRef>;
+    fn number_of_children(&self) -> usize;
     fn children(&self) -> Self::ChildrenIter<'_>;
     fn get_remove_change(&self) -> Option<Self::ItemChange>;
     fn get_add_change(&self) -> Option<Self::ItemChange>;

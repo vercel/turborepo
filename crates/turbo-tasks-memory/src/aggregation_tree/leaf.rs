@@ -1,4 +1,4 @@
-use std::{hash::Hash, sync::Arc};
+use std::{hash::Hash, sync::Arc, time::Instant};
 
 use nohash_hasher::IsEnabled;
 use ref_cast::RefCast;
@@ -9,7 +9,7 @@ use super::{
     bottom_tree::BottomTree,
     inner_refs::{BottomRef, ChildLocation},
     top_tree::TopTree,
-    AggregationContext, AggregationItemLock,
+    AggregationContext, AggregationItemLock, CHILDREN_INNER_THRESHOLD,
 };
 
 pub struct AggregationTreeLeaf<T, I: IsEnabled> {
@@ -349,4 +349,50 @@ pub fn remove_inner_upper_from_item<C: AggregationContext>(
         upper.remove_child_of_child(context, &child)
     }
     true
+}
+
+pub fn ensure_thresholds<'a, C: AggregationContext>(
+    context: &'a C,
+    item: &mut C::ItemLock<'_>,
+) -> impl FnOnce() + 'a {
+    let mut result = None;
+
+    let number_of_total_children = item.number_of_children();
+    let reference = item.reference().clone();
+    let leaf = item.leaf();
+    if let BottomConnection::Inner(list) = &leaf.upper {
+        if list.len() * number_of_total_children > CHILDREN_INNER_THRESHOLD {
+            println!(
+                "Converted to root node {} {}",
+                list.len(),
+                number_of_total_children
+            );
+            let start = Instant::now();
+            let (tree, new) = get_or_create_in_vec(&mut leaf.bottom_trees, 0, || {
+                Arc::new(BottomTree::new(reference.clone(), 0))
+            });
+            debug_assert!(new);
+            let new_bottom_tree = tree.clone();
+            result = Some((
+                add_left_upper_to_item_step_1::<C>(item, &new_bottom_tree),
+                reference,
+                new_bottom_tree,
+                tracing::trace_span!("ensure_thresholds", height = 0).entered(),
+            ));
+            println!(
+                "Converted to root node took {}ms (step 1)",
+                start.elapsed().as_millis()
+            );
+        }
+    }
+    || {
+        if let Some((result, reference, new_bottom_tree, _span)) = result {
+            let start = Instant::now();
+            add_left_upper_to_item_step_2(context, &reference, &new_bottom_tree, result);
+            println!(
+                "Converted to root node took {}ms (step 2)",
+                start.elapsed().as_millis()
+            );
+        }
+    }
 }
