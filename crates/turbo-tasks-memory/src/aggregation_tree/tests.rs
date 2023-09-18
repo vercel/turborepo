@@ -516,23 +516,37 @@ fn many_children() {
         connect_child(&context, &inner_node, &node);
     }
     println!("Children: {:?}", start.elapsed());
+    let start = Instant::now();
+    for i in 0..ROOTS {
+        let node = Arc::new(Node {
+            inner: Mutex::new(NodeInner {
+                children: Vec::new(),
+                aggregation_leaf: AggregationTreeLeaf::new(),
+                value: 30000 + i,
+            }),
+        });
+        roots.push(node.clone());
+        aggregation_info(&context, &NodeRef(node.clone()))
+            .lock()
+            .active = true;
+        connect_child(&context, &node, &inner_node);
+    }
+    println!("Roots: {:?}", start.elapsed());
+    let start = Instant::now();
+    for i in 0..CHILDREN {
+        let node = Arc::new(Node {
+            inner: Mutex::new(NodeInner {
+                children: Vec::new(),
+                aggregation_leaf: AggregationTreeLeaf::new(),
+                value: 40000 + i,
+            }),
+        });
+        children.push(node.clone());
+        connect_child(&context, &inner_node, &node);
+    }
+    let children_duration = start.elapsed();
+    println!("Children: {:?}", children_duration);
     for _ in 0..10 {
-        let start = Instant::now();
-        for i in 0..ROOTS {
-            let node = Arc::new(Node {
-                inner: Mutex::new(NodeInner {
-                    children: Vec::new(),
-                    aggregation_leaf: AggregationTreeLeaf::new(),
-                    value: 30000 + i,
-                }),
-            });
-            roots.push(node.clone());
-            aggregation_info(&context, &NodeRef(node.clone()))
-                .lock()
-                .active = true;
-            connect_child(&context, &node, &inner_node);
-        }
-        println!("Roots: {:?}", start.elapsed());
         let start = Instant::now();
         for i in 0..CHILDREN {
             let node = Arc::new(Node {
@@ -545,7 +559,9 @@ fn many_children() {
             children.push(node.clone());
             connect_child(&context, &inner_node, &node);
         }
-        println!("Children: {:?}", start.elapsed());
+        let dur = start.elapsed();
+        assert!(dur < children_duration * 3 / 2);
+        println!("Children: {:?}", dur);
     }
 
     let root = NodeRef(roots[0].clone());

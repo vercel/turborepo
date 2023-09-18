@@ -362,12 +362,6 @@ pub fn ensure_thresholds<'a, C: AggregationContext>(
     let leaf = item.leaf();
     if let BottomConnection::Inner(list) = &leaf.upper {
         if list.len() * number_of_total_children > CHILDREN_INNER_THRESHOLD {
-            println!(
-                "Converted to root node {} {}",
-                list.len(),
-                number_of_total_children
-            );
-            let start = Instant::now();
             let (tree, new) = get_or_create_in_vec(&mut leaf.bottom_trees, 0, || {
                 Arc::new(BottomTree::new(reference.clone(), 0))
             });
@@ -379,20 +373,12 @@ pub fn ensure_thresholds<'a, C: AggregationContext>(
                 new_bottom_tree,
                 tracing::trace_span!("ensure_thresholds", height = 0).entered(),
             ));
-            println!(
-                "Converted to root node took {}ms (step 1)",
-                start.elapsed().as_millis()
-            );
         }
     }
     || {
         if let Some((result, reference, new_bottom_tree, _span)) = result {
             let start = Instant::now();
             add_left_upper_to_item_step_2(context, &reference, &new_bottom_tree, result);
-            println!(
-                "Converted to root node took {}ms (step 2)",
-                start.elapsed().as_millis()
-            );
         }
     }
 }
