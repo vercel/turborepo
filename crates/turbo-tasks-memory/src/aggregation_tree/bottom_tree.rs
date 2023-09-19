@@ -409,10 +409,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             if let Some(change) = remove_change.as_ref() {
                 self.child_change(context, change);
             }
-            for following in following.iter() {
-                // TODO use children of child method
-                self.remove_child_of_child(context, following);
-            }
+            self.remove_children_of_child(context, following);
         } else {
             // remove count from following instead
             if state.following.remove_count(item.clone(), -count as usize) {
@@ -461,15 +458,14 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         if let Some(change) = context.info_to_remove_change(&state.data) {
             upper.child_change(context, &change);
         }
-        for following in state.following.iter() {
-            // TODO use children of child method
-            // TODO move this out of the state lock
-            upper.remove_child_of_child(context, following);
-        }
+        let following = state.following.iter().cloned().collect::<Vec<_>>();
         if state.top_upper.is_empty() {
             drop(state);
             self.remove_self_from_lower(context);
+        } else {
+            drop(state);
         }
+        upper.remove_children_of_child(context, following);
     }
 
     #[must_use]
@@ -484,15 +480,13 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         };
         let removed = inner.remove_clonable(BottomRef::ref_cast(upper));
         if removed {
-            if let Some(change) = context.info_to_remove_change(&state.data) {
-                // TODO move this out of the state lock
+            let remove_change = context.info_to_remove_change(&state.data);
+            let following = state.following.iter().cloned().collect::<Vec<_>>();
+            drop(state);
+            if let Some(change) = remove_change {
                 upper.child_change(context, &change);
             }
-            for following in state.following.iter() {
-                // TODO use children of child method
-                // TODO move this out of the state lock
-                upper.remove_child_of_child(context, following);
-            }
+            upper.remove_children_of_child(context, following);
         }
         true
     }
@@ -614,8 +608,6 @@ fn propagate_new_following_to_uppers<C: AggregationContext>(
     context: &C,
     child_of_child: &C::ItemRef,
 ) {
-    // TODO we want to check if child_of_child is already connected as inner child
-    // and convert that that
     let bottom_uppers = state.bottom_upper.as_cloned_uppers();
     let top_upper = state.top_upper.iter().cloned().collect::<Vec<_>>();
     drop(state);

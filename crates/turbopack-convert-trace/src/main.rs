@@ -149,13 +149,27 @@ fn main() {
         values: &IndexMap<Cow<'a, str>, TraceValue<'a>>,
         collapse_names: bool,
     ) -> Cow<'a, str> {
-        if collapse_names && name != "turbo_tasks::function" {
+        if name == "turbo_tasks::function" {
+            if let Some(v) = values.get("name") {
+                return format!("{v} ({name})").into();
+            } else {
+                return name.into();
+            }
+        }
+        if collapse_names || values.is_empty() {
             return name.into();
         }
-        values
-            .get("name")
-            .and_then(|v| v.as_str().map(|s| format!("{s} ({name})").into()))
-            .unwrap_or(name.into())
+        let mut name = name.to_string();
+        name.push_str(" (");
+        for (i, (key, value)) in values.iter().enumerate() {
+            use std::fmt::Write;
+            if i > 0 {
+                name.push_str(", ");
+            }
+            write!(name, "{key}={value}").unwrap();
+        }
+        name.push(')');
+        name.into()
     }
 
     for data in trace_rows {
