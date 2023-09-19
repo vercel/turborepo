@@ -189,8 +189,8 @@ pub async fn finalize_css(
             }
             .into())
         }
-        ParseCssResult::Unparseable => Ok(FinalCssResult::Unparseable.into()),
-        ParseCssResult::NotFound => Ok(FinalCssResult::NotFound.into()),
+        CssWithPlaceholderResult::Unparseable => Ok(FinalCssResult::Unparseable.into()),
+        CssWithPlaceholderResult::NotFound => Ok(FinalCssResult::NotFound.into()),
     }
 }
 
