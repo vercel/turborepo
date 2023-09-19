@@ -57,12 +57,17 @@ impl PartialEq for ParseCssResult {
 pub enum CssWithPlaceholderResult {
     Ok {
         #[turbo_tasks(trace_ignore)]
+        stylesheet: StyleSheet<'static, 'static>,
+
+        references: Vc<ModuleReferences>,
+
+        url_references: Vc<UnresolvedUrlReferences>,
+
+        #[turbo_tasks(trace_ignore)]
         exports: Option<CssModuleExports>,
 
         #[turbo_tasks(trace_ignore)]
         dependencies: Option<Vec<Dependency>>,
-
-        source_map: Vc<ParseCssResultSourceMap>,
 
         #[turbo_tasks(trace_ignore)]
         placeholders: HashMap<String, Url<'static>>,
@@ -113,37 +118,22 @@ pub async fn process_css_with_placeholder(
             references,
             url_references,
         } => {
-            {
-                let mut stylesheet = stylesheet_into_static(stylesheet);
+            let mut stylesheet = stylesheet_into_static(stylesheet);
 
-                let url_references = *url_references;
-
-                let mut url_map = HashMap::new();
-
-                for (src, reference) in (*url_references.await?).iter() {
-                    let resolved = resolve_url_reference(*reference, chunking_context).await?;
-                    if let Some(v) = resolved.as_ref().cloned() {
-                        url_map.insert(src.to_string(), v);
-                    }
-                }
-
-                replace_url_references(&mut stylesheet, &url_map);
-            }
-
-            let mut srcmap = parcel_sourcemap::SourceMap::new("");
             let result = stylesheet.to_css(PrinterOptions {
-                source_map: Some(&mut srcmap),
                 analyze_dependencies: Some(DependencyOptions {
-                    remove_imports: true,
+                    ..Default::default()
                 }),
                 ..Default::default()
             })?;
 
             Ok(CssWithPlaceholderResult::Ok {
-                output_code: result.code,
                 dependencies: result.dependencies,
                 exports: result.exports,
-                source_map: ParseCssResultSourceMap::new(srcmap).cell(),
+                references: references.clone(),
+                url_references: url_references.clone(),
+                placeholders: HashMap::new(),
+                stylesheet: stylesheet,
             }
             .into())
         }
@@ -159,10 +149,11 @@ pub async fn finalize_css(
 ) -> Result<Vc<FinalCssResult>> {
     let result = result.await?;
     match &*result {
-        ParseCssResult::Ok {
+        CssWithPlaceholderResult::Ok {
             stylesheet,
             references,
             url_references,
+            ..
         } => {
             {
                 let mut stylesheet = stylesheet_into_static(stylesheet);
