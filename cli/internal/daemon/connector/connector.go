@@ -339,7 +339,7 @@ func (c *Connector) sendHello(ctx context.Context, client turbodprotocol.TurbodC
 	case codes.FailedPrecondition:
 		return ErrVersionMismatch
 	case codes.Unavailable:
-		return errConnectionFailure
+		return errUnavailable
 	default:
 		return err
 	}
