@@ -102,8 +102,14 @@ impl PartialEq for FinalCssResult {
 }
 
 #[turbo_tasks::function]
-pub async fn finalize_css(
+pub async fn process_css_with_placeholder(
     result: Vc<ParseCssResult>,
+) -> Result<Vc<CssWithPlaceholderResult>> {
+}
+
+#[turbo_tasks::function]
+pub async fn finalize_css(
+    result: Vc<CssWithPlaceholderResult>,
     chunking_context: Vc<Box<dyn ChunkingContext>>,
 ) -> Result<Vc<FinalCssResult>> {
     let result = result.await?;
