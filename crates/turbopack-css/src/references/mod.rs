@@ -23,9 +23,12 @@ use turbopack_core::{
     source_pos::SourcePos,
 };
 
-use crate::references::{
-    import::{ImportAssetReference, ImportAttributes},
-    url::UrlAssetReference,
+use crate::{
+    lifetime_util::import_rule_to_static,
+    references::{
+        import::{ImportAssetReference, ImportAttributes},
+        url::UrlAssetReference,
+    },
 };
 
 pub(crate) mod compose;
@@ -91,7 +94,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                 self.references.push(Vc::upcast(ImportAssetReference::new(
                     self.origin,
                     Request::parse(Value::new(src.to_string().into())),
-                    ImportAttributes::new_from_prelude(i).into(),
+                    ImportAttributes::new_from_prelude(&import_rule_to_static(i)).into(),
                     IssueSource::new(
                         Vc::upcast(self.source),
                         SourcePos {
