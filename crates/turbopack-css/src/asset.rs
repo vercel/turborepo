@@ -65,6 +65,13 @@ impl ProcessCss for CssModuleAsset {
     }
 
     #[turbo_tasks::function]
+    async fn get_css_with_placeholder(self: Vc<Self>) -> Result<Vc<CssWithPlaceholderResult>> {
+        let parse_result = self.parse_css();
+
+        Ok(process_css_with_placeholder(parse_result))
+    }
+
+    #[turbo_tasks::function]
     async fn finalize_css(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
