@@ -33,7 +33,7 @@ use tracing::{error, info, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
     cookie_jar::CookieJar,
-    globwatcher::{Error as GlobWatcherError, GlobSet, GlobWatcher},
+    globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
     FileSystemWatcher, WatchError,
 };
 
@@ -68,7 +68,7 @@ enum RpcError {
     #[error("deadline exceeded")]
     DeadlineExceeded,
     #[error("invalid glob: {0}")]
-    InvalidGlob(#[from] wax::BuildError),
+    InvalidGlob(#[from] GlobError),
     #[error("globwatching failed: {0}")]
     GlobWatching(#[from] GlobWatcherError),
     #[error("filewatching unavailable")]
