@@ -145,7 +145,7 @@ describe("create-turbo", () => {
         });
 
       await create(root as CreateCommandArgument, undefined, {
-        manager: packageManager,
+        packageManager,
         skipInstall: true,
         example: "default",
       });

@@ -59,7 +59,11 @@ export async function create(
   packageManagerCmd: CreateCommandArgument,
   opts: CreateCommandOptions
 ) {
-  const { manager: packageManagerOpt, skipInstall, skipTransforms } = opts;
+  const {
+    packageManager: packageManagerOpt,
+    skipInstall,
+    skipTransforms,
+  } = opts;
   logger.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
   info(`Welcome to Turborepo! Let's get you set up with a new codebase.`);
   logger.log();
