@@ -5,6 +5,7 @@ use lightningcss::{
     css_modules::{CssModuleExports, Pattern, Segment},
     dependencies::{Dependency, DependencyOptions},
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet},
+    values::url::Url,
 };
 use smallvec::smallvec;
 use swc_core::base::sourcemap::SourceMapBuilder;
@@ -47,6 +48,30 @@ pub enum ParseCssResult {
 }
 
 impl PartialEq for ParseCssResult {
+    fn eq(&self, other: &Self) -> bool {
+        false
+    }
+}
+
+#[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
+pub enum CssWithPlaceholderResult {
+    Ok {
+        #[turbo_tasks(trace_ignore)]
+        exports: Option<CssModuleExports>,
+
+        #[turbo_tasks(trace_ignore)]
+        dependencies: Option<Vec<Dependency>>,
+
+        source_map: Vc<ParseCssResultSourceMap>,
+
+        #[turbo_tasks(trace_ignore)]
+        placeholders: HashMap<String, Url>,
+    },
+    Unparseable,
+    NotFound,
+}
+
+impl PartialEq for CssWithPlaceholderResult {
     fn eq(&self, other: &Self) -> bool {
         false
     }
@@ -130,6 +155,8 @@ pub async fn finalize_css(
 #[turbo_tasks::value_trait]
 pub trait ProcessCss {
     async fn parse_css(self: Vc<Self>) -> Result<Vc<ParseCssResult>>;
+
+    async fn get_css_with_placeholder(self: Vc<Self>) -> Result<Vc<CssWithPlaceholderResult>>;
 
     async fn finalize_css(
         self: Vc<Self>,
