@@ -22,7 +22,7 @@ use crate::{
         RunCache,
     },
     task_hash,
-    task_hash::{PackageInputsHashes, TaskHasher},
+    task_hash::{PackageInputsHashes, TaskHashTracker, TaskHasher},
 };
 
 // This holds the whole world
@@ -35,6 +35,8 @@ pub struct Visitor<'a> {
     sink: OutputSink<StdWriter>,
     color_cache: ColorSelector,
     ui: UI,
+    // For testing purposes we need to be able to silence the output
+    silent: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -89,24 +91,29 @@ impl<'a> Visitor<'a> {
             sink,
             color_cache,
             ui,
+            silent: false,
         }
+    }
+
+    pub fn silent(mut self) -> Self {
+        self.silent = true;
+        self
     }
 
     pub async fn visit(&self, engine: Arc<Engine>) -> Result<(), Error> {
         let concurrency = self.opts.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
-
         let engine_handle = {
             let engine = engine.clone();
             tokio::spawn(engine.execute(ExecutionOptions::new(false, concurrency), node_sender))
         };
-
         let mut tasks = FuturesUnordered::new();
 
         while let Some(message) = node_stream.recv().await {
             let crate::engine::Message { info, callback } = message;
             let is_github_actions = self.opts.run_opts.is_github_actions;
             let package_name = WorkspaceName::from(info.package());
+
             let workspace_dir =
                 self.package_graph
                     .workspace_dir(&package_name)
@@ -146,7 +153,7 @@ impl<'a> Visitor<'a> {
 
             let task_env_mode = match self.global_env_mode {
                 // Task env mode is only independent when global env mode is `infer`.
-                EnvMode::Infer if !task_definition.pass_through_env.is_empty() => {
+                EnvMode::Infer if task_definition.pass_through_env.is_some() => {
                     ResolvedEnvMode::Strict
                 }
                 // If we're in infer mode we have just detected non-usage of strict env vars.
@@ -184,12 +191,15 @@ impl<'a> Visitor<'a> {
             let prefix = self.prefix(&info);
             let pretty_prefix = self.color_cache.prefix_with_color(&task_hash, &prefix);
             let ui = self.ui;
+            let silent = self.silent;
 
             tasks.push(tokio::spawn(async move {
                 let _task_cache = task_cache;
-                let mut prefixed_ui =
-                    Self::prefixed_ui(ui, is_github_actions, &output_client, pretty_prefix);
-                prefixed_ui.output(command);
+                if !silent {
+                    let mut prefixed_ui =
+                        Self::prefixed_ui(ui, is_github_actions, &output_client, pretty_prefix);
+                    prefixed_ui.output(command);
+                }
                 callback.send(Ok(())).unwrap();
             }));
         }
@@ -261,6 +271,10 @@ impl<'a> Visitor<'a> {
                 .with_warn_prefix(Style::new().apply_to("[WARN]".to_string()));
         }
         prefixed_ui
+    }
+
+    pub fn into_task_hash_tracker(self) -> TaskHashTracker {
+        self.task_hasher.into_task_hash_tracker()
     }
 }
 

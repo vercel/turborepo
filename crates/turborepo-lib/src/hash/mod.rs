@@ -41,15 +41,16 @@ mod proto_capnp {
     }
 }
 
+#[derive(Debug)]
 pub struct TaskHashable<'a> {
     // hashes
     pub(crate) global_hash: &'a str,
     pub(crate) task_dependency_hashes: Vec<String>,
     pub(crate) hash_of_files: &'a str,
-    pub(crate) external_deps_hash: String,
+    pub(crate) external_deps_hash: Option<String>,
 
     // task
-    pub(crate) package_dir: turbopath::RelativeUnixPathBuf,
+    pub(crate) package_dir: Option<turbopath::RelativeUnixPathBuf>,
     pub(crate) task: &'a str,
     pub(crate) outputs: TaskOutputs,
     pub(crate) pass_through_args: &'a [String],
@@ -62,11 +63,12 @@ pub struct TaskHashable<'a> {
     pub(crate) dot_env: &'a [turbopath::RelativeUnixPathBuf],
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GlobalHashable<'a> {
     pub global_cache_key: &'static str,
     pub global_file_hash_map: HashMap<turbopath::RelativeUnixPathBuf, String>,
-    pub root_external_dependencies_hash: String,
+    // This is None in single package mode
+    pub root_external_dependencies_hash: Option<String>,
     pub env: &'a [String],
     pub resolved_env_vars: Vec<String>,
     pub pass_through_env: &'a [String],
@@ -198,9 +200,15 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
         let mut builder = message.init_root();
 
         builder.set_global_hash(task_hashable.global_hash);
-        builder.set_package_dir(&task_hashable.package_dir.to_string());
+        if let Some(package_dir) = task_hashable.package_dir {
+            builder.set_package_dir(&package_dir.to_string());
+        }
+
         builder.set_hash_of_files(task_hashable.hash_of_files);
-        builder.set_external_deps_hash(&task_hashable.external_deps_hash);
+        if let Some(external_deps_hash) = task_hashable.external_deps_hash {
+            builder.set_external_deps_hash(&external_deps_hash);
+        }
+
         builder.set_task(task_hashable.task);
         builder.set_env_mode(task_hashable.env_mode.into());
 
@@ -221,11 +229,11 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
         }
 
         {
-            let mut pass_thru_args_builder = builder
+            let mut pass_through_args_builder = builder
                 .reborrow()
                 .init_pass_thru_args(task_hashable.pass_through_args.len() as u32);
             for (i, arg) in task_hashable.pass_through_args.iter().enumerate() {
-                pass_thru_args_builder.set(i as u32, arg);
+                pass_through_args_builder.set(i as u32, arg);
             }
         }
 
@@ -237,11 +245,11 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
         }
 
         {
-            let mut pass_thru_env_builder = builder
+            let mut pass_through_env_builder = builder
                 .reborrow()
                 .init_pass_thru_env(task_hashable.pass_through_env.len() as u32);
             for (i, env) in task_hashable.pass_through_env.iter().enumerate() {
-                pass_thru_env_builder.set(i as u32, env);
+                pass_through_env_builder.set(i as u32, env);
             }
         }
 
@@ -307,7 +315,9 @@ impl<'a> From<GlobalHashable<'a>> for Builder<HeapAllocator> {
             }
         }
 
-        builder.set_root_external_deps_hash(&hashable.root_external_dependencies_hash);
+        if let Some(root_external_dependencies_hash) = hashable.root_external_dependencies_hash {
+            builder.set_root_external_deps_hash(&root_external_dependencies_hash);
+        }
 
         {
             let mut entries = builder.reborrow().init_env(hashable.env.len() as u32);
@@ -384,9 +394,9 @@ mod test {
         let task_hashable = TaskHashable {
             global_hash: "global_hash",
             task_dependency_hashes: vec!["task_dependency_hash".to_string()],
-            package_dir: turbopath::RelativeUnixPathBuf::new("package_dir").unwrap(),
+            package_dir: Some(turbopath::RelativeUnixPathBuf::new("package_dir").unwrap()),
             hash_of_files: "hash_of_files",
-            external_deps_hash: "external_deps_hash".to_string(),
+            external_deps_hash: Some("external_deps_hash".to_string()),
             task: "task",
             outputs: TaskOutputs {
                 inclusions: vec!["inclusions".to_string()],
@@ -413,7 +423,7 @@ mod test {
             )]
             .into_iter()
             .collect(),
-            root_external_dependencies_hash: "0000000000000000".to_string(),
+            root_external_dependencies_hash: Some("0000000000000000".to_string()),
             env: &["env".to_string()],
             resolved_env_vars: vec![],
             pass_through_env: &["pass_through_env".to_string()],

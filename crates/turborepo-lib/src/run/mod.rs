@@ -38,13 +38,13 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct Run {
-    base: CommandBase,
+pub struct Run<'a> {
+    base: &'a CommandBase,
     processes: ProcessManager,
 }
 
-impl Run {
-    pub fn new(base: CommandBase) -> Self {
+impl<'a> Run<'a> {
+    pub fn new(base: &'a CommandBase) -> Self {
         let processes = ProcessManager::new();
         Self { base, processes }
     }
@@ -204,6 +204,7 @@ impl Run {
             .expect("must have root workspace");
 
         let global_hash_inputs = get_global_hash_inputs(
+            !opts.run_opts.single_package,
             root_workspace,
             &self.base.repo_root,
             pkg_dep_graph.package_manager(),
@@ -211,7 +212,7 @@ impl Run {
             &root_turbo_json.global_deps,
             &env_at_execution_start,
             &root_turbo_json.global_env,
-            &root_turbo_json.global_pass_through_env,
+            root_turbo_json.global_pass_through_env.as_deref(),
             opts.run_opts.env_mode,
             opts.run_opts.framework_inference,
             &root_turbo_json.global_dot_env,
@@ -234,7 +235,7 @@ impl Run {
 
         let mut global_env_mode = opts.run_opts.env_mode;
         if matches!(global_env_mode, EnvMode::Infer)
-            && !root_turbo_json.global_pass_through_env.is_empty()
+            && root_turbo_json.global_pass_through_env.is_some()
         {
             global_env_mode = EnvMode::Strict;
         }

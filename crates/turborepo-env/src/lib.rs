@@ -14,6 +14,7 @@ use thiserror::Error;
 const DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 
 /// Environment mode after we've resolved the `Infer` variant
+#[derive(Debug)]
 pub enum ResolvedEnvMode {
     Loose,
     Strict,
