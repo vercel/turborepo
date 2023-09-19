@@ -32,7 +32,7 @@ use turbopack_ecmascript::{
 };
 
 use crate::{
-    process::{FinalCssResult, ParseCssResult, ProcessCss},
+    process::{CssWithPlaceholderResult, FinalCssResult, ParseCssResult, ProcessCss},
     references::{compose::CssModuleComposeReference, internal::InternalCssAssetReference},
 };
 
@@ -158,11 +158,11 @@ impl ModuleCssAsset {
             bail!("inner asset should be CSS parseable");
         };
 
-        let result = inner.parse_css().await?;
+        let result = inner.get_css_with_placeholder().await?;
         let mut classes = IndexMap::default();
 
         // TODO(alexkirsz) Should we report an error on parse error here?
-        if let FinalCssResult::Ok {
+        if let CssWithPlaceholderResult::Ok {
             exports: Some(exports),
             ..
         } = &*result
