@@ -105,6 +105,51 @@ impl PartialEq for FinalCssResult {
 pub async fn process_css_with_placeholder(
     result: Vc<ParseCssResult>,
 ) -> Result<Vc<CssWithPlaceholderResult>> {
+    let result = result.await?;
+
+    match &*result {
+        ParseCssResult::Ok {
+            stylesheet,
+            references,
+            url_references,
+        } => {
+            {
+                let mut stylesheet = stylesheet_into_static(stylesheet);
+
+                let url_references = *url_references;
+
+                let mut url_map = HashMap::new();
+
+                for (src, reference) in (*url_references.await?).iter() {
+                    let resolved = resolve_url_reference(*reference, chunking_context).await?;
+                    if let Some(v) = resolved.as_ref().cloned() {
+                        url_map.insert(src.to_string(), v);
+                    }
+                }
+
+                replace_url_references(&mut stylesheet, &url_map);
+            }
+
+            let mut srcmap = parcel_sourcemap::SourceMap::new("");
+            let result = stylesheet.to_css(PrinterOptions {
+                source_map: Some(&mut srcmap),
+                analyze_dependencies: Some(DependencyOptions {
+                    remove_imports: true,
+                }),
+                ..Default::default()
+            })?;
+
+            Ok(CssWithPlaceholderResult::Ok {
+                output_code: result.code,
+                dependencies: result.dependencies,
+                exports: result.exports,
+                source_map: ParseCssResultSourceMap::new(srcmap).cell(),
+            }
+            .into())
+        }
+        ParseCssResult::Unparseable => Ok(CssWithPlaceholderResult::Unparseable.into()),
+        ParseCssResult::NotFound => Ok(CssWithPlaceholderResult::NotFound.into()),
+    }
 }
 
 #[turbo_tasks::function]
