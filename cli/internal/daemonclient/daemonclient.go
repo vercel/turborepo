@@ -34,9 +34,14 @@ func New(client *connector.Client) *DaemonClient {
 
 // GetChangedOutputs implements runcache.OutputWatcher.GetChangedOutputs
 func (d *DaemonClient) GetChangedOutputs(ctx context.Context, hash string, repoRelativeOutputGlobs []string) ([]string, int, error) {
+	// The daemon expects globs to be unix paths
+	var outputGlobs []string
+	for _, outputGlob := range repoRelativeOutputGlobs {
+		outputGlobs = append(outputGlobs, filepath.ToSlash(outputGlob))
+	}
 	resp, err := d.client.GetChangedOutputs(ctx, &turbodprotocol.GetChangedOutputsRequest{
 		Hash:        hash,
-		OutputGlobs: repoRelativeOutputGlobs,
+		OutputGlobs: outputGlobs,
 	})
 	if err != nil {
 		return nil, 0, err
