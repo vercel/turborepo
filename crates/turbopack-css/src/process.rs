@@ -65,7 +65,7 @@ pub enum CssWithPlaceholderResult {
         source_map: Vc<ParseCssResultSourceMap>,
 
         #[turbo_tasks(trace_ignore)]
-        placeholders: HashMap<String, Url>,
+        placeholders: HashMap<String, Url<'static>>,
     },
     Unparseable,
     NotFound,
