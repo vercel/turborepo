@@ -28,7 +28,7 @@ createTurboCli
   .argument("[package-manager]")
   .addOption(
     new Option(
-      "-m, --manager <package-manager>",
+      "-m, --package-manager <package-manager>",
       "Specify the package manager to use"
     ).choices(["npm", "yarn", "pnpm", "bun"])
   )
