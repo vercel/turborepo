@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
 use semver::Version;
@@ -20,8 +20,8 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_ui::UI;
 
 use crate::{
-    cli, get_version, package_manager::WorkspaceGlobs, spawn_child, tracing::TurboSubscriber,
-    PackageManager, Payload,
+    cli, get_version, package_json::PackageJson, package_manager::WorkspaceGlobs, spawn_child,
+    tracing::TurboSubscriber, PackageManager, Payload,
 };
 
 // all arguments that result in a stdout that much be directly parsable and
@@ -195,11 +195,6 @@ pub enum RepoMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct PackageJson {
-    version: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct YarnRc {
     pnp_unplugged_folder: Utf8PathBuf,
@@ -306,48 +301,43 @@ impl LocalTurboState {
     // - berry (nodeLinker: "node-modules")
     //
     // This also supports people directly depending upon the platform version.
-    fn generate_hoisted_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
-        Some(root_path.join("node_modules"))
+    fn generate_hoisted_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+        Some(root_path.join_component("node_modules"))
     }
 
     // Nested strategy:
     // - `npm install --install-strategy=shallow` (`npm install --global-style`)
     // - `npm install --install-strategy=nested` (`npm install --legacy-bundling`)
     // - berry (nodeLinker: "pnpm")
-    fn generate_nested_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
-        Some(
-            root_path
-                .join("node_modules")
-                .join("turbo")
-                .join("node_modules"),
-        )
+    fn generate_nested_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+        Some(root_path.join_components(&["node_modules", "turbo", "node_modules"]))
     }
 
     // Linked strategy:
     // - `pnpm install`
     // - `npm install --install-strategy=linked`
-    fn generate_linked_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
+    fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
         let canonical_path =
-            fs_canonicalize(root_path.join("node_modules").join("turbo").join("..")).ok()?;
+            fs_canonicalize(root_path.join_components(&["node_modules", "turbo", ".."])).ok()?;
 
-        Utf8PathBuf::try_from(canonical_path).ok()
+        AbsoluteSystemPathBuf::try_from(canonical_path).ok()
     }
 
     // The unplugged directory doesn't have a fixed path.
-    fn get_unplugged_base_path(root_path: &Utf8Path) -> Utf8PathBuf {
+    fn get_unplugged_base_path(root_path: &AbsoluteSystemPath) -> Utf8PathBuf {
         let yarn_rc_filename =
             env::var("YARN_RC_FILENAME").unwrap_or_else(|_| String::from(".yarnrc.yml"));
-        let yarn_rc_filepath = root_path.join(yarn_rc_filename);
+        let yarn_rc_filepath = root_path.as_path().join(yarn_rc_filename);
 
         let yarn_rc_yaml_string = fs::read_to_string(yarn_rc_filepath).unwrap_or_default();
         let yarn_rc: YarnRc = serde_yaml::from_str(&yarn_rc_yaml_string).unwrap_or_default();
 
-        root_path.join(yarn_rc.pnp_unplugged_folder)
+        root_path.as_path().join(yarn_rc.pnp_unplugged_folder)
     }
 
     // Unplugged strategy:
     // - berry 2.1+
-    fn generate_unplugged_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
+    fn generate_unplugged_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
         let platform_package_name = TurboState::platform_package_name();
         let unplugged_base_path = Self::get_unplugged_base_path(root_path);
 
@@ -361,7 +351,10 @@ impl LocalTurboState {
                     Ok(entry) => {
                         let file_name = entry.file_name();
                         if file_name.starts_with(platform_package_name) {
-                            Some(unplugged_base_path.join(file_name).join("node_modules"))
+                            AbsoluteSystemPathBuf::new(
+                                unplugged_base_path.join(file_name).join("node_modules"),
+                            )
+                            .ok()
                         } else {
                             None
                         }
@@ -378,14 +371,13 @@ impl LocalTurboState {
     //
     // In spite of that, the only known unsupported local invocation is Yarn/Berry <
     // 2.1 PnP
-    pub fn infer(root_path: &Utf8Path) -> Option<Self> {
+    pub fn infer(root_path: &AbsoluteSystemPathBuf) -> Option<Self> {
         let platform_package_name = TurboState::platform_package_name();
         let binary_name = TurboState::binary_name();
 
-        let platform_package_json_path: Utf8PathBuf =
-            [platform_package_name, "package.json"].iter().collect();
-        let platform_package_executable_path: Utf8PathBuf =
-            [platform_package_name, "bin", binary_name].iter().collect();
+        let platform_package_json_path_components = [platform_package_name, "package.json"];
+        let platform_package_executable_path_components =
+            [platform_package_name, "bin", binary_name];
 
         // These are lazy because the last two are more expensive.
         let search_functions = [
@@ -403,20 +395,20 @@ impl LocalTurboState {
         {
             // Needs borrow because of the loop.
             #[allow(clippy::needless_borrow)]
-            let bin_path = root.join(&platform_package_executable_path);
+            let bin_path = root.join_components(&platform_package_executable_path_components);
             match fs_canonicalize(&bin_path) {
                 Ok(bin_path) => {
-                    let resolved_package_json_path = root.join(platform_package_json_path);
-                    let platform_package_json_string =
-                        fs::read_to_string(resolved_package_json_path).ok()?;
-                    let platform_package_json: PackageJson =
-                        serde_json::from_str(&platform_package_json_string).ok()?;
+                    let resolved_package_json_path =
+                        root.join_components(&platform_package_json_path_components);
+                    let platform_package_json =
+                        PackageJson::load(&resolved_package_json_path).ok()?;
+                    let local_version = platform_package_json.version?;
 
                     debug!("Local turbo path: {}", bin_path.display());
-                    debug!("Local turbo version: {}", platform_package_json.version);
+                    debug!("Local turbo version: {}", &local_version);
                     return Some(Self {
                         bin_path,
-                        version: platform_package_json.version,
+                        version: local_version,
                     });
                 }
                 Err(_) => debug!("No local turbo binary found at: {}", bin_path),
@@ -467,7 +459,8 @@ impl RepoState {
         let potential_turbo_roots = reference_dir
             .ancestors()
             .filter_map(|path| {
-                let has_package_json = path.join_component("package.json").exists();
+                let package_json = PackageJson::load(&path.join_component("package.json")).ok();
+                let has_package_json = package_json.is_some();
                 let has_turbo_json = path.join_component("turbo.json").exists();
 
                 if !has_package_json && !has_turbo_json {
@@ -475,9 +468,10 @@ impl RepoState {
                 }
 
                 // FIXME: We should save this package manager that we detected
-                let workspace_globs = PackageManager::get_package_manager(path, None)
-                    .and_then(|mgr| mgr.get_workspace_globs(path))
-                    .ok();
+                let workspace_globs =
+                    PackageManager::get_package_manager(path, package_json.as_ref())
+                        .and_then(|mgr| mgr.get_workspace_globs(path))
+                        .ok();
 
                 Some(InferInfo {
                     path: path.to_owned(),
@@ -525,7 +519,7 @@ impl RepoState {
 
             // If there is only one potential root, that's the winner.
             if check_roots.peek().is_none() {
-                let local_turbo_state = LocalTurboState::infer(current.path.as_path());
+                let local_turbo_state = LocalTurboState::infer(&current.path);
                 return Ok(Self {
                     root: current.path.clone(),
                     mode: if current.workspace_globs.is_some() {
@@ -541,7 +535,7 @@ impl RepoState {
             // and set the mode properly in the else and it would still work.
             } else if current.workspace_globs.is_some() {
                 // If the closest one has workspaces then we stop there.
-                let local_turbo_state = LocalTurboState::infer(current.path.as_path());
+                let local_turbo_state = LocalTurboState::infer(&current.path);
                 return Ok(Self {
                     root: current.path.clone(),
                     mode: RepoMode::MultiPackage,
@@ -555,8 +549,7 @@ impl RepoState {
             } else {
                 for ancestor_infer in check_roots {
                     if ancestor_infer.is_workspace_root_of(&current.path) {
-                        let local_turbo_state =
-                            LocalTurboState::infer(ancestor_infer.path.as_path());
+                        let local_turbo_state = LocalTurboState::infer(&ancestor_infer.path);
                         return Ok(Self {
                             root: ancestor_infer.path.clone(),
                             mode: RepoMode::MultiPackage,
@@ -567,7 +560,7 @@ impl RepoState {
 
                 // We have eliminated RepoMode::MultiPackage as an option.
                 // We must exhaustively check before this becomes the answer.
-                let local_turbo_state = LocalTurboState::infer(current.path.as_path());
+                let local_turbo_state = LocalTurboState::infer(&current.path);
                 return Ok(Self {
                     root: current.path.clone(),
                     mode: RepoMode::SinglePackage,
