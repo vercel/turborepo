@@ -14,13 +14,16 @@ use dunce::canonicalize as fs_canonicalize;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use tiny_gradient::{GradientStr, RGB};
-use tracing::debug;
+use tracing::{debug, warn};
 use turbo_updater::check_for_updates;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_ui::UI;
 
 use crate::{
-    cli, get_version, package_manager::WorkspaceGlobs, spawn_child, tracing::TurboSubscriber,
+    cli, get_version,
+    package_manager::{Error, WorkspaceGlobs},
+    spawn_child,
+    tracing::TurboSubscriber,
     PackageManager, Payload,
 };
 
@@ -475,9 +478,20 @@ impl RepoState {
                 }
 
                 // FIXME: We should save this package manager that we detected
-                let workspace_globs = PackageManager::get_package_manager(path, None)
+                let workspace_globs = match PackageManager::get_package_manager(path, None)
                     .and_then(|mgr| mgr.get_workspace_globs(path))
-                    .ok();
+                {
+                    Ok(globs) => Some(globs),
+                    Err(Error::MultiplePackageManagers { managers }) => {
+                        warn!(
+                            "detected multiple package managers ({}) in this workspace. inference \
+                             may be impacted.",
+                            managers.join(", ")
+                        );
+                        None
+                    }
+                    Err(_) => None,
+                };
 
                 Some(InferInfo {
                     path: path.to_owned(),
