@@ -30,6 +30,7 @@ use std::{
     cmp::{max, min, Reverse},
     collections::{hash_map::Entry, HashMap, HashSet},
     eprintln,
+    io::{stderr, Write},
     mem::take,
     ops::Range,
     time::Instant,
@@ -100,7 +101,10 @@ fn main() {
         start.elapsed().as_secs_f32()
     );
 
-    eprint!("Analysing trace into span tree...");
+    eprint!(
+        "Analysing trace into span tree... 0 / {} (0%)",
+        trace_rows.len()
+    );
     let start = Instant::now();
 
     let mut spans = Vec::new();
@@ -175,7 +179,17 @@ fn main() {
         name.into()
     }
 
-    for data in trace_rows {
+    let number_of_trace_rows = trace_rows.len();
+    for (i, data) in trace_rows.into_iter().enumerate() {
+        if i % 131072 == 0 {
+            eprint!(
+                "\rAnalysing trace into span tree... {} / {} ({}%)",
+                i,
+                number_of_trace_rows,
+                i * 100 / number_of_trace_rows
+            );
+            let _ = stderr().flush();
+        }
         match data {
             TraceRow::Start {
                 ts,
@@ -274,7 +288,9 @@ fn main() {
     }
 
     eprintln!(
-        " done ({} spans, {:.3}s)",
+        "\rAnalysing trace into span tree... {} / {} done ({} spans, {:.3}s)",
+        number_of_trace_rows,
+        number_of_trace_rows,
         spans.len(),
         start.elapsed().as_secs_f64()
     );
@@ -402,6 +418,7 @@ fn main() {
         {
             if i % 1000 == 0 {
                 eprint!("\rDistributing time into virtual threads... {i} / {busy_len}",);
+                let _ = stderr().flush();
             }
             let stack = get_stack(id);
             let thread = find_thread(&mut virtual_threads, &stack, start);
@@ -468,9 +485,25 @@ fn main() {
     }
 
     if single || merged {
-        eprint!("Emitting span tree...");
-        let start = Instant::now();
+        let number_of_spans = spans.len();
+        eprint!("Emitting span tree... 0 / {} (0%)", number_of_spans);
         let mut span_counter = 0;
+        let mut add_to_span_counter = {
+            let span_counter = &mut span_counter;
+            || {
+                *span_counter += 1;
+                if *span_counter % 16384 == 0 {
+                    eprint!(
+                        "\rEmitting span tree... {} / {} ({}%)",
+                        *span_counter,
+                        number_of_spans,
+                        *span_counter * 100 / number_of_spans
+                    );
+                    let _ = stderr().flush();
+                }
+            }
+        };
+        let start = Instant::now();
 
         const CONCURRENCY_FIXED_POINT_FACTOR: u64 = 100;
         const CONCURRENCY_FIXED_POINT_FACTOR_F: f32 = 100.0;
@@ -518,7 +551,7 @@ fn main() {
             .rev()
             .filter_map(|(id, span)| {
                 if span.parent == 0 {
-                    span_counter += 1;
+                    add_to_span_counter();
                     Some(Task::Enter { id, root: true })
                 } else {
                     None
@@ -542,6 +575,7 @@ fn main() {
                             parent_count: &mut u32,
                             parent_name: &str,
                             items: Vec<SpanItem>,
+                            add_to_span_counter: &mut impl FnMut(),
                         ) {
                             for item in items {
                                 match item {
@@ -561,9 +595,14 @@ fn main() {
                                                 parent_count,
                                                 parent_name,
                                                 items,
+                                                add_to_span_counter,
                                             );
+                                            add_to_span_counter();
                                         } else {
                                             let group = groups.entry(key).or_insert_with(Vec::new);
+                                            if !group.is_empty() {
+                                                add_to_span_counter();
+                                            }
                                             group.push(item);
                                         }
                                     }
@@ -577,6 +616,7 @@ fn main() {
                             &mut count,
                             parent_name,
                             items,
+                            &mut add_to_span_counter,
                         );
                         if !self_items.is_empty() {
                             groups
@@ -684,14 +724,7 @@ fn main() {
                                 }
                             }
                             SpanItem::Child(id) => {
-                                span_counter += 1;
-                                if span_counter % 12543 == 0 {
-                                    eprint!(
-                                        "\rEmitting span tree... {} / {}",
-                                        span_counter,
-                                        spans.len()
-                                    );
-                                }
+                                add_to_span_counter();
                                 stack.push(Task::Enter {
                                     id: *id,
                                     root: false,
