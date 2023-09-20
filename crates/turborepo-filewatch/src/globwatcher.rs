@@ -27,7 +27,8 @@ pub struct GlobSet {
 
 #[derive(Debug, Error)]
 pub struct GlobError {
-    underlying: wax::BuildError,
+    // Boxed to minimize error size
+    underlying: Box<wax::BuildError>,
     raw: String,
 }
 
@@ -41,7 +42,7 @@ fn compile_glob(raw: &str) -> Result<Glob<'static>, GlobError> {
     Glob::from_str(raw)
         .map(|g| g.to_owned())
         .map_err(|e| GlobError {
-            underlying: e,
+            underlying: Box::new(e),
             raw: raw.to_owned(),
         })
 }
@@ -67,7 +68,7 @@ impl GlobSet {
             .collect::<Result<Vec<_>, GlobError>>()?;
         let exclude = wax::any(excludes)
             .map_err(|e| GlobError {
-                underlying: e,
+                underlying: Box::new(e),
                 raw: format!("{{{}}}", raw_excludes.join(",")),
             })?
             .to_owned();
