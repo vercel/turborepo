@@ -663,7 +663,7 @@ impl Task {
         let future;
         {
             let mut state = self.full_state_mut();
-            let change_job;
+            let mut change_job;
             match state.state_type {
                 Done { .. } | InProgress { .. } | InProgressDirty { .. } => {
                     // should not start in this state
@@ -684,7 +684,8 @@ impl Task {
                             change.collectibles.push((trait_type, value, -count));
                         }
                     }
-                    change_job = state.aggregation_leaf.change_job(&context, change);
+                    change_job = (!change.is_empty())
+                        .then(|| state.aggregation_leaf.change_job(&context, change));
                 }
                 Dirty { .. } => {
                     let state_type = Task::state_string(&*state);
@@ -695,7 +696,9 @@ impl Task {
                 }
             };
             future = self.make_execution_future(state, backend, turbo_tasks);
-            (change_job)();
+            if let Some(job) = change_job {
+                job();
+            }
         }
         context.apply_queued_updates();
         Some(TaskExecutionSpec { future })
@@ -1102,20 +1105,22 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
+        let context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut state = self.full_state_mut();
         if let TaskStateType::Dirty { ref mut event } = state.state_type {
             state.state_type = Scheduled {
                 event: event.take(),
             };
-            state.aggregation_leaf.change(
-                &TaskAggregationContext::new(turbo_tasks, backend),
-                &TaskChange {
+            let job = state.aggregation_leaf.change_job(
+                &context,
+                TaskChange {
                     dirty_tasks_update: vec![(self.id, -1)],
                     ..Default::default()
                 },
             );
             drop(state);
             turbo_tasks.schedule(self.id);
+            job();
         }
     }
 

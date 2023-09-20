@@ -39,7 +39,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     {
         let uppers = self.upper.as_cloned_uppers();
         move || {
-            let _span = tracing::trace_span!("aggregation_tree leaf add_children").entered();
+            let _span = tracing::trace_span!("aggregation_tree leaf add_children_job").entered();
             uppers.add_children_of_child(context, &children);
         }
     }
@@ -54,7 +54,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     {
         let uppers = self.upper.as_cloned_uppers();
         move || {
-            let _span = tracing::trace_span!("aggregation_tree leaf add_child").entered();
+            let _span = tracing::trace_span!("aggregation_tree leaf add_child_job").entered();
             uppers.add_child_of_child(context, child);
         }
     }
@@ -82,7 +82,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     {
         let uppers = self.upper.as_cloned_uppers();
         move || {
-            let _span = tracing::trace_span!("aggregation_tree leaf remove_children").entered();
+            let _span = tracing::trace_span!("aggregation_tree leaf remove_children_job").entered();
             uppers.remove_children_of_child(context, children.iter())
         }
     }
@@ -108,7 +108,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     {
         let uppers = self.upper.as_cloned_uppers();
         move || {
-            let _span = tracing::trace_span!("aggregation_tree leaf change").entered();
+            let _span = tracing::trace_span!("aggregation_tree leaf change_job").entered();
             context.on_change(&change);
             uppers.child_change(context, &change);
         }

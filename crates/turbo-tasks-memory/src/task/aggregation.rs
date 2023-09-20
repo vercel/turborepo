@@ -124,7 +124,7 @@ pub struct TaskChange {
 }
 
 impl TaskChange {
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         #[allow(unused_mut, reason = "feature flag")]
         let mut empty = self.unfinished == 0
             && self.dirty_tasks_update.is_empty()
@@ -166,10 +166,12 @@ impl<'a> TaskAggregationContext<'a> {
     }
 
     pub fn apply_queued_updates(&mut self) {
+        let mut _span = None;
         let tasks = self.dirty_tasks_to_schedule.get_mut();
         if let Some(tasks) = tasks.as_mut() {
             let tasks = take(tasks);
             if !tasks.is_empty() {
+                _span.get_or_insert_with(|| tracing::trace_span!("apply_queued_updates").entered());
                 self.backend
                     .schedule_when_dirty_from_aggregation(tasks, self.turbo_tasks);
             }
@@ -178,6 +180,7 @@ impl<'a> TaskAggregationContext<'a> {
         if let Some(tasks) = tasks.as_mut() {
             let tasks = take(tasks);
             if !tasks.is_empty() {
+                _span.get_or_insert_with(|| tracing::trace_span!("apply_queued_updates").entered());
                 self.turbo_tasks.schedule_notify_tasks_set(&tasks);
             }
         }
