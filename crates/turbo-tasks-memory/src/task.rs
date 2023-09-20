@@ -391,6 +391,8 @@ enum TaskStateType {
     InProgress {
         event: Event,
         count_as_finished: bool,
+        /// Children that need to be disconnected once leaving this state
+        outdated_children: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
     },
 
     /// Invalid execution is happening
@@ -661,7 +663,6 @@ impl Task {
         let future;
         {
             let mut state = self.full_state_mut();
-            let mut remove_job = None;
             let change_job;
             match state.state_type {
                 Done { .. } | InProgress { .. } | InProgressDirty { .. } => {
@@ -669,19 +670,14 @@ impl Task {
                     return None;
                 }
                 Scheduled { ref mut event } => {
+                    let event = event.take();
+                    let children = take(&mut state.children);
                     state.state_type = InProgress {
-                        event: event.take(),
+                        event,
                         count_as_finished: false,
+                        outdated_children: children,
                     };
                     state.stats.increment_executions();
-                    if !state.children.is_empty() {
-                        let children = take(&mut state.children).into_iter().collect();
-                        remove_job = Some(
-                            state
-                                .aggregation_leaf
-                                .remove_children_job(&context, children),
-                        );
-                    }
                     let mut change = TaskChange::default();
                     if let Some(collectibles) = state.collectibles.take_collectibles() {
                         for ((trait_type, value), count) in collectibles.into_iter() {
@@ -699,9 +695,6 @@ impl Task {
                 }
             };
             future = self.make_execution_future(state, backend, turbo_tasks);
-            if let Some(job) = remove_job {
-                (job)();
-            }
             (change_job)();
         }
         context.apply_queued_updates();
@@ -775,6 +768,7 @@ impl Task {
         };
         let TaskStateType::InProgress {
             ref mut count_as_finished,
+            ref mut outdated_children,
             ..
         } = state.state_type
         else {
@@ -785,9 +779,13 @@ impl Task {
         }
         *count_as_finished = true;
         let context = TaskAggregationContext::new(turbo_tasks, backend);
-        state.aggregation_leaf.change(
+        let outdated_children: AutoSet<TaskId, BuildNoHashHasher<TaskId>> = take(outdated_children);
+        let job1 = state
+            .aggregation_leaf
+            .remove_children_job(&context, outdated_children);
+        let job2 = state.aggregation_leaf.change_job(
             &context,
-            &TaskChange {
+            TaskChange {
                 unfinished: -1,
                 #[cfg(feature = "track_unfinished")]
                 unfinished_tasks_update: vec![(self.id, -1)],
@@ -795,6 +793,8 @@ impl Task {
             },
         );
         drop(state);
+        job1();
+        job2();
     }
 
     pub(crate) fn execution_result(
@@ -855,64 +855,84 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> bool {
+        let mut context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut schedule_task = false;
-        let mut dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
         {
-            let mut state = self.full_state_mut();
+            let mut job1 = None;
+            let mut job2 = None;
+            let mut dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
+            {
+                let mut state = self.full_state_mut();
 
-            state
-                .stats
-                .register_execution(duration, turbo_tasks.program_duration_until(instant));
-            match state.state_type {
-                InProgress {
-                    ref mut event,
-                    count_as_finished,
-                } => {
-                    let event = event.take();
-                    let mut dependencies = take(&mut dependencies);
-                    // This will stay here for longer, so make sure to not consume too much memory
-                    dependencies.shrink_to_fit();
-                    for cells in state.cells.values_mut() {
-                        cells.shrink_to_fit();
+                state
+                    .stats
+                    .register_execution(duration, turbo_tasks.program_duration_until(instant));
+                match state.state_type {
+                    InProgress {
+                        ref mut event,
+                        count_as_finished,
+                        ref mut outdated_children,
+                    } => {
+                        let event = event.take();
+                        let outdated_children = take(outdated_children);
+                        let mut dependencies = take(&mut dependencies);
+                        // This will stay here for longer, so make sure to not consume too much
+                        // memory
+                        dependencies.shrink_to_fit();
+                        for cells in state.cells.values_mut() {
+                            cells.shrink_to_fit();
+                        }
+                        state.cells.shrink_to_fit();
+                        state.stateful = stateful;
+                        state.state_type = Done { dependencies };
+                        if !count_as_finished {
+                            job1 = Some(state.aggregation_leaf.change_job(
+                                &context,
+                                TaskChange {
+                                    unfinished: -1,
+                                    #[cfg(feature = "track_unfinished")]
+                                    unfinished_tasks_update: vec![(self.id, -1)],
+                                    ..Default::default()
+                                },
+                            ));
+                        }
+                        if !outdated_children.is_empty() {
+                            job2 = Some(
+                                state
+                                    .aggregation_leaf
+                                    .remove_children_job(&context, outdated_children),
+                            );
+                        }
+                        event.notify(usize::MAX);
                     }
-                    state.cells.shrink_to_fit();
-                    state.stateful = stateful;
-                    state.state_type = Done { dependencies };
-                    if !count_as_finished {
-                        state.aggregation_leaf.change(
-                            &TaskAggregationContext::new(turbo_tasks, backend),
-                            &TaskChange {
-                                unfinished: -1,
-                                #[cfg(feature = "track_unfinished")]
-                                unfinished_tasks_update: vec![(self.id, -1)],
-                                ..Default::default()
-                            },
-                        );
+                    InProgressDirty { ref mut event } => {
+                        let event = event.take();
+                        state.state_type = Scheduled { event };
+                        schedule_task = true;
                     }
-                    event.notify(usize::MAX);
-                }
-                InProgressDirty { ref mut event } => {
-                    let event = event.take();
-                    state.state_type = Scheduled { event };
-                    schedule_task = true;
-                }
-                Dirty { .. } | Scheduled { .. } | Done { .. } => {
-                    panic!(
-                        "Task execution completed in unexpected state {}",
-                        Task::state_string(&state)
-                    )
-                }
-            };
+                    Dirty { .. } | Scheduled { .. } | Done { .. } => {
+                        panic!(
+                            "Task execution completed in unexpected state {}",
+                            Task::state_string(&state)
+                        )
+                    }
+                };
+            }
+            if !dependencies.is_empty() {
+                self.clear_dependencies(dependencies, backend, turbo_tasks);
+            }
+            if let Some(job) = job1 {
+                job();
+            }
+            if let Some(job) = job2 {
+                job();
+            }
         }
-        if !dependencies.is_empty() {
-            self.clear_dependencies(dependencies, backend, turbo_tasks);
-        }
-
         if let TaskType::Once(_) = self.ty {
             // unset the root type, so tasks below are no longer active
-            let mut context = TaskAggregationContext::new(turbo_tasks, backend);
             context.aggregation_info(self.id).lock().root_type = None;
         }
+        context.apply_queued_updates();
 
         schedule_task
     }
@@ -941,6 +961,7 @@ impl Task {
         } else {
             self.state_mut()
         };
+        let mut context = TaskAggregationContext::new(turbo_tasks, backend);
         if let TaskMetaStateWriteGuard::Full(mut state) = state {
             let mut clear_dependencies = AutoSet::default();
 
@@ -978,7 +999,6 @@ impl Task {
                     clear_dependencies = take(dependencies);
                     // add to dirty lists and potentially schedule
                     let description = self.get_event_description();
-                    let mut context = TaskAggregationContext::new(turbo_tasks, backend);
                     let should_schedule = force_schedule
                         || state
                             .aggregation_leaf
@@ -1043,21 +1063,31 @@ impl Task {
                 InProgress {
                     ref mut event,
                     count_as_finished,
+                    ref mut outdated_children,
                 } => {
                     let event = event.take();
+                    let outdated_children = take(outdated_children);
+                    let mut job1 = None;
                     if count_as_finished {
-                        state.aggregation_leaf.change(
-                            &TaskAggregationContext::new(turbo_tasks, backend),
-                            &TaskChange {
+                        job1 = Some(state.aggregation_leaf.change_job(
+                            &context,
+                            TaskChange {
                                 unfinished: 1,
                                 #[cfg(feature = "track_unfinished")]
                                 unfinished_tasks_update: vec![(self.id, 1)],
                                 ..Default::default()
                             },
-                        );
+                        ));
                     }
+                    let job2 = state
+                        .aggregation_leaf
+                        .remove_children_job(&context, outdated_children);
                     state.state_type = InProgressDirty { event };
                     drop(state);
+                    if let Some(job) = job1 {
+                        job();
+                    }
+                    job2();
                 }
             }
 

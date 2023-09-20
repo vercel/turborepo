@@ -359,6 +359,15 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
     }
 }
 
+impl<'a, K, V> Clone for Iter<'a, K, V> {
+    fn clone(&self) -> Self {
+        match self {
+            Iter::List(iter) => Iter::List(iter.clone()),
+            Iter::Map(iter) => Iter::Map(iter.clone()),
+        }
+    }
+}
+
 pub enum IterMut<'a, K, V> {
     List(std::slice::IterMut<'a, (K, V)>),
     Map(std::collections::hash_map::IterMut<'a, K, V>),

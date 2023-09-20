@@ -1,5 +1,6 @@
 use std::{hash::Hash, sync::Arc};
 
+use auto_hash_map::AutoSet;
 use nohash_hasher::IsEnabled;
 use ref_cast::RefCast;
 use tracing::Level;
@@ -69,14 +70,15 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
             .remove_child_of_child(context, child);
     }
 
-    pub fn remove_children_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn remove_children_job<'a, C: AggregationContext<Info = T, ItemRef = I>, H>(
         &self,
         context: &'a C,
-        children: Vec<I>,
+        children: AutoSet<I, H>,
     ) -> impl FnOnce() + 'a
     where
         T: 'a,
         I: 'a,
+        H: 'a,
     {
         let uppers = self.upper.as_cloned_uppers();
         move || {
