@@ -12,7 +12,7 @@ use super::{
         remove_left_upper_from_item,
     },
     top_tree::TopTree,
-    AggregationContext, MAX_NESTING_LEVEL,
+    AggregationContext, CHILDREN_INNER_THRESHOLD, MAX_NESTING_LEVEL,
 };
 use crate::count_hash_set::{CountHashSet, RemoveIfEntryResult};
 
@@ -450,7 +450,11 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         nesting_level: u8,
     ) -> bool {
         let mut state = self.state.lock();
+        let number_of_following = state.following.len();
         let BottomConnection::Inner(inner) = &mut state.bottom_upper else {
+            return false;
+        };
+        if inner.len() * number_of_following > CHILDREN_INNER_THRESHOLD {
             return false;
         };
         let new = inner.add_clonable(BottomRef::ref_cast(upper), nesting_level);
