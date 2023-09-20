@@ -1,4 +1,6 @@
-use anyhow::{bail, Result};
+use std::fs::File;
+
+use anyhow::{bail, Context, Result};
 use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
@@ -6,7 +8,7 @@ use turbo_tasks::{
     trace::TraceRawVcs,
     TaskInput, TryJoinIterExt, Value, Vc,
 };
-use turbo_tasks_fs::FileSystemPath;
+use turbo_tasks_fs::{FileSystem, FileSystemPath};
 use turbopack_core::{
     chunk::{Chunk, ChunkableModule, ChunkingContext, Chunks, EvaluatableAssets},
     environment::Environment,
@@ -81,10 +83,14 @@ pub struct BuildChunkingContext {
     context_path: Vc<FileSystemPath>,
     /// This path is used to compute the url to request chunks or assets from
     output_root: Vc<FileSystemPath>,
+    /// This path is used to compute the url to request chunks or assets from
+    client_root: Vc<FileSystemPath>,
     /// Chunks are placed at this path
     chunk_root_path: Vc<FileSystemPath>,
     /// Static assets are placed at this path
     asset_root_path: Vc<FileSystemPath>,
+    /// Static assets requested from this path
+    asset_prefix: Vc<String>,
     /// Layer name within this context
     layer: Option<String>,
     /// The environment chunks will be evaluated in.
@@ -100,16 +106,20 @@ impl BuildChunkingContext {
     pub fn builder(
         context_path: Vc<FileSystemPath>,
         output_root: Vc<FileSystemPath>,
+        client_root: Vc<FileSystemPath>,
         chunk_root_path: Vc<FileSystemPath>,
         asset_root_path: Vc<FileSystemPath>,
+        asset_prefix: Vc<String>,
         environment: Vc<Environment>,
     ) -> BuildChunkingContextBuilder {
         BuildChunkingContextBuilder {
             chunking_context: BuildChunkingContext {
                 context_path,
                 output_root,
+                client_root,
                 chunk_root_path,
                 asset_root_path,
+                asset_prefix,
                 layer: None,
                 environment,
                 runtime_type: Default::default(),
@@ -241,6 +251,23 @@ impl ChunkingContext for BuildChunkingContext {
     #[turbo_tasks::function]
     fn environment(&self) -> Vc<Environment> {
         self.environment
+    }
+
+    #[turbo_tasks::function]
+    async fn asset_url_path(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<String>> {
+        let this = self.await?;
+        let asset_path = ident.path().await?.to_string();
+        let asset_path = asset_path
+            .strip_prefix(&format!("{}/", this.client_root.await?.path))
+            .context("expected client root to contain asset path")?;
+
+        dbg!(&asset_path, this.asset_prefix.await?);
+
+        Ok(Vc::cell(format!(
+            "{}{}",
+            this.asset_prefix.await?,
+            asset_path
+        )))
     }
 
     #[turbo_tasks::function]

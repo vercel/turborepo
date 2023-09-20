@@ -1,3 +1,4 @@
+use anyhow::Result;
 use turbo_tasks::Vc;
 use turbo_tasks_fs::FileSystemPath;
 
@@ -34,6 +35,8 @@ pub trait ChunkingContext {
         asset_a: Vc<Box<dyn Module>>,
         asset_b: Vc<Box<dyn Module>>,
     ) -> Vc<bool>;
+
+    fn asset_url_path(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<String>>;
 
     fn asset_path(
         self: Vc<Self>,

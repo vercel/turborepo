@@ -36,6 +36,11 @@ impl DevChunkingContextBuilder {
         self
     }
 
+    pub fn asset_base_path(mut self, asset_base_path: Vc<Option<String>>) -> Self {
+        self.chunking_context.asset_base_path = asset_base_path;
+        self
+    }
+
     pub fn chunk_base_path(mut self, chunk_base_path: Vc<Option<String>>) -> Self {
         self.chunking_context.chunk_base_path = chunk_base_path;
         self
@@ -90,6 +95,9 @@ pub struct DevChunkingContext {
     /// Base path that will be prepended to all chunk URLs when loading them.
     /// This path will not appear in chunk paths or chunk data.
     chunk_base_path: Vc<Option<String>>,
+    /// Base path that will be prepended to all static asset URLs when loading
+    /// them.
+    asset_base_path: Vc<Option<String>>,
     /// Layer name within this context
     layer: Option<String>,
     /// Enable HMR for this chunking
@@ -116,6 +124,7 @@ impl DevChunkingContext {
                 reference_chunk_source_maps: true,
                 reference_css_chunk_source_maps: true,
                 asset_root_path,
+                asset_base_path: Default::default(),
                 chunk_base_path: Default::default(),
                 layer: None,
                 enable_hot_module_replacement: false,
@@ -232,6 +241,18 @@ impl ChunkingContext for DevChunkingContext {
         };
         let name = ident.output_name(self.context_path, extension).await?;
         Ok(root_path.join(name.clone_value()))
+    }
+
+    #[turbo_tasks::function]
+    async fn asset_url_path(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<String>> {
+        let this = self.await?;
+        let asset_path = ident.path().await?.to_string();
+        dbg!(&asset_path);
+
+        Ok(Vc::cell(match &*this.asset_base_path.await? {
+            Some(asset_base_path) => format!("{}/{}", asset_base_path, asset_path),
+            None => format!("/{}", asset_path),
+        }))
     }
 
     #[turbo_tasks::function]
