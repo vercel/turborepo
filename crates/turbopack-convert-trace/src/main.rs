@@ -112,6 +112,7 @@ fn main() {
         start: 0,
         end: 0,
         self_start: None,
+        self_time: 0,
         items: Vec::new(),
         values: IndexMap::new(),
     });
@@ -132,6 +133,7 @@ fn main() {
                     start: 0,
                     end: 0,
                     self_start: None,
+                    self_time: 0,
                     items: Vec::new(),
                     values: IndexMap::new(),
                 };
@@ -143,6 +145,7 @@ fn main() {
 
     let mut all_self_times = Vec::new();
     let mut name_counts: HashMap<Cow<'_, str>, usize> = HashMap::new();
+    let mut name_self_times: HashMap<Cow<'_, str>, u64> = HashMap::new();
 
     fn get_name<'a>(
         name: &'a str,
@@ -230,6 +233,8 @@ fn main() {
                             value: internal_id,
                         });
                     }
+                    span.self_time += duration;
+                    *name_self_times.entry(span.name.clone()).or_default() += duration;
                 }
             }
             TraceRow::Event { ts, parent, values } => {
@@ -252,6 +257,7 @@ fn main() {
                     start,
                     end: ts,
                     self_start: None,
+                    self_time: 0,
                     items: vec![SpanItem::SelfTime { start, duration }],
                     values,
                 });
@@ -324,6 +330,14 @@ fn main() {
     eprintln!("Top 10 span names:");
     for (name, count) in name_counts.into_iter().take(10) {
         eprintln!("{}x {}", count, name);
+    }
+
+    let mut name_self_times: Vec<(Cow<'_, str>, u64)> = name_self_times.into_iter().collect();
+    name_self_times.sort_by_key(|(_, duration)| Reverse(*duration));
+
+    eprintln!("Top 10 span durations:");
+    for (name, duration) in name_self_times.into_iter().take(10) {
+        eprintln!("{}s {}", duration / 1000 / 1000, name);
     }
 
     println!("[");
@@ -790,6 +804,7 @@ struct Span<'a> {
     start: u64,
     end: u64,
     self_start: Option<SelfTimeStarted>,
+    self_time: u64,
     items: Vec<SpanItem>,
     values: IndexMap<Cow<'a, str>, TraceValue<'a>>,
 }
