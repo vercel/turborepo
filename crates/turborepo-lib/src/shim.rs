@@ -317,8 +317,14 @@ impl LocalTurboState {
     // - `pnpm install`
     // - `npm install --install-strategy=linked`
     fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
-        let canonical_path =
-            fs_canonicalize(root_path.join_components(&["node_modules", "turbo", ".."])).ok()?;
+        let canonical_path = fs_canonicalize(
+            root_path
+                .as_path()
+                .join("node_modules")
+                .join("turbo")
+                .join(".."),
+        )
+        .ok()?;
 
         AbsoluteSystemPathBuf::try_from(canonical_path).ok()
     }
