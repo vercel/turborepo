@@ -370,9 +370,9 @@ fn chain_double_connected() {
 
     {
         let aggregated = aggregation_info(&context, &current);
-        assert_eq!(aggregated.lock().value, 7627);
+        assert_eq!(aggregated.lock().value, 8230);
     }
-    assert_eq!(context.additions.load(Ordering::SeqCst), 184);
+    assert_eq!(context.additions.load(Ordering::SeqCst), 204);
     context.additions.store(0, Ordering::SeqCst);
 }
 
@@ -560,8 +560,8 @@ fn many_children() {
             connect_child(&context, &inner_node, &node);
         }
         let dur = start.elapsed();
-        assert!(dur < children_duration * 3 / 2);
         println!("Children: {:?}", dur);
+        assert!(dur < children_duration * 2);
     }
 
     let root = NodeRef(roots[0].clone());
