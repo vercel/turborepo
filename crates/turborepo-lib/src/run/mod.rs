@@ -228,6 +228,7 @@ impl<'a> Run<'a> {
             opts.run_opts.env_mode,
             opts.run_opts.framework_inference,
             &root_turbo_json.global_dot_env,
+            &scm,
         )?;
 
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
