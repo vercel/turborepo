@@ -223,10 +223,14 @@ pub fn add_inner_upper_to_item<C: AggregationContext>(
 ) -> bool {
     let (change, children) = {
         let mut item = context.item(reference);
+        let number_of_children = item.number_of_children();
         let leaf = item.leaf();
         let BottomConnection::Inner(inner) = &mut leaf.upper else {
             return false;
         };
+        if inner.len() * number_of_children > CHILDREN_INNER_THRESHOLD {
+            return false;
+        }
         let new = inner.add_clonable(BottomRef::ref_cast(upper), nesting_level);
         if new {
             let change = item.get_add_change();
