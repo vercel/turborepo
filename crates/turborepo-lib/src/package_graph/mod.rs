@@ -102,6 +102,7 @@ impl PackageGraph {
         PackageGraphBuilder::new(repo_root, root_package_json)
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn validate(&self) -> Result<(), builder::Error> {
         // This is equivalent to AcyclicGraph.Cycles from Go's dag library
         let cycles_lines = petgraph::algo::tarjan_scc(&self.workspace_graph)

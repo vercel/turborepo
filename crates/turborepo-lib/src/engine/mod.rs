@@ -133,6 +133,7 @@ impl Engine<Built> {
         &self.task_definitions
     }
 
+    #[tracing::instrument(skip(self, package_graph))]
     pub fn validate(
         &self,
         package_graph: &PackageGraph,

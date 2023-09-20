@@ -57,6 +57,7 @@ impl Run {
         self.base.args().try_into()
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn run(&mut self) -> Result<()> {
         let _start_at = std::time::Instant::now();
         let package_json_path = self.base.repo_root.join_component("package.json");

@@ -93,6 +93,7 @@ impl<'a> EngineBuilder<'a> {
         self
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn build(mut self) -> Result<super::Engine, Error> {
         // If there are no affected packages, we don't need to go through all this work
         // we can just exit early.

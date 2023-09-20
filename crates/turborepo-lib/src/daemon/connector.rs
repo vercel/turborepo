@@ -82,6 +82,7 @@ impl DaemonConnector {
     /// 1. the versions do not match
     /// 2. the server is not running
     /// 3. the server is unresponsive
+    #[tracing::instrument(skip(self))]
     pub async fn connect(self) -> Result<DaemonClient<DaemonConnector>, DaemonConnectorError> {
         let time = Instant::now();
         for _ in 0..Self::CONNECT_RETRY_MAX {

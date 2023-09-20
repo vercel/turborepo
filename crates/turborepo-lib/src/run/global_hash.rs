@@ -40,6 +40,17 @@ pub struct GlobalHashableInputs<'a> {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[tracing::instrument(skip(
+    root_workspace,
+    root_path,
+    package_manager,
+    lockfile,
+    global_file_dependencies,
+    env_at_execution_start,
+    global_env,
+    global_pass_through_env,
+    dot_env
+))]
 pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     root_workspace: &WorkspaceInfo,
     root_path: &AbsoluteSystemPath,
