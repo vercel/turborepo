@@ -465,7 +465,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         } else {
             drop(state);
         }
-        upper.remove_children_of_child(context, following);
+        upper.remove_children_of_child(context, &following);
     }
 
     #[must_use]
@@ -486,7 +486,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             if let Some(change) = remove_change {
                 upper.child_change(context, &change);
             }
-            upper.remove_children_of_child(context, following);
+            upper.remove_children_of_child(context, &following);
         }
         true
     }
