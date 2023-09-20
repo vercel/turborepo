@@ -166,21 +166,24 @@ impl<'a> TaskAggregationContext<'a> {
     }
 
     pub fn apply_queued_updates(&mut self) {
-        let mut _span = None;
-        let tasks = self.dirty_tasks_to_schedule.get_mut();
-        if let Some(tasks) = tasks.as_mut() {
-            let tasks = take(tasks);
-            if !tasks.is_empty() {
-                _span.get_or_insert_with(|| tracing::trace_span!("apply_queued_updates").entered());
-                self.backend
-                    .schedule_when_dirty_from_aggregation(tasks, self.turbo_tasks);
+        {
+            let mut _span = None;
+            let tasks = self.dirty_tasks_to_schedule.get_mut();
+            if let Some(tasks) = tasks.as_mut() {
+                let tasks = take(tasks);
+                if !tasks.is_empty() {
+                    _span.get_or_insert_with(|| {
+                        tracing::trace_span!("task aggregation apply_queued_updates").entered()
+                    });
+                    self.backend
+                        .schedule_when_dirty_from_aggregation(tasks, self.turbo_tasks);
+                }
             }
         }
         let tasks = self.tasks_to_notify.get_mut();
         if let Some(tasks) = tasks.as_mut() {
             let tasks = take(tasks);
             if !tasks.is_empty() {
-                _span.get_or_insert_with(|| tracing::trace_span!("apply_queued_updates").entered());
                 self.turbo_tasks.schedule_notify_tasks_set(&tasks);
             }
         }

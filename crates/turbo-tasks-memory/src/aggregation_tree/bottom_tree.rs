@@ -71,6 +71,12 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     ) where
         I: 'a,
     {
+        let _span = (self.height > 2).then(|| {
+            tracing::trace_span!(
+                "aggregation_tree BottomTree::add_children_of_child",
+                height = self.height
+            )
+        });
         match child_location {
             ChildLocation::Left => {
                 // the left child has new children
@@ -155,6 +161,12 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         child_of_child: &I,
         nesting_level: u8,
     ) {
+        let _span = (self.height > 2).then(|| {
+            tracing::trace_span!(
+                "aggregation_tree BottomTree::add_child_of_child",
+                height = self.height
+            )
+        });
         debug_assert!(child_of_child != &self.item);
         match child_location {
             ChildLocation::Left => {
@@ -226,6 +238,12 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         context: &C,
         child_of_child: &I,
     ) {
+        let _span = (self.height > 2).then(|| {
+            tracing::trace_span!(
+                "aggregation_tree BottomTree::remove_child_of_child",
+                height = self.height
+            )
+        });
         if !self.remove_child_of_child_if_following(context, child_of_child) {
             self.remove_child_of_child_inner(context, child_of_child);
         }
@@ -238,6 +256,12 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     ) where
         I: 'a,
     {
+        let _span = (self.height > 2).then(|| {
+            tracing::trace_span!(
+                "aggregation_tree BottomTree::remove_children_of_child",
+                height = self.height
+            )
+        });
         let mut children = children.into_iter().collect();
         self.remove_children_of_child_if_following(context, &mut children);
         self.remove_children_of_child_inner(context, children);

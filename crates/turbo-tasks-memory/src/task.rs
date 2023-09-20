@@ -1221,6 +1221,14 @@ impl Task {
         }
     }
 
+    pub fn is_dirty(&self) -> bool {
+        if let TaskMetaStateReadGuard::Full(state) = self.state() {
+            matches!(state.state_type, TaskStateType::Dirty { .. })
+        } else {
+            false
+        }
+    }
+
     pub fn reset_stats(&self) {
         if let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() {
             state.stats.reset();
@@ -1348,9 +1356,24 @@ impl Task {
                     job2 = Some(state.aggregation_leaf.add_child_job(&context, &child_id));
                 }
             }
-            (job1)();
+            job1();
             if let Some(job) = job2 {
-                (job)();
+                // To avoid bubbling up the dirty tasks into the new parent tree, we make a
+                // quick check for activeness of the parent when the child is dirty. This is
+                // purely an optimization and not required for correctness.
+                // So it's fine to ignore the race condition existing here.
+                backend.with_task(child_id, |child| {
+                    if child.is_dirty() {
+                        let active = self
+                            .full_state_mut()
+                            .aggregation_leaf
+                            .get_root_info(&context, &RootInfoType::IsActive);
+                        if active {
+                            child.schedule_when_dirty_from_aggregation(backend, turbo_tasks);
+                        }
+                    }
+                });
+                job();
             }
         }
         context.apply_queued_updates();
