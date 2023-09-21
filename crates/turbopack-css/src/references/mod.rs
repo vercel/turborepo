@@ -82,7 +82,9 @@ impl<'a> ModuleReferencesVisitor<'a> {
 impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
     type Error = Infallible;
 
-    const TYPES: lightningcss::visitor::VisitTypes = lightningcss::visitor::VisitTypes::all();
+    fn visit_types(&self) -> lightningcss::visitor::VisitTypes {
+        lightningcss::visitor::VisitTypes::all()
+    }
 
     fn visit_rule(&mut self, rule: &mut CssRule) -> std::result::Result<(), Self::Error> {
         match rule {

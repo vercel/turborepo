@@ -126,7 +126,7 @@ pub fn replace_url_references(
     urls: &HashMap<String, String>,
 ) {
     let mut replacer = AssetReferenceReplacer { urls };
-    ss.visit(&mut replacer);
+    ss.visit(&mut replacer).unwrap();
 }
 
 struct AssetReferenceReplacer<'a> {
@@ -136,10 +136,12 @@ struct AssetReferenceReplacer<'a> {
 impl<'i> Visitor<'i> for AssetReferenceReplacer<'_> {
     type Error = Infallible;
 
-    const TYPES: lightningcss::visitor::VisitTypes = visit_types!(URLS);
+    fn visit_types(&self) -> lightningcss::visitor::VisitTypes {
+        visit_types!(URLS)
+    }
 
     fn visit_url(&mut self, u: &mut Url) -> std::result::Result<(), Self::Error> {
-        u.visit_children(self);
+        u.visit_children(self)?;
 
         if let Some(new) = self.urls.get(&*u.url) {
             u.url = new.clone().into();
