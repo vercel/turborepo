@@ -45,6 +45,7 @@ pub(crate) fn hash_files(
     Ok(hashes)
 }
 
+#[tracing::instrument(skip(inputs))]
 pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
     turbo_root: &AbsoluteSystemPath,
     package_path: &AnchoredSystemPath,
@@ -85,6 +86,9 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
         .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
         .build();
     for dirent in walker {
+        let span = tracing::span!(tracing::Level::TRACE, "walk");
+        let _enter = span.enter();
+
         let dirent = dirent?;
         let metadata = dirent.metadata()?;
         // We need to do this here, rather than as a filter, because the root
