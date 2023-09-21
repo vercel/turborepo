@@ -28,6 +28,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         }
     }
 
+    #[allow(unused)]
     pub fn add_children_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         context: &'a C,
