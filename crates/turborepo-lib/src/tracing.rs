@@ -143,7 +143,7 @@ impl TurboSubscriber {
     /// Enables daemon logging with the specified rotation settings.
     ///
     /// Daemon logging uses the standard tracing formatter.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, appender))]
     pub fn set_daemon_logger(&self, appender: RollingFileAppender) -> Result<(), Error> {
         let (file_writer, guard) = tracing_appender::non_blocking(appender);
         trace!("created non-blocking file writer");

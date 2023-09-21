@@ -9,6 +9,7 @@ use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use crate::{package_deps::GitHashes, wait_for_success, Error, Git};
 
 impl Git {
+    #[tracing::instrument(skip(self, root_path, hashes))]
     pub(crate) fn append_git_status(
         &self,
         root_path: &AbsoluteSystemPath,

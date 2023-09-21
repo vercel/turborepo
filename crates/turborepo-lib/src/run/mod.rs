@@ -16,7 +16,7 @@ pub use cache::{RunCache, TaskCache};
 use chrono::Local;
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
@@ -64,6 +64,7 @@ impl<'a> Run<'a> {
         self.base.args().try_into()
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn run(&mut self) -> Result<i32> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
@@ -346,7 +347,7 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
         )?;
 
-        debug!("package file hashes: {:?}", package_file_hashes);
+        trace!("package file hashes: {:?}", package_file_hashes);
 
         let mut run_summary = RunSummary::new(
             start_at,
@@ -366,6 +367,7 @@ impl<'a> Run<'a> {
     }
 
     #[tokio::main]
+    #[tracing::instrument(skip(self))]
     pub async fn get_hashes(&self) -> Result<(String, TaskHashTrackerState)> {
         let env_at_execution_start = EnvironmentVariableMap::infer();
 

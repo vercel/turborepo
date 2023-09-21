@@ -94,6 +94,7 @@ impl<'a> PackageGraphBuilder<'a> {
         self
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn build(self) -> Result<PackageGraph, Error> {
         let is_single_package = self.is_single_package;
         let state = BuildState::new(self)?;
@@ -102,7 +103,7 @@ impl<'a> PackageGraphBuilder<'a> {
             false => {
                 let state = state.parse_package_jsons()?;
                 let state = state.resolve_lockfile()?;
-                Ok(state.build())
+                Ok(state.build_inner())
             }
         }
     }
@@ -219,6 +220,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
     }
 
     // need our own type
+    #[tracing::instrument(skip(self))]
     fn parse_package_jsons(mut self) -> Result<BuildState<'a, ResolvedWorkspaces>, Error> {
         // The root workspace will be present
         // we either read from disk or just read the map
@@ -286,6 +288,7 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
 }
 
 impl<'a> BuildState<'a, ResolvedWorkspaces> {
+    #[tracing::instrument(skip(self))]
     fn connect_internal_dependencies(&mut self) -> Result<(), Error> {
         let split_deps = self
             .workspaces
@@ -334,6 +337,7 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     fn populate_lockfile(&mut self) -> Result<Box<dyn Lockfile>, Error> {
         match self.lockfile.take() {
             Some(lockfile) => Ok(lockfile),
@@ -351,6 +355,7 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     fn resolve_lockfile(mut self) -> Result<BuildState<'a, ResolvedLockfile>, Error> {
         self.connect_internal_dependencies()?;
 
@@ -429,7 +434,8 @@ impl<'a> BuildState<'a, ResolvedLockfile> {
         Ok(())
     }
 
-    fn build(mut self) -> PackageGraph {
+    #[tracing::instrument(skip(self))]
+    fn build_inner(mut self) -> PackageGraph {
         if let Err(e) = self.populate_transitive_dependencies() {
             warn!("Unable to calculate transitive closures: {}", e);
         }
