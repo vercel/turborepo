@@ -36,6 +36,7 @@ describe("transform", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
+        bun: undefined,
       });
 
     const mockGetWorkspaceDetails = jest
@@ -93,6 +94,7 @@ describe("transform", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
+        bun: undefined,
       });
 
     const mockGetWorkspaceDetails = jest

@@ -4,7 +4,7 @@ use tracing::{debug, error};
 use crate::{commands::CommandBase, run::Run};
 
 pub async fn run(base: CommandBase) -> Result<()> {
-    let mut run = Run::new(base);
+    let mut run = Run::new(&base);
     debug!("using the experimental rust codepath");
     debug!("configured run struct: {:?}", run);
 

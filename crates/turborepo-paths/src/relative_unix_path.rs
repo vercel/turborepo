@@ -48,6 +48,10 @@ impl RelativeUnixPath {
         AnchoredSystemPathBuf(self.to_system_path_buf())
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     pub fn to_owned(&self) -> RelativeUnixPathBuf {
         RelativeUnixPathBuf(self.0.to_owned())
     }

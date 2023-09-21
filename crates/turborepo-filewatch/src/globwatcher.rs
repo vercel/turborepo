@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     future::IntoFuture,
+    str::FromStr,
 };
 
 use notify::Event;
@@ -21,6 +22,30 @@ type Hash = String;
 pub struct GlobSet {
     include: HashMap<String, wax::Glob<'static>>,
     exclude: Any<'static>,
+}
+
+impl GlobSet {
+    pub fn from_raw(
+        raw_includes: Vec<String>,
+        raw_excludes: Vec<String>,
+    ) -> Result<Self, wax::BuildError> {
+        let include = raw_includes
+            .into_iter()
+            .map(|raw_glob| {
+                let glob = Glob::from_str(&raw_glob)?.to_owned();
+                Ok((raw_glob, glob))
+            })
+            .collect::<Result<HashMap<_, _>, wax::BuildError>>()?;
+        let excludes = raw_excludes
+            .into_iter()
+            .map(|raw_glob| {
+                let glob = Glob::from_str(&raw_glob)?.to_owned();
+                Ok(glob)
+            })
+            .collect::<Result<Vec<_>, wax::BuildError>>()?;
+        let exclude = wax::any(excludes)?.to_owned();
+        Ok(Self { include, exclude })
+    }
 }
 
 #[derive(Debug, Error)]
@@ -369,7 +394,7 @@ mod test {
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
 
-        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
         let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
@@ -447,7 +472,7 @@ mod test {
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
 
-        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
         let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
@@ -535,7 +560,7 @@ mod test {
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
 
-        let watcher = FileSystemWatcher::new(&repo_root).unwrap();
+        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
         let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());

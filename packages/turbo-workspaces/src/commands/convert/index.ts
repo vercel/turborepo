@@ -1,10 +1,9 @@
 import inquirer from "inquirer";
 import chalk from "chalk";
-import { getAvailablePackageManagers } from "@turbo/utils";
+import { getAvailablePackageManagers, type PackageManager } from "@turbo/utils";
 import { Logger } from "../../logger";
 import { directoryInfo } from "../../utils";
 import { getWorkspaceDetails } from "../../getWorkspaceDetails";
-import type { PackageManager } from "../../types";
 import { convertProject } from "../../convert";
 import type { ConvertCommandArgument, ConvertCommandOptions } from "./types";
 
@@ -80,11 +79,16 @@ export async function convertCommand(
     when:
       !packageManager ||
       !Object.keys(availablePackageManagers).includes(packageManager),
-    choices: ["npm", "pnpm", "yarn"].map((p) => ({
-      name: `${p} workspaces`,
-      value: p,
+    choices: [
+      { pm: "npm", label: "npm workspaces" },
+      { pm: "pnpm", label: "pnpm workspaces" },
+      { pm: "yarn", label: "yarn workspaces" },
+      { pm: "bun", label: "bun workspaces (beta)" },
+    ].map(({ pm, label }) => ({
+      name: label,
+      value: pm,
       disabled: isPackageManagerDisabled({
-        packageManager: p as PackageManager,
+        packageManager: pm as PackageManager,
         currentWorkspaceManger: project.packageManager,
         availablePackageManagers,
       }),

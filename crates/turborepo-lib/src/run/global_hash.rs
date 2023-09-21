@@ -13,6 +13,7 @@ use crate::{
     cli::EnvMode,
     hash::{GlobalHashable, TurboHash},
     package_graph::WorkspaceInfo,
+    package_manager,
     package_manager::PackageManager,
 };
 
@@ -29,11 +30,12 @@ enum GlobalHashError {}
 pub struct GlobalHashableInputs<'a> {
     global_cache_key: &'static str,
     global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
-    root_external_dependencies_hash: String,
+    // This is `None` in single package mode
+    root_external_dependencies_hash: Option<String>,
     env: &'a [String],
     // Only Option to allow #[derive(Default)]
     resolved_env_vars: Option<DetailedMap>,
-    pass_through_env: &'a [String],
+    pass_through_env: Option<&'a [String]>,
     env_mode: EnvMode,
     framework_inference: bool,
     dot_env: &'a [RelativeUnixPathBuf],
@@ -41,6 +43,7 @@ pub struct GlobalHashableInputs<'a> {
 
 #[allow(clippy::too_many_arguments)]
 pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
+    is_monorepo: bool,
     root_workspace: &WorkspaceInfo,
     root_path: &AbsoluteSystemPath,
     package_manager: &PackageManager,
@@ -48,7 +51,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     global_file_dependencies: &'a [String],
     env_at_execution_start: &EnvironmentVariableMap,
     global_env: &'a [String],
-    global_pass_through_env: &'a [String],
+    global_pass_through_env: Option<&'a [String]>,
     env_mode: EnvMode,
     framework_inference: bool,
     dot_env: &'a [RelativeUnixPathBuf],
@@ -64,12 +67,23 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     let mut global_deps = HashSet::new();
 
     if !global_file_dependencies.is_empty() {
-        let globs = package_manager.get_workspace_globs(root_path)?;
+        let exclusions = match package_manager.get_workspace_globs(root_path) {
+            Ok(globs) => globs.raw_exclusions,
+            // If we hit a missing workspaces error, we could be in single package mode
+            // so we should just use the default globs
+            Err(package_manager::Error::Workspace(_)) => {
+                package_manager.get_default_exclusions().collect()
+            }
+            Err(err) => {
+                debug!("no workspace globs found");
+                return Err(err.into());
+            }
+        };
 
         let files = globwalk::globwalk(
             root_path,
             global_file_dependencies,
-            &globs.raw_exclusions,
+            &exclusions,
             WalkType::All,
         )?;
 
@@ -102,11 +116,14 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         global_file_hash_map.extend(dot_env_object);
     }
 
-    let root_external_dependencies_hash = root_workspace.get_external_deps_hash();
+    let root_external_dependencies_hash =
+        is_monorepo.then(|| root_workspace.get_external_deps_hash());
 
     debug!(
-        "rust external deps hash: {}",
+        "external deps hash: {}",
         root_external_dependencies_hash
+            .as_deref()
+            .unwrap_or("no hash (single package)")
     );
 
     Ok(GlobalHashableInputs {
@@ -125,11 +142,15 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
 impl<'a> GlobalHashableInputs<'a> {
     pub fn calculate_global_hash_from_inputs(mut self) -> String {
         match self.env_mode {
-            EnvMode::Infer if !self.pass_through_env.is_empty() => {
+            // In infer mode, if there is any pass_through config (even if it is an empty array)
+            // we'll hash the whole object, so we can detect changes to that config
+            // Further, resolve the envMode to the concrete value.
+            EnvMode::Infer if self.pass_through_env.is_some() => {
                 self.env_mode = EnvMode::Strict;
             }
             EnvMode::Loose => {
-                self.pass_through_env = &[];
+                // Remove the passthroughs from hash consideration if we're explicitly loose.
+                self.pass_through_env = None;
             }
             _ => {}
         }
@@ -147,7 +168,7 @@ impl<'a> GlobalHashableInputs<'a> {
                 .resolved_env_vars
                 .map(|evm| evm.all.to_hashable())
                 .unwrap_or_default(),
-            pass_through_env: self.pass_through_env,
+            pass_through_env: self.pass_through_env.unwrap_or_default(),
             env_mode: self.env_mode,
             framework_inference: self.framework_inference,
             dot_env: self.dot_env,

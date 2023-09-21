@@ -1,3 +1,4 @@
+mod bun;
 mod npm;
 mod pnpm;
 mod yarn;
@@ -6,6 +7,7 @@ use std::{
     backtrace,
     fmt::{self, Display},
     fs,
+    process::Command,
 };
 
 use globwalk::fix_glob_pattern;
@@ -18,10 +20,11 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_lockfiles::Lockfile;
 use turborepo_ui::{UI, UNDERLINE};
 use wax::{Any, Glob, Pattern};
+use which::which;
 
 use crate::{
     package_json::PackageJson,
-    package_manager::{npm::NpmDetector, pnpm::PnpmDetector, yarn::YarnDetector},
+    package_manager::{bun::BunDetector, npm::NpmDetector, pnpm::PnpmDetector, yarn::YarnDetector},
 };
 
 #[derive(Debug, Deserialize)]
@@ -67,6 +70,7 @@ pub enum PackageManager {
     Pnpm,
     Pnpm6,
     Yarn,
+    Bun,
 }
 
 impl Display for PackageManager {
@@ -79,6 +83,7 @@ impl Display for PackageManager {
             PackageManager::Pnpm => write!(f, "pnpm"),
             PackageManager::Pnpm6 => write!(f, "pnpm6"),
             PackageManager::Yarn => write!(f, "yarn"),
+            PackageManager::Bun => write!(f, "bun"),
         }
     }
 }
@@ -218,6 +223,10 @@ impl Display for MissingWorkspaceError {
                 "package.json: no workspaces found. Turborepo requires npm workspaces to be \
                  defined in the root package.json"
             }
+            PackageManager::Bun => {
+                "package.json: no workspaces found. Turborepo requires bun workspaces to be \
+                 defined in the root package.json"
+            }
         };
         write!(f, "{}", err)
     }
@@ -277,7 +286,7 @@ pub enum Error {
 }
 
 static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
-    lazy_regex!(r"(?P<manager>npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)");
+    lazy_regex!(r"(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)");
 
 impl PackageManager {
     /// Returns the set of globs for the workspace.
@@ -285,25 +294,27 @@ impl PackageManager {
         &self,
         root_path: &AbsoluteSystemPath,
     ) -> Result<WorkspaceGlobs, Error> {
-        let (mut inclusions, mut exclusions) = self.get_configured_workspace_globs(root_path)?;
+        let (inclusions, mut exclusions) = self.get_configured_workspace_globs(root_path)?;
         exclusions.extend(self.get_default_exclusions());
 
         // Yarn appends node_modules to every other glob specified
         if *self == PackageManager::Yarn {
             inclusions
-                .iter_mut()
+                .iter()
                 .for_each(|inclusion| exclusions.push(format!("{inclusion}/node_modules/**")));
         }
+
         let globs = WorkspaceGlobs::new(inclusions, exclusions)?;
         Ok(globs)
     }
 
-    fn get_default_exclusions(&self) -> impl Iterator<Item = String> {
+    pub fn get_default_exclusions(&self) -> impl Iterator<Item = String> {
         let ignores = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 ["**/node_modules/**", "**/bower_components/**"].as_slice()
             }
             PackageManager::Npm => ["**/node_modules/**"].as_slice(),
+            PackageManager::Bun => ["**/node_modules", "**/.git"].as_slice(),
             PackageManager::Berry => ["**/node_modules", "**/.git", "**/.yarn"].as_slice(),
             PackageManager::Yarn => [].as_slice(), // yarn does its own handling above
         };
@@ -316,8 +327,11 @@ impl PackageManager {
     ) -> Result<(Vec<String>, Vec<String>), Error> {
         let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
+                // Make sure to convert this to a missing workspace error
+                // so we can catch it in the case of single package mode.
                 let workspace_yaml =
-                    fs::read_to_string(root_path.join_component("pnpm-workspace.yaml"))?;
+                    fs::read_to_string(root_path.join_component("pnpm-workspace.yaml"))
+                        .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self)))?;
                 let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml)?;
                 if pnpm_workspace.packages.is_empty() {
                     return Err(MissingWorkspaceError::from(self).into());
@@ -325,10 +339,14 @@ impl PackageManager {
                     pnpm_workspace.packages
                 }
             }
-            PackageManager::Berry | PackageManager::Npm | PackageManager::Yarn => {
+            PackageManager::Berry
+            | PackageManager::Npm
+            | PackageManager::Yarn
+            | PackageManager::Bun => {
                 let package_json_text =
                     fs::read_to_string(root_path.join_component("package.json"))?;
-                let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)?;
+                let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)
+                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self)))?; // Make sure to convert this to a missing workspace error
 
                 if package_json.workspaces.as_ref().is_empty() {
                     return Err(MissingWorkspaceError::from(self).into());
@@ -374,6 +392,7 @@ impl PackageManager {
         let version = version.parse()?;
         let manager = match manager {
             "npm" => Some(PackageManager::Npm),
+            "bun" => Some(PackageManager::Bun),
             "yarn" => Some(YarnDetector::detect_berry_or_yarn(&version)?),
             "pnpm" => Some(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
             _ => None,
@@ -386,6 +405,7 @@ impl PackageManager {
         let mut detected_package_managers = PnpmDetector::new(repo_root)
             .chain(NpmDetector::new(repo_root))
             .chain(YarnDetector::new(repo_root))
+            .chain(BunDetector::new(repo_root))
             .collect::<Result<Vec<_>, Error>>()?;
 
         match detected_package_managers.len() {
@@ -433,6 +453,7 @@ impl PackageManager {
     pub fn lockfile_name(&self) -> &'static str {
         match self {
             PackageManager::Npm => npm::LOCKFILE,
+            PackageManager::Bun => bun::LOCKFILE,
             PackageManager::Pnpm | PackageManager::Pnpm6 => pnpm::LOCKFILE,
             PackageManager::Yarn | PackageManager::Berry => yarn::LOCKFILE,
         }
@@ -441,7 +462,10 @@ impl PackageManager {
     pub fn workspace_configuration_path(&self) -> Option<&'static str> {
         match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => Some("pnpm-workspace.yaml"),
-            PackageManager::Npm | PackageManager::Berry | PackageManager::Yarn => None,
+            PackageManager::Npm
+            | PackageManager::Berry
+            | PackageManager::Yarn
+            | PackageManager::Bun => None,
         }
     }
 
@@ -450,7 +474,17 @@ impl PackageManager {
         root_path: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
-        let contents = root_path.join_component(self.lockfile_name()).read()?;
+        let lockfile_path = self.lockfile_path(root_path);
+        let contents = match self {
+            PackageManager::Bun => {
+                Command::new(which("bun")?)
+                    .arg(lockfile_path.to_string())
+                    .current_dir(root_path.to_string())
+                    .output()?
+                    .stdout
+            }
+            _ => lockfile_path.read()?,
+        };
         self.parse_lockfile(root_package_json, &contents)
     }
 
@@ -466,6 +500,9 @@ impl PackageManager {
             }
             PackageManager::Yarn => {
                 Box::new(turborepo_lockfiles::Yarn1Lockfile::from_bytes(contents)?)
+            }
+            PackageManager::Bun => {
+                Box::new(turborepo_lockfiles::BunLockfile::from_bytes(contents)?)
             }
             PackageManager::Berry => Box::new(turborepo_lockfiles::BerryLockfile::load(
                 contents,
@@ -490,8 +527,8 @@ impl PackageManager {
             PackageManager::Pnpm6 | PackageManager::Pnpm => {
                 pnpm::prune_patches(package_json, patches)
             }
-            PackageManager::Yarn | PackageManager::Npm => {
-                unreachable!("npm and yarn 1 don't have a concept of patches")
+            PackageManager::Yarn | PackageManager::Npm | PackageManager::Bun => {
+                unreachable!("bun, npm, and yarn 1 don't have a concept of patches")
             }
         }
     }
@@ -545,6 +582,7 @@ mod tests {
             PackageManager::Berry,
             PackageManager::Yarn,
             PackageManager::Npm,
+            PackageManager::Bun,
         ] {
             let found = mgr.get_package_jsons(&with_yarn).unwrap();
             let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found);
@@ -588,6 +626,7 @@ mod tests {
             let expected: &[&str] = match mgr {
                 PackageManager::Npm => &["**/node_modules/**"],
                 PackageManager::Berry => &["**/node_modules", "**/.git", "**/.yarn"],
+                PackageManager::Bun => &["**/node_modules", "**/.git"],
                 PackageManager::Yarn => &["apps/*/node_modules/**", "packages/*/node_modules/**"],
                 PackageManager::Pnpm | PackageManager::Pnpm6 => &[
                     "**/node_modules/**",
@@ -667,6 +706,13 @@ mod tests {
                 expected_version: "111.0.1".to_owned(),
                 expected_error: false,
             },
+            TestCase {
+                name: "supports bun".to_owned(),
+                package_manager: "bun@1.0.1".to_owned(),
+                expected_manager: "bun".to_owned(),
+                expected_version: "1.0.1".to_owned(),
+                expected_error: false,
+            },
         ];
 
         for case in tests {
@@ -705,6 +751,10 @@ mod tests {
         package_json.package_manager = Some("pnpm@7.2.0".to_string());
         let package_manager = PackageManager::read_package_manager(&package_json)?;
         assert_eq!(package_manager, Some(PackageManager::Pnpm));
+
+        package_json.package_manager = Some("bun@1.0.1".to_string());
+        let package_manager = PackageManager::read_package_manager(&package_json)?;
+        assert_eq!(package_manager, Some(PackageManager::Bun));
 
         Ok(())
     }

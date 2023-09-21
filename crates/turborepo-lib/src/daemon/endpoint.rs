@@ -6,7 +6,7 @@ use futures::Stream;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tonic::transport::server::Connected;
 use tracing::{debug, trace};
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::AbsoluteSystemPath;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SocketOpenError {
@@ -30,7 +30,7 @@ const WINDOWS_POLL_DURATION: Duration = Duration::from_millis(1);
 ///       code path to shut down the non-blocking polling
 #[tracing::instrument]
 pub async fn listen_socket(
-    path: AbsoluteSystemPathBuf,
+    path: &AbsoluteSystemPath,
     #[allow(unused)] running: Arc<AtomicBool>,
 ) -> Result<
     (
@@ -202,7 +202,7 @@ mod test {
         pid_path.create_with_contents("100000").unwrap();
 
         let running = Arc::new(AtomicBool::new(true));
-        let result = listen_socket(pid_path, running).await;
+        let result = listen_socket(&pid_path, running).await;
 
         // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
 
@@ -232,7 +232,7 @@ mod test {
             .unwrap();
 
         let running = Arc::new(AtomicBool::new(true));
-        let result = listen_socket(pid_path, running).await;
+        let result = listen_socket(&pid_path, running).await;
 
         // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
 

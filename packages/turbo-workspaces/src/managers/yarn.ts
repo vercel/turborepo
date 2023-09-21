@@ -11,6 +11,7 @@ import type {
   CleanArgs,
   Project,
   ManagerHandler,
+  Manager,
 } from "../types";
 import {
   getMainStep,
@@ -20,7 +21,14 @@ import {
   expandWorkspaces,
   getWorkspacePackageManager,
   parseWorkspacePackages,
+  removeLockFile,
+  bunLockToYarnLock,
 } from "../utils";
+
+const PACKAGE_MANAGER_DETAILS: Manager = {
+  name: "yarn",
+  lock: "yarn.lock",
+};
 
 /**
  * Check if a given project is using yarn workspaces
@@ -30,11 +38,13 @@ import {
  */
 // eslint-disable-next-line @typescript-eslint/require-await -- must match the detect type signature
 async function detect(args: DetectArgs): Promise<boolean> {
-  const lockFile = path.join(args.workspaceRoot, "yarn.lock");
+  const lockFile = path.join(args.workspaceRoot, PACKAGE_MANAGER_DETAILS.lock);
   const packageManager = getWorkspacePackageManager({
     workspaceRoot: args.workspaceRoot,
   });
-  return existsSync(lockFile) || packageManager === "yarn";
+  return (
+    existsSync(lockFile) || packageManager === PACKAGE_MANAGER_DETAILS.name
+  );
 }
 
 /**
@@ -56,10 +66,10 @@ async function read(args: ReadArgs): Promise<Project> {
   return {
     name,
     description,
-    packageManager: "yarn",
+    packageManager: PACKAGE_MANAGER_DETAILS.name,
     paths: expandPaths({
       root: args.workspaceRoot,
-      lockFile: "yarn.lock",
+      lockFile: PACKAGE_MANAGER_DETAILS.lock,
     }),
     workspaceData: {
       globs: workspaceGlobs,
@@ -85,7 +95,11 @@ async function create(args: CreateArgs): Promise<void> {
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    getMainStep({ packageManager: "yarn", action: "create", project })
+    getMainStep({
+      packageManager: PACKAGE_MANAGER_DETAILS.name,
+      action: "create",
+      project,
+    })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
   logger.rootHeader();
@@ -144,7 +158,11 @@ async function remove(args: RemoveArgs): Promise<void> {
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    getMainStep({ packageManager: "yarn", action: "remove", project })
+    getMainStep({
+      packageManager: PACKAGE_MANAGER_DETAILS.name,
+      action: "remove",
+      project,
+    })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
 
@@ -203,15 +221,36 @@ async function clean(args: CleanArgs): Promise<void> {
  *
  * If this is not possible, the non yarn lockfile is removed
  */
-// eslint-disable-next-line @typescript-eslint/require-await -- must match the convertLock type signature
 async function convertLock(args: ConvertArgs): Promise<void> {
-  const { project, options } = args;
+  const { project, options, logger } = args;
 
-  if (project.packageManager !== "yarn") {
-    // remove the lockfile
-    if (!options?.dry) {
-      rmSync(project.paths.lockfile, { force: true });
-    }
+  const logLockConversionStep = (): void => {
+    logger.subStep(
+      `converting ${path.relative(
+        project.paths.root,
+        project.paths.lockfile
+      )} to ${PACKAGE_MANAGER_DETAILS.lock}`
+    );
+  };
+
+  // handle moving lockfile from `packageManager` to yarn
+  switch (project.packageManager) {
+    case "pnpm":
+      // can't convert from pnpm to yarn - just remove the lock
+      removeLockFile({ project, options });
+      break;
+    case "bun":
+      // convert from bun lockfile to yarn
+      logLockConversionStep();
+      await bunLockToYarnLock({ project, options });
+      break;
+    case "npm":
+      // can't convert from npm to yarn - just remove the lock
+      removeLockFile({ project, options });
+      break;
+    case "yarn":
+      // we're already using yarn, so we don't need to convert
+      break;
   }
 }
 

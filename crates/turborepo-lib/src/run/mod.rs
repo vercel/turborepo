@@ -28,24 +28,24 @@ use crate::{
     config::TurboJson,
     daemon::DaemonConnector,
     engine::EngineBuilder,
-    manager::Manager,
     opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
+    process::ProcessManager,
     run::global_hash::get_global_hash_inputs,
     task_graph::Visitor,
     task_hash::PackageInputsHashes,
 };
 
 #[derive(Debug)]
-pub struct Run {
-    base: CommandBase,
-    processes: Manager,
+pub struct Run<'a> {
+    base: &'a CommandBase,
+    processes: ProcessManager,
 }
 
-impl Run {
-    pub fn new(base: CommandBase) -> Self {
-        let processes = Manager::new();
+impl<'a> Run<'a> {
+    pub fn new(base: &'a CommandBase) -> Self {
+        let processes = ProcessManager::new();
         Self { base, processes }
     }
 
@@ -204,6 +204,7 @@ impl Run {
             .expect("must have root workspace");
 
         let global_hash_inputs = get_global_hash_inputs(
+            !opts.run_opts.single_package,
             root_workspace,
             &self.base.repo_root,
             pkg_dep_graph.package_manager(),
@@ -211,7 +212,7 @@ impl Run {
             &root_turbo_json.global_deps,
             &env_at_execution_start,
             &root_turbo_json.global_env,
-            &root_turbo_json.global_pass_through_env,
+            root_turbo_json.global_pass_through_env.as_deref(),
             opts.run_opts.env_mode,
             opts.run_opts.framework_inference,
             &root_turbo_json.global_dot_env,
@@ -234,7 +235,7 @@ impl Run {
 
         let mut global_env_mode = opts.run_opts.env_mode;
         if matches!(global_env_mode, EnvMode::Infer)
-            && !root_turbo_json.global_pass_through_env.is_empty()
+            && root_turbo_json.global_pass_through_env.is_some()
         {
             global_env_mode = EnvMode::Strict;
         }
@@ -250,6 +251,9 @@ impl Run {
 
         debug!("package inputs hashes: {:?}", package_inputs_hashes);
 
+        // remove dead code warnings
+        let _proc_manager = ProcessManager::new();
+
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
         let visitor = Visitor::new(
@@ -260,6 +264,7 @@ impl Run {
             &env_at_execution_start,
             &global_hash,
             global_env_mode,
+            self.base.ui,
         );
 
         visitor.visit(engine.clone()).await?;

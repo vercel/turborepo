@@ -3,7 +3,7 @@
 import http from "node:http";
 import https from "node:https";
 import chalk from "chalk";
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import { logger } from "@turbo/utils";
 import { ProxyAgent } from "proxy-agent";
 import cliPkg from "../package.json";
@@ -21,9 +21,17 @@ const createTurboCli = new Command();
 createTurboCli
   .name(chalk.bold(logger.turboGradient("create-turbo")))
   .description("Create a new Turborepo")
-  .usage(`${chalk.bold("<project-directory> <package-manager>")} [options]`)
+  .usage(`${chalk.bold("<project-directory>")} [options]`)
   .argument("[project-directory]")
+  // TODO: argument is still provided (but removed from help)
+  // for backwards compatibility, remove this in the next major
   .argument("[package-manager]")
+  .addOption(
+    new Option(
+      "-m, --package-manager <package-manager>",
+      "Specify the package manager to use"
+    ).choices(["npm", "yarn", "pnpm", "bun"])
+  )
   .option(
     "--skip-install",
     "Do not run a package manager install after creating the project",

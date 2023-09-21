@@ -5,9 +5,10 @@ import {
   getAvailablePackageManagers,
   getPackageManagersBinPaths,
   logger,
+  type PackageManager,
   type PackageJson,
 } from "@turbo/utils";
-import { type Project, type PackageManager } from "@turbo/workspaces";
+import type { Project } from "@turbo/workspaces";
 import { exec } from "../utils";
 
 type InstallType = "dependencies" | "devDependencies";
@@ -23,6 +24,8 @@ function getGlobalUpgradeCommand(
       return `npm install turbo@${to} --global`;
     case "pnpm":
       return `pnpm add turbo@${to} --global`;
+    case "bun":
+      return `bun add turbo@${to} --global`;
   }
 }
 
@@ -77,6 +80,13 @@ function getLocalUpgradeCommand({
         `turbo@${to}`,
         installType === "devDependencies" && "--save-dev",
         isUsingWorkspaces && "-w",
+      ]);
+    case "bun":
+      return renderCommand([
+        "bun",
+        "add",
+        `turbo@${to}`,
+        installType === "devDependencies" && "--dev",
       ]);
   }
 }

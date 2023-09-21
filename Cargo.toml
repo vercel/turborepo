@@ -77,19 +77,17 @@ async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.12.2" }
 
-# Temporarily downgrading these to avoid breaking changes stemming from using
-# lightning_css in later versions styled_jsx >= 0.37.0
-mdxjs = "=0.1.14"
-modularize_imports = { version = "=0.33.0" }
-styled_components = { version = "=0.60.0" }
-styled_jsx = { version = "=0.37.0" }
-swc_core = { version = "=0.79.55", features = [
+mdxjs = "0.1.16"
+modularize_imports = { version = "0.45.0" }
+styled_components = { version = "0.72.0" }
+styled_jsx = { version = "0.49.0" }
+swc_core = { version = "0.83.12", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
-swc_emotion = { version = "=0.36.0" }
-swc_relay = { version = "=0.8.0" }
-testing = { version = "0.33.21" }
+swc_emotion = { version = "0.48.0" }
+swc_relay = { version = "0.20.0" }
+testing = { version = "0.34.1" }
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
@@ -190,7 +188,7 @@ dunce = "1.0.3"
 futures = "0.3.26"
 futures-retry = "0.6.0"
 hex = "0.4.3"
-httpmock = { version = "0.6.7", default-features = false }
+httpmock = { version = "0.6.8", default-features = false }
 image = { version = "0.24.6", default-features = false }
 indexmap = "1.9.2"
 indicatif = "0.17.3"
@@ -228,7 +226,8 @@ sourcemap = "6.0.2"
 syn = "1.0.107"
 tempfile = "3.3.0"
 test-case = "3.0.0"
-thiserror = "1.0.38"
+# pinned due to 1.0.45 requiring toolchain update
+thiserror = "<1.0.45"
 tiny-gradient = "0.1.0"
 tokio = "1.25.0"
 tokio-util = { version = "0.7.7", features = ["io"] }

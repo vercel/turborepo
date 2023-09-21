@@ -4,12 +4,11 @@ use std::{
 };
 
 use anyhow::Result;
-use itertools::Itertools;
-use petgraph::visit::{depth_first_search, EdgeRef, Reversed};
+use petgraph::visit::{depth_first_search, Reversed};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
-use crate::{package_json::PackageJson, package_manager::PackageManager};
+use crate::{graph, package_json::PackageJson, package_manager::PackageManager};
 
 mod builder;
 
@@ -102,34 +101,8 @@ impl PackageGraph {
         PackageGraphBuilder::new(repo_root, root_package_json)
     }
 
-    pub fn validate(&self) -> Result<(), builder::Error> {
-        // This is equivalent to AcyclicGraph.Cycles from Go's dag library
-        let cycles_lines = petgraph::algo::tarjan_scc(&self.workspace_graph)
-            .into_iter()
-            .filter(|cycle| cycle.len() > 1)
-            .map(|cycle| {
-                let workspaces = cycle
-                    .into_iter()
-                    .map(|id| self.workspace_graph.node_weight(id).unwrap());
-                format!("\t{}", workspaces.format(", "))
-            })
-            .join("\n");
-
-        if !cycles_lines.is_empty() {
-            return Err(builder::Error::CyclicDependencies(cycles_lines));
-        }
-
-        for edge in self.workspace_graph.edge_references() {
-            if edge.source() == edge.target() {
-                let node = self
-                    .workspace_graph
-                    .node_weight(edge.source())
-                    .expect("edge pointed to missing node");
-                return Err(builder::Error::SelfDependency(node.clone()));
-            }
-        }
-
-        Ok(())
+    pub fn validate(&self) -> Result<(), Error> {
+        Ok(graph::validate_graph(&self.workspace_graph)?)
     }
 
     /// Returns the number of workspaces in the repo
@@ -681,7 +654,7 @@ mod test {
 
         assert_matches!(
             pkg_graph.validate(),
-            Err(builder::Error::CyclicDependencies(_))
+            Err(builder::Error::Graph(graph::Error::CyclicDependencies(_)))
         );
     }
 
@@ -712,6 +685,9 @@ mod test {
         .build()
         .unwrap();
 
-        assert_matches!(pkg_graph.validate(), Err(builder::Error::SelfDependency(_)));
+        assert_matches!(
+            pkg_graph.validate(),
+            Err(builder::Error::Graph(graph::Error::SelfDependency(_)))
+        );
     }
 }

@@ -88,7 +88,7 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
     Object.keys(workspacesByDirectory).forEach((dir, idx) => {
       renderDirectory({
         number: idx + 1,
-        workspaces: workspacesByDirectory[directory],
+        workspaces: workspacesByDirectory[dir],
         dir,
       });
     });

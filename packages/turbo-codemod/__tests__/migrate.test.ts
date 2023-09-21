@@ -48,6 +48,7 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
+        bun: undefined,
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -134,6 +135,7 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
+        bun: undefined,
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -202,6 +204,7 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
+        bun: undefined,
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -286,6 +289,7 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
+        bun: undefined,
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -489,6 +493,7 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
+        bun: undefined,
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -596,6 +601,7 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
+        bun: undefined,
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -832,6 +838,7 @@ describe("migrate", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
+        bun: undefined,
       });
     const mockedGetWorkspaceDetails = jest
       .spyOn(turboWorkspaces, "getWorkspaceDetails")
