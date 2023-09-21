@@ -77,6 +77,7 @@ macro_rules! free_var_references {
 pub enum CompileTimeDefineValue {
     Bool(bool),
     String(String),
+    JSON(String),
 }
 
 impl From<bool> for CompileTimeDefineValue {
@@ -97,7 +98,14 @@ impl From<&str> for CompileTimeDefineValue {
     }
 }
 
+impl From<serde_json::Value> for CompileTimeDefineValue {
+    fn from(value: serde_json::Value) -> Self {
+        Self::JSON(value.to_string())
+    }
+}
+
 #[turbo_tasks::value(transparent)]
+#[derive(Debug, Clone)]
 pub struct CompileTimeDefines(pub IndexMap<Vec<String>, CompileTimeDefineValue>);
 
 impl IntoIterator for CompileTimeDefines {
@@ -118,7 +126,7 @@ impl CompileTimeDefines {
 }
 
 #[turbo_tasks::value]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FreeVarReference {
     EcmaScriptModule {
         request: String,
@@ -153,6 +161,7 @@ impl From<CompileTimeDefineValue> for FreeVarReference {
 }
 
 #[turbo_tasks::value(transparent)]
+#[derive(Debug, Clone)]
 pub struct FreeVarReferences(pub IndexMap<Vec<String>, FreeVarReference>);
 
 #[turbo_tasks::value_impl]
@@ -164,6 +173,7 @@ impl FreeVarReferences {
 }
 
 #[turbo_tasks::value(shared)]
+#[derive(Debug, Clone)]
 pub struct CompileTimeInfo {
     pub environment: Vc<Environment>,
     pub defines: Vc<CompileTimeDefines>,
