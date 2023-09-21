@@ -1,5 +1,3 @@
-use std::fs::File;
-
 use anyhow::{bail, Context, Result};
 use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
@@ -8,7 +6,7 @@ use turbo_tasks::{
     trace::TraceRawVcs,
     TaskInput, TryJoinIterExt, Value, Vc,
 };
-use turbo_tasks_fs::{FileSystem, FileSystemPath};
+use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     chunk::{Chunk, ChunkableModule, ChunkingContext, Chunks, EvaluatableAssets},
     environment::Environment,
@@ -254,14 +252,12 @@ impl ChunkingContext for BuildChunkingContext {
     }
 
     #[turbo_tasks::function]
-    async fn asset_url_path(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<String>> {
+    async fn asset_url(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<String>> {
         let this = self.await?;
         let asset_path = ident.path().await?.to_string();
         let asset_path = asset_path
             .strip_prefix(&format!("{}/", this.client_root.await?.path))
             .context("expected client root to contain asset path")?;
-
-        dbg!(&asset_path, this.asset_prefix.await?);
 
         Ok(Vc::cell(format!(
             "{}{}",

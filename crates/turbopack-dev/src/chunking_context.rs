@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use indexmap::IndexSet;
 use turbo_tasks::{
     graph::{AdjacencyMap, GraphTraversal},
@@ -36,8 +36,8 @@ impl DevChunkingContextBuilder {
         self
     }
 
-    pub fn asset_base_path(mut self, asset_base_path: Vc<Option<String>>) -> Self {
-        self.chunking_context.asset_base_path = asset_base_path;
+    pub fn asset_prefix(mut self, asset_prefix: Vc<Option<String>>) -> Self {
+        self.chunking_context.asset_prefix = asset_prefix;
         self
     }
 
@@ -95,9 +95,9 @@ pub struct DevChunkingContext {
     /// Base path that will be prepended to all chunk URLs when loading them.
     /// This path will not appear in chunk paths or chunk data.
     chunk_base_path: Vc<Option<String>>,
-    /// Base path that will be prepended to all static asset URLs when loading
+    /// URL prefix that will be prepended to all static asset URLs when loading
     /// them.
-    asset_base_path: Vc<Option<String>>,
+    asset_prefix: Vc<Option<String>>,
     /// Layer name within this context
     layer: Option<String>,
     /// Enable HMR for this chunking
@@ -124,7 +124,7 @@ impl DevChunkingContext {
                 reference_chunk_source_maps: true,
                 reference_css_chunk_source_maps: true,
                 asset_root_path,
-                asset_base_path: Default::default(),
+                asset_prefix: Default::default(),
                 chunk_base_path: Default::default(),
                 layer: None,
                 enable_hot_module_replacement: false,
@@ -244,15 +244,18 @@ impl ChunkingContext for DevChunkingContext {
     }
 
     #[turbo_tasks::function]
-    async fn asset_url_path(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<String>> {
+    async fn asset_url(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<String>> {
         let this = self.await?;
         let asset_path = ident.path().await?.to_string();
-        dbg!(&asset_path);
+        let asset_path = asset_path
+            .strip_prefix(&format!("{}/", this.output_root.await?.path))
+            .context("expected output_root to contain asset path")?;
 
-        Ok(Vc::cell(match &*this.asset_base_path.await? {
-            Some(asset_base_path) => format!("{}/{}", asset_base_path, asset_path),
-            None => format!("/{}", asset_path),
-        }))
+        Ok(Vc::cell(format!(
+            "{}{}",
+            this.asset_prefix.await?.as_ref().unwrap_or(&"/".to_owned()),
+            asset_path
+        )))
     }
 
     #[turbo_tasks::function]

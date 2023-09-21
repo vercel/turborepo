@@ -20,7 +20,7 @@ use turbopack_ecmascript::{
 };
 use turbopack_ecmascript_runtime::RuntimeType;
 
-use crate::{chunking_context, DevChunkingContext};
+use crate::DevChunkingContext;
 
 /// An Ecmascript chunk that:
 /// * Contains the Turbopack dev runtime code; and

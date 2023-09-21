@@ -36,7 +36,7 @@ pub trait ChunkingContext {
         asset_b: Vc<Box<dyn Module>>,
     ) -> Vc<bool>;
 
-    fn asset_url_path(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<String>>;
+    fn asset_url(self: Vc<Self>, ident: Vc<AssetIdent>) -> Result<Vc<String>>;
 
     fn asset_path(
         self: Vc<Self>,
