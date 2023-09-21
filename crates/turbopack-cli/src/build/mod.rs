@@ -184,6 +184,8 @@ async fn build_internal(
             build_output_root,
             build_output_root,
             build_output_root,
+            build_output_root.join("_next/static/media".to_string()),
+            Vc::cell("/".to_string()),
             env,
         )
         .minify_type(minify_type)
