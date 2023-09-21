@@ -134,7 +134,9 @@ func configureRun(base *cmdutil.CmdBase, opts *Opts, signalWatcher *signals.Watc
 	// that they want it. This should be fixed in Go and Rust at the same time.
 	if opts.runOpts.LogOrder == "auto" && ci.Constant() == "GITHUB_ACTIONS" {
 		opts.runOpts.LogOrder = "grouped"
-		opts.runOpts.LogPrefix = "none"
+		if opts.runOpts.LogPrefix != "task" {
+			opts.runOpts.LogPrefix = "none"
+		}
 		opts.runOpts.IsGithubActions = true
 	}
 
