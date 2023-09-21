@@ -10,7 +10,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbostate"
 )
 
-// Touching file to force cache miss
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Printf("go-turbo is expected to be invoked via turbo")
