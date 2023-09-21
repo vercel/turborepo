@@ -62,12 +62,6 @@ impl<T, H> CountHashSet<T, H> {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-
-    /// Checks if this set is equal to a fresh created set, meaning it has no
-    /// positive but also no negative entries.
-    pub fn is_unset(&self) -> bool {
-        self.inner.is_empty()
-    }
 }
 
 pub enum RemoveIfEntryResult {
@@ -137,11 +131,6 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
         }
     }
 
-    /// Returns the current count of an item
-    pub fn get(&self, item: &T) -> isize {
-        *self.inner.get(item).unwrap_or(&0)
-    }
-
     /// Returns true when the value is no longer visible from outside
     pub fn remove_count(&mut self, item: T, count: usize) -> bool {
         match self.inner.entry(item) {
@@ -174,11 +163,6 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
         }
     }
 
-    /// Returns true, when the value is no longer visible from outside
-    pub fn remove(&mut self, item: T) -> bool {
-        self.remove_count(item, 1)
-    }
-
     /// Removes an item if it is present.
     pub fn remove_if_entry(&mut self, item: &T) -> RemoveIfEntryResult {
         match self.inner.raw_entry_mut(item) {
@@ -201,14 +185,6 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
         CountHashSetIter {
             inner: self.inner.iter().filter_map(filter),
         }
-    }
-
-    pub fn into_counts(self) -> IntoIter<T, isize> {
-        self.inner.into_iter()
-    }
-
-    pub fn counts(&self) -> Iter<'_, T, isize> {
-        self.inner.iter()
     }
 }
 
