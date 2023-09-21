@@ -36,12 +36,6 @@ impl<T> TopTree<T> {
     ) where
         C::ItemRef: 'a,
     {
-        let _span = (self.depth > 1).then(|| {
-            tracing::trace_span!(
-                "aggregation_tree TopTree::add_children_of_child",
-                depth = self.depth
-            )
-        });
         for child in children {
             top_tree(context, child, self.depth + 1).add_upper(context, self);
         }
@@ -52,12 +46,6 @@ impl<T> TopTree<T> {
         context: &C,
         child_of_child: &C::ItemRef,
     ) {
-        let _span = (self.depth > 1).then(|| {
-            tracing::trace_span!(
-                "aggregation_tree TopTree::add_child_of_child",
-                depth = self.depth
-            )
-        });
         top_tree(context, child_of_child, self.depth + 1).add_upper(context, self);
     }
 
@@ -66,12 +54,6 @@ impl<T> TopTree<T> {
         context: &C,
         child_of_child: &C::ItemRef,
     ) {
-        let _span = (self.depth > 1).then(|| {
-            tracing::trace_span!(
-                "aggregation_tree TopTree::remove_child_of_child",
-                depth = self.depth
-            )
-        });
         top_tree(context, child_of_child, self.depth + 1).remove_upper(context, self);
     }
 
@@ -82,12 +64,6 @@ impl<T> TopTree<T> {
     ) where
         C::ItemRef: 'a,
     {
-        let _span = (self.depth > 1).then(|| {
-            tracing::trace_span!(
-                "aggregation_tree TopTree::remove_children_of_child",
-                depth = self.depth
-            )
-        });
         for child in children {
             top_tree(context, child, self.depth + 1).remove_upper(context, self);
         }
