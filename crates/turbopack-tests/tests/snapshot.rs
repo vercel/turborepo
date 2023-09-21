@@ -141,11 +141,8 @@ async fn run(resource: PathBuf) -> Result<()> {
     let tt = TurboTasks::new(MemoryBackend::default());
     let task = tt.spawn_once_task(async move {
         let out = run_test(resource.to_str().unwrap().to_string());
-        let captured_issues = out
-            .peek_issues_with_path()
-            .await?
-            .strongly_consistent()
-            .await?;
+        out.resolve_strongly_consistent().await?;
+        let captured_issues = out.peek_issues_with_path().await?.cell();
 
         let plain_issues = captured_issues
             .iter_with_shortest_path()

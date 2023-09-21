@@ -24,7 +24,7 @@ use crate::source::{resolve::ResolveSourceRequestResult, ProxyResult};
 type GetContentFn = Box<dyn Fn() -> Vc<ResolveSourceRequestResult> + Send + Sync>;
 
 async fn peek_issues<T: Send>(source: Vc<T>) -> Result<Vec<ReadRef<PlainIssue>>> {
-    let captured = source.peek_issues_with_path().await?.await?;
+    let captured = source.peek_issues_with_path().await?;
 
     captured.get_plain_issues().await
 }
