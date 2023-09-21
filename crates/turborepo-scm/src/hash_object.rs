@@ -2,6 +2,7 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
 use crate::{package_deps::GitHashes, Error};
 
+#[tracing::instrument(skip(git_root, pkg_path, hashes))]
 pub(crate) fn hash_objects(
     git_root: &AbsoluteSystemPath,
     pkg_path: &AbsoluteSystemPath,
@@ -9,6 +10,9 @@ pub(crate) fn hash_objects(
     hashes: &mut GitHashes,
 ) -> Result<(), Error> {
     for filename in to_hash {
+        let span = tracing::span!(tracing::Level::INFO, "hash_object", ?filename);
+        let _enter = span.enter();
+
         let full_file_path = git_root.join_unix_path(filename)?;
         match git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path) {
             Ok(hash) => {
