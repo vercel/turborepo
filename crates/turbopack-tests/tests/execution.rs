@@ -298,8 +298,8 @@ async fn run_test(resource: String) -> Result<Vc<RunTestResult>> {
 
 #[turbo_tasks::function]
 async fn snapshot_issues(run_result: Vc<RunTestResult>) -> Result<Vc<()>> {
-    run_result.resolve_strongly_consistent().await?;
-    let captured_issues = run_result.peek_issues_with_path().await?.cell();
+    let _ = run_result.resolve_strongly_consistent().await?;
+    let captured_issues = run_result.peek_issues_with_path().await?;
 
     let RunTestResult { js_result: _, path } = *run_result.await?;
 
