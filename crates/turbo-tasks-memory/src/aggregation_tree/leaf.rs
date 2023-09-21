@@ -141,7 +141,7 @@ fn get_or_create_in_vec<T>(
     }
 }
 
-#[tracing::instrument(level = Level::TRACE, skip(context, reference))]
+#[tracing::instrument(level = Level::TRACE, skip(aggregation_context, reference))]
 pub fn top_tree<C: AggregationContext>(
     aggregation_context: &C,
     reference: &C::ItemRef,
