@@ -576,6 +576,10 @@ impl Backend for MemoryBackend {
         };
         id
     }
+
+    fn dispose_root_task(&self, task: TaskId, turbo_tasks: &dyn TurboTasksBackendApi<Self>) {
+        Task::unset_root(task, self, turbo_tasks);
+    }
 }
 
 pub(crate) enum Job {

@@ -348,6 +348,8 @@ pub trait Backend: Sync + Send {
         task_type: TransientTaskType,
         turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     ) -> TaskId;
+
+    fn dispose_root_task(&self, task: TaskId, turbo_tasks: &dyn TurboTasksBackendApi<Self>);
 }
 
 impl PersistentTaskType {

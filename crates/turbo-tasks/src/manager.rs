@@ -356,6 +356,10 @@ impl<B: Backend + 'static> TurboTasks<B> {
         id
     }
 
+    pub fn dispose_root_task(&self, task_id: TaskId) {
+        self.backend.dispose_root_task(task_id, self);
+    }
+
     // TODO make sure that all dependencies settle before reading them
     /// Creates a new root task, that is only executed once.
     /// Dependencies will not invalidate the task.

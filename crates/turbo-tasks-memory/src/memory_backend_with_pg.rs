@@ -1604,6 +1604,10 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         self.only_known_to_memory_tasks.insert(task);
         task
     }
+
+    fn dispose_root_task(&self, _task: TaskId, _turbo_tasks: &dyn TurboTasksBackendApi<Self>) {
+        todo!()
+    }
 }
 
 struct MemoryBackendPersistedGraphApi<'a, P: PersistedGraph + 'static> {
