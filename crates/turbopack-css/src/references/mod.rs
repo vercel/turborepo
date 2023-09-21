@@ -7,7 +7,6 @@ use lightningcss::{
     values::url::Url,
     visitor::{Visit, Visitor},
 };
-use swc_core::common::{source_map::Pos, Spanned};
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
     issue::{IssueSeverity, IssueSource},
@@ -49,7 +48,7 @@ pub fn analyze_references(
     let mut urls = Vec::new();
 
     let mut visitor = ModuleReferencesVisitor::new(source, origin, &mut references, &mut urls);
-    stylesheet.visit(&mut visitor);
+    stylesheet.visit(&mut visitor).unwrap();
 
     Ok((references, urls))
 }
