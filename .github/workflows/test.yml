@@ -221,6 +221,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        shell: bash
 
   go_lint:
     name: Go linting
@@ -277,6 +278,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: turbo run test --filter=cli --color
+        shell: bash
 
   go_integration:
     name: Go Integration Tests
