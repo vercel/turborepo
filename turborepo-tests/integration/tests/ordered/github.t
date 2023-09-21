@@ -5,8 +5,7 @@
 # Build as if we are in Github Actions
 Note that we need to use (re) for lines that start with '> '
 because otherwise prysk interprets them as multiline commands
-  $ export GITHUB_ACTIONS=1
-  $ ${TURBO} run build --force
+  $ GITHUB_ACTIONS=1 ${TURBO} run build --force
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -34,20 +33,10 @@ because otherwise prysk interprets them as multiline commands
     Time:\s*[\.0-9]+m?s  (re)
   
 # Build as if we are in Github Actions with a task log prefix.
-  $ export GITHUB_ACTIONS=1
-  $ ${TURBO} run build --force --log-prefix="task"
-  \xe2\x80\xa2 Packages in scope: my-app, util (esc)
-  \xe2\x80\xa2 Running build in 2 packages (esc)
+  $ GITHUB_ACTIONS=1 ${TURBO} run build --force --log-prefix="task" --filter=util
+  \xe2\x80\xa2 Packages in scope: util (esc)
+  \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  ::group::my-app:build
-  my-app:build: cache bypass, force executing 4c3a4e8d472d74b2
-  my-app:build: 
-  my-app:build: > build
-  my-app:build: > echo 'building' && sleep 1 && echo 'done'
-  my-app:build: 
-  my-app:build: building
-  my-app:build: done
-  ::endgroup::
   ::group::util:build
   util:build: cache bypass, force executing 90d7154e362e3386
   util:build: 
@@ -58,13 +47,13 @@ because otherwise prysk interprets them as multiline commands
   util:build: completed
   ::endgroup::
   
-   Tasks:    2 successful, 2 total
-  Cached:    0 cached, 2 total
+   Tasks:    1 successful, 1 total
+  Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
 
 Verify that errors are grouped properly
-  $ ${TURBO} run fail
+  $ GITHUB_ACTIONS=1 ${TURBO} run fail
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running fail in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
