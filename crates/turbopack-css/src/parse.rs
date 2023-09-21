@@ -1,10 +1,9 @@
-use once_cell::sync::Lazy;
-use regex::Regex;
 use swc_core::common::{source_map::SourceMapGenConfig, FileName};
 use turbopack_core::SOURCE_MAP_ROOT_NAME;
 
-// Capture up until the first "."
-static BASENAME_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[^.]*").unwrap());
+// // Capture up until the first "."
+// static BASENAME_RE: Lazy<Regex> = Lazy::new(||
+// Regex::new(r"^[^.]*").unwrap());
 
 /// A config to generate a source map which includes the source content of every
 /// source file. SWC doesn't inline sources content by default when generating a

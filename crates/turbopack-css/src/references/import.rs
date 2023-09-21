@@ -40,7 +40,7 @@ pub struct ImportAttributes {
 }
 
 impl PartialEq for ImportAttributes {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _: &Self) -> bool {
         false
     }
 }
