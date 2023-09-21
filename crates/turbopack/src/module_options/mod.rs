@@ -14,7 +14,7 @@ use turbopack_core::{
     reference_type::{CssReferenceSubType, ReferenceType, UrlReferenceSubType},
     resolve::options::{ImportMap, ImportMapping},
 };
-use turbopack_css::{CssInputTransform, CssModuleAssetType};
+use turbopack_css::CssModuleAssetType;
 use turbopack_ecmascript::{EcmascriptInputTransform, EcmascriptOptions, SpecifiedModuleType};
 use turbopack_mdx::MdxTransformOptions;
 use turbopack_node::transforms::{postcss::PostCssTransform, webpack::WebpackLoaders};
@@ -181,7 +181,6 @@ impl ModuleOptions {
             Vc::cell(transforms.clone())
         };
 
-        let css_transforms = Vc::cell(vec![CssInputTransform::Nested]);
         let mdx_transforms = Vc::cell(
             if let Some(transform) = &ts_transform {
                 if let Some(decorators_transform) = &decorators_transform {
@@ -381,7 +380,6 @@ impl ModuleOptions {
                     )]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                         ty: CssModuleAssetType::Default,
-                        transforms: css_transforms,
                     })],
                 ),
                 ModuleRule::new(
@@ -390,7 +388,6 @@ impl ModuleOptions {
                     )]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                         ty: CssModuleAssetType::Module,
-                        transforms: css_transforms,
                     })],
                 ),
             ]);
@@ -461,7 +458,6 @@ impl ModuleOptions {
                     ]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                         ty: CssModuleAssetType::Default,
-                        transforms: css_transforms,
                     })],
                 ),
                 ModuleRule::new(
@@ -474,7 +470,6 @@ impl ModuleOptions {
                     ]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                         ty: CssModuleAssetType::Module,
-                        transforms: css_transforms,
                     })],
                 ),
                 ModuleRule::new_internal(
@@ -483,7 +478,6 @@ impl ModuleOptions {
                     )]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                         ty: CssModuleAssetType::Default,
-                        transforms: css_transforms,
                     })],
                 ),
                 ModuleRule::new_internal(
@@ -492,7 +486,6 @@ impl ModuleOptions {
                     )]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                         ty: CssModuleAssetType::Module,
-                        transforms: css_transforms,
                     })],
                 ),
             ]);
