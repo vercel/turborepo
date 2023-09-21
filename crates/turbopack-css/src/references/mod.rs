@@ -151,7 +151,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
             self.urls.push((u.url.to_string(), vc));
         }
 
-        u.visit_children(self);
+        u.visit_children(self)?;
 
         Ok(())
     }

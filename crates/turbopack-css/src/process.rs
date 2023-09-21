@@ -48,7 +48,7 @@ pub enum ParseCssResult {
 }
 
 impl PartialEq for ParseCssResult {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _: &Self) -> bool {
         false
     }
 }
@@ -77,7 +77,7 @@ pub enum CssWithPlaceholderResult {
 }
 
 impl PartialEq for CssWithPlaceholderResult {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _: &Self) -> bool {
         false
     }
 }
@@ -101,7 +101,7 @@ pub enum FinalCssResult {
 }
 
 impl PartialEq for FinalCssResult {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _: &Self) -> bool {
         false
     }
 }
@@ -234,7 +234,7 @@ pub async fn parse_css(
 
 async fn process_content(
     code: String,
-    fs_path: &FileSystemPath,
+    _fs_path: &FileSystemPath,
     ident_str: &str,
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
@@ -263,7 +263,7 @@ async fn process_content(
 
     let stylesheet = match StyleSheet::parse(&code, config) {
         Ok(stylesheet) => stylesheet,
-        Err(e) => {
+        Err(_e) => {
             // TODO(kdy1): Report errors
             // e.to_diagnostics(&handler).emit();
             return Ok(ParseCssResult::Unparseable.into());
@@ -288,7 +288,7 @@ pub struct ParseCssResultSourceMap {
 }
 
 impl PartialEq for ParseCssResultSourceMap {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _: &Self) -> bool {
         false
     }
 }
