@@ -31,7 +31,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     #[allow(unused)]
     pub fn add_children_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
-        context: &'a C,
+        aggregation_context: &'a C,
         children: Vec<I>,
     ) -> impl FnOnce() + 'a
     where
@@ -40,13 +40,13 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     {
         let uppers = self.upper.as_cloned_uppers();
         move || {
-            uppers.add_children_of_child(context, &children);
+            uppers.add_children_of_child(aggregation_context, &children);
         }
     }
 
     pub fn add_child_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
-        context: &'a C,
+        aggregation_context: &'a C,
         child: &'a I,
     ) -> impl FnOnce() + 'a
     where
@@ -54,23 +54,23 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     {
         let uppers = self.upper.as_cloned_uppers();
         move || {
-            uppers.add_child_of_child(context, child);
+            uppers.add_child_of_child(aggregation_context, child);
         }
     }
 
     pub fn remove_child<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
-        context: &C,
+        aggregation_context: &C,
         child: &I,
     ) {
         self.upper
             .as_cloned_uppers()
-            .remove_child_of_child(context, child);
+            .remove_child_of_child(aggregation_context, child);
     }
 
     pub fn remove_children_job<'a, C: AggregationContext<Info = T, ItemRef = I>, H>(
         &self,
-        context: &'a C,
+        aggregation_context: &'a C,
         children: AutoSet<I, H>,
     ) -> impl FnOnce() + 'a
     where
@@ -79,21 +79,21 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         H: 'a,
     {
         let uppers = self.upper.as_cloned_uppers();
-        move || uppers.remove_children_of_child(context, children.iter())
+        move || uppers.remove_children_of_child(aggregation_context, children.iter())
     }
 
     pub fn change<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
-        context: &C,
+        aggregation_context: &C,
         change: &C::ItemChange,
     ) {
-        context.on_change(change);
-        self.upper.child_change(context, change);
+        aggregation_context.on_change(change);
+        self.upper.child_change(aggregation_context, change);
     }
 
     pub fn change_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
-        context: &'a C,
+        aggregation_context: &'a C,
         change: C::ItemChange,
     ) -> impl FnOnce() + 'a
     where
@@ -102,20 +102,20 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     {
         let uppers = self.upper.as_cloned_uppers();
         move || {
-            context.on_change(&change);
-            uppers.child_change(context, &change);
+            aggregation_context.on_change(&change);
+            uppers.child_change(aggregation_context, &change);
         }
     }
 
     pub fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
-        context: &C,
+        aggregation_context: &C,
         root_info_type: &C::RootInfoType,
     ) -> C::RootInfo {
         self.upper.get_root_info(
-            context,
+            aggregation_context,
             root_info_type,
-            context.new_root_info(root_info_type),
+            aggregation_context.new_root_info(root_info_type),
         )
     }
 
@@ -143,12 +143,12 @@ fn get_or_create_in_vec<T>(
 
 #[tracing::instrument(level = Level::TRACE, skip(context, reference))]
 pub fn top_tree<C: AggregationContext>(
-    context: &C,
+    aggregation_context: &C,
     reference: &C::ItemRef,
     depth: u8,
 ) -> Arc<TopTree<C::Info>> {
     let new_top_tree = {
-        let mut item = context.item(reference);
+        let mut item = aggregation_context.item(reference);
         let leaf = item.leaf();
         let (tree, new) = get_or_create_in_vec(&mut leaf.top_trees, depth as usize, || {
             Arc::new(TopTree::new(depth))
@@ -158,13 +158,13 @@ pub fn top_tree<C: AggregationContext>(
         }
         tree.clone()
     };
-    let bottom_tree = bottom_tree(context, reference, depth + 4);
-    bottom_tree.add_top_tree_upper(context, &new_top_tree);
+    let bottom_tree = bottom_tree(aggregation_context, reference, depth + 4);
+    bottom_tree.add_top_tree_upper(aggregation_context, &new_top_tree);
     new_top_tree
 }
 
 pub fn bottom_tree<C: AggregationContext>(
-    context: &C,
+    aggregation_context: &C,
     reference: &C::ItemRef,
     height: u8,
 ) -> Arc<BottomTree<C::Info, C::ItemRef>> {
@@ -172,7 +172,7 @@ pub fn bottom_tree<C: AggregationContext>(
     let new_bottom_tree;
     let mut result = None;
     {
-        let mut item = context.item(reference);
+        let mut item = aggregation_context.item(reference);
         let leaf = item.leaf();
         let (tree, new) = get_or_create_in_vec(&mut leaf.bottom_trees, height as usize, || {
             Arc::new(BottomTree::new(reference.clone(), height))
@@ -191,24 +191,24 @@ pub fn bottom_tree<C: AggregationContext>(
         }
     }
     if let Some(result) = result {
-        add_left_upper_to_item_step_2(context, reference, &new_bottom_tree, result);
+        add_left_upper_to_item_step_2(aggregation_context, reference, &new_bottom_tree, result);
     }
     if height != 0 {
-        bottom_tree(context, reference, height - 1)
-            .add_left_bottom_tree_upper(context, &new_bottom_tree);
+        bottom_tree(aggregation_context, reference, height - 1)
+            .add_left_bottom_tree_upper(aggregation_context, &new_bottom_tree);
     }
     new_bottom_tree
 }
 
 #[must_use]
 pub fn add_inner_upper_to_item<C: AggregationContext>(
-    context: &C,
+    aggregation_context: &C,
     reference: &C::ItemRef,
     upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
     nesting_level: u8,
 ) -> bool {
     let (change, children) = {
-        let mut item = context.item(reference);
+        let mut item = aggregation_context.item(reference);
         let number_of_children = item.number_of_children();
         let leaf = item.leaf();
         let BottomConnection::Inner(inner) = &mut leaf.upper else {
@@ -229,11 +229,16 @@ pub fn add_inner_upper_to_item<C: AggregationContext>(
         }
     };
     if let Some(change) = change {
-        context.on_add_change(&change);
-        upper.child_change(context, &change);
+        aggregation_context.on_add_change(&change);
+        upper.child_change(aggregation_context, &change);
     }
     if !children.is_empty() {
-        upper.add_children_of_child(context, ChildLocation::Inner, &children, nesting_level + 1)
+        upper.add_children_of_child(
+            aggregation_context,
+            ChildLocation::Inner,
+            &children,
+            nesting_level + 1,
+        )
     }
     true
 }
@@ -272,7 +277,7 @@ fn add_left_upper_to_item_step_1<C: AggregationContext>(
 }
 
 fn add_left_upper_to_item_step_2<C: AggregationContext>(
-    context: &C,
+    aggregation_context: &C,
     reference: &C::ItemRef,
     upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
     step_1_result: AddLeftUpperIntermediateResult<C>,
@@ -285,15 +290,15 @@ fn add_left_upper_to_item_step_2<C: AggregationContext>(
         following_for_old_uppers,
     ) = step_1_result;
     if let Some(change) = change {
-        context.on_add_change(&change);
-        upper.child_change(context, &change);
+        aggregation_context.on_add_change(&change);
+        upper.child_change(aggregation_context, &change);
     }
     if !children.is_empty() {
-        upper.add_children_of_child(context, ChildLocation::Left, &children, 1)
+        upper.add_children_of_child(aggregation_context, ChildLocation::Left, &children, 1)
     }
     for (BottomRef { upper: old_upper }, count) in old_inner.into_counts() {
         old_upper.migrate_old_inner(
-            context,
+            aggregation_context,
             reference,
             count,
             &remove_change_for_old_inner,
@@ -303,32 +308,32 @@ fn add_left_upper_to_item_step_2<C: AggregationContext>(
 }
 
 pub fn remove_left_upper_from_item<C: AggregationContext>(
-    context: &C,
+    aggregation_context: &C,
     reference: &C::ItemRef,
     upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
 ) {
-    let mut item = context.item(reference);
+    let mut item = aggregation_context.item(reference);
     let leaf = &mut item.leaf();
     leaf.upper.unset_left_upper(upper);
     let change = item.get_remove_change();
     let children = item.children().map(|r| r.into_owned()).collect::<Vec<_>>();
     drop(item);
     if let Some(change) = change {
-        context.on_remove_change(&change);
-        upper.child_change(context, &change);
+        aggregation_context.on_remove_change(&change);
+        upper.child_change(aggregation_context, &change);
     }
     for child in children {
-        upper.remove_child_of_child(context, &child)
+        upper.remove_child_of_child(aggregation_context, &child)
     }
 }
 
 #[must_use]
 pub fn remove_inner_upper_from_item<C: AggregationContext>(
-    context: &C,
+    aggregation_context: &C,
     reference: &C::ItemRef,
     upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
 ) -> bool {
-    let mut item = context.item(reference);
+    let mut item = aggregation_context.item(reference);
     let BottomConnection::Inner(inner) = &mut item.leaf().upper else {
         return false;
     };
@@ -341,17 +346,17 @@ pub fn remove_inner_upper_from_item<C: AggregationContext>(
     drop(item);
 
     if let Some(change) = change {
-        context.on_remove_change(&change);
-        upper.child_change(context, &change);
+        aggregation_context.on_remove_change(&change);
+        upper.child_change(aggregation_context, &change);
     }
     for child in children {
-        upper.remove_child_of_child(context, &child)
+        upper.remove_child_of_child(aggregation_context, &child)
     }
     true
 }
 
 pub fn ensure_thresholds<'a, C: AggregationContext>(
-    context: &'a C,
+    aggregation_context: &'a C,
     item: &mut C::ItemLock<'_>,
 ) -> impl FnOnce() + 'a {
     let mut result = None;
@@ -375,7 +380,12 @@ pub fn ensure_thresholds<'a, C: AggregationContext>(
     }
     || {
         if let Some((result, reference, new_bottom_tree)) = result {
-            add_left_upper_to_item_step_2(context, &reference, &new_bottom_tree, result);
+            add_left_upper_to_item_step_2(
+                aggregation_context,
+                &reference,
+                &new_bottom_tree,
+                result,
+            );
         }
     }
 }

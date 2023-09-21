@@ -109,11 +109,11 @@ pub trait AggregationItemLock {
 }
 
 pub fn aggregation_info<C: AggregationContext>(
-    context: &C,
+    aggregation_context: &C,
     reference: &C::ItemRef,
 ) -> AggregationInfoReference<C::Info> {
     AggregationInfoReference {
-        tree: top_tree(context, reference, 0),
+        tree: top_tree(aggregation_context, reference, 0),
     }
 }
 

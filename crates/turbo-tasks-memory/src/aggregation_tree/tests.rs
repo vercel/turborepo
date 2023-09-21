@@ -20,12 +20,12 @@ struct Node {
 }
 
 impl Node {
-    fn incr(&self, context: &NodeAggregationContext) {
+    fn incr(&self, aggregation_context: &NodeAggregationContext) {
         let mut guard = self.inner.lock();
         guard.value += 10000;
         guard
             .aggregation_leaf
-            .change(context, &Change { value: 10000 });
+            .change(aggregation_context, &Change { value: 10000 });
     }
 }
 
@@ -222,7 +222,7 @@ struct Aggregated {
 #[test]
 fn chain() {
     let something_with_lifetime = 0;
-    let context = NodeAggregationContext {
+    let ctx = NodeAggregationContext {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
         add_value: true,
@@ -247,52 +247,40 @@ fn chain() {
     let current = NodeRef(current);
 
     {
-        let root_info = leaf
-            .inner
-            .lock()
-            .aggregation_leaf
-            .get_root_info(&context, &());
+        let root_info = leaf.inner.lock().aggregation_leaf.get_root_info(&ctx, &());
         assert_eq!(root_info, false);
     }
 
     {
-        let aggregated = aggregation_info(&context, &current);
+        let aggregated = aggregation_info(&ctx, &current);
         assert_eq!(aggregated.lock().value, 15050);
     }
-    assert_eq!(context.additions.load(Ordering::SeqCst), 100);
-    context.additions.store(0, Ordering::SeqCst);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 100);
+    ctx.additions.store(0, Ordering::SeqCst);
 
-    print(&context, &current);
+    print(&ctx, &current);
 
     {
-        let root_info = leaf
-            .inner
-            .lock()
-            .aggregation_leaf
-            .get_root_info(&context, &());
+        let root_info = leaf.inner.lock().aggregation_leaf.get_root_info(&ctx, &());
         assert_eq!(root_info, false);
     }
 
-    leaf.incr(&context);
+    leaf.incr(&ctx);
     // The change need to propagate through 5 top trees and 5 bottom trees
-    assert_eq!(context.additions.load(Ordering::SeqCst), 6);
-    context.additions.store(0, Ordering::SeqCst);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 6);
+    ctx.additions.store(0, Ordering::SeqCst);
 
     {
-        let aggregated = aggregation_info(&context, &current);
+        let aggregated = aggregation_info(&ctx, &current);
         let mut aggregated = aggregated.lock();
         assert_eq!(aggregated.value, 25050);
         (*aggregated).active = true;
     }
-    assert_eq!(context.additions.load(Ordering::SeqCst), 0);
-    context.additions.store(0, Ordering::SeqCst);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 0);
+    ctx.additions.store(0, Ordering::SeqCst);
 
     {
-        let root_info = leaf
-            .inner
-            .lock()
-            .aggregation_leaf
-            .get_root_info(&context, &());
+        let root_info = leaf.inner.lock().aggregation_leaf.get_root_info(&ctx, &());
         assert_eq!(root_info, true);
     }
 
@@ -307,25 +295,21 @@ fn chain() {
     let current = NodeRef(current);
 
     {
-        let aggregated = aggregation_info(&context, &current);
+        let aggregated = aggregation_info(&ctx, &current);
         let aggregated = aggregated.lock();
         assert_eq!(aggregated.value, 25151);
     }
     // This should be way less the 100 to prove that we are reusing trees
-    assert_eq!(context.additions.load(Ordering::SeqCst), 1);
-    context.additions.store(0, Ordering::SeqCst);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 1);
+    ctx.additions.store(0, Ordering::SeqCst);
 
-    leaf.incr(&context);
+    leaf.incr(&ctx);
     // This should be less the 20 to prove that we are reusing trees
-    assert_eq!(context.additions.load(Ordering::SeqCst), 9);
-    context.additions.store(0, Ordering::SeqCst);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 9);
+    ctx.additions.store(0, Ordering::SeqCst);
 
     {
-        let root_info = leaf
-            .inner
-            .lock()
-            .aggregation_leaf
-            .get_root_info(&context, &());
+        let root_info = leaf.inner.lock().aggregation_leaf.get_root_info(&ctx, &());
         assert_eq!(root_info, true);
     }
 }
@@ -333,7 +317,7 @@ fn chain() {
 #[test]
 fn chain_double_connected() {
     let something_with_lifetime = 0;
-    let context = NodeAggregationContext {
+    let ctx = NodeAggregationContext {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
         add_value: true,
@@ -366,14 +350,14 @@ fn chain_double_connected() {
     }
     let current = NodeRef(current2);
 
-    print(&context, &current);
+    print(&ctx, &current);
 
     {
-        let aggregated = aggregation_info(&context, &current);
+        let aggregated = aggregation_info(&ctx, &current);
         assert_eq!(aggregated.lock().value, 8230);
     }
-    assert_eq!(context.additions.load(Ordering::SeqCst), 204);
-    context.additions.store(0, Ordering::SeqCst);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 204);
+    ctx.additions.store(0, Ordering::SeqCst);
 }
 
 const RECT_SIZE: usize = 100;
@@ -382,7 +366,7 @@ const RECT_MULT: usize = 100;
 #[test]
 fn rectangle_tree() {
     let something_with_lifetime = 0;
-    let context = NodeAggregationContext {
+    let ctx = NodeAggregationContext {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
         add_value: false,
@@ -413,24 +397,30 @@ fn rectangle_tree() {
 
     let root = NodeRef(nodes[RECT_SIZE - 1][RECT_SIZE - 1].clone());
 
-    print(&context, &root);
+    print(&ctx, &root);
 }
 
 #[test]
 fn rectangle_adding_tree() {
     let something_with_lifetime = 0;
-    let context = NodeAggregationContext {
+    let ctx = NodeAggregationContext {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
         add_value: false,
     };
     let mut nodes: Vec<Vec<Arc<Node>>> = Vec::new();
 
-    fn add_child(parent: &Arc<Node>, node: &Arc<Node>, context: &NodeAggregationContext<'_>) {
+    fn add_child(
+        parent: &Arc<Node>,
+        node: &Arc<Node>,
+        aggregation_context: &NodeAggregationContext<'_>,
+    ) {
         let node_ref = NodeRef(node.clone());
         let mut state = parent.inner.lock();
         state.children.push(node.clone());
-        let job = state.aggregation_leaf.add_child_job(context, &node_ref);
+        let job = state
+            .aggregation_leaf
+            .add_child_job(aggregation_context, &node_ref);
         drop(state);
         job();
     }
@@ -448,16 +438,14 @@ fn rectangle_adding_tree() {
             line.push(node.clone());
             if x > 0 {
                 let parent = &line[x - 1];
-                add_child(parent, &node, &context);
+                add_child(parent, &node, &ctx);
             }
             if y > 0 {
                 let parent = &nodes[y - 1][x];
-                add_child(parent, &node, &context);
+                add_child(parent, &node, &ctx);
             }
             if x == 0 && y == 0 {
-                aggregation_info(&context, &NodeRef(node.clone()))
-                    .lock()
-                    .active = true;
+                aggregation_info(&ctx, &NodeRef(node.clone())).lock().active = true;
             }
         }
         nodes.push(line);
@@ -465,13 +453,13 @@ fn rectangle_adding_tree() {
 
     let root = NodeRef(nodes[0][0].clone());
 
-    print(&context, &root);
+    print(&ctx, &root);
 }
 
 #[test]
 fn many_children() {
     let something_with_lifetime = 0;
-    let context = NodeAggregationContext {
+    let ctx = NodeAggregationContext {
         additions: AtomicU32::new(0),
         something_with_lifetime: &something_with_lifetime,
         add_value: false,
@@ -497,10 +485,8 @@ fn many_children() {
             }),
         });
         roots.push(node.clone());
-        aggregation_info(&context, &NodeRef(node.clone()))
-            .lock()
-            .active = true;
-        connect_child(&context, &node, &inner_node);
+        aggregation_info(&ctx, &NodeRef(node.clone())).lock().active = true;
+        connect_child(&ctx, &node, &inner_node);
     }
     println!("Roots: {:?}", start.elapsed());
     let start = Instant::now();
@@ -513,7 +499,7 @@ fn many_children() {
             }),
         });
         children.push(node.clone());
-        connect_child(&context, &inner_node, &node);
+        connect_child(&ctx, &inner_node, &node);
     }
     println!("Children: {:?}", start.elapsed());
     let start = Instant::now();
@@ -526,10 +512,8 @@ fn many_children() {
             }),
         });
         roots.push(node.clone());
-        aggregation_info(&context, &NodeRef(node.clone()))
-            .lock()
-            .active = true;
-        connect_child(&context, &node, &inner_node);
+        aggregation_info(&ctx, &NodeRef(node.clone())).lock().active = true;
+        connect_child(&ctx, &node, &inner_node);
     }
     println!("Roots: {:?}", start.elapsed());
     let start = Instant::now();
@@ -542,7 +526,7 @@ fn many_children() {
             }),
         });
         children.push(node.clone());
-        connect_child(&context, &inner_node, &node);
+        connect_child(&ctx, &inner_node, &node);
     }
     let children_duration = start.elapsed();
     println!("Children: {:?}", children_duration);
@@ -557,7 +541,7 @@ fn many_children() {
                 }),
             });
             children.push(node.clone());
-            connect_child(&context, &inner_node, &node);
+            connect_child(&ctx, &inner_node, &node);
         }
         let dur = start.elapsed();
         println!("Children: {:?}", dur);
@@ -566,35 +550,41 @@ fn many_children() {
 
     let root = NodeRef(roots[0].clone());
 
-    print(&context, &root);
+    print(&ctx, &root);
 }
 
-fn connect_child(context: &NodeAggregationContext<'_>, parent: &Arc<Node>, child: &Arc<Node>) {
+fn connect_child(
+    aggregation_context: &NodeAggregationContext<'_>,
+    parent: &Arc<Node>,
+    child: &Arc<Node>,
+) {
     let state = parent.inner.lock();
     let node_ref = NodeRef(child.clone());
     let mut node_guard = unsafe { NodeGuard::new(state, parent.clone()) };
-    let job1 = ensure_thresholds(context, &mut node_guard);
+    let job1 = ensure_thresholds(aggregation_context, &mut node_guard);
     let NodeGuard {
         guard: mut state, ..
     } = node_guard;
     state.children.push(child.clone());
-    let job2 = state.aggregation_leaf.add_child_job(context, &node_ref);
+    let job2 = state
+        .aggregation_leaf
+        .add_child_job(aggregation_context, &node_ref);
     drop(state);
     job1();
     job2();
 }
 
-fn print(context: &NodeAggregationContext<'_>, current: &NodeRef) {
+fn print(aggregation_context: &NodeAggregationContext<'_>, current: &NodeRef) {
     println!("digraph {{");
     let start = 0;
     let end = 3;
     for i in start..end {
-        print_graph(context, current, i, false, |item| {
+        print_graph(aggregation_context, current, i, false, |item| {
             format!("{}", item.0.inner.lock().value)
         });
     }
     for i in start + 1..end + 1 {
-        print_graph(context, current, i, true, |item| {
+        print_graph(aggregation_context, current, i, true, |item| {
             format!("{}", item.0.inner.lock().value)
         });
     }
