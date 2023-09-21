@@ -23,6 +23,7 @@ pub use module_asset::ModuleCssAsset;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, TaskInput};
 
+pub use self::process::ProcessCss;
 use crate::references::import::ImportAssetReference;
 
 #[derive(
