@@ -118,7 +118,7 @@ pub async fn process_css_with_placeholder(
             references,
             url_references,
         } => {
-            let mut stylesheet = stylesheet_into_static(stylesheet);
+            let stylesheet = stylesheet_into_static(stylesheet);
 
             let result = stylesheet.to_css(PrinterOptions {
                 analyze_dependencies: Some(DependencyOptions {
@@ -151,7 +151,6 @@ pub async fn finalize_css(
     match &*result {
         CssWithPlaceholderResult::Ok {
             stylesheet,
-            references,
             url_references,
             ..
         } => {
@@ -195,9 +194,12 @@ pub async fn finalize_css(
 }
 
 #[turbo_tasks::value_trait]
-pub trait ProcessCss {
+pub trait ParseCss {
     async fn parse_css(self: Vc<Self>) -> Result<Vc<ParseCssResult>>;
+}
 
+#[turbo_tasks::value_trait]
+pub trait ProcessCss: ParseCss {
     async fn get_css_with_placeholder(self: Vc<Self>) -> Result<Vc<CssWithPlaceholderResult>>;
 
     async fn finalize_css(

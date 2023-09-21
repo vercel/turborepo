@@ -17,7 +17,7 @@ use crate::{
     code_gen::CodeGenerateable,
     process::{
         finalize_css, parse_css, process_css_with_placeholder, CssWithPlaceholderResult,
-        FinalCssResult, ParseCssResult, ProcessCss,
+        FinalCssResult, ParseCss, ParseCssResult, ProcessCss,
     },
     references::{compose::CssModuleComposeReference, import::ImportAssetReference},
     CssModuleAssetType,
@@ -60,13 +60,16 @@ impl CssModuleAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl ProcessCss for CssModuleAsset {
+impl ParseCss for CssModuleAsset {
     #[turbo_tasks::function]
     async fn parse_css(self: Vc<Self>) -> Result<Vc<ParseCssResult>> {
         let this = self.await?;
         Ok(parse_css(this.source, Vc::upcast(self), this.ty))
     }
+}
 
+#[turbo_tasks::value_impl]
+impl ProcessCss for CssModuleAsset {
     #[turbo_tasks::function]
     async fn get_css_with_placeholder(self: Vc<Self>) -> Result<Vc<CssWithPlaceholderResult>> {
         let parse_result = self.parse_css();
