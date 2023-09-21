@@ -238,7 +238,7 @@ pub fn add_inner_upper_to_item<C: AggregationContext>(
     true
 }
 
-type AddLeftUpperIntermediateResult = (
+struct AddLeftUpperIntermediateResult<C: AggregationContext>(
     Option<C::ItemChange>,
     Vec<C::ItemRef>,
     DistanceCountMap<BottomRef<C::Info, C::ItemRef>>,
@@ -250,7 +250,7 @@ type AddLeftUpperIntermediateResult = (
 fn add_left_upper_to_item_step_1<C: AggregationContext>(
     item: &mut C::ItemLock<'_>,
     upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
-) -> AddLeftUpperIntermediateResult {
+) -> AddLeftUpperIntermediateResult<C> {
     let old_inner = item.leaf().upper.set_left_upper(upper);
     let remove_change_for_old_inner = (!old_inner.is_unset())
         .then(|| item.get_remove_change())
@@ -262,7 +262,7 @@ fn add_left_upper_to_item_step_1<C: AggregationContext>(
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    (
+    AddLeftUpperIntermediateResult(
         item.get_add_change(),
         item.children().map(|r| r.into_owned()).collect(),
         old_inner,
@@ -275,10 +275,15 @@ fn add_left_upper_to_item_step_2<C: AggregationContext>(
     context: &C,
     reference: &C::ItemRef,
     upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
-    step_1_result: AddLeftUpperIntermediateResult,
+    step_1_result: AddLeftUpperIntermediateResult<C>,
 ) {
-    let (change, children, old_inner, remove_change_for_old_inner, following_for_old_uppers) =
-        step_1_result;
+    let AddLeftUpperIntermediateResult(
+        change,
+        children,
+        old_inner,
+        remove_change_for_old_inner,
+        following_for_old_uppers,
+    ) = step_1_result;
     if let Some(change) = change {
         context.on_add_change(&change);
         upper.child_change(context, &change);
