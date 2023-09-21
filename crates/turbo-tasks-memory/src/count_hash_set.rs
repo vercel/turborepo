@@ -7,7 +7,7 @@ use std::{
 };
 
 use auto_hash_map::{
-    map::{Entry, IntoIter, Iter, RawEntry},
+    map::{Entry, Iter, RawEntry},
     AutoMap,
 };
 

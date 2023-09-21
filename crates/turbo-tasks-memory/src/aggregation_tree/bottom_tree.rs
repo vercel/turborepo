@@ -689,14 +689,8 @@ pub fn print_graph<C: AggregationContext>(
     while let Some(item) = queue.pop_front() {
         let tree = bottom_tree(context, &item, height);
         let name = name_fn(&item);
-        let mut label = format!("{}", name);
+        let label = format!("{}", name);
         let state = tree.state.lock();
-        for (item, count) in state.following.counts() {
-            if *count < 0 {
-                label += "\\n";
-                label += &name_fn(item);
-            }
-        }
         if color_upper {
             print!(r#""{} {}" [color=red];"#, height - 1, name);
         } else {
