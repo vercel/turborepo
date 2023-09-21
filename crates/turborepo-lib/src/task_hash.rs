@@ -60,6 +60,7 @@ pub struct PackageInputsHashes {
 }
 
 impl PackageInputsHashes {
+    #[tracing::instrument(skip(all_tasks, workspaces, task_definitions, repo_root, scm))]
     pub fn calculate_file_hashes<'a>(
         scm: &SCM,
         all_tasks: impl ParallelIterator<Item = &'a TaskNode>,
@@ -69,6 +70,8 @@ impl PackageInputsHashes {
     ) -> Result<PackageInputsHashes, Error> {
         let (hashes, expanded_hashes): (HashMap<_, _>, HashMap<_, _>) = all_tasks
             .filter_map(|task| {
+                let span = tracing::span!(tracing::Level::INFO, "calculate_file_hashes");
+                let _enter = span.enter();
                 let TaskNode::Task(task_id) = task else {
                     return None;
                 };

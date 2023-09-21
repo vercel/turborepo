@@ -350,6 +350,7 @@ pub(crate) fn any_with_contextual_error(
     })
 }
 
+#[tracing::instrument]
 pub fn globwalk(
     base_path: &AbsoluteSystemPath,
     include: &[String],
