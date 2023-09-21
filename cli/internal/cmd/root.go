@@ -18,6 +18,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
+// A comment that should force a rebuild, DO NOT LET CHRIS COMMIT THIS
 func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs *turbostate.ParsedArgsFromRust) error {
 	if parsedArgs.Trace != "" {
 		cleanup, err := createTraceFile(parsedArgs.Trace)
