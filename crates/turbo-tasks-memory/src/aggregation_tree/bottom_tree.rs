@@ -129,7 +129,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         let mut following = Vec::new();
         if self.height == 0 {
             for child in children {
-                let can_be_inner = add_inner_upper_to_item(context, child, &self, nesting_level);
+                let can_be_inner = add_inner_upper_to_item(context, child, self, nesting_level);
                 if !can_be_inner {
                     following.push(child);
                 }
@@ -137,7 +137,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         } else {
             for child in children {
                 let can_be_inner = bottom_tree(context, child, self.height - 1)
-                    .add_inner_bottom_tree_upper(context, &self, nesting_level);
+                    .add_inner_bottom_tree_upper(context, self, nesting_level);
                 if !can_be_inner {
                     following.push(child);
                 }
@@ -208,11 +208,11 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         nesting_level: u8,
     ) {
         let can_be_inner = if self.height == 0 {
-            add_inner_upper_to_item(context, child_of_child, &self, nesting_level)
+            add_inner_upper_to_item(context, child_of_child, self, nesting_level)
         } else {
             bottom_tree(context, child_of_child, self.height - 1).add_inner_bottom_tree_upper(
                 context,
-                &self,
+                self,
                 nesting_level,
             )
         };
@@ -308,10 +308,10 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         child_of_child: &I,
     ) {
         let can_remove_inner = if self.height == 0 {
-            remove_inner_upper_from_item(context, child_of_child, &self)
+            remove_inner_upper_from_item(context, child_of_child, self)
         } else {
             bottom_tree(context, child_of_child, self.height - 1)
-                .remove_inner_bottom_tree_upper(context, &self)
+                .remove_inner_bottom_tree_upper(context, self)
         };
         if !can_remove_inner {
             self.remove_child_of_child_following(context, child_of_child);
@@ -328,14 +328,14 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         let unremoveable = if self.height == 0 {
             children
                 .into_iter()
-                .filter(|&child| !remove_inner_upper_from_item(context, child, &self))
+                .filter(|&child| !remove_inner_upper_from_item(context, child, self))
                 .collect::<Vec<_>>()
         } else {
             children
                 .into_iter()
                 .filter(|&child| {
                     !bottom_tree(context, child, self.height - 1)
-                        .remove_inner_bottom_tree_upper(context, &self)
+                        .remove_inner_bottom_tree_upper(context, self)
                 })
                 .collect::<Vec<_>>()
         };

@@ -252,11 +252,12 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         }
         for &(task, count) in change.dirty_tasks_update.iter() {
             let value = update_count_entry(info.dirty_tasks.entry(task), count);
-            if value > 0 && value <= count {
-                if matches!(info.root_type, Some(RootType::Root) | Some(RootType::Once)) {
-                    let mut tasks_to_schedule = self.dirty_tasks_to_schedule.lock();
-                    tasks_to_schedule.get_or_insert_default().insert(task);
-                }
+            if value > 0
+                && value <= count
+                && matches!(info.root_type, Some(RootType::Root) | Some(RootType::Once))
+            {
+                let mut tasks_to_schedule = self.dirty_tasks_to_schedule.lock();
+                tasks_to_schedule.get_or_insert_default().insert(task);
             }
         }
         for &(trait_type_id, collectible, count) in change.collectibles.iter() {
@@ -422,7 +423,7 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
     fn children(&self) -> Self::ChildrenIter<'_> {
         match self.guard {
             TaskMetaStateWriteGuard::Full(ref guard) => {
-                Some(guard.children.iter().map(|c| Cow::Borrowed(c)))
+                Some(guard.children.iter().map(Cow::Borrowed))
                     .into_iter()
                     .flatten()
             }

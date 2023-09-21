@@ -46,9 +46,9 @@ pub type NativeTaskFn = Box<dyn Fn() -> NativeTaskFuture + Send + Sync>;
 
 #[derive(Hash, Copy, Clone, PartialEq, Eq)]
 pub enum TaskDependency {
-    TaskOutput(TaskId),
-    TaskCell(TaskId, CellId),
-    TaskCollectibles(TaskId, TraitTypeId),
+    Output(TaskId),
+    Cell(TaskId, CellId),
+    Collectibles(TaskId, TraitTypeId),
 }
 
 task_local! {
@@ -317,11 +317,7 @@ struct MaybeCollectibles {
 impl MaybeCollectibles {
     /// Consumes the collectibles (if any) and return them.
     fn take_collectibles(&mut self) -> Option<Collectibles> {
-        if let Some(inner) = &mut self.inner {
-            Some(take(&mut **inner))
-        } else {
-            None
-        }
+        self.inner.as_mut().map(|boxed| take(&mut **boxed))
     }
 
     /// Consumes the collectibles (if any) and return them.
@@ -570,21 +566,21 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         match dep {
-            TaskDependency::TaskOutput(task) => {
+            TaskDependency::Output(task) => {
                 backend.with_task(task, |task| {
                     task.with_output_mut_if_available(|output| {
                         output.dependent_tasks.remove(&reader);
                     });
                 });
             }
-            TaskDependency::TaskCell(task, index) => {
+            TaskDependency::Cell(task, index) => {
                 backend.with_task(task, |task| {
                     task.with_cell_mut_if_available(index, |cell| {
                         cell.remove_dependent_task(reader);
                     });
                 });
             }
-            TaskDependency::TaskCollectibles(task, trait_type) => {
+            TaskDependency::Collectibles(task, trait_type) => {
                 let mut context = TaskAggregationContext::new(turbo_tasks, backend);
                 let aggregation = context.aggregation_info(task);
                 aggregation
@@ -680,7 +676,7 @@ impl Task {
                 state.stats.increment_executions();
             }
             Dirty { .. } => {
-                let state_type = Task::state_string(&*state);
+                let state_type = Task::state_string(&state);
                 panic!(
                     "{:?} execution started in unexpected state {}",
                     self, state_type
@@ -1298,9 +1294,9 @@ impl Task {
             if let Done { ref dependencies } = state.state_type {
                 for dep in dependencies.iter() {
                     match dep {
-                        TaskDependency::TaskOutput(task)
-                        | TaskDependency::TaskCell(task, _)
-                        | TaskDependency::TaskCollectibles(task, _) => {
+                        TaskDependency::Output(task)
+                        | TaskDependency::Cell(task, _)
+                        | TaskDependency::Collectibles(task, _) => {
                             refs.push((ReferenceType::Dependency, *task))
                         }
                     }

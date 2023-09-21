@@ -343,7 +343,7 @@ impl Backend for MemoryBackend {
             move || format!("reading task output from {reader}"),
             turbo_tasks,
             |output| {
-                Task::add_dependency_to_current(TaskDependency::TaskOutput(task));
+                Task::add_dependency_to_current(TaskDependency::Output(task));
                 output.read(reader)
             },
         )
@@ -376,7 +376,7 @@ impl Backend for MemoryBackend {
                 task.with_cell(index, |cell| cell.read_own_content_untracked())
             })))
         } else {
-            Task::add_dependency_to_current(TaskDependency::TaskCell(task_id, index));
+            Task::add_dependency_to_current(TaskDependency::Cell(task_id, index));
             self.with_task(task_id, |task| {
                 match task.with_cell_mut(index, |cell| {
                     cell.read_content(

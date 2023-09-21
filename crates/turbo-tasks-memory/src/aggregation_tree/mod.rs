@@ -42,8 +42,8 @@ pub use self::{
     top_tree::AggregationInfoGuard,
 };
 
-pub(self) const MAX_NESTING_LEVEL: u8 = 7;
-pub(self) const CHILDREN_INNER_THRESHOLD: usize = 2000;
+const MAX_NESTING_LEVEL: u8 = 7;
+const CHILDREN_INNER_THRESHOLD: usize = 2000;
 
 pub trait AggregationContext {
     type ItemLock<'a>: AggregationItemLock<
