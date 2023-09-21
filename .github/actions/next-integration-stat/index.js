@@ -16819,6 +16819,7 @@
           : yield getTestResultDiffBase(octokit, shouldDiffWithMain);
         const postCommentAsync = createCommentPostAsync(octokit, prNumber);
         const failedTestLists = [];
+        const passedTestsLists = [];
         // Collect failed test results for each job. We don't use this actively yet.
         const perJobFailedLists = {};
         // Consturct a comment body to post test report with summary & full details.
@@ -16879,6 +16880,8 @@
                 }
                 perJobFailedLists[value.job].push(failedTest);
               }
+            } else {
+              passedTestsLists.push(test.name);
             }
           }
           if (hasFailedTest) commentValues.push(`\n`);
@@ -16952,6 +16955,10 @@
               null,
               2
             )
+          );
+          fs.writeFileSync(
+            "./passed-test-path-list.json",
+            JSON.stringify(passedTestsLists, null, 2)
           );
           if (!prNumber) {
             return;
