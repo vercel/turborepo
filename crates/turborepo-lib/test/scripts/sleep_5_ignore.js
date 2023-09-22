@@ -9,5 +9,6 @@ function delay(time) {
 async function run() {
   await delay(5000);
 }
-
+// signal that our signal handler is registered
+console.log("here");
 run();
