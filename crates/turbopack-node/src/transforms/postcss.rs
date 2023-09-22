@@ -186,14 +186,61 @@ fn postcss_executor(
     )
 }
 
+#[turbo_tasks::value(transparent)]
+pub struct OptionPostcssConfigFile(Option<FileSystemPathVc>);
+
+#[turbo_tasks::function]
+async fn find_postcss_config_file(
+    source_path: FileSystemPathVc,
+    project_path: FileSystemPathVc,
+) -> Result<OptionPostcssConfigFileVc> {
+    let postcss_config_names = postcss_configs();
+
+    if let FindContextFileResult::Found(config_path, _) =
+        *find_context_file(source_path.parent(), postcss_config_names).await?
+    {
+        return Ok(OptionPostcssConfigFileVc::cell(Some(config_path)));
+    }
+
+    // handle the case when the postcss config file is inside of workspace project
+    // see: https://github.com/vercel/turbo/issues/5068
+    if !*source_path.is_inside(project_path).await? {
+        for name in &*postcss_config_names.await? {
+            let config_path = project_path.join(name);
+            match *config_path.get_type().await? {
+                FileSystemEntryType::File => {
+                    return Ok(OptionPostcssConfigFileVc::cell(Some(config_path)));
+                }
+                FileSystemEntryType::Symlink => {
+                    let real_config_path = config_path.realpath();
+                    if matches!(
+                        *real_config_path.get_type().await?,
+                        FileSystemEntryType::File
+                    ) {
+                        return Ok(OptionPostcssConfigFileVc::cell(Some(real_config_path)));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(OptionPostcssConfigFileVc::cell(None))
+}
+
 #[turbo_tasks::value_impl]
 impl PostCssTransformedAsset {
     #[turbo_tasks::function]
     async fn process(self: Vc<Self>) -> Result<Vc<ProcessPostCssResult>> {
         let this = self.await?;
+        let ExecutionContext {
+            project_path,
+            chunking_context,
+            env,
+        } = *this.execution_context.await?;
         let find_config_result =
-            find_context_file(this.source.ident().path().parent(), postcss_configs());
-        let FindContextFileResult::Found(config_path, _) = *find_config_result.await? else {
+            *find_postcss_config_file(this.source.ident().path(), project_path).await?;
+        let Some(config_path) = find_config_result else {
             return Ok(ProcessPostCssResult {
                 content: this.source.content(),
                 assets: Vec::new(),
@@ -201,11 +248,6 @@ impl PostCssTransformedAsset {
             .cell());
         };
 
-        let ExecutionContext {
-            project_path,
-            chunking_context,
-            env,
-        } = *this.execution_context.await?;
         let source_content = this.source.content();
         let AssetContent::File(file) = *source_content.await? else {
             bail!("PostCSS transform only support transforming files");
