@@ -276,6 +276,14 @@ impl<'a> From<&'a RunArgs> for CacheOpts<'a> {
     }
 }
 
+impl<'a> RunOpts<'a> {
+    pub fn should_redirect_stderr_to_stdout(&self) -> bool {
+        // If we're running on Github Actions, force everything to stdout
+        // so as not to have out-of-order log lines
+        matches!(self.log_order, ResolvedLogOrder::Grouped) && self.is_github_actions
+    }
+}
+
 impl ScopeOpts {
     pub fn get_filters(&self) -> Vec<String> {
         [

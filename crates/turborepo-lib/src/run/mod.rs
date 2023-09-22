@@ -265,6 +265,7 @@ impl<'a> Run<'a> {
             &global_hash,
             global_env_mode,
             self.base.ui,
+            false,
         );
 
         visitor.visit(engine.clone()).await?;
