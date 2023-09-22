@@ -23,6 +23,10 @@ jobs:
         with:
           ref: nextjs-integration-test-data
 
+      - name: Git pull
+        run: |
+          git pull --depth=1 --no-tags origin nextjs-integration-test-data
+
       # First, grab test results into `test-results/main` directory from artifact stored by `next-integration-test`.
       - name: Grab test results
         uses: actions/download-artifact@v3
@@ -51,10 +55,6 @@ jobs:
           mv -fvn test-results/main/failed-test-path-list.json test-results/${{ env.RESULT_SUBPATH }}/failed-test-path-list.json
           ls -al ./test-results
           ls -al ./test-results/${{ env.RESULT_SUBPATH }}
-
-      - name: Git pull
-        run: |
-          git pull --depth=1 --no-tags origin nextjs-integration-test-data
 
       - name: Push data to branch
         uses: stefanzweifel/git-auto-commit-action@v4
