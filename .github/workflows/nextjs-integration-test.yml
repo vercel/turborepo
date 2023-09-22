@@ -83,7 +83,7 @@ jobs:
         run: |
           ls $NEXT_TEST_SKIP_RETRY_MANIFEST
           sudo npx playwright install-deps && pnpm playwright install
-          NEXT_TEST_MODE=dev node run-tests.js -g ${{ matrix.group }}/3 -c ${TEST_CONCURRENCY} --test-pattern '^(test\/(development|e2e|unit)|packages\/.*\/src\/.*)/.*\.test\.(js|jsx|ts|tsx)$'
+          NEXT_TEST_MODE=dev node run-tests.js -g ${{ matrix.group }}/3 -c ${TEST_CONCURRENCY} --type development
           ls test/turbopack-test-junit-report
         # It is currently expected to fail some of next.js integration test, do not fail CI check.
         continue-on-error: true
@@ -124,7 +124,7 @@ jobs:
       - name: Run test/production
         run: |
           sudo npx playwright install-deps && pnpm playwright install
-          NEXT_TEST_MODE=start node run-tests.js -g ${{ matrix.group }}/5 -c ${TEST_CONCURRENCY} --test-pattern '^(test\/(production|e2e))/.*\.test\.(js|jsx|ts|tsx)$'
+          NEXT_TEST_MODE=start node run-tests.js -g ${{ matrix.group }}/5 -c ${TEST_CONCURRENCY} --type production
           ls test/turbopack-test-junit-report
         continue-on-error: true
         env:
@@ -163,7 +163,7 @@ jobs:
       - name: Run test/integration
         run: |
           sudo npx playwright install-deps && pnpm playwright install
-          node run-tests.js -g ${{ matrix.group }}/12 -c ${TEST_CONCURRENCY} --test-pattern '^(test\/integration)/.*\.test\.(js|jsx|ts|tsx)$'
+          node run-tests.js -g ${{ matrix.group }}/12 -c ${TEST_CONCURRENCY} --type integration
           ls test/turbopack-test-junit-report
         continue-on-error: true
         env:
