@@ -1,49 +1,48 @@
 use std::io::Write;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use indoc::writedoc;
 use serde::Serialize;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value, ValueToString, ValueToStringVc};
-use turbo_tasks_fs::{embed_file, File, FileContent};
+use turbo_tasks::{ReadRef, TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks_fs::File;
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc, AssetsVc},
-    chunk::{ChunkVc, ChunkingContext, EvaluatableAssetsVc, ModuleIdReadRef},
-    code_builder::{CodeBuilder, CodeVc},
-    environment::ChunkLoading,
-    ident::AssetIdentVc,
-    reference::AssetReferencesVc,
-    source_map::{
-        GenerateSourceMap, GenerateSourceMapVc, OptionSourceMapVc, SourceMapAssetReferenceVc,
-    },
+    asset::{Asset, AssetContent},
+    chunk::{Chunk, ChunkData, ChunkingContext, ChunksData, EvaluatableAssets, ModuleId},
+    code_builder::{Code, CodeBuilder},
+    ident::AssetIdent,
+    module::Module,
+    output::{OutputAsset, OutputAssets},
+    source_map::{GenerateSourceMap, OptionSourceMap, SourceMapAsset},
 };
 use turbopack_ecmascript::{
-    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkPlaceableVc},
+    chunk::{EcmascriptChunkData, EcmascriptChunkItemExt, EcmascriptChunkPlaceable},
     utils::StringifyJs,
 };
+use turbopack_ecmascript_runtime::RuntimeType;
 
-use crate::{ecmascript::list::reference::ChunkListReferenceVc, DevChunkingContextVc};
+use crate::DevChunkingContext;
 
 /// An Ecmascript chunk that:
 /// * Contains the Turbopack dev runtime code; and
 /// * Evaluates a list of runtime entries.
 #[turbo_tasks::value(shared)]
 pub(crate) struct EcmascriptDevEvaluateChunk {
-    pub(super) chunking_context: DevChunkingContextVc,
-    pub(super) entry_chunk: ChunkVc,
-    pub(super) other_chunks: AssetsVc,
-    pub(super) evaluatable_assets: EvaluatableAssetsVc,
+    chunking_context: Vc<DevChunkingContext>,
+    entry_chunk: Vc<Box<dyn Chunk>>,
+    other_chunks: Vc<OutputAssets>,
+    evaluatable_assets: Vc<EvaluatableAssets>,
 }
 
 #[turbo_tasks::value_impl]
-impl EcmascriptDevEvaluateChunkVc {
-    /// Creates a new [`EcmascriptDevEvaluateChunkVc`].
+impl EcmascriptDevEvaluateChunk {
+    /// Creates a new [`Vc<EcmascriptDevEvaluateChunk>`].
     #[turbo_tasks::function]
     pub fn new(
-        chunking_context: DevChunkingContextVc,
-        entry_chunk: ChunkVc,
-        other_chunks: AssetsVc,
-        evaluatable_assets: EvaluatableAssetsVc,
-    ) -> Self {
+        chunking_context: Vc<DevChunkingContext>,
+        entry_chunk: Vc<Box<dyn Chunk>>,
+        other_chunks: Vc<OutputAssets>,
+        evaluatable_assets: Vc<EvaluatableAssets>,
+    ) -> Vc<Self> {
         EcmascriptDevEvaluateChunk {
             chunking_context,
             entry_chunk,
@@ -54,8 +53,19 @@ impl EcmascriptDevEvaluateChunkVc {
     }
 
     #[turbo_tasks::function]
-    async fn code(self) -> Result<CodeVc> {
+    async fn chunks_data(self: Vc<Self>) -> Result<Vc<ChunksData>> {
         let this = self.await?;
+        Ok(ChunkData::from_assets(
+            this.chunking_context.output_root(),
+            this.other_chunks,
+        ))
+    }
+
+    #[turbo_tasks::function]
+    async fn code(self: Vc<Self>) -> Result<Vc<Code>> {
+        let this = self.await?;
+        let chunking_context = this.chunking_context.await?;
+        let environment = this.chunking_context.environment();
 
         let output_root = this.chunking_context.output_root().await?;
         let chunk_path = self.ident().path().await?;
@@ -69,14 +79,12 @@ impl EcmascriptDevEvaluateChunkVc {
             );
         };
 
-        let other_chunks = this.other_chunks.await?;
-        let mut other_chunks_paths = Vec::with_capacity(other_chunks.len());
-        for other_chunk in &*other_chunks {
-            let other_chunk_path = &*other_chunk.ident().path().await?;
-            if let Some(other_chunk_path) = output_root.get_path_to(other_chunk_path) {
-                other_chunks_paths.push(other_chunk_path.to_string());
-            }
-        }
+        let other_chunks_data = self.chunks_data().await?;
+        let other_chunks_data = other_chunks_data.iter().try_join().await?;
+        let other_chunks_data: Vec<_> = other_chunks_data
+            .iter()
+            .map(|chunk_data| EcmascriptChunkData::new(chunk_data))
+            .collect();
 
         let runtime_module_ids = this
             .evaluatable_assets
@@ -85,11 +93,13 @@ impl EcmascriptDevEvaluateChunkVc {
             .map({
                 let chunking_context = this.chunking_context;
                 move |entry| async move {
-                    if let Some(placeable) = EcmascriptChunkPlaceableVc::resolve_from(entry).await?
+                    if let Some(placeable) =
+                        Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(*entry)
+                            .await?
                     {
                         Ok(Some(
                             placeable
-                                .as_chunk_item(chunking_context.into())
+                                .as_chunk_item(Vc::upcast(chunking_context))
                                 .id()
                                 .await?,
                         ))
@@ -104,17 +114,8 @@ impl EcmascriptDevEvaluateChunkVc {
             .flatten()
             .collect();
 
-        let chunk_list_path = this
-            .chunking_context
-            .chunk_list_path(this.entry_chunk.ident())
-            .await?;
-        let chunk_list_path = output_root
-            .get_path_to(&*chunk_list_path)
-            .context("chunk list path is not in output root")?;
-
         let params = EcmascriptDevChunkRuntimeParams {
-            chunk_list_path,
-            other_chunks: other_chunks_paths,
+            other_chunks: &other_chunks_data,
             runtime_module_ids,
         };
 
@@ -131,74 +132,52 @@ impl EcmascriptDevEvaluateChunkVc {
                     {{}},
                     {}
                 ]);
-                (() => {{
-                if (!Array.isArray(globalThis.TURBOPACK)) {{
-                    return;
-                }}
             "#,
             StringifyJs(&chunk_public_path),
             StringifyJs(&params),
         )?;
 
-        let shared_runtime_code = embed_file!("js/src/runtime.js").await?;
-
-        match &*shared_runtime_code {
-            FileContent::NotFound => bail!("shared runtime code is not found"),
-            FileContent::Content(file) => code.push_source(file.content(), None),
-        };
-
-        // The specific runtime code depends on declarations in the shared runtime code,
-        // hence it must be appended after it.
-        let specific_runtime_code =
-            match &*this.chunking_context.environment().chunk_loading().await? {
-                ChunkLoading::None => embed_file!("js/src/runtime.none.js").await?,
-                ChunkLoading::NodeJs => embed_file!("js/src/runtime.nodejs.js").await?,
-                ChunkLoading::Dom => embed_file!("js/src/runtime.dom.js").await?,
-            };
-
-        match &*specific_runtime_code {
-            FileContent::NotFound => bail!("specific runtime code is not found"),
-            FileContent::Content(file) => code.push_source(file.content(), None),
-        };
-
-        // Registering chunks depends on the BACKEND variable, which is set by the
-        // specific runtime code, hence it must be appended after it.
-        writedoc!(
-            code,
-            r#"
-                const chunksToRegister = globalThis.TURBOPACK;
-                globalThis.TURBOPACK = {{ push: registerChunk }};
-                chunksToRegister.forEach(registerChunk);
-                }})();
-            "#
-        )?;
+        match chunking_context.runtime_type() {
+            RuntimeType::Default => {
+                let runtime_code = turbopack_ecmascript_runtime::get_dev_runtime_code(
+                    environment,
+                    chunking_context.chunk_base_path(),
+                );
+                code.push_code(&*runtime_code.await?);
+            }
+            #[cfg(feature = "test")]
+            RuntimeType::Dummy => {
+                let runtime_code = turbopack_ecmascript_runtime::get_dummy_runtime_code();
+                code.push_code(&runtime_code);
+            }
+        }
 
         if code.has_source_map() {
             let filename = chunk_path.file_name();
             write!(code, "\n\n//# sourceMappingURL={}.map", filename)?;
         }
 
-        Ok(CodeVc::cell(code.build()))
+        Ok(Code::cell(code.build()))
     }
 }
 
 #[turbo_tasks::value_impl]
 impl ValueToString for EcmascriptDevEvaluateChunk {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell("Ecmascript Dev Evaluate Chunk".to_string()))
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell("Ecmascript Dev Evaluate Chunk".to_string()))
     }
 }
 
 #[turbo_tasks::function]
-fn modifier() -> StringVc {
-    StringVc::cell("ecmascript dev evaluate chunk".to_string())
+fn modifier() -> Vc<String> {
+    Vc::cell("ecmascript dev evaluate chunk".to_string())
 }
 
 #[turbo_tasks::value_impl]
-impl Asset for EcmascriptDevEvaluateChunk {
+impl OutputAsset for EcmascriptDevEvaluateChunk {
     #[turbo_tasks::function]
-    async fn ident(&self) -> Result<AssetIdentVc> {
+    async fn ident(&self) -> Result<Vc<AssetIdent>> {
         let mut ident = self.entry_chunk.ident().await?.clone_value();
 
         ident.add_modifier(modifier());
@@ -214,48 +193,62 @@ impl Asset for EcmascriptDevEvaluateChunk {
             ident.add_modifier(chunk.ident().to_string());
         }
 
-        let ident = AssetIdentVc::new(Value::new(ident));
-        Ok(AssetIdentVc::from_path(
-            self.chunking_context.chunk_path(ident, ".js"),
+        let ident = AssetIdent::new(Value::new(ident));
+        Ok(AssetIdent::from_path(
+            self.chunking_context.chunk_path(ident, ".js".to_string()),
         ))
     }
 
     #[turbo_tasks::function]
-    async fn references(self_vc: EcmascriptDevEvaluateChunkVc) -> Result<AssetReferencesVc> {
-        let this = self_vc.await?;
-        Ok(AssetReferencesVc::cell(vec![
-            ChunkListReferenceVc::new(this.chunking_context, this.entry_chunk, this.other_chunks)
-                .into(),
-            SourceMapAssetReferenceVc::new(self_vc.into()).into(),
-        ]))
-    }
+    async fn references(self: Vc<Self>) -> Result<Vc<OutputAssets>> {
+        let this = self.await?;
+        let mut references = Vec::new();
 
+        let include_source_map = *this
+            .chunking_context
+            .reference_chunk_source_maps(Vc::upcast(self))
+            .await?;
+
+        if include_source_map {
+            references.push(Vc::upcast(SourceMapAsset::new(Vc::upcast(self))));
+        }
+
+        for chunk_data in &*self.chunks_data().await? {
+            references.extend(chunk_data.references().await?.iter().copied());
+        }
+
+        Ok(Vc::cell(references))
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl Asset for EcmascriptDevEvaluateChunk {
     #[turbo_tasks::function]
-    async fn content(self_vc: EcmascriptDevEvaluateChunkVc) -> Result<AssetContentVc> {
-        let code = self_vc.code().await?;
-        Ok(File::from(code.source_code().clone()).into())
+    async fn content(self: Vc<Self>) -> Result<Vc<AssetContent>> {
+        let code = self.code().await?;
+        Ok(AssetContent::file(
+            File::from(code.source_code().clone()).into(),
+        ))
     }
 }
 
 #[turbo_tasks::value_impl]
 impl GenerateSourceMap for EcmascriptDevEvaluateChunk {
     #[turbo_tasks::function]
-    fn generate_source_map(self_vc: EcmascriptDevEvaluateChunkVc) -> OptionSourceMapVc {
-        self_vc.code().generate_source_map()
+    fn generate_source_map(self: Vc<Self>) -> Vc<OptionSourceMap> {
+        self.code().generate_source_map()
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct EcmascriptDevChunkRuntimeParams<'a> {
+struct EcmascriptDevChunkRuntimeParams<'a, T> {
     /// Other chunks in the chunk group this chunk belongs to, if any. Does not
     /// include the chunk itself.
     ///
     /// These chunks must be loaed before the runtime modules can be
     /// instantiated.
-    other_chunks: Vec<String>,
+    other_chunks: &'a [T],
     /// List of module IDs that this chunk should instantiate when executed.
-    runtime_module_ids: Vec<ModuleIdReadRef>,
-    /// Path to the chunk list that this chunk should register itself with.
-    chunk_list_path: &'a str,
+    runtime_module_ids: Vec<ReadRef<ModuleId>>,
 }

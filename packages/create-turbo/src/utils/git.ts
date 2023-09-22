@@ -1,7 +1,6 @@
-import fs from "fs-extra";
-import { execSync } from "child_process";
-import path from "path";
-import rimraf from "rimraf";
+import { execSync } from "node:child_process";
+import path from "node:path";
+import { sync as rmSync } from "rimraf";
 
 export const DEFAULT_IGNORE = `
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
@@ -37,7 +36,9 @@ export function isInGitRepository(): boolean {
   try {
     execSync(GIT_REPO_COMMAND, { stdio: "ignore" });
     return true;
-  } catch (_) {}
+  } catch (_) {
+    // do nothing
+  }
   return false;
 }
 
@@ -45,33 +46,35 @@ export function isInMercurialRepository(): boolean {
   try {
     execSync(HG_REPO_COMMAND, { stdio: "ignore" });
     return true;
-  } catch (_) {}
+  } catch (_) {
+    // do nothing
+  }
   return false;
 }
 
 export function tryGitInit(root: string, message: string): boolean {
   let didInit = false;
   try {
-    execSync("git --version", { stdio: "ignore" });
     if (isInGitRepository() || isInMercurialRepository()) {
       return false;
     }
 
     execSync("git init", { stdio: "ignore" });
+    execSync("git add -A", { stdio: "ignore" });
+
     didInit = true;
 
     execSync("git checkout -b main", { stdio: "ignore" });
 
-    execSync("git add -A", { stdio: "ignore" });
-    execSync(`git commit -m "${message}"`, {
-      stdio: "ignore",
-    });
+    gitCommit(message);
     return true;
   } catch (err) {
     if (didInit) {
       try {
-        rimraf.sync(path.join(root, ".git"));
-      } catch (_) {}
+        rmSync(path.join(root, ".git"));
+      } catch (_) {
+        // do nothing
+      }
     }
     return false;
   }
@@ -79,12 +82,30 @@ export function tryGitInit(root: string, message: string): boolean {
 
 export function tryGitCommit(message: string): boolean {
   try {
-    execSync("git add -A", { stdio: "ignore" });
-    execSync(`git commit -m "${message}"`, {
-      stdio: "ignore",
-    });
+    gitCommit(message);
     return true;
   } catch (err) {
     return false;
   }
+}
+
+export function tryGitAdd(): void {
+  try {
+    gitAddAll();
+  } catch (err) {
+    // do nothing
+  }
+}
+
+function gitAddAll() {
+  execSync("git add -A", { stdio: "ignore" });
+}
+
+function gitCommit(message: string) {
+  execSync(
+    `git commit --author="Turbobot <turbobot@vercel.com>" -am "${message}"`,
+    {
+      stdio: "ignore",
+    }
+  );
 }

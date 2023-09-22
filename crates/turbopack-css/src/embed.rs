@@ -1,20 +1,25 @@
+use turbo_tasks::Vc;
 use turbopack_core::{
-    asset::{Asset, AssetVc},
-    chunk::{ChunkableAsset, ChunkableAssetVc, ChunkingContextVc},
-    reference::AssetReferencesVc,
+    asset::Asset,
+    chunk::{ChunkableModule, ChunkingContext},
+    module::Module,
+    output::{OutputAsset, OutputAssets},
 };
 
 #[turbo_tasks::value_trait]
-pub trait CssEmbeddable: ChunkableAsset + Asset {
-    fn as_css_embed(&self, context: ChunkingContextVc) -> CssEmbedVc;
+pub trait CssEmbeddable: ChunkableModule + Module + Asset {
+    fn as_css_embed(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Vc<Box<dyn CssEmbed>>;
 }
 
 #[turbo_tasks::value_trait]
 pub trait CssEmbed {
     /// A [CssEmbed] can describe different `references` than its original
-    /// [Asset].
+    /// [Module].
     /// TODO(alexkirsz) This should have a default impl that returns empty
     /// references.
-    fn references(&self) -> AssetReferencesVc;
-    fn embeddable_asset(&self) -> AssetVc;
+    fn references(self: Vc<Self>) -> Vc<OutputAssets>;
+    fn embeddable_asset(self: Vc<Self>) -> Vc<Box<dyn OutputAsset>>;
 }

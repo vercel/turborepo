@@ -3,21 +3,19 @@ use std::mem::replace;
 use anyhow::Result;
 use swc_core::{
     common::DUMMY_SP,
-    ecma::{
-        ast::{
-            ClassDecl, Decl, DefaultDecl, ExportDecl, ExportDefaultDecl, ExportDefaultExpr, FnDecl,
-            Ident, ModuleDecl, ModuleItem, Stmt,
-        },
-        visit::AstParentKind,
+    ecma::ast::{
+        ClassDecl, Decl, DefaultDecl, ExportDecl, ExportDefaultDecl, ExportDefaultExpr, FnDecl,
+        Ident, ModuleDecl, ModuleItem, Stmt,
     },
     quote,
 };
+use turbo_tasks::Vc;
 
 use crate::{
-    chunk::EcmascriptChunkingContextVc,
-    code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
+    chunk::EcmascriptChunkingContext,
+    code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor, magic_identifier,
-    references::AstPathVc,
+    references::AstPath,
 };
 
 /// Makes code changes to remove export/import declarations and places the
@@ -26,13 +24,13 @@ use crate::{
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct EsmModuleItem {
-    pub path: AstPathVc,
+    pub path: Vc<AstPath>,
 }
 
 #[turbo_tasks::value_impl]
-impl EsmModuleItemVc {
+impl EsmModuleItem {
     #[turbo_tasks::function]
-    pub fn new(path: AstPathVc) -> Self {
+    pub fn new(path: Vc<AstPath>) -> Vc<Self> {
         Self::cell(EsmModuleItem { path })
     }
 }
@@ -42,15 +40,11 @@ impl CodeGenerateable for EsmModuleItem {
     #[turbo_tasks::function]
     async fn code_generation(
         &self,
-        _context: EcmascriptChunkingContextVc,
-    ) -> Result<CodeGenerationVc> {
+        _context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    ) -> Result<Vc<CodeGeneration>> {
         let mut visitors = Vec::new();
 
         let path = &self.path.await?;
-        assert!(
-            matches!(path.last(), Some(AstParentKind::ModuleDecl(_))),
-            "EsmModuleItem was created with a path that points to a unexpected ast node"
-        );
         visitors.push(
             create_visitor!(path, visit_mut_module_item(module_item: &mut ModuleItem) {
                 let item = replace(module_item, ModuleItem::Stmt(quote!(";" as Stmt)));
@@ -63,7 +57,7 @@ impl CodeGenerateable for EsmModuleItem {
                             );
                             *module_item = ModuleItem::Stmt(stmt);
                         }
-                        ModuleDecl::ExportDefaultDecl(ExportDefaultDecl { decl, ..}) => {
+                        ModuleDecl::ExportDefaultDecl(ExportDefaultDecl { decl, span }) => {
                             match decl {
                                 DefaultDecl::Class(class) => {
                                     *module_item = ModuleItem::Stmt(Stmt::Decl(Decl::Class(ClassDecl {
@@ -80,7 +74,8 @@ impl CodeGenerateable for EsmModuleItem {
                                     })))
                                 }
                                 DefaultDecl::TsInterfaceDecl(_) => {
-                                    panic!("typescript declarations are unexpected here");
+                                    // not matching, might happen due to eventual consistency
+                                    *module_item = ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(ExportDefaultDecl { decl, span }));
                                 }
                             }
                         }
@@ -97,12 +92,12 @@ impl CodeGenerateable for EsmModuleItem {
                             // already removed
                         }
                         _ => {
-                            // not matching
+                            // not matching, might happen due to eventual consistency
                             *module_item = ModuleItem::ModuleDecl(module_decl);
                         }
                     }
                 } else {
-                    // not matching
+                    // not matching, might happen due to eventual consistency
                     *module_item = item;
                 }
             }),

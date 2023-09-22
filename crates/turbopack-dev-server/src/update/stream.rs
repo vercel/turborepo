@@ -1,32 +1,35 @@
 use std::pin::Pin;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use futures::{prelude::*, Stream};
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
-use turbo_tasks::{CollectiblesSource, IntoTraitRef, State, TraitRef, TransientInstance};
+use tracing::Instrument;
+use turbo_tasks::{IntoTraitRef, ReadRef, TransientInstance, Vc};
+use turbo_tasks_fs::{FileSystem, FileSystemPath};
 use turbopack_core::{
-    issue::{IssueVc, PlainIssueReadRef},
+    error::PrettyPrintError,
+    issue::{
+        Issue, IssueDescriptionExt, IssueSeverity, OptionIssueProcessingPathItems, PlainIssue,
+    },
+    server_fs::ServerFileSystem,
     version::{
-        NotFoundVersionVc, PartialUpdate, TotalUpdate, Update, UpdateReadRef, VersionVc,
+        NotFoundVersion, PartialUpdate, TotalUpdate, Update, Version, VersionState,
         VersionedContent,
     },
 };
 
-use crate::source::{
-    resolve::{ResolveSourceRequestResult, ResolveSourceRequestResultVc},
-    ProxyResultVc,
-};
+use crate::source::{resolve::ResolveSourceRequestResult, ProxyResult};
 
-type GetContentFn = Box<dyn Fn() -> ResolveSourceRequestResultVc + Send + Sync>;
+type GetContentFn = Box<dyn Fn() -> Vc<ResolveSourceRequestResult> + Send + Sync>;
 
-async fn peek_issues<T: CollectiblesSource + Copy>(source: T) -> Result<Vec<PlainIssueReadRef>> {
-    let captured = IssueVc::peek_issues_with_path(source).await?.await?;
+async fn peek_issues<T: Send>(source: Vc<T>) -> Result<Vec<ReadRef<PlainIssue>>> {
+    let captured = source.peek_issues_with_path().await?.await?;
 
     captured.get_plain_issues().await
 }
 
-fn extend_issues(issues: &mut Vec<PlainIssueReadRef>, new_issues: Vec<PlainIssueReadRef>) {
+fn extend_issues(issues: &mut Vec<ReadRef<PlainIssue>>, new_issues: Vec<ReadRef<PlainIssue>>) {
     for issue in new_issues {
         if issues.contains(&issue) {
             continue;
@@ -38,12 +41,41 @@ fn extend_issues(issues: &mut Vec<PlainIssueReadRef>, new_issues: Vec<PlainIssue
 
 #[turbo_tasks::function]
 async fn get_update_stream_item(
-    from: VersionStateVc,
+    resource: String,
+    from: Vc<VersionState>,
     get_content: TransientInstance<GetContentFn>,
-) -> Result<UpdateStreamItemVc> {
+) -> Result<Vc<UpdateStreamItem>> {
     let content = get_content();
+    let mut plain_issues = peek_issues(content).await?;
 
-    match *content.await? {
+    let content_value = match content.await {
+        Ok(content) => content,
+        Err(e) => {
+            plain_issues.push(
+                FatalStreamIssue {
+                    resource: resource.to_string(),
+                    description: Vc::cell(format!("{}", PrettyPrintError(&e))),
+                }
+                .cell()
+                .into_plain(OptionIssueProcessingPathItems::none())
+                .await?,
+            );
+
+            let update = Update::Total(TotalUpdate {
+                to: Vc::upcast::<Box<dyn Version>>(NotFoundVersion::new())
+                    .into_trait_ref()
+                    .await?,
+            })
+            .cell();
+            return Ok(UpdateStreamItem::Found {
+                update: update.await?,
+                issues: plain_issues,
+            }
+            .cell());
+        }
+    };
+
+    match *content_value {
         ResolveSourceRequestResult::Static(static_content_vc, _) => {
             let static_content = static_content_vc.await?;
 
@@ -56,8 +88,7 @@ async fn get_update_stream_item(
             let from = from.get();
             let update = resolved_content.update(from);
 
-            let mut plain_issues = peek_issues(update).await?;
-            extend_issues(&mut plain_issues, peek_issues(content).await?);
+            extend_issues(&mut plain_issues, peek_issues(update).await?);
 
             let update = update.await?;
 
@@ -74,10 +105,10 @@ async fn get_update_stream_item(
                 return Ok(UpdateStreamItem::NotFound.cell());
             }
 
-            let plain_issues = peek_issues(proxy_result).await?;
+            extend_issues(&mut plain_issues, peek_issues(proxy_result).await?);
 
             let from = from.get();
-            if let Some(from) = ProxyResultVc::resolve_from(from).await? {
+            if let Some(from) = Vc::try_resolve_downcast_type::<ProxyResult>(from).await? {
                 if from.await? == proxy_result_value {
                     return Ok(UpdateStreamItem::Found {
                         update: Update::None.cell().await?,
@@ -89,7 +120,9 @@ async fn get_update_stream_item(
 
             Ok(UpdateStreamItem::Found {
                 update: Update::Total(TotalUpdate {
-                    to: proxy_result.as_version().into_trait_ref().await?,
+                    to: Vc::upcast::<Box<dyn Version>>(proxy_result)
+                        .into_trait_ref()
+                        .await?,
                 })
                 .cell()
                 .await?,
@@ -98,16 +131,13 @@ async fn get_update_stream_item(
             .cell())
         }
         _ => {
-            let plain_issues = peek_issues(content).await?;
-
             let update = if plain_issues.is_empty() {
                 // Client requested a non-existing asset
                 // It might be removed in meantime, reload client
                 // TODO add special instructions for removed assets to handled it in a better
                 // way
                 Update::Total(TotalUpdate {
-                    to: NotFoundVersionVc::new()
-                        .as_version()
+                    to: Vc::upcast::<Box<dyn Version>>(NotFoundVersion::new())
                         .into_trait_ref()
                         .await?,
                 })
@@ -127,55 +157,31 @@ async fn get_update_stream_item(
 
 #[turbo_tasks::function]
 async fn compute_update_stream(
-    from: VersionStateVc,
+    resource: String,
+    from: Vc<VersionState>,
     get_content: TransientInstance<GetContentFn>,
-    sender: TransientInstance<Sender<UpdateStreamItemReadRef>>,
-) -> Result<()> {
-    let item = get_update_stream_item(from, get_content)
+    sender: TransientInstance<Sender<Result<ReadRef<UpdateStreamItem>>>>,
+) -> Result<Vc<()>> {
+    let item = get_update_stream_item(resource, from, get_content)
         .strongly_consistent()
-        .await?;
+        .await;
 
-    if sender.send(item).await.is_err() {
-        bail!("channel closed");
-    }
+    // Send update. Ignore channel closed error.
+    let _ = sender.send(item).await;
 
-    Ok(())
+    Ok(Default::default())
 }
 
-#[turbo_tasks::value]
-struct VersionState {
-    #[turbo_tasks(trace_ignore)]
-    version: State<TraitRef<VersionVc>>,
-}
-
-#[turbo_tasks::value_impl]
-impl VersionStateVc {
-    #[turbo_tasks::function]
-    async fn get(self) -> Result<VersionVc> {
-        let this = self.await?;
-        let version = TraitRef::cell(this.version.get().clone());
-        Ok(version)
-    }
-}
-
-impl VersionStateVc {
-    async fn new(version: TraitRef<VersionVc>) -> Result<Self> {
-        Ok(Self::cell(VersionState {
-            version: State::new(version),
-        }))
-    }
-
-    async fn set(&self, new_version: TraitRef<VersionVc>) -> Result<()> {
-        let this = self.await?;
-        this.version.set(new_version);
-        Ok(())
-    }
-}
-
-pub(super) struct UpdateStream(Pin<Box<dyn Stream<Item = UpdateStreamItemReadRef> + Send + Sync>>);
+pub(super) struct UpdateStream(
+    Pin<Box<dyn Stream<Item = Result<ReadRef<UpdateStreamItem>>> + Send + Sync>>,
+);
 
 impl UpdateStream {
-    pub async fn new(get_content: TransientInstance<GetContentFn>) -> Result<UpdateStream> {
+    #[tracing::instrument(skip(get_content), name = "UpdateStream::new")]
+    pub async fn new(
+        resource: String,
+        get_content: TransientInstance<GetContentFn>,
+    ) -> Result<UpdateStream> {
         let (sx, rx) = tokio::sync::mpsc::channel(32);
 
         let content = get_content();
@@ -185,55 +191,64 @@ impl UpdateStream {
             ResolveSourceRequestResult::Static(static_content, _) => {
                 static_content.await?.content.version()
             }
-            ResolveSourceRequestResult::HttpProxy(proxy_result) => proxy_result.into(),
-            _ => NotFoundVersionVc::new().into(),
+            ResolveSourceRequestResult::HttpProxy(proxy_result) => Vc::upcast(proxy_result),
+            _ => Vc::upcast(NotFoundVersion::new()),
         };
-        let version_state = VersionStateVc::new(version.into_trait_ref().await?).await?;
+        let version_state = VersionState::new(version.into_trait_ref().await?).await?;
 
-        compute_update_stream(version_state, get_content, TransientInstance::new(sx));
+        let _ = compute_update_stream(
+            resource,
+            version_state,
+            get_content,
+            TransientInstance::new(sx),
+        );
 
         let mut last_had_issues = false;
 
         let stream = ReceiverStream::new(rx).filter_map(move |item| {
-            let (has_issues, issues_changed) =
-                if let UpdateStreamItem::Found { issues, .. } = &*item {
-                    let has_issues = !issues.is_empty();
-                    let issues_changed = has_issues != last_had_issues;
-                    last_had_issues = has_issues;
-                    (has_issues, issues_changed)
-                } else {
-                    (false, false)
-                };
+            {
+                let (has_issues, issues_changed) =
+                    if let Ok(UpdateStreamItem::Found { issues, .. }) = item.as_deref() {
+                        let has_issues = !issues.is_empty();
+                        let issues_changed = has_issues != last_had_issues;
+                        last_had_issues = has_issues;
+                        (has_issues, issues_changed)
+                    } else {
+                        (false, false)
+                    };
 
-            async move {
-                match &*item {
-                    UpdateStreamItem::NotFound => {
-                        // Propagate not found updates so we can drop this update stream.
-                        Some(item)
-                    }
-                    UpdateStreamItem::Found { update, .. } => {
-                        match &**update {
-                            Update::Partial(PartialUpdate { to, .. })
-                            | Update::Total(TotalUpdate { to }) => {
-                                version_state
-                                    .set(to.clone())
-                                    .await
-                                    .expect("failed to update version");
+                async move {
+                    match item.as_deref() {
+                        Ok(UpdateStreamItem::Found { update, .. }) => {
+                            match &**update {
+                                Update::Partial(PartialUpdate { to, .. })
+                                | Update::Total(TotalUpdate { to }) => {
+                                    version_state
+                                        .set(to.clone())
+                                        .await
+                                        .expect("failed to update version");
 
-                                Some(item)
-                            }
-                            // Do not propagate empty updates.
-                            Update::None => {
-                                if has_issues || issues_changed {
                                     Some(item)
-                                } else {
-                                    None
+                                }
+                                // Do not propagate empty updates.
+                                Update::None => {
+                                    if has_issues || issues_changed {
+                                        Some(item)
+                                    } else {
+                                        None
+                                    }
                                 }
                             }
                         }
+                        _ => {
+                            // Propagate other updates
+                            Some(item)
+                        }
                     }
                 }
+                .in_current_span()
             }
+            .in_current_span()
         });
 
         Ok(UpdateStream(Box::pin(stream)))
@@ -241,7 +256,7 @@ impl UpdateStream {
 }
 
 impl Stream for UpdateStream {
-    type Item = UpdateStreamItemReadRef;
+    type Item = Result<ReadRef<UpdateStreamItem>>;
 
     fn poll_next(
         self: Pin<&mut Self>,
@@ -256,7 +271,41 @@ impl Stream for UpdateStream {
 pub enum UpdateStreamItem {
     NotFound,
     Found {
-        update: UpdateReadRef,
-        issues: Vec<PlainIssueReadRef>,
+        update: ReadRef<Update>,
+        issues: Vec<ReadRef<PlainIssue>>,
     },
+}
+
+#[turbo_tasks::value(serialization = "none")]
+struct FatalStreamIssue {
+    description: Vc<String>,
+    resource: String,
+}
+
+#[turbo_tasks::value_impl]
+impl Issue for FatalStreamIssue {
+    #[turbo_tasks::function]
+    fn severity(&self) -> Vc<IssueSeverity> {
+        IssueSeverity::Fatal.into()
+    }
+
+    #[turbo_tasks::function]
+    fn file_path(&self) -> Vc<FileSystemPath> {
+        ServerFileSystem::new().root().join(self.resource.clone())
+    }
+
+    #[turbo_tasks::function]
+    fn category(&self) -> Vc<String> {
+        Vc::cell("websocket".to_string())
+    }
+
+    #[turbo_tasks::function]
+    fn title(&self) -> Vc<String> {
+        Vc::cell("Fatal error while getting content to stream".to_string())
+    }
+
+    #[turbo_tasks::function]
+    fn description(&self) -> Vc<String> {
+        self.description
+    }
 }

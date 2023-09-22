@@ -1,7 +1,5 @@
 //! Testing utilities and macros for turbo-tasks and applications based on it.
 
-#![feature(box_syntax)]
-
 mod macros;
 pub mod retry;
 
@@ -10,24 +8,25 @@ use std::{
     collections::HashMap,
     future::Future,
     mem::replace,
+    panic::AssertUnwindSafe,
     sync::{Arc, Mutex, Weak},
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use auto_hash_map::AutoSet;
+use futures::FutureExt;
 use turbo_tasks::{
     backend::CellContent,
     event::{Event, EventListener},
-    primitives::RawVcSetVc,
     registry,
     test_helpers::with_turbo_tasks_for_testing,
-    util::StaticOrArc,
-    CellId, InvalidationReason, RawVc, TaskId, TraitTypeId, TurboTasksApi, TurboTasksCallApi,
+    util::{SharedError, StaticOrArc},
+    CellId, InvalidationReason, RawVc, TaskId, TraitTypeId, TurboTasksApi, TurboTasksCallApi, Vc,
 };
 
 enum Task {
     Spawned(Event),
-    Finished(RawVc),
+    Finished(Result<RawVc, SharedError>),
 }
 
 #[derive(Default)]
@@ -41,7 +40,7 @@ impl TurboTasksCallApi for VcStorage {
     fn dynamic_call(
         &self,
         func: turbo_tasks::FunctionId,
-        inputs: Vec<turbo_tasks::TaskInput>,
+        inputs: Vec<turbo_tasks::ConcreteTaskInput>,
     ) -> RawVc {
         let this = self.this.upgrade().unwrap();
         let func = registry::get_function(func).bind(&inputs);
@@ -59,7 +58,20 @@ impl TurboTasksCallApi for VcStorage {
             this.clone(),
             TaskId::from(i),
             async move {
-                let result = future.await.unwrap();
+                let result = AssertUnwindSafe(future).catch_unwind().await;
+
+                // Convert the unwind panic to an anyhow error that can be cloned.
+                let result = result
+                    .map_err(|any| match any.downcast::<String>() {
+                        Ok(owned) => anyhow!(owned),
+                        Err(any) => match any.downcast::<&'static str>() {
+                            Ok(str) => anyhow!(str),
+                            Err(_) => anyhow!("unknown panic"),
+                        },
+                    })
+                    .and_then(|r| r)
+                    .map_err(SharedError::new);
+
                 let mut tasks = this.tasks.lock().unwrap();
                 if let Task::Spawned(event) = replace(&mut tasks[i], Task::Finished(result)) {
                     event.notify(usize::MAX);
@@ -72,7 +84,7 @@ impl TurboTasksCallApi for VcStorage {
     fn native_call(
         &self,
         _func: turbo_tasks::FunctionId,
-        _inputs: Vec<turbo_tasks::TaskInput>,
+        _inputs: Vec<turbo_tasks::ConcreteTaskInput>,
     ) -> RawVc {
         unreachable!()
     }
@@ -81,7 +93,7 @@ impl TurboTasksCallApi for VcStorage {
         &self,
         _trait_type: turbo_tasks::TraitTypeId,
         _trait_fn_name: Cow<'static, str>,
-        _inputs: Vec<turbo_tasks::TaskInput>,
+        _inputs: Vec<turbo_tasks::ConcreteTaskInput>,
     ) -> RawVc {
         unreachable!()
     }
@@ -110,6 +122,10 @@ impl TurboTasksCallApi for VcStorage {
 }
 
 impl TurboTasksApi for VcStorage {
+    fn pin(&self) -> Arc<dyn TurboTasksApi> {
+        self.this.upgrade().unwrap()
+    }
+
     fn invalidate(&self, _task: TaskId) {
         unreachable!()
     }
@@ -135,7 +151,10 @@ impl TurboTasksApi for VcStorage {
         let task = tasks.get(*task).unwrap();
         match task {
             Task::Spawned(event) => Ok(Err(event.listen())),
-            Task::Finished(result) => Ok(Ok(*result)),
+            Task::Finished(result) => match result {
+                Ok(vc) => Ok(Ok(*vc)),
+                Err(err) => Err(anyhow!(err.clone())),
+            },
         }
     }
 
@@ -197,7 +216,7 @@ impl TurboTasksApi for VcStorage {
         unimplemented!()
     }
 
-    fn read_task_collectibles(&self, _task: TaskId, _trait_id: TraitTypeId) -> RawVcSetVc {
+    fn read_task_collectibles(&self, _task: TaskId, _trait_id: TraitTypeId) -> Vc<AutoSet<RawVc>> {
         unimplemented!()
     }
 
@@ -222,6 +241,13 @@ impl TurboTasksApi for VcStorage {
 
     fn mark_own_task_as_finished(&self, _task: TaskId) {
         // no-op
+    }
+
+    fn detached(
+        &self,
+        _f: std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>> {
+        unimplemented!()
     }
 }
 

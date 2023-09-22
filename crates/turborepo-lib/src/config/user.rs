@@ -1,10 +1,11 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 
-use anyhow::Result;
+use camino::Utf8PathBuf;
 use config::{Config, Environment};
 use serde::{Deserialize, Serialize};
 
 use super::write_to_disk;
+use crate::config::Error;
 
 // Inner struct that matches the config file schema
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Default)]
@@ -19,13 +20,13 @@ pub struct UserConfig {
     // environment variables or command line flags.
     disk_config: UserConfigValue,
     config: UserConfigValue,
-    path: PathBuf,
+    path: Utf8PathBuf,
 }
 
 /// Configuration options for loading a UserConfig object
 #[derive(Debug, Clone)]
 pub struct UserConfigLoader {
-    path: PathBuf,
+    path: Utf8PathBuf,
     token: Option<String>,
     environment: Option<HashMap<String, String>>,
 }
@@ -37,22 +38,22 @@ impl UserConfig {
     }
 
     /// Set token and sync the changes to disk
-    pub fn set_token(&mut self, token: Option<String>) -> Result<()> {
+    pub fn set_token(&mut self, token: Option<String>) -> Result<(), Error> {
         self.disk_config.token = token.clone();
         self.config.token = token;
         self.write_to_disk()
     }
 
-    fn write_to_disk(&self) -> Result<()> {
+    fn write_to_disk(&self) -> Result<(), Error> {
         write_to_disk(&self.path, &self.disk_config)
     }
 }
 
 impl UserConfigLoader {
     /// Creates a loader that will load the config file at the given path
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(path: impl Into<Utf8PathBuf>) -> Self {
         Self {
-            path,
+            path: path.into(),
             token: None,
             environment: None,
         }
@@ -74,7 +75,7 @@ impl UserConfigLoader {
     }
 
     /// Loads the user config using settings of the loader
-    pub fn load(self) -> Result<UserConfig> {
+    pub fn load(self) -> Result<UserConfig, Error> {
         let Self {
             path,
             token,
@@ -84,7 +85,7 @@ impl UserConfigLoader {
         // value that comes from a flag or environment variable.
         let raw_disk_config = Config::builder()
             .add_source(
-                config::File::with_name(path.to_string_lossy().as_ref())
+                config::File::with_name(path.as_str())
                     .format(config::FileFormat::Json)
                     .required(false),
             )
@@ -92,7 +93,8 @@ impl UserConfigLoader {
 
         let config = Config::builder()
             .add_source(raw_disk_config.clone())
-            .add_source(Environment::with_prefix("turbo").source(environment))
+            .add_source(Environment::with_prefix("TURBO").source(environment.clone()))
+            .add_source(Environment::with_prefix("VERCEL_ARTIFACTS").source(environment))
             .set_override_option("token", token)?
             .build()?
             .try_deserialize()?;
@@ -111,6 +113,7 @@ impl UserConfigLoader {
 mod test {
     use std::io::Write;
 
+    use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
 
     use super::*;
@@ -121,7 +124,7 @@ mod test {
         let mut config_path = config_dir.path().to_path_buf();
         config_path.push("turbo");
         config_path.push("config.json");
-        let loader = UserConfigLoader::new(config_path.clone());
+        let loader = UserConfigLoader::new(config_path.to_str().unwrap());
         let mut config = loader.clone().load()?;
         assert_eq!(config.token(), None);
         config.set_token(Some("foo".to_string()))?;
@@ -134,29 +137,38 @@ mod test {
     fn test_disk_value_preserved() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
         writeln!(&mut config_file, "{{\"token\": \"foo\"}}")?;
-        let loader =
-            UserConfigLoader::new(config_file.path().to_path_buf()).with_token(Some("bar".into()));
+        let loader = UserConfigLoader::new(config_file.path().to_str().unwrap())
+            .with_token(Some("bar".into()));
         let config = loader.load()?;
         assert_eq!(config.token(), Some("bar"));
         config.write_to_disk()?;
-        let new_config = UserConfigLoader::new(config_file.path().to_path_buf()).load()?;
+        let new_config = UserConfigLoader::new(config_file.path().to_str().unwrap()).load()?;
         assert_eq!(new_config.token(), Some("foo"));
         Ok(())
     }
+
+    static TOKEN_ENV_VARS: [&str; 2] = ["TURBO_TOKEN", "VERCEL_ARTIFACTS_TOKEN"];
 
     #[test]
     fn test_env_var_trumps_disk() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
         writeln!(&mut config_file, "{{\"token\": \"foo\"}}")?;
-        let env = {
-            let mut map = HashMap::new();
-            map.insert("TURBO_TOKEN".into(), "bar".into());
-            map
-        };
-        let config = UserConfigLoader::new(config_file.path().to_path_buf())
-            .with_environment(Some(env))
-            .load()?;
-        assert_eq!(config.token(), Some("bar"));
+
+        for (idx, env_var) in TOKEN_ENV_VARS.into_iter().enumerate() {
+            let env_var_value = format!("bar{}", idx);
+
+            let env = {
+                let mut map = HashMap::new();
+                map.insert(env_var.into(), env_var_value.clone());
+                map
+            };
+            let config = UserConfigLoader::new(config_file.path().to_str().unwrap())
+                .with_environment(Some(env))
+                .load()?;
+
+            assert_eq!(config.token(), Some(env_var_value.as_str()));
+        }
+
         Ok(())
     }
 }

@@ -1,3 +1,5 @@
+#![allow(clippy::redundant_closure_call)]
+
 use std::{
     borrow::Cow,
     cmp::Ordering,
@@ -9,9 +11,12 @@ use std::{
     sync::Arc,
 };
 
-use indexmap::IndexSet;
+use anyhow::{bail, Context, Result};
+use indexmap::{IndexMap, IndexSet};
 use num_bigint::BigInt;
 use num_traits::identities::Zero;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use swc_core::{
     common::Mark,
     ecma::{
@@ -19,17 +24,19 @@ use swc_core::{
         atoms::{Atom, JsWord},
     },
 };
+use turbo_tasks::Vc;
 use turbopack_core::compile_time_info::CompileTimeDefineValue;
 use url::Url;
 
 use self::imports::ImportAnnotations;
 pub(crate) use self::imports::ImportMap;
-use crate::utils::StringifyJs;
+use crate::{references::require_context::RequireContextMap, utils::StringifyJs};
 
 pub mod builtin;
 pub mod graph;
 pub mod imports;
 pub mod linker;
+pub mod top_level_await;
 pub mod well_known;
 
 type PinnedAsyncUntilSettledBox<'a, E> =
@@ -167,6 +174,14 @@ impl ConstantValue {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Self::Str(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::True => Some(true),
+            Self::False => Some(false),
             _ => None,
         }
     }
@@ -369,7 +384,7 @@ pub enum JsValue {
     WellKnownFunction(WellKnownFunctionKind),
     /// Not-analyzable value. Might contain the original value for additional
     /// info. Has a reason string for explanation.
-    Unknown(Option<Arc<JsValue>>, &'static str),
+    Unknown(Option<Arc<JsValue>>, Cow<'static, str>),
 
     // NESTED VALUES
     // ----------------------------
@@ -410,6 +425,9 @@ pub enum JsValue {
     /// A function call without a this context.
     /// `(total_node_count, callee, args)`
     Call(usize, Box<JsValue>, Vec<JsValue>),
+    /// A super call to the parent constructor.
+    /// `(total_node_count, args)`
+    SuperCall(usize, Vec<JsValue>),
     /// A function call with a this context.
     /// `(total_node_count, obj, prop, args)`
     MemberCall(usize, Box<JsValue>, Box<JsValue>, Vec<JsValue>),
@@ -490,7 +508,7 @@ impl From<&CompileTimeDefineValue> for JsValue {
 
 impl Default for JsValue {
     fn default() -> Self {
-        JsValue::Unknown(None, "")
+        JsValue::unknown_empty("")
     }
 }
 
@@ -570,6 +588,14 @@ impl Display for JsValue {
                 f,
                 "{}({})",
                 callee,
+                list.iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            JsValue::SuperCall(_, list) => write!(
+                f,
+                "super({})",
                 list.iter()
                     .map(|v| v.to_string())
                     .collect::<Vec<_>>()
@@ -669,6 +695,7 @@ impl JsValue {
             | JsValue::Logical(..)
             | JsValue::Binary(..)
             | JsValue::Call(..)
+            | JsValue::SuperCall(..)
             | JsValue::MemberCall(..) => JsValueMetaKind::Operation,
             JsValue::Variable(..)
             | JsValue::Argument(..)
@@ -711,36 +738,36 @@ impl JsValue {
     pub fn equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),
-            box a,
+            Box::new(a),
             BinaryOperator::Equal,
-            box b,
+            Box::new(b),
         )
     }
 
     pub fn not_equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),
-            box a,
+            Box::new(a),
             BinaryOperator::NotEqual,
-            box b,
+            Box::new(b),
         )
     }
 
     pub fn strict_equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),
-            box a,
+            Box::new(a),
             BinaryOperator::StrictEqual,
-            box b,
+            Box::new(b),
         )
     }
 
     pub fn strict_not_equal(a: JsValue, b: JsValue) -> Self {
         Self::Binary(
             1 + a.total_nodes() + b.total_nodes(),
-            box a,
+            Box::new(a),
             BinaryOperator::StrictNotEqual,
-            box b,
+            Box::new(b),
         )
     }
 
@@ -800,6 +827,10 @@ impl JsValue {
         Self::Call(1 + f.total_nodes() + total_nodes(&args), f, args)
     }
 
+    pub fn super_call(args: Vec<JsValue>) -> Self {
+        Self::SuperCall(1 + total_nodes(&args), args)
+    }
+
     pub fn member_call(o: Box<JsValue>, p: Box<JsValue>, args: Vec<JsValue>) -> Self {
         Self::MemberCall(
             1 + o.total_nodes() + p.total_nodes() + total_nodes(&args),
@@ -808,8 +839,17 @@ impl JsValue {
             args,
         )
     }
+
     pub fn member(o: Box<JsValue>, p: Box<JsValue>) -> Self {
         Self::Member(1 + o.total_nodes() + p.total_nodes(), o, p)
+    }
+
+    pub fn unknown(value: impl Into<Arc<JsValue>>, reason: impl Into<Cow<'static, str>>) -> Self {
+        Self::Unknown(Some(value.into()), reason.into())
+    }
+
+    pub fn unknown_empty(reason: impl Into<Cow<'static, str>>) -> Self {
+        Self::Unknown(None, reason.into())
     }
 }
 
@@ -836,6 +876,7 @@ impl JsValue {
             | JsValue::Logical(c, _, _)
             | JsValue::Binary(c, _, _, _)
             | JsValue::Call(c, _, _)
+            | JsValue::SuperCall(c, _)
             | JsValue::MemberCall(c, _, _, _)
             | JsValue::Member(c, _, _)
             | JsValue::Function(c, _, _) => *c,
@@ -888,6 +929,9 @@ impl JsValue {
             }
             JsValue::Call(c, f, list) => {
                 *c = 1 + f.total_nodes() + total_nodes(list);
+            }
+            JsValue::SuperCall(c, list) => {
+                *c = 1 + total_nodes(list);
             }
             JsValue::MemberCall(c, o, m, list) => {
                 *c = 1 + o.total_nodes() + m.total_nodes() + total_nodes(list);
@@ -966,6 +1010,10 @@ impl JsValue {
                 }
                 JsValue::Call(_, f, args) => {
                     make_max_unknown([&mut **f].into_iter().chain(args.iter_mut()));
+                    self.update_total_nodes();
+                }
+                JsValue::SuperCall(_, args) => {
+                    make_max_unknown(args.iter_mut());
                     self.update_total_nodes();
                 }
                 JsValue::MemberCall(_, o, p, args) => {
@@ -1125,7 +1173,7 @@ impl JsValue {
                     "| "
                 )
             ),
-            JsValue::FreeVar(name) => format!("FreeVar({})", &*name),
+            JsValue::FreeVar(name) => format!("FreeVar({})", name),
             JsValue::Variable(name) => {
                 format!("{}", name.0)
             }
@@ -1195,6 +1243,26 @@ impl JsValue {
                 format!(
                     "{}({})",
                     callee.explain_internal_inner(hints, indent_depth, depth, unknown_depth),
+                    pretty_join(
+                        &list
+                            .iter()
+                            .map(|v| v.explain_internal_inner(
+                                hints,
+                                indent_depth + 1,
+                                depth,
+                                unknown_depth
+                            ))
+                            .collect::<Vec<_>>(),
+                        indent_depth,
+                        ", ",
+                        ",",
+                        ""
+                    )
+                )
+            }
+            JsValue::SuperCall(_, list) => {
+                format!(
+                    "super({})",
                     pretty_join(
                         &list
                             .iter()
@@ -1358,6 +1426,10 @@ impl JsValue {
                     ),
                     WellKnownFunctionKind::Require => ("require".to_string(), "The require method from CommonJS"),
                     WellKnownFunctionKind::RequireResolve => ("require.resolve".to_string(), "The require.resolve method from CommonJS"),
+                    WellKnownFunctionKind::RequireContext => ("require.context".to_string(), "The require.context method from webpack"),
+                    WellKnownFunctionKind::RequireContextRequire(..) => ("require.context(...)".to_string(), "The require.context(...) method from webpack: https://webpack.js.org/api/module-methods/#requirecontext"),
+                    WellKnownFunctionKind::RequireContextRequireKeys(..) => ("require.context(...).keys".to_string(), "The require.context(...).keys method from webpack: https://webpack.js.org/guides/dependency-management/#requirecontext"),
+                    WellKnownFunctionKind::RequireContextRequireResolve(..) => ("require.context(...).resolve".to_string(), "The require.context(...).resolve method from webpack: https://webpack.js.org/guides/dependency-management/#requirecontext"),
                     WellKnownFunctionKind::Define => ("define".to_string(), "The define method from AMD"),
                     WellKnownFunctionKind::FsReadMethod(name) => (
                         format!("fs.{name}"),
@@ -1458,14 +1530,20 @@ impl JsValue {
 // Unknown management
 impl JsValue {
     /// Convert the value into unknown with a specific reason.
-    pub fn make_unknown(&mut self, reason: &'static str) {
-        *self = JsValue::Unknown(Some(Arc::new(take(self))), reason);
+    pub fn make_unknown(&mut self, reason: impl Into<Cow<'static, str>>) {
+        *self = JsValue::unknown(take(self), reason);
+    }
+
+    /// Convert the owned value into unknown with a specific reason.
+    pub fn into_unknown(mut self, reason: impl Into<Cow<'static, str>>) -> Self {
+        self.make_unknown(reason);
+        self
     }
 
     /// Convert the value into unknown with a specific reason, but don't retain
     /// the original value.
-    pub fn make_unknown_without_content(&mut self, reason: &'static str) {
-        *self = JsValue::Unknown(None, reason);
+    pub fn make_unknown_without_content(&mut self, reason: impl Into<Cow<'static, str>>) {
+        *self = JsValue::unknown_empty(reason);
     }
 
     /// Make all nested operations unknown when the value is an operation.
@@ -1486,12 +1564,20 @@ impl JsValue {
     }
 
     pub fn add_unknown_mutations(&mut self) {
-        self.add_alt(JsValue::Unknown(None, "unknown mutation"));
+        self.add_alt(JsValue::unknown_empty("unknown mutation"));
     }
 }
 
 // Defineable name management
 impl JsValue {
+    /// When the value has a user-defineable name, return the length of it (in
+    /// segments). Otherwise returns None.
+    /// - any free var has itself as user-defineable name.
+    /// - any member access adds the identifier as segement to the name of the
+    ///   object.
+    /// - some well-known objects/functions have a user-defineable names.
+    /// - member calls without arguments also have a user-defineable name which
+    ///   is the property with `()` appended.
     pub fn get_defineable_name_len(&self) -> Option<usize> {
         match self {
             JsValue::FreeVar(_) => Some(1),
@@ -1510,6 +1596,12 @@ impl JsValue {
         }
     }
 
+    /// Returns a reverse iterator over the segments of the user-defineable
+    /// name. e. g. `foo.bar().baz` would yield `baz`, `bar()`, `foo`.
+    /// `(1+2).foo.baz` would also yield `baz`, `foo` even while the value is
+    /// not a complete user-defineable name. Before calling this method you must
+    /// use [JsValue::get_defineable_name_len] to determine if the value has a
+    /// user-defineable name at all.
     pub fn iter_defineable_name_rev(&self) -> DefineableNameIter<'_> {
         DefineableNameIter {
             next: Some(self),
@@ -1567,6 +1659,14 @@ impl JsValue {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             JsValue::Constant(c) => c.as_str(),
+            _ => None,
+        }
+    }
+
+    /// Returns the constant bool if the value represents a constant boolean.
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            JsValue::Constant(c) => c.as_bool(),
             _ => None,
         }
     }
@@ -1779,7 +1879,8 @@ impl JsValue {
             | JsValue::Argument(..)
             | JsValue::Call(..)
             | JsValue::MemberCall(..)
-            | JsValue::Member(..) => None,
+            | JsValue::Member(..)
+            | JsValue::SuperCall(..) => None,
         }
     }
 
@@ -1973,6 +2074,18 @@ macro_rules! for_each_children_async {
             JsValue::Call(_, box callee, list) => {
                 let (new_callee, mut modified) = $visit_fn(take(callee), $($args),+).await?;
                 *callee = new_callee;
+                for item in list.iter_mut() {
+                    let (v, m) = $visit_fn(take(item), $($args),+).await?;
+                    *item = v;
+                    if m {
+                        modified = true
+                    }
+                }
+                $value.update_total_nodes();
+                ($value, modified)
+            }
+            JsValue::SuperCall(_, list) => {
+                let mut modified = false;
                 for item in list.iter_mut() {
                     let (v, m) = $visit_fn(take(item), $($args),+).await?;
                     *item = v;
@@ -2249,6 +2362,18 @@ impl JsValue {
                 }
                 modified
             }
+            JsValue::SuperCall(_, list) => {
+                let mut modified = false;
+                for item in list.iter_mut() {
+                    if visitor(item) {
+                        modified = true
+                    }
+                }
+                if modified {
+                    self.update_total_nodes();
+                }
+                modified
+            }
             JsValue::MemberCall(_, obj, prop, list) => {
                 let m1 = visitor(obj);
                 let m2 = visitor(prop);
@@ -2413,6 +2538,11 @@ impl JsValue {
             }
             JsValue::Call(_, callee, list) => {
                 visitor(callee);
+                for item in list.iter() {
+                    visitor(item);
+                }
+            }
+            JsValue::SuperCall(_, list) => {
                 for item in list.iter() {
                     visitor(item);
                 }
@@ -2753,6 +2883,9 @@ impl JsValue {
                 a.similar_hash(state, depth - 1);
                 all_similar_hash(b, state, depth - 1);
             }
+            JsValue::SuperCall(_, a) => {
+                all_similar_hash(a, state, depth - 1);
+            }
             JsValue::MemberCall(_, a, b, c) => {
                 a.similar_hash(state, depth - 1);
                 b.similar_hash(state, depth - 1);
@@ -2852,6 +2985,124 @@ impl WellKnownObjectKind {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct RequireContextOptions {
+    pub dir: String,
+    pub include_subdirs: bool,
+    /// this is a regex (pattern, flags)
+    pub filter: Regex,
+}
+
+/// Convert an ECMAScript regex to a Rust regex.
+fn regex_from_js(pattern: &str, flags: &str) -> Result<Regex> {
+    // rust regex doesn't allow escaped slashes, but they are necessary in js
+    let pattern = pattern.replace("\\/", "/");
+
+    let mut applied_flags = String::new();
+    for flag in flags.chars() {
+        match flag {
+            // indices for substring matches: not relevant for the regex itself
+            'd' => {}
+            // global: default in rust, ignore
+            'g' => {}
+            // case-insensitive: letters match both upper and lower case
+            'i' => applied_flags.push('i'),
+            // multi-line mode: ^ and $ match begin/end of line
+            'm' => applied_flags.push('m'),
+            // allow . to match \n
+            's' => applied_flags.push('s'),
+            // Unicode support (enabled by default)
+            'u' => applied_flags.push('u'),
+            // sticky search: not relevant for the regex itself
+            'y' => {}
+            _ => bail!("unsupported flag `{}` in regex", flag),
+        }
+    }
+
+    let regex = if !applied_flags.is_empty() {
+        format!("(?{}){}", applied_flags, pattern)
+    } else {
+        pattern
+    };
+
+    Regex::new(&regex).context("could not convert ECMAScript regex to Rust regex")
+}
+
+/// Parse the arguments passed to a require.context invocation, validate them
+/// and convert them to the appropriate rust values.
+pub fn parse_require_context(args: &Vec<JsValue>) -> Result<RequireContextOptions> {
+    if !(1..=3).contains(&args.len()) {
+        // https://linear.app/vercel/issue/WEB-910/add-support-for-requirecontexts-mode-argument
+        bail!("require.context() only supports 1-3 arguments (mode is not supported)");
+    }
+
+    let Some(dir) = args[0].as_str().map(|s| s.to_string()) else {
+        bail!("require.context(dir, ...) requires dir to be a constant string");
+    };
+
+    let include_subdirs = if let Some(include_subdirs) = args.get(1) {
+        if let Some(include_subdirs) = include_subdirs.as_bool() {
+            include_subdirs
+        } else {
+            bail!(
+                "require.context(..., includeSubdirs, ...) requires includeSubdirs to be a \
+                 constant boolean",
+            );
+        }
+    } else {
+        true
+    };
+
+    let filter = if let Some(filter) = args.get(2) {
+        if let JsValue::Constant(ConstantValue::Regex(pattern, flags)) = filter {
+            regex_from_js(pattern, flags)?
+        } else {
+            bail!("require.context(..., ..., filter) requires filter to be a regex");
+        }
+    } else {
+        // https://webpack.js.org/api/module-methods/#requirecontext
+        // > optional, default /^\.\/.*$/, any file
+        static DEFAULT_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\\./.*$").unwrap());
+
+        DEFAULT_REGEX.clone()
+    };
+
+    Ok(RequireContextOptions {
+        dir,
+        include_subdirs,
+        filter,
+    })
+}
+
+#[turbo_tasks::value(transparent)]
+#[derive(Debug, Clone)]
+pub struct RequireContextValue(IndexMap<String, String>);
+
+#[turbo_tasks::value_impl]
+impl RequireContextValue {
+    #[turbo_tasks::function]
+    pub async fn from_context_map(map: Vc<RequireContextMap>) -> Result<Vc<Self>> {
+        let mut context_map = IndexMap::new();
+
+        for (key, entry) in map.await?.iter() {
+            context_map.insert(key.clone(), entry.origin_relative.clone());
+        }
+
+        Ok(Vc::cell(context_map))
+    }
+}
+
+impl Hash for RequireContextValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.len().hash(state);
+        for (i, (k, v)) in self.0.iter().enumerate() {
+            i.hash(state);
+            k.hash(state);
+            v.hash(state);
+        }
+    }
+}
+
 /// A list of well-known functions that have special meaning in the analysis.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum WellKnownFunctionKind {
@@ -2863,6 +3114,10 @@ pub enum WellKnownFunctionKind {
     Import,
     Require,
     RequireResolve,
+    RequireContext,
+    RequireContextRequire(Vc<RequireContextValue>),
+    RequireContextRequireKeys(Vc<RequireContextValue>),
+    RequireContextRequireResolve(Vc<RequireContextValue>),
     Define,
     FsReadMethod(JsWord),
     PathToFileUrl,
@@ -2889,6 +3144,7 @@ impl WellKnownFunctionKind {
             Self::Import => Some(&["import"]),
             Self::Require => Some(&["require"]),
             Self::RequireResolve => Some(&["require", "resolve"]),
+            Self::RequireContext => Some(&["require", "context"]),
             Self::Define => Some(&["define"]),
             _ => None,
         }
@@ -2901,16 +3157,18 @@ fn is_unresolved(i: &Ident, unresolved_mark: Mark) -> bool {
 
 #[doc(hidden)]
 pub mod test_utils {
-    use std::sync::Arc;
-
     use anyhow::Result;
-    use turbopack_core::compile_time_info::CompileTimeInfoVc;
+    use indexmap::IndexMap;
+    use turbo_tasks::Vc;
+    use turbopack_core::{compile_time_info::CompileTimeInfo, error::PrettyPrintError};
 
     use super::{
         builtin::early_replace_builtin, well_known::replace_well_known, JsValue, ModuleValue,
         WellKnownFunctionKind, WellKnownObjectKind,
     };
-    use crate::analyzer::builtin::replace_builtin;
+    use crate::analyzer::{
+        builtin::replace_builtin, imports::ImportAnnotations, parse_require_context,
+    };
 
     pub async fn early_visitor(mut v: JsValue) -> Result<(JsValue, bool)> {
         let m = early_replace_builtin(&mut v);
@@ -2919,24 +3177,54 @@ pub mod test_utils {
 
     pub async fn visitor(
         v: JsValue,
-        compile_time_info: CompileTimeInfoVc,
+        compile_time_info: Vc<CompileTimeInfo>,
     ) -> Result<(JsValue, bool)> {
         let mut new_value = match v {
+            JsValue::Call(
+                _,
+                box JsValue::WellKnownFunction(WellKnownFunctionKind::Import),
+                ref args,
+            ) => match &args[0] {
+                JsValue::Constant(v) => JsValue::Module(ModuleValue {
+                    module: v.to_string().into(),
+                    annotations: ImportAnnotations::default(),
+                }),
+                _ => v.into_unknown("import() non constant"),
+            },
             JsValue::Call(
                 _,
                 box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
                 ref args,
             ) => match &args[0] {
                 JsValue::Constant(v) => (v.to_string() + "/resolved/lib/index.js").into(),
-                _ => JsValue::Unknown(Some(Arc::new(v)), "resolve.resolve non constant"),
+                _ => v.into_unknown("require.resolve non constant"),
             },
-            JsValue::FreeVar(var) => match &*var {
+            JsValue::Call(
+                _,
+                box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContext),
+                ref args,
+            ) => match parse_require_context(args) {
+                Ok(options) => {
+                    let mut map = IndexMap::new();
+
+                    map.insert("./a".into(), format!("[context: {}]/a", options.dir));
+                    map.insert("./b".into(), format!("[context: {}]/b", options.dir));
+                    map.insert("./c".into(), format!("[context: {}]/c", options.dir));
+
+                    JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(
+                        Vc::cell(map),
+                    ))
+                }
+                Err(err) => v.into_unknown(PrettyPrintError(&err).to_string()),
+            },
+            JsValue::FreeVar(ref var) => match &**var {
+                "import" => JsValue::WellKnownFunction(WellKnownFunctionKind::Import),
                 "require" => JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
                 "define" => JsValue::WellKnownFunction(WellKnownFunctionKind::Define),
                 "__dirname" => "__dirname".into(),
                 "__filename" => "__filename".into(),
                 "process" => JsValue::WellKnownObject(WellKnownObjectKind::NodeProcess),
-                _ => JsValue::Unknown(Some(Arc::new(JsValue::FreeVar(var))), "unknown global"),
+                _ => v.into_unknown("unknown global"),
             },
             JsValue::Module(ModuleValue {
                 module: ref name, ..
@@ -2975,9 +3263,7 @@ mod tests {
     use turbo_tasks::{util::FormatDuration, Value};
     use turbopack_core::{
         compile_time_info::CompileTimeInfo,
-        environment::{
-            EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment,
-        },
+        environment::{Environment, ExecutionEnvironment, NodeJsEnvironment},
         target::{Arch, CompileTarget, Endianness, Libc, Platform},
     };
 
@@ -3141,7 +3427,7 @@ mod tests {
                                         );
                                     }
                                     EffectArg::Spread => {
-                                        new_args.push(JsValue::Unknown(None, "spread"));
+                                        new_args.push(JsValue::unknown_empty("spread"));
                                     }
                                 }
                             }
@@ -3179,7 +3465,7 @@ mod tests {
                                 let new_args = handle_args(args, &mut queue, &var_graph, i).await;
                                 resolved.push((
                                     format!("{parent} -> {i} call"),
-                                    JsValue::call(box func, new_args),
+                                    JsValue::call(Box::new(func), new_args),
                                 ));
                             }
                             Effect::FreeVar { var, .. } => {
@@ -3193,7 +3479,7 @@ mod tests {
                                 let new_args = handle_args(args, &mut queue, &var_graph, i).await;
                                 resolved.push((
                                     format!("{parent} -> {i} member call"),
-                                    JsValue::member_call(box obj, box prop, new_args),
+                                    JsValue::member_call(Box::new(obj), Box::new(prop), new_args),
                                 ));
                             }
                             _ => {}
@@ -3240,8 +3526,8 @@ mod tests {
 
     async fn resolve(var_graph: &VarGraph, val: JsValue) -> JsValue {
         turbo_tasks_testing::VcStorage::with(async {
-            let compile_time_info = CompileTimeInfo::builder(EnvironmentVc::new(
-                Value::new(ExecutionEnvironment::NodeJsLambda(
+            let compile_time_info = CompileTimeInfo::builder(Environment::new(Value::new(
+                ExecutionEnvironment::NodeJsLambda(
                     NodeJsEnvironment {
                         compile_target: CompileTarget {
                             arch: Arch::X64,
@@ -3253,9 +3539,8 @@ mod tests {
                         ..Default::default()
                     }
                     .into(),
-                )),
-                Value::new(EnvironmentIntention::ServerRendering),
-            ))
+                ),
+            )))
             .cell();
             link(
                 var_graph,

@@ -12,6 +12,7 @@ bench = false
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+futures = { workspace = true }
 indexmap = { workspace = true }
 indoc = { workspace = true }
 lazy_static = { workspace = true }
@@ -19,16 +20,13 @@ num-bigint = "0.4"
 num-traits = "0.2.15"
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
-petgraph = "0.6.2"
+petgraph = { workspace = true }
 pin-project-lite = { workspace = true }
 regex = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_qs = { workspace = true }
-styled_components = { workspace = true }
-styled_jsx = { workspace = true }
-swc_emotion = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 turbo-tasks = { workspace = true }
@@ -40,6 +38,7 @@ url = { workspace = true }
 
 swc_core = { workspace = true, features = [
   "ecma_ast",
+  "ecma_ast_serde",
   "common",
   "common_concurrent",
   "common_sourcemap",

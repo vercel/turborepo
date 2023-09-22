@@ -1,43 +1,66 @@
+import path from "node:path";
 import { v4 as uuidv4 } from "uuid";
-import path from "path";
-import fs from "fs-extra";
+import { rimraf } from "rimraf";
+import {
+  mkdirSync,
+  existsSync,
+  copySync,
+  writeFileSync,
+  readFileSync,
+} from "fs-extra";
 import yaml from "js-yaml";
-import JSON5 from "json5";
+import { parse as JSON5Parse } from "json5";
 
-export default function setupTestFixtures({
-  directory,
-  test = "",
-}: {
+interface SetupTextFixtures {
   directory: string;
   test?: string;
-}) {
-  const fixtures: Array<string> = [];
-  const parentDirectory = path.join(directory, test ? test : "test-runs");
+  options?: {
+    emptyFixture?: boolean;
+  };
+}
 
-  afterEach(() => {
-    fixtures.forEach((fixture) => {
-      fs.rmSync(fixture, { recursive: true, force: true });
-    });
+export function setupTestFixtures({
+  directory,
+  test = "",
+  options = {},
+}: SetupTextFixtures) {
+  const fixtures: Array<string> = [];
+  const parentDirectory = path.join(directory, test ? test : uuidv4());
+
+  afterEach(async () => {
+    await Promise.all(
+      fixtures.map((fixture) =>
+        rimraf(fixture, {
+          retryDelay: 50,
+          maxRetries: 5,
+        })
+      )
+    );
   });
 
-  afterAll(() => {
-    fs.rmSync(parentDirectory, { recursive: true, force: true });
+  afterAll(async () => {
+    await rimraf(parentDirectory, {
+      retryDelay: 50,
+      maxRetries: 5,
+    });
   });
 
   const useFixture = ({ fixture }: { fixture: string }) => {
     const directoryName = uuidv4();
     const testDirectory = path.join(parentDirectory, directoryName);
-    if (!fs.existsSync(testDirectory)) {
-      fs.mkdirSync(testDirectory, { recursive: true });
+    if (!existsSync(testDirectory)) {
+      mkdirSync(testDirectory, { recursive: true });
     }
     // keep track of it
     fixtures.push(testDirectory);
 
     // copy fixture to test directory
-    const fixturePath = path.join(directory, "__fixtures__", test, fixture);
-    fs.copySync(fixturePath, testDirectory, {
-      recursive: true,
-    });
+    if (!options.emptyFixture) {
+      const fixturePath = path.join(directory, "__fixtures__", test, fixture);
+      copySync(fixturePath, testDirectory, {
+        recursive: true,
+      });
+    }
 
     const getFilePath = (filename: string) => {
       return path.isAbsolute(filename)
@@ -59,19 +82,19 @@ export default function setupTestFixtures({
       filename: string,
       content: string | NodeJS.ArrayBufferView
     ) => {
-      fs.writeFileSync(getFilePath(filename), content);
+      writeFileSync(getFilePath(filename), content);
     };
 
     const exists = (filename: string): boolean => {
-      return fs.existsSync(getFilePath(filename));
+      return existsSync(getFilePath(filename));
     };
 
-    const read = readGenerator((filePath) => fs.readFileSync(filePath, "utf8"));
+    const read = readGenerator((filePath) => readFileSync(filePath, "utf8"));
     const readJson = readGenerator((filePath) =>
-      JSON5.parse(fs.readFileSync(filePath, "utf8"))
+      JSON5Parse(readFileSync(filePath, "utf8"))
     );
     const readYaml = readGenerator((filePath) =>
-      yaml.load(fs.readFileSync(filePath, "utf8"))
+      yaml.load(readFileSync(filePath, "utf8"))
     );
 
     return {

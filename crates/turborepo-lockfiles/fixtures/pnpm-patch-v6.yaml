@@ -1,0 +1,40 @@
+lockfileVersion: "6.0"
+
+patchedDependencies:
+  lodash@4.17.21:
+    hash: lgum37zgng4nfkynzh3cs7wdeq
+    path: patches/lodash@4.17.21.patch
+  "@babel/helper-string-parser@7.19.4":
+    hash: wjhgmpzh47qmycrzgpeyoyh3ce
+    path: patches/@babel__helper-string-parser@7.19.4.patch
+
+importers:
+  .: {}
+
+  packages/a:
+    dependencies:
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21(patch_hash=lgum37zgng4nfkynzh3cs7wdeq)
+
+  packages/b:
+    dependencies:
+      "@babel/helper-string-parser":
+        specifier: ^7.19.4
+        version: 7.19.4(patch_hash=wjhgmpzh47qmycrzgpeyoyh3ce)(@babel/core@7.21.0)
+
+packages:
+  /@babel/helper-string-parser@7.19.4(patch_hash=wjhgmpzh47qmycrzgpeyoyh3ce)(@babel/core@7.21.0):
+    resolution:
+      {
+        integrity: sha512-nHtDoQcuqFmwYNYPz3Rah5ph2p8PFeFCsZk9A/48dPc/rGocJ5J3hAAZ7pb76VWX3fZKu+uEr/FhH5jLx7umrw==,
+      }
+    engines: { node: ">=6.9.0" }
+    dev: false
+
+  /lodash@4.17.21(patch_hash=lgum37zgng4nfkynzh3cs7wdeq):
+    resolution:
+      {
+        integrity: sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==,
+      }
+    dev: false

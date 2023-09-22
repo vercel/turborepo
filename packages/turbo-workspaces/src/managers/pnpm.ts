@@ -1,9 +1,9 @@
-import fs from "fs-extra";
-import path from "path";
+import path from "node:path";
+import { writeJSONSync, writeFileSync, existsSync, rmSync, rm } from "fs-extra";
 import execa from "execa";
 import { ConvertError } from "../errors";
-import updateDependencies from "../updateDependencies";
-import {
+import { updateDependencies } from "../updateDependencies";
+import type {
   DetectArgs,
   ReadArgs,
   CreateArgs,
@@ -12,6 +12,7 @@ import {
   CleanArgs,
   Project,
   ManagerHandler,
+  Manager,
 } from "../types";
 import {
   getMainStep,
@@ -21,7 +22,14 @@ import {
   getPnpmWorkspaces,
   getPackageJson,
   getWorkspacePackageManager,
+  removeLockFile,
+  bunLockToYarnLock,
 } from "../utils";
+
+const PACKAGE_MANAGER_DETAILS: Manager = {
+  name: "pnpm",
+  lock: "pnpm-lock.yaml",
+};
 
 /**
  * Check if a given project is using pnpm workspaces
@@ -29,16 +37,17 @@ import {
  *  1. pnpm-workspace.yaml
  *  2. pnpm-workspace.yaml
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- must match the detect type signature
 async function detect(args: DetectArgs): Promise<boolean> {
-  const lockFile = path.join(args.workspaceRoot, "pnpm-lock.yaml");
+  const lockFile = path.join(args.workspaceRoot, PACKAGE_MANAGER_DETAILS.lock);
   const workspaceFile = path.join(args.workspaceRoot, "pnpm-workspace.yaml");
   const packageManager = getWorkspacePackageManager({
     workspaceRoot: args.workspaceRoot,
   });
   return (
-    fs.existsSync(lockFile) ||
-    fs.existsSync(workspaceFile) ||
-    packageManager === "pnpm"
+    existsSync(lockFile) ||
+    existsSync(workspaceFile) ||
+    packageManager === PACKAGE_MANAGER_DETAILS.name
   );
 }
 
@@ -57,10 +66,10 @@ async function read(args: ReadArgs): Promise<Project> {
   return {
     name,
     description,
-    packageManager: "pnpm",
+    packageManager: PACKAGE_MANAGER_DETAILS.name,
     paths: expandPaths({
       root: args.workspaceRoot,
-      lockFile: "pnpm-lock.yaml",
+      lockFile: PACKAGE_MANAGER_DETAILS.lock,
       workspaceConfig: "pnpm-workspace.yaml",
     }),
     workspaceData: {
@@ -81,12 +90,17 @@ async function read(args: ReadArgs): Promise<Project> {
  *  2. Setting the packageManager field in package.json
  *  3. Updating all workspace package.json dependencies to ensure correct format
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- must match the create type signature
 async function create(args: CreateArgs): Promise<void> {
   const { project, to, logger, options } = args;
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    getMainStep({ action: "create", packageManager: "pnpm", project })
+    getMainStep({
+      action: "create",
+      packageManager: PACKAGE_MANAGER_DETAILS.name,
+      project,
+    })
   );
 
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
@@ -98,11 +112,11 @@ async function create(args: CreateArgs): Promise<void> {
 
   // write the changes
   if (!options?.dry) {
-    fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+    writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
 
     if (hasWorkspaces) {
       logger.rootStep(`adding "pnpm-workspace.yaml"`);
-      fs.writeFileSync(
+      writeFileSync(
         path.join(project.paths.root, "pnpm-workspace.yaml"),
         `packages:\n${project.workspaceData.globs
           .map((w) => `  - "${w}"`)
@@ -123,9 +137,9 @@ async function create(args: CreateArgs): Promise<void> {
 
     // workspace dependencies
     logger.workspaceHeader();
-    project.workspaceData.workspaces.forEach((workspace) =>
-      updateDependencies({ workspace, project, to, logger, options })
-    );
+    project.workspaceData.workspaces.forEach((workspace) => {
+      updateDependencies({ workspace, project, to, logger, options });
+    });
   }
 }
 
@@ -142,14 +156,18 @@ async function remove(args: RemoveArgs): Promise<void> {
   const hasWorkspaces = project.workspaceData.globs.length > 0;
 
   logger.mainStep(
-    getMainStep({ action: "remove", packageManager: "pnpm", project })
+    getMainStep({
+      action: "remove",
+      packageManager: PACKAGE_MANAGER_DETAILS.name,
+      project,
+    })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
 
   if (project.paths.workspaceConfig && hasWorkspaces) {
     logger.subStep(`removing "pnpm-workspace.yaml"`);
     if (!options?.dry) {
-      fs.rmSync(project.paths.workspaceConfig, { force: true });
+      rmSync(project.paths.workspaceConfig, { force: true });
     }
   }
 
@@ -159,7 +177,7 @@ async function remove(args: RemoveArgs): Promise<void> {
   delete packageJson.packageManager;
 
   if (!options?.dry) {
-    fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
+    writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
 
     // collect all workspace node_modules directories
     const allModulesDirs = [
@@ -170,9 +188,7 @@ async function remove(args: RemoveArgs): Promise<void> {
     try {
       logger.subStep(`removing "node_modules"`);
       await Promise.all(
-        allModulesDirs.map((dir) =>
-          fs.rm(dir, { recursive: true, force: true })
-        )
+        allModulesDirs.map((dir) => rm(dir, { recursive: true, force: true }))
       );
     } catch (err) {
       throw new ConvertError("Failed to remove node_modules", {
@@ -187,6 +203,7 @@ async function remove(args: RemoveArgs): Promise<void> {
  * from this package manager that were needed for install,
  * but not required after migration
  */
+// eslint-disable-next-line @typescript-eslint/require-await -- must match the clean type signature
 async function clean(args: CleanArgs): Promise<void> {
   const { project, logger, options } = args;
 
@@ -194,7 +211,7 @@ async function clean(args: CleanArgs): Promise<void> {
     `removing ${path.relative(project.paths.root, project.paths.lockfile)}`
   );
   if (!options?.dry) {
-    fs.rmSync(project.paths.lockfile, { force: true });
+    rmSync(project.paths.lockfile, { force: true });
   }
 }
 
@@ -204,29 +221,59 @@ async function clean(args: CleanArgs): Promise<void> {
  * If this is not possible, the non pnpm lockfile is removed
  */
 async function convertLock(args: ConvertArgs): Promise<void> {
-  const { project, logger, options } = args;
+  const { project, options, logger } = args;
 
-  if (project.packageManager !== "pnpm") {
+  const logLockConversionStep = (): void => {
     logger.subStep(
       `converting ${path.relative(
         project.paths.root,
         project.paths.lockfile
-      )} to pnpm-lock.yaml`
+      )} to ${PACKAGE_MANAGER_DETAILS.lock}`
     );
-    if (!options?.dry && fs.existsSync(project.paths.lockfile)) {
+  };
+
+  const importLockfile = async (): Promise<void> => {
+    if (!options?.dry && existsSync(project.paths.lockfile)) {
       try {
-        await execa("pnpm", ["import"], {
+        await execa(PACKAGE_MANAGER_DETAILS.name, ["import"], {
           stdio: "ignore",
           cwd: project.paths.root,
         });
+      } catch (err) {
+        // do nothing
       } finally {
-        fs.rmSync(project.paths.lockfile, { force: true });
+        removeLockFile({ project, options });
       }
     }
+  };
+
+  // handle moving lockfile from `packageManager` to npm
+  switch (project.packageManager) {
+    case "pnpm":
+      // we're already using pnpm, so we don't need to convert
+      break;
+    case "bun":
+      logLockConversionStep();
+      // convert bun -> yarn -> pnpm
+      await bunLockToYarnLock({ project, options });
+      await importLockfile();
+      // remove the intermediate yarn lockfile
+      rmSync(path.join(project.paths.root, "yarn.lock"), { force: true });
+      break;
+    case "npm":
+      // convert npm -> pnpm
+      logLockConversionStep();
+      await importLockfile();
+      break;
+    case "yarn":
+      // convert yarn -> pnpm
+      logLockConversionStep();
+      await importLockfile();
+      break;
   }
 }
 
-const pnpm: ManagerHandler = {
+export const pnpm: ManagerHandler = {
   detect,
   read,
   create,
@@ -234,5 +281,3 @@ const pnpm: ManagerHandler = {
   clean,
   convertLock,
 };
-
-export default pnpm;

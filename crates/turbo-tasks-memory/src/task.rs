@@ -6,7 +6,9 @@ use std::{
     cell::RefCell,
     cmp::{max, Ordering, Reverse},
     collections::{HashMap, HashSet, VecDeque},
-    fmt::{self, Debug, Display, Formatter, Write},
+    fmt::{
+        Debug, Display, Formatter, Write, {self},
+    },
     future::Future,
     hash::Hash,
     mem::{replace, take},
@@ -24,10 +26,8 @@ use tokio::task_local;
 use turbo_tasks::{
     backend::{PersistentTaskType, TaskExecutionSpec},
     event::{Event, EventListener},
-    get_invalidator,
-    primitives::{RawVcSet, RawVcSetVc},
-    registry, CellId, Invalidator, RawVc, StatsType, TaskId, TraitTypeId, TryJoinIterExt,
-    TurboTasksBackendApi, ValueTypeId,
+    get_invalidator, registry, CellId, Invalidator, RawVc, StatsType, TaskId, TraitTypeId,
+    TryJoinIterExt, TurboTasksBackendApi, ValueTypeId, Vc,
 };
 
 use crate::{
@@ -79,18 +79,19 @@ struct ReadScopeCollectiblesTaskType {
 
 /// Different Task types
 enum TaskType {
+    // Note: double boxed to reduce TaskType size
     /// A root task that will track dependencies and re-execute when
     /// dependencies change. Task will eventually settle to the correct
     /// execution.
-    Root(NativeTaskFn),
+    Root(Box<NativeTaskFn>),
 
-    // TODO implement these strongly consistency
+    // Note: double boxed to reduce TaskType size
     /// A single root task execution. It won't track dependencies.
     /// Task will definitely include all invalidations that happened before the
     /// start of the task. It may or may not include invalidations that
     /// happened after that. It may see these invalidations partially
     /// applied.
-    Once(OnceTaskFn),
+    Once(Box<OnceTaskFn>),
 
     /// A task that reads all collectibles of a certain trait from a
     /// [TaskScope]. It will do that by recursively calling
@@ -527,10 +528,10 @@ impl Task {
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new(
+            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new(
                 description,
                 stats_type,
-            ))),
+            )))),
         }
     }
 
@@ -540,15 +541,13 @@ impl Task {
         functor: impl Fn() -> NativeTaskFuture + Sync + Send + 'static,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::Root(Box::new(functor));
+        let ty = TaskType::Root(Box::new(Box::new(functor)));
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new_scheduled_in_scope(
-                description,
-                scope,
-                stats_type,
+            state: RwLock::new(TaskMetaState::Full(Box::new(
+                TaskState::new_scheduled_in_scope(description, scope, stats_type),
             ))),
         }
     }
@@ -559,15 +558,13 @@ impl Task {
         functor: impl Future<Output = Result<RawVc>> + Send + 'static,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::Once(Mutex::new(Some(Box::pin(functor))));
+        let ty = TaskType::Once(Box::new(Mutex::new(Some(Box::pin(functor)))));
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new_scheduled_in_scope(
-                description,
-                scope,
-                stats_type,
+            state: RwLock::new(TaskMetaState::Full(Box::new(
+                TaskState::new_scheduled_in_scope(description, scope, stats_type),
             ))),
         }
     }
@@ -578,18 +575,18 @@ impl Task {
         trait_type_id: TraitTypeId,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::ReadScopeCollectibles(box ReadScopeCollectiblesTaskType {
+        let ty = TaskType::ReadScopeCollectibles(Box::new(ReadScopeCollectiblesTaskType {
             scope: target_scope,
             trait_type: trait_type_id,
-        });
+        }));
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new(
+            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new(
                 description,
                 stats_type,
-            ))),
+            )))),
         }
     }
 
@@ -600,19 +597,19 @@ impl Task {
         trait_type_id: TraitTypeId,
         stats_type: StatsType,
     ) -> Self {
-        let ty = TaskType::ReadTaskCollectibles(box ReadTaskCollectiblesTaskType {
+        let ty = TaskType::ReadTaskCollectibles(Box::new(ReadTaskCollectiblesTaskType {
             task: target_task,
             trait_type: trait_type_id,
-        });
+        }));
         let description = Self::get_event_description_static(id, &ty);
         Self {
             id,
             ty,
-            state: RwLock::new(TaskMetaState::Full(box TaskState::new_root_scoped(
+            state: RwLock::new(TaskMetaState::Full(Box::new(TaskState::new_root_scoped(
                 description,
                 scope,
                 stats_type,
-            ))),
+            )))),
         }
     }
 
@@ -920,7 +917,11 @@ impl Task {
         let TaskMetaStateWriteGuard::Full(mut state) = self.state_mut() else {
             return;
         };
-        let TaskStateType::InProgress { ref mut count_as_finished, .. } = state.state_type else {
+        let TaskStateType::InProgress {
+            ref mut count_as_finished,
+            ..
+        } = state.state_type
+        else {
             return;
         };
         if *count_as_finished {
@@ -2268,11 +2269,7 @@ impl Task {
                             read_task_id,
                             &*turbo_tasks,
                         );
-                        // Safety: RawVcSet is a transparent value
-                        unsafe {
-                            RawVc::TaskOutput(task)
-                                .into_transparent_read::<RawVcSet, AutoSet<RawVc>>()
-                        }
+                        unsafe { <Vc<AutoSet<RawVc>>>::from_task_id(task) }
                     })
                 })
             })
@@ -2283,7 +2280,9 @@ impl Task {
                 current.add(*v);
             }
         }
-        Ok(RawVcSetVc::cell(current.iter().copied().collect()).into())
+        Ok(Vc::into_raw(Vc::<AutoSet<RawVc>>::cell(
+            current.iter().copied().collect(),
+        )))
     }
 
     pub(crate) fn read_task_collectibles(
@@ -2292,7 +2291,7 @@ impl Task {
         trait_id: TraitTypeId,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> RawVcSetVc {
+    ) -> Vc<AutoSet<RawVc>> {
         let task = backend.get_or_create_read_task_collectibles_task(
             self.id,
             trait_id,
@@ -2786,7 +2785,7 @@ impl Task {
         if unset {
             *state = TaskMetaState::Unloaded(UnloadedTaskState { stats_type });
         } else {
-            *state = TaskMetaState::Partial(box PartialTaskState { scopes, stats_type });
+            *state = TaskMetaState::Partial(Box::new(PartialTaskState { scopes, stats_type }));
         }
         drop(state);
 

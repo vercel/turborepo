@@ -1,29 +1,27 @@
 {
   "name": "turbo",
-  "version": "1.9.0-canary.2",
+  "version": "1.10.14",
   "description": "Turborepo is a high-performance build system for JavaScript and TypeScript codebases.",
   "repository": "https://github.com/vercel/turbo",
   "bugs": "https://github.com/vercel/turbo/issues",
   "homepage": "https://turbo.build/repo",
   "license": "MPL-2.0",
+  "main": "./bin/turbo",
   "scripts": {
-    "postversion": "node bump-version.js",
-    "postinstall": "node install.js"
+    "postversion": "node bump-version.js"
   },
   "bin": {
     "turbo": "./bin/turbo"
   },
   "files": [
-    "bin",
-    "node-platform.js",
-    "install.js"
+    "bin"
   ],
   "optionalDependencies": {
-    "turbo-darwin-64": "1.9.0-canary.2",
-    "turbo-darwin-arm64": "1.9.0-canary.2",
-    "turbo-linux-64": "1.9.0-canary.2",
-    "turbo-linux-arm64": "1.9.0-canary.2",
-    "turbo-windows-64": "1.9.0-canary.2",
-    "turbo-windows-arm64": "1.9.0-canary.2"
+    "turbo-darwin-64": "1.10.14",
+    "turbo-darwin-arm64": "1.10.14",
+    "turbo-linux-64": "1.10.14",
+    "turbo-linux-arm64": "1.10.14",
+    "turbo-windows-64": "1.10.14",
+    "turbo-windows-arm64": "1.10.14"
   }
 }

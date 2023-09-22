@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"strconv"
 	"sync"
 
 	"github.com/hashicorp/go-hclog"
@@ -15,7 +14,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/mitchellh/cli"
 	"github.com/vercel/turbo/cli/internal/client"
-	"github.com/vercel/turbo/cli/internal/config"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/turbostate"
@@ -38,13 +36,6 @@ type Helper struct {
 	verbosity int
 
 	rawRepoRoot string
-
-	clientOpts client.Opts
-
-	// UserConfigPath is the path to where we expect to find
-	// a user-specific config file, if one is present. Public
-	// to allow overrides in tests
-	UserConfigPath turbopath.AbsoluteSystemPath
 
 	cleanupsMu sync.Mutex
 	cleanups   []io.Closer
@@ -74,15 +65,23 @@ func (h *Helper) Cleanup(cliConfig *turbostate.ParsedArgsFromRust) {
 	}
 }
 
-func (h *Helper) getUI(cliConfig *turbostate.ParsedArgsFromRust) cli.Ui {
+func (h *Helper) getUI(cliArgs *turbostate.ParsedArgsFromRust) cli.Ui {
+	factory := h.getUIFactory(cliArgs)
+	return factory.Build(os.Stdout, os.Stdin, os.Stderr)
+}
+
+func (h *Helper) getUIFactory(cliArgs *turbostate.ParsedArgsFromRust) ui.Factory {
 	colorMode := ui.GetColorModeFromEnv()
-	if cliConfig.GetNoColor() {
+	if cliArgs.NoColor {
 		colorMode = ui.ColorModeSuppressed
 	}
-	if cliConfig.GetColor() {
+	if cliArgs.Color {
 		colorMode = ui.ColorModeForced
 	}
-	return ui.BuildColoredUi(colorMode)
+	return &ui.ColoredUIFactory{
+		ColorMode: colorMode,
+		Base:      &ui.BasicUIFactory{},
+	}
 }
 
 func (h *Helper) getLogger() (hclog.Logger, error) {
@@ -126,23 +125,23 @@ func (h *Helper) getLogger() (hclog.Logger, error) {
 // turbo command.
 func NewHelper(turboVersion string, args *turbostate.ParsedArgsFromRust) *Helper {
 	return &Helper{
-		TurboVersion:   turboVersion,
-		UserConfigPath: config.DefaultUserConfigPath(),
-		verbosity:      args.Verbosity,
+		TurboVersion: turboVersion,
+		verbosity:    args.Verbosity,
 	}
 }
 
 // GetCmdBase returns a CmdBase instance configured with values from this helper.
 // It additionally returns a mechanism to set an error, so
-func (h *Helper) GetCmdBase(cliConfig *turbostate.ParsedArgsFromRust) (*CmdBase, error) {
+func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase, error) {
 	// terminal is for color/no-color output
-	terminal := h.getUI(cliConfig)
+	uiFactory := h.getUIFactory(&executionState.CLIArgs)
+	terminal := uiFactory.Build(os.Stdin, os.Stdout, os.Stderr)
 	// logger is configured with verbosity level using --verbosity flag from end users
 	logger, err := h.getLogger()
 	if err != nil {
 		return nil, err
 	}
-	cwdRaw, err := cliConfig.GetCwd()
+	cwdRaw := executionState.CLIArgs.CWD
 	if err != nil {
 		return nil, err
 	}
@@ -155,75 +154,47 @@ func (h *Helper) GetCmdBase(cliConfig *turbostate.ParsedArgsFromRust) (*CmdBase,
 	if err != nil {
 		return nil, err
 	}
-	repoConfig, err := config.ReadRepoConfigFile(config.GetRepoConfigPath(repoRoot), cliConfig)
-	if err != nil {
-		return nil, err
-	}
-	userConfig, err := config.ReadUserConfigFile(h.UserConfigPath, cliConfig)
-	if err != nil {
-		return nil, err
-	}
-	remoteConfig := repoConfig.GetRemoteConfig(userConfig.Token())
-	if remoteConfig.Token == "" && ui.IsCI {
-		vercelArtifactsToken := os.Getenv("VERCEL_ARTIFACTS_TOKEN")
-		vercelArtifactsOwner := os.Getenv("VERCEL_ARTIFACTS_OWNER")
-		if vercelArtifactsToken != "" {
-			remoteConfig.Token = vercelArtifactsToken
-		}
-		if vercelArtifactsOwner != "" {
-			remoteConfig.TeamID = vercelArtifactsOwner
-		}
-	}
-
-	// Primacy: Arg > Env
-	timeout, err := cliConfig.GetRemoteCacheTimeout()
-	if err == nil {
-		h.clientOpts.Timeout = timeout
-	} else {
-		val, ok := os.LookupEnv("TURBO_REMOTE_CACHE_TIMEOUT")
-		if ok {
-			number, err := strconv.ParseUint(val, 10, 64)
-			if err == nil {
-				h.clientOpts.Timeout = number
-			}
-		}
-	}
+	apiClientConfig := executionState.APIClientConfig
+	spacesAPIClientConfig := executionState.SpacesAPIClientConfig
 
 	apiClient := client.NewClient(
-		remoteConfig,
+		apiClientConfig,
 		logger,
 		h.TurboVersion,
-		h.clientOpts,
+	)
+
+	spacesClient := client.NewClient(
+		spacesAPIClientConfig,
+		logger,
+		h.TurboVersion,
 	)
 
 	return &CmdBase{
-		UI:           terminal,
-		Logger:       logger,
-		RepoRoot:     repoRoot,
-		APIClient:    apiClient,
-		RepoConfig:   repoConfig,
-		UserConfig:   userConfig,
-		RemoteConfig: remoteConfig,
-		TurboVersion: h.TurboVersion,
+		UI:              terminal,
+		UIFactory:       uiFactory,
+		Logger:          logger,
+		RepoRoot:        repoRoot,
+		APIClient:       apiClient,
+		SpacesAPIClient: spacesClient,
+		TurboVersion:    h.TurboVersion,
 	}, nil
 }
 
 // CmdBase encompasses configured components common to all turbo commands.
 type CmdBase struct {
-	UI           cli.Ui
-	Logger       hclog.Logger
-	RepoRoot     turbopath.AbsoluteSystemPath
-	APIClient    *client.APIClient
-	RepoConfig   *config.RepoConfig
-	UserConfig   *config.UserConfig
-	RemoteConfig client.RemoteConfig
-	TurboVersion string
+	UI              cli.Ui
+	UIFactory       ui.Factory
+	Logger          hclog.Logger
+	RepoRoot        turbopath.AbsoluteSystemPath
+	APIClient       *client.APIClient
+	SpacesAPIClient *client.APIClient
+	TurboVersion    string
 }
 
 // LogError prints an error to the UI
 func (b *CmdBase) LogError(format string, args ...interface{}) {
 	err := fmt.Errorf(format, args...)
-	b.Logger.Error("error", err)
+	b.Logger.Error(fmt.Sprintf("error: %v", err))
 	b.UI.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", err)))
 }
 

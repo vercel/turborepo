@@ -1,8 +1,9 @@
-import fs from "fs-extra";
-import path from "path";
-
-import { TransformerResults } from "../runner";
-import getTransformerHelpers from "../utils/getTransformerHelpers";
+import path from "node:path";
+import { readJsonSync, existsSync } from "fs-extra";
+import { type PackageJson } from "@turbo/utils";
+import type { Schema } from "@turbo/types";
+import type { TransformerResults } from "../runner";
+import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerArgs } from "../types";
 
 // transformer details
@@ -24,17 +25,17 @@ export function transformer({
   log.info(`Migrating "package.json" "turbo" key to "turbo.json" file...`);
   const turboConfigPath = path.join(root, "turbo.json");
   const rootPackageJsonPath = path.join(root, "package.json");
-  if (!fs.existsSync(rootPackageJsonPath)) {
+  if (!existsSync(rootPackageJsonPath)) {
     return runner.abortTransform({
       reason: `No package.json found at ${root}. Is the path correct?`,
     });
   }
 
   // read files
-  const rootPackageJson = fs.readJsonSync(rootPackageJsonPath);
+  const rootPackageJson = readJsonSync(rootPackageJsonPath) as PackageJson;
   let rootTurboJson = null;
   try {
-    rootTurboJson = fs.readJSONSync(turboConfigPath);
+    rootTurboJson = readJsonSync(turboConfigPath) as Schema;
   } catch (err) {
     rootTurboJson = null;
   }
@@ -42,7 +43,7 @@ export function transformer({
   // modify files
   let transformedPackageJson = rootPackageJson;
   let transformedTurboConfig = rootTurboJson;
-  if (!rootTurboJson && rootPackageJson["turbo"]) {
+  if (!rootTurboJson && rootPackageJson.turbo) {
     const { turbo: turboConfig, ...remainingPkgJson } = rootPackageJson;
     transformedTurboConfig = turboConfig;
     transformedPackageJson = remainingPkgJson;
@@ -61,10 +62,11 @@ export function transformer({
 }
 
 const transformerMeta = {
-  name: `${TRANSFORMER}: ${DESCRIPTION}`,
-  value: TRANSFORMER,
+  name: TRANSFORMER,
+  description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
   transformer,
 };
 
+// eslint-disable-next-line import/no-default-export -- transforms require default export
 export default transformerMeta;

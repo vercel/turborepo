@@ -71,7 +71,7 @@ func TestShortCircuiting(t *testing.T) {
 		println(taskID)
 		executed[taskID] = true
 		if taskID == "b#build" {
-			return expectedErr
+			return StopExecution(expectedErr)
 		}
 		return nil
 	}

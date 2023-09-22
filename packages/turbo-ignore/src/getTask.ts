@@ -1,7 +1,7 @@
 import { info } from "./logger";
-import { TurboIgnoreArgs } from "./types";
+import type { TurboIgnoreOptions } from "./types";
 
-export function getTask(args: TurboIgnoreArgs): string | null {
+export function getTask(args: TurboIgnoreOptions): string {
   if (args.task) {
     info(`Using "${args.task}" as the task from the arguments`);
     return `"${args.task}"`;

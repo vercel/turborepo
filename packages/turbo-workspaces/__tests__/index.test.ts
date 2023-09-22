@@ -1,6 +1,6 @@
 import path from "path";
-import * as turboUtils from "turbo-utils";
-import { setupTestFixtures } from "turbo-test-utils";
+import * as turboUtils from "@turbo/utils";
+import { setupTestFixtures } from "@turbo/test-utils";
 import { getWorkspaceDetails, convert } from "../src";
 import { generateConvertMatrix } from "./test-utils";
 import execa from "execa";
@@ -26,18 +26,10 @@ describe("Node entrypoint", () => {
         const mockedGetAvailablePackageManagers = jest
           .spyOn(turboUtils, "getAvailablePackageManagers")
           .mockResolvedValue({
-            npm: {
-              available: true,
-              version: "8.19.2",
-            },
-            yarn: {
-              available: true,
-              version: "1.22.19",
-            },
-            pnpm: {
-              available: true,
-              version: "7.29.1",
-            },
+            npm: "8.19.2",
+            yarn: "1.22.19",
+            pnpm: "7.29.1",
+            bun: "1.0.1",
           });
 
         const { root } = useFixture({

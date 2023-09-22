@@ -1,7 +1,7 @@
-export type TransformErrorOptions = {
+export interface TransformErrorOptions {
   transform?: string;
   fatal?: boolean;
-};
+}
 
 export class TransformError extends Error {
   public transform: string;

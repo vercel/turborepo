@@ -1,5 +1,7 @@
 package util
 
+import "strings"
+
 // EnvMode specifies if we will be using strict env vars
 type EnvMode string
 
@@ -12,6 +14,11 @@ const (
 	Strict EnvMode = "Strict"
 )
 
+// MarshalText implements TextMarshaler for the struct.
+func (s EnvMode) MarshalText() (text []byte, err error) {
+	return []byte(strings.ToLower(string(s))), nil
+}
+
 // RunOpts holds the options that control the execution of a turbo run
 type RunOpts struct {
 	// Force execution to be serially one-at-a-time
@@ -20,6 +27,8 @@ type RunOpts struct {
 	Parallel bool
 
 	EnvMode EnvMode
+	// Whether or not to infer the framework for each workspace.
+	FrameworkInference bool
 	// The filename to write a perf profile.
 	Profile string
 	// If true, continue task executions even if a task fails.
@@ -39,8 +48,14 @@ type RunOpts struct {
 	// logPrefix controls whether we should print a prefix in task logs
 	LogPrefix string
 
+	// The order of the logs, either 'grouped' or 'stream'
+	LogOrder string
+
 	// Whether turbo should create a run summary
 	Summarize bool
 
 	ExperimentalSpaceID string
+
+	// Whether this run is in Github Actions
+	IsGithubActions bool
 }

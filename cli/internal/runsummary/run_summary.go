@@ -2,15 +2,17 @@
 package runsummary
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/mitchellh/cli"
 	"github.com/segmentio/ksuid"
+	"github.com/vercel/turbo/cli/internal/ci"
 	"github.com/vercel/turbo/cli/internal/client"
+	"github.com/vercel/turbo/cli/internal/env"
+	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/workspace"
@@ -21,12 +23,15 @@ import (
 // the RunSummary will print this, instead of the script (e.g. `next build`).
 const MissingTaskLabel = "<NONEXISTENT>"
 
-// MissingFrameworkLabel is a string to identify when a workspace doesn't detect a framework
-const MissingFrameworkLabel = "<NO FRAMEWORK DETECTED>"
+// NoFrameworkDetected is a string to identify when a workspace doesn't detect a framework
+const NoFrameworkDetected = "<NO FRAMEWORK DETECTED>"
 
-const runSummarySchemaVersion = "0"
-const runsEndpoint = "/v0/spaces/%s/runs"
-const tasksEndpoint = "/v0/spaces/%s/runs/%s/tasks"
+// FrameworkDetectionSkipped is a string to identify when framework detection was skipped
+const FrameworkDetectionSkipped = "<FRAMEWORK DETECTION SKIPPED>"
+
+// NOTE: When changing this, please ensure that the server side is updated to handle the new version on vercel.com
+// this is required to ensure safe handling of env vars (unknown run summary versions will be ignored on the server)
+const runSummarySchemaVersion = "1"
 
 type runType int
 
@@ -39,37 +44,46 @@ const (
 // Meta is a wrapper around the serializable RunSummary, with some extra information
 // about the Run and references to other things that we need.
 type Meta struct {
-	RunSummary    *RunSummary
-	ui            cli.Ui
-	repoRoot      turbopath.AbsoluteSystemPath // used to write run summary
-	singlePackage bool
-	shouldSave    bool
-	apiClient     *client.APIClient
-	spaceID       string
-	runType       runType
+	RunSummary         *RunSummary
+	repoRoot           turbopath.AbsoluteSystemPath // used to write run summary
+	repoPath           turbopath.RelativeSystemPath
+	singlePackage      bool
+	shouldSave         bool
+	spacesClient       *spacesClient
+	runType            runType
+	synthesizedCommand string
 }
 
 // RunSummary contains a summary of what happens in the `turbo run` command and why.
 type RunSummary struct {
-	ID                ksuid.KSUID        `json:"id"`
-	Version           string             `json:"version"`
-	TurboVersion      string             `json:"turboVersion"`
-	GlobalHashSummary *GlobalHashSummary `json:"globalCacheInputs"`
-	Packages          []string           `json:"packages,omitempty"`
-	ExecutionSummary  *executionSummary  `json:"execution,omitempty"`
-	Tasks             []*TaskSummary     `json:"tasks"`
+	ID                 ksuid.KSUID        `json:"id"`
+	Version            string             `json:"version"`
+	TurboVersion       string             `json:"turboVersion"`
+	Monorepo           bool               `json:"monorepo"`
+	GlobalHashSummary  *GlobalHashSummary `json:"globalCacheInputs"`
+	Packages           []string           `json:"packages"`
+	EnvMode            util.EnvMode       `json:"envMode"`
+	FrameworkInference bool               `json:"frameworkInference"`
+	ExecutionSummary   *executionSummary  `json:"execution,omitempty"`
+	Tasks              []*TaskSummary     `json:"tasks"`
+	User               string             `json:"user"`
+	SCM                *scmState          `json:"scm"`
 }
 
 // NewRunSummary returns a RunSummary instance
 func NewRunSummary(
 	startAt time.Time,
-	ui cli.Ui,
 	repoRoot turbopath.AbsoluteSystemPath,
+	repoPath turbopath.RelativeSystemPath,
 	turboVersion string,
 	apiClient *client.APIClient,
+	spacesClient *client.APIClient,
 	runOpts util.RunOpts,
 	packages []string,
+	globalEnvMode util.EnvMode,
+	envAtExecutionStart env.EnvironmentVariableMap,
 	globalHashSummary *GlobalHashSummary,
+	synthesizedCommand string,
 ) Meta {
 	singlePackage := runOpts.SinglePackage
 	profile := runOpts.Profile
@@ -84,26 +98,44 @@ func NewRunSummary(
 		}
 	}
 
-	executionSummary := newExecutionSummary(startAt, profile)
+	executionSummary := newExecutionSummary(synthesizedCommand, repoPath, startAt, profile)
 
-	return Meta{
+	rsm := Meta{
 		RunSummary: &RunSummary{
-			ID:                ksuid.New(),
-			Version:           runSummarySchemaVersion,
-			ExecutionSummary:  executionSummary,
-			TurboVersion:      turboVersion,
-			Packages:          packages,
-			Tasks:             []*TaskSummary{},
-			GlobalHashSummary: globalHashSummary,
+			ID:                 ksuid.New(),
+			Version:            runSummarySchemaVersion,
+			ExecutionSummary:   executionSummary,
+			TurboVersion:       turboVersion,
+			Packages:           packages,
+			EnvMode:            globalEnvMode,
+			FrameworkInference: runOpts.FrameworkInference,
+			Tasks:              []*TaskSummary{},
+			GlobalHashSummary:  globalHashSummary,
+			SCM:                getSCMState(envAtExecutionStart, repoRoot),
+			User:               getUser(envAtExecutionStart, repoRoot),
+			Monorepo:           !singlePackage,
 		},
-		ui:            ui,
-		runType:       runType,
-		repoRoot:      repoRoot,
-		singlePackage: singlePackage,
-		shouldSave:    shouldSave,
-		apiClient:     apiClient,
-		spaceID:       spaceID,
+		runType:            runType,
+		repoRoot:           repoRoot,
+		singlePackage:      singlePackage,
+		shouldSave:         shouldSave,
+		synthesizedCommand: synthesizedCommand,
 	}
+
+	rsm.spacesClient = newSpacesClient(spaceID, spacesClient)
+	if rsm.spacesClient.enabled {
+		go rsm.spacesClient.start()
+		payload := newSpacesRunCreatePayload(&rsm)
+		rsm.spacesClient.createRun(payload)
+	}
+
+	return rsm
+}
+
+// SpacesIsEnabled returns true if this run summary is going to send to a
+// spaces backend
+func (rsm *Meta) SpacesIsEnabled() bool {
+	return rsm.spacesClient.enabled
 }
 
 // getPath returns a path to where the runSummary is written.
@@ -115,17 +147,17 @@ func (rsm *Meta) getPath() turbopath.AbsoluteSystemPath {
 }
 
 // Close wraps up the RunSummary at the end of a `turbo run`.
-func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
+func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspace.Catalog, ui cli.Ui) error {
 	if rsm.runType == runTypeDryJSON || rsm.runType == runTypeDryText {
-		return rsm.closeDryRun(workspaceInfos)
+		return rsm.closeDryRun(workspaceInfos, ui)
 	}
 
 	rsm.RunSummary.ExecutionSummary.exitCode = exitCode
 	rsm.RunSummary.ExecutionSummary.endedAt = time.Now()
 
 	summary := rsm.RunSummary
-	if err := writeChrometracing(summary.ExecutionSummary.profileFilename, rsm.ui); err != nil {
-		rsm.ui.Error(fmt.Sprintf("Error writing tracing data: %v", err))
+	if err := writeChrometracing(summary.ExecutionSummary.profileFilename, ui); err != nil {
+		ui.Error(fmt.Sprintf("Error writing tracing data: %v", err))
 	}
 
 	// TODO: printing summary to local, writing to disk, and sending to API
@@ -136,27 +168,41 @@ func (rsm *Meta) Close(exitCode int, workspaceInfos workspace.Catalog) error {
 	// Warn on the error, but we don't need to throw an error
 	if rsm.shouldSave {
 		if err := rsm.save(); err != nil {
-			rsm.ui.Warn(fmt.Sprintf("Error writing run summary: %v", err))
+			ui.Warn(fmt.Sprintf("Error writing run summary: %v", err))
 		}
 	}
 
-	rsm.printExecutionSummary()
-
-	if rsm.shouldSave {
-		if rsm.spaceID != "" && rsm.apiClient.IsLinked() {
-			if err := rsm.record(); err != nil {
-				rsm.ui.Warn(fmt.Sprintf("Error recording Run to Vercel: %v", err))
-			}
-		}
+	rsm.printExecutionSummary(ui)
+	if rsm.spacesClient.enabled {
+		rsm.sendToSpace(ctx, ui)
+	} else {
+		// Print any errors if the client is not enabled, since it could have
+		// been disabled at runtime due to an issue.
+		rsm.spacesClient.printErrors(ui)
 	}
 
 	return nil
 }
 
+func (rsm *Meta) sendToSpace(ctx context.Context, ui cli.Ui) {
+	rsm.spacesClient.finishRun(rsm)
+	func() {
+		_ = spinner.WaitFor(ctx, rsm.spacesClient.Close, ui, "...sending run summary...", 1000*time.Millisecond)
+	}()
+
+	rsm.spacesClient.printErrors(ui)
+
+	url := rsm.spacesClient.run.URL
+	if url != "" {
+		ui.Output(fmt.Sprintf("Run: %s", url))
+		ui.Output("")
+	}
+}
+
 // closeDryRun wraps up the Run Summary at the end of `turbo run --dry`.
 // Ideally this should be inlined into Close(), but RunSummary doesn't currently
 // have context about whether a run was real or dry.
-func (rsm *Meta) closeDryRun(workspaceInfos workspace.Catalog) error {
+func (rsm *Meta) closeDryRun(workspaceInfos workspace.Catalog, ui cli.Ui) error {
 	// Render the dry run as json
 	if rsm.runType == runTypeDryJSON {
 		rendered, err := rsm.FormatJSON()
@@ -164,16 +210,27 @@ func (rsm *Meta) closeDryRun(workspaceInfos workspace.Catalog) error {
 			return err
 		}
 
-		rsm.ui.Output(string(rendered))
+		ui.Output(string(rendered))
 		return nil
 	}
 
-	return rsm.FormatAndPrintText(workspaceInfos)
+	return rsm.FormatAndPrintText(workspaceInfos, ui)
 }
 
 // TrackTask makes it possible for the consumer to send information about the execution of a task.
 func (summary *RunSummary) TrackTask(taskID string) (func(outcome executionEventName, err error, exitCode *int), *TaskExecutionSummary) {
 	return summary.ExecutionSummary.run(taskID)
+}
+
+func (summary *RunSummary) getFailedTasks() []*TaskSummary {
+	failed := []*TaskSummary{}
+
+	for _, t := range summary.Tasks {
+		if *t.Execution.exitCode != 0 {
+			failed = append(failed, t)
+		}
+	}
+	return failed
 }
 
 // Save saves the run summary to a file
@@ -194,80 +251,20 @@ func (rsm *Meta) save() error {
 	return summaryPath.WriteFile(json, 0644)
 }
 
-// record sends the summary to the API
-// TODO: make this work for single package tasks
-func (rsm *Meta) record() []error {
-	errs := []error{}
-
-	// Right now we'll send the POST to create the Run and the subsequent task payloads
-	// when everything after all execution is done, but in the future, this first POST request
-	// can happen when the Run actually starts, so we can send updates to Vercel as the tasks progress.
-	runsURL := fmt.Sprintf(runsEndpoint, rsm.spaceID)
-	var runID string
-	payload := newVercelRunCreatePayload(rsm.RunSummary)
-	if startPayload, err := json.Marshal(payload); err == nil {
-		if resp, err := rsm.apiClient.JSONPost(runsURL, startPayload); err != nil {
-			errs = append(errs, err)
-		} else {
-			vercelRunResponse := &vercelRunResponse{}
-			if err := json.Unmarshal(resp, vercelRunResponse); err != nil {
-				errs = append(errs, err)
-			} else {
-				runID = vercelRunResponse.ID
-			}
-		}
+// CloseTask posts the result of the Task to Spaces
+func (rsm *Meta) CloseTask(task *TaskSummary, logs []byte) {
+	if rsm.spacesClient.enabled {
+		rsm.spacesClient.postTask(task, logs)
 	}
-
-	if runID != "" {
-		rsm.postTaskSummaries(runID)
-
-		if donePayload, err := json.Marshal(newVercelDonePayload(rsm.RunSummary)); err == nil {
-			if _, err := rsm.apiClient.JSONPatch(runsURL, donePayload); err != nil {
-				errs = append(errs, err)
-			}
-		}
-	}
-
-	if len(errs) > 0 {
-		return errs
-	}
-
-	return nil
 }
 
-func (rsm *Meta) postTaskSummaries(runID string) {
-	// We make at most 8 requests at a time.
-	maxParallelRequests := 8
-	taskSummaries := rsm.RunSummary.Tasks
-	taskCount := len(taskSummaries)
-	taskURL := fmt.Sprintf(tasksEndpoint, rsm.spaceID, runID)
+func getUser(envVars env.EnvironmentVariableMap, dir turbopath.AbsoluteSystemPath) string {
+	var username string
 
-	parallelRequestCount := maxParallelRequests
-	if taskCount < maxParallelRequests {
-		parallelRequestCount = taskCount
+	if ci.IsCi() {
+		vendor := ci.Info()
+		username = envVars[vendor.UsernameEnvVar]
 	}
 
-	queue := make(chan int, taskCount)
-
-	wg := &sync.WaitGroup{}
-	for i := 0; i < parallelRequestCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for index := range queue {
-				task := taskSummaries[index]
-				if taskPayload, err := json.Marshal(task); err == nil {
-					if _, err := rsm.apiClient.JSONPost(taskURL, taskPayload); err != nil {
-						rsm.ui.Warn(fmt.Sprintf("Eror uploading summary of %s", task.TaskID))
-					}
-				}
-			}
-		}()
-	}
-
-	for index := range taskSummaries {
-		queue <- index
-	}
-	close(queue)
-	wg.Wait()
+	return username
 }

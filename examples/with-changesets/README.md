@@ -2,6 +2,14 @@
 
 This is an official React design system starter powered by Turborepo. Versioning and package publishing is handled by [Changesets](https://github.com/changesets/changesets) and fully automated with GitHub Actions.
 
+## Using this example
+
+Run the following command:
+
+```sh
+npx create-turbo@latest -e with-changesets
+```
+
 ## What's inside?
 
 This Turborepo includes the following:
@@ -23,17 +31,6 @@ This Turborepo has some additional tools already setup for you:
 - [TypeScript](https://www.typescriptlang.org/) for static type checking
 - [ESLint](https://eslint.org/) for code linting
 - [Prettier](https://prettier.io) for code formatting
-
-## Using this example
-
-Run the following command:
-
-```sh
-npx degit vercel/turbo/examples/with-changesets with-changesets
-cd with-changesets
-pnpm install
-git init . && git add . && git commit -m "Init"
-```
 
 ### Useful commands
 

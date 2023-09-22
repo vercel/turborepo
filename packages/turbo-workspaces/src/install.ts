@@ -1,11 +1,11 @@
+import type { PackageManager } from "@turbo/utils";
 import execa from "execa";
 import ora from "ora";
 import { satisfies } from "semver";
 import { ConvertError } from "./errors";
 import { Logger } from "./logger";
-import {
-  PackageManager,
-  PackageManagerDetails,
+import type {
+  RequestedPackageManagerDetails,
   PackageManagerInstallDetails,
   InstallArgs,
 } from "./types";
@@ -40,7 +40,7 @@ export const PACKAGE_MANAGERS: Record<
       name: "pnpm",
       template: "pnpm",
       command: "pnpm",
-      installArgs: ["install"],
+      installArgs: ["install", "--fix-lockfile"],
       version: "latest",
       executable: "pnpm dlx",
       semver: ">=7",
@@ -68,22 +68,35 @@ export const PACKAGE_MANAGERS: Record<
       semver: ">=2",
     },
   ],
+  bun: [
+    {
+      name: "bun",
+      template: "bun",
+      command: "bun",
+      installArgs: ["install"],
+      version: "latest",
+      executable: "bunx",
+      semver: "^1.0.1",
+      default: true,
+    },
+  ],
 };
 
-export function getPackageManagerMeta(packageManager: PackageManagerDetails) {
+export function getPackageManagerMeta(
+  packageManager: RequestedPackageManagerDetails
+) {
   const { version, name } = packageManager;
   if (version) {
     return PACKAGE_MANAGERS[name].find((manager) =>
       satisfies(version, manager.semver)
     );
-  } else {
-    return PACKAGE_MANAGERS[name].find((manager) => {
-      return manager.default;
-    });
   }
+  return PACKAGE_MANAGERS[name].find((manager) => {
+    return manager.default;
+  });
 }
 
-export default async function install(args: InstallArgs) {
+export async function install(args: InstallArgs) {
   const { to, logger, options } = args;
 
   const installLogger = logger ?? new Logger(options);
@@ -96,11 +109,13 @@ export default async function install(args: InstallArgs) {
   }
 
   installLogger.subStep(
-    `running "${packageManager.command} ${packageManager.installArgs}"`
+    `running "${packageManager.command} ${packageManager.installArgs.join(
+      " "
+    )}"`
   );
   if (!options?.dry) {
     let spinner;
-    if (installLogger?.interactive) {
+    if (installLogger.interactive) {
       spinner = ora({
         text: "installing dependencies...",
         spinner: {

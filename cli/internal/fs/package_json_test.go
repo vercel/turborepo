@@ -3,6 +3,7 @@ package fs
 import (
 	"testing"
 
+	mapset "github.com/deckarep/golang-set"
 	"gotest.tools/v3/assert"
 )
 
@@ -155,6 +156,15 @@ func Test_MarshalPackageJSON(t *testing.T) {
 		assert.NilError(t, err, testCase.name)
 		assertPackageJSONEqual(t, actual, testCase.expected)
 	}
+}
+
+func Test_SetExternalDepsWithEmptySet(t *testing.T) {
+	pkg := &PackageJSON{}
+	err := pkg.SetExternalDeps(mapset.NewSet())
+	assert.NilError(t, err)
+	assert.Assert(t, pkg.TransitiveDeps != nil)
+	assert.Equal(t, len(pkg.TransitiveDeps), 0)
+	assert.DeepEqual(t, pkg.ExternalDepsHash, "ccab0b28617f1f56")
 }
 
 // Asserts that the data section of two PackageJSON structs are equal

@@ -1,0 +1,23 @@
+[package]
+name = "turbopath"
+version = "0.1.0"
+license = "MPL-2.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+camino = { workspace = true }
+dunce = { workspace = true }
+fs-err = "2.9.0"
+path-clean = "1.0.1"
+# TODO: Make this a crate feature
+serde = { workspace = true }
+thiserror = { workspace = true }
+wax = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+tempdir = "0.3.7"
+test-case = { workspace = true }

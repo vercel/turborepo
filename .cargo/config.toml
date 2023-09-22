@@ -1,5 +1,10 @@
 [env]
 CARGO_WORKSPACE_DIR = { value = "", relative = true }
+TURBO_PNPM_WORKSPACE_DIR = { value = "", relative = true }
+
+[build]
+rustflags = ["--cfg", "tokio_unstable"]
+rustdocflags = ["-Znormalize-docs"]
 
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld"
@@ -8,11 +13,24 @@ linker = "rust-lld"
 xtask = "run --package xtask --"
 tr-build = "build -p turbo"
 tr-run = "run -p turbo"
-tr-test = "test -p turborepo-lib -p turborepo-scm -p turborepo-lockfiles -p turbopath -p turborepo-api-client --features rustls-tls"
-tr-check = "check -p turbo"
+tr-test = "groups test turborepo"
+tr-check = "groups check turborepo"
 # Builds all test code to check for compiler errors before running
-tp-pre-test = "nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm --exclude turbopath --exclude turborepo-lockfiles --exclude turborepo-api-client"
-tp-test = "nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-ffi --exclude turborepo-lib --exclude turborepo-scm --exclude turbopath --exclude turborepo-lockfiles --exclude turborepo-api-client"
+tp-pre-test = "nextest run --no-run --workspace --release --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
+tp-test = "nextest run --workspace --release --no-fail-fast --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
+tp-bench-test = "test --benches --workspace --release --no-fail-fast --exclude turbopack-bench --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
+tp-check = "check --workspace --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
+tp-clippy = "clippy --workspace --exclude turbo --exclude turborepo-* --exclude turbopath --exclude wax --exclude globwalk --exclude globwatch --exclude pidlock"
 
 [target.'cfg(all())']
-rustflags = ["--cfg", "tokio_unstable", "-Csymbol-mangling-version=v0", "-Aclippy::too_many_arguments"]
+rustflags = [
+  "--cfg",
+  "tokio_unstable",
+  "-Zshare-generics=y",
+  "-Csymbol-mangling-version=v0",
+  "-Aclippy::too_many_arguments",
+  # Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
+  "-Aclippy::needless_pass_by_ref_mut",
+  # Clippy's partial_eq lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11178
+  "-Aclippy::incorrect_partial_ord_impl_on_ord_type",
+]

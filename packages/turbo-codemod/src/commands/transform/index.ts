@@ -1,27 +1,23 @@
 import chalk from "chalk";
-import inquirer from "inquirer";
-
-import loadTransformers from "../../utils/loadTransformers";
-import checkGitStatus from "../../utils/checkGitStatus";
-import directoryInfo from "../../utils/directoryInfo";
+import { prompt } from "inquirer";
+import { logger } from "@turbo/utils";
+import { loadTransformers } from "../../utils/loadTransformers";
+import { checkGitStatus } from "../../utils/checkGitStatus";
+import { directoryInfo } from "../../utils/directoryInfo";
+import { Runner } from "../../runner";
 import type {
   TransformCommandOptions,
   TransformCommandArgument,
 } from "./types";
-import { Runner } from "../../runner";
 
-export default async function transform(
-  transform: TransformCommandArgument,
+export async function transform(
+  transformName: TransformCommandArgument,
   directory: TransformCommandArgument,
   options: TransformCommandOptions
 ) {
   const transforms = loadTransformers();
   if (options.list) {
-    console.log(
-      transforms
-        .map((transform) => `- ${chalk.cyan(transform.value)}`)
-        .join("\n")
-    );
+    logger.log(transforms.map((t) => `- ${chalk.cyan(t.name)}`).join("\n"));
     return process.exit(0);
   }
 
@@ -30,7 +26,7 @@ export default async function transform(
     checkGitStatus({ directory, force: options.force });
   }
 
-  const answers = await inquirer.prompt<{
+  const answers = await prompt<{
     directoryInput?: string;
     transformerInput?: string;
   }>([
@@ -40,54 +36,59 @@ export default async function transform(
       message: "Where is the root of the repo where the transform should run?",
       when: !directory,
       default: ".",
-      validate: (directory: string) => {
-        const { exists, absolute } = directoryInfo({ directory });
+      validate: (d: string) => {
+        const { exists, absolute } = directoryInfo({ directory: d });
         if (exists) {
           return true;
-        } else {
-          return `Directory ${chalk.dim(`(${absolute})`)} does not exist`;
         }
+        return `Directory ${chalk.dim(`(${absolute})`)} does not exist`;
       },
-      filter: (directory: string) => directory.trim(),
+      filter: (d: string) => d.trim(),
     },
     {
       type: "list",
       name: "transformerInput",
       message: "Which transform would you like to apply?",
-      when: !transform,
+      when: !transformName,
       pageSize: transforms.length,
-      choices: transforms,
+      choices: transforms.map((t) => ({
+        name: `${chalk.bold(t.name)} - ${chalk.gray(
+          t.description
+        )} ${chalk.gray(`(${t.introducedIn})`)}`,
+        value: t.name,
+      })),
     },
   ]);
 
   const {
-    directoryInput: selectedDirectory = directory as string,
-    transformerInput: selectedTransformer = transform as string,
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- we know it exists because of the prompt
+    directoryInput: selectedDirectory = directory!,
+    transformerInput: selectedTransformer = transformName,
   } = answers;
   const { exists, absolute: root } = directoryInfo({
     directory: selectedDirectory,
   });
   if (!exists) {
-    console.error(`Directory ${chalk.dim(`(${root})`)} does not exist`);
+    logger.error(`Directory ${chalk.dim(`(${root})`)} does not exist`);
     return process.exit(1);
   }
 
-  const transformKeys = transforms.map((transform) => transform.value);
-  const transformData = transforms.find(
-    (transform) => transform.value === selectedTransformer
-  );
+  const transformKeys = transforms.map((t) => t.name);
+  const transformData = transforms.find((t) => t.name === selectedTransformer);
 
   // validate transforms
   if (!transformData) {
-    console.error(
-      `Invalid transform choice ${chalk.dim(`(${transform})`)}, pick one of:`
+    logger.error(
+      `Invalid transform choice ${chalk.dim(
+        `(${transformName})`
+      )}, pick one of:`
     );
-    console.error(transformKeys.map((key) => `- ${key}`).join("\n"));
+    logger.error(transformKeys.map((key) => `- ${key}`).join("\n"));
     return process.exit(1);
   }
 
   // run the transform
-  const result = transformData.transformer({
+  const result = await transformData.transformer({
     root,
     options,
   });

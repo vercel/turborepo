@@ -24,10 +24,10 @@ message GlobRespList {
 }
 
 message ChangedFilesReq {
-  string repo_root = 1;
-  string monorepo_root = 2;
+  string git_root = 1;
+  string turbo_root = 2;
   optional string from_commit = 3;
-  optional string to_commit = 4;
+  string to_commit = 4;
 }
 
 message ChangedFilesResp {
@@ -42,7 +42,7 @@ message ChangedFilesList {
 }
 
 message PreviousContentReq {
-  string repo_root = 1;
+  string git_root = 1;
   string from_commit = 2;
   string file_path = 3;
 }
@@ -54,17 +54,43 @@ message PreviousContentResp {
   }
 }
 
+enum PackageManager {
+  NPM = 0;
+  BERRY = 1;
+  PNPM = 2;
+  YARN = 3;
+  BUN = 4;
+}
+
+message PackageDependency {
+  string name = 1;
+  string range = 2;
+}
+
+message PackageDependencyList {
+  repeated PackageDependency list = 1;
+}
+
+message WorkspaceDependencies {
+  map<string, LockfilePackageList> dependencies = 1;
+}
+
 message TransitiveDepsRequest {
   bytes contents = 1;
-  string workspace_dir = 2;
-  map<string, string> unresolved_deps = 3;
+  PackageManager package_manager = 2;
+  map<string, PackageDependencyList> workspaces = 3;
+  optional AdditionalBerryData resolutions = 4;
 }
 
 message TransitiveDepsResponse {
   oneof response {
-    LockfilePackageList packages = 1;
+    WorkspaceDependencies dependencies = 1;
     string error = 2;
   }
+}
+
+message AdditionalBerryData {
+  map<string, string> resolutions = 1;
 }
 
 message LockfilePackage {
@@ -79,13 +105,133 @@ message LockfilePackageList {
 
 message SubgraphRequest {
   bytes contents = 1;
-  repeated string workspaces = 2;
-  repeated string packages = 3;
+  PackageManager package_manager = 2;
+  repeated string workspaces = 3;
+  repeated string packages = 4;
+  optional AdditionalBerryData resolutions = 5;
 }
 
 message SubgraphResponse {
   oneof response {
     bytes contents = 1;
+    string error = 2;
+  }
+}
+
+message PatchesRequest {
+  bytes contents = 1;
+  PackageManager package_manager = 2;
+}
+
+message PatchesResponse {
+  oneof response {
+    Patches patches = 1;
+    string error = 2;
+  }
+}
+
+message Patches {
+  repeated string patches = 1;
+}
+
+message GlobalChangeRequest {
+  PackageManager package_manager = 1;
+  bytes  prev_contents = 2;
+  bytes curr_contents = 3;
+}
+
+message GlobalChangeResponse {
+  bool global_change = 1;
+}
+
+message RecursiveCopyRequest {
+  string src = 1;
+  string dst = 2;
+}
+
+message RecursiveCopyResponse {
+  optional string error = 1;
+}
+
+message VerifySignatureRequest {
+  string hash = 1;
+  bytes artifact_body = 2;
+  bytes team_id = 3;
+  string expected_tag = 4;
+  optional bytes secret_key_override = 5;
+}
+
+message VerifySignatureResponse {
+  oneof response {
+    bool verified = 1;
+    string error = 2;
+  }
+}
+
+message GetPackageFileHashesRequest {
+  string turbo_root = 1;
+  string package_path = 2;
+  repeated string inputs = 3;
+}
+
+message GetPackageFileHashesResponse {
+  oneof response {
+    FileHashes hashes = 1;
+    string error = 2;
+  }
+}
+
+message GetHashesForFilesRequest {
+  string turbo_root = 1;
+  repeated string files = 2;
+  bool allow_missing = 3;
+}
+
+message GetHashesForFilesResponse {
+  oneof response {
+    FileHashes hashes = 1;
+    string error = 2;
+  }
+}
+
+message FileHashes {
+  map<string, string> hashes = 1;
+}
+
+message FromWildcardsRequest {
+  EnvVarMap env_vars = 1;
+  repeated string wildcard_patterns = 2;
+}
+
+message FromWildcardsResponse {
+  oneof response {
+    EnvVarMap env_vars = 1;
+    string error = 2;
+  }
+}
+
+message EnvVarMap {
+  map<string, string> map = 1;
+}
+
+message DetailedMap {
+  map<string, string> all = 1;
+  BySource by_source = 2;
+}
+
+message BySource {
+  map<string, string> explicit = 1;
+  map<string, string> matching = 2;
+}
+
+message GetGlobalHashableEnvVarsRequest {
+  EnvVarMap env_at_execution_start = 1;
+  repeated string global_env = 2;
+}
+
+message GetGlobalHashableEnvVarsResponse {
+  oneof response {
+    DetailedMap detailed_map = 1;
     string error = 2;
   }
 }

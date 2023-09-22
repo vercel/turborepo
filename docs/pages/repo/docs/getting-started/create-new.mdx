@@ -78,13 +78,14 @@ Choose anywhere you like. The default is `./my-turborepo`.
 
 #### Which package manager do you want to use?
 
-Turborepo doesn't handle installing packages, so you'll need to choose either:
+Turborepo doesn't handle installing packages, so you'll need to choose one of:
 
+- [bun](https://bun.sh/)
 - [npm](https://www.npmjs.com//)
 - [pnpm](https://pnpm.io/)
 - [yarn](https://yarnpkg.com/)
 
-If you're not sure, we recommend choosing `pnpm`. If you don't have it installed, cancel `create-turbo` (via `ctrl-C`) and take a look at the [installation instructions](https://pnpm.io/installation).
+`create-turbo` will detect which package managers you have available on your system. If you're unsure which to choose, Turborepo recommends `pnpm`.
 
 #### Installation
 
@@ -114,7 +115,7 @@ First, open `./packages/ui/package.json`. You'll notice that the package's name 
 
 Next, open `./apps/web/package.json`. You'll notice that this package's name is `"name": "web"`. But also - take a look in its dependencies.
 
-You'll see that `"web"` depends on a package called `"ui"`. If you're using `pnpm`, you'll see it's declared like this:
+You'll see that `"web"` depends on a package called `"ui"`.
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
@@ -154,18 +155,18 @@ This pattern of sharing code across applications is extremely common in monorepo
 
 #### Understanding imports and exports
 
-Take a look inside `./apps/docs/pages/index.tsx`. Both `docs` and `web` are [Next.js](https://nextjs.org/) applications, and they both use the `ui` library in a similar way:
+Take a look inside `./apps/docs/app/page.tsx`. Both `docs` and `web` are [Next.js](https://nextjs.org/) applications, and they both use the `ui` library in a similar way:
 
-```tsx filename="apps/docs/pages/index.tsx"
-import { Button } from "ui";
-//       ^^^^^^         ^^
+```tsx filename="apps/docs/app/page.tsx"
+import { Button, Header } from "ui";
+//       ^^^^^^^^^^^^^^         ^^
 
-export default function Docs() {
+export default function Page() {
   return (
-    <div>
-      <h1>Docs</h1>
+    <>
+      <Header text="Docs">
       <Button />
-    </div>
+    <>
   );
 }
 ```
@@ -198,7 +199,7 @@ Everything inside this file will be able to be used by workspaces that depend on
 import * as React from "react";
 
 export const Button = () => {
-  return <button>Boop</button>;
+  return <button onClick={() => alert("boop")}>Boop</button>;
 };
 ```
 
@@ -275,7 +276,7 @@ You'll notice that this is named slightly differently to the other workspaces. I
 
 ```ts filename=".eslintrc.js"
 module.exports = {
-  // This tells ESLint to load the config from the workspace `eslint-config-custom`
+  // This tells ESLint to load the config from the package `eslint-config-custom`
   extends: ["custom"],
 };
 ```
@@ -324,11 +325,12 @@ Let's take a look inside `turbo.json`, at the root:
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     },
     "lint": {},
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
@@ -391,7 +393,7 @@ The scripts that each run come from each workspace's `package.json`. Each worksp
 ```json filename="packages/ui/package.json"
 {
   "scripts": {
-    "lint": "eslint *.ts*"
+    "lint": "eslint \"**/*.ts*\""
   }
 }
 ```
@@ -402,7 +404,7 @@ When we run `turbo lint`, Turborepo looks at each `lint` script in each workspac
 
 Let's run our `lint` script one more time. You'll notice a few new things appear in the terminal:
 
-1. `cache hit, replaying output` appears for `docs:lint`, `web:lint` and `ui:lint`.
+1. `cache hit, replaying logs` appears for `docs:lint`, `web:lint` and `ui:lint`.
 2. You'll see `3 cached, 3 total`.
 3. The total runtime should be under `100ms`, and `>>> FULL TURBO` appears.
 
@@ -412,16 +414,16 @@ It had saved the logs from the previous run, so it just replayed them.
 
 Let's try changing some code to see what happens. Make a change to a file inside `apps/docs`:
 
-```diff filename="apps/docs/pages/index.tsx"
-import { Button } from "ui";
+```diff filename="apps/docs/app/page.tsx"
+import { Button, Header } from "ui";
 
-export default function Docs() {
+export default function Page() {
   return (
-    <div>
--     <h1>Docs</h1>
-+     <h1>My great docs</h1>
+    <>
+-     <Header text="Docs" />
++     <Header text="My great docs" />
       <Button />
-    </div>
+    <>
   );
 }
 ```
@@ -466,7 +468,7 @@ Run the `build` script again. You'll notice:
 1. We hit `FULL TURBO` - the builds complete in under `100ms`.
 2. The `.next` folder re-appears!
 
-Turborepo cached the result of our previous build. When we ran the `build` command again, it restored the entire `.next/**` folder from the cache. To learn more, check out our docs on [cache outputs](/repo/docs/core-concepts/caching#configuring-cache-outputs).
+Turborepo cached the result of our previous build. When we ran the `build` command again, it restored the entire `.next/**` folder from the cache. To learn more, check out our docs on [cache outputs](/repo/docs/core-concepts/caching/what-to-cache).
 
 ### 6. Running dev scripts
 
@@ -500,6 +502,7 @@ Take a look at `turbo.json`:
 Inside `dev`, we've specified `"cache": false`. This means we're telling Turborepo _not_ to cache the
 results of the `dev` script. `dev` runs a persistent dev server and produces no outputs, so there
 is nothing to cache. Learn more about it in our docs on [turning off caching](/repo/docs/core-concepts/caching#turn-off-caching).
+
 Additionally, we set `"persistent": true`, to let turbo know that this is a long-running dev server,
 so that turbo can ensure that no other tasks depend on it. You can read more in the [docs for the
 `persistent` option](/repo/docs/reference/configuration#persistent).

@@ -2,48 +2,48 @@ use std::{future::Future, pin::Pin};
 
 use anyhow::Result;
 use indexmap::IndexSet;
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::{
-    DirectoryContent, DirectoryEntry, FileSystem, FileSystemEntryType, FileSystemPathVc,
-    FileSystemVc,
+    DirectoryContent, DirectoryEntry, FileSystem, FileSystemEntryType, FileSystemPath,
 };
 use turbopack_core::{
-    asset::{Asset, AssetVc},
-    reference::{AssetReference, AssetReferenceVc},
-    resolve::{
-        pattern::{Pattern, PatternVc},
-        ResolveResult, ResolveResultVc,
-    },
-    source_asset::SourceAssetVc,
+    file_source::FileSource,
+    raw_module::RawModule,
+    reference::ModuleReference,
+    resolve::{pattern::Pattern, ModuleResolveResult},
+    source::Source,
 };
 
 #[turbo_tasks::value]
 #[derive(Hash, Clone, Debug)]
 pub struct PackageJsonReference {
-    pub package_json: FileSystemPathVc,
+    pub package_json: Vc<FileSystemPath>,
 }
 
 #[turbo_tasks::value_impl]
-impl PackageJsonReferenceVc {
+impl PackageJsonReference {
     #[turbo_tasks::function]
-    pub fn new(package_json: FileSystemPathVc) -> Self {
+    pub fn new(package_json: Vc<FileSystemPath>) -> Vc<Self> {
         Self::cell(PackageJsonReference { package_json })
     }
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for PackageJsonReference {
+impl ModuleReference for PackageJsonReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::asset(SourceAssetVc::new(self.package_json).into()).into()
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        ModuleResolveResult::module(Vc::upcast(RawModule::new(Vc::upcast(FileSource::new(
+            self.package_json,
+        )))))
+        .cell()
     }
 }
 
 #[turbo_tasks::value_impl]
 impl ValueToString for PackageJsonReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "package.json {}",
             self.package_json.to_string().await?,
         )))
@@ -53,31 +53,31 @@ impl ValueToString for PackageJsonReference {
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct DirAssetReference {
-    pub source: AssetVc,
-    pub path: PatternVc,
+    pub source: Vc<Box<dyn Source>>,
+    pub path: Vc<Pattern>,
 }
 
 #[turbo_tasks::value_impl]
-impl DirAssetReferenceVc {
+impl DirAssetReference {
     #[turbo_tasks::function]
-    pub fn new(source: AssetVc, path: PatternVc) -> Self {
+    pub fn new(source: Vc<Box<dyn Source>>, path: Vc<Pattern>) -> Vc<Self> {
         Self::cell(DirAssetReference { source, path })
     }
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for DirAssetReference {
+impl ModuleReference for DirAssetReference {
     #[turbo_tasks::function]
-    async fn resolve_reference(&self) -> Result<ResolveResultVc> {
+    async fn resolve_reference(&self) -> Result<Vc<ModuleResolveResult>> {
         let context_path = self.source.ident().path().await?;
         // ignore path.join in `node-gyp`, it will includes too many files
         if context_path.path.contains("node_modules/node-gyp") {
-            return Ok(ResolveResult::unresolveable().into());
+            return Ok(ModuleResolveResult::unresolveable().cell());
         }
-        let context = self.source.ident().path().parent();
+        let parent_path = self.source.ident().path().parent();
         let pat = self.path.await?;
         let mut result = IndexSet::default();
-        let fs = context.fs();
+        let fs = parent_path.fs();
         match &*pat {
             Pattern::Constant(p) => {
                 extend_with_constant_pattern(p, fs, &mut result).await?;
@@ -93,27 +93,37 @@ impl AssetReference for DirAssetReference {
             }
             _ => {}
         }
-        Ok(ResolveResult::assets_with_references(result.into_iter().collect(), vec![]).into())
+        Ok(ModuleResolveResult::modules(
+            result
+                .into_iter()
+                .map(|source| Vc::upcast(RawModule::new(source)))
+                .collect(),
+        )
+        .cell())
     }
 }
 
 #[turbo_tasks::value_impl]
 impl ValueToString for DirAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "directory assets {}",
             self.path.to_string().await?,
         )))
     }
 }
 
+type SourceSet = IndexSet<Vc<Box<dyn Source>>>;
+
 async fn extend_with_constant_pattern(
     pattern: &str,
-    fs: FileSystemVc,
-    result: &mut IndexSet<AssetVc>,
+    fs: Vc<Box<dyn FileSystem>>,
+    result: &mut SourceSet,
 ) -> Result<()> {
-    let dest_file_path = fs.root().join(pattern.trim_start_matches("/ROOT/"));
+    let dest_file_path = fs
+        .root()
+        .join(pattern.trim_start_matches("/ROOT/").to_string());
     // ignore error
     let realpath_with_links = match dest_file_path.realpath_with_links().await {
         Ok(p) => p,
@@ -124,7 +134,7 @@ async fn extend_with_constant_pattern(
         realpath_with_links
             .symlinks
             .iter()
-            .map(|l| SourceAssetVc::new(*l).as_asset()),
+            .map(|l| Vc::upcast(FileSource::new(*l))),
     );
     let entry_type = match dest_file_path.get_type().await {
         Ok(e) => e,
@@ -135,14 +145,14 @@ async fn extend_with_constant_pattern(
             result.extend(read_dir(dest_file_path).await?);
         }
         FileSystemEntryType::File | FileSystemEntryType::Symlink => {
-            result.insert(SourceAssetVc::new(dest_file_path).into());
+            result.insert(Vc::upcast(FileSource::new(dest_file_path)));
         }
         _ => {}
     }
     Ok(())
 }
 
-async fn read_dir(p: FileSystemPathVc) -> Result<IndexSet<AssetVc>> {
+async fn read_dir(p: Vc<FileSystemPath>) -> Result<SourceSet> {
     let mut result = IndexSet::new();
     let dir_entries = p.read_dir().await?;
     if let DirectoryContent::Entries(entries) = &*dir_entries {
@@ -151,7 +161,7 @@ async fn read_dir(p: FileSystemPathVc) -> Result<IndexSet<AssetVc>> {
         for (_, entry) in entries {
             match entry {
                 DirectoryEntry::File(file) => {
-                    result.insert(SourceAssetVc::new(*file).into());
+                    result.insert(Vc::upcast(FileSource::new(*file)));
                 }
                 DirectoryEntry::Directory(dir) => {
                     let sub = read_dir_boxed(*dir).await?;
@@ -165,7 +175,7 @@ async fn read_dir(p: FileSystemPathVc) -> Result<IndexSet<AssetVc>> {
 }
 
 fn read_dir_boxed(
-    p: FileSystemPathVc,
-) -> Pin<Box<dyn Future<Output = Result<IndexSet<AssetVc>>> + Send>> {
+    p: Vc<FileSystemPath>,
+) -> Pin<Box<dyn Future<Output = Result<SourceSet>> + Send>> {
     Box::pin(read_dir(p))
 }

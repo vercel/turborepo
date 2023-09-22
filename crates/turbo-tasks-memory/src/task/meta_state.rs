@@ -85,12 +85,14 @@ impl TaskMetaState {
 
 // These need to be impl types since there is no way to reference the zero-sized
 // function item type
-type TaskMetaStateAsFull = impl Fn(&TaskMetaState) -> Option<&TaskState>;
-type TaskMetaStateAsPartial = impl Fn(&TaskMetaState) -> Option<&PartialTaskState>;
-type TaskMetaStateAsUnloaded = impl Fn(&TaskMetaState) -> Option<&UnloadedTaskState>;
-type TaskMetaStateAsFullMut = impl Fn(&mut TaskMetaState) -> Option<&mut TaskState>;
-type TaskMetaStateAsPartialMut = impl Fn(&mut TaskMetaState) -> Option<&mut PartialTaskState>;
-type TaskMetaStateAsUnloadedMut = impl Fn(&mut TaskMetaState) -> Option<&mut UnloadedTaskState>;
+pub(super) type TaskMetaStateAsFull = impl Fn(&TaskMetaState) -> Option<&TaskState>;
+pub(super) type TaskMetaStateAsPartial = impl Fn(&TaskMetaState) -> Option<&PartialTaskState>;
+pub(super) type TaskMetaStateAsUnloaded = impl Fn(&TaskMetaState) -> Option<&UnloadedTaskState>;
+pub(super) type TaskMetaStateAsFullMut = impl Fn(&mut TaskMetaState) -> Option<&mut TaskState>;
+pub(super) type TaskMetaStateAsPartialMut =
+    impl Fn(&mut TaskMetaState) -> Option<&mut PartialTaskState>;
+pub(super) type TaskMetaStateAsUnloadedMut =
+    impl Fn(&mut TaskMetaState) -> Option<&mut UnloadedTaskState>;
 
 pub(super) enum TaskMetaStateReadGuard<'a> {
     Full(ReadGuard<'a, TaskMetaState, TaskState, TaskMetaStateAsFull>),
@@ -187,7 +189,8 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
                 )
                 .into_partial()
                 .unwrap();
-                *guard = TaskMetaState::Full(box partial.into_full(task.get_event_description()));
+                *guard =
+                    TaskMetaState::Full(Box::new(partial.into_full(task.get_event_description())));
             }
             TaskMetaState::Unloaded(_) => {
                 let unloaded = replace(
@@ -199,7 +202,8 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
                 )
                 .into_unloaded()
                 .unwrap();
-                *guard = TaskMetaState::Full(box unloaded.into_full(task.get_event_description()));
+                *guard =
+                    TaskMetaState::Full(Box::new(unloaded.into_full(task.get_event_description())));
             }
         }
         WriteGuard::new(guard, TaskMetaState::as_full, TaskMetaState::as_full_mut)
@@ -228,7 +232,7 @@ impl<'a> TaskMetaStateWriteGuard<'a> {
                 )
                 .into_unloaded()
                 .unwrap();
-                *guard = TaskMetaState::Partial(box unloaded.into_partial());
+                *guard = TaskMetaState::Partial(Box::new(unloaded.into_partial()));
                 TaskMetaStateWriteGuard::Partial(WriteGuard::new(
                     guard,
                     TaskMetaState::as_partial,

@@ -1,1 +1,3 @@
-module.exports = require("../eslint-config-custom");
+module.exports = {
+  extends: ["custom/react"],
+};

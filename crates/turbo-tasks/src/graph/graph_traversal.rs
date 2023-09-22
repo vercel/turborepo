@@ -3,39 +3,55 @@ use std::{future::Future, pin::Pin};
 use anyhow::Result;
 use futures::{stream::FuturesUnordered, Stream};
 
-use super::{graph_store::GraphStore, with_future::With, Visit, VisitControlFlow};
+use super::{
+    graph_store::{GraphNode, GraphStore},
+    with_future::With,
+    SkipDuplicates, Visit, VisitControlFlow,
+};
 
 /// [`GraphTraversal`] is a utility type that can be used to traverse a graph of
 /// nodes, where each node can have a variable number of outgoing edges. The
 /// traversal is done in parallel, and the order of the nodes in the traversal
 /// result is determined by the [`GraphStore`] parameter.
-pub struct GraphTraversal<Store> {
-    _store: std::marker::PhantomData<Store>,
+pub trait GraphTraversal: GraphStore + Sized {
+    fn visit<RootEdgesIt, VisitImpl, Abort, Impl>(
+        self,
+        root_edges: RootEdgesIt,
+        visit: VisitImpl,
+    ) -> GraphTraversalFuture<Self, VisitImpl, Abort, Impl, VisitImpl::EdgesFuture>
+    where
+        VisitImpl: Visit<Self::Node, Abort, Impl>,
+        RootEdgesIt: IntoIterator<Item = VisitImpl::Edge>;
+
+    fn skip_duplicates(self) -> SkipDuplicates<Self>;
 }
 
-impl<Store> GraphTraversal<Store> {
+impl<Store> GraphTraversal for Store
+where
+    Store: GraphStore,
+{
     /// Visits the graph starting from the given `roots`, and returns a future
     /// that will resolve to the traversal result.
-    pub fn visit<Node, RootEdgesIt, VisitImpl, Abort, Impl>(
+    fn visit<RootEdgesIt, VisitImpl, Abort, Impl>(
+        mut self,
         root_edges: RootEdgesIt,
         mut visit: VisitImpl,
-    ) -> GraphTraversalFuture<Node, Store, VisitImpl, Abort, Impl>
+    ) -> GraphTraversalFuture<Self, VisitImpl, Abort, Impl, VisitImpl::EdgesFuture>
     where
-        Store: GraphStore<Node>,
-        VisitImpl: Visit<Node, Abort, Impl>,
+        VisitImpl: Visit<Self::Node, Abort, Impl>,
         RootEdgesIt: IntoIterator<Item = VisitImpl::Edge>,
     {
-        let mut store = Store::default();
         let futures = FuturesUnordered::new();
         for edge in root_edges {
             match visit.visit(edge) {
                 VisitControlFlow::Continue(node) => {
-                    if let Some((parent_handle, node_ref)) = store.insert(None, node) {
-                        futures.push(With::new(visit.edges(node_ref), parent_handle));
+                    let span = visit.span(&node);
+                    if let Some((parent_handle, node_ref)) = self.insert(None, GraphNode(node)) {
+                        futures.push(With::new(visit.edges(node_ref), span, parent_handle));
                     }
                 }
                 VisitControlFlow::Skip(node) => {
-                    store.insert(None, node);
+                    self.insert(None, GraphNode(node));
                 }
                 VisitControlFlow::Abort(abort) => {
                     return GraphTraversalFuture {
@@ -46,46 +62,58 @@ impl<Store> GraphTraversal<Store> {
         }
         GraphTraversalFuture {
             state: GraphTraversalState::Running(GraphTraversalRunningState {
-                store,
+                store: self,
                 futures,
                 visit,
+                _phantom: std::marker::PhantomData,
             }),
         }
+    }
+
+    fn skip_duplicates(self) -> SkipDuplicates<Self> {
+        SkipDuplicates::new(self)
     }
 }
 
 /// A future that resolves to a [`GraphStore`] containing the result of a graph
 /// traversal.
-pub struct GraphTraversalFuture<Node, Store, VisitImpl, Abort, Impl>
+pub struct GraphTraversalFuture<Store, VisitImpl, Abort, Impl, EdgesFuture>
 where
-    Store: GraphStore<Node>,
-    VisitImpl: Visit<Node, Abort, Impl>,
+    Store: GraphStore,
+    VisitImpl: Visit<Store::Node, Abort, Impl>,
+    EdgesFuture: Future,
 {
-    state: GraphTraversalState<Node, Store, VisitImpl, Abort, Impl>,
+    state: GraphTraversalState<Store, VisitImpl, Abort, Impl, EdgesFuture>,
 }
 
 #[derive(Default)]
-enum GraphTraversalState<Node, Store, VisitImpl, Abort, Impl>
+enum GraphTraversalState<Store, VisitImpl, Abort, Impl, EdgesFuture>
 where
-    Store: GraphStore<Node>,
-    VisitImpl: Visit<Node, Abort, Impl>,
+    Store: GraphStore,
+    VisitImpl: Visit<Store::Node, Abort, Impl>,
+    EdgesFuture: Future,
 {
     #[default]
     Completed,
     Aborted {
         abort: Abort,
     },
-    Running(GraphTraversalRunningState<Node, Store, VisitImpl, Abort, Impl>),
+    Running(GraphTraversalRunningState<Store, VisitImpl, Abort, Impl, EdgesFuture>),
 }
 
-struct GraphTraversalRunningState<Node, Store, VisitImpl, Abort, Impl>
+struct GraphTraversalRunningState<Store, VisitImpl, Abort, Impl, EdgesFuture>
 where
-    Store: GraphStore<Node>,
-    VisitImpl: Visit<Node, Abort, Impl>,
+    Store: GraphStore,
+    VisitImpl: Visit<Store::Node, Abort, Impl>,
+    EdgesFuture: Future,
 {
     store: Store,
-    futures: FuturesUnordered<With<VisitImpl::EdgesFuture, Store::Handle>>,
+    // This should be VisitImpl::EdgesFuture, but this causes a bug in the Rust
+    // compiler (see https://github.com/rust-lang/rust/issues/102211).
+    // Instead, we pass the associated type as an additional generic parameter.
+    futures: FuturesUnordered<With<EdgesFuture, Store::Handle>>,
     visit: VisitImpl,
+    _phantom: std::marker::PhantomData<(Abort, Impl)>,
 }
 
 pub enum GraphTraversalResult<Completed, Aborted> {
@@ -102,11 +130,14 @@ impl<Completed> GraphTraversalResult<Completed, !> {
     }
 }
 
-impl<Node, Store, VisitImpl, Abort, Impl> Future
-    for GraphTraversalFuture<Node, Store, VisitImpl, Abort, Impl>
+impl<Store, VisitImpl, Abort, Impl, EdgesFuture> Future
+    for GraphTraversalFuture<Store, VisitImpl, Abort, Impl, EdgesFuture>
 where
-    Store: GraphStore<Node>,
-    VisitImpl: Visit<Node, Abort, Impl>,
+    Store: GraphStore,
+    // The EdgesFuture bound is necessary to avoid the compiler bug mentioned
+    // above.
+    VisitImpl: Visit<Store::Node, Abort, Impl, EdgesFuture = EdgesFuture>,
+    EdgesFuture: Future<Output = Result<VisitImpl::EdgesIntoIter>>,
 {
     type Output = GraphTraversalResult<Result<Store>, Abort>;
 
@@ -128,21 +159,27 @@ where
             GraphTraversalState::Running(mut running) => 'outer: loop {
                 let futures_pin = unsafe { Pin::new_unchecked(&mut running.futures) };
                 match futures_pin.poll_next(cx) {
-                    std::task::Poll::Ready(Some((parent_handle, Ok(edges)))) => {
+                    std::task::Poll::Ready(Some((parent_handle, span, Ok(edges)))) => {
+                        let _guard = span.enter();
                         for edge in edges {
                             match running.visit.visit(edge) {
                                 VisitControlFlow::Continue(node) => {
-                                    if let Some((node_handle, node_ref)) =
-                                        running.store.insert(Some(parent_handle.clone()), node)
+                                    let span = running.visit.span(&node);
+                                    if let Some((node_handle, node_ref)) = running
+                                        .store
+                                        .insert(Some(parent_handle.clone()), GraphNode(node))
                                     {
                                         running.futures.push(With::new(
                                             running.visit.edges(node_ref),
+                                            span,
                                             node_handle,
                                         ));
                                     }
                                 }
                                 VisitControlFlow::Skip(node) => {
-                                    running.store.insert(Some(parent_handle.clone()), node);
+                                    running
+                                        .store
+                                        .insert(Some(parent_handle.clone()), GraphNode(node));
                                 }
                                 VisitControlFlow::Abort(abort) => {
                                     break 'outer (
@@ -155,7 +192,7 @@ where
                             }
                         }
                     }
-                    std::task::Poll::Ready(Some((_, Err(err)))) => {
+                    std::task::Poll::Ready(Some((_, _, Err(err)))) => {
                         break (
                             GraphTraversalState::Completed,
                             std::task::Poll::Ready(GraphTraversalResult::Completed(Err(err))),

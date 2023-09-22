@@ -26,6 +26,7 @@ var (
 	// ErrVersionMismatch is returned when the daemon process was spawned by a different version than the connecting client
 	ErrVersionMismatch   = errors.New("daemon version does not match client version")
 	errConnectionFailure = errors.New("could not connect to daemon")
+	errUnavailable       = errors.New("the server is not ready yet")
 	// ErrTooManyAttempts is returned when the client fails to connect too many times
 	ErrTooManyAttempts = errors.New("reached maximum number of attempts contacting daemon")
 	// ErrDaemonNotRunning is returned when the client cannot contact the daemon and has
@@ -73,10 +74,15 @@ type ConnectionError struct {
 }
 
 func (ce *ConnectionError) Error() string {
-	return fmt.Sprintf(`connection to turbo daemon process failed. Please ensure the following:
+	return fmt.Sprintf(`connection to turbo daemon process failed.
+	To quickly resolve the issue, try running:
+	- $ turbo daemon clean
+
+	To debug further - please ensure the following:
 	- the process identified by the pid in the file at %v is not running, and remove %v
 	- check the logs at %v
 	- the unix domain socket at %v has been removed
+
 	You can also run without the daemon process by passing --no-daemon`, ce.PidPath, ce.PidPath, ce.LogPath, ce.SockPath)
 }
 
@@ -127,6 +133,7 @@ const (
 	_maxAttempts       = 3
 	_shutdownTimeout   = 1 * time.Second
 	_socketPollTimeout = 1 * time.Second
+	_notReadyTimeout   = 3 * time.Millisecond
 )
 
 // killLiveServer tells a running server to shut down. This method is also responsible
@@ -252,13 +259,12 @@ func (c *Connector) connectInternal(ctx context.Context) (*Client, error) {
 				return nil, err
 			}
 			// Loops back around and tries again.
-		} else if errors.Is(err, errConnectionFailure) {
-			// close the client, see if we can kill the stale daemon
-			_ = client.Close()
-			if err := c.killDeadServer(serverPid); err != nil {
-				return nil, err
-			}
-			// if we successfully killed the dead server, loop around and try again
+		} else if errors.Is(err, errUnavailable) {
+			// The rust daemon will open the socket a few ms before it's ready to accept connections.
+			// If we get here, we know that the socket exists, but the server isn't ready yet.
+			// We'll wait a few ms and try again.
+			c.Logger.Debug("server not ready yet")
+			time.Sleep(_notReadyTimeout)
 		} else if err != nil {
 			// Some other error occurred, close the client and
 			// report the error to the user
@@ -328,6 +334,8 @@ func (c *Connector) sendHello(ctx context.Context, client turbodprotocol.TurbodC
 	switch status.Code() {
 	case codes.OK:
 		return nil
+	case codes.Unimplemented:
+		fallthrough // some versions of the rust daemon return Unimplemented rather than FailedPrecondition
 	case codes.FailedPrecondition:
 		return ErrVersionMismatch
 	case codes.Unavailable:
@@ -357,9 +365,17 @@ func (c *Connector) waitForSocket() error {
 	// Note that we don't care if this is our daemon
 	// or not. We started a process, but someone else could beat
 	// use to listening. That's fine, we'll check the version
-	// later.
+	// later. However, we need to ensure that _some_ pid file
+	// exists to protect against stale .sock files
+	if err := waitForFile(c.PidPath); err != nil {
+		return err
+	}
+	return waitForFile(c.SockPath)
+}
+
+func waitForFile(file turbopath.AbsoluteSystemPath) error {
 	err := backoff.Retry(func() error {
-		if !c.SockPath.FileExists() {
+		if !file.FileExists() {
 			return errNeedsRetry
 		}
 		return nil
@@ -374,7 +390,7 @@ func (c *Connector) waitForSocket() error {
 
 // startDaemon starts the daemon and returns the pid for the new process
 func (c *Connector) startDaemon() (int, error) {
-	args := []string{"daemon"}
+	args := []string{"--skip-infer", "daemon"}
 	if c.Opts.ServerTimeout != 0 {
 		args = append(args, fmt.Sprintf("--idle-time=%v", c.Opts.ServerTimeout.String()))
 	}

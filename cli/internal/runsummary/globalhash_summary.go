@@ -2,34 +2,59 @@ package runsummary
 
 import (
 	"github.com/vercel/turbo/cli/internal/env"
-	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
+
+// GlobalEnvConfiguration contains the environment variable inputs for the global hash
+type GlobalEnvConfiguration struct {
+	Env            []string `json:"env"`
+	PassThroughEnv []string `json:"passThroughEnv"`
+}
+
+// GlobalEnvVarSummary contains the environment variables that impacted the global hash
+type GlobalEnvVarSummary struct {
+	Specified GlobalEnvConfiguration `json:"specified"`
+
+	Configured  env.EnvironmentVariablePairs `json:"configured"`
+	Inferred    env.EnvironmentVariablePairs `json:"inferred"`
+	PassThrough env.EnvironmentVariablePairs `json:"passthrough"`
+}
 
 // GlobalHashSummary contains the pieces of data that impacted the global hash (then then impacted the task hash)
 type GlobalHashSummary struct {
 	GlobalCacheKey       string                                `json:"rootKey"`
 	GlobalFileHashMap    map[turbopath.AnchoredUnixPath]string `json:"files"`
 	RootExternalDepsHash string                                `json:"hashOfExternalDependencies"`
-	Pipeline             fs.PristinePipeline                   `json:"rootPipeline"`
-
-	// This is a private field because and not in JSON, because we'll add it to each task
-	envVars env.EnvironmentVariablePairs
+	DotEnv               turbopath.AnchoredUnixPathArray       `json:"globalDotEnv"`
+	EnvVars              GlobalEnvVarSummary                   `json:"environmentVariables"`
 }
 
 // NewGlobalHashSummary creates a GlobalHashSummary struct from a set of fields.
 func NewGlobalHashSummary(
+	globalCacheKey string,
 	fileHashMap map[turbopath.AnchoredUnixPath]string,
 	rootExternalDepsHash string,
-	envVars env.DetailedMap,
-	globalCacheKey string,
-	pipeline fs.PristinePipeline,
+	globalEnv []string,
+	globalPassThroughEnv []string,
+	globalDotEnv turbopath.AnchoredUnixPathArray,
+	resolvedEnvVars env.DetailedMap,
+	resolvedPassThroughEnvVars env.EnvironmentVariableMap,
 ) *GlobalHashSummary {
 	return &GlobalHashSummary{
-		envVars:              envVars.All.ToSecretHashable(),
+		GlobalCacheKey:       globalCacheKey,
 		GlobalFileHashMap:    fileHashMap,
 		RootExternalDepsHash: rootExternalDepsHash,
-		GlobalCacheKey:       globalCacheKey,
-		Pipeline:             pipeline,
+
+		EnvVars: GlobalEnvVarSummary{
+			Specified: GlobalEnvConfiguration{
+				Env:            globalEnv,
+				PassThroughEnv: globalPassThroughEnv,
+			},
+			Configured:  resolvedEnvVars.BySource.Explicit.ToSecretHashable(),
+			Inferred:    resolvedEnvVars.BySource.Matching.ToSecretHashable(),
+			PassThrough: resolvedPassThroughEnvVars.ToSecretHashable(),
+		},
+
+		DotEnv: globalDotEnv,
 	}
 }

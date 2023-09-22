@@ -1,41 +1,41 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::{ValueToString, Vc};
 use turbopack_core::{
-    asset::{Asset, AssetVc},
-    reference::{AssetReference, AssetReferenceVc},
-    resolve::{pattern::PatternVc, resolve_raw, ResolveResultVc},
+    reference::ModuleReference,
+    resolve::{pattern::Pattern, resolve_raw, ModuleResolveResult},
+    source::Source,
 };
 
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
-pub struct SourceAssetReference {
-    pub source: AssetVc,
-    pub path: PatternVc,
+pub struct FileSourceReference {
+    pub source: Vc<Box<dyn Source>>,
+    pub path: Vc<Pattern>,
 }
 
 #[turbo_tasks::value_impl]
-impl SourceAssetReferenceVc {
+impl FileSourceReference {
     #[turbo_tasks::function]
-    pub fn new(source: AssetVc, path: PatternVc) -> Self {
-        Self::cell(SourceAssetReference { source, path })
+    pub fn new(source: Vc<Box<dyn Source>>, path: Vc<Pattern>) -> Vc<Self> {
+        Self::cell(FileSourceReference { source, path })
     }
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for SourceAssetReference {
+impl ModuleReference for FileSourceReference {
     #[turbo_tasks::function]
-    async fn resolve_reference(&self) -> Result<ResolveResultVc> {
-        let context = self.source.ident().path().parent();
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        let context_dir = self.source.ident().path().parent();
 
-        Ok(resolve_raw(context, self.path, false))
+        resolve_raw(context_dir, self.path, false).as_raw_module_result()
     }
 }
 
 #[turbo_tasks::value_impl]
-impl ValueToString for SourceAssetReference {
+impl ValueToString for FileSourceReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "raw asset {}",
             self.path.to_string().await?,
         )))

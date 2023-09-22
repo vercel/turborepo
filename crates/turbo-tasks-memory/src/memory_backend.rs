@@ -19,15 +19,15 @@ use dashmap::{mapref::entry::Entry, DashMap};
 use nohash_hasher::BuildNoHashHasher;
 use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
+use tracing::{trace_span, Instrument};
 use turbo_tasks::{
     backend::{
         Backend, BackendJobId, CellContent, PersistentTaskType, TaskExecutionSpec,
         TransientTaskType,
     },
     event::EventListener,
-    primitives::RawVcSetVc,
     util::{IdFactory, NoMoveVec},
-    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi, Unused,
+    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi, Unused, Vc,
 };
 
 use crate::{
@@ -243,7 +243,7 @@ impl MemoryBackend {
 
             let mem_limit = self.memory_limit;
 
-            let usage = turbo_malloc::TurboMalloc::memory_usage();
+            let usage = turbo_tasks_malloc::TurboMalloc::memory_usage();
             let target = if idle {
                 mem_limit * 3 / 4
             } else {
@@ -409,10 +409,22 @@ impl Backend for MemoryBackend {
 
     fn invalidate_tasks(
         &self,
-        tasks: Vec<TaskId>,
+        tasks: &[TaskId],
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
-        for task in tasks.into_iter() {
+        for &task in tasks {
+            self.with_task(task, |task| {
+                task.invalidate(self, turbo_tasks);
+            });
+        }
+    }
+
+    fn invalidate_tasks_set(
+        &self,
+        tasks: &AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) {
+        for &task in tasks {
             self.with_task(task, |task| {
                 task.invalidate(self, turbo_tasks);
             });
@@ -443,11 +455,17 @@ impl Backend for MemoryBackend {
 
     fn task_execution_result(
         &self,
-        task: TaskId,
+        task_id: TaskId,
         result: Result<Result<RawVc>, Option<Cow<'static, str>>>,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
-        self.with_task(task, |task| {
+        self.with_task(task_id, |task| {
+            #[cfg(debug_assertions)]
+            if let Ok(Ok(RawVc::TaskOutput(result))) = result.as_ref() {
+                if *result == task_id {
+                    panic!("Task {} returned itself as output", task.get_description());
+                }
+            }
             task.execution_result(result, self, turbo_tasks);
         })
     }
@@ -583,7 +601,7 @@ impl Backend for MemoryBackend {
         trait_id: TraitTypeId,
         reader: TaskId,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
-    ) -> RawVcSetVc {
+    ) -> Vc<AutoSet<RawVc>> {
         self.with_task(id, |task| {
             task.read_task_collectibles(reader, trait_id, self, turbo_tasks)
         })
@@ -767,6 +785,7 @@ impl Job {
     ) {
         match self {
             Job::RemoveFromScopes(tasks, scopes) => {
+                let _guard = trace_span!("Job::RemoveFromScopes").entered();
                 for task in tasks {
                     backend.with_task(task, |task| {
                         task.remove_from_scopes(scopes.iter().copied(), backend, turbo_tasks)
@@ -775,6 +794,7 @@ impl Job {
                 backend.scope_add_remove_priority.finish_high();
             }
             Job::RemoveFromScope(tasks, scope) => {
+                let _guard = trace_span!("Job::RemoveFromScope").entered();
                 for task in tasks {
                     backend.with_task(task, |task| {
                         task.remove_from_scope(scope, backend, turbo_tasks)
@@ -783,6 +803,7 @@ impl Job {
                 backend.scope_add_remove_priority.finish_high();
             }
             Job::ScheduleWhenDirtyFromScope(tasks) => {
+                let _guard = trace_span!("Job::ScheduleWhenDirtyFromScope").entered();
                 for task in tasks.into_iter() {
                     backend.with_task(task, |task| {
                         task.schedule_when_dirty_from_scope(backend, turbo_tasks);
@@ -799,16 +820,20 @@ impl Job {
                     .run_low(async {
                         run_add_to_scope_queue(queue, scope, merging_scopes, backend, turbo_tasks);
                     })
+                    .instrument(trace_span!("Job::AddToScopeQueue"))
                     .await;
             }
             Job::RemoveFromScopeQueue(queue, id) => {
+                let _guard = trace_span!("Job::AddToScopeQueue").entered();
                 run_remove_from_scope_queue(queue, id, backend, turbo_tasks);
                 backend.scope_add_remove_priority.finish_high();
             }
             Job::UnloadRootScope(id) => {
+                let span = trace_span!("Job::UnloadRootScope");
                 if let Some(future) = turbo_tasks.wait_foreground_done_excluding_own() {
-                    future.await;
+                    future.instrument(span.clone()).await;
                 }
+                let _guard = span.entered();
                 backend.with_scope(id, |scope| {
                     scope.assert_unused();
                 });
@@ -817,6 +842,7 @@ impl Job {
                 }
             }
             Job::GarbageCollection => {
+                let _guard = trace_span!("Job::GarbageCollection").entered();
                 backend.run_gc(true, turbo_tasks);
             }
         }

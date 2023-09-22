@@ -7,6 +7,7 @@
     "declarationMap": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
+    "allowImportingTsExtensions": true,
     "inlineSources": false,
     "isolatedModules": true,
     "moduleResolution": "node",
@@ -14,7 +15,9 @@
     "noUnusedParameters": false,
     "preserveWatchOutput": true,
     "skipLibCheck": true,
-    "strict": true
+    "strict": true,
+    "noEmit": true,
+    "strictNullChecks": true
   },
   "exclude": ["node_modules"]
 }

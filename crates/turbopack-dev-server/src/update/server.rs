@@ -10,14 +10,15 @@ use hyper_tungstenite::{tungstenite::Message, HyperWebsocket, WebSocketStream};
 use pin_project_lite::pin_project;
 use tokio::select;
 use tokio_stream::StreamMap;
-use turbo_tasks::{TransientInstance, TurboTasksApi};
+use tracing::{instrument, Level};
+use turbo_tasks::{TransientInstance, TurboTasksApi, Vc};
 use turbo_tasks_fs::json::parse_json_with_source_context;
-use turbopack_core::{error::PrettyPrintError, issue::IssueReporterVc, version::Update};
-
-use super::{
-    protocol::{ClientMessage, ClientUpdateInstruction, Issue, ResourceIdentifier},
-    stream::UpdateStream,
+use turbopack_core::{error::PrettyPrintError, issue::IssueReporter, version::Update};
+use turbopack_ecmascript_hmr_protocol::{
+    ClientMessage, ClientUpdateInstruction, Issue, ResourceIdentifier,
 };
+
+use super::stream::UpdateStream;
 use crate::{
     source::{request::SourceRequest, resolve::resolve_source_request, Body},
     update::stream::UpdateStreamItem,
@@ -27,12 +28,13 @@ use crate::{
 /// A server that listens for updates and sends them to connected clients.
 pub(crate) struct UpdateServer<P: SourceProvider> {
     source_provider: P,
-    issue_reporter: IssueReporterVc,
+    #[allow(dead_code)]
+    issue_reporter: Vc<Box<dyn IssueReporter>>,
 }
 
 impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
     /// Create a new update server with the given websocket and content source.
-    pub fn new(source_provider: P, issue_reporter: IssueReporterVc) -> Self {
+    pub fn new(source_provider: P, issue_reporter: Vc<Box<dyn IssueReporter>>) -> Self {
         Self {
             source_provider,
             issue_reporter,
@@ -49,6 +51,7 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
         }));
     }
 
+    #[instrument(level = Level::TRACE, skip_all, name = "UpdateServer::run_internal")]
     async fn run_internal(self, ws: HyperWebsocket) -> Result<()> {
         let mut client: UpdateClient = ws.await?.into();
 
@@ -67,12 +70,11 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
                                     let source = source_provider.get_source();
                                     resolve_source_request(
                                         source,
-                                        TransientInstance::new(request),
-                                        self.issue_reporter
+                                        TransientInstance::new(request)
                                     )
                                 }
                             };
-                            match UpdateStream::new(TransientInstance::new(Box::new(get_content))).await {
+                            match UpdateStream::new(resource.to_string(), TransientInstance::new(Box::new(get_content))).await {
                                 Ok(stream) => {
                                     streams.insert(resource, stream);
                                 }
@@ -94,7 +96,14 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
                     }
                 }
                 Some((resource, update)) = streams.next() => {
-                    Self::send_update(&mut client, &mut streams, resource, &update).await?;
+                    match update {
+                        Ok(update) => {
+                            Self::send_update(&mut client, &mut streams, resource, &update).await?;
+                        }
+                        Err(err) => {
+                            eprintln!("Failed to get update for {resource}: {}", PrettyPrintError(&err));
+                        }
+                    }
                 }
                 else => break
             }
@@ -129,7 +138,7 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
                         client
                             .send(ClientUpdateInstruction::partial(
                                 &resource,
-                                &**partial_instruction,
+                                partial_instruction,
                                 &issues,
                             ))
                             .await?;

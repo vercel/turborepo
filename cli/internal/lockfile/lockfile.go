@@ -3,11 +3,11 @@ package lockfile
 
 import (
 	"fmt"
-	"io"
 	"reflect"
 	"sort"
 
 	mapset "github.com/deckarep/golang-set"
+	"github.com/vercel/turbo/cli/internal/ffi"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"golang.org/x/sync/errgroup"
 )
@@ -18,12 +18,6 @@ type Lockfile interface {
 	ResolvePackage(workspacePath turbopath.AnchoredUnixPath, name string, version string) (Package, error)
 	// AllDependencies Given a lockfile key return all (dev/optional/peer) dependencies of that package
 	AllDependencies(key string) (map[string]string, bool)
-	// Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
-	Subgraph(workspacePackages []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error)
-	// Encode encode the lockfile representation and write it to the given writer
-	Encode(w io.Writer) error
-	// Patches return a list of patches used in the lockfile
-	Patches() []turbopath.AnchoredUnixPath
 	// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
 	// the cache.
 	GlobalChange(other Lockfile) bool
@@ -56,10 +50,63 @@ func (p ByKey) Swap(i, j int) {
 }
 
 func (p ByKey) Less(i, j int) bool {
-	return p[i].Key < p[j].Key
+	return p[i].Key+p[i].Version < p[j].Key+p[j].Version
 }
 
 var _ (sort.Interface) = (*ByKey)(nil)
+
+type closureMsg struct {
+	workspace turbopath.AnchoredUnixPath
+	closure   mapset.Set
+}
+
+// AllTransitiveClosures computes closures for all workspaces
+func AllTransitiveClosures(
+	workspaces map[turbopath.AnchoredUnixPath]map[string]string,
+	lockFile Lockfile,
+) (map[turbopath.AnchoredUnixPath]mapset.Set, error) {
+	// We special case as Rust implementations have their own dep crawl
+	if lf, ok := lockFile.(*NpmLockfile); ok {
+		return rustTransitiveDeps(lf.contents, "npm", workspaces, nil)
+	}
+	if lf, ok := lockFile.(*BerryLockfile); ok {
+		return rustTransitiveDeps(lf.contents, "berry", workspaces, lf.resolutions)
+	}
+	if lf, ok := lockFile.(*PnpmLockfile); ok {
+		return rustTransitiveDeps(lf.contents, "pnpm", workspaces, nil)
+	}
+	if lf, ok := lockFile.(*YarnLockfile); ok {
+		return rustTransitiveDeps(lf.contents, "yarn", workspaces, nil)
+	}
+	if lf, ok := lockFile.(*BunLockfile); ok {
+		return rustTransitiveDeps(lf.contents, "bun", workspaces, nil)
+	}
+
+	g := new(errgroup.Group)
+	c := make(chan closureMsg, len(workspaces))
+	closures := make(map[turbopath.AnchoredUnixPath]mapset.Set, len(workspaces))
+	for workspace, deps := range workspaces {
+		workspace := workspace
+		deps := deps
+		g.Go(func() error {
+			closure, err := transitiveClosure(workspace, deps, lockFile)
+			if err != nil {
+				return err
+			}
+			c <- closureMsg{workspace: workspace, closure: closure}
+			return nil
+		})
+	}
+	err := g.Wait()
+	close(c)
+	if err != nil {
+		return nil, err
+	}
+	for msg := range c {
+		closures[msg.workspace] = msg.closure
+	}
+	return closures, nil
+}
 
 func transitiveClosure(
 	workspaceDir turbopath.AnchoredUnixPath,
@@ -119,4 +166,29 @@ func transitiveClosureHelper(
 			return nil
 		})
 	}
+}
+
+func rustTransitiveDeps(content []byte, packageManager string, workspaces map[turbopath.AnchoredUnixPath]map[string]string, resolutions map[string]string) (map[turbopath.AnchoredUnixPath]mapset.Set, error) {
+	processedWorkspaces := make(map[string]map[string]string, len(workspaces))
+	for workspacePath, workspace := range workspaces {
+		processedWorkspaces[workspacePath.ToString()] = workspace
+	}
+	workspaceDeps, err := ffi.TransitiveDeps(content, packageManager, processedWorkspaces, resolutions)
+	if err != nil {
+		return nil, err
+	}
+	resolvedWorkspaces := make(map[turbopath.AnchoredUnixPath]mapset.Set, len(workspaceDeps))
+	for workspace, dependencies := range workspaceDeps {
+		depsSet := mapset.NewSet()
+		for _, pkg := range dependencies.GetList() {
+			depsSet.Add(Package{
+				Found:   pkg.Found,
+				Key:     pkg.Key,
+				Version: pkg.Version,
+			})
+		}
+		workspacePath := turbopath.AnchoredUnixPath(workspace)
+		resolvedWorkspaces[workspacePath] = depsSet
+	}
+	return resolvedWorkspaces, nil
 }

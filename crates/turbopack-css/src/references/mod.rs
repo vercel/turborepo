@@ -10,46 +10,47 @@ use swc_core::{
         visit::{AstNodePath, AstParentKind, VisitAstPath, VisitWithPath},
     },
 };
-use turbo_tasks::Value;
+use turbo_tasks::{Value, Vc};
 use turbopack_core::{
-    asset::AssetVc,
-    issue::{IssueSeverity, IssueSourceVc, OptionIssueSourceVc},
-    reference::{AssetReferenceVc, AssetReferencesVc},
+    issue::{IssueSeverity, IssueSource, OptionIssueSource},
+    reference::{ModuleReference, ModuleReferences},
     reference_type::{CssReferenceSubType, ReferenceType},
     resolve::{
         handle_resolve_error,
-        origin::{ResolveOrigin, ResolveOriginVc},
-        parse::RequestVc,
-        ResolveResultVc,
+        origin::{ResolveOrigin, ResolveOriginExt},
+        parse::Request,
+        ModuleResolveResult,
     },
+    source::Source,
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 
 use crate::{
-    parse::{parse, ParseResult},
+    parse::{parse_css, ParseCssResult},
     references::{
-        import::{ImportAssetReferenceVc, ImportAttributes},
-        url::UrlAssetReferenceVc,
+        import::{ImportAssetReference, ImportAttributes},
+        url::UrlAssetReference,
     },
-    CssInputTransformsVc, CssModuleAssetType,
+    CssInputTransforms, CssModuleAssetType,
 };
 
 pub(crate) mod compose;
 pub(crate) mod import;
+pub(crate) mod internal;
 pub(crate) mod url;
 
 #[turbo_tasks::function]
 pub async fn analyze_css_stylesheet(
-    source: AssetVc,
-    origin: ResolveOriginVc,
-    ty: Value<CssModuleAssetType>,
-    transforms: CssInputTransformsVc,
-) -> Result<AssetReferencesVc> {
+    source: Vc<Box<dyn Source>>,
+    origin: Vc<Box<dyn ResolveOrigin>>,
+    ty: CssModuleAssetType,
+    transforms: Vc<CssInputTransforms>,
+) -> Result<Vc<ModuleReferences>> {
     let mut references = Vec::new();
 
-    let parsed = parse(source, ty, transforms).await?;
+    let parsed = parse_css(source, ty, transforms).await?;
 
-    if let ParseResult::Ok {
+    if let ParseCssResult::Ok {
         stylesheet,
         source_map,
         ..
@@ -58,36 +59,36 @@ pub async fn analyze_css_stylesheet(
         let handler = Handler::with_emitter(
             true,
             false,
-            box IssueEmitter {
+            Box::new(IssueEmitter {
                 source,
                 source_map: source_map.clone(),
                 title: None,
-            },
+            }),
         );
         let globals = Globals::new();
         HANDLER.set(&handler, || {
             GLOBALS.set(&globals, || {
                 // TODO migrate to effects
-                let mut visitor = AssetReferencesVisitor::new(source, origin, &mut references);
+                let mut visitor = ModuleReferencesVisitor::new(source, origin, &mut references);
                 stylesheet.visit_with_path(&mut visitor, &mut Default::default());
             })
         });
     }
-    Ok(AssetReferencesVc::cell(references))
+    Ok(Vc::cell(references))
 }
 
-struct AssetReferencesVisitor<'a> {
-    source: AssetVc,
-    origin: ResolveOriginVc,
-    references: &'a mut Vec<AssetReferenceVc>,
+struct ModuleReferencesVisitor<'a> {
+    source: Vc<Box<dyn Source>>,
+    origin: Vc<Box<dyn ResolveOrigin>>,
+    references: &'a mut Vec<Vc<Box<dyn ModuleReference>>>,
     is_import: bool,
 }
 
-impl<'a> AssetReferencesVisitor<'a> {
+impl<'a> ModuleReferencesVisitor<'a> {
     fn new(
-        source: AssetVc,
-        origin: ResolveOriginVc,
-        references: &'a mut Vec<AssetReferenceVc>,
+        source: Vc<Box<dyn Source>>,
+        origin: Vc<Box<dyn ResolveOrigin>>,
+        references: &'a mut Vec<Vc<Box<dyn ModuleReference>>>,
     ) -> Self {
         Self {
             source,
@@ -113,7 +114,7 @@ pub fn as_parent_path(ast_path: &AstNodePath<'_>) -> Vec<AstParentKind> {
     ast_path.iter().map(|n| n.kind()).collect()
 }
 
-impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
+impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
     fn visit_import_prelude<'ast: 'r, 'r>(
         &mut self,
         i: &'ast ImportPrelude,
@@ -127,20 +128,17 @@ impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
 
         let issue_span = i.href.span();
 
-        self.references.push(
-            ImportAssetReferenceVc::new(
-                self.origin,
-                RequestVc::parse(Value::new(src.to_string().into())),
-                AstPathVc::cell(as_parent_path(ast_path)),
-                ImportAttributes::new_from_prelude(i).into(),
-                IssueSourceVc::from_byte_offset(
-                    self.source,
-                    issue_span.lo.to_usize(),
-                    issue_span.hi.to_usize(),
-                ),
-            )
-            .into(),
-        );
+        self.references.push(Vc::upcast(ImportAssetReference::new(
+            self.origin,
+            Request::parse(Value::new(src.to_string().into())),
+            Vc::cell(as_parent_path(ast_path)),
+            ImportAttributes::new_from_prelude(i).into(),
+            IssueSource::from_byte_offset(
+                Vc::upcast(self.source),
+                issue_span.lo.to_usize(),
+                issue_span.hi.to_usize(),
+            ),
+        )));
 
         self.is_import = true;
         i.visit_children_with_path(self, ast_path);
@@ -154,20 +152,21 @@ impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
 
         let src = url_string(u);
 
-        let issue_span = u.span;
-        self.references.push(
-            UrlAssetReferenceVc::new(
+        // ignore internal urls like `url(#noiseFilter)`
+        // ignore server-relative urls like `url(/foo)`
+        if !matches!(src.bytes().next(), Some(b'#') | Some(b'/')) {
+            let issue_span = u.span;
+            self.references.push(Vc::upcast(UrlAssetReference::new(
                 self.origin,
-                RequestVc::parse(Value::new(src.to_string().into())),
-                AstPathVc::cell(as_parent_path(ast_path)),
-                IssueSourceVc::from_byte_offset(
-                    self.source,
+                Request::parse(Value::new(src.to_string().into())),
+                Vc::cell(as_parent_path(ast_path)),
+                IssueSource::from_byte_offset(
+                    Vc::upcast(self.source),
                     issue_span.lo.to_usize(),
                     issue_span.hi.to_usize(),
                 ),
-            )
-            .into(),
-        );
+            )));
+        }
 
         u.visit_children_with_path(self, ast_path);
     }
@@ -175,11 +174,11 @@ impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
 
 #[turbo_tasks::function]
 pub async fn css_resolve(
-    origin: ResolveOriginVc,
-    request: RequestVc,
+    origin: Vc<Box<dyn ResolveOrigin>>,
+    request: Vc<Request>,
     ty: Value<CssReferenceSubType>,
-    issue_source: OptionIssueSourceVc,
-) -> Result<ResolveResultVc> {
+    issue_source: Vc<OptionIssueSource>,
+) -> Result<Vc<ModuleResolveResult>> {
     let ty = Value::new(ReferenceType::Css(ty.into_value()));
     let options = origin.resolve_options(ty.clone());
     let result = origin.resolve_asset(request, options, ty.clone());
