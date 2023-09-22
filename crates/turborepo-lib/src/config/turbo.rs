@@ -32,7 +32,7 @@ pub struct TurboJson {
     pub(crate) global_env: Vec<String>,
     pub(crate) global_pass_through_env: Option<Vec<String>>,
     pub(crate) pipeline: Pipeline,
-    pub(crate) remote_cache_options: Option<ConfigurationOptions>,
+    pub(crate) remote_cache: Option<ConfigurationOptions>,
     pub(crate) space_id: Option<String>,
 }
 
@@ -63,7 +63,7 @@ pub struct RawTurboJSON {
     pipeline: Option<RawPipeline>,
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) remote_cache_options: Option<ConfigurationOptions>,
+    pub(crate) remote_cache: Option<ConfigurationOptions>,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Clone)]
@@ -384,7 +384,7 @@ impl TryFrom<RawTurboJSON> for TurboJson {
                 .map(|(task_name, task_definition)| Ok((task_name, task_definition.try_into()?)))
                 .collect::<Result<HashMap<_, _>, Error>>()?,
             // copy these over, we don't need any changes here.
-            remote_cache_options: raw_turbo.remote_cache_options,
+            remote_cache: raw_turbo.remote_cache,
             extends: raw_turbo.extends.unwrap_or_default(),
             // Directly to space_id, we don't need to keep the struct
             space_id: raw_turbo.experimental_spaces.and_then(|s| s.id),

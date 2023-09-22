@@ -80,13 +80,13 @@ impl<'a> Run<'a> {
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
 
-        let team_id = if let Some(configuration_options) = &root_turbo_json.remote_cache_options {
+        let team_id = if let Some(configuration_options) = &root_turbo_json.remote_cache {
             configuration_options.team_id.clone().unwrap_or_default()
         } else {
             "".to_string()
         };
 
-        let signature = if let Some(configuration_options) = &root_turbo_json.remote_cache_options {
+        let signature = if let Some(configuration_options) = &root_turbo_json.remote_cache {
             configuration_options.signature.unwrap_or_default()
         } else {
             false

@@ -93,6 +93,11 @@ impl ConfigurationOptions {
     }
 
     #[allow(dead_code)]
+    pub fn enabled(&self) -> bool {
+        self.enabled.unwrap_or(true)
+    }
+
+    #[allow(dead_code)]
     pub fn preflight(&self) -> bool {
         self.preflight.unwrap_or_default()
     }
@@ -123,7 +128,7 @@ impl ResolvedConfigurationOptions for PackageJson {
 
 impl ResolvedConfigurationOptions for RawTurboJSON {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
-        match &self.remote_cache_options {
+        match &self.remote_cache {
             Some(configuration_options) => {
                 configuration_options.clone().get_configuration_options()
             }
@@ -161,7 +166,6 @@ fn get_env_var_config(
 
     let mut output_map = HashMap::new();
 
-    // Process the TURBO_* first.
     turbo_mapping.iter().for_each(|(k, mapped)| {
         if let Some(value) = environment.get(k) {
             if !value.is_empty() {
@@ -350,6 +354,7 @@ impl TurborepoConfigBuilder {
     create_builder!(with_team_id, team_id, Option<String>);
     create_builder!(with_token, token, Option<String>);
     create_builder!(with_signature, signature, Option<bool>);
+    create_builder!(with_enabled, enabled, Option<bool>);
     create_builder!(with_preflight, preflight, Option<bool>);
     create_builder!(with_timeout, timeout, Option<u64>);
 
@@ -416,6 +421,9 @@ impl TurborepoConfigBuilder {
                         }
                         if let Some(signature) = current_source_config.signature {
                             acc.signature = Some(signature);
+                        }
+                        if let Some(enabled) = current_source_config.enabled {
+                            acc.enabled = Some(enabled);
                         }
                         if let Some(preflight) = current_source_config.preflight {
                             acc.preflight = Some(preflight);

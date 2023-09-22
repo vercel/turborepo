@@ -102,14 +102,15 @@ type ExecutionState struct {
 
 // Config holds the resolved configuration from the combination of all sources.
 type Config struct {
-	APIURL    string `json:"api_url"`
-	TeamSlug  string `json:"team_slug"`
-	TeamID    string `json:"team_id"`
+	APIURL    string `json:"apiUrl"`
+	LoginURL  string `json:"loginUrl"`
+	TeamSlug  string `json:"teamSlug"`
+	TeamID    string `json:"teamId"`
 	Token     string `json:"token"`
 	Signature bool   `json:"signature"`
 	Preflight bool   `json:"preflight"`
 	Timeout   uint64 `json:"timeout"`
-	Enabled   bool   `json:"enabled"`
+	Enabled   *bool  `json:"enabled"`
 }
 
 // APIClientConfig holds the authentication and endpoint details for the API client

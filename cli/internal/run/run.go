@@ -437,8 +437,8 @@ func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
 
 	// After we know if its _possible_ to enable remote cache, check the config
 	// and dsiable it if wanted.
-	if !r.base.Config.Enabled {
-		r.opts.cacheOpts.SkipRemote = true
+	if r.base.Config.Enabled != nil {
+		r.opts.cacheOpts.SkipRemote = !*r.base.Config.Enabled
 	}
 
 	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.base.Logger.Named("analytics"))
