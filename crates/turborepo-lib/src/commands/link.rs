@@ -599,7 +599,9 @@ mod test {
         fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
 
         // repo
-        let repo_root = AbsoluteSystemPathBuf::try_from(TempDir::new().unwrap().path()).unwrap();
+        let repo_root_tmp_dir = TempDir::new().unwrap();
+        let handle = repo_root_tmp_dir.path();
+        let repo_root = AbsoluteSystemPathBuf::try_from(handle).unwrap();
         repo_root
             .join_component("turbo.json")
             .create_with_contents("{}")
