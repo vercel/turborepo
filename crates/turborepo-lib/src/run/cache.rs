@@ -24,6 +24,12 @@ pub enum Error {
     Cache(#[from] turborepo_cache::CacheError),
 }
 
+impl Error {
+    pub fn is_cache_miss(&self) -> bool {
+        matches!(&self, Self::Cache(CacheError::CacheMiss))
+    }
+}
+
 pub struct RunCache {
     task_output_mode: Option<OutputLogsMode>,
     cache: AsyncCache,
