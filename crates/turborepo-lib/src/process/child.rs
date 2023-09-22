@@ -499,12 +499,7 @@ mod test {
         let state = child.state.read().await;
 
         // this should time out and be killed
-        assert_matches!(
-            &*state,
-            // todo(arlyon): on ubuntu the detection logic between killed and gracefully terminated
-            // is flaky
-            ChildState::Exited(ChildExit::Killed) | ChildState::Exited(ChildExit::Finished(None))
-        );
+        assert_matches!(&*state, ChildState::Exited(ChildExit::Killed));
     }
 
     #[tokio::test]
