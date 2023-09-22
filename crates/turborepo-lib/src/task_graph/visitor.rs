@@ -35,8 +35,6 @@ pub struct Visitor<'a> {
     sink: OutputSink<StdWriter>,
     color_cache: ColorSelector,
     ui: UI,
-    // For testing purposes we need to be able to silence the output
-    silent: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -92,7 +90,6 @@ impl<'a> Visitor<'a> {
             sink,
             color_cache,
             ui,
-            silent: false,
         }
     }
 
