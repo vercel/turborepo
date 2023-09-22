@@ -938,6 +938,7 @@ async function run() {
   const postCommentAsync = createCommentPostAsync(octokit, prNumber);
 
   const failedTestLists = [];
+  const passedTestsLists = [];
   // Collect failed test results for each job. We don't use this actively yet.
   const perJobFailedLists = {};
 
@@ -980,6 +981,8 @@ async function run() {
           }
           perJobFailedLists[value.job].push(failedTest);
         }
+      } else {
+        passedTestsLists.push(test.name);
       }
     }
     if (hasFailedTest) commentValues.push(`\n`);
@@ -1059,6 +1062,11 @@ async function run() {
         null,
         2
       )
+    );
+
+    fs.writeFileSync(
+      "./passed-test-path-list.json",
+      JSON.stringify(passedTestsLists, null, 2)
     );
 
     if (!prNumber) {
