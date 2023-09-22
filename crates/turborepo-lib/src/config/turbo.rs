@@ -13,7 +13,7 @@ use crate::{
     config::Error,
     package_json::PackageJson,
     run::task_id::{TaskId, TaskName, ROOT_PKG_NAME},
-    task_graph::{BookkeepingTaskDefinition, Pipeline, TaskDefinitionHashable, TaskOutputs},
+    task_graph::{BookkeepingTaskDefinition, Pipeline, TaskDefinitionStable, TaskOutputs},
 };
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone)]
@@ -31,7 +31,7 @@ pub struct TurboJson {
     pub(crate) global_deps: Vec<String>,
     pub(crate) global_dot_env: Vec<RelativeUnixPathBuf>,
     pub(crate) global_env: Vec<String>,
-    pub(crate) global_pass_through_env: Vec<String>,
+    pub(crate) global_pass_through_env: Option<Vec<String>>,
     pub(crate) pipeline: Pipeline,
     pub(crate) remote_cache_options: Option<RemoteCacheOpts>,
     pub(crate) space_id: Option<String>,
@@ -234,8 +234,7 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
                 pass_through_env.sort();
                 Ok(pass_through_env)
             })
-            .transpose()?
-            .unwrap_or_default();
+            .transpose()?;
 
         let dot_env = raw_task
             .dot_env
@@ -265,7 +264,7 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
             defined_fields,
             experimental_fields: Default::default(),
             experimental: Default::default(),
-            task_definition: TaskDefinitionHashable {
+            task_definition: TaskDefinitionStable {
                 outputs,
                 cache,
                 topological_dependencies,
@@ -351,8 +350,7 @@ impl TryFrom<RawTurboJSON> for TurboJson {
                     global_pass_through_env.sort();
                     Ok(global_pass_through_env)
                 })
-                .transpose()?
-                .unwrap_or_default(),
+                .transpose()?,
             global_deps: {
                 let mut global_deps: Vec<_> = global_file_dependencies.into_iter().collect();
                 global_deps.sort();
@@ -455,9 +453,9 @@ impl TurboJson {
                             set.insert("Cache".to_string());
                             set
                         },
-                        task_definition: TaskDefinitionHashable {
+                        task_definition: TaskDefinitionStable {
                             cache: false,
-                            ..TaskDefinitionHashable::default()
+                            ..TaskDefinitionStable::default()
                         },
                         ..BookkeepingTaskDefinition::default()
                     },
@@ -567,8 +565,7 @@ mod tests {
         package_json::PackageJson,
         run::task_id::TaskName,
         task_graph::{
-            BookkeepingTaskDefinition, TaskDefinitionExperiments, TaskDefinitionHashable,
-            TaskOutputs,
+            BookkeepingTaskDefinition, TaskDefinitionExperiments, TaskDefinitionStable, TaskOutputs,
         },
     };
 
@@ -587,7 +584,7 @@ mod tests {
     ; "global dot env (unsorted)")]
     #[test_case(r#"{ "globalPassThroughEnv": ["GITHUB_TOKEN", "AWS_SECRET_KEY"] }"#,
         TurboJson {
-            global_pass_through_env: vec!["AWS_SECRET_KEY".to_string(), "GITHUB_TOKEN".to_string()],
+            global_pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string(), "GITHUB_TOKEN".to_string()]),
             ..TurboJson::default()
         }
     )]
@@ -617,9 +614,9 @@ mod tests {
                 "//#build".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
-                    task_definition: TaskDefinitionHashable {
+                    task_definition: TaskDefinitionStable {
                         cache: false,
-                        ..TaskDefinitionHashable::default()
+                        ..TaskDefinitionStable::default()
                     },
                     ..BookkeepingTaskDefinition::default()
                 }
@@ -652,9 +649,9 @@ mod tests {
                 "//#build".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
-                    task_definition: TaskDefinitionHashable {
+                    task_definition: TaskDefinitionStable {
                         cache: true,
-                        ..TaskDefinitionHashable::default()
+                        ..TaskDefinitionStable::default()
                     },
                     ..BookkeepingTaskDefinition::default()
                 }
@@ -663,9 +660,9 @@ mod tests {
                 "//#test".into(),
                 BookkeepingTaskDefinition {
                     defined_fields: ["Cache".to_string()].into_iter().collect(),
-                    task_definition: TaskDefinitionHashable {
+                    task_definition: TaskDefinitionStable {
                         cache: false,
-                        ..TaskDefinitionHashable::default()
+                        ..TaskDefinitionStable::default()
                     },
                     ..BookkeepingTaskDefinition::default()
                 }
@@ -706,7 +703,7 @@ mod tests {
             defined_fields: ["Persistent".to_string()].into_iter().collect(),
             experimental_fields: HashSet::new(),
             experimental: TaskDefinitionExperiments::default(),
-            task_definition: TaskDefinitionHashable::default()
+            task_definition: TaskDefinitionStable::default()
         }
     )]
     #[test_case(
@@ -746,7 +743,7 @@ mod tests {
             ].into_iter().collect(),
             experimental_fields: HashSet::new(),
             experimental: TaskDefinitionExperiments {},
-            task_definition: TaskDefinitionHashable {
+            task_definition: TaskDefinitionStable {
                 dot_env: vec![RelativeUnixPathBuf::new("package/a/.env").unwrap()],
                 env: vec!["OS".to_string()],
                 outputs: TaskOutputs {
@@ -756,7 +753,7 @@ mod tests {
                 cache: false,
                 inputs: vec!["package/a/src/**".to_string()],
                 output_mode: OutputLogsMode::Full,
-                pass_through_env: vec!["AWS_SECRET_KEY".to_string()],
+                pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
                 task_dependencies: vec!["cli#build".into()],
                 topological_dependencies: vec![],
                 persistent: true,

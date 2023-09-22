@@ -1,8 +1,7 @@
 use std::{
     borrow::Cow,
-    cell::RefCell,
     io::{self, Write},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
 };
 
 /// OutputSink represent a sink for outputs that can be written to from multiple
@@ -19,7 +18,9 @@ struct SinkWriters<W> {
 /// OutputClient allows for multiple threads to write to the same OutputSink
 pub struct OutputClient<W> {
     behavior: OutputClientBehavior,
-    buffer: Option<RefCell<Vec<SinkBytes<'static>>>>,
+    // We could use a RefCell if we didn't use this with async code.
+    // Any locals held across an await must implement Sync and RwLock lets us achieve this
+    buffer: Option<RwLock<Vec<SinkBytes<'static>>>>,
     writers: Arc<Mutex<SinkWriters<W>>>,
 }
 
@@ -70,7 +71,7 @@ impl<W: Write> OutputSink<W> {
         let buffer = match behavior {
             OutputClientBehavior::Passthrough => None,
             OutputClientBehavior::InMemoryBuffer | OutputClientBehavior::Grouped => {
-                Some(RefCell::new(Vec::new()))
+                Some(Default::default())
             }
         };
         let writers = self.writers.clone();
@@ -109,7 +110,7 @@ impl<W: Write> OutputClient<W> {
             buffer,
             writers,
         } = self;
-        let buffers = buffer.map(|cell| cell.into_inner());
+        let buffers = buffer.map(|cell| cell.into_inner().expect("lock poisoned"));
 
         if matches!(behavior, OutputClientBehavior::Grouped) {
             let buffers = buffers
@@ -184,7 +185,7 @@ impl<W: Write> OutputClient<W> {
             .buffer
             .as_ref()
             .expect("attempted to add line to nil buffer");
-        buffer.borrow_mut().push(bytes);
+        buffer.write().expect("lock poisoned").push(bytes);
     }
 }
 
@@ -322,5 +323,12 @@ mod test {
         assert_eq!(err, b"warning for 2\n");
 
         Ok(())
+    }
+
+    #[test]
+    fn assert_output_writer_sync() {
+        // This is the bound required for a value to be held across an await
+        fn hold_across_await<T: Send>() {}
+        hold_across_await::<&mut OutputWriter<'static, Vec<u8>>>();
     }
 }

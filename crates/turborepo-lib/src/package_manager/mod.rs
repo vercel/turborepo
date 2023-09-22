@@ -294,20 +294,21 @@ impl PackageManager {
         &self,
         root_path: &AbsoluteSystemPath,
     ) -> Result<WorkspaceGlobs, Error> {
-        let (mut inclusions, mut exclusions) = self.get_configured_workspace_globs(root_path)?;
+        let (inclusions, mut exclusions) = self.get_configured_workspace_globs(root_path)?;
         exclusions.extend(self.get_default_exclusions());
 
         // Yarn appends node_modules to every other glob specified
         if *self == PackageManager::Yarn {
             inclusions
-                .iter_mut()
+                .iter()
                 .for_each(|inclusion| exclusions.push(format!("{inclusion}/node_modules/**")));
         }
+
         let globs = WorkspaceGlobs::new(inclusions, exclusions)?;
         Ok(globs)
     }
 
-    fn get_default_exclusions(&self) -> impl Iterator<Item = String> {
+    pub fn get_default_exclusions(&self) -> impl Iterator<Item = String> {
         let ignores = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
                 ["**/node_modules/**", "**/bower_components/**"].as_slice()
@@ -326,8 +327,11 @@ impl PackageManager {
     ) -> Result<(Vec<String>, Vec<String>), Error> {
         let globs = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 => {
+                // Make sure to convert this to a missing workspace error
+                // so we can catch it in the case of single package mode.
                 let workspace_yaml =
-                    fs::read_to_string(root_path.join_component("pnpm-workspace.yaml"))?;
+                    fs::read_to_string(root_path.join_component("pnpm-workspace.yaml"))
+                        .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self)))?;
                 let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml)?;
                 if pnpm_workspace.packages.is_empty() {
                     return Err(MissingWorkspaceError::from(self).into());
@@ -341,7 +345,8 @@ impl PackageManager {
             | PackageManager::Bun => {
                 let package_json_text =
                     fs::read_to_string(root_path.join_component("package.json"))?;
-                let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)?;
+                let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)
+                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self)))?; // Make sure to convert this to a missing workspace error
 
                 if package_json.workspaces.as_ref().is_empty() {
                     return Err(MissingWorkspaceError::from(self).into());
