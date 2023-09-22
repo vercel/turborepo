@@ -72,6 +72,7 @@ impl<'a> Visitor<'a> {
         global_hash: &'a str,
         global_env_mode: EnvMode,
         ui: UI,
+        silent: bool,
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,
@@ -79,7 +80,7 @@ impl<'a> Visitor<'a> {
             env_at_execution_start,
             global_hash,
         );
-        let sink = Self::sink(opts);
+        let sink = Self::sink(opts, silent);
         let color_cache = ColorSelector::default();
 
         Self {
@@ -93,11 +94,6 @@ impl<'a> Visitor<'a> {
             ui,
             silent: false,
         }
-    }
-
-    pub fn silent(mut self) -> Self {
-        self.silent = true;
-        self
     }
 
     pub async fn visit(&self, engine: Arc<Engine>) -> Result<(), Error> {
@@ -191,15 +187,12 @@ impl<'a> Visitor<'a> {
             let prefix = self.prefix(&info);
             let pretty_prefix = self.color_cache.prefix_with_color(&task_hash, &prefix);
             let ui = self.ui;
-            let silent = self.silent;
 
             tasks.push(tokio::spawn(async move {
                 let _task_cache = task_cache;
-                if !silent {
-                    let mut prefixed_ui =
-                        Self::prefixed_ui(ui, is_github_actions, &output_client, pretty_prefix);
-                    prefixed_ui.output(command);
-                }
+                let mut prefixed_ui =
+                    Self::prefixed_ui(ui, is_github_actions, &output_client, pretty_prefix);
+                prefixed_ui.output(command);
                 callback.send(Ok(())).unwrap();
             }));
         }
@@ -214,18 +207,15 @@ impl<'a> Visitor<'a> {
         Ok(())
     }
 
-    fn sink(opts: &Opts) -> OutputSink<StdWriter> {
-        let err_writer = match matches!(
-            opts.run_opts.log_order,
-            crate::opts::ResolvedLogOrder::Grouped
-        ) && opts.run_opts.is_github_actions
-        {
-            // If we're running on Github Actions, force everything to stdout
-            // so as not to have out-of-order log lines
-            true => std::io::stdout().into(),
-            false => std::io::stderr().into(),
+    fn sink(opts: &Opts, silent: bool) -> OutputSink<StdWriter> {
+        let (out, err) = if silent {
+            (std::io::sink().into(), std::io::sink().into())
+        } else if opts.run_opts.should_redirect_stderr_to_stdout() {
+            (std::io::stdout().into(), std::io::stdout().into())
+        } else {
+            (std::io::stdout().into(), std::io::stderr().into())
         };
-        OutputSink::new(std::io::stdout().into(), err_writer)
+        OutputSink::new(out, err)
     }
 
     fn output_client(&self) -> OutputClient<impl std::io::Write> {
@@ -283,6 +273,7 @@ impl<'a> Visitor<'a> {
 enum StdWriter {
     Out(std::io::Stdout),
     Err(std::io::Stderr),
+    Null(std::io::Sink),
 }
 
 impl StdWriter {
@@ -290,6 +281,7 @@ impl StdWriter {
         match self {
             StdWriter::Out(out) => out,
             StdWriter::Err(err) => err,
+            StdWriter::Null(null) => null,
         }
     }
 }
@@ -303,6 +295,12 @@ impl From<std::io::Stdout> for StdWriter {
 impl From<std::io::Stderr> for StdWriter {
     fn from(value: std::io::Stderr) -> Self {
         Self::Err(value)
+    }
+}
+
+impl From<std::io::Sink> for StdWriter {
+    fn from(value: std::io::Sink) -> Self {
+        Self::Null(value)
     }
 }
 
