@@ -21,8 +21,7 @@ use crate::{
         task_id::{self, TaskId},
         RunCache,
     },
-    task_hash,
-    task_hash::{PackageInputsHashes, TaskHashTracker, TaskHasher},
+    task_hash::{self, PackageInputsHashes, TaskHashTracker, TaskHashTrackerState, TaskHasher},
 };
 
 // This holds the whole world
@@ -260,8 +259,8 @@ impl<'a> Visitor<'a> {
         prefixed_ui
     }
 
-    pub fn into_task_hash_tracker(self) -> TaskHashTracker {
-        self.task_hasher.into_task_hash_tracker()
+    pub fn into_task_hash_tracker(self) -> TaskHashTrackerState {
+        self.task_hasher.into_task_hash_tracker_state()
     }
 }
 

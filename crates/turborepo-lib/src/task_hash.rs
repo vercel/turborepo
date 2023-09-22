@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 
 use rayon::prelude::*;
@@ -140,8 +140,13 @@ impl PackageInputsHashes {
     }
 }
 
-#[derive(Default, Debug, Serialize)]
+#[derive(Default, Debug, Clone)]
 pub struct TaskHashTracker {
+    state: Arc<Mutex<TaskHashTrackerState>>,
+}
+
+#[derive(Default, Debug, Serialize)]
+pub struct TaskHashTrackerState {
     #[serde(skip)]
     package_task_env_vars: HashMap<TaskId<'static>, DetailedMap>,
     package_task_hashes: HashMap<TaskId<'static>, String>,
@@ -157,8 +162,7 @@ pub struct TaskHasher<'a> {
     opts: &'a Opts<'a>,
     env_at_execution_start: &'a EnvironmentVariableMap,
     global_hash: &'a str,
-
-    task_hash_tracker: Mutex<TaskHashTracker>,
+    task_hash_tracker: TaskHashTracker,
 }
 
 impl<'a> TaskHasher<'a> {
@@ -173,7 +177,7 @@ impl<'a> TaskHasher<'a> {
             opts,
             env_at_execution_start,
             global_hash,
-            task_hash_tracker: Mutex::new(TaskHashTracker::default()),
+            task_hash_tracker: Default::default(),
         }
     }
 
@@ -304,13 +308,8 @@ impl<'a> TaskHasher<'a> {
 
         let task_hash = task_hashable.calculate_task_hash();
 
-        let mut task_hash_tracker = self.task_hash_tracker.lock().map_err(|_| Error::Mutex)?;
-        task_hash_tracker
-            .package_task_env_vars
-            .insert(task_id.clone(), env_vars);
-        task_hash_tracker
-            .package_task_hashes
-            .insert(task_id.clone(), task_hash.clone());
+        self.task_hash_tracker
+            .insert_hash(task_id.clone(), env_vars, task_hash.clone());
 
         Ok(task_hash)
     }
@@ -335,10 +334,9 @@ impl<'a> TaskHasher<'a> {
                 continue;
             };
 
-            let task_hash_tracker = self.task_hash_tracker.lock().map_err(|_| Error::Mutex)?;
-            let dependency_hash = task_hash_tracker
-                .package_task_hashes
-                .get(dependency_task_id)
+            let dependency_hash = self
+                .task_hash_tracker
+                .hash(dependency_task_id)
                 .ok_or_else(|| Error::MissingDependencyTaskHash(dependency_task.to_string()))?;
             dependency_hash_set.insert(dependency_hash.clone());
         }
@@ -349,7 +347,68 @@ impl<'a> TaskHasher<'a> {
         Ok(dependency_hash_list)
     }
 
-    pub fn into_task_hash_tracker(self) -> TaskHashTracker {
-        self.task_hash_tracker.into_inner().unwrap()
+    pub fn into_task_hash_tracker_state(self) -> TaskHashTrackerState {
+        let mutex = Arc::into_inner(self.task_hash_tracker.state)
+            .expect("multiple references to tracker state still exist");
+        mutex.into_inner().unwrap()
+    }
+
+    pub fn task_hash_tracker(&self) -> TaskHashTracker {
+        self.task_hash_tracker.clone()
+    }
+}
+
+impl TaskHashTracker {
+    // We only want hash to be queried and set from the TaskHasher
+    fn hash(&self, task_id: &TaskId) -> Option<String> {
+        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        state.package_task_hashes.get(task_id).cloned()
+    }
+
+    fn insert_hash(&self, task_id: TaskId<'static>, env_vars: DetailedMap, hash: String) {
+        let mut state = self.state.lock().expect("hash tracker mutex poisoned");
+        state
+            .package_task_env_vars
+            .insert(task_id.clone(), env_vars);
+        state.package_task_hashes.insert(task_id, hash);
+    }
+
+    pub fn env_vars(&self, task_id: &TaskId) -> Option<DetailedMap> {
+        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        state.package_task_env_vars.get(task_id).cloned()
+    }
+
+    pub fn framework(&self, task_id: &TaskId) -> Option<String> {
+        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        state.package_task_framework.get(task_id).cloned()
+    }
+
+    pub fn expanded_outputs(&self, task_id: &TaskId) -> Option<Vec<AnchoredSystemPathBuf>> {
+        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        state.package_task_outputs.get(task_id).cloned()
+    }
+
+    pub fn insert_expanded_outputs(
+        &self,
+        task_id: TaskId<'static>,
+        outputs: Vec<AnchoredSystemPathBuf>,
+    ) {
+        let mut state = self.state.lock().expect("hash tracker mutex poisoned");
+        state.package_task_outputs.insert(task_id, outputs);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_hash_tracker_is_send_and_sync() {
+        // We need the tracker to implement these traits as multiple tasks will query
+        // and write to it
+        fn assert_send<T: Send>() {}
+        fn assert_sync<T: Sync>() {}
+        assert_send::<TaskHashTracker>();
+        assert_sync::<TaskHashTracker>();
     }
 }
