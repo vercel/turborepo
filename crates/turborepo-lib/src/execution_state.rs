@@ -2,11 +2,13 @@ use serde::Serialize;
 use tracing::trace;
 
 use crate::{
-    cli::Args, commands::CommandBase, package_json::PackageJson, package_manager::PackageManager,
+    cli::Args, commands::CommandBase, config::ConfigurationOptions, package_json::PackageJson,
+    package_manager::PackageManager,
 };
 
 #[derive(Debug, Serialize)]
 pub struct ExecutionState<'a> {
+    pub config: &'a ConfigurationOptions,
     pub api_client_config: APIClientConfig<'a>,
     pub spaces_api_client_config: SpacesAPIClientConfig<'a>,
     package_manager: PackageManager,
@@ -69,6 +71,7 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
         };
 
         Ok(ExecutionState {
+            config,
             api_client_config,
             spaces_api_client_config,
             package_manager,

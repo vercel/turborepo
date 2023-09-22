@@ -208,8 +208,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		return err
 	}
 
-	// TODO: these values come from a config file, hopefully viper can help us merge these
-	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
+	r.opts.cacheOpts.Signature = r.base.Config.Signature
 
 	// If a spaceID wasn't passed as a flag, read it from the turbo.json config.
 	// If that is not set either, we'll still end up with a blank string.
@@ -438,7 +437,7 @@ func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
 
 	// After we know if its _possible_ to enable remote cache, check the config
 	// and dsiable it if wanted.
-	if !r.opts.cacheOpts.RemoteCacheOpts.Enabled {
+	if !r.base.Config.Enabled {
 		r.opts.cacheOpts.SkipRemote = true
 	}
 

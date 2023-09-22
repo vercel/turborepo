@@ -93,10 +93,23 @@ type ParsedArgsFromRust struct {
 
 // ExecutionState is the entire state of a turbo execution that is passed from the Rust shim.
 type ExecutionState struct {
+	Config                Config             `json:"config"`
 	APIClientConfig       APIClientConfig    `json:"api_client_config"`
 	SpacesAPIClientConfig APIClientConfig    `json:"spaces_api_client_config"`
 	PackageManager        string             `json:"package_manager"`
 	CLIArgs               ParsedArgsFromRust `json:"cli_args"`
+}
+
+// Config holds the resolved configuration from the combination of all sources.
+type Config struct {
+	APIURL    string `json:"api_url"`
+	TeamSlug  string `json:"team_slug"`
+	TeamID    string `json:"team_id"`
+	Token     string `json:"token"`
+	Signature bool   `json:"signature"`
+	Preflight bool   `json:"preflight"`
+	Timeout   uint64 `json:"timeout"`
+	Enabled   bool   `json:"enabled"`
 }
 
 // APIClientConfig holds the authentication and endpoint details for the API client

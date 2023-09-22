@@ -48,6 +48,7 @@ pub struct ConfigurationOptions {
     pub(crate) signature: Option<bool>,
     pub(crate) preflight: Option<bool>,
     pub(crate) timeout: Option<u64>,
+    pub(crate) enabled: Option<bool>,
 }
 
 #[derive(Default)]
@@ -144,11 +145,9 @@ fn get_lowercased_env_vars() -> HashMap<String, String> {
         .collect()
 }
 
-fn get_env_var_config(environment: HashMap<String, String>) -> Result<ConfigurationOptions, Error> {
-    let mut vercel_artifacts_mapping = HashMap::new();
-    vercel_artifacts_mapping.insert(String::from("vercel_artifacts_token"), "token");
-    vercel_artifacts_mapping.insert(String::from("vercel_artifacts_owner"), "team_id");
-
+fn get_env_var_config(
+    environment: &HashMap<String, String>,
+) -> Result<ConfigurationOptions, Error> {
     let mut turbo_mapping = HashMap::new();
     turbo_mapping.insert(String::from("turbo_api"), "api_url");
     turbo_mapping.insert(String::from("turbo_login"), "login_url");
@@ -158,22 +157,13 @@ fn get_env_var_config(environment: HashMap<String, String>) -> Result<Configurat
     turbo_mapping.insert(String::from("turbo_signature"), "signature"); // new
     turbo_mapping.insert(String::from("turbo_preflight"), "preflight"); // new
     turbo_mapping.insert(String::from("turbo_remote_cache_timeout"), "timeout");
+    turbo_mapping.insert(String::from("turbo_remote_cache_enabled"), "enabled"); // new
 
     let mut output_map = HashMap::new();
 
     // Process the TURBO_* first.
     turbo_mapping.iter().for_each(|(k, mapped)| {
         if let Some(value) = environment.get(k) {
-            if !value.is_empty() {
-                output_map.insert(mapped.to_string(), value.to_string());
-            }
-        }
-    });
-
-    // Process the VERCEL_ARTIFACTS_* next.
-    vercel_artifacts_mapping.iter().for_each(|(k, mapped)| {
-        let k = k.to_string();
-        if let Some(value) = environment.get(&k) {
             if !value.is_empty() {
                 output_map.insert(mapped.to_string(), value.to_string());
             }
@@ -202,6 +192,17 @@ fn get_env_var_config(environment: HashMap<String, String>) -> Result<Configurat
         None
     };
 
+    // Process enabled
+    let enabled = if let Some(enabled) = output_map.get("enabled").cloned() {
+        match enabled.as_str() {
+            "0" => Some(false),
+            "1" => Some(true),
+            _ => return Err(anyhow!("parse_enabled")),
+        }
+    } else {
+        None
+    };
+
     // Process timeout
     let timeout = if let Some(timeout) = output_map.get("timeout").cloned() {
         Some(timeout.parse::<u64>().map_err(|e| {
@@ -222,9 +223,45 @@ fn get_env_var_config(environment: HashMap<String, String>) -> Result<Configurat
         // Processed booleans
         signature,
         preflight,
+        enabled,
 
         // Processed numbers
         timeout,
+    };
+
+    Ok(output)
+}
+
+fn get_override_env_var_config(
+    environment: &HashMap<String, String>,
+) -> Result<ConfigurationOptions, Error> {
+    let mut vercel_artifacts_mapping = HashMap::new();
+    vercel_artifacts_mapping.insert(String::from("vercel_artifacts_token"), "token");
+    vercel_artifacts_mapping.insert(String::from("vercel_artifacts_owner"), "team_id");
+
+    let mut output_map = HashMap::new();
+
+    // Process the VERCEL_ARTIFACTS_* next.
+    vercel_artifacts_mapping.iter().for_each(|(k, mapped)| {
+        let k = k.to_string();
+        if let Some(value) = environment.get(&k) {
+            if !value.is_empty() {
+                output_map.insert(mapped.to_string(), value.to_string());
+            }
+        }
+    });
+
+    let output = ConfigurationOptions {
+        api_url: None,
+        login_url: None,
+        team_slug: None,
+        team_id: output_map.get("team_id").cloned(),
+        token: output_map.get("token").cloned(),
+
+        signature: None,
+        preflight: None,
+        enabled: None,
+        timeout: None,
     };
 
     Ok(output)
@@ -343,7 +380,9 @@ impl TurborepoConfigBuilder {
             })?;
         let global_config = self.get_global_config()?;
         let local_config = self.get_local_config()?;
-        let env_var_config = get_env_var_config(get_lowercased_env_vars())?;
+        let env_vars = get_lowercased_env_vars();
+        let env_var_config = get_env_var_config(&env_vars)?;
+        let override_env_var_config = get_override_env_var_config(&env_vars)?;
 
         let sources = [
             root_package_json.get_configuration_options(),
@@ -352,6 +391,7 @@ impl TurborepoConfigBuilder {
             local_config.get_configuration_options(),
             env_var_config.get_configuration_options(),
             Ok(self.override_config.clone()),
+            override_env_var_config.get_configuration_options(),
         ];
 
         let output = sources.iter().fold(
