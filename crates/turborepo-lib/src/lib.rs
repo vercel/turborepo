@@ -1,7 +1,6 @@
 #![feature(assert_matches)]
 #![feature(box_patterns)]
 #![feature(error_generic_member_access)]
-#![feature(provide_any)]
 #![feature(hash_extract_if)]
 #![feature(option_get_or_insert_default)]
 #![feature(once_cell_try)]

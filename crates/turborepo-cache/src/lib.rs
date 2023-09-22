@@ -1,5 +1,4 @@
 #![feature(error_generic_member_access)]
-#![feature(provide_any)]
 #![feature(assert_matches)]
 #![feature(box_patterns)]
 #![deny(clippy::all)]
