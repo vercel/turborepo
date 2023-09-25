@@ -1,6 +1,10 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package                                                                                  
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package npm@9.6.7
+  $ pwd
+  $ corepack enable
+  $ node --version
+  $ npm --version
 
   $ ${TURBO} run build --dry=json
   {

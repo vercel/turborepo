@@ -11,6 +11,7 @@ ${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh ${TARGET_DIR}
 
 # Update package manager
 if [ "$3" != "" ]; then
+  echo "Setting package manager to $3"
   # Use jq to write a new file with a .packageManager field set and then
   # Overwrite original package.json. For some reason the command above won't send its output
   # directly to the original file.
