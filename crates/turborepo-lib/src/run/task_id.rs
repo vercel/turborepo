@@ -39,6 +39,12 @@ impl<'a> fmt::Display for TaskId<'a> {
     }
 }
 
+impl<'a> From<TaskId<'a>> for String {
+    fn from(value: TaskId<'a>) -> Self {
+        value.to_string()
+    }
+}
+
 impl<'a> TaskId<'a> {
     pub fn new(package: &'a str, task: &'a str) -> Self {
         TaskId::try_from(task).unwrap_or_else(|_| Self {
@@ -76,6 +82,11 @@ impl<'a> TaskId<'a> {
 
     pub fn task(&self) -> &str {
         &self.task
+    }
+
+    // Remove package for single package task summaries
+    pub fn strip_package(&mut self) {
+        self.package = "".into();
     }
 
     pub fn as_non_workspace_task_name(&self) -> TaskName {

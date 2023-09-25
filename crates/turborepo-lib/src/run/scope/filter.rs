@@ -155,10 +155,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         };
 
         // if the root package is in the filtered packages, remove it
-        if let Some(pkg_name) = &self.pkg_graph.root_package_json().name {
-            let name = WorkspaceName::Other(pkg_name.to_owned());
-            filter_patterns.remove(&name);
-        }
+        filter_patterns.remove(&WorkspaceName::Root);
 
         Ok(filter_patterns)
     }
