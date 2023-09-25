@@ -14,7 +14,9 @@ use serde::Serialize;
 use svix_ksuid::{Ksuid, KsuidLike};
 use tabwriter::TabWriter;
 use thiserror::Error;
+use tracing::log::warn;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
@@ -23,7 +25,12 @@ use crate::{
     cli::EnvMode,
     opts::RunOpts,
     package_graph::{PackageGraph, WorkspaceName},
-    run::summary::{execution::ExecutionSummary, scm::SCMState, task::TaskSummary},
+    run::summary::{
+        execution::{ExecutionState, ExecutionSummary},
+        scm::SCMState,
+        spaces::{SpaceRequest, SpacesClient, SpacesClientHandle},
+        task::TaskSummary,
+    },
 };
 
 #[derive(Debug, Error)]
@@ -34,6 +41,14 @@ pub enum Error {
     Serde(#[from] serde_json::Error),
     #[error("missing workspace {0}")]
     MissingWorkspace(WorkspaceName),
+    #[error("request took too long to resolve: {0}")]
+    Timeout(#[from] tokio::time::error::Elapsed),
+    #[error("failed to send spaces request: {0}")]
+    SpacesRequest(#[from] turborepo_api_client::Error),
+    #[error("failed to close spaces client")]
+    SpacesClientClose(#[from] tokio::task::JoinError),
+    #[error("failed to contact spaces client")]
+    SpacesClientSend(#[from] tokio::sync::mpsc::error::SendError<SpaceRequest>),
 }
 
 // NOTE: When changing this, please ensure that the server side is updated to
@@ -64,8 +79,10 @@ fn get_user(env_vars: &EnvironmentVariableMap) -> Option<String> {
 pub struct RunSummary<'a> {
     inner: RunSummaryInner<'a>,
     repo_root: &'a AbsoluteSystemPath,
+    package_inference_root: Option<&'a AnchoredSystemPath>,
     single_package: bool,
     should_save: bool,
+    spaces_client_handle: Option<SpacesClientHandle>,
     run_type: RunType,
     synthesized_command: String,
 }
@@ -77,14 +94,57 @@ pub struct RunSummaryInner<'a> {
     version: String,
     turbo_version: String,
     monorepo: bool,
+    #[serde(rename = "globalCacheInputs")]
     global_hash_summary: GlobalHashSummary<'a>,
     packages: HashSet<WorkspaceName>,
     env_mode: EnvMode,
     framework_inference: bool,
+    #[serde(rename = "execution", skip_serializing_if = "Option::is_none")]
     execution_summary: Option<ExecutionSummary<'a>>,
     tasks: Vec<TaskSummary<'a>>,
     user: Option<String>,
-    scm: SCMState,
+    pub scm: SCMState,
+}
+
+// This is an exact copy of RunSummary, but the JSON tags are structured
+// for rendering a single-package run of turbo. Notably, we want to always omit
+// packages since there is no concept of packages in a single-workspace repo.
+// This struct exists solely for the purpose of serializing to JSON and should
+// not be used anywhere else.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NonMonorepoRunSummary<'a, 'b> {
+    id: Ksuid,
+    version: &'b str,
+    turbo_version: &'b str,
+    monorepo: bool,
+    #[serde(rename = "globalCacheInputs")]
+    global_hash_summary: &'b GlobalHashSummary<'a>,
+    env_mode: EnvMode,
+    framework_inference: bool,
+    #[serde(rename = "execution", skip_serializing_if = "Option::is_none")]
+    execution_summary: Option<&'b ExecutionSummary<'a>>,
+    tasks: &'b [TaskSummary<'a>],
+    user: Option<&'b str>,
+    pub scm: &'b SCMState,
+}
+
+impl<'a, 'b> From<&'b RunSummaryInner<'a>> for NonMonorepoRunSummary<'a, 'b> {
+    fn from(rsm: &'b RunSummaryInner<'a>) -> Self {
+        NonMonorepoRunSummary {
+            id: rsm.id,
+            version: &rsm.version,
+            turbo_version: &rsm.turbo_version,
+            monorepo: rsm.monorepo,
+            global_hash_summary: &rsm.global_hash_summary,
+            env_mode: rsm.env_mode,
+            framework_inference: rsm.framework_inference,
+            execution_summary: rsm.execution_summary.as_ref(),
+            tasks: &rsm.tasks,
+            user: rsm.user.as_deref(),
+            scm: &rsm.scm,
+        }
+    }
 }
 
 impl<'a> RunSummary<'a> {
@@ -98,16 +158,18 @@ impl<'a> RunSummary<'a> {
         global_hash_summary,
         synthesized_command
     ))]
-    pub fn new(
+    pub async fn new(
         start_at: chrono::DateTime<Local>,
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&'a AnchoredSystemPath>,
         turbo_version: &'static str,
-        run_opts: &RunOpts,
+        spaces_api_client: APIClient,
+        run_opts: &RunOpts<'a>,
         packages: HashSet<WorkspaceName>,
         env_at_execution_start: EnvironmentVariableMap,
         global_hash_summary: GlobalHashSummary<'a>,
         synthesized_command: String,
+        api_auth: Option<APIAuth>,
     ) -> RunSummary<'a> {
         let single_package = run_opts.single_package;
         let should_save = run_opts.summarize.flatten().is_some_and(|s| s);
@@ -128,7 +190,7 @@ impl<'a> RunSummary<'a> {
             start_at,
         );
 
-        RunSummary {
+        let mut rsm = RunSummary {
             inner: RunSummaryInner {
                 id: Ksuid::new(None, None),
                 version: RUN_SUMMARY_SCHEMA_VERSION.to_string(),
@@ -145,17 +207,32 @@ impl<'a> RunSummary<'a> {
             },
             run_type,
             repo_root,
+            package_inference_root,
             single_package,
             should_save,
+            spaces_client_handle: None,
 
             synthesized_command,
+        };
+
+        if let Some(spaces_client) = SpacesClient::new(
+            run_opts.experimental_space_id.clone(),
+            spaces_api_client,
+            api_auth,
+        ) {
+            let payload = CreateSpaceRunPayload::from(&rsm);
+            if let Ok(handle) = spaces_client.start(payload).await {
+                rsm.spaces_client_handle = Some(handle)
+            }
         }
+
+        rsm
     }
 
     #[tracing::instrument(skip(pkg_dep_graph, ui))]
-    pub fn close(
+    pub async fn close(
         &mut self,
-        _exit_code: u32,
+        exit_code: u32,
         pkg_dep_graph: &PackageGraph,
         ui: UI,
     ) -> Result<(), Error> {
@@ -163,7 +240,64 @@ impl<'a> RunSummary<'a> {
             self.close_dry_run(pkg_dep_graph, ui)?;
         }
 
+        let end_time = Local::now();
+
+        if let Some(execution_summary) = &mut self.inner.execution_summary {
+            execution_summary.exit_code = Some(exit_code);
+            execution_summary.end_time = Some(end_time);
+        }
+
+        if self.should_save {
+            if let Err(err) = self.save() {
+                warn!("Error writing run summary: {}", err)
+            }
+        }
+
+        if let Some(execution_summary) = &self.inner.execution_summary {
+            let path = self.get_path();
+            let failed_tasks = self.get_failed_tasks();
+            execution_summary.print(ui, path, failed_tasks);
+        }
+
+        if let Some(spaces_client_handle) = self.spaces_client_handle.take() {
+            self.send_to_space(spaces_client_handle, end_time, exit_code)
+                .await?;
+        }
+
         Ok(())
+    }
+
+    async fn send_to_space(
+        &self,
+        spaces_client_handle: SpacesClientHandle,
+        ended_at: chrono::DateTime<Local>,
+        exit_code: u32,
+    ) -> Result<(), Error> {
+        let spinner = turborepo_ui::start_spinner("...sending run summary...");
+
+        spaces_client_handle.finish_run(exit_code, ended_at).await?;
+
+        let result = spaces_client_handle.close().await;
+
+        spinner.finish_and_clear();
+
+        Self::print_errors(&result.errors);
+
+        if let Some(run) = result.run {
+            println!("Run: {}\n", run.url);
+        }
+
+        Ok(())
+    }
+
+    fn print_errors(errors: &[Error]) {
+        if errors.is_empty() {
+            return;
+        }
+
+        for error in errors {
+            warn!("{}", error)
+        }
     }
 
     fn close_dry_run(&mut self, pkg_dep_graph: &PackageGraph, ui: UI) -> Result<(), Error> {
@@ -369,8 +503,15 @@ impl<'a> RunSummary<'a> {
         Ok(())
     }
 
-    fn format_json(&self) -> Result<String, Error> {
-        Ok(String::new())
+    fn format_json(&mut self) -> Result<String, Error> {
+        self.normalize();
+
+        if self.single_package {
+            let monorepo_rsm: NonMonorepoRunSummary<'a, '_> = (&self.inner).into();
+            Ok(serde_json::to_string_pretty(&monorepo_rsm)?)
+        } else {
+            Ok(serde_json::to_string_pretty(&self.inner)?)
+        }
     }
 
     fn normalize(&mut self) {
@@ -399,8 +540,16 @@ impl<'a> RunSummary<'a> {
             .join_components(&[".turbo", "runs", &filename])
     }
 
-    fn save(&self) -> Result<(), Error> {
-        let json = serde_json::to_string_pretty(&self.inner)?;
+    fn get_failed_tasks(&self) -> Vec<&TaskSummary<'a>> {
+        self.inner
+            .tasks
+            .iter()
+            .filter(|task| matches!(task.execution.state, ExecutionState::BuildFailed { .. }))
+            .collect()
+    }
+
+    fn save(&mut self) -> Result<(), Error> {
+        let json = self.format_json()?;
 
         let summary_path = self.get_path();
         summary_path.ensure_dir()?;

@@ -37,6 +37,7 @@ impl HTTPCache {
         } else {
             None
         };
+
         let APIAuth {
             team_id,
             token,

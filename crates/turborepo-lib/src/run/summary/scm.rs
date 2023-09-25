@@ -5,15 +5,17 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
 enum SCMType {
     Git,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct SCMState {
+    #[serde(rename = "type")]
     ty: SCMType,
-    sha: Option<String>,
-    branch: Option<String>,
+    pub(crate) sha: Option<String>,
+    pub(crate) branch: Option<String>,
 }
 
 impl SCMState {

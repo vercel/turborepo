@@ -19,3 +19,22 @@ Setup
      Time:\s*[\.0-9]+m?s  (re)
   Summary:    .+\.turbo\/runs\/[a-zA-Z0-9]+.json (re)
   
+
+
+  $ ${TURBO} run build --summarize --filter=my-app --experimental-rust-codepath --no-daemon
+  my-app:build: 
+  my-app:build: > build
+  my-app:build: > echo 'building'
+  my-app:build: 
+  my-app:build: building
+  
+   WARNING  No tasks were executed as a part of this run.
+  
+    Tasks:    0 successful, 0 total
+   Cached:    0 cached, 0 total
+     Time:\s*[\.0-9]+m?s  (re)
+  Summary:    .+\.turbo\/runs\/[a-zA-Z0-9]+.json (re)
+  
+
+
+

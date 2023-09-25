@@ -16,7 +16,7 @@ use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
-use turborepo_api_client::Client;
+use turborepo_api_client::{APIClient, Client};
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
 use turborepo_ui::{BOLD, GREY, UNDERLINE};

@@ -18,7 +18,6 @@ use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tracing::{debug, info, trace};
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_api_client::APIAuth;
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_json::PackageJson;
@@ -215,6 +214,7 @@ impl<'a> Run<'a> {
             AsyncCache::new(&opts.cache_opts, &self.base.repo_root, api_client, api_auth)?;
 
         info!("created cache");
+
         let engine = EngineBuilder::new(
             &self.base.repo_root,
             &pkg_dep_graph,
@@ -292,6 +292,16 @@ impl<'a> Run<'a> {
 
         let color_selector = ColorSelector::default();
 
+        let api_auth = self.base.api_auth()?;
+        let api_client = self.base.api_client()?;
+
+        let async_cache = AsyncCache::new(
+            &opts.cache_opts,
+            &self.base.repo_root,
+            api_client,
+            api_auth.clone(),
+        )?;
+
         let runcache = Arc::new(RunCache::new(
             async_cache,
             &self.base.repo_root,
@@ -300,6 +310,8 @@ impl<'a> Run<'a> {
             daemon,
             self.base.ui,
         ));
+
+        info!("created cache");
 
         let mut global_env_mode = opts.run_opts.env_mode;
         if matches!(global_env_mode, EnvMode::Infer)
@@ -391,19 +403,24 @@ impl<'a> Run<'a> {
 
         trace!("package file hashes: {:?}", package_file_hashes);
 
+        let spaces_client = self.base.api_client()?;
+
         let mut run_summary = RunSummary::new(
             start_at,
             &self.base.repo_root,
             opts.scope_opts.pkg_inference_root.as_deref(),
             self.base.version(),
+            spaces_client,
             &opts.run_opts,
             filtered_pkgs.clone(),
             env_at_execution_start,
             global_hash_summary,
             "todo".to_string(),
-        );
+            api_auth,
+        )
+        .await;
 
-        run_summary.close(0, &pkg_dep_graph, self.base.ui)?;
+        run_summary.close(0, &pkg_dep_graph, self.base.ui).await?;
 
         Ok(exit_code)
     }
@@ -474,18 +491,7 @@ impl<'a> Run<'a> {
         };
 
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
-        let config = self.base.config()?;
-
-        let team_id = config.team_id();
-        let team_slug = config.team_slug();
-
-        let token = config.token();
-
-        let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
-            team_id: team_id.to_string(),
-            token: token.to_string(),
-            team_slug: team_slug.map(|s| s.to_string()),
-        });
+        let api_auth = self.base.api_auth()?;
 
         let engine = EngineBuilder::new(
             &self.base.repo_root,

@@ -20,7 +20,7 @@ pub use crate::error::{Error, Result};
 
 mod error;
 mod retry;
-mod spaces;
+pub mod spaces;
 
 lazy_static! {
     static ref AUTHORIZATION_REGEX: Regex =
@@ -87,6 +87,7 @@ pub trait Client {
     fn make_url(&self, endpoint: &str) -> String;
 }
 
+#[derive(Debug)]
 pub struct APIClient {
     client: reqwest::Client,
     base_url: String,
@@ -94,6 +95,7 @@ pub struct APIClient {
     use_preflight: bool,
 }
 
+#[derive(Clone)]
 pub struct APIAuth {
     pub team_id: String,
     pub token: String,

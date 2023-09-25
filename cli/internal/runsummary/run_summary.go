@@ -161,7 +161,7 @@ func (rsm *Meta) Close(ctx context.Context, exitCode int, workspaceInfos workspa
 	}
 
 	// TODO: printing summary to local, writing to disk, and sending to API
-	// are all the same thng, we should use a strategy similar to cache save/upload to
+	// are all the same thing, we should use a strategy similar to cache save/upload to
 	// do this in parallel.
 
 	// Otherwise, attempt to save the summary

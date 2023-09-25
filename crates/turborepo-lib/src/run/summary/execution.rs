@@ -1,19 +1,39 @@
 use std::fmt;
 
-use chrono::{DateTime, Duration, Local};
-use serde::{ser::SerializeStruct, Serialize};
+use chrono::{DateTime, Duration, Local, SubsecRound};
+use serde::{ser::SerializeStruct, Serialize, Serializer};
 use tokio::sync::mpsc;
-use turbopath::AnchoredSystemPath;
+use tracing::log::warn;
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turborepo_ui::{color, BOLD, BOLD_GREEN, BOLD_RED, MAGENTA, UI};
 
-use crate::run::task_id::TaskId;
+use crate::run::{summary::task::TaskSummary, task_id::TaskId};
 
 // Just used to make changing the type that gets passed to the state management
 // thread easy
 type Message = Event;
 
+fn serialize_datetime<S: Serializer>(
+    date_time: &DateTime<Local>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_i64(date_time.timestamp_millis())
+}
+
+fn serialize_optional_datetime<S: Serializer>(
+    date_time: &Option<DateTime<Local>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let millis = date_time
+        .map(|dt| dt.timestamp_millis())
+        .unwrap_or_default();
+    serializer.serialize_i64(millis)
+}
+
 // Should *not* be exposed outside of run summary module
 /// The execution summary
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExecutionSummary<'a> {
     // this thread handles the state management
     #[serde(skip)]
@@ -21,8 +41,128 @@ pub struct ExecutionSummary<'a> {
     #[serde(skip)]
     sender: mpsc::Sender<Message>,
     command: String,
-    package_inference_path: Option<&'a AnchoredSystemPath>,
-    started_at: DateTime<Local>,
+    success: usize,
+    failed: usize,
+    cached: usize,
+    attempted: usize,
+    #[serde(rename = "repoPath", skip_serializing_if = "Option::is_none")]
+    package_inference_root: Option<&'a AnchoredSystemPath>,
+    #[serde(serialize_with = "serialize_datetime")]
+    pub(crate) start_time: DateTime<Local>,
+    #[serde(serialize_with = "serialize_optional_datetime")]
+    pub(crate) end_time: Option<DateTime<Local>>,
+    pub(crate) exit_code: Option<u32>,
+}
+
+impl ExecutionSummary<'_> {
+    fn duration(&self) -> String {
+        let duration = self
+            .end_time
+            .unwrap_or_else(Local::now)
+            .trunc_subsecs(3)
+            .signed_duration_since(self.start_time.trunc_subsecs(3));
+
+        if duration.num_hours() > 0 {
+            format!(
+                "{}h{}m{}s",
+                duration.num_hours(),
+                duration.num_minutes(),
+                duration.num_seconds()
+            )
+        } else if duration.num_minutes() > 0 {
+            format!("{}m{}s", duration.num_minutes(), duration.num_seconds())
+        } else if duration.num_seconds() > 0 {
+            format!("{}s", duration.num_seconds())
+        } else {
+            format!("{}ms", duration.num_milliseconds())
+        }
+    }
+
+    /// We implement this on `ExecutionSummary` and not `RunSummary` because
+    /// the `execution_summary` field is nullable (due to normalize).
+    pub fn print(&self, ui: UI, path: AbsoluteSystemPathBuf, failed_tasks: Vec<&TaskSummary>) {
+        let maybe_full_turbo = if self.cached == self.attempted && self.attempted > 0 {
+            match std::env::var("TERM_PROGRAM").as_deref() {
+                Ok("Apple_Terminal") => color!(ui, MAGENTA, ">>> FULL TURBO").to_string(),
+                _ => ui.rainbow(">>> FULL TURBO").to_string(),
+            }
+        } else {
+            String::new()
+        };
+
+        let mut line_data = vec![
+            (
+                "Tasks",
+                format!(
+                    "{}, {} total",
+                    color!(ui, BOLD_GREEN, "{} successful", self.success),
+                    self.attempted
+                ),
+            ),
+            (
+                "Cached",
+                format!(
+                    "{}, {} total",
+                    color!(ui, BOLD, "{} cached", self.cached),
+                    self.attempted
+                )
+                .to_string(),
+            ),
+            (
+                "Time",
+                format!(
+                    "{} {}",
+                    color!(ui, BOLD, "{}", self.duration()),
+                    maybe_full_turbo
+                ),
+            ),
+        ];
+
+        if path.exists() {
+            line_data.push(("Summary", path.to_string()));
+        }
+
+        if !failed_tasks.is_empty() {
+            let mut formatted: Vec<_> = failed_tasks
+                .iter()
+                .map(|task| color!(ui, BOLD_RED, "{}", task.task_id).to_string())
+                .collect();
+            formatted.sort();
+            line_data.push(("Failed", formatted.join(", ")));
+        }
+
+        let max_length = line_data
+            .iter()
+            .map(|(header, _)| header.len())
+            .max()
+            .unwrap_or_default();
+
+        let lines: Vec<_> = line_data
+            .into_iter()
+            .map(|(header, trailer)| {
+                color!(
+                    ui,
+                    BOLD,
+                    "{}{}:    {}",
+                    " ".repeat(max_length - header.len()),
+                    header,
+                    trailer
+                )
+            })
+            .collect();
+
+        if self.attempted == 0 {
+            println!();
+            warn!("No tasks were executed as a part of this run.");
+        }
+
+        println!();
+        for line in lines {
+            println!("{}", line);
+        }
+
+        println!();
+    }
 }
 
 /// The final states of all task executions
@@ -64,7 +204,7 @@ enum Event {
 }
 
 #[derive(Debug, Serialize)]
-enum ExecutionState {
+pub enum ExecutionState {
     Canceled,
     Built { exit_code: u32 },
     Cached,
@@ -75,7 +215,7 @@ enum ExecutionState {
 pub struct TaskExecutionSummary {
     started_at: DateTime<Local>,
     ended_at: DateTime<Local>,
-    state: ExecutionState,
+    pub(crate) state: ExecutionState,
 }
 
 impl Serialize for TaskExecutionSummary {
@@ -107,7 +247,7 @@ impl TaskExecutionSummary {
 impl<'a> ExecutionSummary<'a> {
     pub fn new(
         command: String,
-        package_inference_path: Option<&'a AnchoredSystemPath>,
+        package_inference_root: Option<&'a AnchoredSystemPath>,
         started_at: DateTime<Local>,
     ) -> Self {
         // This buffer size is probably overkill, but since messages are only a byte
@@ -125,8 +265,15 @@ impl<'a> ExecutionSummary<'a> {
             state_thread,
             sender,
             command,
-            package_inference_path,
-            started_at,
+
+            package_inference_root,
+            start_time: started_at,
+            success: 0,
+            failed: 0,
+            cached: 0,
+            attempted: 0,
+            end_time: None,
+            exit_code: None,
         }
     }
 
@@ -191,6 +338,7 @@ impl Tracker<chrono::DateTime<Local>> {
             .send(Event::Cached)
             .await
             .expect("summary state thread finished");
+
         TaskExecutionSummary {
             started_at,
             ended_at: Local::now(),

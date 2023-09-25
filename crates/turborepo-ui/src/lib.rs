@@ -184,6 +184,8 @@ lazy_static! {
     pub static ref UNDERLINE: Style = Style::new().underlined();
     pub static ref BOLD_CYAN: Style = Style::new().cyan().bold();
     pub static ref BOLD_GREY: Style = Style::new().dim().bold();
+    pub static ref BOLD_GREEN: Style = Style::new().green().bold();
+    pub static ref BOLD_RED: Style = Style::new().red().bold();
 }
 
 pub const RESET: &str = "\x1b[0m";

@@ -17,6 +17,8 @@ const runsPatchEndpoint = "/v0/spaces/%s/runs/%s"
 const tasksEndpoint = "/v0/spaces/%s/runs/%s/tasks"
 
 // spaceRequest contains all the information for a single request to Spaces
+// This will be an enum in Rust with all the relevant information to construct the url.
+// We'll pattern match and call the correct API client method.
 type spaceRequest struct {
 	method  string
 	url     string
@@ -133,9 +135,12 @@ func makeRequest(ctx context.Context, api spacesAPIClient, req *spaceRequest, ru
 	//
 	// Secondly, if makeURL _is_ defined, we call it, and if there are any errors, we exit early.
 	// We are doing this check before any of the other basic checks (e.g. the existence of a spaceID)
-	// becaus in the case the repo is not linked to a space, we don't want to print those errors
+	// because in the case the repo is not linked to a space, we don't want to print those errors
 	// for every request that fails. On the other hand, if that POST /run request fails, and N
 	// requests fail after that as a consequence, it is ok to print all of those errors.
+	//
+	// We're going to remove this in the Rust version because closures are kinda messy, especially closures that mutate.
+	// Instead we'll directly store the id in the struct and use that.
 	if req.makeURL != nil {
 		if err := req.makeURL(req, run); err != nil {
 			return nil, err
@@ -158,18 +163,25 @@ func makeRequest(ctx context.Context, api spacesAPIClient, req *spaceRequest, ru
 
 func (c *spacesClient) createRun(payload *spacesRunPayload) {
 	c.wg.Add(1)
+	// We don't need the goroutine here since tokio will schedule the threads for us.
+	// If needed we can do `spawn`
 	go func() {
 		defer c.wg.Done()
 		defer close(c.runCreated)
 		ctx, cancel := context.WithTimeout(context.Background(), c.requestTimeout)
 		defer cancel()
 
+		// Because `makeUrl` is not defined, this is the first request.
 		req := &spaceRequest{
 			method: "POST",
 			url:    fmt.Sprintf(runsEndpoint, c.spaceID),
 			body:   payload,
 		}
+		// In the Rust version we'll have a specific `create_spaces_run` method
 		resp, err := makeRequest(ctx, c.api, req, c.run)
+		// We don't need to store this error in the Rust version. Instead
+		// if this fails, we send a message via a oneshot channel to indicate
+		// that we don't need to send any more requests.
 		if err != nil {
 			c.runCreateError = err
 			return
@@ -240,7 +252,7 @@ func (c *spacesClient) printErrors(ui cli.Ui) {
 	}
 }
 
-// Cloe will wait for all requests to finish and then close the channel listening for them
+// Close will wait for all requests to finish and then close the channel listening for them
 func (c *spacesClient) Close() {
 	// wait for all requests to finish.
 	c.wg.Wait()
