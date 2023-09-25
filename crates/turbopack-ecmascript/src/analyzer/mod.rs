@@ -3,7 +3,7 @@
 use std::{
     borrow::Cow,
     cmp::Ordering,
-    fmt::Display,
+    fmt::{Display, Write},
     future::Future,
     hash::{Hash, Hasher},
     mem::take,
@@ -502,6 +502,7 @@ impl From<&CompileTimeDefineValue> for JsValue {
         match v {
             CompileTimeDefineValue::String(s) => JsValue::Constant(s.as_str().into()),
             CompileTimeDefineValue::Bool(b) => JsValue::Constant((*b).into()),
+            CompileTimeDefineValue::JSON(_) => JsValue::unknown_empty("compile time injected JSON"),
         }
     }
 }
@@ -1043,10 +1044,10 @@ impl JsValue {
         let explainer = pretty_join(&args, 0, ", ", ",", "");
         (
             explainer,
-            hints
-                .into_iter()
-                .map(|h| format!("\n{h}"))
-                .collect::<String>(),
+            hints.into_iter().fold(String::new(), |mut out, h| {
+                let _ = write!(out, "\n{h}");
+                out
+            }),
         )
     }
 
@@ -1055,10 +1056,10 @@ impl JsValue {
         let explainer = self.explain_internal(&mut hints, 0, depth, unknown_depth);
         (
             explainer,
-            hints
-                .into_iter()
-                .map(|h| format!("\n{h}"))
-                .collect::<String>(),
+            hints.into_iter().fold(String::new(), |mut out, h| {
+                let _ = write!(out, "\n{h}");
+                out
+            }),
         )
     }
 

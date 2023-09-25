@@ -51,7 +51,7 @@ There are two ways to make a process faster - work faster, or do less work. For 
 
 ### Page-level compilation
 
-Versions of Next.js from 2-3 years ago used to compile the _entire application_ before showing your dev server. In Next.js [11], we began compiling _only the code on the page you requested._
+Versions of Next.js from 2-3 years ago used to compile the _entire application_ before showing your dev server. In [Next.js 11](https://nextjs.org/blog/next-11), we began compiling _only the code on the page you requested._
 
 That’s better, but it’s not perfect. When you navigate to `/users`, we’ll bundle all the client and server modules, dynamic-imported modules, and referenced CSS and images. That means if a large part of your page is hidden from view, or hidden behind tabs, we’ll still compile it anyway.
 

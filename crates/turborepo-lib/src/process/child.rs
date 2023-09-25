@@ -483,15 +483,17 @@ mod test {
             let script = find_script_dir().join_component("sleep_5_ignore.js");
             let mut cmd = Command::new("node");
             cmd.args([script.as_std_path()]);
+            cmd.stdout(Stdio::piped());
             cmd
         };
 
         let mut child =
             Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500))).unwrap();
 
-        // give it a moment to register the signal handler
-        tokio::time::sleep(STARTUP_DELAY).await;
-
+        let mut stdout = child.stdout().unwrap();
+        let mut buf = vec![0; 4];
+        // wait for the process to print "here"
+        stdout.read_exact(&mut buf).await.unwrap();
         child.stop().await;
 
         let state = child.state.read().await;

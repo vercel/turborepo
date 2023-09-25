@@ -27,7 +27,6 @@ pub struct PackageGraphBuilder<'a> {
     package_manager: Option<PackageManager>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     lockfile: Option<Box<dyn Lockfile>>,
-    quiet: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -67,7 +66,6 @@ impl<'a> PackageGraphBuilder<'a> {
             package_manager: None,
             package_jsons: None,
             lockfile: None,
-            quiet: false,
         }
     }
 
@@ -79,11 +77,6 @@ impl<'a> PackageGraphBuilder<'a> {
     #[allow(dead_code)]
     pub fn with_package_manger(mut self, package_manager: Option<PackageManager>) -> Self {
         self.package_manager = package_manager;
-        self
-    }
-
-    pub fn with_quiet(mut self) -> Self {
-        self.quiet = true;
         self
     }
 
@@ -125,7 +118,6 @@ struct BuildState<'a, S> {
     node_lookup: HashMap<WorkspaceNode, NodeIndex>,
     lockfile: Option<Box<dyn Lockfile>>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
-    quiet: bool,
     state: std::marker::PhantomData<S>,
 }
 
@@ -164,7 +156,6 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
             package_manager,
             package_jsons,
             lockfile,
-            quiet,
         } = builder;
         let package_manager = package_manager.map_or_else(
             || PackageManager::get_package_manager(repo_root, Some(&root_package_json)),
@@ -187,7 +178,6 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
             workspaces,
             lockfile,
             package_jsons,
-            quiet,
             workspace_graph: Graph::new(),
             node_lookup: HashMap::new(),
             state: std::marker::PhantomData,
@@ -258,7 +248,6 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
             workspace_graph,
             node_lookup,
             lockfile,
-            quiet,
             ..
         } = self;
         Ok(BuildState {
@@ -269,7 +258,6 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
             workspace_graph,
             node_lookup,
             lockfile,
-            quiet,
             package_jsons: None,
             state: std::marker::PhantomData,
         })
@@ -369,13 +357,11 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
         let lockfile = match self.populate_lockfile() {
             Ok(lockfile) => Some(lockfile),
             Err(e) => {
-                if !self.quiet {
-                    warn!(
-                        "Issues occurred when constructing package graph. Turbo will function, \
-                         but some features may not be available: {}",
-                        e
-                    );
-                }
+                warn!(
+                    "Issues occurred when constructing package graph. Turbo will function, but \
+                     some features may not be available: {}",
+                    e
+                );
                 None
             }
         };
@@ -387,7 +373,6 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
             workspaces,
             workspace_graph,
             node_lookup,
-            quiet,
             ..
         } = self;
         Ok(BuildState {
@@ -398,7 +383,6 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
             workspace_graph,
             node_lookup,
             lockfile,
-            quiet,
             package_jsons: None,
             state: std::marker::PhantomData,
         })
@@ -447,9 +431,7 @@ impl<'a> BuildState<'a, ResolvedLockfile> {
 
     fn build(mut self) -> PackageGraph {
         if let Err(e) = self.populate_transitive_dependencies() {
-            if !self.quiet {
-                warn!("Unable to calculate transitive closures: {}", e);
-            }
+            warn!("Unable to calculate transitive closures: {}", e);
         }
         let Self {
             package_manager,

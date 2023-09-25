@@ -48,7 +48,7 @@ impl EnvironmentVariableMap {
 }
 
 // BySource contains a map of environment variables broken down by the source
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct BySource {
     pub explicit: EnvironmentVariableMap,
     pub matching: EnvironmentVariableMap,
@@ -57,7 +57,7 @@ pub struct BySource {
 // DetailedMap contains the composite and the detailed maps of environment
 // variables All is used as a taskhash input (taskhash.CalculateTaskHash)
 // BySource is used by dry runs and run summaries
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct DetailedMap {
     pub all: EnvironmentVariableMap,
     pub by_source: BySource,

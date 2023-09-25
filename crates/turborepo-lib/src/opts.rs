@@ -114,12 +114,15 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
         });
 
         let (is_github_actions, log_order, log_prefix) = match args.log_order {
-            // TODO: We currently don't respect the user's input if they ask for task prefixes on
-            // GitHub Actions and forcibly strip tasks from their logs even if they specify
-            // that they want it. This should be fixed in Go and Rust at the same time.
-            LogOrder::Auto if turborepo_ci::Vendor::get_constant() == Some("GITHUB_ACTIONS") => {
-                (true, ResolvedLogOrder::Grouped, ResolvedLogPrefix::None)
-            }
+            LogOrder::Auto if turborepo_ci::Vendor::get_constant() == Some("GITHUB_ACTIONS") => (
+                true,
+                ResolvedLogOrder::Grouped,
+                match args.log_prefix {
+                    LogPrefix::Task => ResolvedLogPrefix::Task,
+                    _ => ResolvedLogPrefix::None,
+                },
+            ),
+
             // Streaming is the default behavior except when running on GitHub Actions
             LogOrder::Auto | LogOrder::Stream => {
                 (false, ResolvedLogOrder::Stream, args.log_prefix.into())
@@ -270,6 +273,14 @@ impl<'a> From<&'a RunArgs> for CacheOpts<'a> {
             workers: run_args.cache_workers,
             ..CacheOpts::default()
         }
+    }
+}
+
+impl<'a> RunOpts<'a> {
+    pub fn should_redirect_stderr_to_stdout(&self) -> bool {
+        // If we're running on Github Actions, force everything to stdout
+        // so as not to have out-of-order log lines
+        matches!(self.log_order, ResolvedLogOrder::Grouped) && self.is_github_actions
     }
 }
 
