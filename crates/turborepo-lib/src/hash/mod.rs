@@ -316,7 +316,7 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
         }
 
         if let Some(root_external_dependencies_hash) = hashable.root_external_dependencies_hash {
-            builder.set_root_external_deps_hash(&root_external_dependencies_hash);
+            builder.set_root_external_deps_hash(root_external_dependencies_hash);
         }
 
         {

@@ -119,9 +119,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
 
     debug!(
         "external deps hash: {}",
-        root_external_dependencies_hash
-            .as_deref()
-            .unwrap_or("no hash (single package)")
+        root_external_dependencies_hash.unwrap_or("no hash (single package)")
     );
 
     Ok(GlobalHashableInputs {
@@ -161,7 +159,7 @@ impl<'a> GlobalHashableInputs<'a> {
             global_cache_key: self.global_cache_key,
             global_file_hash_map: &self.global_file_hash_map,
             root_external_dependencies_hash: self.root_external_dependencies_hash,
-            env: &self.env,
+            env: self.env,
             resolved_env_vars: self
                 .resolved_env_vars
                 .as_ref()
