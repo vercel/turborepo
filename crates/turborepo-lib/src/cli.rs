@@ -513,7 +513,12 @@ pub struct RunArgs {
     #[clap(long)]
     pub since: Option<String>,
     /// Generate a summary of the turbo run
-    #[clap(long, env = "TURBO_RUN_SUMMARY", default_missing_value = "true")]
+    #[clap(
+        long,
+        env = "TURBO_RUN_SUMMARY",
+        default_missing_value = "true",
+        default_value = "true"
+    )]
     pub summarize: Option<Option<bool>>,
 
     /// Use "none" to remove prefixes from task logs. Use "task" to get task id
