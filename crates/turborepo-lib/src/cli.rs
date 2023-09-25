@@ -427,7 +427,7 @@ pub struct RunArgs {
     #[clap(alias = "dry", long = "dry-run", num_args = 0..=1, default_missing_value = "text")]
     pub dry_run: Option<DryRunMode>,
     /// Run turbo in single-package mode
-    #[clap(long, global = true)]
+    #[clap(long)]
     pub single_package: bool,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
