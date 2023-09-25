@@ -34,6 +34,7 @@
 #![feature(async_fn_in_trait)]
 #![feature(type_alias_impl_trait)]
 #![feature(never_type)]
+#![feature(provide_any)]
 
 pub mod backend;
 mod collectibles;

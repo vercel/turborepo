@@ -1,4 +1,3 @@
-#![allow(internal_features)]
 #![feature(proc_macro_diagnostic)]
 #![feature(allow_internal_unstable)]
 #![feature(box_patterns)]
