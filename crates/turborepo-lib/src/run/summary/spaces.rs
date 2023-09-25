@@ -34,7 +34,8 @@ struct SpacesRunPayload {
     exit_code: u32,
     command: String,
     repository_path: AbsoluteSystemPathBuf,
-    context: String,
+    #[serde(rename = "context")]
+    run_context: String,
     client: SpacesClientSummary,
     git_branch: String,
     git_sha: String,
