@@ -234,24 +234,29 @@ fn encode<'t, A, T>(
             }
             (_, Class(class)) => {
                 grouping.push_with(pattern, || {
+                    use crate::token::Class as ClassToken;
+
+                    fn encode_class_archetypes(class: &ClassToken, pattern: &mut String) {
+                        for archetype in class.archetypes() {
+                            match archetype {
+                                Character(literal) => pattern.push_str(&literal.escaped()),
+                                Range(left, right) => {
+                                    pattern.push_str(&left.escaped());
+                                    pattern.push('-');
+                                    pattern.push_str(&right.escaped());
+                                }
+                            }
+                        }
+                    }
+
                     let mut pattern = String::new();
                     pattern.push('[');
                     if class.is_negated() {
                         pattern.push('^');
-                    }
-                    for archetype in class.archetypes() {
-                        match archetype {
-                            Character(literal) => pattern.push_str(&literal.escaped()),
-                            Range(left, right) => {
-                                pattern.push_str(&left.escaped());
-                                pattern.push('-');
-                                pattern.push_str(&right.escaped());
-                            }
-                        }
-                    }
-                    if class.is_negated() {
+                        encode_class_archetypes(class, &mut pattern);
                         pattern.push_str(SEPARATOR_CLASS_EXPRESSION);
                     } else {
+                        encode_class_archetypes(class, &mut pattern);
                         pattern.push_str(nsepexpr!("&&{0}"));
                     }
                     pattern.push(']');

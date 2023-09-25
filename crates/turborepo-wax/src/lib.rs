@@ -1732,6 +1732,26 @@ mod tests {
     }
 
     #[test]
+    fn match_glob_with_negated_class_tokens() {
+        let glob = Glob::new("a[!b]c").unwrap();
+
+        assert!(glob.is_match(Path::new("a-c")));
+        assert!(glob.is_match(Path::new("axc")));
+
+        assert!(!glob.is_match(Path::new("abc")));
+        assert!(!glob.is_match(Path::new("a/c")));
+
+        let glob = Glob::new("a[!0-4]b").unwrap();
+
+        assert!(glob.is_match(Path::new("a9b")));
+        assert!(glob.is_match(Path::new("axb")));
+
+        assert!(!glob.is_match(Path::new("a0b")));
+        assert!(!glob.is_match(Path::new("a4b")));
+        assert!(!glob.is_match(Path::new("a/b")));
+    }
+
+    #[test]
     fn match_glob_with_alternative_tokens() {
         let glob = Glob::new("a/{x?z,y$}b/*").unwrap();
 
