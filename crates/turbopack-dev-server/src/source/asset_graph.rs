@@ -150,6 +150,7 @@ async fn expand(
     for (p_vc, asset) in assets {
         // For clippy -- This explicit deref is necessary
         let p = &*p_vc.await?;
+        let asset = asset.resolve().await?;
         if let Some(sub_path) = root_path.get_path_to(p) {
             map.insert(sub_path.to_string(), asset);
             if sub_path == "index.html" {

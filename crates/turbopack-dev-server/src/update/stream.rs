@@ -46,6 +46,7 @@ async fn get_update_stream_item(
     get_content: TransientInstance<GetContentFn>,
 ) -> Result<Vc<UpdateStreamItem>> {
     let content = get_content();
+    let _ = content.resolve_strongly_consistent().await?;
     let mut plain_issues = peek_issues(content).await?;
 
     let content_value = match content.await {

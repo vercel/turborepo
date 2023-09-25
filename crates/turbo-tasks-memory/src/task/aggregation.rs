@@ -273,7 +273,7 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
                         self.tasks_to_notify
                             .lock()
                             .get_or_insert_default()
-                            .extend(collectibles_info.dependent_tasks.iter().copied());
+                            .extend(take(&mut collectibles_info.dependent_tasks).into_iter());
                     }
                     if value == 0 && collectibles_info.is_unset() {
                         e.remove();
