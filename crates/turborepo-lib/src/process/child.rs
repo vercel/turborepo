@@ -657,4 +657,26 @@ mod test {
         assert!(err.is_empty());
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
+
+    #[tokio::test]
+    async fn test_wait_with_output() {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+
+        let exit = child
+            .wait_with_piped_outputs(&mut out, &mut err)
+            .await
+            .unwrap();
+
+        assert_eq!(out, b"hello world\n");
+        assert!(err.is_empty());
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
 }
