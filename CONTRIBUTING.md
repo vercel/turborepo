@@ -258,7 +258,7 @@ Finally, the crate must be added to the Turborepo section of CODEOWNERS:
 
 Turbopack uses [Cargo workspaces][workspaces] in the Turbo monorepo. You'll find
 several workspaces inside the `crates/` directory. In order to run a particular
-crate, you can use the `cargo run -p [CRATE_NAME]` command. For example, to test the Next.js development server, run `cargo run -p next-dev`.
+crate, you can use the `cargo run -p [CRATE_NAME]` command.
 
 ### Turbopack Architecture
 
@@ -287,10 +287,6 @@ You can also create a little demo app and run
 ```shell
 cargo run -p node-file-trace -- print demo/index.js
 ```
-
-### Benchmarking Turbopack
-
-See [the benchmarking README for Turbopack](crates/next-dev/benches/README.md) for details.
 
 ### Profiling Turbopack
 

@@ -30,7 +30,7 @@ const WINDOWS_POLL_DURATION: Duration = Duration::from_millis(1);
 ///       code path to shut down the non-blocking polling
 #[tracing::instrument]
 pub async fn listen_socket(
-    path: &AbsoluteSystemPath,
+    daemon_root: &AbsoluteSystemPath,
     #[allow(unused)] running: Arc<AtomicBool>,
 ) -> Result<
     (
@@ -39,15 +39,15 @@ pub async fn listen_socket(
     ),
     SocketOpenError,
 > {
-    let pid_path = path.join_component("turbod.pid");
-    let sock_path = path.join_component("turbod.sock");
+    let pid_path = daemon_root.join_component("turbod.pid");
+    let sock_path = daemon_root.join_component("turbod.sock");
     let mut lock = pidlock::Pidlock::new(pid_path.as_std_path().to_owned());
 
     trace!("acquiring pidlock");
     // this will fail if the pid is already owned
     // todo: make sure we fall back and handle this
     lock.acquire()?;
-    std::fs::remove_file(&sock_path).ok();
+    sock_path.remove_file().ok();
 
     debug!("pidlock acquired at {}", pid_path);
     debug!("listening on socket at {}", sock_path);
@@ -178,48 +178,42 @@ impl<T> Connected for UdsWindowsStream<T> {
 mod test {
     use std::{
         assert_matches::assert_matches,
-        path::Path,
         process::Command,
         sync::{atomic::AtomicBool, Arc},
     };
 
     use pidlock::PidlockError;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use super::listen_socket;
     use crate::daemon::endpoint::SocketOpenError;
 
-    fn pid_path(tmp_path: &Path) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf::try_from(tmp_path.join("turbod.pid")).unwrap()
+    fn pid_path(daemon_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+        daemon_root.join_component("turbod.pid")
     }
 
     #[tokio::test]
     async fn test_stale_pid() {
         let tmp_dir = tempfile::tempdir().unwrap();
-        let tmp_path = tmp_dir.path().to_owned();
-        let pid_path = pid_path(&tmp_path);
+        let daemon_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        let pid_path = pid_path(&daemon_root);
         // A pid that will never be running and is guaranteed not to be us
         pid_path.create_with_contents("100000").unwrap();
 
         let running = Arc::new(AtomicBool::new(true));
-        let result = listen_socket(&pid_path, running).await;
+        let result = listen_socket(&daemon_root, running).await;
 
-        // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
-
-        // todo: update this test to gracefully connect if the lock file exists but has
-        // no process
-        if let Err(err) = result {
-            assert_matches!(err, SocketOpenError::LockError(PidlockError::LockExists(_)));
-        } else {
-            panic!("expected an error")
-        }
+        assert!(
+            result.is_ok(),
+            "expected to clear stale pid file and connect"
+        );
     }
 
     #[tokio::test]
     async fn test_existing_process() {
         let tmp_dir = tempfile::tempdir().unwrap();
-        let tmp_path = tmp_dir.path().to_owned();
-        let pid_path = pid_path(&tmp_path);
+        let daemon_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        let pid_path = pid_path(&daemon_root);
 
         #[cfg(windows)]
         let node_bin = "node.exe";
@@ -232,7 +226,7 @@ mod test {
             .unwrap();
 
         let running = Arc::new(AtomicBool::new(true));
-        let result = listen_socket(&pid_path, running).await;
+        let result = listen_socket(&daemon_root, running).await;
 
         // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
 
@@ -240,7 +234,7 @@ mod test {
         // pid file, and start a new daemon. the old one should just time
         // out, and this should not error.
         if let Err(err) = result {
-            assert_matches!(err, SocketOpenError::LockError(PidlockError::LockExists(_)));
+            assert_matches!(err, SocketOpenError::LockError(PidlockError::AlreadyOwned));
         } else {
             panic!("expected an error")
         }
