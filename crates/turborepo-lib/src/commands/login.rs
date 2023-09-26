@@ -98,6 +98,8 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
     let api_client: APIClient = base.api_client()?;
     let ui = base.ui.clone();
 
+    // We are passing a closure here, but it would be cleaner if we made a
+    // turborepo-config crate and imported that into turborepo-auth.
     let set_token = |token: &str| -> Result<(), anyhow::Error> {
         Ok(base.user_config_mut()?.set_token(Some(token.to_string()))?)
     };
