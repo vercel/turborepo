@@ -35,6 +35,7 @@ pub async fn login<F>(
 where
     F: FnMut(&str) -> Result<()>,
 {
+    println!("WHAT");
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
     let mut login_url = Url::parse(login_url_configuration)?;
 
@@ -146,4 +147,40 @@ async fn run_login_one_shot_server(
         .handle(handle)
         .serve(app.into_make_service())
         .await?)
+}
+
+#[cfg(test)]
+mod test {
+    use port_scanner;
+    use tokio;
+    use turborepo_ui::UI;
+    use turborepo_vercel_api_mock::start_test_server;
+
+    use crate::login;
+
+    #[tokio::test]
+    async fn test_login() {
+        let port = port_scanner::request_open_port().unwrap();
+        let api_server = tokio::spawn(start_test_server(port));
+
+        let ui = UI::new(false);
+
+        let url = format!("http://localhost:{port}");
+
+        let api_client =
+            turborepo_api_client::APIClient::new(url.clone(), 1000, "1", false).unwrap();
+
+        // closure that will check that the token is sent correctly
+        let mut got_token = String::new();
+        let set_token = |t: &str| -> Result<(), anyhow::Error> {
+            got_token = t.to_string();
+            Ok(())
+        };
+
+        login(api_client, &ui, set_token, &url).await.unwrap();
+
+        api_server.abort();
+        println!("got_token: {}", got_token);
+        assert_eq!(got_token, turborepo_vercel_api_mock::EXPECTED_TOKEN);
+    }
 }

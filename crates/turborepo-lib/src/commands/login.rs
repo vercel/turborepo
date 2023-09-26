@@ -221,53 +221,6 @@ mod test {
         Args,
     };
 
-    #[tokio::test]
-    async fn test_login() {
-        let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
-
-        let user_config_file = NamedTempFile::new().unwrap();
-        fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
-        let repo_config_file = NamedTempFile::new().unwrap();
-        let repo_config_path = AbsoluteSystemPathBuf::try_from(repo_config_file.path()).unwrap();
-        // Explicitly pass the wrong port to confirm that we're reading it from the
-        // manual override
-        fs::write(
-            repo_config_file.path(),
-            format!("{{ \"apiurl\": \"http://localhost:{}\" }}", port + 1),
-        )
-        .unwrap();
-        let root_dir = tempdir().unwrap();
-
-        let mut base = CommandBase {
-            repo_root: AbsoluteSystemPathBuf::new(root_dir.path().to_string_lossy()).unwrap(),
-            ui: UI::new(false),
-            client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
-            user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
-                    .load()
-                    .unwrap(),
-            ),
-            repo_config: OnceCell::from(
-                RepoConfigLoader::new(repo_config_path)
-                    .with_api(Some(format!("http://localhost:{}", port)))
-                    .load()
-                    .unwrap(),
-            ),
-            args: Args::default(),
-            version: "",
-        };
-
-        login::login(&mut base).await.unwrap();
-
-        handle.abort();
-
-        assert_eq!(
-            base.user_config().unwrap().token().unwrap(),
-            turborepo_vercel_api_mock::EXPECTED_TOKEN
-        );
-    }
-
     #[derive(Debug, Clone, Deserialize)]
     struct TokenRequest {
         #[cfg(not(test))]
