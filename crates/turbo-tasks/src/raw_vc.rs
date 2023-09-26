@@ -372,6 +372,9 @@ impl<T: ?Sized, Cast: VcCast> Future for ReadRawVcFuture<T, Cast> {
                     };
                     match read_result {
                         Ok(Ok(vc)) => {
+                            // We no longer need to read strongly consistent, as any Vc returned
+                            // from the first task will be inside of the scope of the first task. So
+                            // it's already strongly consistent.
                             this.strongly_consistent = false;
                             this.current = vc;
                             continue 'outer;
