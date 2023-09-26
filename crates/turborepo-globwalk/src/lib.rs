@@ -15,6 +15,7 @@ use empty_glob::InclusiveEmptyAny;
 use itertools::Itertools;
 use path_slash::PathExt;
 use regex::Regex;
+use tracing::info_span;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 use wax::{Any, BuildError, Glob, Pattern};
 
@@ -403,19 +404,25 @@ pub fn globwalk(
                             ex_patterns, e,
                         )
                     })
-                    .filter_map(|entry| match entry {
-                        Ok(entry) if walk_type == WalkType::Files && entry.file_type().is_dir() => {
-                            None
-                        }
-                        Ok(entry) => Some(
-                            AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into()),
-                        ),
-                        Err(e) => {
-                            let io_err = std::io::Error::from(e);
-                            if io_err.kind() == std::io::ErrorKind::NotFound {
+                    .filter_map(|entry| {
+                        let span = info_span!("visit_file");
+                        let _enter = span.enter();
+                        match entry {
+                            Ok(entry)
+                                if walk_type == WalkType::Files && entry.file_type().is_dir() =>
+                            {
                                 None
-                            } else {
-                                Some(Err(io_err.into()))
+                            }
+                            Ok(entry) => Some(
+                                AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into()),
+                            ),
+                            Err(e) => {
+                                let io_err = std::io::Error::from(e);
+                                if io_err.kind() == std::io::ErrorKind::NotFound {
+                                    None
+                                } else {
+                                    Some(Err(io_err.into()))
+                                }
                             }
                         }
                     })
