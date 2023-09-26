@@ -29,12 +29,12 @@ pub struct GlobSet {
 pub struct GlobError {
     // Boxed to minimize error size
     underlying: Box<wax::BuildError>,
-    raw: String,
+    raw_glob: String,
 }
 
 impl Display for GlobError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.underlying, self.raw)
+        write!(f, "{}: {}", self.underlying, self.raw_glob)
     }
 }
 
@@ -43,7 +43,7 @@ fn compile_glob(raw: &str) -> Result<Glob<'static>, GlobError> {
         .map(|g| g.to_owned())
         .map_err(|e| GlobError {
             underlying: Box::new(e),
-            raw: raw.to_owned(),
+            raw_glob: raw.to_owned(),
         })
 }
 
@@ -69,7 +69,7 @@ impl GlobSet {
         let exclude = wax::any(excludes)
             .map_err(|e| GlobError {
                 underlying: Box::new(e),
-                raw: format!("{{{}}}", raw_excludes.join(",")),
+                raw_glob: format!("{{{}}}", raw_excludes.join(",")),
             })?
             .to_owned();
         Ok(Self { include, exclude })
