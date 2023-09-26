@@ -27,7 +27,7 @@ pub enum Error {
 }
 
 // TODO: make this configurable
-const LOGIN_URL: &str = "https://vercel.com/api";
+const LOGIN_URL: &str = "https://vercel.com";
 
 pub async fn login<F>(api_client: APIClient, ui: &UI, mut set_token: F) -> Result<()>
 where
