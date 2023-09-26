@@ -94,7 +94,9 @@ fn make_token_name() -> Result<String> {
 }
 
 pub async fn login(base: &mut CommandBase) -> Result<()> {
-    return login(base);
+    const api_client: APIClient = base.api_client()?;
+    const ui: UI = &base.ui;
+    return login(base, api_client, ui);
 }
 
 #[cfg(test)]
