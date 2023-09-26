@@ -63,7 +63,7 @@ where
     // This function is passed in from turborepo-lib
     // TODO: inline this here and only pass in the location to write the token as an
     // optional arg.
-    let _ = set_token(token);
+    set_token(token)?;
 
     // TODO: make this a request to /teams endpoint instead?
     let user_response = api_client.get_user(token.as_str()).await?;
