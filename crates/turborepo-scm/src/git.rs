@@ -7,6 +7,20 @@ use turbopath::{
 use crate::{Error, Git, SCM};
 
 impl SCM {
+    pub fn get_current_branch(&self, path: &AbsoluteSystemPath) -> Result<String, Error> {
+        match self {
+            Self::Git(git) => git.get_current_branch(),
+            Self::Manual => Err(Error::GitRequired(path.to_owned())),
+        }
+    }
+
+    pub fn get_current_sha(&self, path: &AbsoluteSystemPath) -> Result<String, Error> {
+        match self {
+            Self::Git(git) => git.get_current_sha(),
+            Self::Manual => Err(Error::GitRequired(path.to_owned())),
+        }
+    }
+
     pub fn changed_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -66,6 +80,18 @@ pub fn changed_files(
 }
 
 impl Git {
+    fn get_current_branch(&self) -> Result<String, Error> {
+        let output = self.execute_git_command(&["branch", "--show-current"], "")?;
+        let output = String::from_utf8(output)?;
+        Ok(output.trim().to_owned())
+    }
+
+    fn get_current_sha(&self) -> Result<String, Error> {
+        let output = self.execute_git_command(&["rev-parse", "HEAD"], "")?;
+        let output = String::from_utf8(output)?;
+        Ok(output.trim().to_owned())
+    }
+
     fn changed_files(
         &self,
         turbo_root: &AbsoluteSystemPath,

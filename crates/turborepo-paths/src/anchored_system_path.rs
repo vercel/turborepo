@@ -1,10 +1,12 @@
 use std::{fmt, path::Path};
 
 use camino::{Utf8Component, Utf8Path};
+use serde::Serialize;
 
 use crate::{AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(transparent)]
 pub struct AnchoredSystemPath(Utf8Path);
 
 impl ToOwned for AnchoredSystemPath {

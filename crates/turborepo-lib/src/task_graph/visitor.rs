@@ -21,7 +21,7 @@ use crate::{
         task_id::{self, TaskId},
         RunCache,
     },
-    task_hash::{self, PackageInputsHashes, TaskHashTracker, TaskHashTrackerState, TaskHasher},
+    task_hash::{self, PackageInputsHashes, TaskHashTrackerState, TaskHasher},
 };
 
 // This holds the whole world

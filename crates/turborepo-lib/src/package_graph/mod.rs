@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::Result;
 use petgraph::visit::{depth_first_search, Reversed};
+use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
 
@@ -14,7 +15,10 @@ mod builder;
 
 pub use builder::{Error, PackageGraphBuilder};
 
-use crate::hash::{LockFilePackages, TurboHash};
+use crate::{
+    hash::{LockFilePackages, TurboHash},
+    run::task_id::ROOT_PKG_NAME,
+};
 
 pub struct PackageGraph {
     workspace_graph: petgraph::Graph<WorkspaceNode, ()>,
@@ -76,6 +80,15 @@ type PackageVersion = String;
 pub enum WorkspaceName {
     Root,
     Other(String),
+}
+
+impl Serialize for WorkspaceName {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            WorkspaceName::Root => serializer.serialize_str(ROOT_PKG_NAME),
+            WorkspaceName::Other(other) => serializer.serialize_str(other),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]

@@ -16,6 +16,20 @@ use crate::{
     task_graph::{TaskDefinition, TaskOutputs},
 };
 
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("Error replaying logs: {0}")]
+    Ui(#[from] turborepo_ui::Error),
+    #[error("Error accessing cache: {0}")]
+    Cache(#[from] turborepo_cache::CacheError),
+}
+
+impl Error {
+    pub fn is_cache_miss(&self) -> bool {
+        matches!(&self, Self::Cache(CacheError::CacheMiss))
+    }
+}
+
 pub struct RunCache {
     task_output_mode: Option<OutputLogsMode>,
     cache: AsyncCache,
@@ -98,10 +112,7 @@ pub struct TaskCache {
 }
 
 impl TaskCache {
-    pub fn replay_log_file(
-        &self,
-        prefixed_ui: &mut PrefixedUI<impl Write>,
-    ) -> Result<(), anyhow::Error> {
+    pub fn replay_log_file(&self, prefixed_ui: &mut PrefixedUI<impl Write>) -> Result<(), Error> {
         if self.log_file_path.exists() {
             replay_logs(prefixed_ui, &self.log_file_path)?;
         }
@@ -109,7 +120,7 @@ impl TaskCache {
         Ok(())
     }
 
-    pub fn on_error(&self, prefixed_ui: &mut PrefixedUI<impl Write>) -> Result<(), anyhow::Error> {
+    pub fn on_error(&self, prefixed_ui: &mut PrefixedUI<impl Write>) -> Result<(), Error> {
         if self.task_output_mode == OutputLogsMode::ErrorsOnly {
             prefixed_ui.output(format!(
                 "cache miss, executing {}",
@@ -125,7 +136,7 @@ impl TaskCache {
         &self,
         prefix: StyledObject<String>,
         writer: W,
-    ) -> Result<LogWriter<W>, anyhow::Error> {
+    ) -> Result<LogWriter<W>, Error> {
         let mut log_writer = LogWriter::default();
         let prefixed_writer = PrefixedWriter::new(self.run_cache.ui, prefix, writer);
 
@@ -149,7 +160,7 @@ impl TaskCache {
     pub async fn restore_outputs(
         &mut self,
         prefixed_ui: &mut PrefixedUI<impl Write>,
-    ) -> Result<CacheResponse, anyhow::Error> {
+    ) -> Result<CacheResponse, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
             if !matches!(
                 self.task_output_mode,

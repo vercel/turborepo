@@ -147,6 +147,10 @@ impl CommandBase {
         // We directly use repo_root to avoid converting back to absolute system path
         &self.repo_root
     }
+
+    pub fn version(&self) -> &'static str {
+        self.version
+    }
 }
 
 #[cfg(test)]

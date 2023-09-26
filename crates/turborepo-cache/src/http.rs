@@ -1,7 +1,7 @@
 use std::{backtrace::Backtrace, io::Write};
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-use turborepo_api_client::{APIClient, Response};
+use turborepo_api_client::{APIAuth, APIClient, Response};
 
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
@@ -16,12 +16,6 @@ pub struct HTTPCache {
     token: String,
     team_id: String,
     team_slug: Option<String>,
-}
-
-pub struct APIAuth {
-    pub team_id: String,
-    pub token: String,
-    pub team_slug: Option<String>,
 }
 
 impl HTTPCache {
