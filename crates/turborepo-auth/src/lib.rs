@@ -35,7 +35,6 @@ pub async fn login<F>(
 where
     F: FnMut(&str) -> Result<()>,
 {
-    println!("WHAT");
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
     let mut login_url = Url::parse(login_url_configuration)?;
 
@@ -180,7 +179,6 @@ mod test {
         login(api_client, &ui, set_token, &url).await.unwrap();
 
         api_server.abort();
-        println!("got_token: {}", got_token);
         assert_eq!(got_token, turborepo_vercel_api_mock::EXPECTED_TOKEN);
     }
 }
