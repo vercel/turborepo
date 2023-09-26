@@ -38,7 +38,7 @@ because otherwise prysk interprets them as multiline commands
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   ::group::util:build
-  util:build: cache bypass, force executing 90d7154e362e3386
+  util:build: cache bypass, force executing 329a30aa0bee6760
   util:build: 
   util:build: > build
   util:build: > sleep 0.5 && echo 'building' && sleep 1 && echo 'completed'
