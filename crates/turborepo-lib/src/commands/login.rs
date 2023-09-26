@@ -96,6 +96,7 @@ fn make_token_name() -> Result<String> {
 
 pub async fn login(base: &mut CommandBase) -> Result<()> {
     let api_client: APIClient = base.api_client()?;
+    let repo_config = base.repo_config()?;
     let ui = base.ui.clone();
 
     // We are passing a closure here, but it would be cleaner if we made a
@@ -104,7 +105,7 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
         Ok(base.user_config_mut()?.set_token(Some(token.to_string()))?)
     };
 
-    return auth_login(api_client, &ui, set_token).await;
+    return auth_login(api_client, &ui, set_token, repo_config.login_url()).await;
 }
 
 #[cfg(test)]
