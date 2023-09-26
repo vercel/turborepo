@@ -15,7 +15,6 @@ use turborepo_ui::{start_spinner, BOLD, CYAN, UI};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
-const DEFAULT_SSO_PROVIDER: &str = "SAML/OIDC Single Sign-On";
 
 use thiserror::Error;
 #[derive(Debug, Error)]
