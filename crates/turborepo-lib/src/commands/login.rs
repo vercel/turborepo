@@ -96,8 +96,8 @@ fn make_token_name() -> Result<String> {
 
 pub async fn login(base: &mut CommandBase) -> Result<()> {
     let api_client: APIClient = base.api_client()?;
-    let repo_config = base.repo_config()?;
     let ui = base.ui.clone();
+    let login_url_config = base.repo_config()?.login_url().to_string();
 
     // We are passing a closure here, but it would be cleaner if we made a
     // turborepo-config crate and imported that into turborepo-auth.
@@ -105,7 +105,7 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
         Ok(base.user_config_mut()?.set_token(Some(token.to_string()))?)
     };
 
-    return auth_login(api_client, &ui, set_token, repo_config.login_url()).await;
+    return auth_login(api_client, &ui, set_token, &login_url_config).await;
 }
 
 #[cfg(test)]
