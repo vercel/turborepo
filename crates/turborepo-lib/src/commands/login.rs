@@ -96,7 +96,12 @@ fn make_token_name() -> Result<String> {
 pub async fn login(base: &mut CommandBase) -> Result<()> {
     const api_client: APIClient = base.api_client()?;
     const ui: UI = &base.ui;
-    return login(base, api_client, ui);
+
+    let set_token = |token: &str| -> () {
+        base.user_config_mut()?.set_token(Some(token.to_string()))?;
+    };
+
+    return login(base, api_client, ui, set_token);
 }
 
 #[cfg(test)]
