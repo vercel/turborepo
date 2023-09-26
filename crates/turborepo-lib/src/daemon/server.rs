@@ -120,7 +120,7 @@ where
     S: Future<Output = CloseReason>,
 {
     let running = Arc::new(AtomicBool::new(true));
-    let (_pid_lock, stream) = match listen_socket(daemon_root.clone(), running.clone()).await {
+    let (_pid_lock, stream) = match listen_socket(daemon_root, running.clone()).await {
         Ok((pid_lock, stream)) => (pid_lock, stream),
         Err(e) => return CloseReason::SocketOpenError(e),
     };

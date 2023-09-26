@@ -94,33 +94,33 @@ enum Command {
 
 /// Wraps a writer with a prefix before the actual message.
 pub struct PrefixedWriter<W> {
-    prefix: StyledObject<String>,
+    prefix: String,
     writer: W,
-    ui: UI,
 }
 
 impl<W> Debug for PrefixedWriter<W> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PrefixedWriter")
             .field("prefix", &self.prefix)
-            .field("ui", &self.ui)
             .finish()
     }
 }
 
 impl<W: Write> PrefixedWriter<W> {
-    pub fn new(ui: UI, prefix: StyledObject<String>, writer: W) -> Self {
-        Self { ui, prefix, writer }
+    pub fn new(ui: UI, prefix: StyledObject<impl Display>, writer: W) -> Self {
+        let prefix = ui.apply(prefix).to_string();
+        Self { prefix, writer }
     }
 }
 
 impl<W: Write> Write for PrefixedWriter<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let prefix = self.prefix.clone();
-        let prefix = self.ui.apply(prefix);
-        let prefix_bytes_written = self.writer.write(prefix.to_string().as_bytes())?;
+        self.writer.write_all(self.prefix.as_bytes())?;
 
-        Ok(prefix_bytes_written + self.writer.write(buf)?)
+        // We do end up writing more bytes than this to the underlying writer, but we
+        // cannot report this to the callers as the amount of bytes we report
+        // written must be less than or equal to the number of bytes in the buffer.
+        self.writer.write(buf)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
@@ -164,6 +164,19 @@ mod test {
             Command::Output => out,
             Command::Warn | Command::Error => err,
         };
+        assert_eq!(String::from_utf8(buffer).unwrap(), expected);
+    }
+
+    #[test_case(true, "foo#build: cool!")]
+    #[test_case(false, "\u{1b}[1mfoo#build: \u{1b}[0mcool!")]
+    fn test_prefixed_writer(strip_ansi: bool, expected: &str) {
+        let mut buffer = Vec::new();
+        let mut writer = PrefixedWriter::new(
+            UI::new(strip_ansi),
+            crate::BOLD.apply_to("foo#build: "),
+            &mut buffer,
+        );
+        writer.write_all(b"cool!").unwrap();
         assert_eq!(String::from_utf8(buffer).unwrap(), expected);
     }
 }

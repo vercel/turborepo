@@ -323,8 +323,15 @@ pub enum Command {
     Logout {},
     /// Prepare a subset of your monorepo.
     Prune {
-        #[clap(long)]
-        scope: Vec<String>,
+        #[clap(hide = true, long)]
+        scope: Option<Vec<String>>,
+        /// Workspaces that should be included in the subset
+        #[clap(
+            required_unless_present("scope"),
+            conflicts_with("scope"),
+            value_name = "SCOPE"
+        )]
+        scope_arg: Option<Vec<String>>,
         #[clap(long)]
         docker: bool,
         #[clap(long = "out-dir", default_value_t = String::from("out"), value_parser)]
@@ -782,10 +789,15 @@ pub async fn run(
         }
         Command::Prune {
             scope,
+            scope_arg,
             docker,
             output_dir,
         } => {
-            let scope = scope.clone();
+            let scope = scope_arg
+                .as_ref()
+                .or(scope.as_ref())
+                .cloned()
+                .unwrap_or_default();
             let docker = *docker;
             let output_dir = output_dir.clone();
             let base = CommandBase::new(cli_args, repo_root, version, ui)?;
@@ -1638,13 +1650,14 @@ mod test {
     #[test]
     fn test_parse_prune() {
         let default_prune = Command::Prune {
-            scope: Vec::new(),
+            scope: None,
+            scope_arg: Some(vec!["foo".into()]),
             docker: false,
             output_dir: "out".to_string(),
         };
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "prune"]).unwrap(),
+            Args::try_parse_from(["turbo", "prune", "foo"]).unwrap(),
             Args {
                 command: Some(default_prune.clone()),
                 ..Args::default()
@@ -1653,7 +1666,7 @@ mod test {
 
         CommandTestCase {
             command: "prune",
-            command_args: vec![],
+            command_args: vec![vec!["foo"]],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(default_prune),
@@ -1667,7 +1680,8 @@ mod test {
             Args::try_parse_from(["turbo", "prune", "--scope", "bar"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
-                    scope: vec!["bar".to_string()],
+                    scope: Some(vec!["bar".to_string()]),
+                    scope_arg: None,
                     docker: false,
                     output_dir: "out".to_string(),
                 }),
@@ -1676,10 +1690,24 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "prune", "--docker"]).unwrap(),
+            Args::try_parse_from(["turbo", "prune", "foo", "bar"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
-                    scope: Vec::new(),
+                    scope: None,
+                    scope_arg: Some(vec!["foo".to_string(), "bar".to_string()]),
+                    docker: false,
+                    output_dir: "out".to_string(),
+                }),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "prune", "--docker", "foo"]).unwrap(),
+            Args {
+                command: Some(Command::Prune {
+                    scope: None,
+                    scope_arg: Some(vec!["foo".into()]),
                     docker: true,
                     output_dir: "out".to_string(),
                 }),
@@ -1688,10 +1716,11 @@ mod test {
         );
 
         assert_eq!(
-            Args::try_parse_from(["turbo", "prune", "--out-dir", "dist"]).unwrap(),
+            Args::try_parse_from(["turbo", "prune", "--out-dir", "dist", "foo"]).unwrap(),
             Args {
                 command: Some(Command::Prune {
-                    scope: Vec::new(),
+                    scope: None,
+                    scope_arg: Some(vec!["foo".into()]),
                     docker: false,
                     output_dir: "dist".to_string(),
                 }),
@@ -1701,11 +1730,12 @@ mod test {
 
         CommandTestCase {
             command: "prune",
-            command_args: vec![vec!["--out-dir", "dist"], vec!["--docker"]],
+            command_args: vec![vec!["foo"], vec!["--out-dir", "dist"], vec!["--docker"]],
             global_args: vec![],
             expected_output: Args {
                 command: Some(Command::Prune {
-                    scope: Vec::new(),
+                    scope: None,
+                    scope_arg: Some(vec!["foo".into()]),
                     docker: true,
                     output_dir: "dist".to_string(),
                 }),
@@ -1716,11 +1746,12 @@ mod test {
 
         CommandTestCase {
             command: "prune",
-            command_args: vec![vec!["--out-dir", "dist"], vec!["--docker"]],
+            command_args: vec![vec!["foo"], vec!["--out-dir", "dist"], vec!["--docker"]],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
                 command: Some(Command::Prune {
-                    scope: Vec::new(),
+                    scope: None,
+                    scope_arg: Some(vec!["foo".into()]),
                     docker: true,
                     output_dir: "dist".to_string(),
                 }),
@@ -1740,7 +1771,8 @@ mod test {
             global_args: vec![],
             expected_output: Args {
                 command: Some(Command::Prune {
-                    scope: vec!["foo".to_string()],
+                    scope: Some(vec!["foo".to_string()]),
+                    scope_arg: None,
                     docker: true,
                     output_dir: "dist".to_string(),
                 }),
@@ -1790,6 +1822,11 @@ mod test {
                 ..Args::default()
             }
         );
+    }
+
+    #[test]
+    fn test_parse_prune_no_mixed_arg_and_flag() {
+        assert!(Args::try_parse_from(["turbo", "prune", "foo", "--scope", "bar"]).is_err(),);
     }
 
     #[test]
