@@ -11,7 +11,7 @@ use tokio::sync::OnceCell;
 #[cfg(not(test))]
 use tracing::warn;
 use turborepo_api_client::APIClient;
-use turborepo_ui::{start_spinner, BOLD, CYAN, UI};
+use turborepo_ui::{start_spinner, BOLD, CYAN};
 
 use crate::{commands::CommandBase, config::Error};
 
@@ -96,14 +96,13 @@ fn make_token_name() -> Result<String> {
 
 pub async fn login(base: &mut CommandBase) -> Result<()> {
     let api_client: APIClient = base.api_client()?;
-    let ui: &UI = &base.ui;
+    let ui = base.ui.clone();
 
-    let set_token = |token: &str| -> Result<(), _> {
-        base.user_config_mut()?.set_token(Some(token.to_string()));
-        Ok(())
+    let set_token = |token: &str| -> Result<(), anyhow::Error> {
+        Ok(base.user_config_mut()?.set_token(Some(token.to_string()))?)
     };
 
-    return auth_login(api_client, ui, set_token).await;
+    return auth_login(api_client, &ui, set_token).await;
 }
 
 #[cfg(test)]
