@@ -29,16 +29,17 @@ pub enum Error {
     LoginUrlCannotBeABase { value: String },
 }
 
+// TODO: make this configurable
+const LOGIN_URL: &str = "https://vercel.com/api";
+
 pub async fn login(base: &mut CommandBase) -> Result<()> {
-    let repo_config = base.repo_config()?;
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
-    let login_url_configuration = repo_config.login_url();
-    let mut login_url = Url::parse(login_url_configuration)?;
+    let mut login_url = Url::parse(LOGIN_URL)?;
 
     login_url
         .path_segments_mut()
         .map_err(|_: ()| Error::LoginUrlCannotBeABase {
-            value: login_url_configuration.to_string(),
+            value: LOGIN_URL.to_string(),
         })?
         .extend(["turborepo", "token"]);
 
@@ -51,12 +52,7 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
     direct_user_to_url(login_url.as_str());
 
     let token_cell = Arc::new(OnceCell::new());
-    run_login_one_shot_server(
-        DEFAULT_PORT,
-        repo_config.login_url().to_string(),
-        token_cell.clone(),
-    )
-    .await?;
+    run_login_one_shot_server(DEFAULT_PORT, LOGIN_URL.to_string(), token_cell.clone()).await?;
 
     spinner.finish_and_clear();
 
