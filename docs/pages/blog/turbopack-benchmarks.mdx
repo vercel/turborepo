@@ -99,7 +99,7 @@ Based on feedback and collaboration with the Vite team, we used the [SWC plugin]
 To run this benchmark yourself, clone [`vercel/turbo`](https://github.com/vercel/turbo) and then use this command from the root:
 
 ```sh
-TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "startup/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)."
+TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p turbopack-bench "startup/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)."
 ```
 
 Here are the numbers we were able to produce on a 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400):
@@ -176,7 +176,7 @@ For more info, visit the comparison docs for [Vite](/pack/docs/comparisons/vite)
 To run this benchmark yourself, clone [`vercel/turbo`](https://github.com/vercel/turbo) and then use this command from the root:
 
 ```
-TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "hmr_to_commit/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)"
+TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p turbopack-bench "hmr_to_commit/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)"
 ```
 
 Here are the numbers we were able to produce on a 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400):

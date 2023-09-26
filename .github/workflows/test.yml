@@ -641,7 +641,7 @@ jobs:
           (set -o pipefail && \
           cargo check \
             --config $BINDING --config $TASKS --config $TASKS_FS \
-            --all -p next-swc-api -p next-dev \
+            --all -p next-swc-api \
             --no-default-features --features cli,custom_allocator,rustls-tls \
             --message-format short --quiet \
           2>&1 | tee cargo_output.log)
@@ -975,7 +975,7 @@ jobs:
           # One of Turbopack with 1000 modules is benchmarked in every run
           # to create a baseline result for normalization (should the runners performance vary between jobs)
 
-          # This runs all the non next-dev benchmarks
+          # This runs all the non turbopack-bench benchmarks
           - name: generic
             cache_key: all
             args: --workspace --exclude turbopack-bench
