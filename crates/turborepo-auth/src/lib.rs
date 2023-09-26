@@ -29,9 +29,9 @@ pub enum Error {
 // TODO: make this configurable
 const LOGIN_URL: &str = "https://vercel.com/api";
 
-pub async fn login<F>(api_client: APIClient, ui: &UI, set_token: F) -> Result<()>
+pub async fn login<F>(api_client: APIClient, ui: &UI, mut set_token: F) -> Result<()>
 where
-    F: Fn(&str) -> Result<()>,
+    F: FnMut(&str) -> Result<()>,
 {
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
     let mut login_url = Url::parse(LOGIN_URL)?;
