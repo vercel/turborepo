@@ -35,7 +35,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     /// Prepares the addition of new children. It returns a closure that should
     /// be executed outside of the leaf lock.
     #[allow(unused)]
-    #[must_use]
     pub fn add_children_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &'a C,
@@ -53,7 +52,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
 
     /// Prepares the addition of a new child. It returns a closure that should
     /// be executed outside of the leaf lock.
-    #[must_use]
     pub fn add_child_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &'a C,
@@ -81,7 +79,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
 
     /// Prepares the removal of a child. It returns a closure that should be
     /// executed outside of the leaf lock.
-    #[must_use]
     pub fn remove_children_job<'a, C: AggregationContext<Info = T, ItemRef = I>, H>(
         &self,
         aggregation_context: &'a C,
@@ -109,7 +106,6 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     /// Prepares the communication of a change on the leaf to updated aggregated
     /// nodes. It returns a closure that should be executed outside of the leaf
     /// lock.
-    #[must_use]
     pub fn change_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &'a C,
