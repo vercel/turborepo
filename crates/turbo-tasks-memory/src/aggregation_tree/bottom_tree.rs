@@ -12,26 +12,13 @@ use super::{
         remove_left_upper_from_item,
     },
     top_tree::TopTree,
-    AggregationContext, CHILDREN_INNER_THRESHOLD, MAX_NESTING_LEVEL,
+    AggregationContext, CHILDREN_INNER_THRESHOLD, CONNECTIVITY_LIMIT,
 };
 use crate::count_hash_set::{CountHashSet, RemoveIfEntryResult};
 
 /// The bottom half of the aggregation tree. It aggregates items up the a
 /// certain connectivity depending on the "height". Every level of the tree
 /// aggregates the previous level.
-///
-/// The every level aggregates an item with all of its children plus potentially
-/// all of their children. This depends on a flag called "is_blue" of the
-/// child. A "blue" child will aggregate one additional layer of
-/// connectivity, but this is not applies recursively. So every level of the
-/// tree will aggregate a connectivity of 2 to 3.
-///
-/// It's assumed that the "is_blue" flag of an item is randomly distributed, but
-/// deterministic.
-///
-/// The concept of "blue" nodes will improve the sharing of graphs as
-/// aggregation will eventually propagate to use the same items, even if they
-/// start on different depths of the graph.
 pub struct BottomTree<T, I: IsEnabled> {
     height: u8,
     item: I,
@@ -83,7 +70,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 // this means white children are inner children of this node
                 // and blue children need to propagate up
                 let mut children = children.into_iter().collect();
-                if nesting_level > MAX_NESTING_LEVEL {
+                if nesting_level > CONNECTIVITY_LIMIT {
                     self.add_children_of_child_following(aggregation_context, children);
                     return;
                 }
@@ -165,7 +152,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 self.add_child_of_child_inner(aggregation_context, child_of_child, nesting_level);
             }
             ChildLocation::Inner => {
-                if nesting_level <= MAX_NESTING_LEVEL {
+                if nesting_level <= CONNECTIVITY_LIMIT {
                     // the inner child has a new child
                     // but it's not a blue node and we are not too deep
                     // this means it's a inner child of this node
@@ -346,7 +333,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         }
     }
 
-    pub(super) fn add_left_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn add_left_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         upper: &Arc<BottomTree<T, I>>,
@@ -402,7 +389,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         }
     }
 
-    pub(super) fn migrate_old_inner<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn migrate_old_inner<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
         item: &I,
@@ -432,7 +419,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     }
 
     #[must_use]
-    pub(super) fn add_inner_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn add_inner_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         upper: &Arc<BottomTree<T, I>>,
@@ -465,7 +452,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         true
     }
 
-    pub(super) fn remove_left_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn remove_left_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
         upper: &Arc<BottomTree<T, I>>,
@@ -486,7 +473,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     }
 
     #[must_use]
-    pub(super) fn remove_inner_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn remove_inner_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         upper: &Arc<BottomTree<T, I>>,
@@ -508,7 +495,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         true
     }
 
-    pub(super) fn add_top_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn add_top_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         upper: &Arc<TopTree<T>>,
@@ -526,7 +513,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     }
 
     #[allow(dead_code)]
-    pub(super) fn remove_top_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn remove_top_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
         upper: &Arc<TopTree<T>>,
@@ -561,7 +548,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         }
     }
 
-    pub(super) fn child_change<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn child_change<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         change: &C::ItemChange,
@@ -571,7 +558,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         propagate_change_to_upper(&mut state, aggregation_context, change);
     }
 
-    pub(super) fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         root_info_type: &C::RootInfoType,

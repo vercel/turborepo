@@ -6,6 +6,11 @@ use ref_cast::RefCast;
 use super::{inner_refs::TopRef, leaf::top_tree, AggregationContext};
 use crate::count_hash_set::CountHashSet;
 
+/// The top half of the aggregation tree. It can aggregate all nodes of a
+/// subgraph. To do that it used a [BottomTree] of a specific height and, since
+/// a bottom tree only aggregates up to a specific connectivity, also another
+/// TopTree of the current depth + 1. This continues recursively until all nodes
+/// are aggregated.
 pub struct TopTree<T> {
     pub depth: u8,
     state: Mutex<TopTreeState<T>>,
@@ -29,7 +34,7 @@ impl<T: Default> TopTree<T> {
 }
 
 impl<T> TopTree<T> {
-    pub(super) fn add_children_of_child<'a, C: AggregationContext<Info = T>>(
+    pub fn add_children_of_child<'a, C: AggregationContext<Info = T>>(
         self: &Arc<Self>,
         aggregation_context: &C,
         children: impl IntoIterator<Item = &'a C::ItemRef>,
@@ -42,7 +47,7 @@ impl<T> TopTree<T> {
         }
     }
 
-    pub(super) fn add_child_of_child<C: AggregationContext<Info = T>>(
+    pub fn add_child_of_child<C: AggregationContext<Info = T>>(
         self: &Arc<Self>,
         aggregation_context: &C,
         child_of_child: &C::ItemRef,
@@ -51,7 +56,7 @@ impl<T> TopTree<T> {
             .add_upper(aggregation_context, self);
     }
 
-    pub(super) fn remove_child_of_child<C: AggregationContext<Info = T>>(
+    pub fn remove_child_of_child<C: AggregationContext<Info = T>>(
         self: &Arc<Self>,
         aggregation_context: &C,
         child_of_child: &C::ItemRef,
@@ -60,7 +65,7 @@ impl<T> TopTree<T> {
             .remove_upper(aggregation_context, self);
     }
 
-    pub(super) fn remove_children_of_child<'a, C: AggregationContext<Info = T>>(
+    pub fn remove_children_of_child<'a, C: AggregationContext<Info = T>>(
         self: &Arc<Self>,
         aggregation_context: &C,
         children: impl IntoIterator<Item = &'a C::ItemRef>,
@@ -73,7 +78,7 @@ impl<T> TopTree<T> {
         }
     }
 
-    pub(super) fn add_upper<C: AggregationContext<Info = T>>(
+    pub fn add_upper<C: AggregationContext<Info = T>>(
         &self,
         aggregation_context: &C,
         upper: &Arc<TopTree<T>>,
@@ -86,7 +91,7 @@ impl<T> TopTree<T> {
         }
     }
 
-    pub(super) fn remove_upper<C: AggregationContext<Info = T>>(
+    pub fn remove_upper<C: AggregationContext<Info = T>>(
         &self,
         aggregation_context: &C,
         upper: &Arc<TopTree<T>>,
@@ -99,7 +104,7 @@ impl<T> TopTree<T> {
         }
     }
 
-    pub(super) fn child_change<C: AggregationContext<Info = T>>(
+    pub fn child_change<C: AggregationContext<Info = T>>(
         &self,
         aggregation_context: &C,
         change: &C::ItemChange,
@@ -131,7 +136,7 @@ impl<T> TopTree<T> {
         }
     }
 
-    pub(super) fn lock_info(self: &Arc<Self>) -> AggregationInfoGuard<T> {
+    pub fn lock_info(self: &Arc<Self>) -> AggregationInfoGuard<T> {
         AggregationInfoGuard {
             // SAFETY: We can cast the lifetime as we keep a strong reference to the tree.
             // The order of the field in the struct is important to drop guard before tree.

@@ -14,6 +14,11 @@ struct BottomRefInfo {
     distance: u8,
 }
 
+/// A map that stores references to bottom trees which a specific distance. It
+/// stores the minimum distance added to the map.
+///
+/// This is used to store uppers of leafs or smaller bottom trees with the
+/// current distance. The distance is imporant to keep the correct connectivity.
 #[derive(Default)]
 pub struct DistanceCountMap<T: IsEnabled> {
     map: AutoMap<T, BottomRefInfo, BuildNoHashHasher<T>>,
@@ -88,24 +93,28 @@ impl<T: IsEnabled + Eq + Hash + Clone> DistanceCountMap<T> {
     }
 }
 
+/// Connection to upper bottom trees. It has two modes: A single bottom tree,
+/// where the current left/smaller bottom tree is the left-most child. Or
+/// multiple bottom trees, where the current left/smaller bottom tree is an
+/// inner child (not left-most).
 pub enum BottomConnection<T, I: IsEnabled> {
     Left(Arc<BottomTree<T, I>>),
     Inner(DistanceCountMap<BottomRef<T, I>>),
 }
 
 impl<T, I: IsEnabled> BottomConnection<T, I> {
-    pub(super) fn new() -> Self {
+    pub fn new() -> Self {
         Self::Inner(DistanceCountMap::new())
     }
 
-    pub(super) fn is_unset(&self) -> bool {
+    pub fn is_unset(&self) -> bool {
         match self {
             Self::Left(_) => false,
             Self::Inner(list) => list.is_unset(),
         }
     }
 
-    pub(super) fn as_cloned_uppers(&self) -> BottomUppers<T, I> {
+    pub fn as_cloned_uppers(&self) -> BottomUppers<T, I> {
         match self {
             Self::Left(upper) => BottomUppers::Left(upper.clone()),
             Self::Inner(upper) => BottomUppers::Inner(
@@ -118,7 +127,7 @@ impl<T, I: IsEnabled> BottomConnection<T, I> {
     }
 
     #[must_use]
-    pub(super) fn set_left_upper(
+    pub fn set_left_upper(
         &mut self,
         upper: &Arc<BottomTree<T, I>>,
     ) -> DistanceCountMap<BottomRef<T, I>> {
@@ -128,7 +137,7 @@ impl<T, I: IsEnabled> BottomConnection<T, I> {
         }
     }
 
-    pub(super) fn unset_left_upper(&mut self, upper: &Arc<BottomTree<T, I>>) {
+    pub fn unset_left_upper(&mut self, upper: &Arc<BottomTree<T, I>>) {
         match std::mem::replace(self, BottomConnection::Inner(DistanceCountMap::new())) {
             BottomConnection::Left(old_upper) => {
                 debug_assert!(Arc::ptr_eq(&old_upper, upper));
@@ -139,7 +148,7 @@ impl<T, I: IsEnabled> BottomConnection<T, I> {
 }
 
 impl<T, I: IsEnabled + Eq + Hash + Clone> BottomConnection<T, I> {
-    pub(super) fn child_change<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn child_change<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         change: &C::ItemChange,
@@ -156,7 +165,7 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomConnection<T, I> {
         }
     }
 
-    pub(super) fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         root_info_type: &C::RootInfoType,
@@ -191,7 +200,7 @@ pub enum BottomUppers<T, I: IsEnabled> {
 }
 
 impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
-    pub(super) fn add_children_of_child<'a, C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn add_children_of_child<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         children: impl IntoIterator<Item = &'a I> + Clone,
@@ -215,7 +224,7 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
         }
     }
 
-    pub(super) fn add_child_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn add_child_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         child_of_child: &I,
@@ -242,7 +251,7 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
         }
     }
 
-    pub(super) fn remove_child_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn remove_child_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         child_of_child: &I,
@@ -259,7 +268,7 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
         }
     }
 
-    pub(super) fn remove_children_of_child<'a, C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn remove_children_of_child<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         children: impl IntoIterator<Item = &'a I> + Clone,
@@ -278,7 +287,7 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
         }
     }
 
-    pub(super) fn child_change<C: AggregationContext<Info = T, ItemRef = I>>(
+    pub fn child_change<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         change: &C::ItemChange,

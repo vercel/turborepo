@@ -10,10 +10,13 @@ use super::{bottom_tree::BottomTree, top_tree::TopTree};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ChildLocation {
+    // Left-most child
     Left,
+    // Inner child, not left-most
     Inner,
 }
 
+/// A reference to a [TopTree].
 #[derive(RefCast)]
 #[repr(transparent)]
 pub struct TopRef<T> {
@@ -44,6 +47,7 @@ impl<T> Clone for TopRef<T> {
     }
 }
 
+/// A reference to a [BottomTree].
 #[derive(RefCast)]
 #[repr(transparent)]
 pub struct BottomRef<T, I: IsEnabled> {

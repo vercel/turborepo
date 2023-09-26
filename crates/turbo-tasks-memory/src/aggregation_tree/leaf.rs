@@ -13,6 +13,10 @@ use super::{
     AggregationContext, AggregationItemLock, CHILDREN_INNER_THRESHOLD,
 };
 
+/// The leaf of the aggregation tree. It's usually stored inside of the nodes
+/// that should be aggregated by the aggregation tree. It caches [TopTree]s and
+/// [BottomTree]s created from that node. And it also stores the upper bottom
+/// trees.
 pub struct AggregationTreeLeaf<T, I: IsEnabled> {
     top_trees: Vec<Option<Arc<TopTree<T>>>>,
     bottom_trees: Vec<Option<Arc<BottomTree<T, I>>>>,
@@ -28,7 +32,10 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         }
     }
 
+    /// Prepares the addition of new children. It returns a closure that should
+    /// be executed outside of the leaf lock.
     #[allow(unused)]
+    #[must_use]
     pub fn add_children_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &'a C,
@@ -44,6 +51,9 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         }
     }
 
+    /// Prepares the addition of a new child. It returns a closure that should
+    /// be executed outside of the leaf lock.
+    #[must_use]
     pub fn add_child_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &'a C,
@@ -58,6 +68,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         }
     }
 
+    /// Removes a child.
     pub fn remove_child<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
@@ -68,6 +79,9 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
             .remove_child_of_child(aggregation_context, child);
     }
 
+    /// Prepares the removal of a child. It returns a closure that should be
+    /// executed outside of the leaf lock.
+    #[must_use]
     pub fn remove_children_job<'a, C: AggregationContext<Info = T, ItemRef = I>, H>(
         &self,
         aggregation_context: &'a C,
@@ -82,15 +96,20 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         move || uppers.remove_children_of_child(aggregation_context, children.iter())
     }
 
+    /// Communicates a change on the leaf to updated aggregated nodes. Prefer
+    /// [Self::change_job] to avoid leaf locking.
     pub fn change<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
         change: &C::ItemChange,
     ) {
-        aggregation_context.on_change(change);
         self.upper.child_change(aggregation_context, change);
     }
 
+    /// Prepares the communication of a change on the leaf to updated aggregated
+    /// nodes. It returns a closure that should be executed outside of the leaf
+    /// lock.
+    #[must_use]
     pub fn change_job<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &'a C,
@@ -102,11 +121,11 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     {
         let uppers = self.upper.as_cloned_uppers();
         move || {
-            aggregation_context.on_change(&change);
             uppers.child_change(aggregation_context, &change);
         }
     }
 
+    /// Captures information about the aggregation tree roots.
     pub fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
@@ -229,7 +248,6 @@ pub fn add_inner_upper_to_item<C: AggregationContext>(
         }
     };
     if let Some(change) = change {
-        aggregation_context.on_add_change(&change);
         upper.child_change(aggregation_context, &change);
     }
     if !children.is_empty() {
@@ -290,7 +308,6 @@ fn add_left_upper_to_item_step_2<C: AggregationContext>(
         following_for_old_uppers,
     ) = step_1_result;
     if let Some(change) = change {
-        aggregation_context.on_add_change(&change);
         upper.child_change(aggregation_context, &change);
     }
     if !children.is_empty() {
@@ -319,7 +336,6 @@ pub fn remove_left_upper_from_item<C: AggregationContext>(
     let children = item.children().map(|r| r.into_owned()).collect::<Vec<_>>();
     drop(item);
     if let Some(change) = change {
-        aggregation_context.on_remove_change(&change);
         upper.child_change(aggregation_context, &change);
     }
     for child in children {
@@ -346,7 +362,6 @@ pub fn remove_inner_upper_from_item<C: AggregationContext>(
     drop(item);
 
     if let Some(change) = change {
-        aggregation_context.on_remove_change(&change);
         upper.child_change(aggregation_context, &change);
     }
     for child in children {
@@ -355,6 +370,9 @@ pub fn remove_inner_upper_from_item<C: AggregationContext>(
     true
 }
 
+/// Checks thresholds for an item to ensure the aggregation graph stays
+/// well-formed. Run this before added a child to an item. Returns a closure
+/// that should be executed outside of the leaf lock.
 pub fn ensure_thresholds<'a, C: AggregationContext>(
     aggregation_context: &'a C,
     item: &mut C::ItemLock<'_>,
