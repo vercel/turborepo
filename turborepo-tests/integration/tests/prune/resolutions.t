@@ -5,7 +5,7 @@ Setup
 Prune a
 We expect to no longer have the non-resolved is-odd descriptor and
 only have the override that has been set
-  $ ${TURBO} prune --scope=a
+  $ ${TURBO} prune a
   Generating pruned monorepo for a in .*out (re)
    - Added a
   $ grep -F '"is-odd@npm:' out/yarn.lock
@@ -15,7 +15,7 @@ only have the override that has been set
 
 Prune b
 We should no longer have the override for is-odd
-  $ ${TURBO} prune --scope=b
+  $ ${TURBO} prune b
   Generating pruned monorepo for b in .*out (re)
    - Added b
 
