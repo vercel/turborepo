@@ -118,12 +118,19 @@ async fn expand(
         })
         .try_join()
         .await?;
+
     if let Some(expanded) = &expanded {
         let expanded = expanded.get();
         for (path, root_asset) in root_assets_with_path.into_iter() {
             if let Some(sub_path) = root_path.get_path_to(&path) {
-                assets.push((sub_path.to_string(), root_asset));
-                let expanded = expanded.contains(sub_path);
+                let (sub_paths_buffer, sub_paths) = get_sub_paths(sub_path);
+                let expanded = sub_paths_buffer
+                    .iter()
+                    .take(sub_paths)
+                    .any(|sub_path| expanded.contains(sub_path));
+                for sub_path in sub_paths_buffer.into_iter().take(sub_paths) {
+                    assets.push((sub_path, root_asset));
+                }
                 assets_set.insert(root_asset);
                 if expanded {
                     queue.push_back(root_asset.references());
@@ -133,9 +140,12 @@ async fn expand(
     } else {
         for (path, root_asset) in root_assets_with_path.into_iter() {
             if let Some(sub_path) = root_path.get_path_to(&path) {
-                assets.push((sub_path.to_string(), root_asset));
-                assets_set.insert(root_asset);
+                let (sub_paths_buffer, sub_paths) = get_sub_paths(sub_path);
+                for sub_path in sub_paths_buffer.into_iter().take(sub_paths) {
+                    assets.push((sub_path, root_asset));
+                }
                 queue.push_back(root_asset.references());
+                assets_set.insert(root_asset);
             }
         }
     }
@@ -145,20 +155,22 @@ async fn expand(
             if assets_set.insert(*asset) {
                 let path = asset.ident().path().await?;
                 if let Some(sub_path) = root_path.get_path_to(&path) {
+                    let (sub_paths_buffer, sub_paths) = get_sub_paths(sub_path);
                     let expanded = if let Some(expanded) = &expanded {
-                        // We lookup the unresolved asset in the expanded set.
-                        // We could resolve the asset here, but that would require waiting on the
-                        // computation here and it doesn't seem to be neccessary in this case. We
-                        // just have to be sure that we consistently use the
-                        // unresolved asset.
-                        expanded.get().contains(sub_path)
+                        let expanded = expanded.get();
+                        sub_paths_buffer
+                            .iter()
+                            .take(sub_paths)
+                            .any(|sub_path| expanded.contains(sub_path))
                     } else {
                         true
                     };
                     if expanded {
                         queue.push_back(asset.references());
                     }
-                    assets.push((sub_path.to_string(), *asset));
+                    for sub_path in sub_paths_buffer.into_iter().take(sub_paths) {
+                        assets.push((sub_path, *asset));
+                    }
                 }
             }
         }
@@ -176,6 +188,24 @@ async fn expand(
         map.insert(sub_path, asset);
     }
     Ok(map)
+}
+
+fn get_sub_paths(sub_path: &str) -> ([String; 3], usize) {
+    let sub_paths_buffer: [String; 3];
+    let n = if sub_path == "index.html" {
+        sub_paths_buffer = ["".to_string(), sub_path.to_string(), String::new()];
+        2
+    } else if let Some(p) = sub_path.strip_suffix("/index.html") {
+        sub_paths_buffer = [p.to_string(), format!("{p}/"), sub_path.to_string()];
+        3
+    } else if let Some(p) = sub_path.strip_suffix(".html") {
+        sub_paths_buffer = [p.to_string(), sub_path.to_string(), String::new()];
+        2
+    } else {
+        sub_paths_buffer = [sub_path.to_string(), String::new(), String::new()];
+        1
+    };
+    (sub_paths_buffer, n)
 }
 
 #[turbo_tasks::value_impl]
