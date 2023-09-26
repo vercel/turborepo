@@ -186,9 +186,9 @@ Setup
 
   $ cd $TARGET_DIR/outer-no-turbo/apps && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: [\-\w\/\.]+ (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: [\-\w\/\.]+ (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: [\-\w\/\.]+ (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: [\-\w\/\.]+ (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: [\-\w\/\.]+ (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "apps" (re)
   Error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one
