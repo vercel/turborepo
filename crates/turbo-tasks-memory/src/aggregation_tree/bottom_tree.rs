@@ -581,7 +581,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         for TopRef { upper } in state.top_upper.iter() {
             let info = upper.get_root_info(aggregation_context, root_info_type);
             if aggregation_context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
-                break;
+                return result;
             }
         }
         state
