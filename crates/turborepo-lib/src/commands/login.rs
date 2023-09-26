@@ -10,7 +10,8 @@ use serde::Deserialize;
 use tokio::sync::OnceCell;
 #[cfg(not(test))]
 use tracing::warn;
-use turborepo_ui::{start_spinner, BOLD, CYAN};
+use turborepo_api_client::APIClient;
+use turborepo_ui::{start_spinner, BOLD, CYAN, UI};
 
 use crate::{commands::CommandBase, config::Error};
 
@@ -18,7 +19,7 @@ const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 const DEFAULT_SSO_PROVIDER: &str = "SAML/OIDC Single Sign-On";
 
-use turborepo_auth::login;
+use turborepo_auth::login as auth_login;
 
 pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
     let repo_config = base.repo_config()?;
@@ -94,14 +95,20 @@ fn make_token_name() -> Result<String> {
 }
 
 pub async fn login(base: &mut CommandBase) -> Result<()> {
-    const api_client: APIClient = base.api_client()?;
-    const ui: UI = &base.ui;
+    let api_client: APIClient = base.api_client()?;
+    let ui: &UI = &base.ui;
 
-    let set_token = |token: &str| -> () {
-        base.user_config_mut()?.set_token(Some(token.to_string()))?;
+    // let set_token = |token: &str| -> () {
+    //     base.user_config_mut()?.set_token(Some(token.to_string()));
+    //     return ();
+    // };
+
+    let set_token = |token: &str| -> Result<(), _> {
+        base.user_config_mut()?.set_token(Some(token.to_string()));
+        Ok(())
     };
 
-    return login(api_client, ui, set_token);
+    return auth_login(api_client, ui, set_token);
 }
 
 #[cfg(test)]

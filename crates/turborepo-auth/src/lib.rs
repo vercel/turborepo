@@ -29,7 +29,10 @@ pub enum Error {
 // TODO: make this configurable
 const LOGIN_URL: &str = "https://vercel.com/api";
 
-pub async fn login(api_client: APIClient, ui: UI, set_token: fn(&str) -> ()) -> Result<()> {
+pub async fn login<F>(api_client: APIClient, ui: &UI, set_token: F) -> Result<()>
+where
+    F: Fn(&str) -> Result<()>,
+{
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
     let mut login_url = Url::parse(LOGIN_URL)?;
 
@@ -60,7 +63,7 @@ pub async fn login(api_client: APIClient, ui: UI, set_token: fn(&str) -> ()) -> 
     // This function is passed in from turborepo-lib
     // TODO: inline this here and only pass in the location to write the token as an
     // optional arg.
-    set_token(token);
+    let _ = set_token(token);
 
     // TODO: make this a request to /teams endpoint instead?
     let user_response = api_client.get_user(token.as_str()).await?;
