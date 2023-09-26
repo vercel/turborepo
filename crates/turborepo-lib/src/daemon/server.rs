@@ -105,6 +105,9 @@ async fn start_filewatching(
     Ok(())
 }
 
+/// Timeout for every RPC the server handles
+const REQUEST_TIMEOUT: Duration = Duration::from_millis(100);
+
 /// run a gRPC server providing the Turbod interface. external_shutdown
 /// can be used to deliver a signal to shutdown the server. This is expected
 /// to be wired to signal handling.
@@ -188,7 +191,8 @@ where
             ));
 
         Server::builder()
-            .timeout(Duration::from_millis(100))
+            // set a max timeout for RPCs
+            .timeout(REQUEST_TIMEOUT)
             .add_service(service)
             .serve_with_incoming_shutdown(stream, shutdown_fut)
     };
