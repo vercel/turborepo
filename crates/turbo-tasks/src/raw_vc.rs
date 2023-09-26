@@ -372,7 +372,6 @@ impl<T: ?Sized, Cast: VcCast> Future for ReadRawVcFuture<T, Cast> {
                     };
                     match read_result {
                         Ok(Ok(vc)) => {
-                            this.strongly_consistent = false;
                             this.current = vc;
                             continue 'outer;
                         }
