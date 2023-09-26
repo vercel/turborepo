@@ -604,7 +604,7 @@ impl RepoState {
 /// * `turbo_state`: state for current execution
 ///
 /// returns: Result<i32, Error>
-fn run_correct_turbo(
+async fn run_correct_turbo(
     repo_state: RepoState,
     shim_args: ShimArgs,
     subscriber: &TurboSubscriber,
@@ -619,7 +619,7 @@ fn run_correct_turbo(
                 shim_args.invocation_dir.as_path(),
             );
             debug!("Currently running turbo is local turbo.");
-            cli::run(Some(repo_state), subscriber, ui)
+            cli::run(Some(repo_state), subscriber, ui).await
         } else {
             Ok(Payload::Rust(spawn_local_turbo(
                 &repo_state,
@@ -636,7 +636,7 @@ fn run_correct_turbo(
             shim_args.invocation_dir.as_path(),
         );
         debug!("Running command as global turbo");
-        cli::run(Some(repo_state), subscriber, ui)
+        cli::run(Some(repo_state), subscriber, ui).await
     }
 }
 
@@ -757,7 +757,8 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
     }
 }
 
-pub fn run() -> Result<Payload> {
+#[tokio::main]
+pub async fn run() -> Result<Payload> {
     let args = ShimArgs::parse()?;
     let ui = args.ui();
     let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &ui);
@@ -768,7 +769,7 @@ pub fn run() -> Result<Payload> {
     // global turbo having handled the inference. We can run without any
     // concerns.
     if args.skip_infer {
-        return cli::run(None, &subscriber, ui);
+        return cli::run(None, &subscriber, ui).await;
     }
 
     // If the TURBO_BINARY_PATH is set, we do inference but we do not use
@@ -777,20 +778,20 @@ pub fn run() -> Result<Payload> {
     if is_turbo_binary_path_set() {
         let repo_state = RepoState::infer(&args.cwd)?;
         debug!("Repository Root: {}", repo_state.root);
-        return cli::run(Some(repo_state), &subscriber, ui);
+        return cli::run(Some(repo_state), &subscriber, ui).await;
     }
 
     match RepoState::infer(&args.cwd) {
         Ok(repo_state) => {
             debug!("Repository Root: {}", repo_state.root);
-            run_correct_turbo(repo_state, args, &subscriber, ui)
+            run_correct_turbo(repo_state, args, &subscriber, ui).await
         }
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
             // commands like login/logout/link/unlink to still work
             debug!("Repository inference failed: {}", err);
             debug!("Running command as global turbo");
-            cli::run(None, &subscriber, ui)
+            cli::run(None, &subscriber, ui).await
         }
     }
 }

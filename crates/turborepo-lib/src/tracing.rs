@@ -1,11 +1,13 @@
 use std::{marker::PhantomData, sync::Mutex};
 
 use chrono::Local;
+use opentelemetry::{global, runtime, sdk::Resource, KeyValue};
+use opentelemetry_otlp::WithExportConfig;
 use owo_colors::{
     colors::{Black, Default, Red, Yellow},
     Color, OwoColorize,
 };
-use tracing::{field::Visit, metadata::LevelFilter, trace, Event, Level, Subscriber};
+use tracing::{field::Visit, info, metadata::LevelFilter, trace, Event, Level, Subscriber};
 use tracing_appender::{
     non_blocking::{NonBlocking, WorkerGuard},
     rolling::RollingFileAppender,
@@ -110,6 +112,29 @@ impl TurboSubscriber {
             .build()
             .unwrap();
 
+        info!("opentelemetry tracer installed");
+
+        let registry = {
+            // First, create a OTLP exporter builder. Configure it as you need.
+            let otlp_exporter = opentelemetry_otlp::new_exporter()
+                .tonic()
+                .with_endpoint("http://localhost:4317");
+            // Then pass it into pipeline builder
+            let tracer = opentelemetry_otlp::new_pipeline()
+                .tracing()
+                .with_exporter(otlp_exporter)
+                .with_trace_config(opentelemetry::sdk::trace::config().with_resource(
+                    Resource::new(vec![KeyValue::new(
+                        opentelemetry_semantic_conventions::resource::SERVICE_NAME,
+                        "turborepo",
+                    )]),
+                ))
+                .install_batch(runtime::Tokio)
+                .unwrap();
+
+            registry.with(tracing_opentelemetry::layer().with_tracer(tracer))
+        };
+
         registry.init();
 
         Self {
@@ -125,7 +150,7 @@ impl TurboSubscriber {
     /// Enables daemon logging with the specified rotation settings.
     ///
     /// Daemon logging uses the standard tracing formatter.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, appender))]
     pub fn set_daemon_logger(&self, appender: RollingFileAppender) -> Result<(), Error> {
         let (file_writer, guard) = tracing_appender::non_blocking(appender);
         trace!("created non-blocking file writer");
@@ -149,6 +174,8 @@ impl Drop for TurboSubscriber {
             let file = std::fs::File::create("flamegraph.svg").unwrap();
             report.flamegraph(file).unwrap();
         };
+
+        global::shutdown_tracer_provider();
     }
 }
 

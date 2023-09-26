@@ -312,7 +312,7 @@ pub enum FileWaitError {
 ///
 /// It does this by watching the parent directory of the path, and waiting for
 /// events on that path.
-#[tracing::instrument(skip(path))]
+#[tracing::instrument]
 async fn wait_for_file(
     path: &turbopath::AbsoluteSystemPathBuf,
     action: WaitAction,

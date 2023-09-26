@@ -262,7 +262,7 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
         )?;
 
-        debug!("package inputs hashes: {:?}", package_inputs_hashes);
+        // debug!("package inputs hashes: {:?}", package_inputs_hashes);
 
         // remove dead code warnings
         let _proc_manager = ProcessManager::new();
@@ -366,6 +366,8 @@ impl<'a> Run<'a> {
 
         let root_external_dependencies_hash = root_workspace.get_external_deps_hash();
 
+        let scm = SCM::new(&self.base.repo_root);
+
         let mut global_hash_inputs = get_global_hash_inputs(
             !opts.run_opts.single_package,
             &root_external_dependencies_hash,
@@ -379,9 +381,8 @@ impl<'a> Run<'a> {
             opts.run_opts.env_mode,
             opts.run_opts.framework_inference,
             &root_turbo_json.global_dot_env,
+            &scm,
         )?;
-
-        let scm = SCM::new(&self.base.repo_root);
 
         let filtered_pkgs = {
             let mut filtered_pkgs = scope::resolve_packages(

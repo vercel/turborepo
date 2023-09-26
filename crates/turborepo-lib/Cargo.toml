@@ -97,6 +97,9 @@ is-terminal = "0.4.7"
 lazy-regex = "2.5.0"
 node-semver = "2.1.0"
 num_cpus = "1.15.0"
+opentelemetry = { version = "0.20.0", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.13.0", features = ["tokio"] }
+opentelemetry-semantic-conventions = "0.12.0"
 owo-colors.workspace = true
 pprof = { version = "0.12.1", features = [
   "flamegraph",
@@ -108,6 +111,7 @@ svix-ksuid = { version = "0.7.0", features = ["serde"] }
 tabwriter = "1.3.0"
 tracing-appender = "0.2.2"
 tracing-chrome = { version = "0.7.1", optional = true }
+tracing-opentelemetry = "0.21.0"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 tracing.workspace = true
 turbo-updater = { workspace = true }

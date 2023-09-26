@@ -626,7 +626,7 @@ impl Default for LogPrefix {
 /// * `ui`: The UI to use for the run.
 ///
 /// returns: Result<Payload, Error>
-#[tokio::main]
+#[tracing::instrument(skip(repo_state, logger, ui))]
 pub async fn run(
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,

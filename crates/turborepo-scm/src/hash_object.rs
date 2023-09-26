@@ -2,7 +2,7 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
 use crate::{package_deps::GitHashes, Error};
 
-#[tracing::instrument(skip(git_root, pkg_path, hashes))]
+#[tracing::instrument(skip(git_root, hashes, to_hash))]
 pub(crate) fn hash_objects(
     git_root: &AbsoluteSystemPath,
     pkg_path: &AbsoluteSystemPath,

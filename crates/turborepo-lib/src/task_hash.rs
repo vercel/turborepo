@@ -70,7 +70,7 @@ impl PackageInputsHashes {
     ) -> Result<PackageInputsHashes, Error> {
         let (hashes, expanded_hashes): (HashMap<_, _>, HashMap<_, _>) = all_tasks
             .filter_map(|task| {
-                let span = tracing::span!(tracing::Level::INFO, "calculate_file_hashes");
+                let span = tracing::span!(tracing::Level::INFO, "calculate_file_hash");
                 let _enter = span.enter();
                 let TaskNode::Task(task_id) = task else {
                     return None;
