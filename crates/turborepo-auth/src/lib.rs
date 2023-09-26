@@ -13,9 +13,6 @@ use tracing::warn;
 use turborepo_api_client::APIClient;
 use turborepo_ui::{start_spinner, BOLD, CYAN, UI};
 
-// TODO: fix these imports not to use turborepo-lib
-use crate::commands::CommandBase;
-
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 const DEFAULT_SSO_PROVIDER: &str = "SAML/OIDC Single Sign-On";
@@ -33,12 +30,7 @@ pub enum Error {
 // TODO: make this configurable
 const LOGIN_URL: &str = "https://vercel.com/api";
 
-pub async fn login(
-    base: &mut CommandBase,
-    api_client: APIClient,
-    ui: UI,
-    set_token: fn(&str) -> (),
-) -> Result<()> {
+pub async fn login(api_client: APIClient, ui: UI, set_token: fn(&str) -> ()) -> Result<()> {
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
     let mut login_url = Url::parse(LOGIN_URL)?;
 

@@ -101,7 +101,7 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
         base.user_config_mut()?.set_token(Some(token.to_string()))?;
     };
 
-    return login(base, api_client, ui, set_token);
+    return login(api_client, ui, set_token);
 }
 
 #[cfg(test)]
