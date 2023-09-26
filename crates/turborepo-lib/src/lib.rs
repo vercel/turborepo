@@ -7,6 +7,7 @@
 #![deny(clippy::all)]
 // Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
 #![allow(clippy::needless_pass_by_ref_mut)]
+#![allow(dead_code)]
 
 mod child;
 mod cli;
