@@ -36,8 +36,8 @@ impl DevChunkingContextBuilder {
         self
     }
 
-    pub fn asset_prefix(mut self, asset_prefix: Vc<Option<String>>) -> Self {
-        self.chunking_context.asset_prefix = asset_prefix;
+    pub fn asset_base_path(mut self, asset_base_path: Vc<Option<String>>) -> Self {
+        self.chunking_context.asset_base_path = asset_base_path;
         self
     }
 
@@ -97,7 +97,7 @@ pub struct DevChunkingContext {
     chunk_base_path: Vc<Option<String>>,
     /// URL prefix that will be prepended to all static asset URLs when loading
     /// them.
-    asset_prefix: Vc<Option<String>>,
+    asset_base_path: Vc<Option<String>>,
     /// Layer name within this context
     layer: Option<String>,
     /// Enable HMR for this chunking
@@ -124,8 +124,8 @@ impl DevChunkingContext {
                 reference_chunk_source_maps: true,
                 reference_css_chunk_source_maps: true,
                 asset_root_path,
-                asset_prefix: Default::default(),
                 chunk_base_path: Default::default(),
+                asset_base_path: Default::default(),
                 layer: None,
                 enable_hot_module_replacement: false,
                 environment,
@@ -253,7 +253,10 @@ impl ChunkingContext for DevChunkingContext {
 
         Ok(Vc::cell(format!(
             "{}{}",
-            this.asset_prefix.await?.as_ref().unwrap_or(&"/".to_owned()),
+            this.asset_base_path
+                .await?
+                .as_ref()
+                .unwrap_or(&"/".to_owned()),
             asset_path
         )))
     }
