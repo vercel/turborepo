@@ -57,51 +57,44 @@ pub struct TurborepoConfigBuilder {
 
     #[cfg(test)]
     global_config_path: Option<AbsoluteSystemPathBuf>,
+    #[cfg(test)]
+    environment: HashMap<String, String>,
 }
 
 // Getters
 impl ConfigurationOptions {
-    #[allow(dead_code)]
     pub fn api_url(&self) -> &str {
         self.api_url.as_deref().unwrap_or(DEFAULT_API_URL)
     }
 
-    #[allow(dead_code)]
     pub fn login_url(&self) -> &str {
         self.login_url.as_deref().unwrap_or(DEFAULT_LOGIN_URL)
     }
 
-    #[allow(dead_code)]
     pub fn team_slug(&self) -> Option<&str> {
         self.team_slug.as_deref()
     }
 
-    #[allow(dead_code)]
     pub fn team_id(&self) -> Option<&str> {
         self.team_id.as_deref()
     }
 
-    #[allow(dead_code)]
     pub fn token(&self) -> Option<&str> {
         self.token.as_deref()
     }
 
-    #[allow(dead_code)]
     pub fn signature(&self) -> bool {
         self.signature.unwrap_or_default()
     }
 
-    #[allow(dead_code)]
     pub fn enabled(&self) -> bool {
         self.enabled.unwrap_or(true)
     }
 
-    #[allow(dead_code)]
     pub fn preflight(&self) -> bool {
         self.preflight.unwrap_or_default()
     }
 
-    #[allow(dead_code)]
     pub fn timeout(&self) -> u64 {
         self.timeout.unwrap_or(DEFAULT_TIMEOUT)
     }
@@ -294,6 +287,8 @@ impl TurborepoConfigBuilder {
             override_config: Default::default(),
             #[cfg(test)]
             global_config_path: base.global_config_path.clone(),
+            #[cfg(test)]
+            environment: Default::default(),
         }
     }
 
@@ -318,6 +313,16 @@ impl TurborepoConfigBuilder {
     #[allow(dead_code)]
     fn root_turbo_json_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_component("turbo.json")
+    }
+
+    #[cfg(test)]
+    fn get_environment(&self) -> HashMap<String, String> {
+        self.environment.clone()
+    }
+
+    #[cfg(not(test))]
+    fn get_environment(&self) -> HashMap<String, String> {
+        get_lowercased_env_vars()
     }
 
     fn get_global_config(&self) -> Result<ConfigurationOptions, ConfigError> {
@@ -404,7 +409,7 @@ impl TurborepoConfigBuilder {
             })?;
         let global_config = self.get_global_config()?;
         let local_config = self.get_local_config()?;
-        let env_vars = get_lowercased_env_vars();
+        let env_vars = self.get_environment();
         let env_var_config = get_env_var_config(&env_vars)?;
         let override_env_var_config = get_override_env_var_config(&env_vars)?;
 
@@ -459,5 +464,118 @@ impl TurborepoConfigBuilder {
         );
 
         Ok(output)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use tempfile::TempDir;
+
+    use super::*;
+
+    #[test]
+    fn test_defaults() {
+        let defaults: ConfigurationOptions = Default::default();
+        assert_eq!(defaults.api_url(), DEFAULT_API_URL);
+        assert_eq!(defaults.login_url(), DEFAULT_LOGIN_URL);
+        assert_eq!(defaults.team_slug(), None);
+        assert_eq!(defaults.team_id(), None);
+        assert_eq!(defaults.token(), None);
+        assert_eq!(defaults.signature(), false);
+        assert_eq!(defaults.enabled(), true);
+        assert_eq!(defaults.preflight(), false);
+        assert_eq!(defaults.timeout(), DEFAULT_TIMEOUT);
+    }
+
+    #[test]
+    fn test_env_setting() {
+        let mut env: HashMap<String, String> = HashMap::new();
+
+        let turbo_api = "https://example.com/api";
+        let turbo_login = "https://example.com/login";
+        let turbo_team = "vercel";
+        let turbo_teamid = "team_nLlpyC6REAqxydlFKbrMDlud";
+        let turbo_token = "abcdef1234567890abcdef";
+        let turbo_remote_cache_timeout = 200;
+
+        env.insert("turbo_api".into(), turbo_api.into());
+        env.insert("turbo_login".into(), turbo_login.into());
+        env.insert("turbo_team".into(), turbo_team.into());
+        env.insert("turbo_teamid".into(), turbo_teamid.into());
+        env.insert("turbo_token".into(), turbo_token.into());
+        env.insert(
+            "turbo_remote_cache_timeout".into(),
+            turbo_remote_cache_timeout.to_string(),
+        );
+
+        let config = get_env_var_config(&env).unwrap();
+        assert_eq!(turbo_api, config.api_url.unwrap());
+        assert_eq!(turbo_login, config.login_url.unwrap());
+        assert_eq!(turbo_team, config.team_slug.unwrap());
+        assert_eq!(turbo_teamid, config.team_id.unwrap());
+        assert_eq!(turbo_token, config.token.unwrap());
+        assert_eq!(turbo_remote_cache_timeout, config.timeout.unwrap());
+    }
+
+    #[test]
+    fn test_override_env_setting() {
+        let mut env: HashMap<String, String> = HashMap::new();
+
+        let vercel_artifacts_token = "correct-horse-battery-staple";
+        let vercel_artifacts_owner = "bobby_tables";
+
+        env.insert(
+            "vercel_artifacts_token".into(),
+            vercel_artifacts_token.into(),
+        );
+        env.insert(
+            "vercel_artifacts_owner".into(),
+            vercel_artifacts_owner.into(),
+        );
+
+        let config = get_override_env_var_config(&env).unwrap();
+        assert_eq!(vercel_artifacts_token, config.token.unwrap());
+        assert_eq!(vercel_artifacts_owner, config.team_id.unwrap());
+    }
+
+    #[test]
+    fn test_env_layering() {
+        let repo_root = AbsoluteSystemPathBuf::try_from(TempDir::new().unwrap().path()).unwrap();
+        let global_config_path = AbsoluteSystemPathBuf::try_from(
+            TempDir::new().unwrap().path().join("nonexistent.json"),
+        )
+        .unwrap();
+
+        let turbo_teamid = "team_nLlpyC6REAqxydlFKbrMDlud";
+        let turbo_token = "abcdef1234567890abcdef";
+        let vercel_artifacts_owner = "team_SOMEHASH";
+        let vercel_artifacts_token = "correct-horse-battery-staple";
+
+        let mut env: HashMap<String, String> = HashMap::new();
+        env.insert("turbo_teamid".into(), turbo_teamid.into());
+        env.insert("turbo_token".into(), turbo_token.into());
+        env.insert(
+            "vercel_artifacts_token".into(),
+            vercel_artifacts_token.into(),
+        );
+        env.insert(
+            "vercel_artifacts_owner".into(),
+            vercel_artifacts_owner.into(),
+        );
+
+        let mut override_config: ConfigurationOptions = Default::default();
+        override_config.token = Some("unseen".into());
+        override_config.team_id = Some("unseen".into());
+
+        let builder = TurborepoConfigBuilder {
+            repo_root,
+            override_config,
+            global_config_path: Some(global_config_path),
+            environment: env,
+        };
+
+        let config = builder.build().unwrap();
+        assert_eq!(config.team_id().unwrap(), vercel_artifacts_owner);
+        assert_eq!(config.token().unwrap(), vercel_artifacts_token);
     }
 }
