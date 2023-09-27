@@ -1,6 +1,6 @@
 use std::cell::OnceCell;
 
-use anyhow::{anyhow, Error, Result};
+use anyhow::anyhow;
 use dirs_next::config_dir;
 use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -8,7 +8,7 @@ use turborepo_api_client::APIClient;
 use turborepo_ui::UI;
 
 use crate::{
-    config::{ConfigurationOptions, TurborepoConfigBuilder},
+    config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
     Args,
 };
 
@@ -39,15 +39,15 @@ impl CommandBase {
         repo_root: AbsoluteSystemPathBuf,
         version: &'static str,
         ui: UI,
-    ) -> Result<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             repo_root,
             ui,
             args,
             global_config_path: None,
             config: OnceCell::new(),
             version,
-        })
+        }
     }
 
     #[cfg(test)]
@@ -56,7 +56,7 @@ impl CommandBase {
         self
     }
 
-    fn config_init(&self) -> Result<ConfigurationOptions, anyhow::Error> {
+    fn config_init(&self) -> Result<ConfigurationOptions, ConfigError> {
         TurborepoConfigBuilder::new(self)
             // The below should be deprecated and removed.
             .with_api_url(self.args.api.clone())
@@ -67,12 +67,12 @@ impl CommandBase {
             .build()
     }
 
-    pub fn config(&self) -> Result<&ConfigurationOptions, anyhow::Error> {
+    pub fn config(&self) -> Result<&ConfigurationOptions, ConfigError> {
         self.config.get_or_try_init(|| self.config_init())
     }
 
     // Getting all of the paths.
-    fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
+    fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
         if let Some(global_config_path) = self.global_config_path.clone() {
             return Ok(global_config_path);
         }
@@ -96,18 +96,13 @@ impl CommandBase {
         &self.args
     }
 
-    pub fn api_client(&self) -> Result<APIClient> {
+    pub fn api_client(&self) -> Result<APIClient, ConfigError> {
         let config = self.config()?;
         let args = self.args();
 
         let api_url = config.api_url();
         let timeout = config.timeout();
-        Ok(APIClient::new(
-            api_url,
-            timeout,
-            self.version,
-            args.preflight,
-        )?)
+        APIClient::new(api_url, timeout, self.version, args.preflight);
     }
 
     pub fn daemon_file_root(&self) -> AbsoluteSystemPathBuf {
@@ -153,7 +148,7 @@ mod test {
 
         let args = Args::default();
         let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
-        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true)).unwrap();
+        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true));
 
         let hash = command_base.repo_hash();
 

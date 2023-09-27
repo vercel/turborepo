@@ -663,7 +663,7 @@ pub async fn run(
         }
         #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
             match command {
                 Some(command) => daemon::daemon_client(command, &base).await,
@@ -698,7 +698,7 @@ pub async fn run(
         }
         Command::Info { workspace } => {
             let workspace = workspace.clone();
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui);
             info::run(&mut base, workspace.as_deref())?;
 
             Ok(Payload::Rust(Ok(0)))
@@ -714,7 +714,7 @@ pub async fn run(
 
             let modify_gitignore = !*no_gitignore;
             let to = *target;
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui);
 
             if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
                 error!("error: {}", err.to_string())
@@ -723,7 +723,7 @@ pub async fn run(
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Logout { .. } => {
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui);
             logout::logout(&mut base)?;
 
             Ok(Payload::Rust(Ok(0)))
@@ -736,7 +736,7 @@ pub async fn run(
 
             let sso_team = sso_team.clone();
 
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui);
 
             if let Some(sso_team) = sso_team {
                 login::sso_login(&mut base, &sso_team).await?;
@@ -753,7 +753,7 @@ pub async fn run(
             }
 
             let from = *target;
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui);
 
             unlink::unlink(&mut base, from)?;
 
@@ -766,7 +766,7 @@ pub async fn run(
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
             }
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
             if args.experimental_rust_codepath {
                 use crate::commands::run;
@@ -784,7 +784,7 @@ pub async fn run(
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
             }
-            let base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let base = CommandBase::new(cli_args, repo_root, version, ui);
             Ok(Payload::Go(Box::new(base)))
         }
         Command::Prune {
@@ -800,7 +800,7 @@ pub async fn run(
                 .unwrap_or_default();
             let docker = *docker;
             let output_dir = output_dir.clone();
-            let base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let base = CommandBase::new(cli_args, repo_root, version, ui);
             prune::prune(&base, &scope, docker, &output_dir)?;
             Ok(Payload::Rust(Ok(0)))
         }

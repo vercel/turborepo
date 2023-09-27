@@ -31,6 +31,8 @@ pub enum Error {
     PackageTaskInSinglePackageMode { task_id: String },
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
     #[error(
         "You specified \"{value}\" in the \"{key}\" key. You should not prefix your environment \
          variables with \"{env_pipeline_delimiter}\""
