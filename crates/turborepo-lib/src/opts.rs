@@ -62,7 +62,7 @@ pub struct RunOpts<'a> {
     // Whether or not to infer the framework for each workspace.
     pub(crate) framework_inference: bool,
     pub profile: Option<&'a str>,
-    continue_on_error: bool,
+    pub(crate) continue_on_error: bool,
     pub(crate) pass_through_args: &'a [String],
     pub(crate) only: bool,
     pub(crate) dry_run: bool,

@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     io::Write,
-    sync::{Arc, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 use console::{Style, StyledObject};
@@ -92,7 +92,7 @@ impl<'a> Visitor<'a> {
         }
     }
 
-    pub async fn visit(&self, engine: Arc<Engine>) -> Result<(), Error> {
+    pub async fn visit(&self, engine: Arc<Engine>) -> Result<Vec<TaskError>, Error> {
         let concurrency = self.opts.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
         let engine_handle = {
@@ -100,6 +100,7 @@ impl<'a> Visitor<'a> {
             tokio::spawn(engine.execute(ExecutionOptions::new(false, concurrency), node_sender))
         };
         let mut tasks = FuturesUnordered::new();
+        let errors = Arc::new(Mutex::new(Vec::new()));
 
         while let Some(message) = node_stream.recv().await {
             let crate::engine::Message { info, callback } = message;
@@ -200,7 +201,12 @@ impl<'a> Visitor<'a> {
             result.expect("task executor panicked");
         }
 
-        Ok(())
+        let errors = Arc::into_inner(errors)
+            .expect("only one strong reference to errors should remain")
+            .into_inner()
+            .expect("mutex poisoned");
+
+        Ok(errors)
     }
 
     fn sink(opts: &Opts, silent: bool) -> OutputSink<StdWriter> {
@@ -313,4 +319,43 @@ impl std::io::Write for StdWriter {
 fn turbo_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"(?:^|\s)turbo(?:$|\s)").unwrap())
+}
+
+// Error that comes from the execution of the task
+#[derive(Debug, thiserror::Error)]
+#[error("{task_id}: {cause}")]
+pub struct TaskError {
+    task_id: String,
+    cause: TaskErrorCause,
+}
+
+#[derive(Debug, thiserror::Error)]
+enum TaskErrorCause {
+    #[error("unable to spawn child process: {err}")]
+    Spawn { err: std::io::Error },
+    #[error("command {command} exited ({exit_code})")]
+    Exit { command: String, exit_code: i32 },
+}
+
+impl TaskError {
+    pub fn exit_code(&self) -> Option<i32> {
+        match self.cause {
+            TaskErrorCause::Exit { exit_code, .. } => Some(exit_code),
+            _ => None,
+        }
+    }
+
+    fn from_spawn(task_id: String, err: std::io::Error) -> Self {
+        Self {
+            task_id,
+            cause: TaskErrorCause::Spawn { err },
+        }
+    }
+
+    fn from_execution(task_id: String, command: String, exit_code: i32) -> Self {
+        Self {
+            task_id,
+            cause: TaskErrorCause::Exit { command, exit_code },
+        }
+    }
 }
