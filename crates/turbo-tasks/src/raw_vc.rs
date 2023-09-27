@@ -238,8 +238,7 @@ impl CollectiblesSource for RawVc {
         tt.notify_scheduled_tasks();
         let map = tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
         map.into_iter()
-            .filter(|&(_, count)| count > 0)
-            .map(|(raw, _)| raw.into())
+            .filter_map(|(raw, count)| (count > 0).then_some(raw.into()))
             .collect()
     }
 
@@ -249,8 +248,7 @@ impl CollectiblesSource for RawVc {
         let map = tt.read_task_collectibles(self.get_task_id(), T::get_trait_type_id());
         tt.unemit_collectibles(T::get_trait_type_id(), &map);
         map.into_iter()
-            .filter(|&(_, count)| count > 0)
-            .map(|(raw, _)| raw.into())
+            .filter_map(|(raw, count)| (count > 0).then_some(raw.into()))
             .collect()
     }
 }
