@@ -1,3 +1,4 @@
+use tracing::Span;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
 use crate::{package_deps::GitHashes, Error};
@@ -9,8 +10,9 @@ pub(crate) fn hash_objects(
     to_hash: Vec<RelativeUnixPathBuf>,
     hashes: &mut GitHashes,
 ) -> Result<(), Error> {
+    let parent = Span::current();
     for filename in to_hash {
-        let span = tracing::span!(tracing::Level::INFO, "hash_object", ?filename);
+        let span = tracing::info_span!(parent: &parent, "hash_object", ?filename);
         let _enter = span.enter();
 
         let full_file_path = git_root.join_unix_path(filename)?;

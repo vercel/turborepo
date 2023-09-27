@@ -6,7 +6,7 @@ use std::{
 use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
-use tracing::debug;
+use tracing::{debug, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_scm::SCM;
@@ -68,9 +68,10 @@ impl PackageInputsHashes {
         task_definitions: &HashMap<TaskId<'static>, TaskDefinition>,
         repo_root: &AbsoluteSystemPath,
     ) -> Result<PackageInputsHashes, Error> {
+        let span = Span::current();
         let (hashes, expanded_hashes): (HashMap<_, _>, HashMap<_, _>) = all_tasks
             .filter_map(|task| {
-                let span = tracing::span!(tracing::Level::INFO, "calculate_file_hash");
+                let span = tracing::info_span!(parent: &span, "calculate_file_hash");
                 let _enter = span.enter();
                 let TaskNode::Task(task_id) = task else {
                     return None;
@@ -184,6 +185,7 @@ impl<'a> TaskHasher<'a> {
         }
     }
 
+    #[tracing::instrument(skip(self, task_definition, task_env_mode, workspace, dependency_set))]
     pub fn calculate_task_hash(
         &self,
         task_id: &TaskId<'static>,

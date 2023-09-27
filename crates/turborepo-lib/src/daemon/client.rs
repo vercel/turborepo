@@ -24,6 +24,7 @@ pub struct DaemonClient<T: Clone> {
 
 impl<T: Clone> DaemonClient<T> {
     /// Interrogate the server for its version.
+    #[tracing::instrument(skip(self))]
     pub(super) async fn handshake(&mut self) -> Result<(), DaemonError> {
         let _ret = self
             .client

@@ -15,7 +15,7 @@ use empty_glob::InclusiveEmptyAny;
 use itertools::Itertools;
 use path_slash::PathExt;
 use regex::Regex;
-use tracing::info_span;
+use tracing::{info_span, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 use wax::{Any, BuildError, Glob, Pattern};
 
@@ -369,9 +369,13 @@ pub fn globwalk(
         .map(glob_with_contextual_error)
         .collect::<Result<Vec<_>, _>>()?;
 
+    let span = Span::current();
     let result = inc_patterns
         .into_iter()
         .flat_map(|glob| {
+            let span =
+                tracing::info_span!(parent: &span, &"walk_glob", glob = glob.to_string().as_str());
+            let _enter = span.enter();
             // Check if the glob specifies an exact filename with no meta characters.
             if let Some(prefix) = glob.variance().path() {
                 // We expect all of our globs to be absolute paths (asserted above)
@@ -405,7 +409,7 @@ pub fn globwalk(
                         )
                     })
                     .filter_map(|entry| {
-                        let span = info_span!("visit_file");
+                        let span = info_span!(parent: &span, "visit_file", entry = ?entry);
                         let _enter = span.enter();
                         match entry {
                             Ok(entry)
