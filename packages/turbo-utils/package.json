@@ -19,7 +19,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "test": "jest && node --test --test-reporter=spec --loader=typescript tests/*",
+    "test": "jest && pnpm test:node",
+    "test:node": "node --test --loader=typescript tests/*",
     "lint": "eslint src/",
     "check-types": "tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
