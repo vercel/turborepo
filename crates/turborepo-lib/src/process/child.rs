@@ -182,7 +182,10 @@ impl Child {
         let label = {
             let cmd = command.as_std();
             format!(
-                "({}) {}",
+                "({}) {} {}",
+                cmd.get_current_dir()
+                    .map(|dir| dir.to_string_lossy())
+                    .unwrap_or_default(),
                 cmd.get_program().to_string_lossy(),
                 cmd.get_args().map(|s| s.to_string_lossy()).join(" ")
             )

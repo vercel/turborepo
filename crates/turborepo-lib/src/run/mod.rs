@@ -6,7 +6,7 @@ mod scope;
 mod summary;
 pub mod task_id;
 use std::{
-    io::{BufWriter, IsTerminal},
+    io::{BufWriter, IsTerminal, Write},
     sync::Arc,
 };
 
@@ -15,7 +15,7 @@ pub use cache::{RunCache, TaskCache};
 use chrono::Local;
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::APIAuth;
 use turborepo_cache::AsyncCache;
@@ -274,6 +274,8 @@ impl<'a> Run<'a> {
             global_env_mode,
             self.base.ui,
             false,
+            self.processes.clone(),
+            &self.base.repo_root,
         );
 
         let errors = visitor.visit(engine.clone()).await?;
@@ -286,7 +288,7 @@ impl<'a> Run<'a> {
             .unwrap_or(if errors.is_empty() { 0 } else { 1 });
 
         for err in &errors {
-            error!("{err}");
+            writeln!(std::io::stderr(), "{err}").ok();
         }
 
         let pass_through_env = global_hash_inputs.pass_through_env.unwrap_or_default();
