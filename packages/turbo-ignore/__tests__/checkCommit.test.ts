@@ -97,6 +97,7 @@ describe("checkCommit()", () => {
       });
     });
   });
+
   describe("Not on Vercel", () => {
     describe("for all workspaces", () => {
       it("results in continue when no special commit messages are found", async () => {
