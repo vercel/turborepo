@@ -9,8 +9,8 @@ pub use turbo_config::{ConfigurationOptions, TurborepoConfigBuilder};
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("default config path not found")]
-    NoDefaultConfigPath,
+    #[error("Global config path not found")]
+    NoGlobalConfigPath,
     #[error(transparent)]
     PackageJson(#[from] crate::package_json::Error),
     #[error(

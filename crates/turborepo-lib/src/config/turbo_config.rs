@@ -55,7 +55,7 @@ pub struct TurborepoConfigBuilder {
     repo_root: AbsoluteSystemPathBuf,
     override_config: ConfigurationOptions,
 
-    // Used for testing.
+    #[cfg(test)]
     global_config_path: Option<AbsoluteSystemPathBuf>,
 }
 
@@ -275,20 +275,21 @@ impl TurborepoConfigBuilder {
         Self {
             repo_root: base.repo_root.to_owned(),
             override_config: Default::default(),
+            #[cfg(test)]
             global_config_path: base.global_config_path.clone(),
         }
     }
 
     // Getting all of the paths.
     fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
+        #[cfg(test)]
         if let Some(global_config_path) = self.global_config_path.clone() {
             return Ok(global_config_path);
         }
-        Ok(AbsoluteSystemPathBuf::try_from(
-            config_dir()
-                .map(|p| p.join("turborepo").join("config.json"))
-                .ok_or(ConfigError::Anyhow(anyhow!("No global config path")))?,
-        )?)
+
+        let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
+        let global_config_path = config_dir.join("turborepo").join("config.json");
+        AbsoluteSystemPathBuf::try_from(global_config_path).map_err(|e| ConfigError::PathError(e))
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
