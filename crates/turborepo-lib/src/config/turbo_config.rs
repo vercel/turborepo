@@ -158,10 +158,13 @@ fn get_env_var_config(
     turbo_mapping.insert(String::from("turbo_team"), "team_slug");
     turbo_mapping.insert(String::from("turbo_teamid"), "team_id");
     turbo_mapping.insert(String::from("turbo_token"), "token");
-    turbo_mapping.insert(String::from("turbo_signature"), "signature"); // new
-    turbo_mapping.insert(String::from("turbo_preflight"), "preflight"); // new
     turbo_mapping.insert(String::from("turbo_remote_cache_timeout"), "timeout");
-    turbo_mapping.insert(String::from("turbo_remote_cache_enabled"), "enabled"); // new
+
+    // We do not enable new config sources:
+    // turbo_mapping.insert(String::from("turbo_signature"), "signature"); // new
+    // turbo_mapping.insert(String::from("turbo_preflight"), "preflight"); // new
+    // turbo_mapping.insert(String::from("turbo_remote_cache_enabled"), "enabled");
+    // // new
 
     let mut output_map = HashMap::new();
 
@@ -178,7 +181,11 @@ fn get_env_var_config(
         match signature.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => return Err(ConfigError::Anyhow(anyhow!("parse_signature"))),
+            _ => {
+                return Err(ConfigError::Anyhow(anyhow!(
+                    "TURBO_SIGNATURE should be either 1 or 0."
+                )))
+            }
         }
     } else {
         None
@@ -189,7 +196,11 @@ fn get_env_var_config(
         match preflight.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => return Err(ConfigError::Anyhow(anyhow!("parse_preflight"))),
+            _ => {
+                return Err(ConfigError::Anyhow(anyhow!(
+                    "TURBO_PREFLIGHT should be either 1 or 0."
+                )))
+            }
         }
     } else {
         None
@@ -200,7 +211,11 @@ fn get_env_var_config(
         match enabled.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => return Err(ConfigError::Anyhow(anyhow!("parse_enabled"))),
+            _ => {
+                return Err(ConfigError::Anyhow(anyhow!(
+                    "TURBO_REMOTE_CACHE_ENABLED should be either 1 or 0."
+                )))
+            }
         }
     } else {
         None
@@ -209,8 +224,10 @@ fn get_env_var_config(
     // Process timeout
     let timeout = if let Some(timeout) = output_map.get("timeout").cloned() {
         Some(timeout.parse::<u64>().map_err(|e| {
-            dbg!(e);
-            ConfigError::Anyhow(anyhow!("parse_timeout"))
+            ConfigError::Anyhow(anyhow!(
+                "TURBO_REMOTE_CACHE_TIMEOUT: error parsing timeout. {}",
+                e
+            ))
         })?)
     } else {
         None
@@ -304,26 +321,23 @@ impl TurborepoConfigBuilder {
     }
 
     fn get_global_config(&self) -> Result<ConfigurationOptions, ConfigError> {
-        let global_config_path = self.global_config_path().map_err(|e| {
-            dbg!(e);
-            ConfigError::Anyhow(anyhow!("global_path"))
-        })?;
-        let mut contents = std::fs::read_to_string(global_config_path).or_else(|e| {
+        let global_config_path = self.global_config_path()?;
+        let mut contents = std::fs::read_to_string(&global_config_path).or_else(|e| {
             if matches!(e.kind(), std::io::ErrorKind::NotFound) {
                 Ok(String::from(""))
             } else {
-                dbg!(e);
-                Err(ConfigError::Anyhow(anyhow!("global_read")))
+                Err(anyhow!(
+                    "Encountered an IO error while attempting to read {}: {}",
+                    &global_config_path,
+                    e
+                ))
             }
         })?;
         if contents.is_empty() {
             contents = String::from("{}");
         }
-        let global_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
-            dbg!(contents);
-            dbg!(e);
-            ConfigError::Anyhow(anyhow!("global_de"))
-        })?;
+        let global_config: ConfigurationOptions =
+            serde_json::from_str(&contents).map_err(|e| ConfigError::SerdeJson(e))?;
         Ok(global_config)
     }
 
@@ -333,18 +347,18 @@ impl TurborepoConfigBuilder {
             if matches!(e.kind(), std::io::ErrorKind::NotFound) {
                 Ok(String::from(""))
             } else {
-                dbg!(e);
-                Err(ConfigError::Anyhow(anyhow!("local_read")))
+                Err(anyhow!(
+                    "Encountered an IO error while attempting to read {}: {}",
+                    local_config_path,
+                    e
+                ))
             }
         })?;
         if contents.is_empty() {
             contents = String::from("{}");
         }
-        let local_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
-            dbg!(contents);
-            dbg!(e);
-            ConfigError::Anyhow(anyhow!("local_de"))
-        })?;
+        let local_config: ConfigurationOptions =
+            serde_json::from_str(&contents).map_err(|e| ConfigError::SerdeJson(e))?;
         Ok(local_config)
     }
 

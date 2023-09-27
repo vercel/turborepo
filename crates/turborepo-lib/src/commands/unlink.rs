@@ -23,8 +23,11 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<()> {
             if matches!(e.kind(), std::io::ErrorKind::NotFound) {
                 Ok(String::from("{}"))
             } else {
-                dbg!(e);
-                Err(anyhow!("unlink remote cache"))
+                Err(anyhow!(
+                    "Encountered an IO error while attempting to read {}: {}",
+                    base.local_config_path(),
+                    e
+                ))
             }
         })?;
         let mut updated = before;
@@ -62,8 +65,11 @@ fn unlink_spaces(base: &mut CommandBase) -> Result<()> {
             if matches!(e.kind(), std::io::ErrorKind::NotFound) {
                 Ok(String::from("{}"))
             } else {
-                dbg!(e);
-                Err(anyhow!("unlink spaces"))
+                Err(anyhow!(
+                    "Encountered an IO error while attempting to read {}: {}",
+                    base.local_config_path(),
+                    e
+                ))
             }
         })?;
         let mut updated = before;

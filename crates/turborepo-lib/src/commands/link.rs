@@ -171,8 +171,11 @@ pub async fn link(
                 if matches!(e.kind(), std::io::ErrorKind::NotFound) {
                     Ok(String::from("{}"))
                 } else {
-                    dbg!(e);
-                    Err(anyhow!("read before write link"))
+                    Err(anyhow!(
+                        "Encountered an IO error while attempting to read {}: {}",
+                        base.local_config_path(),
+                        e
+                    ))
                 }
             })?;
             let no_preexisting_id =
@@ -275,8 +278,11 @@ pub async fn link(
                 if matches!(e.kind(), std::io::ErrorKind::NotFound) {
                     Ok(String::from("{}"))
                 } else {
-                    dbg!(e);
-                    Err(anyhow!("read before write spaces link"))
+                    Err(anyhow!(
+                        "Encountered an IO error while attempting to read {}: {}",
+                        base.local_config_path(),
+                        e
+                    ))
                 }
             })?;
             let no_preexisting_id =
