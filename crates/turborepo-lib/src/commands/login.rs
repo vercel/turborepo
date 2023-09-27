@@ -248,17 +248,17 @@ mod test {
         let port = port_scanner::request_open_port().unwrap();
 
         // user config
-        let user_config_file = NamedTempFile::new().unwrap();
-        fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
+        let global_config_file = NamedTempFile::new().unwrap();
+        fs::write(global_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
 
         // repo config
         let repo_root = AbsoluteSystemPathBuf::try_from(TempDir::new().unwrap().path()).unwrap();
-        let repo_config_path = repo_root.join_components(&[".turbo", "config.json"]);
-        repo_config_path.ensure_dir().unwrap();
+        let local_config_path = repo_root.join_components(&[".turbo", "config.json"]);
+        local_config_path.ensure_dir().unwrap();
 
         // Explicitly pass the wrong port to confirm that we're reading it from the
         // manual override
-        repo_config_path
+        local_config_path
             .create_with_contents(format!(
                 "{{ \"apiurl\": \"http://localhost:{}\" }}",
                 port + 1
@@ -269,7 +269,7 @@ mod test {
 
         let mut base = CommandBase {
             global_config_path: Some(
-                AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
+                AbsoluteSystemPathBuf::try_from(global_config_file.path().to_path_buf()).unwrap(),
             ),
             repo_root: repo_root.clone(),
             ui: UI::new(false),
@@ -292,8 +292,11 @@ mod test {
 
         handle.abort();
 
+        // Re-read configuration.
+        let config = TurborepoConfigBuilder::new(&base).build().unwrap();
+
         assert_eq!(
-            base.config().unwrap().token().unwrap(),
+            config.token().unwrap(),
             turborepo_vercel_api_mock::EXPECTED_TOKEN
         );
     }
