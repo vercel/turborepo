@@ -377,7 +377,7 @@ impl APIClient {
         } else {
             reqwest::Client::builder().build()
         };
-        let client = builder_result.map_err(|e| Error::TlsError(e))?;
+        let client = builder_result.map_err(Error::TlsError)?;
 
         let user_agent = format!(
             "turbo {} {} {} {}",
