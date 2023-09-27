@@ -17,6 +17,7 @@ use tracing_subscriber::{
         format::{DefaultFields, Writer},
         FmtContext, FormatEvent, FormatFields,
     },
+    layer,
     prelude::*,
     registry::LookupSpan,
     reload::{self, Error, Handle},
@@ -24,20 +25,11 @@ use tracing_subscriber::{
 };
 use turborepo_ui::UI;
 
-type StdOutLog = Filtered<
-    tracing_subscriber::fmt::Layer<Registry, DefaultFields, TurboFormatter>,
-    EnvFilter,
-    Registry,
->;
+type StdOutLog = Filtered<fmt::Layer<Registry, DefaultFields, TurboFormatter>, EnvFilter, Registry>;
 
-type DaemonLog = tracing_subscriber::fmt::Layer<
-    Layered,
-    DefaultFields,
-    tracing_subscriber::fmt::format::Format,
-    NonBlocking,
->;
+type DaemonLog = fmt::Layer<Layered, DefaultFields, fmt::format::Format, NonBlocking>;
 
-type Layered = tracing_subscriber::layer::Layered<StdOutLog, Registry>;
+type Layered = layer::Layered<StdOutLog, Registry>;
 
 pub struct TurboSubscriber {
     #[allow(dead_code)]
@@ -93,6 +85,10 @@ impl TurboSubscriber {
 
         // we set this layer to None to start with, effectively disabling it
         let (logrotate, update) = reload::Layer::new(Option::<DaemonLog>::None);
+        let daemon_filter = tracing_subscriber::filter::targets::Targets::new()
+            .with_default(Level::INFO)
+            .with_target("turborepo", Level::TRACE);
+        let logrotate = logrotate.with_filter(daemon_filter);
 
         let registry = Registry::default().with(stdout).with(logrotate);
 
@@ -122,7 +118,7 @@ impl TurboSubscriber {
         let (file_writer, guard) = tracing_appender::non_blocking(appender);
         trace!("created non-blocking file writer");
 
-        let layer = tracing_subscriber::fmt::layer()
+        let layer: DaemonLog = tracing_subscriber::fmt::layer()
             .with_writer(file_writer)
             .with_ansi(false);
 

@@ -1,6 +1,9 @@
+use std::io;
+
 use thiserror::Error;
 use tonic::{Code, Status};
 use tracing::info;
+use turbopath::AbsoluteSystemPathBuf;
 
 use self::proto::turbod_client::TurbodClient;
 use super::{
@@ -160,6 +163,9 @@ pub enum DaemonError {
 
     #[error("unable to complete daemon clean")]
     CleanFailed,
+
+    #[error("failed to setup cookie dir {1}: {0}")]
+    CookieDir(io::Error, AbsoluteSystemPathBuf),
 }
 
 impl From<Status> for DaemonError {

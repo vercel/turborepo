@@ -12,7 +12,7 @@ use tokio::{
     sync::{broadcast, oneshot},
     time::error::Elapsed,
 };
-use tracing::debug;
+use tracing::{debug, trace};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
 
 use crate::NotifyError;
@@ -101,6 +101,7 @@ impl CookieJar {
         opts.truncate(true).create(true).write(true);
         {
             // dropping the resulting file closes the handle
+            trace!("writing cookie {}", cookie_path);
             _ = cookie_path.open_with_options(opts)?;
         }
         // ??? -> timeout, recv failure, actual cookie failure
@@ -129,6 +130,7 @@ async fn watch_cookies(
                                     .try_into()
                                     .expect("Non-absolute path from filewatching");
                                 if root.relation_to_path(abs_path) == PathRelation::Parent {
+                                    trace!("saw cookie: {}", abs_path);
                                     if let Some(responder) = watches.cookies.remove(&path) {
                                         if responder.send(Ok(())).is_err() {
                                             // Note that cookie waiters will time out if they don't get a
