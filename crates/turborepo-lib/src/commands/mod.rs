@@ -102,7 +102,15 @@ impl CommandBase {
 
         let api_url = config.api_url();
         let timeout = config.timeout();
-        APIClient::new(api_url, timeout, self.version, args.preflight);
+        APIClient::new(api_url, timeout, self.version, args.preflight).map_err(|e| {
+            // This error can only be turborepo_api_client::Error::TlsError()
+            match e {
+                turborepo_api_client::Error::TlsError(e) => {
+                    ConfigError::Anyhow(anyhow!("Unable to configure TLS for your machine: {}", e))
+                }
+                _ => panic!("Got a non-builder error at build time."),
+            }
+        })
     }
 
     pub fn daemon_file_root(&self) -> AbsoluteSystemPathBuf {

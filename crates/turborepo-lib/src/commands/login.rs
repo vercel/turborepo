@@ -98,12 +98,27 @@ fn make_token_name() -> Result<String> {
 pub async fn login(base: &mut CommandBase) -> Result<()> {
     let api_client: APIClient = base.api_client()?;
     let ui = base.ui;
-    let login_url_config = base.turbo_config()?.login_url().to_string();
+    let login_url_config = base.config()?.login_url().to_string();
 
     // We are passing a closure here, but it would be cleaner if we made a
     // turborepo-config crate and imported that into turborepo-auth.
     let set_token = |token: &str| -> Result<(), anyhow::Error> {
-        Ok(base.user_config_mut()?.set_token(Some(token.to_string()))?)
+        let global_config_path = base.global_config_path()?;
+        let before = global_config_path.read_to_string().or_else(|e| {
+            if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                Ok(String::from("{}"))
+            } else {
+                Err(anyhow!(
+                    "Encountered an IO error while attempting to read {}: {}",
+                    global_config_path,
+                    e
+                ))
+            }
+        })?;
+        let after = set_path(&before, &["token"], &format!("\"{}\"", token))?;
+        global_config_path.ensure_dir()?;
+        global_config_path.create_with_contents(after)?;
+        Ok(())
     };
 
     auth_login(api_client, &ui, set_token, &login_url_config).await

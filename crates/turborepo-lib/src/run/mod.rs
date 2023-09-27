@@ -18,7 +18,7 @@ use rayon::iter::ParallelBridge;
 use tracing::{debug, info};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::APIAuth;
-use turborepo_cache::AsyncCache;
+use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_scm::SCM;
 use turborepo_ui::ColorSelector;
