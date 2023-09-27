@@ -10,6 +10,7 @@ use serde::Deserialize;
 use tokio::sync::OnceCell;
 #[cfg(not(test))]
 use tracing::warn;
+use turborepo_api_client::APIClient;
 use turborepo_ui::{start_spinner, BOLD, CYAN};
 
 use crate::{commands::CommandBase, config::Error};
@@ -17,6 +18,8 @@ use crate::{commands::CommandBase, config::Error};
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 const DEFAULT_SSO_PROVIDER: &str = "SAML/OIDC Single Sign-On";
+
+use turborepo_auth::login as auth_login;
 
 pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
     let repo_config = base.repo_config()?;
@@ -92,64 +95,17 @@ fn make_token_name() -> Result<String> {
 }
 
 pub async fn login(base: &mut CommandBase) -> Result<()> {
-    let repo_config = base.repo_config()?;
-    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
-    let login_url_configuration = repo_config.login_url();
-    let mut login_url = Url::parse(login_url_configuration)?;
+    let api_client: APIClient = base.api_client()?;
+    let ui = base.ui;
+    let login_url_config = base.repo_config()?.login_url().to_string();
 
-    login_url
-        .path_segments_mut()
-        .map_err(|_: ()| Error::LoginUrlCannotBeABase {
-            value: login_url_configuration.to_string(),
-        })?
-        .extend(["turborepo", "token"]);
+    // We are passing a closure here, but it would be cleaner if we made a
+    // turborepo-config crate and imported that into turborepo-auth.
+    let set_token = |token: &str| -> Result<(), anyhow::Error> {
+        Ok(base.user_config_mut()?.set_token(Some(token.to_string()))?)
+    };
 
-    login_url
-        .query_pairs_mut()
-        .append_pair("redirect_uri", &redirect_url);
-
-    println!(">>> Opening browser to {login_url}");
-    let spinner = start_spinner("Waiting for your authorization...");
-    direct_user_to_url(login_url.as_str());
-
-    let token_cell = Arc::new(OnceCell::new());
-    run_login_one_shot_server(
-        DEFAULT_PORT,
-        repo_config.login_url().to_string(),
-        token_cell.clone(),
-    )
-    .await?;
-
-    spinner.finish_and_clear();
-
-    let token = token_cell
-        .get()
-        .ok_or_else(|| anyhow!("Failed to get token"))?;
-
-    base.user_config_mut()?.set_token(Some(token.to_string()))?;
-
-    let client = base.api_client()?;
-    let user_response = client.get_user(token.as_str()).await?;
-
-    let ui = &base.ui;
-
-    println!(
-        "
-{} Turborepo CLI authorized for {}
-
-{}
-
-{}
-
-",
-        ui.rainbow(">>> Success!"),
-        user_response.user.email,
-        ui.apply(
-            CYAN.apply_to("To connect to your Remote Cache, run the following in any turborepo:")
-        ),
-        ui.apply(BOLD.apply_to("  npx turbo link"))
-    );
-    Ok(())
+    auth_login(api_client, &ui, set_token, &login_url_config).await
 }
 
 #[cfg(test)]
@@ -161,52 +117,8 @@ fn direct_user_to_url(url: &str) {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-struct LoginPayload {
-    #[cfg(not(test))]
-    token: String,
-}
-
 #[cfg(test)]
 const EXPECTED_VERIFICATION_TOKEN: &str = "expected_verification_token";
-
-#[cfg(test)]
-async fn run_login_one_shot_server(
-    _: u16,
-    _: String,
-    login_token: Arc<OnceCell<String>>,
-) -> Result<()> {
-    login_token
-        .set(turborepo_vercel_api_mock::EXPECTED_TOKEN.to_string())
-        .unwrap();
-    Ok(())
-}
-
-#[cfg(not(test))]
-async fn run_login_one_shot_server(
-    port: u16,
-    login_url_base: String,
-    login_token: Arc<OnceCell<String>>,
-) -> Result<()> {
-    let handle = axum_server::Handle::new();
-    let route_handle = handle.clone();
-    let app = Router::new()
-        // `GET /` goes to `root`
-        .route(
-            "/",
-            get(|login_payload: Query<LoginPayload>| async move {
-                let _ = login_token.set(login_payload.0.token);
-                route_handle.shutdown();
-                Redirect::to(&format!("{login_url_base}/turborepo/success"))
-            }),
-        );
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-
-    Ok(axum_server::bind(addr)
-        .handle(handle)
-        .serve(app.into_make_service())
-        .await?)
-}
 
 #[derive(Debug, Default, Clone, Deserialize)]
 #[allow(dead_code)]
@@ -308,53 +220,6 @@ mod test {
         config::{ClientConfigLoader, RepoConfigLoader, UserConfigLoader},
         Args,
     };
-
-    #[tokio::test]
-    async fn test_login() {
-        let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
-
-        let user_config_file = NamedTempFile::new().unwrap();
-        fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
-        let repo_config_file = NamedTempFile::new().unwrap();
-        let repo_config_path = AbsoluteSystemPathBuf::try_from(repo_config_file.path()).unwrap();
-        // Explicitly pass the wrong port to confirm that we're reading it from the
-        // manual override
-        fs::write(
-            repo_config_file.path(),
-            format!("{{ \"apiurl\": \"http://localhost:{}\" }}", port + 1),
-        )
-        .unwrap();
-        let root_dir = tempdir().unwrap();
-
-        let mut base = CommandBase {
-            repo_root: AbsoluteSystemPathBuf::new(root_dir.path().to_string_lossy()).unwrap(),
-            ui: UI::new(false),
-            client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
-            user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
-                    .load()
-                    .unwrap(),
-            ),
-            repo_config: OnceCell::from(
-                RepoConfigLoader::new(repo_config_path)
-                    .with_api(Some(format!("http://localhost:{}", port)))
-                    .load()
-                    .unwrap(),
-            ),
-            args: Args::default(),
-            version: "",
-        };
-
-        login::login(&mut base).await.unwrap();
-
-        handle.abort();
-
-        assert_eq!(
-            base.user_config().unwrap().token().unwrap(),
-            turborepo_vercel_api_mock::EXPECTED_TOKEN
-        );
-    }
 
     #[derive(Debug, Clone, Deserialize)]
     struct TokenRequest {

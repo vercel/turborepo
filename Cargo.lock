@@ -9950,6 +9950,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-auth"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-server",
+ "port_scanner",
+ "reqwest",
+ "serde",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "turborepo-api-client",
+ "turborepo-ui",
+ "turborepo-vercel-api-mock",
+ "webbrowser",
+]
+
+[[package]]
 name = "turborepo-cache"
 version = "0.1.0"
 dependencies = [
@@ -10140,6 +10159,7 @@ dependencies = [
  "turbo-updater",
  "turbopath",
  "turborepo-api-client",
+ "turborepo-auth",
  "turborepo-cache",
  "turborepo-ci",
  "turborepo-env",

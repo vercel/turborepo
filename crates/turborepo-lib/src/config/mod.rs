@@ -37,6 +37,7 @@ pub enum Error {
          one"
     )]
     NoTurboJSON,
+    // TODO: remove LoginUrlCannotBeABase once sso_login is moved out to turborepo-auth crate
     #[error(
         "loginUrl is configured to \"{value}\", but cannot be a base URL. This happens in \
          situations like using a `data:` URL."
