@@ -41,5 +41,15 @@ Graph
   \t} (esc)
   }
   
-
-
+Graph in Rust
+  $ ${TURBO} run build --graph --experimental-rust-codepath
+  digraph {
+  \tcompound = "true" (esc)
+  \tnewrank = "true" (esc)
+  \tsubgraph "root" { (esc)
+  \t\t"[root] //#build" -> "[root] ___ROOT___" (esc)
+  \t\t"[root] my-app#build" -> "[root] util#build" (esc)
+  \t\t"[root] util#build" -> "[root] ___ROOT___" (esc)
+  \t} (esc)
+  }
+  
