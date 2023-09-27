@@ -256,7 +256,8 @@ impl ChunkingContext for DevChunkingContext {
             this.asset_base_path
                 .await?
                 .as_ref()
-                .unwrap_or(&"/".to_owned()),
+                .map(|s| s.as_str())
+                .unwrap_or("/"),
             asset_path
         )))
     }
