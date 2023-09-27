@@ -22,5 +22,4 @@ Graph in Rust
   \t\t"[root] build" -> "[root] ___ROOT___" (esc)
   \t} (esc)
   }
-
   

@@ -121,7 +121,11 @@ impl<'a> Run<'a> {
 
             if filtered_pkgs.len() != pkg_dep_graph.len() {
                 for target in self.targets() {
-                    let task_name = TaskName::from(target.as_str()).into_root_task();
+                    let mut task_name = TaskName::from(target.as_str());
+                    // If it's not a package task, we convert to a root task
+                    if !task_name.is_package_task() {
+                        task_name = task_name.into_root_task()
+                    }
 
                     if root_turbo_json.pipeline.contains_key(&task_name) {
                         filtered_pkgs.insert(WorkspaceName::Root);
