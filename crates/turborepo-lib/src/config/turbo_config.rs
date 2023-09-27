@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use anyhow::anyhow;
 use dirs_next::config_dir;
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPathBuf;
@@ -13,8 +14,6 @@ use crate::{
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 20;
-
-use anyhow::{anyhow, Error};
 
 macro_rules! create_builder {
     ($func_name:ident, $property_name:ident, $type:ty) => {
@@ -109,16 +108,16 @@ impl ConfigurationOptions {
 }
 
 trait ResolvedConfigurationOptions {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error>;
+    fn get_configuration_options(self) -> Result<ConfigurationOptions, ConfigError>;
 }
 
 impl ResolvedConfigurationOptions for PackageJson {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
+    fn get_configuration_options(self) -> Result<ConfigurationOptions, ConfigError> {
         match &self.legacy_turbo_config {
             Some(legacy_turbo_config) => {
                 let synthetic_raw_turbo_json: RawTurboJSON =
                     serde_json::from_value(legacy_turbo_config.clone())
-                        .map_err(|_| anyhow!("global_de"))?;
+                        .map_err(|_| ConfigError::Anyhow(anyhow!("global_de")))?;
                 synthetic_raw_turbo_json.get_configuration_options()
             }
             None => Ok(ConfigurationOptions::default()),
@@ -127,7 +126,7 @@ impl ResolvedConfigurationOptions for PackageJson {
 }
 
 impl ResolvedConfigurationOptions for RawTurboJSON {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
+    fn get_configuration_options(self) -> Result<ConfigurationOptions, ConfigError> {
         match &self.remote_cache {
             Some(configuration_options) => {
                 configuration_options.clone().get_configuration_options()
@@ -139,7 +138,7 @@ impl ResolvedConfigurationOptions for RawTurboJSON {
 
 // Used for global config and local config.
 impl ResolvedConfigurationOptions for ConfigurationOptions {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
+    fn get_configuration_options(self) -> Result<ConfigurationOptions, ConfigError> {
         Ok(self)
     }
 }
@@ -152,7 +151,7 @@ fn get_lowercased_env_vars() -> HashMap<String, String> {
 
 fn get_env_var_config(
     environment: &HashMap<String, String>,
-) -> Result<ConfigurationOptions, Error> {
+) -> Result<ConfigurationOptions, ConfigError> {
     let mut turbo_mapping = HashMap::new();
     turbo_mapping.insert(String::from("turbo_api"), "api_url");
     turbo_mapping.insert(String::from("turbo_login"), "login_url");
@@ -179,7 +178,7 @@ fn get_env_var_config(
         match signature.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => return Err(anyhow!("parse_signature")),
+            _ => return Err(ConfigError::Anyhow(anyhow!("parse_signature"))),
         }
     } else {
         None
@@ -190,7 +189,7 @@ fn get_env_var_config(
         match preflight.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => return Err(anyhow!("parse_preflight")),
+            _ => return Err(ConfigError::Anyhow(anyhow!("parse_preflight"))),
         }
     } else {
         None
@@ -201,7 +200,7 @@ fn get_env_var_config(
         match enabled.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => return Err(anyhow!("parse_enabled")),
+            _ => return Err(ConfigError::Anyhow(anyhow!("parse_enabled"))),
         }
     } else {
         None
@@ -211,7 +210,7 @@ fn get_env_var_config(
     let timeout = if let Some(timeout) = output_map.get("timeout").cloned() {
         Some(timeout.parse::<u64>().map_err(|e| {
             dbg!(e);
-            anyhow!("parse_timeout")
+            ConfigError::Anyhow(anyhow!("parse_timeout"))
         })?)
     } else {
         None
@@ -238,7 +237,7 @@ fn get_env_var_config(
 
 fn get_override_env_var_config(
     environment: &HashMap<String, String>,
-) -> Result<ConfigurationOptions, Error> {
+) -> Result<ConfigurationOptions, ConfigError> {
     let mut vercel_artifacts_mapping = HashMap::new();
     vercel_artifacts_mapping.insert(String::from("vercel_artifacts_token"), "token");
     vercel_artifacts_mapping.insert(String::from("vercel_artifacts_owner"), "team_id");
@@ -281,14 +280,14 @@ impl TurborepoConfigBuilder {
     }
 
     // Getting all of the paths.
-    fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
+    fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
         if let Some(global_config_path) = self.global_config_path.clone() {
             return Ok(global_config_path);
         }
         Ok(AbsoluteSystemPathBuf::try_from(
             config_dir()
                 .map(|p| p.join("turborepo").join("config.json"))
-                .ok_or(anyhow!("No global config path"))?,
+                .ok_or(ConfigError::Anyhow(anyhow!("No global config path")))?,
         )?)
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
@@ -303,17 +302,17 @@ impl TurborepoConfigBuilder {
         self.repo_root.join_component("turbo.json")
     }
 
-    fn get_global_config(&self) -> Result<ConfigurationOptions, Error> {
+    fn get_global_config(&self) -> Result<ConfigurationOptions, ConfigError> {
         let global_config_path = self.global_config_path().map_err(|e| {
             dbg!(e);
-            anyhow!("global_path")
+            ConfigError::Anyhow(anyhow!("global_path"))
         })?;
         let mut contents = std::fs::read_to_string(global_config_path).or_else(|e| {
             if matches!(e.kind(), std::io::ErrorKind::NotFound) {
                 Ok(String::from(""))
             } else {
                 dbg!(e);
-                Err(anyhow!("global_read"))
+                Err(ConfigError::Anyhow(anyhow!("global_read")))
             }
         })?;
         if contents.is_empty() {
@@ -322,19 +321,19 @@ impl TurborepoConfigBuilder {
         let global_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
             dbg!(contents);
             dbg!(e);
-            anyhow!("global_de")
+            ConfigError::Anyhow(anyhow!("global_de"))
         })?;
         Ok(global_config)
     }
 
-    fn get_local_config(&self) -> Result<ConfigurationOptions, Error> {
+    fn get_local_config(&self) -> Result<ConfigurationOptions, ConfigError> {
         let local_config_path = self.local_config_path();
         let mut contents = local_config_path.read_to_string().or_else(|e| {
             if matches!(e.kind(), std::io::ErrorKind::NotFound) {
                 Ok(String::from(""))
             } else {
                 dbg!(e);
-                Err(anyhow!("local_read"))
+                Err(ConfigError::Anyhow(anyhow!("local_read")))
             }
         })?;
         if contents.is_empty() {
@@ -343,7 +342,7 @@ impl TurborepoConfigBuilder {
         let local_config: ConfigurationOptions = serde_json::from_str(&contents).map_err(|e| {
             dbg!(contents);
             dbg!(e);
-            anyhow!("local_de")
+            ConfigError::Anyhow(anyhow!("local_de"))
         })?;
         Ok(local_config)
     }
@@ -358,7 +357,7 @@ impl TurborepoConfigBuilder {
     create_builder!(with_preflight, preflight, Option<bool>);
     create_builder!(with_timeout, timeout, Option<u64>);
 
-    pub fn build(&self) -> Result<ConfigurationOptions, Error> {
+    pub fn build(&self) -> Result<ConfigurationOptions, ConfigError> {
         // Priority, from least significant to most significant:
         // - shared configuration (package.json .turbo)
         // - shared configuration (turbo.json)
@@ -369,9 +368,14 @@ impl TurborepoConfigBuilder {
         // - builder pattern overrides.
 
         let root_package_json = PackageJson::load(&self.repo_root.join_component("package.json"))
-            .map_err(|e| {
-            dbg!(e);
-            anyhow!("package_json")
+            .or_else(|e| {
+            if let crate::package_json::Error::Io(e) = &e {
+                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                    return Ok(Default::default());
+                }
+            }
+
+            Err(e)
         })?;
         let turbo_json =
             RawTurboJSON::read(&self.repo_root.join_component("turbo.json")).or_else(|e| {
