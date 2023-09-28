@@ -564,16 +564,25 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         root_info_type: &C::RootInfoType,
     ) -> C::RootInfo {
         let mut result = aggregation_context.new_root_info(root_info_type);
-        let state = self.state.lock();
-        for TopRef { upper } in state.top_upper.iter() {
+        let top_uppers = {
+            let state = self.state.lock();
+            state
+                .top_upper
+                .iter()
+                .cloned()
+                .collect::<SmallVec<[_; 16]>>()
+        };
+        for TopRef { upper } in top_uppers.iter() {
             let info = upper.get_root_info(aggregation_context, root_info_type);
             if aggregation_context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
                 return result;
             }
         }
-        state
-            .bottom_upper
-            .get_root_info(aggregation_context, root_info_type, result)
+        let bottom_uppers = {
+            let state = self.state.lock();
+            state.bottom_upper.as_cloned_uppers()
+        };
+        bottom_uppers.get_root_info(aggregation_context, root_info_type, result)
     }
 }
 
