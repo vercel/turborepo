@@ -356,8 +356,7 @@ impl TurborepoConfigBuilder {
         if contents.is_empty() {
             contents = String::from("{}");
         }
-        let global_config: ConfigurationOptions =
-            serde_json::from_str(&contents).map_err(|e| ConfigError::SerdeJson(e))?;
+        let global_config: ConfigurationOptions = serde_json::from_str(&contents)?;
         Ok(global_config)
     }
 
@@ -375,8 +374,7 @@ impl TurborepoConfigBuilder {
         if contents.is_empty() {
             contents = String::from("{}");
         }
-        let local_config: ConfigurationOptions =
-            serde_json::from_str(&contents).map_err(|e| ConfigError::SerdeJson(e))?;
+        let local_config: ConfigurationOptions = serde_json::from_str(&contents)?;
         Ok(local_config)
     }
 
