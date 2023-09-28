@@ -169,7 +169,7 @@ struct TaskState {
     stateful: bool,
 
     /// Children are only modified from execution
-    children: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+    children: AutoSet<TaskId, BuildNoHashHasher<TaskId>, 2>,
 
     /// Collectibles are only modified from execution
     collectibles: MaybeCollectibles,
@@ -388,7 +388,7 @@ enum TaskStateType {
         event: Event,
         count_as_finished: bool,
         /// Children that need to be disconnected once leaving this state
-        outdated_children: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+        outdated_children: AutoSet<TaskId, BuildNoHashHasher<TaskId>, 2>,
         outdated_collectibles: MaybeCollectibles,
     },
 

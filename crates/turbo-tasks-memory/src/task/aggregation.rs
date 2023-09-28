@@ -26,7 +26,7 @@ pub enum RootType {
 #[derive(Debug, Default)]
 pub struct CollectiblesInfo {
     collectibles: AutoMap<RawVc, i32>,
-    dependent_tasks: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+    dependent_tasks: AutoSet<TaskId, BuildNoHashHasher<TaskId>, 2>,
 }
 
 impl CollectiblesInfo {
@@ -140,8 +140,8 @@ impl TaskChange {
 pub struct TaskAggregationContext<'a> {
     pub turbo_tasks: &'a dyn TurboTasksBackendApi<MemoryBackend>,
     pub backend: &'a MemoryBackend,
-    pub dirty_tasks_to_schedule: Mutex<Option<AutoSet<TaskId, BuildNoHashHasher<TaskId>>>>,
-    pub tasks_to_notify: Mutex<Option<AutoSet<TaskId, BuildNoHashHasher<TaskId>>>>,
+    pub dirty_tasks_to_schedule: Mutex<Option<AutoSet<TaskId, BuildNoHashHasher<TaskId>, 2>>>,
+    pub tasks_to_notify: Mutex<Option<AutoSet<TaskId, BuildNoHashHasher<TaskId>, 2>>>,
 }
 
 impl<'a> TaskAggregationContext<'a> {
