@@ -104,7 +104,6 @@ export function turboIgnore(
     execOptions.maxBuffer = opts.maxBuffer;
   }
 
-  info(`execOptions: ${JSON.stringify(execOptions, null, 2)}`);
   exec(command, execOptions, (err, stdout) => {
     if (err) {
       const { level, code, message } = shouldWarn({ err: err.message });
