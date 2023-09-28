@@ -73,7 +73,7 @@ impl TurboTasksCallApi for VcStorage {
                     .map_err(SharedError::new);
 
                 let mut tasks = this.tasks.lock().unwrap();
-                if let Task::Spawned(event) = replace(&mut tasks[i], Task::Finished(result)) {
+                if let Task::Spawned(event) = replace(&mut tasks[i - 1], Task::Finished(result)) {
                     event.notify(usize::MAX);
                 }
             },
