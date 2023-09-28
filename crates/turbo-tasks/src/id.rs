@@ -18,6 +18,9 @@ macro_rules! define_id {
         }
 
         impl $name {
+            /// # Safety
+            ///
+            /// The passed `id` must not be zero.
             pub unsafe fn new_unchecked(id: usize) -> Self {
                 Self { id: unsafe { NonZeroUsize::new_unchecked(id) } }
             }
