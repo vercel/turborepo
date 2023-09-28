@@ -296,7 +296,7 @@ task_local! {
     /// The current TurboTasks instance
     static TURBO_TASKS: Arc<dyn TurboTasksApi>;
 
-    static CELL_COUNTERS: RefCell<HashMap<ValueTypeId, u32, BuildNoHashHasher<ValueTypeId>>>;
+    static CELL_COUNTERS: RefCell<AutoMap<ValueTypeId, u32, BuildNoHashHasher<ValueTypeId>, 8>>;
 
     static CURRENT_TASK_ID: TaskId;
 
