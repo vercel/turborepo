@@ -1092,12 +1092,10 @@ async fn resolve_internal(
 
     // Apply import mappings if provided
     if let Some(import_map) = &options_value.import_map {
-        let import_map = import_map.resolve().await?;
-        let result_ref = import_map.lookup(lookup_path, request).await?;
-        let result = &*result_ref;
+        let result = import_map.await?.lookup(lookup_path, request).await?;
         if !matches!(result, ImportMapResult::NoEntry) {
             let resolved_result = resolve_import_map_result(
-                result,
+                &result,
                 lookup_path,
                 lookup_path,
                 request,
@@ -1289,11 +1287,9 @@ async fn resolve_internal(
     // Apply fallback import mappings if provided
     if let Some(import_map) = &options_value.fallback_import_map {
         if *result.is_unresolveable().await? {
-            let import_map = import_map.resolve().await?;
-            let result_ref = import_map.lookup(lookup_path, request).await?;
-            let result = &*result_ref;
+            let result = import_map.await?.lookup(lookup_path, request).await?;
             let resolved_result = resolve_import_map_result(
-                result,
+                &result,
                 lookup_path,
                 lookup_path,
                 request,
@@ -1583,17 +1579,14 @@ fn resolve_import_map_result_boxed<'a>(
     options: Vc<ResolveOptions>,
     query: Vc<String>,
 ) -> Pin<Box<dyn Future<Output = ResolveImportMapResult> + Send + 'a>> {
-    Box::pin(async move {
-        resolve_import_map_result(
-            result,
-            lookup_path,
-            original_lookup_path,
-            original_request,
-            options,
-            query,
-        )
-        .await
-    })
+    Box::pin(resolve_import_map_result(
+        result,
+        lookup_path,
+        original_lookup_path,
+        original_request,
+        options,
+        query,
+    ))
 }
 
 async fn resolve_alias_field_result(
