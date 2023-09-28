@@ -403,6 +403,16 @@ impl AbsoluteSystemPath {
         fs::read_to_string(&self.0)
     }
 
+    /// Attempts to read a file, and:
+    /// If the file does not exist it returns the default value.
+    /// For all other scenarios passes through the `read_to_string` results.
+    pub fn read_or_default(&self, default: String) -> Result<String, io::Error> {
+        match fs::read_to_string(&self.0) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(default),
+            read_result => read_result,
+        }
+    }
+
     #[cfg(unix)]
     pub fn set_mode(&self, mode: u32) -> Result<(), io::Error> {
         use std::os::unix::fs::PermissionsExt;

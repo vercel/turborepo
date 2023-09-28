@@ -19,32 +19,25 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<()> {
         base.config()?.team_id().is_some() || base.config()?.team_slug().is_some();
 
     let output = if needs_disabling {
-        let before = base.local_config_path().read_to_string().or_else(|e| {
-            if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                Ok(String::from("{}"))
-            } else {
-                Err(anyhow!(
+        let before = base
+            .local_config_path()
+            .read_or_default("{}".into())
+            .map_err(|e| {
+                anyhow!(
                     "Encountered an IO error while attempting to read {}: {}",
                     base.local_config_path(),
                     e
-                ))
-            }
-        })?;
-        let mut updated = before;
-        let minus_team_slug = unset_path(&updated, &["teamSlug"], false)?;
-        updated = if let Some(minus_team_slug) = minus_team_slug {
-            minus_team_slug
-        } else {
-            updated
-        };
-        let minus_team_id = unset_path(&updated, &["teamId"], false)?;
-        updated = if let Some(minus_team_id) = minus_team_id {
-            minus_team_id
-        } else {
-            updated
-        };
+                )
+            })?;
+        let no_id = unset_path(&before, &["teamid"], false)
+            .unwrap_or(Some(before))
+            .unwrap();
+        let no_slug = unset_path(&no_id, &["teamslug"], false)
+            .unwrap_or(Some(no_id))
+            .unwrap();
+
         base.local_config_path().ensure_dir()?;
-        base.local_config_path().create_with_contents(updated)?;
+        base.local_config_path().create_with_contents(no_slug)?;
 
         "> Disabled Remote Caching"
     } else {
@@ -61,37 +54,30 @@ fn unlink_spaces(base: &mut CommandBase) -> Result<()> {
         base.config()?.team_id().is_some() || base.config()?.team_slug().is_some();
 
     if needs_disabling {
-        let before = base.local_config_path().read_to_string().or_else(|e| {
-            if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                Ok(String::from("{}"))
-            } else {
-                Err(anyhow!(
+        let before = base
+            .local_config_path()
+            .read_or_default("{}".into())
+            .map_err(|e| {
+                anyhow!(
                     "Encountered an IO error while attempting to read {}: {}",
                     base.local_config_path(),
                     e
-                ))
-            }
-        })?;
-        let mut updated = before;
-        let minus_team_slug = unset_path(&updated, &["teamSlug"], false)?;
-        updated = if let Some(minus_team_slug) = minus_team_slug {
-            minus_team_slug
-        } else {
-            updated
-        };
-        let minus_team_id = unset_path(&updated, &["teamId"], false)?;
-        updated = if let Some(minus_team_id) = minus_team_id {
-            minus_team_id
-        } else {
-            updated
-        };
+                )
+            })?;
+        let no_id = unset_path(&before, &["teamid"], false)
+            .unwrap_or(Some(before))
+            .unwrap();
+        let no_slug = unset_path(&no_id, &["teamslug"], false)
+            .unwrap_or(Some(no_id))
+            .unwrap();
+
         base.local_config_path().ensure_dir()?;
-        base.local_config_path().create_with_contents(updated)?;
+        base.local_config_path().create_with_contents(no_slug)?;
     }
 
     // Space config is _also_ in turbo.json.
     let result =
-        remove_spaces_from_turbo_json(base).context("could not unlink. Something went wrong")?;
+        remove_spaces_from_turbo_json(base).context("Could not unlink. Something went wrong")?;
 
     let output = match (needs_disabling, result) {
         (_, UnlinkSpacesResult::Unlinked) => "> Unlinked Spaces",

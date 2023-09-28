@@ -327,17 +327,15 @@ impl TurborepoConfigBuilder {
 
     fn get_global_config(&self) -> Result<ConfigurationOptions, ConfigError> {
         let global_config_path = self.global_config_path()?;
-        let mut contents = std::fs::read_to_string(&global_config_path).or_else(|e| {
-            if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                Ok(String::from(""))
-            } else {
-                Err(anyhow!(
+        let mut contents = global_config_path
+            .read_or_default("{}".into())
+            .map_err(|e| {
+                anyhow!(
                     "Encountered an IO error while attempting to read {}: {}",
-                    &global_config_path,
+                    global_config_path,
                     e
-                ))
-            }
-        })?;
+                )
+            })?;
         if contents.is_empty() {
             contents = String::from("{}");
         }
@@ -348,17 +346,15 @@ impl TurborepoConfigBuilder {
 
     fn get_local_config(&self) -> Result<ConfigurationOptions, ConfigError> {
         let local_config_path = self.local_config_path();
-        let mut contents = local_config_path.read_to_string().or_else(|e| {
-            if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                Ok(String::from(""))
-            } else {
-                Err(anyhow!(
+        let mut contents = local_config_path
+            .read_or_default("{}".into())
+            .map_err(|e| {
+                anyhow!(
                     "Encountered an IO error while attempting to read {}: {}",
                     local_config_path,
                     e
-                ))
-            }
-        })?;
+                )
+            })?;
         if contents.is_empty() {
             contents = String::from("{}");
         }

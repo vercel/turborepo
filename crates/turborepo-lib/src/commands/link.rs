@@ -167,29 +167,24 @@ pub async fn link(
             verify_caching_enabled(&api_client, team_id, token, Some(selected_team.clone()))
                 .await?;
 
-            let before = base.local_config_path().read_to_string().or_else(|e| {
-                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                    Ok(String::from("{}"))
-                } else {
-                    Err(anyhow!(
+            let before = base
+                .local_config_path()
+                .read_or_default("{}".into())
+                .map_err(|e| {
+                    anyhow!(
                         "Encountered an IO error while attempting to read {}: {}",
                         base.local_config_path(),
                         e
-                    ))
-                }
-            })?;
-            let no_preexisting_id =
-                if let Some(too_permissive) = unset_path(&before, &["teamid"], false)? {
-                    too_permissive
-                } else {
-                    before
-                };
-            let no_preexisting_slug =
-                if let Some(too_permissive) = unset_path(&no_preexisting_id, &["teamid"], false)? {
-                    too_permissive
-                } else {
-                    no_preexisting_id
-                };
+                    )
+                })?;
+
+            let no_preexisting_id = unset_path(&before, &["teamid"], false)
+                .unwrap_or(Some(before))
+                .unwrap();
+            let no_preexisting_slug = unset_path(&no_preexisting_id, &["teamslug"], false)
+                .unwrap_or(Some(no_preexisting_id))
+                .unwrap();
+
             let after = set_path(
                 &no_preexisting_slug,
                 &["teamId"],
@@ -274,32 +269,27 @@ pub async fn link(
                 )
             })?;
 
-            let before = base.local_config_path().read_to_string().or_else(|e| {
-                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                    Ok(String::from("{}"))
-                } else {
-                    Err(anyhow!(
+            let before = base
+                .local_config_path()
+                .read_or_default("{}".into())
+                .map_err(|e| {
+                    anyhow!(
                         "Encountered an IO error while attempting to read {}: {}",
                         base.local_config_path(),
                         e
-                    ))
-                }
-            })?;
-            let no_preexisting_id =
-                if let Some(too_permissive) = unset_path(&before, &["teamid"], false)? {
-                    too_permissive
-                } else {
-                    before
-                };
-            let no_preexisting_slug =
-                if let Some(too_permissive) = unset_path(&no_preexisting_id, &["teamid"], false)? {
-                    too_permissive
-                } else {
-                    no_preexisting_id
-                };
+                    )
+                })?;
+
+            let no_preexisting_id = unset_path(&before, &["teamid"], false)
+                .unwrap_or(Some(before))
+                .unwrap();
+            let no_preexisting_slug = unset_path(&no_preexisting_id, &["teamslug"], false)
+                .unwrap_or(Some(no_preexisting_id))
+                .unwrap();
+
             let after = set_path(
                 &no_preexisting_slug,
-                &["spaces", "teamId"],
+                &["teamId"],
                 &format!("\"{}\"", team_id),
             )?;
             base.local_config_path().ensure_dir()?;
