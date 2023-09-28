@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ffi::OsString};
 
 use anyhow::anyhow;
 use dirs_next::config_dir;
@@ -58,7 +58,7 @@ pub struct TurborepoConfigBuilder {
     #[cfg(test)]
     global_config_path: Option<AbsoluteSystemPathBuf>,
     #[cfg(test)]
-    environment: HashMap<String, String>,
+    environment: HashMap<OsString, OsString>,
 }
 
 // Getters
@@ -136,22 +136,22 @@ impl ResolvedConfigurationOptions for ConfigurationOptions {
     }
 }
 
-fn get_lowercased_env_vars() -> HashMap<String, String> {
-    std::env::vars()
+fn get_lowercased_env_vars() -> HashMap<OsString, OsString> {
+    std::env::vars_os()
         .map(|(k, v)| (k.to_ascii_lowercase(), v))
         .collect()
 }
 
 fn get_env_var_config(
-    environment: &HashMap<String, String>,
+    environment: &HashMap<OsString, OsString>,
 ) -> Result<ConfigurationOptions, ConfigError> {
     let mut turbo_mapping = HashMap::new();
-    turbo_mapping.insert(String::from("turbo_api"), "api_url");
-    turbo_mapping.insert(String::from("turbo_login"), "login_url");
-    turbo_mapping.insert(String::from("turbo_team"), "team_slug");
-    turbo_mapping.insert(String::from("turbo_teamid"), "team_id");
-    turbo_mapping.insert(String::from("turbo_token"), "token");
-    turbo_mapping.insert(String::from("turbo_remote_cache_timeout"), "timeout");
+    turbo_mapping.insert(OsString::from("turbo_api"), "api_url");
+    turbo_mapping.insert(OsString::from("turbo_login"), "login_url");
+    turbo_mapping.insert(OsString::from("turbo_team"), "team_slug");
+    turbo_mapping.insert(OsString::from("turbo_teamid"), "team_id");
+    turbo_mapping.insert(OsString::from("turbo_token"), "token");
+    turbo_mapping.insert(OsString::from("turbo_remote_cache_timeout"), "timeout");
 
     // We do not enable new config sources:
     // turbo_mapping.insert(String::from("turbo_signature"), "signature"); // new
@@ -161,16 +161,25 @@ fn get_env_var_config(
 
     let mut output_map = HashMap::new();
 
-    turbo_mapping.iter().for_each(|(k, mapped)| {
-        if let Some(value) = environment.get(k) {
-            if !value.is_empty() {
-                output_map.insert(mapped.to_string(), value.to_string());
+    turbo_mapping
+        .iter()
+        .try_for_each(|(k, mapped)| -> Result<(), ConfigError> {
+            if let Some(value) = environment.get(k) {
+                let converted = value.to_str().ok_or_else(|| {
+                    ConfigError::Anyhow(anyhow!(
+                        "{} is not UTF8.",
+                        k.to_ascii_uppercase().to_str().unwrap()
+                    ))
+                })?;
+                output_map.insert(mapped.to_string(), converted.to_owned());
+                Ok(())
+            } else {
+                Ok(())
             }
-        }
-    });
+        })?;
 
     // Process signature
-    let signature = if let Some(signature) = output_map.get("signature").cloned() {
+    let signature = if let Some(signature) = output_map.get("signature") {
         match signature.as_str() {
             "0" => Some(false),
             "1" => Some(true),
@@ -185,7 +194,7 @@ fn get_env_var_config(
     };
 
     // Process preflight
-    let preflight = if let Some(preflight) = output_map.get("preflight").cloned() {
+    let preflight = if let Some(preflight) = output_map.get("preflight") {
         match preflight.as_str() {
             "0" => Some(false),
             "1" => Some(true),
@@ -200,7 +209,7 @@ fn get_env_var_config(
     };
 
     // Process enabled
-    let enabled = if let Some(enabled) = output_map.get("enabled").cloned() {
+    let enabled = if let Some(enabled) = output_map.get("enabled") {
         match enabled.as_str() {
             "0" => Some(false),
             "1" => Some(true),
@@ -215,7 +224,7 @@ fn get_env_var_config(
     };
 
     // Process timeout
-    let timeout = if let Some(timeout) = output_map.get("timeout").cloned() {
+    let timeout = if let Some(timeout) = output_map.get("timeout") {
         Some(timeout.parse::<u64>().map_err(|e| {
             ConfigError::Anyhow(anyhow!(
                 "TURBO_REMOTE_CACHE_TIMEOUT: error parsing timeout. {}",
@@ -246,23 +255,31 @@ fn get_env_var_config(
 }
 
 fn get_override_env_var_config(
-    environment: &HashMap<String, String>,
+    environment: &HashMap<OsString, OsString>,
 ) -> Result<ConfigurationOptions, ConfigError> {
     let mut vercel_artifacts_mapping = HashMap::new();
-    vercel_artifacts_mapping.insert(String::from("vercel_artifacts_token"), "token");
-    vercel_artifacts_mapping.insert(String::from("vercel_artifacts_owner"), "team_id");
+    vercel_artifacts_mapping.insert(OsString::from("vercel_artifacts_token"), "token");
+    vercel_artifacts_mapping.insert(OsString::from("vercel_artifacts_owner"), "team_id");
 
     let mut output_map = HashMap::new();
 
     // Process the VERCEL_ARTIFACTS_* next.
-    vercel_artifacts_mapping.iter().for_each(|(k, mapped)| {
-        let k = k.to_string();
-        if let Some(value) = environment.get(&k) {
-            if !value.is_empty() {
-                output_map.insert(mapped.to_string(), value.to_string());
+    vercel_artifacts_mapping
+        .iter()
+        .try_for_each(|(k, mapped)| -> Result<(), ConfigError> {
+            if let Some(value) = environment.get(k) {
+                let converted = value.to_str().ok_or_else(|| {
+                    ConfigError::Anyhow(anyhow!(
+                        "{} is not UTF8.",
+                        k.to_ascii_uppercase().to_str().unwrap()
+                    ))
+                })?;
+                output_map.insert(mapped.to_string(), converted.to_owned());
+                Ok(())
+            } else {
+                Ok(())
             }
-        }
-    });
+        })?;
 
     let output = ConfigurationOptions {
         api_url: None,
@@ -316,12 +333,12 @@ impl TurborepoConfigBuilder {
     }
 
     #[cfg(test)]
-    fn get_environment(&self) -> HashMap<String, String> {
+    fn get_environment(&self) -> HashMap<OsString, OsString> {
         self.environment.clone()
     }
 
     #[cfg(not(test))]
-    fn get_environment(&self) -> HashMap<String, String> {
+    fn get_environment(&self) -> HashMap<OsString, OsString> {
         get_lowercased_env_vars()
     }
 
@@ -485,7 +502,7 @@ mod test {
 
     #[test]
     fn test_env_setting() {
-        let mut env: HashMap<String, String> = HashMap::new();
+        let mut env: HashMap<OsString, OsString> = HashMap::new();
 
         let turbo_api = "https://example.com/api";
         let turbo_login = "https://example.com/login";
@@ -501,7 +518,7 @@ mod test {
         env.insert("turbo_token".into(), turbo_token.into());
         env.insert(
             "turbo_remote_cache_timeout".into(),
-            turbo_remote_cache_timeout.to_string(),
+            turbo_remote_cache_timeout.to_string().into(),
         );
 
         let config = get_env_var_config(&env).unwrap();
@@ -515,7 +532,7 @@ mod test {
 
     #[test]
     fn test_override_env_setting() {
-        let mut env: HashMap<String, String> = HashMap::new();
+        let mut env: HashMap<OsString, OsString> = HashMap::new();
 
         let vercel_artifacts_token = "correct-horse-battery-staple";
         let vercel_artifacts_owner = "bobby_tables";
@@ -547,7 +564,7 @@ mod test {
         let vercel_artifacts_owner = "team_SOMEHASH";
         let vercel_artifacts_token = "correct-horse-battery-staple";
 
-        let mut env: HashMap<String, String> = HashMap::new();
+        let mut env: HashMap<OsString, OsString> = HashMap::new();
         env.insert("turbo_teamid".into(), turbo_teamid.into());
         env.insert("turbo_token".into(), turbo_token.into());
         env.insert(
