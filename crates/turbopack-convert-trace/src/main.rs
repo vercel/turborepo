@@ -157,18 +157,18 @@ fn main() {
         values: &IndexMap<Cow<'a, str>, TraceValue<'a>>,
         collapse_names: bool,
     ) -> Cow<'a, str> {
-        if matches!(name, "turbo_tasks::function") {
-            if let Some(v) = values.get("name") {
-                return format!("{v} ({name})").into();
+        match name {
+            "turbo_tasks::function" => {
+                if let Some(v) = values.get("name") {
+                    return format!("{v} ({name})").into();
+                }
             }
-        }
-        if matches!(
-            name,
-            "turbo_tasks::resolve_call" | "turbo_tasks::resolve_trait_call"
-        ) {
-            if let Some(v) = values.get("name") {
-                return format!("*{v} ({name})").into();
+            "turbo_tasks::resolve_call" | "turbo_tasks::resolve_trait_call" => {
+                if let Some(v) = values.get("name") {
+                    return format!("*{v} ({name})").into();
+                }
             }
+            _ => {}
         }
         if collapse_names || values.is_empty() {
             return name.into();
