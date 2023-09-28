@@ -30,6 +30,12 @@ turboIgnoreCli
       "The directory to run in (default: cwd)"
     )
   )
+  .addOption(
+    new Option(
+      "-b, --max-buffer <number>",
+      "maxBuffer for the child process in KB (default: 1024 * 1024)"
+    ).argParser((val) => parseInt(val, 10))
+  )
   .version(cliPkg.version, "-v, --version", "Output the current version")
   .helpOption("-h, --help", "Display help for command")
   .showHelpAfterError(false)
