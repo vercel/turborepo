@@ -7,6 +7,7 @@ use std::{
 
 use command_group::AsyncCommandGroup;
 use notify::{Config, Event, EventKind, Watcher};
+use pidlock::PidFileError;
 use sysinfo::{Pid, ProcessExt, ProcessRefreshKind, RefreshKind, SystemExt};
 use thiserror::Error;
 use tokio::{sync::mpsc, time::timeout};
@@ -42,6 +43,9 @@ pub enum DaemonConnectorError {
 
     #[error("unable to connect to daemon after {0} retries")]
     ConnectRetriesExceeded(usize),
+
+    #[error("unable to use pid file: {0}")]
+    PidFile(#[from] PidFileError),
 }
 
 #[derive(Error, Debug)]
@@ -129,7 +133,7 @@ impl DaemonConnector {
 
         let pidfile = self.pid_lock();
 
-        match pidfile.get_owner() {
+        match pidfile.get_owner()? {
             Some(pid) => {
                 debug!("found pid: {}", pid);
                 Ok(sysinfo::Pid::from(pid as usize))
@@ -239,7 +243,7 @@ impl DaemonConnector {
         );
 
         let owner = lock
-            .get_owner()
+            .get_owner()?
             .and_then(|p| system.process(sysinfo::Pid::from(p as usize)));
 
         // if the pidfile is owned by the same pid as the one we found, kill it
@@ -434,7 +438,7 @@ mod test {
 
         assert_matches!(
             connector.get_or_start_daemon().await,
-            Err(DaemonConnectorError::NotRunning)
+            Err(DaemonConnectorError::PidFile(PidFileError::Invalid { .. }))
         );
     }
 
@@ -486,7 +490,7 @@ mod test {
         let tmp_path = tmp_dir.path().to_owned();
 
         let pid = pid_path(&tmp_path);
-        std::fs::write(&pid, usize::MAX.to_string()).unwrap();
+        std::fs::write(&pid, i32::MAX.to_string()).unwrap();
         let sock = sock_path(&tmp_path);
         std::fs::write(&sock, "").unwrap();
 
@@ -502,7 +506,10 @@ mod test {
             Ok(())
         );
 
-        assert!(connector.pid_file.exists(), "pid file should still exist");
+        assert!(
+            !connector.pid_file.exists(),
+            "pid file should be cleaned up when getting the owner of a stale pid"
+        );
     }
 
     #[tokio::test]

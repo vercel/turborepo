@@ -37,11 +37,6 @@ pub enum Error {
          one"
     )]
     NoTurboJSON,
-    #[error(
-        "loginUrl is configured to \"{value}\", but cannot be a base URL. This happens in \
-         situations like using a `data:` URL."
-    )]
-    LoginUrlCannotBeABase { value: String },
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
