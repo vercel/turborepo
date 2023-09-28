@@ -1,3 +1,6 @@
+// Fully generic. The initial constructor informs how to resolve
+// the repository, but nothing in the resulting types is js-specific
+
 import type { ChildProcess } from "child_process";
 
 export class Lockfile {
