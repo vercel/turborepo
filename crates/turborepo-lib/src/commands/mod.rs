@@ -174,7 +174,7 @@ mod test {
 
         let args = Args::default();
         let repo_root = AbsoluteSystemPathBuf::new(path).unwrap();
-        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true)).unwrap();
+        let command_base = CommandBase::new(args, repo_root, get_version(), UI::new(true));
 
         let hash = command_base.repo_hash();
 
