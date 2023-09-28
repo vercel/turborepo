@@ -13,6 +13,7 @@ use anyhow::{anyhow, bail, Result};
 use auto_hash_map::{AutoMap, AutoSet};
 use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
+use tracing::Level;
 
 pub use crate::id::BackendJobId;
 use crate::{
@@ -353,6 +354,7 @@ pub trait Backend: Sync + Send {
 }
 
 impl PersistentTaskType {
+    #[tracing::instrument(level = Level::TRACE, skip_all)]
     pub async fn run_resolve_native<B: Backend + 'static>(
         fn_id: FunctionId,
         inputs: Vec<ConcreteTaskInput>,
@@ -365,6 +367,7 @@ impl PersistentTaskType {
         Ok(turbo_tasks.native_call(fn_id, resolved_inputs))
     }
 
+    #[tracing::instrument(level = Level::TRACE, skip_all)]
     pub async fn run_resolve_trait<B: Backend + 'static>(
         trait_type: TraitTypeId,
         name: Cow<'static, str>,
