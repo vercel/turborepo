@@ -1,7 +1,6 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::HashMap,
     future::Future,
     hash::Hash,
     mem::take,
