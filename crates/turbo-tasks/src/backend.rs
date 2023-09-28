@@ -13,7 +13,7 @@ use anyhow::{anyhow, bail, Result};
 use auto_hash_map::{AutoMap, AutoSet};
 use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
-use tracing::Level;
+use tracing::Instrument;
 
 pub use crate::id::BackendJobId;
 use crate::{
@@ -354,68 +354,82 @@ pub trait Backend: Sync + Send {
 }
 
 impl PersistentTaskType {
-    #[tracing::instrument(level = Level::TRACE, skip_all)]
     pub async fn run_resolve_native<B: Backend + 'static>(
         fn_id: FunctionId,
         inputs: Vec<ConcreteTaskInput>,
         turbo_tasks: Arc<dyn TurboTasksBackendApi<B>>,
     ) -> Result<RawVc> {
-        let mut resolved_inputs = Vec::with_capacity(inputs.len());
-        for input in inputs.into_iter() {
-            resolved_inputs.push(input.resolve().await?)
+        let span = tracing::trace_span!(
+            "turbo_tasks::resolve_call",
+            name = &registry::get_function(fn_id).name.as_str()
+        );
+        async move {
+            let mut resolved_inputs = Vec::with_capacity(inputs.len());
+            for input in inputs.into_iter() {
+                resolved_inputs.push(input.resolve().await?)
+            }
+            Ok(turbo_tasks.native_call(fn_id, resolved_inputs))
         }
-        Ok(turbo_tasks.native_call(fn_id, resolved_inputs))
+        .instrument(span)
+        .await
     }
 
-    #[tracing::instrument(level = Level::TRACE, skip_all)]
     pub async fn run_resolve_trait<B: Backend + 'static>(
         trait_type: TraitTypeId,
         name: Cow<'static, str>,
         inputs: Vec<ConcreteTaskInput>,
         turbo_tasks: Arc<dyn TurboTasksBackendApi<B>>,
     ) -> Result<RawVc> {
-        let mut resolved_inputs = Vec::with_capacity(inputs.len());
-        let mut iter = inputs.into_iter();
-        if let Some(this) = iter.next() {
-            let this = this.resolve().await?;
-            let this_value = this.clone().resolve_to_value().await?;
-            match this_value.get_trait_method(trait_type, name) {
-                Ok(native_fn) => {
-                    resolved_inputs.push(this);
-                    for input in iter {
-                        resolved_inputs.push(input)
+        let span = tracing::trace_span!(
+            "turbo_tasks::resolve_trait_call",
+            name = format!("{}::{name}", &registry::get_trait(trait_type).name),
+        );
+        async move {
+            let mut resolved_inputs = Vec::with_capacity(inputs.len());
+            let mut iter = inputs.into_iter();
+            if let Some(this) = iter.next() {
+                let this = this.resolve().await?;
+                let this_value = this.clone().resolve_to_value().await?;
+                match this_value.get_trait_method(trait_type, name) {
+                    Ok(native_fn) => {
+                        resolved_inputs.push(this);
+                        for input in iter {
+                            resolved_inputs.push(input)
+                        }
+                        Ok(turbo_tasks.dynamic_call(native_fn, resolved_inputs))
                     }
-                    Ok(turbo_tasks.dynamic_call(native_fn, resolved_inputs))
-                }
-                Err(name) => {
-                    if !this_value.has_trait(trait_type) {
-                        let traits =
-                            this_value
-                                .traits()
-                                .iter()
-                                .fold(String::new(), |mut out, t| {
-                                    let _ = write!(out, " {}", t);
-                                    out
-                                });
-                        Err(anyhow!(
-                            "{} doesn't implement {} (only{})",
-                            this_value,
-                            registry::get_trait(trait_type),
-                            traits,
-                        ))
-                    } else {
-                        Err(anyhow!(
-                            "{} implements trait {}, but method {} is missing",
-                            this_value,
-                            registry::get_trait(trait_type),
-                            name
-                        ))
+                    Err(name) => {
+                        if !this_value.has_trait(trait_type) {
+                            let traits =
+                                this_value
+                                    .traits()
+                                    .iter()
+                                    .fold(String::new(), |mut out, t| {
+                                        let _ = write!(out, " {}", t);
+                                        out
+                                    });
+                            Err(anyhow!(
+                                "{} doesn't implement {} (only{})",
+                                this_value,
+                                registry::get_trait(trait_type),
+                                traits,
+                            ))
+                        } else {
+                            Err(anyhow!(
+                                "{} implements trait {}, but method {} is missing",
+                                this_value,
+                                registry::get_trait(trait_type),
+                                name
+                            ))
+                        }
                     }
                 }
+            } else {
+                panic!("No arguments for trait call");
             }
-        } else {
-            panic!("No arguments for trait call");
         }
+        .instrument(span)
+        .await
     }
 
     pub fn run<B: Backend + 'static>(

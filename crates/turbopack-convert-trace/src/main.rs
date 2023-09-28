@@ -150,17 +150,24 @@ fn main() {
     let mut all_self_times = Vec::new();
     let mut name_counts: HashMap<Cow<'_, str>, usize> = HashMap::new();
     let mut name_self_times: HashMap<Cow<'_, str>, u64> = HashMap::new();
+    let mut tasks = 0;
 
     fn get_name<'a>(
         name: &'a str,
         values: &IndexMap<Cow<'a, str>, TraceValue<'a>>,
         collapse_names: bool,
     ) -> Cow<'a, str> {
-        if name == "turbo_tasks::function" {
+        if matches!(name, "turbo_tasks::function") {
             if let Some(v) = values.get("name") {
                 return format!("{v} ({name})").into();
-            } else {
-                return name.into();
+            }
+        }
+        if matches!(
+            name,
+            "turbo_tasks::resolve_call" | "turbo_tasks::resolve_trait_call"
+        ) {
+            if let Some(v) = values.get("name") {
+                return format!("*{v} ({name})").into();
             }
         }
         if collapse_names || values.is_empty() {
@@ -200,6 +207,14 @@ fn main() {
                 values,
             } => {
                 let values = values.into_iter().collect();
+                if matches!(
+                    &*name,
+                    "turbo_tasks::function"
+                        | "turbo_tasks::resolve_call"
+                        | "turbo_tasks::resolve_trait_call"
+                ) {
+                    tasks += 1;
+                }
                 let name = get_name(name, &values, collapse_names && parent.is_some());
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
                 spans[internal_id].name = name.clone();
@@ -352,6 +367,8 @@ fn main() {
 
     let mut name_counts: Vec<(Cow<'_, str>, usize)> = name_counts.into_iter().collect();
     name_counts.sort_by_key(|(_, count)| Reverse(*count));
+
+    eprintln!("Total number of tasks: {}", tasks);
 
     eprintln!("Top 10 span names:");
     for (name, count) in name_counts.into_iter().take(10) {
