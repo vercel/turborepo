@@ -22,6 +22,7 @@ use anyhow::Result;
 use auto_hash_map::{AutoMap, AutoSet};
 use nohash_hasher::BuildNoHashHasher;
 use parking_lot::{Mutex, RwLock};
+use smallvec::SmallVec;
 use stats::TaskStats;
 use tokio::task_local;
 use turbo_tasks::{
@@ -179,7 +180,7 @@ struct TaskState {
     prepared_type: PrepareTaskType,
 
     output: Output,
-    cells: AutoMap<ValueTypeId, Vec<Cell>, BuildNoHashHasher<ValueTypeId>>,
+    cells: AutoMap<ValueTypeId, SmallVec<[Cell; 1]>, BuildNoHashHasher<ValueTypeId>>,
 
     // GC state:
     gc: GcTaskState,
