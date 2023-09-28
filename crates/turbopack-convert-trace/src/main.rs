@@ -208,7 +208,7 @@ fn main() {
             } => {
                 let values = values.into_iter().collect();
                 if matches!(
-                    &*name,
+                    name,
                     "turbo_tasks::function"
                         | "turbo_tasks::resolve_call"
                         | "turbo_tasks::resolve_trait_call"
@@ -360,7 +360,7 @@ fn main() {
         .filter_map(|(name, time)| {
             name_counts
                 .get(name)
-                .and_then(|count| Some((name.clone(), *time / *count as u64)))
+                .map(|count| (name.clone(), *time / *count as u64))
         })
         .collect::<Vec<_>>();
     name_self_times_per_execution.sort_by_key(|(_, time)| Reverse(*time));
@@ -374,7 +374,7 @@ fn main() {
     for (name, count) in name_counts.into_iter().take(10) {
         eprintln!("{} x {}", count, name);
     }
-    eprintln!("");
+    eprintln!();
 
     let mut name_self_times: Vec<(Cow<'_, str>, u64)> = name_self_times.into_iter().collect();
     name_self_times.sort_by_key(|(_, duration)| Reverse(*duration));
@@ -383,13 +383,13 @@ fn main() {
     for (name, duration) in name_self_times.into_iter().take(10) {
         eprintln!("{}s {}", duration / 1000 / 1000, name);
     }
-    eprintln!("");
+    eprintln!();
 
     eprintln!("Top 10 span durations per execution:");
     for (name, duration) in name_self_times_per_execution.into_iter().take(10) {
         eprintln!("{}ms {}", duration / 1000, name);
     }
-    eprintln!("");
+    eprintln!();
 
     println!("[");
     print!(r#"{{"ph":"M","pid":1,"name":"thread_name","tid":0,"args":{{"name":"Single CPU"}}}}"#);
