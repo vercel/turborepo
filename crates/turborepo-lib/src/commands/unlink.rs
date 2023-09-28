@@ -29,12 +29,8 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<()> {
                     e
                 )
             })?;
-        let no_id = unset_path(&before, &["teamid"], false)
-            .unwrap_or(Some(before))
-            .unwrap();
-        let no_slug = unset_path(&no_id, &["teamslug"], false)
-            .unwrap_or(Some(no_id))
-            .unwrap();
+        let no_id = unset_path(&before, &["teamid"], false)?.unwrap_or(before);
+        let no_slug = unset_path(&no_id, &["teamslug"], false)?.unwrap_or(no_id);
 
         base.local_config_path().ensure_dir()?;
         base.local_config_path().create_with_contents(no_slug)?;
@@ -64,12 +60,8 @@ fn unlink_spaces(base: &mut CommandBase) -> Result<()> {
                     e
                 )
             })?;
-        let no_id = unset_path(&before, &["teamid"], false)
-            .unwrap_or(Some(before))
-            .unwrap();
-        let no_slug = unset_path(&no_id, &["teamslug"], false)
-            .unwrap_or(Some(no_id))
-            .unwrap();
+        let no_id = unset_path(&before, &["teamid"], false)?.unwrap_or(before);
+        let no_slug = unset_path(&no_id, &["teamslug"], false)?.unwrap_or(no_id);
 
         base.local_config_path().ensure_dir()?;
         base.local_config_path().create_with_contents(no_slug)?;

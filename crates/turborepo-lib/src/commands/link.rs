@@ -178,12 +178,9 @@ pub async fn link(
                     )
                 })?;
 
-            let no_preexisting_id = unset_path(&before, &["teamid"], false)
-                .unwrap_or(Some(before))
-                .unwrap();
-            let no_preexisting_slug = unset_path(&no_preexisting_id, &["teamslug"], false)
-                .unwrap_or(Some(no_preexisting_id))
-                .unwrap();
+            let no_preexisting_id = unset_path(&before, &["teamid"], false)?.unwrap_or(before);
+            let no_preexisting_slug =
+                unset_path(&no_preexisting_id, &["teamslug"], false)?.unwrap_or(no_preexisting_id);
 
             let after = set_path(
                 &no_preexisting_slug,
@@ -280,12 +277,9 @@ pub async fn link(
                     )
                 })?;
 
-            let no_preexisting_id = unset_path(&before, &["teamid"], false)
-                .unwrap_or(Some(before))
-                .unwrap();
-            let no_preexisting_slug = unset_path(&no_preexisting_id, &["teamslug"], false)
-                .unwrap_or(Some(no_preexisting_id))
-                .unwrap();
+            let no_preexisting_id = unset_path(&before, &["teamid"], false)?.unwrap_or(before);
+            let no_preexisting_slug =
+                unset_path(&no_preexisting_id, &["teamslug"], false)?.unwrap_or(no_preexisting_id);
 
             let after = set_path(
                 &no_preexisting_slug,
