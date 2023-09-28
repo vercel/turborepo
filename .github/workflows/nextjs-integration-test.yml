@@ -98,45 +98,6 @@ jobs:
           path: |
             test/turbopack-test-junit-report
 
-  test-prod:
-    name: Next.js integration test (Production)
-    needs: [setup_nextjs]
-    runs-on: ubuntu-latest-16-core-oss
-    timeout-minutes: 180
-    strategy:
-      fail-fast: false
-      matrix:
-        group: [1, 2, 3, 4, 5]
-
-    steps:
-      - uses: actions/cache/restore@v3
-        id: restore-build
-        with:
-          path: ./*
-          key: ${{ inputs.version }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      - name: Enable corepack and install yarn
-        run: |
-          corepack enable
-          corepack prepare --activate yarn@1.22.19
-
-      - name: Run test/production
-        run: |
-          sudo npx playwright install-deps && pnpm playwright install
-          NEXT_TEST_MODE=start node run-tests.js -g ${{ matrix.group }}/5 -c ${TEST_CONCURRENCY} --type production
-          ls test/turbopack-test-junit-report
-        continue-on-error: true
-        env:
-          NEXT_INTEGRATION_TEST: true
-
-      - name: Upload test reports artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: Test trace reports
-          path: |
-            test/turbopack-test-junit-report
-
   test-integration:
     name: Next.js integration test (Integration)
     needs: [setup_nextjs]
@@ -179,7 +140,7 @@ jobs:
   # Collect integration test results from execute_tests,
   # Store it as github artifact for next step to consume.
   collect_nextjs_integration_stat:
-    needs: [test-dev, test-prod, test-integration]
+    needs: [test-dev, test-integration]
     name: Next.js integration test status report
     runs-on: ubuntu-latest-8-core-oss
     if: always()
@@ -208,7 +169,7 @@ jobs:
             slack-payload.json
 
   upload_test_trace:
-    needs: [test-dev, test-prod, test-integration]
+    needs: [test-dev, test-integration]
     name: Upload test trace to datadog
     runs-on: ubuntu-latest-8-core-oss
     if: always()

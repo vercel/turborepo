@@ -210,7 +210,7 @@ impl Pidlock {
                         })?;
                 Ok(Some(pid))
             }
-            Ok(_) => {
+            Ok(pid) => {
                 warn!("stale pid file at {:?}", self.path);
                 if let Err(e) = fs::remove_file(&self.path) {
                     Err(PidFileError::FailedDelete(
@@ -360,6 +360,7 @@ mod tests {
 
         drop(file);
 
+        // expect a stale pid file to be cleaned up
         let mut pidfile = Pidlock::new(path.clone());
         // We clear stale pid files when acquiring them, we expect this to succeed
         assert!(pidfile.acquire().is_ok());

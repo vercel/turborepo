@@ -286,9 +286,10 @@ func (c *Connector) getOrStartDaemon() (int, error) {
 	lockFile := c.lockFile()
 	daemonProcess, getDaemonProcessErr := lockFile.GetOwner()
 	if getDaemonProcessErr != nil {
-		// If we're in a clean state this isn't an "error" per se.
-		// We attempt to start a daemon.
-		if errors.Is(getDaemonProcessErr, fs.ErrNotExist) {
+		// We expect the daemon to write the pid file, so a non-existent or stale
+		// pid file is fine. The daemon will write its own, after verifying that it
+		// doesn't exist or is stale.
+		if errors.Is(getDaemonProcessErr, fs.ErrNotExist) || errors.Is(getDaemonProcessErr, lockfile.ErrDeadOwner) {
 			if c.Opts.DontStart {
 				return 0, ErrDaemonNotRunning
 			}
@@ -339,7 +340,7 @@ func (c *Connector) sendHello(ctx context.Context, client turbodprotocol.TurbodC
 	case codes.FailedPrecondition:
 		return ErrVersionMismatch
 	case codes.Unavailable:
-		return errConnectionFailure
+		return errUnavailable
 	default:
 		return err
 	}
