@@ -1,15 +1,15 @@
 use anyhow::Result;
-use tracing::error;
-use turborepo_ui::GREY;
+use turborepo_auth::logout as auth_logout;
 
 use crate::commands::CommandBase;
 
 pub fn logout(base: &mut CommandBase) -> Result<()> {
-    if let Err(err) = base.user_config_mut()?.set_token(None) {
-        error!("could not logout. Something went wrong: {}", err);
-        return Err(err.into());
-    }
+    let ui = base.ui;
 
-    println!("{}", base.ui.apply(GREY.apply_to(">>> Logged out")));
-    Ok(())
+    // Passing a closure here while we figure out how to make turborepo-auth
+    // crate manage its own configuration for the path to the token.
+    let set_token =
+        || -> Result<(), anyhow::Error> { Ok(base.user_config_mut()?.set_token(None)?) };
+
+    auth_logout(&ui, set_token)
 }
