@@ -7,13 +7,12 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_env::{get_global_hashable_env_vars, DetailedMap, EnvironmentVariableMap};
 use turborepo_lockfiles::Lockfile;
+use turborepo_repository::package_manager::{self, PackageManager};
 use turborepo_scm::SCM;
 
 use crate::{
     cli::EnvMode,
     hash::{GlobalHashable, TurboHash},
-    package_manager,
-    package_manager::PackageManager,
 };
 
 static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];

@@ -10243,12 +10243,22 @@ name = "turborepo-repository"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "globwalk",
+ "itertools",
+ "lazy-regex",
+ "node-semver",
  "pretty_assertions",
+ "regex",
  "serde",
  "serde_json",
+ "serde_yaml 0.9.21",
+ "tempfile",
  "test-case",
  "thiserror",
  "turbopath",
+ "turborepo-lockfiles",
+ "wax",
+ "which",
 ]
 
 [[package]]

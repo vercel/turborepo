@@ -2,9 +2,11 @@ use std::collections::HashSet;
 
 use node_semver::{Range, Version};
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
-use turborepo_repository::package_json::PackageJson;
 
-use crate::package_manager::{Error, PackageManager};
+use crate::{
+    package_json::PackageJson,
+    package_manager::{Error, PackageManager},
+};
 
 pub const LOCKFILE: &str = "pnpm-lock.yaml";
 

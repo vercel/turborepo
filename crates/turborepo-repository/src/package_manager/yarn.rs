@@ -2,10 +2,12 @@ use std::process::Command;
 
 use node_semver::{Range, Version};
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
-use turborepo_repository::package_json::PackageJson;
 use which::which;
 
-use crate::package_manager::{Error, PackageManager};
+use crate::{
+    package_json::PackageJson,
+    package_manager::{Error, PackageManager},
+};
 
 pub const LOCKFILE: &str = "yarn.lock";
 
@@ -106,10 +108,12 @@ mod tests {
     use serde_json::json;
     use tempfile::tempdir;
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
-    use turborepo_repository::package_json::PackageJson;
 
     use super::{prune_patches, LOCKFILE};
-    use crate::package_manager::{yarn::YarnDetector, PackageManager};
+    use crate::{
+        package_json::PackageJson,
+        package_manager::{yarn::YarnDetector, PackageManager},
+    };
 
     #[test]
     fn test_detect_yarn() -> Result<()> {

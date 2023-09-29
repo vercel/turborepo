@@ -11,13 +11,12 @@ use turbopath::{
     RelativeUnixPathBuf,
 };
 use turborepo_lockfiles::Lockfile;
-use turborepo_repository::package_json::PackageJson;
+use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
 use super::{PackageGraph, WorkspaceInfo, WorkspaceName, WorkspaceNode};
 use crate::{
     graph,
     package_graph::{PackageName, PackageVersion},
-    package_manager::PackageManager,
 };
 
 pub struct PackageGraphBuilder<'a> {
@@ -33,7 +32,7 @@ pub struct PackageGraphBuilder<'a> {
 pub enum Error {
     #[error("could not resolve workspaces: {0}")]
     PackageManager(
-        #[from] crate::package_manager::Error,
+        #[from] turborepo_repository::package_manager::Error,
         #[backtrace] Backtrace,
     ),
     #[error(
@@ -148,7 +147,8 @@ impl<'a, S> BuildState<'a, S> {
 impl<'a> BuildState<'a, ResolvedPackageManager> {
     fn new(
         builder: PackageGraphBuilder<'a>,
-    ) -> Result<BuildState<'a, ResolvedPackageManager>, crate::package_manager::Error> {
+    ) -> Result<BuildState<'a, ResolvedPackageManager>, turborepo_repository::package_manager::Error>
+    {
         let PackageGraphBuilder {
             repo_root,
             root_package_json,

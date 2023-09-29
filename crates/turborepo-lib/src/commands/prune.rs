@@ -75,7 +75,7 @@ pub fn prune(
 
     if matches!(
         prune.package_graph.package_manager(),
-        crate::package_manager::PackageManager::Bun
+        turborepo_repository::package_manager::PackageManager::Bun
     ) {
         return Err(Error::BunUnsupported);
     }

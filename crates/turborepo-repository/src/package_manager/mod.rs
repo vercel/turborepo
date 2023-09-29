@@ -18,13 +18,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_lockfiles::Lockfile;
-use turborepo_repository::package_json::PackageJson;
-use turborepo_ui::{UI, UNDERLINE};
 use wax::{Any, Glob, Pattern};
 use which::which;
 
-use crate::package_manager::{
-    bun::BunDetector, npm::NpmDetector, pnpm::PnpmDetector, yarn::YarnDetector,
+use crate::{
+    package_json::PackageJson,
+    package_manager::{bun::BunDetector, npm::NpmDetector, pnpm::PnpmDetector, yarn::YarnDetector},
 };
 
 #[derive(Debug, Deserialize)]
@@ -94,7 +93,7 @@ pub struct WorkspaceGlobs {
     directory_inclusions: Any<'static>,
     directory_exclusions: Any<'static>,
     package_json_inclusions: Vec<String>,
-    pub(crate) raw_exclusions: Vec<String>,
+    pub raw_exclusions: Vec<String>,
 }
 
 impl PartialEq for WorkspaceGlobs {
@@ -184,21 +183,6 @@ pub struct MissingWorkspaceError {
 
 #[derive(Debug, Error)]
 pub struct NoPackageManager;
-
-impl NoPackageManager {
-    // TODO: determine how to thread through user-friendly error message and apply
-    // our UI
-    #[allow(dead_code)]
-    pub fn ui_display(&self, ui: &UI) -> String {
-        let url =
-            ui.apply(UNDERLINE.apply_to("https://nodejs.org/api/packages.html#packagemanager"));
-        format!(
-            "We did not find a package manager specified in your root package.json. Please set \
-             the \"packageManager\" property in your root package.json ({url}) or run `npx \
-             @turbo/codemod add-package-manager` in the root of your monorepo."
-        )
-    }
-}
 
 impl Display for NoPackageManager {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -609,7 +593,7 @@ mod tests {
         let root = repo_root();
         let fixtures = root.join_components(&[
             "crates",
-            "turborepo-lib",
+            "turborepo-repository",
             "src",
             "package_manager",
             "fixtures",
