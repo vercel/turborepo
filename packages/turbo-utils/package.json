@@ -20,13 +20,14 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "test": "jest && pnpm test:node",
-    "test:node": "node --test --loader=typescript tests/*",
+    "test:node": "node --test --loader=@swc-node/register/esm tests/*",
     "lint": "eslint src/",
     "check-types": "tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "devDependencies": {
     "@manypkg/find-root": "^1.1.0",
+    "@swc-node/register": "^1.6.8",
     "@turbo/eslint-config": "workspace:*",
     "@turbo/test-utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",

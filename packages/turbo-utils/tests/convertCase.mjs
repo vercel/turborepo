@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import { strict as assert } from "node:assert";
-import { convertCase } from "../dist/convertCase.js";
+import { convertCase } from "../src/convertCase";
 
 const testCases = [
   { input: "hello_world", expected: "helloWorld", to: "camel" },
