@@ -18,13 +18,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_lockfiles::Lockfile;
+use turborepo_repository::package_json::PackageJson;
 use turborepo_ui::{UI, UNDERLINE};
 use wax::{Any, Glob, Pattern};
 use which::which;
 
-use crate::{
-    package_json::PackageJson,
-    package_manager::{bun::BunDetector, npm::NpmDetector, pnpm::PnpmDetector, yarn::YarnDetector},
+use crate::package_manager::{
+    bun::BunDetector, npm::NpmDetector, pnpm::PnpmDetector, yarn::YarnDetector,
 };
 
 #[derive(Debug, Deserialize)]

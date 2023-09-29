@@ -17,11 +17,12 @@ use tiny_gradient::{GradientStr, RGB};
 use tracing::debug;
 use turbo_updater::check_for_updates;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_repository::package_json::PackageJson;
 use turborepo_ui::UI;
 
 use crate::{
-    cli, get_version, package_json::PackageJson, package_manager::WorkspaceGlobs, spawn_child,
-    tracing::TurboSubscriber, PackageManager, Payload,
+    cli, get_version, package_manager::WorkspaceGlobs, spawn_child, tracing::TurboSubscriber,
+    PackageManager, Payload,
 };
 
 // all arguments that result in a stdout that much be directly parsable and

@@ -8,8 +8,9 @@ use petgraph::visit::{depth_first_search, Reversed};
 use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_lockfiles::Lockfile;
+use turborepo_repository::package_json::PackageJson;
 
-use crate::{graph, package_json::PackageJson, package_manager::PackageManager};
+use crate::{graph, package_manager::PackageManager};
 
 mod builder;
 

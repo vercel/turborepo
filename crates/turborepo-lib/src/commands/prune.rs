@@ -7,13 +7,13 @@ use tracing::trace;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
 };
+use turborepo_repository::package_json::PackageJson;
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
 use crate::{
     config::RawTurboJSON,
     package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
-    package_json::PackageJson,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -27,7 +27,7 @@ pub enum Error {
     #[error("path error while pruning: {0}")]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
-    PackageJson(#[from] crate::package_json::Error),
+    PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(transparent)]
     PackageGraph(#[from] crate::package_graph::Error),
     #[error(transparent)]

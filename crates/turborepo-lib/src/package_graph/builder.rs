@@ -11,12 +11,12 @@ use turbopath::{
     RelativeUnixPathBuf,
 };
 use turborepo_lockfiles::Lockfile;
+use turborepo_repository::package_json::PackageJson;
 
 use super::{PackageGraph, WorkspaceInfo, WorkspaceName, WorkspaceNode};
 use crate::{
     graph,
     package_graph::{PackageName, PackageVersion},
-    package_json::PackageJson,
     package_manager::PackageManager,
 };
 
@@ -48,7 +48,7 @@ pub enum Error {
     #[error("path error: {0}")]
     TurboPath(#[from] turbopath::PathError),
     #[error("unable to parse workspace package.json: {0}")]
-    PackageJson(#[from] crate::package_json::Error),
+    PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error("package.json must have a name field:\n{0}")]
     PackageJsonMissingName(AbsoluteSystemPathBuf),
     #[error(transparent)]

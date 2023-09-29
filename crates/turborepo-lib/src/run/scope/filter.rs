@@ -571,11 +571,11 @@ mod test {
 
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
+    use turborepo_repository::package_json::PackageJson;
 
     use super::{FilterResolver, PackageInference, TargetSelector};
     use crate::{
         package_graph::{PackageGraph, WorkspaceName},
-        package_json::PackageJson,
         package_manager::PackageManager,
         run::{
             scope::change_detector::{ChangeDetectError, PackageChangeDetector},

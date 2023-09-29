@@ -1,0 +1,16 @@
+[package]
+name = "turborepo-repository"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = "1.0.38"
+turbopath = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-case = { workspace = true }

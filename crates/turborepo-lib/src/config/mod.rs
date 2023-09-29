@@ -31,7 +31,7 @@ pub enum Error {
     #[error("default config path not found")]
     NoDefaultConfigPath,
     #[error(transparent)]
-    PackageJson(#[from] crate::package_json::Error),
+    PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
         "Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create \
          one"

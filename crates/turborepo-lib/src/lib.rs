@@ -22,7 +22,6 @@ pub mod graph;
 mod hash;
 mod opts;
 mod package_graph;
-mod package_json;
 mod package_manager;
 mod process;
 mod rewrite_json;
