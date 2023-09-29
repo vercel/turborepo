@@ -98,8 +98,7 @@ mod tests {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
 
-        try_join_all(get_test_cases().into_iter().map(|test_case| async {
-            let test_case = test_case;
+        try_join_all(get_test_cases().into_iter().map(|test_case| async move {
             round_trip_test_with_both_caches(&test_case, port).await?;
             round_trip_test_without_remote_cache(&test_case).await?;
             round_trip_test_without_fs(&test_case, port).await
