@@ -25,7 +25,7 @@ use thiserror::Error;
 use crate::{
     diagnostics::{CompositeSpan, CorrelatedSpan, SpanExt as _},
     token::{self, InvariantSize, Token, TokenKind, TokenTree, Tokenized},
-    Any, BuildError, Compose, Glob,
+    Any, BuildError, Combine, Glob,
 };
 
 /// Maximum invariant size.
@@ -281,35 +281,21 @@ impl<T> Checked<T> {
     }
 }
 
-impl<T> AsRef<T> for Checked<T> {
-    fn as_ref(&self) -> &T {
-        &self.inner
-    }
-}
-
-impl<'t, T> Compose<'t> for Checked<T>
-where
-    T: TokenTree<'t>,
-{
-    type Tokens = T;
-    type Error = Infallible;
-}
-
 impl<'t> Checked<Token<'t, ()>> {
-    pub fn any<T, I>(tokens: I) -> Self
+    pub fn any<T, I>(trees: I) -> Self
     where
         T: TokenTree<'t>,
         I: IntoIterator<Item = Checked<T>>,
     {
         Checked {
-            // `token::any` composes the input tokens into an alternative. The
-            // alternative is not checked, but the `any` combinator is
-            // explicitly allowed to ignore the subset of rules that may be
+            // `token::any` constructs an alternative from the input token
+            // trees. The alternative is not checked, but the `any` combinator
+            // is explicitly allowed to ignore the subset of rules that may be
             // violated by this construction. In particular, branches may or may
             // not have roots such that the alternative can match overlapping
-            // trees.
+            // directory trees.
             inner: token::any(
-                tokens
+                trees
                     .into_iter()
                     .map(Checked::release)
                     .map(TokenTree::into_tokens),
@@ -326,6 +312,14 @@ impl<'t, A> Checked<Token<'t, A>> {
     }
 }
 
+impl<'t, A> Checked<Tokenized<'t, A>> {
+    pub fn into_owned(self) -> Checked<Tokenized<'static, A>> {
+        Checked {
+            inner: self.release().into_owned(),
+        }
+    }
+}
+
 impl<'t> Checked<Tokenized<'t>> {
     pub fn partition(self) -> (PathBuf, Self) {
         let tokenized = self.release();
@@ -335,12 +329,18 @@ impl<'t> Checked<Tokenized<'t>> {
     }
 }
 
-impl<'t, A> Checked<Tokenized<'t, A>> {
-    pub fn into_owned(self) -> Checked<Tokenized<'static, A>> {
-        Checked {
-            inner: self.release().into_owned(),
-        }
+impl<T> AsRef<T> for Checked<T> {
+    fn as_ref(&self) -> &T {
+        &self.inner
     }
+}
+
+impl<'t, T> Combine<'t> for Checked<T>
+where
+    T: TokenTree<'t>,
+{
+    type Tokens = T;
+    type Error = Infallible;
 }
 
 impl<'t> From<Any<'t>> for Checked<Token<'t, ()>> {

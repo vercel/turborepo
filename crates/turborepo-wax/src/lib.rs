@@ -232,7 +232,7 @@ impl From<token::Variance<InvariantText<'_>>> for Variance {
 /// [`Glob::partition`]: crate::Glob::partition
 /// [`Path`]: std::path::Path
 /// [`PathBuf`]: std::path::PathBuf
-pub trait Pattern<'t>: Compose<'t, Error = Infallible> {
+pub trait Pattern<'t>: Combine<'t, Error = Infallible> {
     /// Returns `true` if a path matches the pattern.
     ///
     /// The given path must be convertible into a [`CandidatePath`].
@@ -262,21 +262,21 @@ pub trait Pattern<'t>: Compose<'t, Error = Infallible> {
     fn is_exhaustive(&self) -> bool;
 }
 
-/// A glob expression representation that can be composed into a combinator like
-/// [`Any`].
+/// A glob expression representation that can be incorporated into a combinator.
 ///
-/// See implementors and the [`any`] function.
+/// This trait is implemented by types that can be (fallibly) converted into a
+/// [`Pattern`] and incorporated into a combinator. See [`any`].
 ///
 /// [`any`]: crate::any
-/// [`Any`]: crate::Any
-pub trait Compose<'t>:
-    TryInto<Checked<Self::Tokens>, Error = <Self as Compose<'t>>::Error>
+/// [`Pattern`]: crate::Pattern
+pub trait Combine<'t>:
+    TryInto<Checked<Self::Tokens>, Error = <Self as Combine<'t>>::Error>
 {
     type Tokens: TokenTree<'t>;
     type Error: Into<BuildError>;
 }
 
-impl<'t> Compose<'t> for &'t str {
+impl<'t> Combine<'t> for &'t str {
     type Tokens = Tokenized<'t>;
     type Error = BuildError;
 }
@@ -986,7 +986,7 @@ impl<'t> TryFrom<&'t str> for Glob<'t> {
     }
 }
 
-impl<'t> Compose<'t> for Glob<'t> {
+impl<'t> Combine<'t> for Glob<'t> {
     type Tokens = Tokenized<'t>;
     type Error = Infallible;
 }
@@ -994,7 +994,7 @@ impl<'t> Compose<'t> for Glob<'t> {
 /// Combinator that matches any of its component [`Pattern`]s.
 ///
 /// An instance of `Any` is constructed using the [`any`] function, which
-/// composes multiple [`Pattern`]s for more ergonomic and efficient matching.
+/// combines multiple [`Pattern`]s for more ergonomic and efficient matching.
 ///
 /// [`any`]: crate::any
 /// [`Pattern`]: crate::Pattern
@@ -1029,7 +1029,7 @@ impl<'t> Pattern<'t> for Any<'t> {
     }
 }
 
-impl<'t> Compose<'t> for Any<'t> {
+impl<'t> Combine<'t> for Any<'t> {
     type Tokens = Token<'t, ()>;
     type Error = Infallible;
 }
@@ -1038,24 +1038,23 @@ impl<'t> Compose<'t> for Any<'t> {
 //       This would allow for a variety of types to be composed in an `any` call
 //       and would be especially useful if additional combinators are
 //       introduced.
-/// Composes glob expressions into a combinator that matches if any of its input
-/// [`Pattern`]s match.
+/// Constructs a combinator that matches if any of its input [`Pattern`]s match.
 ///
-/// This function accepts an [`IntoIterator`] with items that implement the
-/// [`Compose`] trait such as [`Glob`] and `&str`. The output [`Any`] implements
-/// [`Pattern`] by matching any of its component [`Pattern`]s. [`Any`] is often
-/// more ergonomic and efficient than matching individually against multiple
+/// This function accepts an [`IntoIterator`] with items that implement
+/// [`Combine`], such as [`Glob`] and `&str`. The output [`Any`] implements
+/// [`Pattern`] by matching its component [`Pattern`]s. [`Any`] is often more
+/// ergonomic and efficient than matching individually against multiple
 /// [`Pattern`]s.
 ///
 /// [`Any`] groups all captures and therefore only exposes the complete text of
 /// a match. It is not possible to index a particular capturing token in the
-/// component patterns. [`Any`] only supports logical matching and cannot be
-/// used to semantically match a directory tree.
+/// component patterns. Combinators only support logical matching and cannot be
+/// used to semantically match (walk) a directory tree.
 ///
 /// # Examples
 ///
 /// To match a path against multiple patterns, the patterns can first be
-/// composed into an [`Any`].
+/// combined into an [`Any`].
 ///
 /// ```rust
 /// use wax::{Glob, Pattern};
@@ -1081,6 +1080,30 @@ impl<'t> Compose<'t> for Any<'t> {
 /// assert!(wax::any([red, blue]).unwrap().is_match("red/potion.txt"));
 /// ```
 ///
+/// This function can only combine patterns of the same type, but intermediate
+/// combinators can be used to combine different types into a single combinator.
+///
+/// ```rust
+/// use wax::{Glob, Pattern};
+///
+/// # fn fallible() -> Result<(), wax::BuildError> {
+/// let glob = Glob::new("**/*.txt")?;
+///
+/// // ...
+///
+/// #[rustfmt::skip]
+/// let any = wax::any([
+///     wax::any([glob])?,
+///     wax::any([
+///         "**/*.pdf",
+///         "**/*.tex",
+///     ])?,
+/// ])?;
+/// assert!(any.is_match("doc/lattice.tex"));
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Errors
 ///
 /// Returns an error if any of the inputs fail to build. If the inputs are a
@@ -1088,13 +1111,14 @@ impl<'t> Compose<'t> for Any<'t> {
 /// compiled program is too large.
 ///
 /// [`Any`]: crate::Any
+/// [`Combine`]: crate::Combine
 /// [`Glob`]: crate::Glob
 /// [`IntoIterator`]: std::iter::IntoIterator
 /// [`Pattern`]: crate::Pattern
 pub fn any<'t, I>(patterns: I) -> Result<Any<'t>, BuildError>
 where
     I: IntoIterator,
-    I::Item: Compose<'t>,
+    I::Item: Combine<'t>,
 {
     let tree = Checked::any(
         patterns

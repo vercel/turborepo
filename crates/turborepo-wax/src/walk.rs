@@ -16,7 +16,7 @@ use crate::{
     capture::MatchedText,
     encode::CompileError,
     token::{self, Token, TokenTree},
-    BuildError, CandidatePath, Compose, Glob,
+    BuildError, CandidatePath, Combine, Glob,
 };
 
 pub type WalkItem<'e> = Result<WalkEntry<'e>, WalkError>;
@@ -352,24 +352,25 @@ pub struct Negation {
 }
 
 impl Negation {
-    /// Composes glob expressions into a `Negation`.
+    /// Combines glob expressions into a `Negation`.
     ///
-    /// This function accepts an [`IntoIterator`] with items that implement the
-    /// [`Compose`] trait such as [`Glob`] and `&str`.
+    /// This function accepts an [`IntoIterator`] with items that implement
+    /// [`Combine`], such as [`Glob`] and `&str`.
     ///
     /// # Errors
     ///
     /// Returns an error if any of the inputs fail to build. If the inputs are a
-    /// compiled [`Pattern`] type such as [`Glob`], then this only occurs if the
-    /// compiled program is too large.
+    /// compiled [`Pattern`] types such as [`Glob`], then this only occurs if
+    /// the compiled program is too large.
     ///
+    /// [`Combine`]: crate::Combine
     /// [`Glob`]: crate::Glob
-    /// [`Pattern`]: crate::Pattern
     /// [`IntoIterator`]: std::iter::IntoIterator
+    /// [`Pattern`]: crate::Pattern
     pub fn any<'t, I>(patterns: I) -> Result<Self, BuildError>
     where
         I: IntoIterator,
-        I::Item: Compose<'t>,
+        I::Item: Combine<'t>,
     {
         let (exhaustive, nonexhaustive) = patterns
             .into_iter()
@@ -690,7 +691,7 @@ impl<'g> Walk<'g> {
     pub fn not<'t, I>(self, patterns: I) -> Result<impl 'g + FileIterator, BuildError>
     where
         I: IntoIterator,
-        I::Item: Compose<'t>,
+        I::Item: Combine<'t>,
     {
         Negation::any(patterns)
             .map(|negation| self.filter_tree(move |entry| negation.target(entry)))

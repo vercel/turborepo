@@ -271,7 +271,7 @@ the expression to match or walk overlapping trees.
 
 ## Combinators
 
-Glob patterns can be composed and matched together using the [`any`] combinator.
+Glob patterns can be combined and matched together using the [`any`] combinator.
 [`any`] accepts an [`IntoIterator`] with items that are compiled [`Pattern`]s or
 `str` slices. The output is an [`Any`], which implements [`Pattern`] and
 efficiently matches any of its input patterns.
