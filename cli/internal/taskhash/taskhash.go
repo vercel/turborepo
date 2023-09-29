@@ -2,6 +2,7 @@
 package taskhash
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -113,7 +114,7 @@ func (th *Tracker) CalculateFileHashes(
 	hashes := make(map[string]string, len(hashTasks))
 	hashObjects := make(map[string]map[turbopath.AnchoredUnixPath]string, len(hashTasks))
 	hashQueue := make(chan *packageFileHashInputs, workerCount)
-	hashErrs := &errgroup.Group{}
+	hashErrs, ctx := errgroup.WithContext(context.Background())
 
 	for i := 0; i < workerCount; i++ {
 		hashErrs.Go(func() error {
@@ -159,8 +160,14 @@ func (th *Tracker) CalculateFileHashes(
 			return nil
 		})
 	}
+outer:
 	for ht := range hashTasks {
-		hashQueue <- ht.(*packageFileHashInputs)
+		select {
+		case hashQueue <- ht.(*packageFileHashInputs):
+		// If we return an error, stop sending more work
+		case <-ctx.Done():
+			break outer
+		}
 	}
 	close(hashQueue)
 	err := hashErrs.Wait()
