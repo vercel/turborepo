@@ -66,6 +66,8 @@ pub enum CacheError {
     MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
     #[error("Cache miss")]
     CacheMiss,
+    #[error("Unable to perform write as cache is shutting down")]
+    CacheShuttingDown,
 }
 
 impl From<turborepo_api_client::Error> for CacheError {
