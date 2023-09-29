@@ -1,4 +1,4 @@
-use std::{io::Write, sync::Arc};
+use std::{io::Write, sync::Arc, time::Duration};
 
 use console::StyledObject;
 use tracing::{debug, log::warn};
@@ -22,6 +22,12 @@ pub enum Error {
     Ui(#[from] turborepo_ui::Error),
     #[error("Error accessing cache: {0}")]
     Cache(#[from] turborepo_cache::CacheError),
+    #[error("Error finding outputs to save: {0}")]
+    Globwalk(#[from] globwalk::WalkError),
+    #[error("Error with daemon: {0}")]
+    Daemon(#[from] crate::daemon::DaemonError),
+    #[error("no connection to daemon")]
+    NoDaemon,
 }
 
 impl Error {
@@ -96,6 +102,8 @@ impl RunCache {
             ui: self.ui,
         }
     }
+
+    // pub fn notify
 }
 
 pub struct TaskCache {
@@ -280,5 +288,66 @@ impl TaskCache {
         }
 
         Ok(cache_status)
+    }
+
+    pub async fn save_outputs(
+        &mut self,
+        prefixed_ui: &mut PrefixedUI<impl Write>,
+        duration: Duration,
+    ) -> Result<(), Error> {
+        if self.caching_disabled || self.run_cache.reads_disabled {
+            return Ok(());
+        }
+
+        debug!("caching outputs: outputs: {:?}", &self.repo_relative_globs);
+
+        let files_to_be_cached = globwalk::globwalk(
+            &self.run_cache.repo_root,
+            &self.repo_relative_globs.inclusions,
+            &self.repo_relative_globs.exclusions,
+            globwalk::WalkType::All,
+        )?;
+
+        let mut relative_paths = files_to_be_cached
+            .into_iter()
+            .map(|path| {
+                AnchoredSystemPathBuf::relative_path_between(&self.run_cache.repo_root, &path)
+            })
+            .collect::<Vec<_>>();
+        relative_paths.sort();
+        self.run_cache
+            .cache
+            .put(
+                self.run_cache.repo_root.clone(),
+                self.hash.clone(),
+                relative_paths.clone(),
+                duration.as_millis() as u64,
+            )
+            .await?;
+
+        let notify_result = match self.daemon_client.as_mut() {
+            Some(daemon_client) => daemon_client
+                .notify_outputs_written(
+                    self.hash.to_string(),
+                    self.repo_relative_globs.inclusions.clone(),
+                    self.repo_relative_globs.exclusions.clone(),
+                    duration.as_millis() as u64,
+                )
+                .await
+                .map_err(Error::from),
+            None => Err(Error::NoDaemon),
+        };
+
+        if let Err(err) = notify_result {
+            let task_id = &self.task_id;
+            warn!("Failed to mark outputs as cached for {task_id}: {err}");
+            prefixed_ui.warn(format!(
+                "Failed to mark outputs as cached for {task_id}: {err}",
+            ));
+        }
+
+        self.expanded_outputs = relative_paths;
+
+        Ok(())
     }
 }
