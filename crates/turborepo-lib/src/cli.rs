@@ -610,24 +610,24 @@ pub async fn run(
                 .as_ref()
                 .map(|repo_state| matches!(repo_state.mode, RepoMode::SinglePackage))
                 .unwrap_or(false);
-        // If this is a run command, and we know the actual invocation path, set the
-        // inference root, as long as the user hasn't overridden the cwd
-        if cli_args.cwd.is_none() {
-            let invocation_path = std::env::current_dir()?;
 
-            // If repo state doesn't exist, we're either local turbo running at the root
-            // (cwd), or inference failed.
-            // If repo state does exist, we're global turbo, and want to calculate
-            // package inference based on the repo root
-            let this_dir = AbsoluteSystemPathBuf::cwd()?;
-            let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
-            if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
-                debug!("pkg_inference_root set to \"{}\"", relative_path.display());
-                let utf8_path = relative_path
-                    .to_str()
-                    .ok_or_else(|| anyhow!("invalid utf8 path: {:?}", relative_path))?;
-                run_args.pkg_inference_root = Some(utf8_path.to_owned());
-            }
+        let invocation_path = match &cli_args.cwd {
+            Some(cwd) => cwd.clone().into_std_path_buf(),
+            None => std::env::current_dir()?,
+        };
+
+        // If repo state doesn't exist, we're either local turbo running at the root
+        // (cwd), or inference failed.
+        // If repo state does exist, we're global turbo, and want to calculate
+        // package inference based on the repo root
+        let this_dir = AbsoluteSystemPathBuf::cwd()?;
+        let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
+        if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
+            debug!("pkg_inference_root set to \"{}\"", relative_path.display());
+            let utf8_path = relative_path
+                .to_str()
+                .ok_or_else(|| anyhow!("invalid utf8 path: {:?}", relative_path))?;
+            run_args.pkg_inference_root = Some(utf8_path.to_owned());
         }
     }
 

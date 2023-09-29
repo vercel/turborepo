@@ -8,9 +8,9 @@ Setup
   \xe2\x80\xa2 Running build in 1 packages (esc)
 
 # Does not run in a particular directory
-  $ ${TURBO} build --cwd $(pwd)/packages/util --force | grep "Running build in 3 packages" | head -n 1
-  \xe2\x80\xa2 Running build in 3 packages (esc)
+  $ ${TURBO} build --cwd $(pwd)/packages/util --force | grep "Running build in 1 packages" | head -n 1
+  \xe2\x80\xa2 Running build in 1 packages (esc)
 
 # Run in a particular directory
-  $ ${TURBO} build --skip-infer --cwd $(pwd)/packages/util --force | grep "Running build in 3 packages" | head -n 1
-  \xe2\x80\xa2 Running build in 3 packages (esc)
+  $ ${TURBO} build --skip-infer --cwd $(pwd)/packages/util --force | grep "Running build in 1 packages" | head -n 1
+  \xe2\x80\xa2 Running build in 1 packages (esc)
