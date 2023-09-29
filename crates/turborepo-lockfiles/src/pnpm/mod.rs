@@ -13,12 +13,6 @@ pub enum Error {
     DependencyPath(#[from] nom::error::Error<String>),
     #[error("Unable to find '{0}' other than reference in dependenciesMeta")]
     MissingInjectedPackage(String),
-    #[error("Unable to find resolved version for {name}@{specifier} in {workspace}")]
-    MissingResolvedVersion {
-        name: String,
-        specifier: String,
-        workspace: String,
-    },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
