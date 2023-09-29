@@ -33,5 +33,5 @@ export function isFolderEmpty(root: string): {
     // Support IntelliJ IDEA-based editors
     .filter((file) => !file.endsWith(".iml"));
 
-  return { isEmpty: conflicts.length === 0, conflicts };
+  return { isEmpty: false, conflicts };
 }
