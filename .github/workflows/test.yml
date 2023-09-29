@@ -183,7 +183,8 @@ jobs:
       turbopack_typescript: ${{ steps.ci.outputs.diff != '' || steps.turbopack_typescript.outputs.diff != '' }}
       turborepo_rust: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
       turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
-      go: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
+      go: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != ''}}
+      turborepo_build: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
       turborepo_e2e: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_e2e.outputs.diff != '' }}
       go_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' || steps.examples.outputs.diff != '' }}
@@ -196,6 +197,8 @@ jobs:
 
   build_turborepo:
     name: Build Turborepo
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.turborepo_build == 'true'
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -207,8 +210,6 @@ jobs:
             runner: macos-latest
           - name: windows
             runner: windows-latest
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.go == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
