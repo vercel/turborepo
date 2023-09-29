@@ -222,6 +222,12 @@ serde_qs = "0.11.0"
 serde_with = "2.3.2"
 serde_yaml = "0.9.17"
 sha2 = "0.10.6"
+smallvec = { version = "1.11.1", features = [
+  "serde",
+  "const_generics",
+  "union",
+  "const_new",
+] }
 sourcemap = "6.0.2"
 syn = "1.0.107"
 tempfile = "3.3.0"
