@@ -3,10 +3,9 @@ Setup
   $ . ${TESTDIR}/setup.sh $(pwd)/subdir "hoisted"
   $ TESTROOT=$(pwd)
 
-When --skip-infer is used we use the current binary and output no global/local message
+When --skip-infer is used we use the current binary, not a local binary
   $ cd $TESTROOT/subdir
-  $ ${TURBO} --help --skip-infer -vv | head -n 2
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
+  $ ${TURBO} --help --skip-infer | grep "The build system that makes ship happen" | head -n 1
   The build system that makes ship happen
 
 It finds repo root and uses correct version
@@ -20,7 +19,7 @@ It finds repo root and uses correct version
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running local turbo binary in .*/hard_mode.t/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: supports_skip_infer_and_single_package true (re)
-  --skip-infer build --filter foo -vv --single-package --
+  --skip-infer build --filter foo -vv
 
 It respects cwd
   $ ${TESTDIR}/set_version.sh $TESTROOT "1.8.0"
@@ -33,7 +32,7 @@ It respects cwd
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running local turbo binary in .*/hard_mode.t/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: supports_skip_infer_and_single_package true (re)
-  --skip-infer build --filter foo -vv --single-package --
+  --skip-infer build --filter foo -vv --cwd .*/hard_mode.t/subdir (re)
 
 It respects cwd and finds repo root
   $ ${TESTDIR}/set_version.sh $TESTROOT "1.8.0"
@@ -46,4 +45,4 @@ It respects cwd and finds repo root
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running local turbo binary in .*/hard_mode.t/subdir/node_modules/turbo-(darwin|linux|windows)-(64|arm64)/bin/turbo (re)
   
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: supports_skip_infer_and_single_package true (re)
-  --skip-infer build --filter foo -vv --single-package --
+  --skip-infer build --filter foo -vv --cwd .*/hard_mode.t/subdir/node_modules (re)

@@ -1,4 +1,4 @@
-use std::{env, io, mem, path::Path, process};
+use std::{env, io, mem, process};
 
 use anyhow::{anyhow, Result};
 use camino::Utf8PathBuf;
@@ -16,10 +16,6 @@ use crate::{
     tracing::TurboSubscriber,
     Payload,
 };
-
-// Global turbo sets this environment variable to its cwd so that local
-// turbo can use it for package inference.
-pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, ValueEnum)]
 pub enum OutputLogsMode {
@@ -617,24 +613,20 @@ pub async fn run(
         // If this is a run command, and we know the actual invocation path, set the
         // inference root, as long as the user hasn't overridden the cwd
         if cli_args.cwd.is_none() {
-            if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
-                let invocation_path = Path::new(&invocation_dir);
+            let invocation_path = std::env::current_dir()?;
 
-                // If repo state doesn't exist, we're either local turbo running at the root
-                // (cwd), or inference failed.
-                // If repo state does exist, we're global turbo, and want to calculate
-                // package inference based on the repo root
-                let this_dir = AbsoluteSystemPathBuf::cwd()?;
-                let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
-                if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
-                    debug!("pkg_inference_root set to \"{}\"", relative_path.display());
-                    let utf8_path = relative_path
-                        .to_str()
-                        .ok_or_else(|| anyhow!("invalid utf8 path: {:?}", relative_path))?;
-                    run_args.pkg_inference_root = Some(utf8_path.to_owned());
-                }
-            } else {
-                debug!("{} not set", INVOCATION_DIR_ENV_VAR);
+            // If repo state doesn't exist, we're either local turbo running at the root
+            // (cwd), or inference failed.
+            // If repo state does exist, we're global turbo, and want to calculate
+            // package inference based on the repo root
+            let this_dir = AbsoluteSystemPathBuf::cwd()?;
+            let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
+            if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
+                debug!("pkg_inference_root set to \"{}\"", relative_path.display());
+                let utf8_path = relative_path
+                    .to_str()
+                    .ok_or_else(|| anyhow!("invalid utf8 path: {:?}", relative_path))?;
+                run_args.pkg_inference_root = Some(utf8_path.to_owned());
             }
         }
     }

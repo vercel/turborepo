@@ -1,5 +1,6 @@
 use std::{
     env,
+    ffi::OsString,
     fs::{self},
     path::{Path, PathBuf},
     process,
@@ -611,78 +612,52 @@ impl RepoState {
             try_check_for_updates(&shim_args, version);
             let canonical_local_turbo = fs_canonicalize(bin_path)?;
             Ok(Payload::Rust(
-                self.spawn_local_turbo(&canonical_local_turbo, shim_args),
+                self.spawn_local_turbo(&canonical_local_turbo),
             ))
         } else {
             try_check_for_updates(&shim_args, get_version());
-            // cli::run checks for this env var, rather than an arg, so that we can support
-            // calling old versions without passing unknown flags.
-            env::set_var(
-                cli::INVOCATION_DIR_ENV_VAR,
-                shim_args.invocation_dir.as_path(),
-            );
             debug!("Running command as global turbo");
             cli::run(Some(self), subscriber, ui)
         }
     }
 
-    fn local_turbo_supports_skip_infer_and_single_package(&self) -> Result<bool> {
+    fn local_turbo_supports_skip_infer_and_single_package(&self) -> bool {
         if let Some(LocalTurboState { version, .. }) = &self.local_turbo_state {
-            Ok(turbo_version_has_shim(version))
+            turbo_version_has_shim(version)
         } else {
-            Ok(false)
+            false
         }
     }
 
-    fn spawn_local_turbo(&self, local_turbo_path: &Path, mut shim_args: ShimArgs) -> Result<i32> {
+    fn spawn_local_turbo(&self, local_turbo_path: &Path) -> Result<i32> {
         debug!(
             "Running local turbo binary in {}\n",
             local_turbo_path.display()
         );
 
         let supports_skip_infer_and_single_package =
-            self.local_turbo_supports_skip_infer_and_single_package()?;
-        let already_has_single_package_flag = shim_args
-            .remaining_turbo_args
-            .contains(&"--single-package".to_string());
-        let should_add_single_package_flag = self.mode == RepoMode::SinglePackage
-            && !already_has_single_package_flag
-            && supports_skip_infer_and_single_package;
+            self.local_turbo_supports_skip_infer_and_single_package();
 
         debug!(
             "supports_skip_infer_and_single_package {:?}",
             supports_skip_infer_and_single_package
         );
-        let cwd = fs_canonicalize(&self.root)?;
-        let mut raw_args: Vec<_> = if supports_skip_infer_and_single_package {
-            vec!["--skip-infer".to_string()]
-        } else {
-            Vec::new()
-        };
 
-        raw_args.append(&mut shim_args.remaining_turbo_args);
-
-        // We add this flag after the raw args to avoid accidentally passing it
-        // as a global flag instead of as a run flag.
-        if should_add_single_package_flag {
-            raw_args.push("--single-package".to_string());
+        let argv_iterator = env::args_os().skip(1);
+        let mut argv: Vec<OsString> = argv_iterator.rev().collect();
+        if supports_skip_infer_and_single_package {
+            argv.push(OsString::from("--skip-infer"));
         }
-
-        raw_args.push("--".to_string());
-        raw_args.append(&mut shim_args.forwarded_args);
+        argv.reverse();
 
         // We spawn a process that executes the local turbo
         // that we've found in node_modules/.bin/turbo.
         let mut command = process::Command::new(local_turbo_path);
         command
-            .args(&raw_args)
+            .args(argv)
             // rather than passing an argument that local turbo might not understand, set
             // an environment variable that can be optionally used
-            .env(
-                cli::INVOCATION_DIR_ENV_VAR,
-                shim_args.invocation_dir.as_path(),
-            )
-            .current_dir(cwd)
+            .current_dir(AbsoluteSystemPathBuf::cwd()?)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit());
 
@@ -715,7 +690,7 @@ impl RepoState {
 /// that conflicts with finding a local turbo installation and
 /// executing that binary, these two features are fundamentally incompatible.
 fn is_turbo_binary_path_set() -> bool {
-    env::var("TURBO_BINARY_PATH").is_ok()
+    env::var_os("TURBO_BINARY_PATH").is_some()
 }
 
 fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
@@ -753,27 +728,16 @@ pub fn run() -> Result<Payload> {
     let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &ui);
 
     debug!("Global turbo version: {}", get_version());
-
-    // If skip_infer is passed, we're probably running local turbo with
-    // global turbo having handled the inference. We can run without any
-    // concerns.
-    if args.skip_infer {
-        return cli::run(None, &subscriber, ui);
-    }
-
-    // If the TURBO_BINARY_PATH is set, we do inference but we do not use
-    // it to execute local turbo. We simply use it to set the `--single-package`
-    // and `--cwd` flags.
-    if is_turbo_binary_path_set() {
-        let repo_state = RepoState::infer(&args.cwd)?;
-        debug!("Repository Root: {}", repo_state.root);
-        return cli::run(Some(repo_state), &subscriber, ui);
-    }
+    let should_run_self = args.skip_infer || is_turbo_binary_path_set();
 
     match RepoState::infer(&args.cwd) {
         Ok(repo_state) => {
             debug!("Repository Root: {}", repo_state.root);
-            repo_state.run_correct_turbo(args, &subscriber, ui)
+            if should_run_self {
+                cli::run(Some(repo_state), &subscriber, ui)
+            } else {
+                repo_state.run_correct_turbo(args, &subscriber, ui)
+            }
         }
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
