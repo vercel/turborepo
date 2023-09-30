@@ -217,15 +217,9 @@ impl PnpmLockfile {
             importer.dependencies.find_resolution(name)
         else {
             // Check if the specifier is already an exact version
-            return match self.get_packages(&self.format_key(name, specifier)) {
-                Some(_) => Ok(Some(specifier)),
-                None => Err(Error::MissingResolvedVersion {
-                    name: name.into(),
-                    specifier: specifier.into(),
-                    workspace: workspace_path.into(),
-                }
-                .into()),
-            };
+            return Ok(self
+                .get_packages(&self.format_key(name, specifier))
+                .and(Some(specifier)));
         };
 
         let override_specifier = self.apply_overrides(name, specifier);
@@ -611,7 +605,7 @@ mod tests {
         "packages/b",
         "is-odd",
         "^3.0.1",
-        Err("Unable to find resolved version for is-odd@^3.0.1 in packages/b")
+        Ok(None)
         ; "v6 missing"
     )]
     #[test_case(
@@ -859,5 +853,44 @@ c:
             serde_yaml::from_str(original_contents).unwrap();
         let contents = serde_yaml::to_string(&original_parsed).unwrap();
         assert_eq!(original_contents, &contents);
+    }
+
+    #[test]
+    fn test_missing_specifier() {
+        // When comparing across git commits the `package.json` might list a
+        // dependency that isn't in a previous lockfile. We must not error in
+        // this case.
+        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
+        let closures = crate::all_transitive_closures(
+            &lockfile,
+            vec![(
+                "packages/a".to_string(),
+                vec![
+                    ("is-odd".to_string(), "^3.0.1".to_string()),
+                    ("pad-left".to_string(), "^1.0.0".to_string()),
+                ]
+                .into_iter()
+                .collect(),
+            )]
+            .into_iter()
+            .collect(),
+        )
+        .unwrap();
+
+        let mut a_closure = closures
+            .get("packages/a")
+            .unwrap()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
+        a_closure.sort();
+
+        assert_eq!(
+            a_closure,
+            vec![
+                Package::new("/is-number@6.0.0", "6.0.0"),
+                Package::new("/is-odd@3.0.1", "3.0.1"),
+            ]
+        )
     }
 }
