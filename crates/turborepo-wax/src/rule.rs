@@ -172,10 +172,10 @@ impl<T> Terminals<T> {
 /// Describes errors concerning rules and patterns in a glob expression.
 ///
 /// Patterns must follow rules described in the [repository
-/// documentation](https://github.com/olson-sean-k/wax/blob/master/README.md).
-/// These rules are designed to avoid nonsense glob expressions and ambiguity.
-/// If a glob expression parses but violates these rules or is otherwise
-/// malformed, then this error is returned by some APIs.
+/// documentation](https://github.com/olson-sean-k/wax/blob/master/README.md). These rules are
+/// designed to avoid nonsense glob expressions and ambiguity. If a glob
+/// expression parses but violates these rules or is otherwise malformed, then
+/// this error is returned by some APIs.
 #[derive(Debug, Error)]
 #[error("malformed glob expression: {kind}")]
 pub struct RuleError<'t> {
@@ -288,12 +288,10 @@ impl<'t> Checked<Token<'t, ()>> {
         I: IntoIterator<Item = Checked<T>>,
     {
         Checked {
-            // `token::any` constructs an alternative from the input token
-            // trees. The alternative is not checked, but the `any` combinator
-            // is explicitly allowed to ignore the subset of rules that may be
-            // violated by this construction. In particular, branches may or may
-            // not have roots such that the alternative can match overlapping
-            // directory trees.
+            // `token::any` constructs an alternative from the input token trees. The alternative
+            // is not checked, but the `any` combinator is explicitly allowed to ignore the subset
+            // of rules that may be violated by this construction. In particular, branches may or
+            // may not have roots such that the alternative can match overlapping directory trees.
             inner: token::any(
                 trees
                     .into_iter()
@@ -476,8 +474,8 @@ fn group<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
     }
 
     fn diagnose<'i, 't>(
-        // This is a somewhat unusual API, but it allows the lifetime `'t` of
-        // the `Cow` to be properly forwarded to output values (`RuleError`).
+        // This is a somewhat unusual API, but it allows the lifetime `'t` of the `Cow` to be
+        // properly forwarded to output values (`RuleError`).
         #[allow(clippy::ptr_arg)] expression: &'i Cow<'t, str>,
         token: &'i Token<'t>,
         label: &'static str,
@@ -495,8 +493,8 @@ fn group<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
     }
 
     fn recurse<'i, 't, I>(
-        // This is a somewhat unusual API, but it allows the lifetime `'t` of
-        // the `Cow` to be properly forwarded to output values (`RuleError`).
+        // This is a somewhat unusual API, but it allows the lifetime `'t` of the `Cow` to be
+        // properly forwarded to output values (`RuleError`).
         #[allow(clippy::ptr_arg)] expression: &Cow<'t, str>,
         tokens: I,
         outer: Outer<'i, 't>,
@@ -541,8 +539,7 @@ fn group<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
     ) -> Result<(), CorrelatedError> {
         let Outer { left, right } = outer;
         match terminals.map(|token| (token, token.kind())) {
-            // The group is preceded by component boundaries; disallow leading
-            // separators.
+            // The group is preceded by component boundaries; disallow leading separators.
             //
             // For example, `foo/{bar,/}`.
             Only((inner, Separator(_))) | StartEnd((inner, Separator(_)), _)
@@ -575,8 +572,7 @@ fn group<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
                 None,
                 inner,
             )),
-            // The group is preceded by component boundaries; disallow leading
-            // tree tokens.
+            // The group is preceded by component boundaries; disallow leading tree tokens.
             //
             // For example, `foo/{bar,**/baz}`.
             StartEnd((inner, Wildcard(Tree { .. })), _) if has_ending_component_boundary(left) => {
@@ -637,8 +633,7 @@ fn group<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
     ) -> Result<(), CorrelatedError> {
         let Outer { left, .. } = outer;
         match terminals.map(|token| (token, token.kind())) {
-            // The alternative is preceded by a termination; disallow rooted
-            // sub-globs.
+            // The alternative is preceded by a termination; disallow rooted sub-globs.
             //
             // For example, `{foo,/}` or `{foo,/bar}`.
             Only((inner, Separator(_))) | StartEnd((inner, Separator(_)), _) if left.is_none() => {
@@ -674,8 +669,8 @@ fn group<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
         let Outer { left, .. } = outer;
         let (lower, _) = bounds;
         match terminals.map(|token| (token, token.kind())) {
-            // The repetition is preceded by a termination; disallow rooted
-            // sub-globs with a zero lower bound.
+            // The repetition is preceded by a termination; disallow rooted sub-globs with a zero
+            // lower bound.
             //
             // For example, `</foo:0,>`.
             Only((inner, Separator(_))) | StartEnd((inner, Separator(_)), _)
@@ -757,10 +752,9 @@ fn bounds<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
 fn size<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
     if let Some((_, token)) = tokenized
         .walk()
-        // TODO: This is expensive. For each token tree encountered, the
-        //       tree is traversed to determine its variance. If variant,
-        //       the tree is traversed and queried again, revisiting the
-        //       same tokens to recompute their local variance.
+        // TODO: This is expensive. For each token tree encountered, the tree is traversed to
+        //       determine its variance. If variant, the tree is traversed and queried again,
+        //       revisiting the same tokens to recompute their local variance.
         .find(|(_, token)| {
             token
                 .variance::<InvariantSize>()

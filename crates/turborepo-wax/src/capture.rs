@@ -84,8 +84,8 @@ impl From<OwnedText> for MaybeOwnedText<'static> {
 /// All [`Pattern`]s provide an implicit capture of the complete text of a
 /// match. This implicit capture has index zero, and is exposed via the
 /// [`complete`] function as well as the [`get`] function using index zero.
-/// Capturing tokens are indexed starting at one, and can be used to isolate
-/// more specific sub-text.
+/// Capturing tokens are indexed starting at one, and can be used to
+/// isolate more specific sub-text.
 ///
 /// # Examples
 ///
@@ -126,9 +126,9 @@ impl<'t> MatchedText<'t> {
     /// Clones any borrowed data to an owning instance.
     ///
     /// This function is similar to [`into_owned`], but does not consume its
-    /// receiver. Due to a technical limitation, `MatchedText` cannot implement
-    /// [`Clone`], so this function is provided as a stop gap that allows a
-    /// distinct instance to be created that owns its data.
+    /// receiver. Due to a technical limitation, `MatchedText` cannot
+    /// implement [`Clone`], so this function is provided as a stop gap that
+    /// allows a distinct instance to be created that owns its data.
     ///
     /// [`Clone`]: std::clone::Clone
     /// [`into_owned`]: crate::MatchedText::into_owned
@@ -143,8 +143,8 @@ impl<'t> MatchedText<'t> {
     /// Gets the complete text of a match.
     ///
     /// All [`Pattern`]s have an implicit capture of the complete text at index
-    /// zero. This function is therefore equivalent to unwrapping the output of
-    /// the [`get`] function with index zero.
+    /// zero. This function is therefore equivalent to unwrapping the output
+    /// of the [`get`] function with index zero.
     ///
     /// [`get`]: crate::MatchedText::get
     /// [`Pattern`]: crate::Pattern
@@ -162,8 +162,8 @@ impl<'t> MatchedText<'t> {
     ///
     /// Alternative and repetition patterns group their sub-globs into a single
     /// capture, so it is not possible to isolate matched text from their
-    /// sub-globs. This can be used to explicitly group matched text, such as
-    /// isolating an entire matched file name using an expression like
+    /// sub-globs. This can be used to explicitly group matched text, such
+    /// as isolating an entire matched file name using an expression like
     /// `{*.{go,rs}}`.
     ///
     /// [`Pattern`]: crate::Pattern

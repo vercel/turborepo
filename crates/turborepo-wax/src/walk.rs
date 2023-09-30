@@ -125,8 +125,8 @@ macro_rules! walk {
         use itertools::EitherOrBoth::{Both, Left, Right};
         use itertools::Position::{First, Last, Middle, Only};
 
-        // `while-let` avoids a mutable borrow of `walk`, which would prevent a
-        // subsequent call to `skip_current_dir` within the loop body.
+        // `while-let` avoids a mutable borrow of `walk`, which would prevent a subsequent call to
+        // `skip_current_dir` within the loop body.
         #[allow(clippy::while_let_on_iterator)]
         #[allow(unreachable_code)]
         'walk: while let Some(entry) = $state.walk.next() {
@@ -160,8 +160,8 @@ macro_rules! walk {
                 match (position, candidate) {
                     (First | Middle, Both(component, pattern)) => {
                         if !pattern.is_match(component.as_ref()) {
-                            // Do not descend into directories that do not match
-                            // the corresponding component pattern.
+                            // Do not descend into directories that do not match the corresponding
+                            // component pattern.
                             if entry.file_type().is_dir() {
                                 $state.walk.skip_current_dir();
                             }
@@ -182,8 +182,8 @@ macro_rules! walk {
                             }
                         }
                         else {
-                            // Do not descend into directories that do not match
-                            // the corresponding component pattern.
+                            // Do not descend into directories that do not match the corresponding
+                            // component pattern.
                             if entry.file_type().is_dir() {
                                 $state.walk.skip_current_dir();
                             }
@@ -208,9 +208,8 @@ macro_rules! walk {
                     }
                 }
             }
-            // If the loop is not entered, check for a match. This may indicate
-            // that the `Glob` is empty and a single invariant path may be
-            // matched.
+            // If the loop is not entered, check for a match. This may indicate that the `Glob` is
+            // empty and a single invariant path may be matched.
             let path = CandidatePath::from(path);
             if let Some(matched) = $state.pattern.captures(path.as_ref()).map(MatchedText::from) {
                 let $entry = Ok(WalkEntry {
@@ -245,24 +244,25 @@ pub trait FileIterator: Sized + TreeIterator<Item = WalkItem<'static>> {
     /// furthermore specifies how iteration proceeds to traverse directory
     /// trees. The adaptor accepts a function that, when discarding a
     /// [`WalkEntry`], yields a [`FilterTarget`]. **If the entry refers to a
-    /// directory and [`FilterTarget::Tree`] is returned by the function, then
-    /// iteration will not descend into that directory and the tree will not be
-    /// read from the file system.** Therefore, this adaptor should be preferred
-    /// over functions like [`Iterator::filter`] when discarded directories do
-    /// not need to be read.
+    /// directory and [`FilterTarget::Tree`] is returned by the function,
+    /// then iteration will not descend into that directory and the tree
+    /// will not be read from the file system.** Therefore, this
+    /// adaptor should be preferred over functions like [`Iterator::filter`]
+    /// when discarded directories do not need to be read.
     ///
     /// Errors are not filtered, so if an error occurs reading a file at a path
-    /// that would have been discarded, then that error is still yielded by the
-    /// iterator.
+    /// that would have been discarded, then that error is still yielded by
+    /// the iterator.
     ///
     /// # Examples
     ///
     /// The [`FilterTree`] adaptor can be used to apply additional custom
-    /// filtering that avoids unnecessary directory reads. The following example
-    /// filters out hidden files on Unix and Windows. On Unix, hidden files are
-    /// filtered out nominally via [`not`]. On Windows, `filter_tree` is used to
-    /// detect the [hidden attribute][attributes]. In both cases, the adaptor
-    /// does not read conventionally hidden directory trees.
+    /// filtering that avoids unnecessary directory reads. The following
+    /// example filters out hidden files on Unix and Windows. On Unix,
+    /// hidden files are filtered out nominally via [`not`]. On Windows,
+    /// `filter_tree` is used to detect the [hidden attribute][attributes]. In
+    /// both cases, the adaptor does not read conventionally hidden
+    /// directory trees.
     ///
     /// ```rust,no_run
     /// use wax::Glob;
@@ -271,8 +271,8 @@ pub trait FileIterator: Sized + TreeIterator<Item = WalkItem<'static>> {
     ///
     /// let glob = Glob::new("**/*.(?i){jpg,jpeg}").unwrap();
     /// let walk = glob.walk("./Pictures");
-    /// // Filter out nominally hidden files on Unix. Like `filter_tree`, `not`
-    /// // does not perform unnecessary reads of directory trees.
+    /// // Filter out nominally hidden files on Unix. Like `filter_tree`, `not` does not perform
+    /// // unnecessary reads of directory trees.
     /// #[cfg(unix)]
     /// let walk = walk.not(["**/.*/**"]).unwrap();
     /// // Filter out files with the hidden attribute on Windows.
@@ -360,8 +360,8 @@ impl WalkNegation {
     /// # Errors
     ///
     /// Returns an error if any of the inputs fail to build. If the inputs are a
-    /// compiled [`Pattern`] types such as [`Glob`], then this only occurs if
-    /// the compiled program is too large.
+    /// compiled [`Pattern`] types such as [`Glob`], then this only occurs
+    /// if the compiled program is too large.
     ///
     /// [`Combine`]: crate::Combine
     /// [`Glob`]: crate::Glob
@@ -389,8 +389,8 @@ impl WalkNegation {
     /// Gets the appropriate [`FilterTarget`] for the given [`WalkEntry`].
     ///
     /// This function can be used with [`FileIterator::filter_tree`] to
-    /// effeciently filter [`WalkEntry`]s without reading directory trees from
-    /// the file system when not necessary.
+    /// effeciently filter [`WalkEntry`]s without reading directory trees
+    /// from the file system when not necessary.
     ///
     /// Returns [`FilterTarget::Tree`] if the [`WalkEntry`] matches an
     /// [exhaustive glob expression][`Pattern::is_exhaustive`], such as
@@ -438,9 +438,9 @@ pub enum LinkBehavior {
     /// Read the target of the symbolic link.
     ///
     /// This behavior reads the target of the symbolic link. The corresponding
-    /// [`WalkEntry`] uses the path of the link file and its metadata describes
-    /// the target. If the target is a directory, then traversal will follow the
-    /// link and descend into the target.
+    /// [`WalkEntry`] uses the path of the link file and its metadata
+    /// describes the target. If the target is a directory, then traversal
+    /// will follow the link and descend into the target.
     ///
     /// If a link is reentrant and forms a cycle, then an error will be emitted
     /// instead of a [`WalkEntry`] and traversal will not follow the link.
@@ -480,16 +480,15 @@ pub enum LinkBehavior {
 #[cfg_attr(docsrs, doc(cfg(feature = "walk")))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct WalkBehavior {
-    // TODO: Consider using a dedicated type for this field. Using primitive
-    //       types does not interact well with conversions used in `walk` APIs.
-    //       For example, if another `usize` field is introduced, then the
-    //       conversions become ambiguous and confusing.
+    // TODO: Consider using a dedicated type for this field. Using primitive types does not
+    //       interact well with conversions used in `walk` APIs. For example, if another `usize`
+    //       field is introduced, then the conversions become ambiguous and confusing.
     /// Maximum depth.
     ///
     /// Determines the maximum depth to which a directory tree will be traversed
-    /// relative to [the root][`Walk::root`]. A depth of zero corresponds to the
-    /// root and so using such a depth will yield at most one entry for the
-    /// root.
+    /// relative to [the root][`Walk::root`]. A depth of zero corresponds to
+    /// the root and so using such a depth will yield at most one entry for
+    /// the root.
     ///
     /// The default value is [`usize::MAX`].
     ///
@@ -598,8 +597,8 @@ impl<'g> Walk<'g> {
                 .iter()
                 .any(|token| token.has_component_boundary())
             {
-                // Stop at component boundaries, such as tree wildcards or any
-                // boundary within a group token.
+                // Stop at component boundaries, such as tree wildcards or any boundary within a
+                // group token.
                 break;
             }
             regexes.push(Glob::compile(component.tokens().iter().copied())?);
@@ -645,35 +644,36 @@ impl<'g> Walk<'g> {
     /// Filters [`WalkEntry`]s against negated glob expressions.
     ///
     /// This function creates an adaptor that discards [`WalkEntry`]s that match
-    /// any of the given glob expressions. This allows for broad negations while
-    /// matching a [`Glob`] against a directory tree that cannot be achieved
-    /// using a single glob expression alone.
+    /// any of the given glob expressions. This allows for broad negations
+    /// while matching a [`Glob`] against a directory tree that cannot be
+    /// achieved using a single glob expression alone.
     ///
     /// The adaptor is constructed via [`FilterTree`] and [`WalkNegation`] and
     /// therefore does not read directory trees from the file system when a
     /// directory matches an [exhaustive glob
     /// expression][`Pattern::is_exhaustive`] such as `**/private/**` or
     /// `hidden/<<?>/>*`. **This function should be preferred when filtering
-    /// [`WalkEntry`]s against [`Glob`]s, since this avoids potentially large
-    /// and unnecessary reads**.
+    /// [`WalkEntry`]s against [`Glob`]s, since this avoids potentially
+    /// large and unnecessary reads**.
     ///
     /// # Errors
     ///
     /// Returns an error if any of the inputs fail to build. If the inputs are a
-    /// compiled [`Pattern`] type such as [`Glob`], then this only occurs if the
-    /// compiled program is too large.
+    /// compiled [`Pattern`] type such as [`Glob`], then this only occurs if
+    /// the compiled program is too large.
     ///
     /// # Examples
     ///
     /// Because glob expressions do not support general negations, it is
-    /// sometimes impossible to express patterns that deny particular text. In
-    /// such cases, `not` can be used to apply additional patterns as a filter.
+    /// sometimes impossible to express patterns that deny particular text.
+    /// In such cases, `not` can be used to apply additional patterns as a
+    /// filter.
     ///
     /// ```rust,no_run
     /// use wax::Glob;
     ///
-    /// // Find image files, but not if they are beneath a directory with a name that
-    /// // suggests that they are private.
+    /// // Find image files, but not if they are beneath a directory with a name that suggests that
+    /// // they are private.
     /// let glob = Glob::new("**/*.(?i){jpg,jpeg,png}").unwrap();
     /// for entry in glob.walk(".").not(["**/(?i)<.:0,1>private/**"]).unwrap() {
     ///     let entry = entry.unwrap();
@@ -701,8 +701,8 @@ impl<'g> Walk<'g> {
     ///
     /// The root directory is determined by joining the directory path in
     /// functions like [`Glob::walk`] with any [invariant
-    /// prefix](`Glob::partition`) of the [`Glob`]. When a [`Glob`] is rooted,
-    /// the root directory is the same as the invariant prefix.
+    /// prefix](`Glob::partition`) of the [`Glob`]. When a [`Glob`] is
+    /// rooted, the root directory is the same as the invariant prefix.
     ///
     /// The depth specified via [`WalkBehavior`] is relative to this path.
     ///
@@ -754,8 +754,8 @@ pub enum FilterTarget {
     /// Discard the file and its directory tree, if any.
     ///
     /// The [`WalkEntry`] for the given file is discarded by the [`FilterTree`]
-    /// adaptor. If the entry represents a directory, then its entire tree is
-    /// ignored and is not read from the file system.
+    /// adaptor. If the entry represents a directory, then its entire tree
+    /// is ignored and is not read from the file system.
     ///
     /// When the [`WalkEntry`] represents a normal file (not a directory), then
     /// this is the same as [`FilterTarget::File`].
@@ -866,8 +866,8 @@ impl<'e> WalkEntry<'e> {
     /// Converts the entry to the relative [`CandidatePath`].
     ///
     /// **This differs from [`path`] and [`into_path`], which are natively
-    /// encoded and may be absolute.** The [`CandidatePath`] is always relative
-    /// to [the root][`Walk::root`] of the directory tree.
+    /// encoded and may be absolute.** The [`CandidatePath`] is always
+    /// relative to [the root][`Walk::root`] of the directory tree.
     ///
     /// [`CandidatePath`]: crate::CandidatePath
     /// [`into_path`]: crate::WalkEntry::into_path
@@ -906,9 +906,9 @@ pub fn walk<'g>(
 ) -> Walk<'g> {
     let directory = directory.as_ref();
     let WalkBehavior { depth, link } = behavior.into();
-    // The directory tree is traversed from `root`, which may include an
-    // invariant prefix from the glob pattern. `Walk` patterns are only applied
-    // to path components following this prefix in `root`.
+    // The directory tree is traversed from `root`, which may include an invariant
+    // prefix from the glob pattern. `Walk` patterns are only applied to path
+    // components following this prefix in `root`.
     let (root, prefix) = invariant_path_prefix(glob.tree.as_ref().tokens()).map_or_else(
         || {
             let root = Cow::from(directory);

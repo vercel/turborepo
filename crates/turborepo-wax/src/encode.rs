@@ -20,9 +20,9 @@ const SEPARATOR_CLASS_EXPRESSION: &str = "/";
 // will be missed. It may be better to have explicit platform support and invoke
 // `compile_error!` on unsupported platforms, as this could cause very aberrant
 // behavior. Then again, it seems that platforms using more than one separator
-// are rare. GS/OS, OS/2, and Windows are likely the best known examples and of
-// those only Windows is a supported Rust target at the time of writing (and is
-// already supported by Wax).
+// are rare. GS/OS, OS/2, and Windows are likely the best known examples
+// and of those only Windows is a supported Rust target at the time of writing
+// (and is already supported by Wax).
 #[cfg(not(any(windows, unix)))]
 const SEPARATOR_CLASS_EXPRESSION: &str = main_separator_class_expression();
 
@@ -30,8 +30,8 @@ const SEPARATOR_CLASS_EXPRESSION: &str = main_separator_class_expression();
 const fn main_separator_class_expression() -> &'static str {
     use std::path::MAIN_SEPARATOR;
 
-    // TODO: This is based upon `regex_syntax::is_meta_character`, but that
-    //       function is not `const`. Perhaps that can be changed upstream.
+    // TODO: This is based upon `regex_syntax::is_meta_character`, but that function
+    // is not       `const`. Perhaps that can be changed upstream.
     const fn escape(x: char) -> &'static str {
         match x {
             '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' | '[' | ']' | '{' | '}' | '^' | '$'
@@ -178,8 +178,8 @@ fn encode<'t, A, T>(
         pattern.push(')');
     }
 
-    // TODO: Use `Grouping` everywhere a group is encoded. For invariant groups
-    //       that ignore `grouping`, construct a local `Grouping` instead.
+    // TODO: Use `Grouping` everywhere a group is encoded. For invariant groups that
+    // ignore       `grouping`, construct a local `Grouping` instead.
     for (position, token) in tokens.into_iter().with_position() {
         match (position, token.borrow().kind()) {
             (_, Literal(literal)) => {
@@ -260,13 +260,11 @@ fn encode<'t, A, T>(
                         pattern.push_str(nsepexpr!("&&{0}"));
                     }
                     pattern.push(']');
-                    // Compile the character class sub-expression. This may fail
-                    // if the subtraction of the separator pattern yields an
-                    // empty character class (meaning that the glob expression
-                    // matches only separator characters on the target
-                    // platform). If compilation fails, then use the null
-                    // character class, which matches nothing on supported
-                    // platforms.
+                    // Compile the character class sub-expression. This may fail if the subtraction
+                    // of the separator pattern yields an empty character class (meaning that the
+                    // glob expression matches only separator characters on the target platform).
+                    // If compilation fails, then use the null character class, which matches
+                    // nothing on supported platforms.
                     if Regex::new(&pattern).is_ok() {
                         pattern.into()
                     } else {
