@@ -186,7 +186,7 @@ impl ShimArgs {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum RepoMode {
     SinglePackage,
     MultiPackage,
@@ -436,7 +436,7 @@ impl LocalTurboState {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct RepoState {
     pub root: AbsoluteSystemPathBuf,
     pub mode: RepoMode,
@@ -445,17 +445,16 @@ pub struct RepoState {
 #[derive(Debug)]
 struct InferInfo {
     path: AbsoluteSystemPathBuf,
-    has_package_json: bool,
-    has_turbo_json: bool,
     workspace_globs: Option<WorkspaceGlobs>,
 }
 
 impl InferInfo {
-    pub fn has_package_json(info: &'_ &InferInfo) -> bool {
-        info.has_package_json
-    }
-    pub fn has_turbo_json(info: &'_ &InferInfo) -> bool {
-        info.has_turbo_json
+    fn repo_mode(&self) -> RepoMode {
+        if self.workspace_globs.is_some() {
+            RepoMode::MultiPackage
+        } else {
+            RepoMode::SinglePackage
+        }
     }
 
     pub fn is_workspace_root_of(&self, target_path: &AbsoluteSystemPath) -> bool {
@@ -468,6 +467,15 @@ impl InferInfo {
     }
 }
 
+impl From<InferInfo> for RepoState {
+    fn from(root: InferInfo) -> Self {
+        Self {
+            mode: root.repo_mode(),
+            root: root.path,
+        }
+    }
+}
+
 impl RepoState {
     fn generate_potential_turbo_roots(reference_dir: &AbsoluteSystemPath) -> Vec<InferInfo> {
         // Find all directories that contain a `package.json` or a `turbo.json`.
@@ -475,33 +483,27 @@ impl RepoState {
         let potential_turbo_roots = reference_dir
             .ancestors()
             .filter_map(|path| {
-                let package_json = PackageJson::load(&path.join_component("package.json")).ok();
-                let has_package_json = package_json.is_some();
-                let has_turbo_json = path.join_component("turbo.json").exists();
+                PackageJson::load(&path.join_component("package.json"))
+                    .ok()
+                    .and_then(|package_json| {
+                        // FIXME: We should save this package manager that we detected
+                        let workspace_globs =
+                            PackageManager::get_package_manager(path, Some(&package_json))
+                                .and_then(|mgr| mgr.get_workspace_globs(path))
+                                .ok();
 
-                if !has_package_json && !has_turbo_json {
-                    return None;
-                }
-
-                // FIXME: We should save this package manager that we detected
-                let workspace_globs =
-                    PackageManager::get_package_manager(path, package_json.as_ref())
-                        .and_then(|mgr| mgr.get_workspace_globs(path))
-                        .ok();
-
-                Some(InferInfo {
-                    path: path.to_owned(),
-                    has_package_json,
-                    has_turbo_json,
-                    workspace_globs,
-                })
+                        Some(InferInfo {
+                            path: path.to_owned(),
+                            workspace_globs,
+                        })
+                    })
             })
             .collect();
 
         potential_turbo_roots
     }
 
-    fn process_potential_turbo_roots(potential_turbo_roots: Vec<InferInfo>) -> Result<Self> {
+    fn process_potential_turbo_roots(potential_turbo_roots: Vec<InferInfo>) -> Option<Self> {
         // Potential improvements:
         // - Detect invalid configuration where turbo.json isn't peer to package.json.
         // - There are a couple of possible early exits to prevent traversing all the
@@ -516,69 +518,86 @@ impl RepoState {
 
         // We need to perform the same search strategy for _both_ turbo.json and _then_
         // package.json.
-        let search_locations = [InferInfo::has_turbo_json, InferInfo::has_package_json];
+        //let search_locations = [InferInfo::has_turbo_json,
+        // InferInfo::has_package_json];
 
-        for check_set_comparator in search_locations {
-            let mut check_roots = potential_turbo_roots
-                .iter()
-                .filter(check_set_comparator)
-                .peekable();
-
-            let current_option = check_roots.next();
-
-            // No potential roots checking by this comparator.
-            if current_option.is_none() {
-                continue;
-            }
-
-            let current = current_option.unwrap();
-
-            // If there is only one potential root, that's the winner.
-            if check_roots.peek().is_none() {
-                return Ok(Self {
-                    root: current.path.clone(),
-                    mode: if current.workspace_globs.is_some() {
-                        RepoMode::MultiPackage
-                    } else {
-                        RepoMode::SinglePackage
-                    },
-                });
-
-            // More than one potential root. See if we can stop at the first.
-            // This is a performance optimization. We could remove this case,
-            // and set the mode properly in the else and it would still work.
-            } else if current.workspace_globs.is_some() {
-                // If the closest one has workspaces then we stop there.
-                return Ok(Self {
-                    root: current.path.clone(),
-                    mode: RepoMode::MultiPackage,
-                });
-
-            // More than one potential root.
-            // Closest is not RepoMode::MultiPackage
-            // We attempt to prove that the closest is a workspace of a parent.
-            // Failing that we just choose the closest.
-            } else {
-                for ancestor_infer in check_roots {
-                    if ancestor_infer.is_workspace_root_of(&current.path) {
-                        return Ok(Self {
-                            root: ancestor_infer.path.clone(),
-                            mode: RepoMode::MultiPackage,
-                        });
-                    }
+        //for check_set_comparator in search_locations {
+        potential_turbo_roots
+            .into_iter()
+            .reduce(|current, candidate| {
+                if current.repo_mode() == RepoMode::MultiPackage {
+                    // We already have a multi-package root, go with that
+                    current
+                } else if candidate.is_workspace_root_of(&current.path) {
+                    // The next candidate is a multipackage root, and it contains current so it's
+                    // our root.
+                    candidate
+                } else {
+                    current
                 }
+            })
+            .map(|root| root.into())
 
-                // We have eliminated RepoMode::MultiPackage as an option.
-                // We must exhaustively check before this becomes the answer.
-                return Ok(Self {
-                    root: current.path.clone(),
-                    mode: RepoMode::SinglePackage,
-                });
-            }
-        }
+        // let mut check_roots = potential_turbo_roots
+        //     .iter()
+        //     //.filter(check_set_comparator)
+        //     .peekable();
+
+        // let current_option = check_roots.next();
+
+        // // No potential roots checking by this comparator.
+        // if current_option.is_none() {
+        //     continue;
+        // }
+
+        // let current = current_option.unwrap();
+
+        // // If there is only one potential root, that's the winner.
+        // if check_roots.peek().is_none() {
+        //     return Ok(Self {
+        //         root: current.path.clone(),
+        //         mode: if current.workspace_globs.is_some() {
+        //             RepoMode::MultiPackage
+        //         } else {
+        //             RepoMode::SinglePackage
+        //         },
+        //     });
+
+        // // More than one potential root. See if we can stop at the first.
+        // // This is a performance optimization. We could remove this case,
+        // // and set the mode properly in the else and it would still work.
+        // } else if current.workspace_globs.is_some() {
+        //     // If the closest one has workspaces then we stop there.
+        //     return Ok(Self {
+        //         root: current.path.clone(),
+        //         mode: RepoMode::MultiPackage,
+        //     });
+
+        // // More than one potential root.
+        // // Closest is not RepoMode::MultiPackage
+        // // We attempt to prove that the closest is a workspace of a parent.
+        // // Failing that we just choose the closest.
+        // } else {
+        //     for ancestor_infer in check_roots {
+        //         if ancestor_infer.is_workspace_root_of(&current.path) {
+        //             return Ok(Self {
+        //                 root: ancestor_infer.path.clone(),
+        //                 mode: RepoMode::MultiPackage,
+        //             });
+        //         }
+        //     }
+
+        //     // We have eliminated RepoMode::MultiPackage as an option.
+        //     // We must exhaustively check before this becomes the answer.
+        //     return Ok(Self {
+        //         root: current.path.clone(),
+        //         mode: RepoMode::SinglePackage,
+        //     });
+        // }
+        //}
 
         // If we're here we didn't find a valid root.
-        Err(anyhow!("Root could not be inferred."))
+        //Err(anyhow!("Root could not be inferred."))
     }
 
     /// Infers `RepoState` from current directory.
@@ -589,8 +608,49 @@ impl RepoState {
     ///
     /// returns: Result<RepoState, Error>
     pub fn infer(reference_dir: &AbsoluteSystemPath) -> Result<Self> {
-        let potential_turbo_roots = RepoState::generate_potential_turbo_roots(reference_dir);
-        RepoState::process_potential_turbo_roots(potential_turbo_roots)
+        reference_dir
+            .ancestors()
+            .filter_map(|path| {
+                PackageJson::load(&path.join_component("package.json"))
+                    .ok()
+                    .map(|package_json| {
+                        // FIXME: We should save this package manager that we detected
+                        let workspace_globs =
+                            PackageManager::get_package_manager(path, Some(&package_json))
+                                .and_then(|mgr| mgr.get_workspace_globs(path))
+                                .ok();
+
+                        InferInfo {
+                            path: path.to_owned(),
+                            workspace_globs,
+                        }
+                    })
+            })
+            .reduce(|current, candidate| {
+                if current.repo_mode() == RepoMode::MultiPackage {
+                    // We already have a multi-package root, go with that
+                    current
+                } else if candidate.is_workspace_root_of(&current.path) {
+                    // The next candidate is a multipackage root, and it contains current so it's
+                    // our root.
+                    candidate
+                } else {
+                    current
+                }
+            })
+            .map(|root| root.into())
+            .ok_or_else(|| {
+                anyhow!(
+                    "Failed to find repository root containing {}",
+                    reference_dir
+                )
+            })
+
+        // let potential_turbo_roots =
+        // RepoState::generate_potential_turbo_roots(reference_dir);
+        // RepoState::process_potential_turbo_roots(potential_turbo_roots).
+        // ok_or_else(|| anyhow!("Failed to find repository root containing {}",
+        // reference_dir))
     }
 }
 
@@ -809,7 +869,154 @@ mod test {
     }
 
     #[test]
-    fn test_process_potential_turbo_roots() {
+    fn test_repo_state_infer() {
+        // Directory layout:
+        // <tmp_dir>
+        //   irrelevant/
+        //   monorepo_root/
+        //     package.json
+        //     standalone/
+        //       package.json
+        //     standalone_monorepo/
+        //       package.json
+        //       packages/
+        //         app-2/
+        //     packages/
+        //       app-1/
+        //         package.json
+        //         src/
+        //   single_root/
+        //     package.json
+        //     src/
+        let (_tmp, tmp_dir) = tmp_dir();
+        let irrelevant = tmp_dir.join_component("irrelevant");
+        irrelevant.create_dir_all().unwrap();
+        let monorepo_root = tmp_dir.join_component("monorepo_root");
+        let monorepo_pkg_json = monorepo_root.join_component("package.json");
+        monorepo_pkg_json.ensure_dir().unwrap();
+        monorepo_pkg_json
+            .create_with_contents("{\"workspaces\": [\"packages/*\"]}")
+            .unwrap();
+        monorepo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
+
+        let app_1 = monorepo_root.join_components(&["packages", "app-1"]);
+        let app_1_pkg_json = app_1.join_component("package.json");
+        app_1_pkg_json.ensure_dir().unwrap();
+        app_1_pkg_json
+            .create_with_contents("{\"name\": \"app_1\"}")
+            .unwrap();
+        let app_1_src = app_1.join_component("src");
+        app_1_src.create_dir_all().unwrap();
+
+        let standalone = monorepo_root.join_component("standalone");
+        let standalone_pkg_json = standalone.join_component("package.json");
+        standalone_pkg_json.ensure_dir().unwrap();
+        standalone_pkg_json
+            .create_with_contents("{\"name\":\"standalone\"}")
+            .unwrap();
+        standalone
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
+
+        let standalone_monorepo = monorepo_root.join_component("standalone_monorepo");
+        let app_2 = standalone_monorepo.join_components(&["packages", "app-2"]);
+        app_2.create_dir_all().unwrap();
+        app_2
+            .join_component("package.json")
+            .create_with_contents("{\"name\":\"app-2\"}")
+            .unwrap();
+        standalone_monorepo
+            .join_component("package.json")
+            .create_with_contents("{\"workspaces\": [\"packages/*\"]}")
+            .unwrap();
+        standalone_monorepo
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
+
+        let single_root = tmp_dir.join_component("single_root");
+        let single_root_src = single_root.join_component("src");
+        single_root_src.create_dir_all().unwrap();
+        single_root
+            .join_component("package.json")
+            .create_with_contents("{\"name\": \"single-root\"}")
+            .unwrap();
+        single_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
+
+        let tests = [
+            (&irrelevant, None),
+            (
+                &monorepo_root,
+                Some(RepoState {
+                    root: monorepo_root.clone(),
+                    mode: RepoMode::MultiPackage,
+                }),
+            ),
+            (
+                &app_1,
+                Some(RepoState {
+                    root: monorepo_root.clone(),
+                    mode: RepoMode::MultiPackage,
+                }),
+            ),
+            (
+                &app_1_src,
+                Some(RepoState {
+                    root: monorepo_root.clone(),
+                    mode: RepoMode::MultiPackage,
+                }),
+            ),
+            (
+                &single_root,
+                Some(RepoState {
+                    root: single_root.clone(),
+                    mode: RepoMode::SinglePackage,
+                }),
+            ),
+            (
+                &single_root_src,
+                Some(RepoState {
+                    root: single_root.clone(),
+                    mode: RepoMode::SinglePackage,
+                }),
+            ),
+            // Nested, technically not supported
+            (
+                &standalone,
+                Some(RepoState {
+                    root: standalone.clone(),
+                    mode: RepoMode::SinglePackage,
+                }),
+            ),
+            (
+                &standalone_monorepo,
+                Some(RepoState {
+                    root: standalone_monorepo.clone(),
+                    mode: RepoMode::MultiPackage,
+                }),
+            ),
+            (
+                &app_2,
+                Some(RepoState {
+                    root: standalone_monorepo.clone(),
+                    mode: RepoMode::MultiPackage,
+                }),
+            ),
+        ];
+        for (reference_path, expected) in tests {
+            assert_eq!(RepoState::infer(reference_path).ok(), expected);
+        }
+    }
+
+    #[test]
+    fn test_process_potential_repo_roots() {
         struct TestCase {
             description: &'static str,
             infer_infos: Vec<InferInfo>,
@@ -817,6 +1024,7 @@ mod test {
         }
 
         let (_tmp, root) = tmp_dir();
+
         let root_one = root.join_components(&["..", "root-one"]);
         let root_two = root_one.join_component("root-two");
         let project_one = root.join_components(&["..", "project-one"]);
@@ -834,8 +1042,6 @@ mod test {
                 description: "Only one, is monorepo with turbo.json.",
                 infer_infos: vec![InferInfo {
                     path: root.clone(),
-                    has_package_json: true,
-                    has_turbo_json: true,
                     workspace_globs: Some(WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap()),
                 }],
                 output: Ok(root.clone()),
@@ -844,8 +1050,6 @@ mod test {
                 description: "Only one, is non-monorepo with turbo.json.",
                 infer_infos: vec![InferInfo {
                     path: root.clone(),
-                    has_package_json: true,
-                    has_turbo_json: true,
                     workspace_globs: None,
                 }],
                 output: Ok(root.clone()),
@@ -854,8 +1058,6 @@ mod test {
                 description: "Only one, is monorepo without turbo.json.",
                 infer_infos: vec![InferInfo {
                     path: root.clone(),
-                    has_package_json: true,
-                    has_turbo_json: false,
                     workspace_globs: Some(WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap()),
                 }],
                 output: Ok(root.clone()),
@@ -864,8 +1066,6 @@ mod test {
                 description: "Only one, is non-monorepo without turbo.json.",
                 infer_infos: vec![InferInfo {
                     path: root.clone(),
-                    has_package_json: true,
-                    has_turbo_json: false,
                     workspace_globs: None,
                 }],
                 output: Ok(root.clone()),
@@ -876,14 +1076,10 @@ mod test {
                 infer_infos: vec![
                     InferInfo {
                         path: root.join_components(&["packages", "ui-library"]),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: root.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: Some(
                             WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
                         ),
@@ -896,20 +1092,14 @@ mod test {
                 infer_infos: vec![
                     InferInfo {
                         path: root.join_components(&["packages", "ui-library", "css"]),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: root.join_components(&["packages", "ui-library"]),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: root.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: Some(
                             WorkspaceGlobs::new(
                                 // This `**` is important:
@@ -927,16 +1117,12 @@ mod test {
                 infer_infos: vec![
                     InferInfo {
                         path: root_two.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: Some(
                             WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
                         ),
                     },
                     InferInfo {
                         path: root_one.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: Some(
                             WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
                         ),
@@ -950,22 +1136,16 @@ mod test {
                 infer_infos: vec![
                     InferInfo {
                         path: root_two.join_components(&["root-two-packages", "ui-library"]),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: root_two.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: Some(
                             WorkspaceGlobs::new(vec!["root-two-packages/*"], vec![]).unwrap(),
                         ),
                     },
                     InferInfo {
                         path: root_one.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: Some(
                             WorkspaceGlobs::new(vec!["root-two/root-one-packages/*"], vec![])
                                 .unwrap(),
@@ -980,22 +1160,16 @@ mod test {
                 infer_infos: vec![
                     InferInfo {
                         path: root_two.join_components(&["root-one-packages", "ui-library"]),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: root_two.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: Some(
                             WorkspaceGlobs::new(vec!["root-two-packages/*"], vec![]).unwrap(),
                         ),
                     },
                     InferInfo {
                         path: root_one.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: Some(
                             WorkspaceGlobs::new(vec!["root-two/root-one-packages/*"], vec![])
                                 .unwrap(),
@@ -1009,14 +1183,10 @@ mod test {
                 infer_infos: vec![
                     InferInfo {
                         path: root.join_component("some-other-project"),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: root.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: Some(
                             WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
                         ),
@@ -1030,16 +1200,12 @@ mod test {
                 infer_infos: vec![
                     InferInfo {
                         path: root_two.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: Some(
                             WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
                         ),
                     },
                     InferInfo {
                         path: root_one,
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: Some(
                             WorkspaceGlobs::new(vec!["root-two"], vec![]).unwrap(),
                         ),
@@ -1052,62 +1218,26 @@ mod test {
                 infer_infos: vec![
                     InferInfo {
                         path: project_two.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: None,
                     },
                     InferInfo {
                         path: project_one.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
                         workspace_globs: None,
                     },
                 ],
                 output: Ok(project_two.clone()),
             },
-            // The below test ensures that we privilege a valid `turbo.json` structure prior to
-            // evaluation of a valid `package.json` structure. If you include `turbo.json` you are
-            // able to "skip" deeper into the resolution by disregarding anything that does _not_
-            // have a `turbo.json`. This will matter _far_ more in a multi-language environment.
-
-            // Just one example test proves that the entire alternative chain construction works.
-            // The selection logic from within this set is identical. If we attempt to optimize the
-            // number of file system reads by early-exiting for matching we should expand this test
-            // set to mirror the above section.
-            TestCase {
-                description: "Nested non-monorepo packages, turbo.json primacy.",
-                infer_infos: vec![
-                    InferInfo {
-                        path: project_two,
-                        has_package_json: true,
-                        has_turbo_json: false,
-                        workspace_globs: None,
-                    },
-                    InferInfo {
-                        path: project_one.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: None,
-                    },
-                ],
-                output: Ok(project_one),
-            },
         ];
 
         for test in tests {
             match RepoState::process_potential_turbo_roots(test.infer_infos) {
-                Ok(repo_state) => assert_eq!(
+                Some(repo_state) => assert_eq!(
                     repo_state.root,
                     test.output.unwrap(),
                     "{}",
                     test.description
                 ),
-                Err(err) => assert_eq!(
-                    err.to_string(),
-                    test.output.unwrap_err().to_string(),
-                    "{}",
-                    test.description
-                ),
+                None => assert!(test.output.is_err(), "{}", test.description),
             };
         }
     }
