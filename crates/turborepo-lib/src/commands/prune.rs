@@ -52,6 +52,20 @@ lazy_static! {
             RelativeUnixPath::new(".npmrc").unwrap(),
             Some(CopyDestination::Docker)
         ),
+        (
+            RelativeUnixPath::new(".yarnrc.yml").unwrap(),
+            Some(CopyDestination::Docker)
+        ),
+    ];
+    static ref ADDITIONAL_DIRECTORIES: Vec<(&'static RelativeUnixPath, Option<CopyDestination>)> = vec![
+        (
+            RelativeUnixPath::new(".yarn/plugins").unwrap(),
+            Some(CopyDestination::Docker)
+        ),
+        (
+            RelativeUnixPath::new(".yarn/releases").unwrap(),
+            Some(CopyDestination::Docker)
+        ),
     ];
 }
 
@@ -151,6 +165,11 @@ pub fn prune(
     for (relative_path, required_for_install) in ADDITIONAL_FILES.as_slice() {
         let path = relative_path.to_anchored_system_path_buf();
         prune.copy_file(&path, *required_for_install)?;
+    }
+
+    for (relative_path, required_for_install) in ADDITIONAL_DIRECTORIES.as_slice() {
+        let path = relative_path.to_anchored_system_path_buf();
+        prune.copy_directory(&path, *required_for_install)?;
     }
 
     prune.copy_turbo_json(&workspace_names)?;
@@ -316,6 +335,34 @@ impl<'a> Prune<'a> {
         {
             let docker_to = self.docker_directory().resolve(path);
             turborepo_fs::copy_file(&from_path, docker_to)?;
+        }
+        Ok(())
+    }
+
+    fn copy_directory(
+        &self,
+        path: &AnchoredSystemPath,
+        destination: Option<CopyDestination>,
+    ) -> Result<(), Error> {
+        let from_path = self.root.resolve(path);
+        if !from_path.try_exists()? {
+            trace!("{from_path} doesn't exist, skipping copying");
+            return Ok(());
+        }
+        let full_to = self.full_directory.resolve(path);
+        turborepo_fs::recursive_copy(&from_path, full_to)?;
+        if matches!(destination, Some(CopyDestination::All)) {
+            let out_to = self.out_directory.resolve(path);
+            turborepo_fs::recursive_copy(&from_path, out_to)?;
+        }
+        if self.docker
+            && matches!(
+                destination,
+                Some(CopyDestination::Docker) | Some(CopyDestination::All)
+            )
+        {
+            let docker_to = self.docker_directory().resolve(path);
+            turborepo_fs::recursive_copy(&from_path, docker_to)?;
         }
         Ok(())
     }
