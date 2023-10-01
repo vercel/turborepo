@@ -32,7 +32,6 @@ mod tracing;
 
 use anyhow::Result;
 pub use child::spawn_child;
-use turborepo_repository::package_manager::PackageManager;
 
 use crate::commands::CommandBase;
 pub use crate::{cli::Args, execution_state::ExecutionState};
