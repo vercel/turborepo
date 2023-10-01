@@ -6,6 +6,7 @@ members = [
   "crates/turbo-tasks*",
   "crates/turbopack*",
   "crates/turborepo*",
+  "packages/turbo-repository/rust/",
   "xtask",
 ]
 
@@ -143,6 +144,7 @@ turborepo-ffi = { path = "crates/turborepo-ffi" }
 turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
+turborepo-repository = { path = "crates/turborepo-repository" }
 turborepo-ui = { path = "crates/turborepo-ui" }
 turborepo-scm = { path = "crates/turborepo-scm" }
 wax = { path = "crates/turborepo-wax" }

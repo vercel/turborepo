@@ -420,7 +420,6 @@ impl PackageManager {
         }
     }
 
-    #[allow(dead_code)]
     pub fn get_package_jsons(
         &self,
         repo_root: &AbsoluteSystemPath,
