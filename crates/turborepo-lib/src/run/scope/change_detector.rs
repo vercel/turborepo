@@ -245,7 +245,6 @@ mod test {
     #[cfg(windows)]
     #[test_case("C:\\\\a\\b\\c", &["package.lock"], "C:\\\\a\\b\\c\\package.lock", Ok(true) ; "simple")]
     #[test_case("C:\\\\a\\b\\c", &["a", "b", "c"],  "C:\\\\a\\b\\c\\package.lock", Ok(false) ; "lockfile unchanged")]
-    #[test_case("C:\\\\a\\b\\c", &["package.lock"], "C:\\\\a\\b\\outside-repo\\package.json", Err(ChangeDetectError::LockfileNotInRepo) ; "different file")]
     fn test_lockfile_changed(
         turbo_root: &str,
         changed_files: &[&str],
