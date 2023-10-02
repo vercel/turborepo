@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use camino::Utf8PathBuf;
 use config::{Config, Environment};
@@ -35,6 +35,11 @@ impl UserConfig {
     #[allow(dead_code)]
     pub fn token(&self) -> Option<&str> {
         self.config.token.as_deref()
+    }
+
+    /// Returns where a token will be written to.
+    pub fn token_path(&self) -> &Path {
+        self.path.as_std_path()
     }
 
     /// Set token and sync the changes to disk

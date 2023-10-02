@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env};
+use std::{collections::HashMap, env, path::Path};
 
 use config::Config;
 use serde::{Deserialize, Serialize};
@@ -85,6 +85,10 @@ pub struct RepoConfigLoader {
 }
 
 impl RepoConfig {
+    pub fn get_path(&self) -> &Path {
+        self.path.as_std_path()
+    }
+
     #[allow(dead_code)]
     pub fn api_url(&self) -> &str {
         self.config.api_url.as_deref().unwrap_or(DEFAULT_API_URL)

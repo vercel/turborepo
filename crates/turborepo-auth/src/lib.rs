@@ -1,6 +1,6 @@
 #[cfg(not(test))]
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 #[cfg(not(test))]
@@ -30,15 +30,45 @@ pub enum Error {
     LoginUrlCannotBeABase { value: String },
 }
 
+fn print_cli_authorized(user: &str, ui: &UI) {
+    println!(
+        "
+{} Turborepo CLI authorized for {}
+
+{}
+
+{}
+",
+        ui.rainbow(">>> Success!"),
+        user,
+        ui.apply(
+            CYAN.apply_to("To connect to your Remote Cache, run the following in any turborepo:")
+        ),
+        ui.apply(BOLD.apply_to("  npx turbo link"))
+    );
+}
+
+/// Login writes a token to disk at token_path. If a token is already present,
+/// we do not overwrite it and instead log that we found an existing token.
 pub async fn login<F>(
     api_client: APIClient,
     ui: &UI,
+    token_path: &Path,
     mut set_token: F,
     login_url_configuration: &str,
 ) -> Result<()>
 where
     F: FnMut(&str) -> Result<()>,
 {
+    // Check if token exists first.
+    if let Ok(token) = std::fs::read_to_string(token_path) {
+        if let Ok(response) = api_client.get_user(&token).await {
+            println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
+            print_cli_authorized(&response.user.email, &ui);
+            return Ok(());
+        }
+    }
+
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
     let mut login_url = Url::parse(login_url_configuration)?;
 
@@ -79,22 +109,8 @@ where
     // TODO: make this a request to /teams endpoint instead?
     let user_response = api_client.get_user(token.as_str()).await?;
 
-    println!(
-        "
-{} Turborepo CLI authorized for {}
+    print_cli_authorized(&user_response.user.email, ui);
 
-{}
-
-{}
-
-",
-        ui.rainbow(">>> Success!"),
-        user_response.user.email,
-        ui.apply(
-            CYAN.apply_to("To connect to your Remote Cache, run the following in any turborepo:")
-        ),
-        ui.apply(BOLD.apply_to("  npx turbo link"))
-    );
     Ok(())
 }
 
@@ -163,9 +179,13 @@ struct SsoPayload {
     email: Option<String>,
 }
 
+/// sso_login writes a token to disk at token_path. If a token is already
+/// present, and the token has access to the provided `sso_team`, we do not
+/// overwrite it and instead log that we found an existing token.
 pub async fn sso_login<F>(
     api_client: APIClient,
     ui: &UI,
+    token_path: &Path,
     mut set_token: F,
     login_url_configuration: &str,
     sso_team: &str,
@@ -173,6 +193,25 @@ pub async fn sso_login<F>(
 where
     F: FnMut(&str) -> Result<()>,
 {
+    // Check if token exists first. Must be there for the user and contain the
+    // sso_team passed into this function.
+    if let Ok(token) = std::fs::read_to_string(token_path) {
+        let (result_user, result_teams) =
+            tokio::join!(api_client.get_user(&token), api_client.get_teams(&token));
+
+        if let (Ok(response_user), Ok(response_teams)) = (result_user, result_teams) {
+            if response_teams
+                .teams
+                .iter()
+                .any(|team| team.slug == sso_team)
+            {
+                println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
+                print_cli_authorized(&response_user.user.email, &ui);
+                return Ok(());
+            }
+        }
+    }
+
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
     let mut login_url = Url::parse(login_url_configuration)?;
 
@@ -208,26 +247,7 @@ where
 
     set_token(&verified_user.token)?;
 
-    println!(
-        "
-{} {}
-",
-        ui.rainbow(">>> Success!"),
-        ui.apply(BOLD.apply_to(format!(
-            "Turborepo CLI authorized for {}",
-            user_response.user.email
-        )))
-    );
-
-    println!(
-        "{}
-{}
-",
-        ui.apply(
-            CYAN.apply_to("To connect to your Remote Cache, run the following in any turborepo:")
-        ),
-        ui.apply(BOLD.apply_to("`npx turbo link`"))
-    );
+    print_cli_authorized(&user_response.user.email, ui);
 
     Ok(())
 }
@@ -312,6 +332,8 @@ async fn run_sso_one_shot_server(
 
 #[cfg(test)]
 mod test {
+    use std::path::Path;
+
     use port_scanner;
     use reqwest::Url;
     use tokio;
@@ -337,7 +359,9 @@ mod test {
             Ok(())
         };
 
-        login(api_client, &ui, set_token, &url).await.unwrap();
+        login(api_client, &ui, Path::new(""), set_token, &url)
+            .await
+            .unwrap();
 
         api_server.abort();
         assert_eq!(got_token, turborepo_vercel_api_mock::EXPECTED_TOKEN);
@@ -361,7 +385,7 @@ mod test {
             Ok(())
         };
 
-        sso_login(api_client, &ui, set_token, &url, team)
+        sso_login(api_client, &ui, Path::new(""), set_token, &url, team)
             .await
             .unwrap();
 
