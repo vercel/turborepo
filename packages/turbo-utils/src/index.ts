@@ -19,6 +19,7 @@ export {
 export { isWriteable } from "./isWriteable";
 export { createProject, DownloadError } from "./createProject";
 export { convertCase } from "./convertCase";
+export { withTempFile } from "./withTempFile";
 
 export * as logger from "./logger";
 
