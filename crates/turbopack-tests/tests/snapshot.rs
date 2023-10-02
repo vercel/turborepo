@@ -143,11 +143,8 @@ async fn run(resource: PathBuf) -> Result<()> {
     let tt = TurboTasks::new(MemoryBackend::default());
     let task = tt.spawn_once_task(async move {
         let out = run_test(resource.to_str().unwrap().to_string());
-        let captured_issues = out
-            .peek_issues_with_path()
-            .await?
-            .strongly_consistent()
-            .await?;
+        let _ = out.resolve_strongly_consistent().await?;
+        let captured_issues = out.peek_issues_with_path().await?;
 
         let plain_issues = captured_issues
             .iter_with_shortest_path()
@@ -297,6 +294,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
         Runtime::Build => Vc::upcast(
             BuildChunkingContext::builder(
                 project_root,
+                path,
                 path,
                 chunk_root_path,
                 static_root_path,

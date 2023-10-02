@@ -1,7 +1,6 @@
 use std::{
     borrow::Cow,
     cell::RefCell,
-    collections::HashMap,
     future::Future,
     hash::Hash,
     mem::take,
@@ -16,7 +15,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use auto_hash_map::AutoSet;
+use auto_hash_map::AutoMap;
 use futures::FutureExt;
 use nohash_hasher::BuildNoHashHasher;
 use serde::{de::Visitor, Deserialize, Serialize};
@@ -36,7 +35,7 @@ use crate::{
     trace::TraceRawVcs,
     util::{FormatDuration, StaticOrArc},
     Completion, ConcreteTaskInput, InvalidationReason, InvalidationReasonSet, SharedReference,
-    TaskId, ValueTypeId, Vc, VcRead, VcValueTrait, VcValueType,
+    TaskId, TaskIdSet, ValueTypeId, Vc, VcRead, VcValueTrait, VcValueType,
 };
 
 pub trait TurboTasksCallApi: Sync + Send {
@@ -102,11 +101,11 @@ pub trait TurboTasksApi: TurboTasksCallApi + Sync + Send {
         index: CellId,
     ) -> Result<Result<CellContent, EventListener>>;
 
-    fn read_task_collectibles(&self, task: TaskId, trait_id: TraitTypeId) -> Vc<AutoSet<RawVc>>;
+    fn read_task_collectibles(&self, task: TaskId, trait_id: TraitTypeId) -> AutoMap<RawVc, i32>;
 
     fn emit_collectible(&self, trait_type: TraitTypeId, collectible: RawVc);
-    fn unemit_collectible(&self, trait_type: TraitTypeId, collectible: RawVc);
-    fn unemit_collectibles(&self, trait_type: TraitTypeId, collectibles: &AutoSet<RawVc>);
+    fn unemit_collectible(&self, trait_type: TraitTypeId, collectible: RawVc, count: u32);
+    fn unemit_collectibles(&self, trait_type: TraitTypeId, collectibles: &AutoMap<RawVc, i32>);
 
     /// INVALIDATION: Be careful with this, it will not track dependencies, so
     /// using it could break cache invalidation.
@@ -207,7 +206,7 @@ pub trait TurboTasksBackendApi<B: Backend + 'static>:
 
     /// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `invalidate_tasks()` on all tasks.
-    fn schedule_notify_tasks_set(&self, tasks: &AutoSet<TaskId, BuildNoHashHasher<TaskId>>);
+    fn schedule_notify_tasks_set(&self, tasks: &TaskIdSet);
 
     /// Returns the stats reporting type.
     fn stats_type(&self) -> StatsType;
@@ -296,7 +295,7 @@ task_local! {
     /// The current TurboTasks instance
     static TURBO_TASKS: Arc<dyn TurboTasksApi>;
 
-    static CELL_COUNTERS: RefCell<HashMap<ValueTypeId, u32, BuildNoHashHasher<ValueTypeId>>>;
+    static CELL_COUNTERS: RefCell<AutoMap<ValueTypeId, u32, BuildNoHashHasher<ValueTypeId>, 8>>;
 
     static CURRENT_TASK_ID: TaskId;
 
@@ -354,6 +353,10 @@ impl<B: Backend + 'static> TurboTasks<B> {
         );
         self.schedule(id);
         id
+    }
+
+    pub fn dispose_root_task(&self, task_id: TaskId) {
+        self.backend.dispose_root_task(task_id, self);
     }
 
     // TODO make sure that all dependencies settle before reading them
@@ -957,7 +960,7 @@ impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
             .try_read_own_task_cell_untracked(current_task, index, self)
     }
 
-    fn read_task_collectibles(&self, task: TaskId, trait_id: TraitTypeId) -> Vc<AutoSet<RawVc>> {
+    fn read_task_collectibles(&self, task: TaskId, trait_id: TraitTypeId) -> AutoMap<RawVc, i32> {
         self.backend.read_task_collectibles(
             task,
             trait_id,
@@ -975,23 +978,27 @@ impl<B: Backend + 'static> TurboTasksApi for TurboTasks<B> {
         );
     }
 
-    fn unemit_collectible(&self, trait_type: TraitTypeId, collectible: RawVc) {
+    fn unemit_collectible(&self, trait_type: TraitTypeId, collectible: RawVc, count: u32) {
         self.backend.unemit_collectible(
             trait_type,
             collectible,
+            count,
             current_task("emitting collectible"),
             self,
         );
     }
 
-    fn unemit_collectibles(&self, trait_type: TraitTypeId, collectibles: &AutoSet<RawVc>) {
-        for collectible in collectibles {
-            self.backend.unemit_collectible(
-                trait_type,
-                *collectible,
-                current_task("emitting collectible"),
-                self,
-            );
+    fn unemit_collectibles(&self, trait_type: TraitTypeId, collectibles: &AutoMap<RawVc, i32>) {
+        for (&collectible, &count) in collectibles {
+            if count > 0 {
+                self.backend.unemit_collectible(
+                    trait_type,
+                    collectible,
+                    count as u32,
+                    current_task("emitting collectible"),
+                    self,
+                );
+            }
         }
     }
 
@@ -1104,7 +1111,7 @@ impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
 
     /// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `dependent_cell_updated()` on all tasks.
-    fn schedule_notify_tasks_set(&self, tasks: &AutoSet<TaskId, BuildNoHashHasher<TaskId>>) {
+    fn schedule_notify_tasks_set(&self, tasks: &TaskIdSet) {
         let result = CURRENT_TASK_STATE.try_with(|cell| {
             let CurrentTaskState {
                 tasks_to_notify, ..

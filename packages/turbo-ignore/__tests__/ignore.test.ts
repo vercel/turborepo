@@ -606,4 +606,29 @@ describe("turboIgnore()", () => {
     mockExecSync.mockRestore();
     mockExec.mockRestore();
   });
+
+  it("passes max buffer to turbo exectuion", () => {
+    const mockExec = jest
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
+        if (callback) {
+          return callback(
+            null,
+            '{"packages": [],"tasks":[]}',
+            "stderr"
+          ) as unknown as ChildProcess;
+        }
+        return {} as unknown as ChildProcess;
+      });
+
+    turboIgnore(undefined, { directory: "__fixtures__/app", maxBuffer: 1024 });
+
+    expect(mockExec).toHaveBeenCalledWith(
+      "npx turbo run build --filter=test-app...[HEAD^] --dry=json",
+      expect.objectContaining({ maxBuffer: 1024 }),
+      expect.anything()
+    );
+
+    mockExec.mockRestore();
+  });
 });

@@ -13,10 +13,9 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use auto_hash_map::AutoSet;
+use auto_hash_map::{AutoMap, AutoSet};
 use concurrent_queue::ConcurrentQueue;
 use dashmap::{mapref::entry::Entry, DashMap, DashSet};
-use nohash_hasher::BuildNoHashHasher;
 use turbo_tasks::{
     backend::{
         Backend, BackendJobId, CellContent, PersistentTaskType, TaskExecutionSpec,
@@ -28,7 +27,7 @@ use turbo_tasks::{
         PersistedGraphApi, ReadTaskState, TaskCell, TaskData,
     },
     util::{IdFactory, NoMoveVec, SharedError},
-    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi, Unused, Vc,
+    CellId, RawVc, TaskId, TaskIdSet, TraitTypeId, TurboTasksBackendApi, Unused,
 };
 
 type RootTaskFn =
@@ -65,11 +64,11 @@ struct MemoryTaskState {
     need_persist: bool,
     has_changes: bool,
     freshness: TaskFreshness,
-    cells: HashMap<CellId, (TaskCell, AutoSet<TaskId, BuildNoHashHasher<TaskId>>)>,
+    cells: HashMap<CellId, (TaskCell, TaskIdSet)>,
     output: Option<Result<RawVc, SharedError>>,
-    output_dependent: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+    output_dependent: TaskIdSet,
     dependencies: AutoSet<RawVc>,
-    children: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+    children: TaskIdSet,
     event: Event,
     event_cells: Event,
 }
@@ -1040,7 +1039,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
 
     fn invalidate_tasks_set(
         &self,
-        tasks: &AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+        tasks: &TaskIdSet,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackendWithPersistedGraph<P>>,
     ) {
         for &task in tasks {
@@ -1443,7 +1442,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         _trait_id: TraitTypeId,
         _reader: TaskId,
         _turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackendWithPersistedGraph<P>>,
-    ) -> Vc<AutoSet<RawVc>> {
+    ) -> AutoMap<RawVc, i32> {
         todo!()
     }
 
@@ -1461,6 +1460,7 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         &self,
         _trait_id: TraitTypeId,
         _collectible: RawVc,
+        _count: u32,
         _task: TaskId,
         _turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackendWithPersistedGraph<P>>,
     ) {
@@ -1602,6 +1602,10 @@ impl<P: PersistedGraph> Backend for MemoryBackendWithPersistedGraph<P> {
         }
         self.only_known_to_memory_tasks.insert(task);
         task
+    }
+
+    fn dispose_root_task(&self, _task: TaskId, _turbo_tasks: &dyn TurboTasksBackendApi<Self>) {
+        todo!()
     }
 }
 
