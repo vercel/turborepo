@@ -10206,6 +10206,7 @@ dependencies = [
  "turborepo-filewatch",
  "turborepo-fs",
  "turborepo-lockfiles",
+ "turborepo-repository",
  "turborepo-scm",
  "turborepo-ui",
  "turborepo-vercel-api",
@@ -10235,6 +10236,29 @@ dependencies = [
  "test-case",
  "thiserror",
  "turbopath",
+]
+
+[[package]]
+name = "turborepo-repository"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "globwalk",
+ "itertools",
+ "lazy-regex",
+ "node-semver",
+ "pretty_assertions",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_yaml 0.9.21",
+ "tempfile",
+ "test-case",
+ "thiserror",
+ "turbopath",
+ "turborepo-lockfiles",
+ "wax",
+ "which",
 ]
 
 [[package]]

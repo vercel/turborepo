@@ -61,7 +61,6 @@ impl PackageJson {
     }
 
     // Utility method for easy construction of package.json during testing
-    #[cfg(test)]
     pub fn from_value(value: serde_json::Value) -> Result<PackageJson, Error> {
         let package_json: PackageJson = serde_json::from_value(value)?;
         Ok(package_json)

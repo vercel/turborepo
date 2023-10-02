@@ -399,12 +399,10 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_lockfiles::Lockfile;
+    use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
     use super::*;
-    use crate::{
-        config::RawTurboJSON, engine::TaskNode, package_json::PackageJson,
-        package_manager::PackageManager,
-    };
+    use crate::{config::RawTurboJSON, engine::TaskNode};
 
     // Only used to prevent package graph construction from attempting to read
     // lockfile from disk

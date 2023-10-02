@@ -187,7 +187,7 @@ pub enum ChangeDetectError {
     #[error("Wax error: {0}")]
     Wax(#[from] wax::BuildError),
     #[error("Package manager error: {0}")]
-    PackageManager(#[from] crate::package_manager::Error),
+    PackageManager(#[from] turborepo_repository::package_manager::Error),
     #[error("No lockfile")]
     NoLockfile,
     #[error("Lockfile error: {0}")]

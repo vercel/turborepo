@@ -20,6 +20,7 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::APIAuth;
 use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_repository::package_json::PackageJson;
 use turborepo_scm::SCM;
 use turborepo_ui::ColorSelector;
 
@@ -32,7 +33,6 @@ use crate::{
     engine::EngineBuilder,
     opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
-    package_json::PackageJson,
     process::ProcessManager,
     run::{
         global_hash::get_global_hash_inputs,
