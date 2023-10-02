@@ -6,7 +6,7 @@ mod scope;
 mod summary;
 pub mod task_id;
 use std::{
-    io::{BufWriter, IsTerminal},
+    io::{BufWriter, IsTerminal, Write},
     sync::Arc,
 };
 
@@ -62,7 +62,7 @@ impl<'a> Run<'a> {
         self.base.args().try_into()
     }
 
-    pub async fn run(&mut self) -> Result<()> {
+    pub async fn run(&mut self) -> Result<i32> {
         let start_at = Local::now();
         let package_json_path = self.base.repo_root.join_component("package.json");
         let root_package_json =
@@ -206,7 +206,7 @@ impl<'a> Run<'a> {
                     engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?
                 }
             }
-            return Ok(());
+            return Ok(0);
         }
 
         let root_workspace = pkg_dep_graph
@@ -279,9 +279,22 @@ impl<'a> Run<'a> {
             global_env_mode,
             self.base.ui,
             false,
+            self.processes.clone(),
+            &self.base.repo_root,
         );
 
-        visitor.visit(engine.clone()).await?;
+        let errors = visitor.visit(engine.clone()).await?;
+
+        let exit_code = errors
+            .iter()
+            .filter_map(|err| err.exit_code())
+            .max()
+            // We hit some error, it shouldn't be exit code 0
+            .unwrap_or(if errors.is_empty() { 0 } else { 1 });
+
+        for err in &errors {
+            writeln!(std::io::stderr(), "{err}").ok();
+        }
 
         let pass_through_env = global_hash_inputs.pass_through_env.unwrap_or_default();
         let resolved_pass_through_env_vars =
@@ -312,6 +325,6 @@ impl<'a> Run<'a> {
 
         run_summary.close(0, &pkg_dep_graph, self.base.ui)?;
 
-        Ok(())
+        Ok(exit_code)
     }
 }

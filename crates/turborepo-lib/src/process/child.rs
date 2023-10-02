@@ -23,6 +23,7 @@ use std::{
 
 use command_group::AsyncCommandGroup;
 use futures::future::try_join3;
+use itertools::Itertools;
 pub use tokio::process::Command;
 use tokio::{
     io::{AsyncBufReadExt, AsyncRead, BufReader},
@@ -148,6 +149,7 @@ pub struct Child {
     stdin: Arc<Mutex<Option<tokio::process::ChildStdin>>>,
     stdout: Arc<Mutex<Option<tokio::process::ChildStdout>>>,
     stderr: Arc<Mutex<Option<tokio::process::ChildStderr>>>,
+    label: String,
 }
 
 #[derive(Debug)]
@@ -177,6 +179,18 @@ impl Child {
     /// Start a child process, returning a handle that can be used to interact
     /// with it. The command will be started immediately.
     pub fn spawn(mut command: Command, shutdown_style: ShutdownStyle) -> io::Result<Self> {
+        let label = {
+            let cmd = command.as_std();
+            format!(
+                "({}) {} {}",
+                cmd.get_current_dir()
+                    .map(|dir| dir.to_string_lossy())
+                    .unwrap_or_default(),
+                cmd.get_program().to_string_lossy(),
+                cmd.get_args().map(|s| s.to_string_lossy()).join(" ")
+            )
+        };
+
         let group = command.group().spawn()?;
 
         let gid = group.id();
@@ -266,6 +280,7 @@ impl Child {
             stdin: Arc::new(Mutex::new(stdin)),
             stdout: Arc::new(Mutex::new(stdout)),
             stderr: Arc::new(Mutex::new(stderr)),
+            label,
         })
     }
 
@@ -380,6 +395,10 @@ impl Child {
             try_join3(async { Ok(self.wait().await) }, stdout_fut, stderr_fut).await?;
 
         Ok(exit)
+    }
+
+    pub fn label(&self) -> &str {
+        &self.label
     }
 }
 
