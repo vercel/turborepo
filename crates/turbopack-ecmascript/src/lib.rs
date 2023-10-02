@@ -507,6 +507,11 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let this = self.await?;
+        let availability_info = if *this.module.analyze().needs_availability_info().await? {
+            availability_info
+        } else {
+            Value::new(AvailabilityInfo::Untracked)
+        };
         let content = this
             .module
             .module_content(this.chunking_context, availability_info);
