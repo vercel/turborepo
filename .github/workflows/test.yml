@@ -1059,7 +1059,7 @@ jobs:
         env:
           DATADOG_API_KEY: ${{ secrets.DD_KEY_TURBOPACK }}
         run: |
-          npm install -g @datadog/datadog-ci@2.18.1
+          npm install -g @datadog/datadog-ci@2.21.1
           # Query raw benchmark output, create key:value pairs for each benchmark entries.
           # The generated key name is compact format the path of the benchmark entry, i.e
           # `base.hmr_to_commit.CSR.1000.mean`
@@ -1422,7 +1422,7 @@ jobs:
           node-version: 18
 
       - name: Install datadog
-        run: npm install -g @datadog/datadog-ci@2.18.1
+        run: npm install -g @datadog/datadog-ci@2.21.1
 
       - name: Download test results
         uses: actions/download-artifact@v3

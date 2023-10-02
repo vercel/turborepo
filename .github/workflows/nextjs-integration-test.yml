@@ -184,10 +184,10 @@ jobs:
           path: test
       - name: Upload test trace to datadog
         run: |
-          npm install -g @datadog/datadog-ci@2.18.1
+          npm install -g @datadog/datadog-ci@2.21.1
           ls -al ./test/*.xml
           # We'll tag this to the Turbopack service, not the next.js
-          DD_ENV=ci datadog-ci junit upload --tags test.type:turbopack.daily --service Turbopack test
+          DD_ENV=ci datadog-ci junit upload --tags test.type:turbopack.daily --service Turbopack test --git-repository-url git@github.com:vercel/next.js.git
 
       # For the debugging purpose, upload the test trace to github artifact.
       # So we can manually analyze test reports.
