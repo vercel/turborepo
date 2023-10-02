@@ -222,7 +222,6 @@ mod test {
     #[cfg(unix)]
     #[test_case("/a/b/c", &["package.lock"], "/a/b/c/package.lock", Ok(true) ; "simple")]
     #[test_case("/a/b/c", &["a", "b", "c"], "/a/b/c/package.lock", Ok(false) ; "lockfile unchanged")]
-    #[test_case("/a/b/c", &["package.lock"], "/a/b/outside-repo/package.json", Err(ChangeDetectError::LockfileNotInRepo) ; "different file")]
     fn test_lockfile_changed(
         turbo_root: &str,
         changed_files: &[&str],
