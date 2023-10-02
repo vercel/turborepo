@@ -6,7 +6,7 @@ use nohash_hasher::{BuildNoHashHasher, IsEnabled};
 use super::{
     bottom_tree::BottomTree,
     inner_refs::{BottomRef, ChildLocation},
-    AggregationContext,
+    AggregationContext, StackVec,
 };
 
 struct BottomRefInfo {
@@ -196,7 +196,7 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomConnection<T, I> {
 
 pub enum BottomUppers<T, I: IsEnabled> {
     Left(Arc<BottomTree<T, I>>),
-    Inner(Vec<(BottomRef<T, I>, u8)>),
+    Inner(StackVec<(BottomRef<T, I>, u8)>),
 }
 
 impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
@@ -302,5 +302,33 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
                 }
             }
         }
+    }
+
+    pub fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
+        &self,
+        aggregation_context: &C,
+        root_info_type: &C::RootInfoType,
+        mut result: C::RootInfo,
+    ) -> C::RootInfo {
+        match &self {
+            BottomUppers::Left(upper) => {
+                let info = upper.get_root_info(aggregation_context, root_info_type);
+                if aggregation_context.merge_root_info(&mut result, info) == ControlFlow::Break(())
+                {
+                    return result;
+                }
+            }
+            BottomUppers::Inner(list) => {
+                for (BottomRef { upper }, _) in list.iter() {
+                    let info = upper.get_root_info(aggregation_context, root_info_type);
+                    if aggregation_context.merge_root_info(&mut result, info)
+                        == ControlFlow::Break(())
+                    {
+                        return result;
+                    }
+                }
+            }
+        }
+        result
     }
 }

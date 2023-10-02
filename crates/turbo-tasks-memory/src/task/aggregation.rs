@@ -4,10 +4,10 @@ use std::{
     mem::take,
 };
 
-use auto_hash_map::{map::Entry, AutoMap, AutoSet};
+use auto_hash_map::{map::Entry, AutoMap};
 use nohash_hasher::BuildNoHashHasher;
 use parking_lot::Mutex;
-use turbo_tasks::{event::Event, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi};
+use turbo_tasks::{event::Event, RawVc, TaskId, TaskIdSet, TraitTypeId, TurboTasksBackendApi};
 
 use super::{meta_state::TaskMetaStateWriteGuard, TaskStateType};
 use crate::{
@@ -26,7 +26,7 @@ pub enum RootType {
 #[derive(Debug, Default)]
 pub struct CollectiblesInfo {
     collectibles: AutoMap<RawVc, i32>,
-    dependent_tasks: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+    dependent_tasks: TaskIdSet,
 }
 
 impl CollectiblesInfo {
@@ -140,8 +140,8 @@ impl TaskChange {
 pub struct TaskAggregationContext<'a> {
     pub turbo_tasks: &'a dyn TurboTasksBackendApi<MemoryBackend>,
     pub backend: &'a MemoryBackend,
-    pub dirty_tasks_to_schedule: Mutex<Option<AutoSet<TaskId, BuildNoHashHasher<TaskId>>>>,
-    pub tasks_to_notify: Mutex<Option<AutoSet<TaskId, BuildNoHashHasher<TaskId>>>>,
+    pub dirty_tasks_to_schedule: Mutex<Option<TaskIdSet>>,
+    pub tasks_to_notify: Mutex<Option<TaskIdSet>>,
 }
 
 impl<'a> TaskAggregationContext<'a> {
@@ -504,8 +504,8 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
 
 pub type TaskAggregationTreeLeaf = AggregationTreeLeaf<Aggregated, TaskId>;
 
-fn update_count_entry<K: Eq + Hash, H: BuildHasher + Default>(
-    entry: Entry<'_, K, i32, H>,
+fn update_count_entry<K: Eq + Hash, H: BuildHasher + Default, const I: usize>(
+    entry: Entry<'_, K, i32, H, I>,
     update: i32,
 ) -> i32 {
     match entry {

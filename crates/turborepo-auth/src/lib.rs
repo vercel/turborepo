@@ -9,10 +9,11 @@ use reqwest::Url;
 use serde::Deserialize;
 use thiserror::Error;
 use tokio::sync::OnceCell;
+use tracing::error;
 #[cfg(not(test))]
 use tracing::warn;
 use turborepo_api_client::APIClient;
-use turborepo_ui::{start_spinner, BOLD, CYAN, UI};
+use turborepo_ui::{start_spinner, BOLD, CYAN, GREY, UI};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
@@ -46,6 +47,19 @@ fn print_cli_authorized(user: &str, ui: &UI) {
         ),
         ui.apply(BOLD.apply_to("  npx turbo link"))
     );
+}
+
+pub fn logout<F>(ui: &UI, mut set_token: F) -> Result<()>
+where
+    F: FnMut() -> Result<()>,
+{
+    if let Err(err) = set_token() {
+        error!("could not logout. Something went wrong: {}", err);
+        return Err(err.into());
+    }
+
+    println!("{}", ui.apply(GREY.apply_to(">>> Logged out")));
+    Ok(())
 }
 
 /// Login writes a token to disk at token_path. If a token is already present,

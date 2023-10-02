@@ -1,7 +1,7 @@
 use std::{hash::Hash, ops::ControlFlow, sync::Arc};
 
 use nohash_hasher::{BuildNoHashHasher, IsEnabled};
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::{RwLock, RwLockWriteGuard};
 use ref_cast::RefCast;
 
 use super::{
@@ -12,7 +12,7 @@ use super::{
         remove_left_upper_from_item,
     },
     top_tree::TopTree,
-    AggregationContext, CHILDREN_INNER_THRESHOLD, CONNECTIVITY_LIMIT,
+    AggregationContext, StackVec, CHILDREN_INNER_THRESHOLD, CONNECTIVITY_LIMIT,
 };
 use crate::count_hash_set::{CountHashSet, RemoveIfEntryResult};
 
@@ -22,7 +22,7 @@ use crate::count_hash_set::{CountHashSet, RemoveIfEntryResult};
 pub struct BottomTree<T, I: IsEnabled> {
     height: u8,
     item: I,
-    state: Mutex<BottomTreeState<T, I>>,
+    state: RwLock<BottomTreeState<T, I>>,
 }
 
 pub struct BottomTreeState<T, I: IsEnabled> {
@@ -38,7 +38,7 @@ impl<T: Default, I: IsEnabled> BottomTree<T, I> {
         Self {
             height,
             item,
-            state: Mutex::new(BottomTreeState {
+            state: RwLock::new(BottomTreeState {
                 data: T::default(),
                 bottom_upper: BottomConnection::new(),
                 top_upper: CountHashSet::new(),
@@ -81,18 +81,18 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         }
     }
 
-    fn add_children_of_child_if_following(&self, children: &mut Vec<&I>) {
-        let mut state = self.state.lock();
-        children.retain(|&child| !state.following.add_if_entry(child));
+    fn add_children_of_child_if_following(&self, children: &mut StackVec<&I>) {
+        let mut state = self.state.write();
+        children.retain(|&mut child| !state.following.add_if_entry(child));
     }
 
     fn add_children_of_child_following<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
-        mut children: Vec<&I>,
+        mut children: StackVec<&I>,
     ) {
-        let mut state = self.state.lock();
-        children.retain(|&child| state.following.add_clonable(child));
+        let mut state = self.state.write();
+        children.retain(|&mut child| state.following.add_clonable(child));
         if children.is_empty() {
             return;
         }
@@ -113,7 +113,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     ) where
         I: 'a,
     {
-        let mut following = Vec::new();
+        let mut following = StackVec::default();
         if self.height == 0 {
             for child in children {
                 let can_be_inner =
@@ -175,7 +175,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     }
 
     fn add_child_of_child_if_following(&self, child_of_child: &I) -> bool {
-        let mut state = self.state.lock();
+        let mut state = self.state.write();
         state.following.add_if_entry(child_of_child)
     }
 
@@ -184,7 +184,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         aggregation_context: &C,
         child_of_child: &I,
     ) {
-        let mut state = self.state.lock();
+        let mut state = self.state.write();
         if !state.following.add_clonable(child_of_child) {
             // Already connect, nothing more to do
             return;
@@ -237,7 +237,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         aggregation_context: &C,
         child_of_child: &I,
     ) -> bool {
-        let mut state = self.state.lock();
+        let mut state = self.state.write();
         match state.following.remove_if_entry(child_of_child) {
             RemoveIfEntryResult::PartiallyRemoved => return true,
             RemoveIfEntryResult::NotPresent => return false,
@@ -252,8 +252,8 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         aggregation_context: &C,
         children: &mut Vec<&'a I>,
     ) {
-        let mut state = self.state.lock();
-        let mut removed = Vec::new();
+        let mut state = self.state.write();
+        let mut removed = StackVec::default();
         children.retain(|&child| match state.following.remove_if_entry(child) {
             RemoveIfEntryResult::PartiallyRemoved => false,
             RemoveIfEntryResult::NotPresent => true,
@@ -272,7 +272,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         aggregation_context: &C,
         child_of_child: &I,
     ) -> bool {
-        let mut state = self.state.lock();
+        let mut state = self.state.write();
         if !state.following.remove_clonable(child_of_child) {
             // no present, nothing to do
             return false;
@@ -284,10 +284,10 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     fn remove_children_of_child_following<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
-        mut children: Vec<&I>,
+        mut children: StackVec<&I>,
     ) {
-        let mut state = self.state.lock();
-        children.retain(|&child| state.following.remove_clonable(child));
+        let mut state = self.state.write();
+        children.retain(|&mut child| state.following.remove_clonable(child));
         propagate_lost_followings_to_uppers(state, aggregation_context, children);
     }
 
@@ -314,11 +314,11 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     ) where
         I: 'a,
     {
-        let unremoveable = if self.height == 0 {
+        let unremoveable: StackVec<_> = if self.height == 0 {
             children
                 .into_iter()
                 .filter(|&child| !remove_inner_upper_from_item(aggregation_context, child, self))
-                .collect::<Vec<_>>()
+                .collect()
         } else {
             children
                 .into_iter()
@@ -326,7 +326,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                     !bottom_tree(aggregation_context, child, self.height - 1)
                         .remove_inner_bottom_tree_upper(aggregation_context, self)
                 })
-                .collect::<Vec<_>>()
+                .collect()
         };
         if !unremoveable.is_empty() {
             self.remove_children_of_child_following(aggregation_context, unremoveable);
@@ -338,10 +338,10 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         aggregation_context: &C,
         upper: &Arc<BottomTree<T, I>>,
     ) {
-        let mut state = self.state.lock();
+        let mut state = self.state.write();
         let old_inner = state.bottom_upper.set_left_upper(upper);
         let add_change = aggregation_context.info_to_add_change(&state.data);
-        let children = state.following.iter().cloned().collect::<Vec<_>>();
+        let children = state.following.iter().cloned().collect::<StackVec<_>>();
 
         let remove_change = (!old_inner.is_unset())
             .then(|| aggregation_context.info_to_remove_change(&state.data))
@@ -397,7 +397,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         remove_change: &Option<C::ItemChange>,
         following: &[I],
     ) {
-        let mut state = self.state.lock();
+        let mut state = self.state.write();
         if count > 0 {
             // add as following
             if state.following.add_count(item.clone(), count as usize) {
@@ -425,7 +425,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         upper: &Arc<BottomTree<T, I>>,
         nesting_level: u8,
     ) -> bool {
-        let mut state = self.state.lock();
+        let mut state = self.state.write();
         let number_of_following = state.following.len();
         let BottomConnection::Inner(inner) = &mut state.bottom_upper else {
             return false;
@@ -438,7 +438,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             if let Some(change) = aggregation_context.info_to_add_change(&state.data) {
                 upper.child_change(aggregation_context, &change);
             }
-            let children = state.following.iter().cloned().collect::<Vec<_>>();
+            let children = state.following.iter().cloned().collect::<StackVec<_>>();
             drop(state);
             if !children.is_empty() {
                 upper.add_children_of_child(
@@ -457,12 +457,12 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         aggregation_context: &C,
         upper: &Arc<BottomTree<T, I>>,
     ) {
-        let mut state = self.state.lock();
+        let mut state = self.state.write();
         state.bottom_upper.unset_left_upper(upper);
         if let Some(change) = aggregation_context.info_to_remove_change(&state.data) {
             upper.child_change(aggregation_context, &change);
         }
-        let following = state.following.iter().cloned().collect::<Vec<_>>();
+        let following = state.following.iter().cloned().collect::<StackVec<_>>();
         if state.top_upper.is_empty() {
             drop(state);
             self.remove_self_from_lower(aggregation_context);
@@ -478,14 +478,14 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         aggregation_context: &C,
         upper: &Arc<BottomTree<T, I>>,
     ) -> bool {
-        let mut state = self.state.lock();
+        let mut state = self.state.write();
         let BottomConnection::Inner(inner) = &mut state.bottom_upper else {
             return false;
         };
         let removed = inner.remove_clonable(BottomRef::ref_cast(upper));
         if removed {
             let remove_change = aggregation_context.info_to_remove_change(&state.data);
-            let following = state.following.iter().cloned().collect::<Vec<_>>();
+            let following = state.following.iter().cloned().collect::<StackVec<_>>();
             drop(state);
             if let Some(change) = remove_change {
                 upper.child_change(aggregation_context, &change);
@@ -500,7 +500,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         aggregation_context: &C,
         upper: &Arc<TopTree<T>>,
     ) {
-        let mut state = self.state.lock();
+        let mut state = self.state.write();
         let new = state.top_upper.add_clonable(TopRef::ref_cast(upper));
         if new {
             if let Some(change) = aggregation_context.info_to_add_change(&state.data) {
@@ -518,7 +518,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         aggregation_context: &C,
         upper: &Arc<TopTree<T>>,
     ) {
-        let mut state = self.state.lock();
+        let mut state = self.state.write();
         let removed = state.top_upper.remove_clonable(TopRef::ref_cast(upper));
         if removed {
             if let Some(change) = aggregation_context.info_to_remove_change(&state.data) {
@@ -553,7 +553,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         aggregation_context: &C,
         change: &C::ItemChange,
     ) {
-        let mut state = self.state.lock();
+        let mut state = self.state.write();
         let change = aggregation_context.apply_change(&mut state.data, change);
         propagate_change_to_upper(&mut state, aggregation_context, change);
     }
@@ -564,26 +564,31 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         root_info_type: &C::RootInfoType,
     ) -> C::RootInfo {
         let mut result = aggregation_context.new_root_info(root_info_type);
-        let state = self.state.lock();
-        for TopRef { upper } in state.top_upper.iter() {
+        let top_uppers = {
+            let state = self.state.read();
+            state.top_upper.iter().cloned().collect::<StackVec<_>>()
+        };
+        for TopRef { upper } in top_uppers.iter() {
             let info = upper.get_root_info(aggregation_context, root_info_type);
             if aggregation_context.merge_root_info(&mut result, info) == ControlFlow::Break(()) {
                 return result;
             }
         }
-        state
-            .bottom_upper
-            .get_root_info(aggregation_context, root_info_type, result)
+        let bottom_uppers = {
+            let state = self.state.read();
+            state.bottom_upper.as_cloned_uppers()
+        };
+        bottom_uppers.get_root_info(aggregation_context, root_info_type, result)
     }
 }
 
 fn propagate_lost_following_to_uppers<C: AggregationContext>(
-    state: MutexGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
+    state: RwLockWriteGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
     aggregation_context: &C,
     child_of_child: &C::ItemRef,
 ) {
     let bottom_uppers = state.bottom_upper.as_cloned_uppers();
-    let top_upper = state.top_upper.iter().cloned().collect::<Vec<_>>();
+    let top_upper = state.top_upper.iter().cloned().collect::<StackVec<_>>();
     drop(state);
     for TopRef { upper } in top_upper {
         upper.remove_child_of_child(aggregation_context, child_of_child);
@@ -592,7 +597,7 @@ fn propagate_lost_following_to_uppers<C: AggregationContext>(
 }
 
 fn propagate_lost_followings_to_uppers<'a, C: AggregationContext>(
-    state: MutexGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
+    state: RwLockWriteGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
     aggregation_context: &C,
     children: impl IntoIterator<Item = &'a C::ItemRef> + Clone,
 ) where
@@ -608,7 +613,7 @@ fn propagate_lost_followings_to_uppers<'a, C: AggregationContext>(
 }
 
 fn propagate_new_following_to_uppers<C: AggregationContext>(
-    state: MutexGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
+    state: RwLockWriteGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
     aggregation_context: &C,
     child_of_child: &C::ItemRef,
 ) {
@@ -622,7 +627,7 @@ fn propagate_new_following_to_uppers<C: AggregationContext>(
 }
 
 fn propagate_change_to_upper<C: AggregationContext>(
-    state: &mut MutexGuard<BottomTreeState<C::Info, C::ItemRef>>,
+    state: &mut RwLockWriteGuard<BottomTreeState<C::Info, C::ItemRef>>,
     aggregation_context: &C,
     change: Option<C::ItemChange>,
 ) {
@@ -651,7 +656,7 @@ fn visit_graph<C: AggregationContext>(
     let mut edges = 0;
     while let Some(item) = queue.pop_front() {
         let tree = bottom_tree(aggregation_context, &item, height);
-        let state = tree.state.lock();
+        let state = tree.state.read();
         for next in state.following.iter() {
             edges += 1;
             if visited.insert(next.clone()) {
@@ -692,7 +697,7 @@ pub fn print_graph<C: AggregationContext>(
         let tree = bottom_tree(aggregation_context, &item, height);
         let name = name_fn(&item);
         let label = format!("{}", name);
-        let state = tree.state.lock();
+        let state = tree.state.read();
         if color_upper {
             print!(r#""{} {}" [color=red];"#, height - 1, name);
         } else {

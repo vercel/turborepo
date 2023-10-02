@@ -10,7 +10,7 @@ use super::{
     bottom_tree::BottomTree,
     inner_refs::{BottomRef, ChildLocation},
     top_tree::TopTree,
-    AggregationContext, AggregationItemLock, CHILDREN_INNER_THRESHOLD,
+    AggregationContext, AggregationItemLock, LargeStackVec, CHILDREN_INNER_THRESHOLD,
 };
 
 /// The leaf of the aggregation tree. It's usually stored inside of the nodes
@@ -79,10 +79,15 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
 
     /// Prepares the removal of a child. It returns a closure that should be
     /// executed outside of the leaf lock.
-    pub fn remove_children_job<'a, C: AggregationContext<Info = T, ItemRef = I>, H>(
+    pub fn remove_children_job<
+        'a,
+        C: AggregationContext<Info = T, ItemRef = I>,
+        H,
+        const N: usize,
+    >(
         &self,
         aggregation_context: &'a C,
-        children: AutoSet<I, H>,
+        children: AutoSet<I, H, N>,
     ) -> impl FnOnce() + 'a
     where
         T: 'a,
@@ -237,7 +242,9 @@ pub fn add_inner_upper_to_item<C: AggregationContext>(
             let change = item.get_add_change();
             (
                 change,
-                item.children().map(|r| r.into_owned()).collect::<Vec<_>>(),
+                item.children()
+                    .map(|r| r.into_owned())
+                    .collect::<LargeStackVec<_>>(),
             )
         } else {
             return true;
@@ -259,10 +266,9 @@ pub fn add_inner_upper_to_item<C: AggregationContext>(
 
 struct AddLeftUpperIntermediateResult<C: AggregationContext>(
     Option<C::ItemChange>,
-    Vec<C::ItemRef>,
+    LargeStackVec<C::ItemRef>,
     DistanceCountMap<BottomRef<C::Info, C::ItemRef>>,
     Option<C::ItemChange>,
-    Vec<C::ItemRef>,
 );
 
 #[must_use]
@@ -274,19 +280,12 @@ fn add_left_upper_to_item_step_1<C: AggregationContext>(
     let remove_change_for_old_inner = (!old_inner.is_unset())
         .then(|| item.get_remove_change())
         .flatten();
-    let children_for_old_inner = (!old_inner.is_unset())
-        .then(|| {
-            item.children()
-                .map(|child| child.into_owned())
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+    let children = item.children().map(|r| r.into_owned()).collect();
     AddLeftUpperIntermediateResult(
         item.get_add_change(),
-        item.children().map(|r| r.into_owned()).collect(),
+        children,
         old_inner,
         remove_change_for_old_inner,
-        children_for_old_inner,
     )
 }
 
@@ -296,13 +295,8 @@ fn add_left_upper_to_item_step_2<C: AggregationContext>(
     upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
     step_1_result: AddLeftUpperIntermediateResult<C>,
 ) {
-    let AddLeftUpperIntermediateResult(
-        change,
-        children,
-        old_inner,
-        remove_change_for_old_inner,
-        following_for_old_uppers,
-    ) = step_1_result;
+    let AddLeftUpperIntermediateResult(change, children, old_inner, remove_change_for_old_inner) =
+        step_1_result;
     if let Some(change) = change {
         upper.child_change(aggregation_context, &change);
     }
@@ -315,7 +309,7 @@ fn add_left_upper_to_item_step_2<C: AggregationContext>(
             reference,
             count,
             &remove_change_for_old_inner,
-            &following_for_old_uppers,
+            &children,
         );
     }
 }
@@ -354,7 +348,10 @@ pub fn remove_inner_upper_from_item<C: AggregationContext>(
         return true;
     }
     let change = item.get_remove_change();
-    let children = item.children().map(|r| r.into_owned()).collect::<Vec<_>>();
+    let children = item
+        .children()
+        .map(|r| r.into_owned())
+        .collect::<LargeStackVec<_>>();
     drop(item);
 
     if let Some(change) = change {

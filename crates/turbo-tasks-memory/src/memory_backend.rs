@@ -15,7 +15,6 @@ use std::{
 use anyhow::{bail, Result};
 use auto_hash_map::{AutoMap, AutoSet};
 use dashmap::{mapref::entry::Entry, DashMap};
-use nohash_hasher::BuildNoHashHasher;
 use rustc_hash::FxHasher;
 use tokio::task::futures::TaskLocalFuture;
 use tracing::trace_span;
@@ -26,7 +25,7 @@ use turbo_tasks::{
     },
     event::EventListener,
     util::{IdFactory, NoMoveVec},
-    CellId, RawVc, TaskId, TraitTypeId, TurboTasksBackendApi, Unused,
+    CellId, RawVc, TaskId, TaskIdSet, TraitTypeId, TurboTasksBackendApi, Unused,
 };
 
 use crate::{
@@ -58,7 +57,11 @@ impl MemoryBackend {
             memory_tasks: NoMoveVec::new(),
             backend_jobs: NoMoveVec::new(),
             backend_job_id_factory: IdFactory::new(),
-            task_cache: DashMap::default(),
+            task_cache: DashMap::with_hasher_and_shard_amount(
+                Default::default(),
+                (std::thread::available_parallelism().map_or(1, usize::from) * 32)
+                    .next_power_of_two(),
+            ),
             memory_limit,
             gc_queue: (memory_limit != usize::MAX).then(GcQueue::new),
             idle_gc_active: AtomicBool::new(false),
@@ -217,7 +220,7 @@ impl MemoryBackend {
 
     pub(crate) fn schedule_when_dirty_from_aggregation(
         &self,
-        set: AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+        set: TaskIdSet,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         for task in set {
@@ -258,7 +261,7 @@ impl Backend for MemoryBackend {
 
     fn invalidate_tasks_set(
         &self,
-        tasks: &AutoSet<TaskId, BuildNoHashHasher<TaskId>>,
+        tasks: &TaskIdSet,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         for &task in tasks {

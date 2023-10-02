@@ -23,4 +23,6 @@ export interface TurboIgnoreOptions {
   task?: string;
   // A ref/head to compare against if no previously deployed SHA is available
   fallback?: string;
+  // The maxBuffer for the child process in KB
+  maxBuffer?: number;
 }
