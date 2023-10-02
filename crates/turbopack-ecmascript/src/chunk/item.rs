@@ -262,7 +262,7 @@ impl FromChunkableModule for Box<dyn EcmascriptChunkItem> {
             return Ok(None);
         };
 
-        Ok(Some(placeable.as_chunk_item(context)))
+        Ok(Some(placeable.as_chunk_item(context).resolve().await?))
     }
 
     async fn from_async_asset(
@@ -281,17 +281,20 @@ impl FromChunkableModule for Box<dyn EcmascriptChunkItem> {
             AvailabilityInfo::Untracked => AvailabilityInfo::Untracked,
             AvailabilityInfo::Root {
                 current_availability_root,
-            } => AvailabilityInfo::Inner {
+            } => AvailabilityInfo::Complete {
                 available_modules: AvailableAssets::new(vec![current_availability_root]),
                 current_availability_root: Vc::upcast(module),
             },
-            AvailabilityInfo::Inner {
+            AvailabilityInfo::Complete {
                 available_modules,
                 current_availability_root,
-            } => AvailabilityInfo::Inner {
+            } => AvailabilityInfo::Complete {
                 available_modules: available_modules.with_roots(vec![current_availability_root]),
                 current_availability_root: Vc::upcast(module),
             },
+            AvailabilityInfo::OnlyAvailableModules { .. } => {
+                panic!("OnlyAvailableModules should not appear here")
+            }
         };
 
         let manifest_asset =

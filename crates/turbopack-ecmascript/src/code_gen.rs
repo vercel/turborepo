@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use swc_core::ecma::visit::{AstParentKind, VisitMut};
 use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, Value, Vc};
-use turbopack_core::chunk::availability_info::AvailabilityInfo;
+use turbopack_core::chunk::availability_info::{AvailabilityInfo, AvailabilityInfoNeeds};
 
 use crate::chunk::EcmascriptChunkingContext;
 
@@ -39,6 +39,13 @@ pub trait CodeGenerateableWithAvailabilityInfo {
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Vc<CodeGeneration>;
+
+    fn get_availability_info_needs(
+        self: Vc<Self>,
+        _is_async_module: bool,
+    ) -> Vc<AvailabilityInfoNeeds> {
+        AvailabilityInfoNeeds::Complete.cell()
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs, ValueDebugFormat)]

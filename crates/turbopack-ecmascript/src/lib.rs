@@ -353,11 +353,6 @@ impl EcmascriptModuleAsset {
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<EcmascriptModuleContent>> {
         let this = self.await?;
-        let availability_info = if *self.analyze().needs_availability_info().await? {
-            availability_info
-        } else {
-            Value::new(AvailabilityInfo::Untracked)
-        };
 
         let parsed = parse(this.source, Value::new(this.ty), this.transforms);
 
@@ -507,18 +502,20 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let this = self.await?;
-        let availability_info = if *this.module.analyze().needs_availability_info().await? {
-            availability_info
-        } else {
-            Value::new(AvailabilityInfo::Untracked)
-        };
-        let content = this
-            .module
-            .module_content(this.chunking_context, availability_info);
         let async_module_options = this
             .module
             .get_async_module()
-            .module_options(availability_info);
+            .module_options(availability_info.current_availability_root());
+        let is_async_module = async_module_options.await?.is_some();
+        let availability_info_needs = *this
+            .module
+            .analyze()
+            .get_availability_info_needs(is_async_module)
+            .await?;
+        let availability_info = availability_info.reduce_to_needs(availability_info_needs);
+        let content = this
+            .module
+            .module_content(this.chunking_context, Value::new(availability_info));
 
         Ok(EcmascriptChunkItemContent::new(
             content,
