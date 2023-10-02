@@ -215,9 +215,7 @@ impl<'a> Visitor<'a> {
                 cmd.stdout(Stdio::piped());
                 cmd.stderr(Stdio::piped());
 
-                // TODO: avoid passing Duration::MAX and instead allow processes to run without
-                // a timeout
-                let mut process = match manager.spawn(cmd, Duration::MAX) {
+                let mut process = match manager.spawn(cmd, Duration::from_millis(500)) {
                     Some(Ok(child)) => child,
                     // Turbo was unable to spawn a process
                     Some(Err(e)) => {
