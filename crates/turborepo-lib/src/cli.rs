@@ -434,7 +434,7 @@ pub struct RunArgs {
     #[clap(alias = "dry", long = "dry-run", num_args = 0..=1, default_missing_value = "text")]
     pub dry_run: Option<DryRunMode>,
     /// Run turbo in single-package mode
-    #[clap(long, global = true)]
+    #[clap(long)]
     pub single_package: bool,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
@@ -458,9 +458,11 @@ pub struct RunArgs {
     #[clap(long, num_args = 0..=1, default_missing_value = "")]
     pub graph: Option<String>,
     /// Environment variable mode.
-    /// Loose passes the entire environment.
-    /// Strict uses an allowlist specified in turbo.json.
-    #[clap(long = "env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer", hide = true)]
+    /// Use "loose" to pass the entire existing environment.
+    /// Use "strict" to use an allowlist specified in turbo.json.
+    /// Use "infer" to defer to existence of "passThroughEnv" or
+    /// "globalPassThroughEnv" in turbo.json. (default infer)
+    #[clap(long = "env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer")]
     pub env_mode: EnvMode,
     /// Files to ignore when calculating changed files (i.e. --since).
     /// Supports globs.
@@ -493,8 +495,8 @@ pub struct RunArgs {
     /// turbo decide based on its own heuristics. (default auto)
     #[clap(long, env = "TURBO_LOG_ORDER", value_enum, default_value_t = LogOrder::Auto)]
     pub log_order: LogOrder,
-
-    #[clap(long, hide = true)]
+    /// Only executes the tasks specified, does not execute parent tasks.
+    #[clap(long)]
     pub only: bool,
     /// Execute all tasks in parallel.
     #[clap(long)]
