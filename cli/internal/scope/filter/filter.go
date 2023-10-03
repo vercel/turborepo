@@ -2,9 +2,9 @@ package filter
 
 import (
 	"fmt"
-	"github.com/hashicorp/go-hclog"
 	"strings"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/doublestar"
