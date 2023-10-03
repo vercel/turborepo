@@ -113,7 +113,7 @@ func (r *Resolver) getFilteredPackages(selectors []*TargetSelector) (*SelectedPa
 			allPackageSelectors = append(allPackageSelectors, selector)
 		}
 	}
-	r.Logger.Debug("Filtering packages", "prodPackageSelectors", prodPackageSelectors, "allPackageSelectors", allPackageSelectors)
+	r.Logger.Debug("Filtering packages", "allPackageSelectors", allPackageSelectors)
 	if len(allPackageSelectors) > 0 || len(prodPackageSelectors) > 0 {
 		if len(allPackageSelectors) > 0 {
 			selected, err := r.filterGraph(allPackageSelectors)
