@@ -1375,7 +1375,7 @@ jobs:
 
   cleanup:
     name: Cleanup
-    needs: [done]
+    needs: [final, upload_test_results]
     if: always()
     uses: ./.github/workflows/pr-clean-caches.yml
     secrets: inherit
