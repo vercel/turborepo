@@ -100,6 +100,7 @@ impl Engine {
                     }
                     return Ok(());
                 };
+                println!("task id: {}", task_id);
 
                 // Acquire the semaphore unless parallel
                 let _permit = match parallel {

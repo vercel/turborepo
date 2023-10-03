@@ -1,7 +1,8 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
 use futures::{future::join_all, stream::FuturesUnordered, StreamExt};
 use petgraph::{
+    data::DataMap,
     visit::{IntoNeighborsDirected, IntoNodeIdentifiers},
     Direction,
 };
@@ -26,16 +27,22 @@ pub type WalkMessage<N> = (N, oneshot::Sender<()>);
 // These constraint might look very stiff, but since all of the petgraph graph
 // types use integers as node ids and GraphBase already constraints these types
 // to Copy + Eq so adding Hash + Send + 'static as bounds aren't unreasonable.
-impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
+impl<N: Eq + Hash + Copy + Send + Debug + 'static> Walker<N, Start> {
     /// Create a new graph walker for a DAG that emits nodes only once all of
     /// their dependencies have been processed.
     /// The graph should not be modified after a walker is created as the nodes
     /// emitted might no longer exist or might miss newly added edges.
-    pub fn new<G: IntoNodeIdentifiers<NodeId = N> + IntoNeighborsDirected>(graph: G) -> Self {
+    pub fn new<G: Send + Sync + DataMap + IntoNodeIdentifiers<NodeId = N> + IntoNeighborsDirected>(
+        graph: G,
+    ) -> Self
+    where
+        <G as petgraph::visit::Data>::NodeWeight: Debug,
+    {
         let (cancel, cancel_rx) = watch::channel(false);
         let mut txs = HashMap::new();
         let mut rxs = HashMap::new();
         for node in graph.node_identifiers() {
+            println!("node: {:?} -> {:?}", node, graph.node_weight(node));
             // Each node can finish at most once so we set the capacity to 1
             let (tx, rx) = broadcast::channel::<()>(1);
             txs.insert(node, tx);
@@ -52,6 +59,7 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
             let mut deps_rx = graph
                 .neighbors_directed(node, Direction::Outgoing)
                 .map(|dep| {
+                    println!("{:?} depends on {:?}", node, dep);
                     rxs.get(&dep)
                         .expect("graph should have all nodes")
                         .resubscribe()
@@ -71,6 +79,7 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
                                 // Could happen if a cancel is sent and is racing with deps
                                 // so we interpret this as a cancel.
                                 Err(broadcast::error::RecvError::Closed) => {
+                                    println!("CANCEL");
                                     return;
                                 }
                                 // A dependency sent a finish signal more than once
@@ -86,6 +95,7 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
 
                         let (callback_tx, callback_rx) = oneshot::channel::<()>();
                         // do some err handling with the send failure?
+                        println!("sending node: {:?}", node);
                         if node_tx.send((node, callback_tx)).await.is_err() {
                             // Receiving end of node channel has been closed/dropped
                             // Since there's nothing the mark the node as being done
@@ -103,6 +113,7 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
                         tx.send(()).ok();
                     }
                     _ = cancel_rx.changed() => {
+                        println!("{:?} is cancelled", node)
                         // If this future resolves this means that either:
                         // - cancel was updated, this can only happen through
                         //   the cancel method which only sets it to true
