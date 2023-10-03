@@ -172,11 +172,11 @@ pub fn infer_framework(workspace: &WorkspaceInfo, is_monorepo: bool) -> Option<&
 #[cfg(test)]
 mod tests {
     use test_case::test_case;
+    use turborepo_repository::package_json::PackageJson;
 
     use crate::{
         framework::{get_frameworks, infer_framework, Framework},
         package_graph::WorkspaceInfo,
-        package_json::PackageJson,
     };
 
     fn get_framework_by_slug(slug: &str) -> &'static Framework {

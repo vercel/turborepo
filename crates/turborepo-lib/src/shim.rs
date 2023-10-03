@@ -1,7 +1,7 @@
 use std::{
     env,
     fs::{self},
-    path::{Path, PathBuf},
+    path::PathBuf,
     process,
     process::Stdio,
     time::Duration,
@@ -12,17 +12,15 @@ use camino::Utf8PathBuf;
 use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
 use semver::Version;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tiny_gradient::{GradientStr, RGB};
 use tracing::debug;
 use turbo_updater::check_for_updates;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_repository::{package_json::PackageJson, package_manager::WorkspaceGlobs};
 use turborepo_ui::UI;
 
-use crate::{
-    cli, get_version, package_json::PackageJson, package_manager::WorkspaceGlobs, spawn_child,
-    tracing::TurboSubscriber, PackageManager, Payload,
-};
+use crate::{cli, get_version, spawn_child, tracing::TurboSubscriber, PackageManager, Payload};
 
 // all arguments that result in a stdout that much be directly parsable and
 // should not be paired with additional output (from the update notifier for
@@ -188,13 +186,13 @@ impl ShimArgs {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RepoMode {
     SinglePackage,
     MultiPackage,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct YarnRc {
     pnp_unplugged_folder: Utf8PathBuf,
@@ -208,7 +206,7 @@ impl Default for YarnRc {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug)]
 pub struct TurboState {
     bin_path: Option<PathBuf>,
     version: &'static str,
@@ -286,7 +284,7 @@ impl TurboState {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct LocalTurboState {
     bin_path: PathBuf,
     version: String,
@@ -377,7 +375,7 @@ impl LocalTurboState {
     //
     // In spite of that, the only known unsupported local invocation is Yarn/Berry <
     // 2.1 PnP
-    pub fn infer(root_path: &AbsoluteSystemPathBuf) -> Option<Self> {
+    pub fn infer(root_path: &AbsoluteSystemPath) -> Option<Self> {
         let platform_package_name = TurboState::platform_package_name();
         let binary_name = TurboState::binary_name();
 
@@ -423,13 +421,16 @@ impl LocalTurboState {
 
         None
     }
+
+    fn supports_skip_infer_and_single_package(&self) -> bool {
+        turbo_version_has_shim(&self.version)
+    }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct RepoState {
     pub root: AbsoluteSystemPathBuf,
     pub mode: RepoMode,
-    pub local_turbo_state: Option<LocalTurboState>,
 }
 
 #[derive(Debug)]
@@ -525,7 +526,6 @@ impl RepoState {
 
             // If there is only one potential root, that's the winner.
             if check_roots.peek().is_none() {
-                let local_turbo_state = LocalTurboState::infer(&current.path);
                 return Ok(Self {
                     root: current.path.clone(),
                     mode: if current.workspace_globs.is_some() {
@@ -533,7 +533,6 @@ impl RepoState {
                     } else {
                         RepoMode::SinglePackage
                     },
-                    local_turbo_state,
                 });
 
             // More than one potential root. See if we can stop at the first.
@@ -541,11 +540,9 @@ impl RepoState {
             // and set the mode properly in the else and it would still work.
             } else if current.workspace_globs.is_some() {
                 // If the closest one has workspaces then we stop there.
-                let local_turbo_state = LocalTurboState::infer(&current.path);
                 return Ok(Self {
                     root: current.path.clone(),
                     mode: RepoMode::MultiPackage,
-                    local_turbo_state,
                 });
 
             // More than one potential root.
@@ -555,22 +552,18 @@ impl RepoState {
             } else {
                 for ancestor_infer in check_roots {
                     if ancestor_infer.is_workspace_root_of(&current.path) {
-                        let local_turbo_state = LocalTurboState::infer(&ancestor_infer.path);
                         return Ok(Self {
                             root: ancestor_infer.path.clone(),
                             mode: RepoMode::MultiPackage,
-                            local_turbo_state,
                         });
                     }
                 }
 
                 // We have eliminated RepoMode::MultiPackage as an option.
                 // We must exhaustively check before this becomes the answer.
-                let local_turbo_state = LocalTurboState::infer(&current.path);
                 return Ok(Self {
                     root: current.path.clone(),
                     mode: RepoMode::SinglePackage,
-                    local_turbo_state,
                 });
             }
         }
@@ -590,122 +583,120 @@ impl RepoState {
         let potential_turbo_roots = RepoState::generate_potential_turbo_roots(reference_dir);
         RepoState::process_potential_turbo_roots(potential_turbo_roots)
     }
+}
 
-    /// Attempts to run correct turbo by finding nearest package.json,
-    /// then finding local turbo installation. If the current binary is the
-    /// local turbo installation, then we run current turbo. Otherwise we
-    /// kick over to the local turbo installation.
-    ///
-    /// # Arguments
-    ///
-    /// * `turbo_state`: state for current execution
-    ///
-    /// returns: Result<i32, Error>
-    fn run_correct_turbo(
-        self,
-        shim_args: ShimArgs,
-        subscriber: &TurboSubscriber,
-        ui: UI,
-    ) -> Result<Payload> {
-        if let Some(LocalTurboState { bin_path, version }) = &self.local_turbo_state {
-            try_check_for_updates(&shim_args, version);
-            let canonical_local_turbo = fs_canonicalize(bin_path)?;
-            Ok(Payload::Rust(
-                self.spawn_local_turbo(&canonical_local_turbo, shim_args),
-            ))
-        } else {
-            try_check_for_updates(&shim_args, get_version());
-            // cli::run checks for this env var, rather than an arg, so that we can support
-            // calling old versions without passing unknown flags.
-            env::set_var(
-                cli::INVOCATION_DIR_ENV_VAR,
-                shim_args.invocation_dir.as_path(),
+/// Attempts to run correct turbo by finding nearest package.json,
+/// then finding local turbo installation. If the current binary is the
+/// local turbo installation, then we run current turbo. Otherwise we
+/// kick over to the local turbo installation.
+///
+/// # Arguments
+///
+/// * `turbo_state`: state for current execution
+///
+/// returns: Result<i32, Error>
+fn run_correct_turbo(
+    repo_state: RepoState,
+    shim_args: ShimArgs,
+    subscriber: &TurboSubscriber,
+    ui: UI,
+) -> Result<Payload> {
+    if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
+        try_check_for_updates(&shim_args, &turbo_state.version);
+        Ok(Payload::Rust(spawn_local_turbo(
+            &repo_state,
+            turbo_state,
+            shim_args,
+        )))
+    } else {
+        try_check_for_updates(&shim_args, get_version());
+        // cli::run checks for this env var, rather than an arg, so that we can support
+        // calling old versions without passing unknown flags.
+        env::set_var(
+            cli::INVOCATION_DIR_ENV_VAR,
+            shim_args.invocation_dir.as_path(),
+        );
+        debug!("Running command as global turbo");
+        cli::run(Some(repo_state), subscriber, ui)
+    }
+}
+
+fn spawn_local_turbo(
+    repo_state: &RepoState,
+    local_turbo_state: LocalTurboState,
+    mut shim_args: ShimArgs,
+) -> Result<i32> {
+    let local_turbo_path = fs_canonicalize(&local_turbo_state.bin_path)?;
+    debug!(
+        "Running local turbo binary in {}\n",
+        local_turbo_path.display()
+    );
+
+    let supports_skip_infer_and_single_package =
+        local_turbo_state.supports_skip_infer_and_single_package();
+    let already_has_single_package_flag = shim_args
+        .remaining_turbo_args
+        .contains(&"--single-package".to_string());
+    let should_add_single_package_flag = repo_state.mode == RepoMode::SinglePackage
+        && !already_has_single_package_flag
+        && supports_skip_infer_and_single_package;
+
+    debug!(
+        "supports_skip_infer_and_single_package {:?}",
+        supports_skip_infer_and_single_package
+    );
+    let cwd = fs_canonicalize(&repo_state.root)?;
+    let mut raw_args: Vec<_> = if supports_skip_infer_and_single_package {
+        vec!["--skip-infer".to_string()]
+    } else {
+        Vec::new()
+    };
+
+    raw_args.append(&mut shim_args.remaining_turbo_args);
+
+    // We add this flag after the raw args to avoid accidentally passing it
+    // as a global flag instead of as a run flag.
+    if should_add_single_package_flag {
+        raw_args.push("--single-package".to_string());
+    }
+
+    raw_args.push("--".to_string());
+    raw_args.append(&mut shim_args.forwarded_args);
+
+    // We spawn a process that executes the local turbo
+    // that we've found in node_modules/.bin/turbo.
+    let mut command = process::Command::new(local_turbo_path);
+    command
+        .args(&raw_args)
+        // rather than passing an argument that local turbo might not understand, set
+        // an environment variable that can be optionally used
+        .env(
+            cli::INVOCATION_DIR_ENV_VAR,
+            shim_args.invocation_dir.as_path(),
+        )
+        .current_dir(cwd)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+
+    let child = spawn_child(command)?;
+
+    let exit_status = child.wait()?;
+    let exit_code = exit_status.code().unwrap_or_else(|| {
+        debug!("go-turbo failed to report exit code");
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            let signal = exit_status.signal();
+            let core_dumped = exit_status.core_dumped();
+            debug!(
+                "go-turbo caught signal {:?}. Core dumped? {}",
+                signal, core_dumped
             );
-            debug!("Running command as global turbo");
-            cli::run(Some(self), subscriber, ui)
         }
-    }
+        2
+    });
 
-    fn local_turbo_supports_skip_infer_and_single_package(&self) -> Result<bool> {
-        if let Some(LocalTurboState { version, .. }) = &self.local_turbo_state {
-            Ok(turbo_version_has_shim(version))
-        } else {
-            Ok(false)
-        }
-    }
-
-    fn spawn_local_turbo(&self, local_turbo_path: &Path, mut shim_args: ShimArgs) -> Result<i32> {
-        debug!(
-            "Running local turbo binary in {}\n",
-            local_turbo_path.display()
-        );
-
-        let supports_skip_infer_and_single_package =
-            self.local_turbo_supports_skip_infer_and_single_package()?;
-        let already_has_single_package_flag = shim_args
-            .remaining_turbo_args
-            .contains(&"--single-package".to_string());
-        let should_add_single_package_flag = self.mode == RepoMode::SinglePackage
-            && !already_has_single_package_flag
-            && supports_skip_infer_and_single_package;
-
-        debug!(
-            "supports_skip_infer_and_single_package {:?}",
-            supports_skip_infer_and_single_package
-        );
-        let cwd = fs_canonicalize(&self.root)?;
-        let mut raw_args: Vec<_> = if supports_skip_infer_and_single_package {
-            vec!["--skip-infer".to_string()]
-        } else {
-            Vec::new()
-        };
-
-        raw_args.append(&mut shim_args.remaining_turbo_args);
-
-        // We add this flag after the raw args to avoid accidentally passing it
-        // as a global flag instead of as a run flag.
-        if should_add_single_package_flag {
-            raw_args.push("--single-package".to_string());
-        }
-
-        raw_args.push("--".to_string());
-        raw_args.append(&mut shim_args.forwarded_args);
-
-        // We spawn a process that executes the local turbo
-        // that we've found in node_modules/.bin/turbo.
-        let mut command = process::Command::new(local_turbo_path);
-        command
-            .args(&raw_args)
-            // rather than passing an argument that local turbo might not understand, set
-            // an environment variable that can be optionally used
-            .env(
-                cli::INVOCATION_DIR_ENV_VAR,
-                shim_args.invocation_dir.as_path(),
-            )
-            .current_dir(cwd)
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit());
-
-        let child = spawn_child(command)?;
-
-        let exit_status = child.wait()?;
-        let exit_code = exit_status.code().unwrap_or_else(|| {
-            debug!("go-turbo failed to report exit code");
-            #[cfg(unix)]
-            {
-                use std::os::unix::process::ExitStatusExt;
-                let signal = exit_status.signal();
-                let core_dumped = exit_status.core_dumped();
-                debug!(
-                    "go-turbo caught signal {:?}. Core dumped? {}",
-                    signal, core_dumped
-                );
-            }
-            2
-        });
-
-        Ok(exit_code)
-    }
+    Ok(exit_code)
 }
 
 /// Checks for `TURBO_BINARY_PATH` variable. If it is set,
@@ -773,7 +764,7 @@ pub fn run() -> Result<Payload> {
     match RepoState::infer(&args.cwd) {
         Ok(repo_state) => {
             debug!("Repository Root: {}", repo_state.root);
-            repo_state.run_correct_turbo(args, &subscriber, ui)
+            run_correct_turbo(repo_state, args, &subscriber, ui)
         }
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global

@@ -9,7 +9,7 @@ use std::{
 };
 
 pub use builder::EngineBuilder;
-pub use execute::{ExecuteError, ExecutionOptions, Message};
+pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
 use petgraph::Graph;
 
 use crate::{

@@ -50,6 +50,7 @@ Test help flag
         --framework-inference [<BOOL>]   Specify whether or not to do framework inference for tasks [default: true] [possible values: true, false]
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]                Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
+        --env-mode [<ENV_MODE>]          Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json. Use "infer" to defer to existence of "passThroughEnv" or "globalPassThroughEnv" in turbo.json. (default infer) [default: infer] [possible values: infer, loose, strict]
         --ignore <IGNORE>                Files to ignore when calculating changed files (i.e. --since). Supports globs
         --include-dependencies           Include the dependencies of tasks in execution
         --no-cache                       Avoid saving task results to the cache. Useful for development/watch tasks
@@ -57,6 +58,7 @@ Test help flag
         --no-deps                        Exclude dependent task consumers from execution
         --output-logs <OUTPUT_LOGS>      Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
         --log-order <LOG_ORDER>          Set type of task output order. Use "stream" to show output as soon as it is available. Use "grouped" to show output when a command has finished execution. Use "auto" to let turbo decide based on its own heuristics. (default auto) [env: TURBO_LOG_ORDER=] [default: auto] [possible values: auto, stream, grouped]
+        --only                           Only executes the tasks specified, does not execute parent tasks
         --parallel                       Execute all tasks in parallel
         --profile <PROFILE>              File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
         --remote-only [<BOOL>]           Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache [env: TURBO_REMOTE_ONLY=] [default: false] [possible values: true, false]
@@ -118,6 +120,7 @@ Test help flag
         --framework-inference [<BOOL>]   Specify whether or not to do framework inference for tasks [default: true] [possible values: true, false]
         --global-deps <GLOBAL_DEPS>      Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]                Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
+        --env-mode [<ENV_MODE>]          Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json. Use "infer" to defer to existence of "passThroughEnv" or "globalPassThroughEnv" in turbo.json. (default infer) [default: infer] [possible values: infer, loose, strict]
         --ignore <IGNORE>                Files to ignore when calculating changed files (i.e. --since). Supports globs
         --include-dependencies           Include the dependencies of tasks in execution
         --no-cache                       Avoid saving task results to the cache. Useful for development/watch tasks
@@ -125,6 +128,7 @@ Test help flag
         --no-deps                        Exclude dependent task consumers from execution
         --output-logs <OUTPUT_LOGS>      Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
         --log-order <LOG_ORDER>          Set type of task output order. Use "stream" to show output as soon as it is available. Use "grouped" to show output when a command has finished execution. Use "auto" to let turbo decide based on its own heuristics. (default auto) [env: TURBO_LOG_ORDER=] [default: auto] [possible values: auto, stream, grouped]
+        --only                           Only executes the tasks specified, does not execute parent tasks
         --parallel                       Execute all tasks in parallel
         --profile <PROFILE>              File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
         --remote-only [<BOOL>]           Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache [env: TURBO_REMOTE_ONLY=] [default: false] [possible values: true, false]
@@ -159,9 +163,6 @@ Test help flag for link command
         --trace <TRACE>                   Specify a file to save a pprof trace
         --verbosity <COUNT>               Verbosity level
     -h, --help                            Print help
-  
-  Run Arguments:
-        --single-package  Run turbo in single-package mode
 
 Test help flag for unlink command
   $ ${TURBO} unlink -h
@@ -188,9 +189,6 @@ Test help flag for unlink command
         --trace <TRACE>                   Specify a file to save a pprof trace
         --verbosity <COUNT>               Verbosity level
     -h, --help                            Print help
-  
-  Run Arguments:
-        --single-package  Run turbo in single-package mode
 
 Test help flag for login command
   $ ${TURBO} login -h
@@ -217,9 +215,6 @@ Test help flag for login command
         --trace <TRACE>                   Specify a file to save a pprof trace
         --verbosity <COUNT>               Verbosity level
     -h, --help                            Print help
-  
-  Run Arguments:
-        --single-package  Run turbo in single-package mode
 
 Test help flag for logout command
   $ ${TURBO} logout -h
@@ -245,6 +240,3 @@ Test help flag for logout command
         --trace <TRACE>                   Specify a file to save a pprof trace
         --verbosity <COUNT>               Verbosity level
     -h, --help                            Print help
-  
-  Run Arguments:
-        --single-package  Run turbo in single-package mode
