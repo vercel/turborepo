@@ -155,10 +155,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         };
 
         // if the root package is in the filtered packages, remove it
-        if let Some(pkg_name) = &self.pkg_graph.root_package_json().name {
-            let name = WorkspaceName::Other(pkg_name.to_owned());
-            filter_patterns.remove(&name);
-        }
+        filter_patterns.remove(&WorkspaceName::Root);
 
         Ok(filter_patterns)
     }
@@ -574,12 +571,11 @@ mod test {
 
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
+    use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
     use super::{FilterResolver, PackageInference, TargetSelector};
     use crate::{
         package_graph::{PackageGraph, WorkspaceName},
-        package_json::PackageJson,
-        package_manager::PackageManager,
         run::{
             scope::change_detector::{ChangeDetectError, PackageChangeDetector},
             task_id::ROOT_PKG_NAME,

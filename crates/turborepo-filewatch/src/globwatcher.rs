@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     future::IntoFuture,
     str::FromStr,
 };
@@ -24,26 +25,53 @@ pub struct GlobSet {
     exclude: Any<'static>,
 }
 
+#[derive(Debug, Error)]
+pub struct GlobError {
+    // Boxed to minimize error size
+    underlying: Box<wax::BuildError>,
+    raw_glob: String,
+}
+
+impl Display for GlobError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.underlying, self.raw_glob)
+    }
+}
+
+fn compile_glob(raw: &str) -> Result<Glob<'static>, GlobError> {
+    Glob::from_str(raw)
+        .map(|g| g.to_owned())
+        .map_err(|e| GlobError {
+            underlying: Box::new(e),
+            raw_glob: raw.to_owned(),
+        })
+}
+
 impl GlobSet {
     pub fn from_raw(
         raw_includes: Vec<String>,
         raw_excludes: Vec<String>,
-    ) -> Result<Self, wax::BuildError> {
+    ) -> Result<Self, GlobError> {
         let include = raw_includes
             .into_iter()
             .map(|raw_glob| {
-                let glob = Glob::from_str(&raw_glob)?.to_owned();
+                let glob = compile_glob(&raw_glob)?;
                 Ok((raw_glob, glob))
             })
-            .collect::<Result<HashMap<_, _>, wax::BuildError>>()?;
+            .collect::<Result<HashMap<_, _>, GlobError>>()?;
         let excludes = raw_excludes
-            .into_iter()
+            .iter()
             .map(|raw_glob| {
-                let glob = Glob::from_str(&raw_glob)?.to_owned();
+                let glob = compile_glob(raw_glob)?;
                 Ok(glob)
             })
-            .collect::<Result<Vec<_>, wax::BuildError>>()?;
-        let exclude = wax::any(excludes)?.to_owned();
+            .collect::<Result<Vec<_>, GlobError>>()?;
+        let exclude = wax::any(excludes)
+            .map_err(|e| GlobError {
+                underlying: Box::new(e),
+                raw_glob: format!("{{{}}}", raw_excludes.join(",")),
+            })?
+            .to_owned();
         Ok(Self { include, exclude })
     }
 }

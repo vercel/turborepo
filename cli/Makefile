@@ -30,7 +30,7 @@ GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/t
 # We do not set go-turbo as a dependency because the Rust build.rs
 # script will call it for us and copy over the binary
 turbo:
-	cargo build -p turbo
+	cargo build -p turbo --features run-stub
 
 turbo-prod:
 	cargo build --release --manifest-path ../crates/turborepo/Cargo.toml

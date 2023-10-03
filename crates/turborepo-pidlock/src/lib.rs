@@ -1,17 +1,20 @@
 #![deny(clippy::all)]
+#![feature(assert_matches)]
 
 use std::{
     convert::TryInto,
     fs,
-    io::{Read, Write},
+    io::{self, Read, Write},
+    num::TryFromIntError,
     path::PathBuf,
     process,
 };
 
 use log::warn;
+use thiserror::Error;
 
 /// Errors that may occur during the `Pidlock` lifetime.
-#[derive(Debug, thiserror::Error, PartialEq)]
+#[derive(Debug, Error)]
 pub enum PidlockError {
     /// A lock already exists
     #[error("lock exists at \"{0}\", please remove it")]
@@ -23,6 +26,24 @@ pub enum PidlockError {
     /// The lock is already owned by a running process
     #[error("already owned")]
     AlreadyOwned,
+    #[error("pid file error: {0}")]
+    File(#[from] PidFileError),
+}
+
+/// Errors that can occur when dealing with the file
+/// on disk.
+#[derive(Debug, Error)]
+pub enum PidFileError {
+    #[error("Error reading pid file {1}: {0}")]
+    IO(io::Error, String),
+    #[error("Invalid pid {contents} in file {file}: {error}")]
+    Invalid {
+        error: String,
+        contents: String,
+        file: String,
+    },
+    #[error("Failed to remove stale pid file {1}: {0}")]
+    FailedDelete(io::Error, String),
 }
 
 /// A result from a Pidlock operation
@@ -104,7 +125,7 @@ impl Pidlock {
         }
 
         // acquiring something with a valid owner is an error
-        if self.get_owner().is_some() {
+        if self.get_owner()?.is_some() {
             return Err(PidlockError::AlreadyOwned);
         }
 
@@ -153,32 +174,58 @@ impl Pidlock {
     /// Gets the owner of this lockfile, returning the pid. If the lock file
     /// doesn't exist, or the specified pid is not a valid process id on the
     /// system, it clears it.
-    pub fn get_owner(&self) -> Option<u32> {
+    pub fn get_owner(&self) -> Result<Option<u32>, PidFileError> {
         let mut file = match fs::OpenOptions::new().read(true).open(self.path.clone()) {
             Ok(file) => file,
-            Err(_) => {
-                return None;
+            Err(io_err) => {
+                // If the file doesn't exist, there's no owner. If, on the
+                // other hand, some other IO error occurred, we don't know
+                // the situation and need to return an error
+                if io_err.kind() == io::ErrorKind::NotFound {
+                    return Ok(None);
+                } else {
+                    return Err(PidFileError::IO(io_err, self.path.display().to_string()));
+                }
             }
         };
 
         let mut contents = String::new();
-        if file.read_to_string(&mut contents).is_err() {
-            warn!("corrupted/invalid pid file at {:?}", self.path);
-            return None;
+        if let Err(io_err) = file.read_to_string(&mut contents) {
+            warn!("corrupted/invalid pid file at {:?}: {}", self.path, io_err);
+            // Return an error, because None implies that we would succeed at
+            // creating a pid file, but we won't. We require the file to not
+            // exist if we're going to create it.
+            // TODO: should we instead try deleting the file like with stale pids?
+            return Err(PidFileError::IO(io_err, self.path.display().to_string()));
         }
 
         match contents.trim().parse::<i32>() {
             Ok(pid) if process_exists(pid) => {
-                Some(pid.try_into().expect("if a pid exists it is a valid u32"))
+                let pid: u32 =
+                    pid.try_into()
+                        .map_err(|e: TryFromIntError| PidFileError::Invalid {
+                            error: e.to_string(),
+                            contents,
+                            file: self.path.display().to_string(),
+                        })?;
+                Ok(Some(pid))
             }
-            Ok(_) => {
+            Ok(pid) => {
                 warn!("stale pid file at {:?}", self.path);
-                None
+                if let Err(e) = fs::remove_file(&self.path) {
+                    Err(PidFileError::FailedDelete(
+                        e,
+                        self.path.display().to_string(),
+                    ))
+                } else {
+                    Ok(None)
+                }
             }
-            Err(_) => {
-                warn!("nonnumeric pid file at {:?}", self.path);
-                None
-            }
+            Err(e) => Err(PidFileError::Invalid {
+                error: e.to_string(),
+                contents,
+                file: self.path.display().to_string(),
+            }),
         }
     }
 }
@@ -193,11 +240,11 @@ impl Drop for Pidlock {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, io::Write, path::PathBuf};
+    use std::{assert_matches::assert_matches, fs, io::Write, path::PathBuf};
 
     use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
-    use super::{Pidlock, PidlockError, PidlockState};
+    use super::{PidFileError, Pidlock, PidlockError, PidlockState};
 
     // This was removed from the library itself, but retained here
     // to assert backwards compatibility with std::process::id
@@ -244,7 +291,7 @@ mod tests {
         match pidfile.acquire() {
             Err(err) => {
                 orig_pidfile.release().unwrap();
-                assert_eq!(err, PidlockError::AlreadyOwned);
+                assert_matches!(err, PidlockError::AlreadyOwned);
             }
             _ => {
                 orig_pidfile.release().unwrap();
@@ -261,7 +308,7 @@ mod tests {
         match pidfile.acquire() {
             Err(err) => {
                 pidfile.release().unwrap();
-                assert_eq!(err, PidlockError::InvalidState);
+                assert_matches!(err, PidlockError::InvalidState);
             }
             _ => {
                 pidfile.release().unwrap();
@@ -276,7 +323,7 @@ mod tests {
         let mut pidfile = Pidlock::new(pid_path);
         match pidfile.release() {
             Err(err) => {
-                assert_eq!(err, PidlockError::InvalidState);
+                assert_matches!(err, PidlockError::InvalidState);
             }
             _ => {
                 panic!("Test failed");
@@ -313,8 +360,10 @@ mod tests {
 
         drop(file);
 
+        // expect a stale pid file to be cleaned up
         let mut pidfile = Pidlock::new(path.clone());
-        assert_eq!(pidfile.acquire(), Err(PidlockError::LockExists(path)));
+        // We clear stale pid files when acquiring them, we expect this to succeed
+        assert!(pidfile.acquire().is_ok());
     }
 
     #[test]
@@ -336,8 +385,11 @@ mod tests {
         drop(file);
 
         let mut pidfile = Pidlock::new(path.clone());
-
-        assert_eq!(pidfile.acquire(), Err(PidlockError::LockExists(path)));
+        // Contents are invalid
+        assert_matches!(
+            pidfile.acquire(),
+            Err(PidlockError::File(PidFileError::Invalid { .. }))
+        );
     }
 
     #[test]
@@ -349,12 +401,17 @@ mod tests {
             .open(path.clone())
             .expect("Could not open file for writing");
 
-        file.write_all(&rand::thread_rng().gen::<[u8; 32]>())
-            .unwrap();
+        let invalid_utf8 = vec![0xff, 0xff, 0xff, 0xff];
+        file.write_all(&invalid_utf8).unwrap();
 
         drop(file);
 
         let mut pidfile = Pidlock::new(path.clone());
-        assert_eq!(pidfile.acquire(), Err(PidlockError::LockExists(path)));
+        // We expect an IO error from trying to read as a utf8 string when it's just
+        // bytes
+        assert_matches!(
+            pidfile.acquire(),
+            Err(PidlockError::File(PidFileError::IO(..)))
+        );
     }
 }

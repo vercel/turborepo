@@ -461,7 +461,7 @@ fn add_space_id_to_turbo_json(base: &CommandBase, space_id: &str) -> Result<()> 
 
 #[cfg(test)]
 mod test {
-    use std::{cell::OnceCell, fs};
+    use std::{cell::OnceCell, collections::HashMap, fs};
 
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
@@ -496,7 +496,12 @@ mod test {
             )
             .unwrap(),
             ui: UI::new(false),
-            client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
+            client_config: OnceCell::from(
+                ClientConfigLoader::new()
+                    .with_environment(Some(HashMap::new()))
+                    .load()
+                    .unwrap(),
+            ),
             user_config: OnceCell::from(
                 UserConfigLoader::new(user_config_file.path().to_str().unwrap())
                     .with_token(Some("token".to_string()))
@@ -549,7 +554,12 @@ mod test {
             repo_root: AbsoluteSystemPathBuf::try_from(TempDir::new().unwrap().into_path())
                 .unwrap(),
             ui: UI::new(false),
-            client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
+            client_config: OnceCell::from(
+                ClientConfigLoader::new()
+                    .with_environment(Some(HashMap::new()))
+                    .load()
+                    .unwrap(),
+            ),
             user_config: OnceCell::from(
                 UserConfigLoader::new(user_config_file.path().to_str().unwrap())
                     .with_token(Some("token".to_string()))

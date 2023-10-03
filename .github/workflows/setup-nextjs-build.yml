@@ -126,7 +126,7 @@ jobs:
       # Note that we do not use upload / download artifacts for this -
       # it is too heavyweight for the purpose since we do not need to persist
       # the cache across multiple runs.
-      - name: Store next.js build cache with next-dev binary
+      - name: Store next.js build cache with next-swc
         uses: actions/cache/save@v3
         id: cache-build
         with:

@@ -16,14 +16,17 @@
 //! them when the manager is closed.
 
 use std::{
-    io,
+    io::{self, Write},
     sync::{Arc, Mutex},
     time::Duration,
 };
 
 use command_group::AsyncCommandGroup;
+use futures::future::try_join3;
+use itertools::Itertools;
 pub use tokio::process::Command;
 use tokio::{
+    io::{AsyncBufReadExt, AsyncRead, BufReader},
     join,
     sync::{mpsc, watch, RwLock},
 };
@@ -146,6 +149,7 @@ pub struct Child {
     stdin: Arc<Mutex<Option<tokio::process::ChildStdin>>>,
     stdout: Arc<Mutex<Option<tokio::process::ChildStdout>>>,
     stderr: Arc<Mutex<Option<tokio::process::ChildStderr>>>,
+    label: String,
 }
 
 #[derive(Debug)]
@@ -175,6 +179,18 @@ impl Child {
     /// Start a child process, returning a handle that can be used to interact
     /// with it. The command will be started immediately.
     pub fn spawn(mut command: Command, shutdown_style: ShutdownStyle) -> io::Result<Self> {
+        let label = {
+            let cmd = command.as_std();
+            format!(
+                "({}) {} {}",
+                cmd.get_current_dir()
+                    .map(|dir| dir.to_string_lossy())
+                    .unwrap_or_default(),
+                cmd.get_program().to_string_lossy(),
+                cmd.get_args().map(|s| s.to_string_lossy()).join(" ")
+            )
+        };
+
         let group = command.group().spawn()?;
 
         let gid = group.id();
@@ -264,6 +280,7 @@ impl Child {
             stdin: Arc::new(Mutex::new(stdin)),
             stdout: Arc::new(Mutex::new(stdout)),
             stderr: Arc::new(Mutex::new(stderr)),
+            label,
         })
     }
 
@@ -342,6 +359,46 @@ impl Child {
 
     pub fn stderr(&mut self) -> Option<tokio::process::ChildStderr> {
         self.stderr.lock().unwrap().take()
+    }
+
+    /// Wait for the `Child` to exit and pipe any stdout and stderr to the
+    /// provided writers.
+    pub async fn wait_with_piped_outputs<W: Write>(
+        &mut self,
+        stdout_pipe: W,
+        stderr_pipe: W,
+    ) -> Result<Option<ChildExit>, std::io::Error> {
+        // Note this is similar to tokio::process::Command::wait_with_outputs
+        // but allows us to provide our own sinks instead of just writing to a buffers.
+        async fn pipe_lines<R: AsyncRead + Unpin, W: Write>(
+            stream: Option<R>,
+            mut sink: W,
+        ) -> std::io::Result<()> {
+            let Some(stream) = stream else { return Ok(()) };
+            let mut stream = BufReader::new(stream);
+            let mut buffer = String::new();
+            loop {
+                // If 0 bytes are read that indicates we've hit EOF
+                if stream.read_line(&mut buffer).await? == 0 {
+                    break;
+                }
+                sink.write_all(buffer.as_bytes())?;
+                buffer.clear();
+            }
+            Ok(())
+        }
+
+        let stdout_fut = pipe_lines(self.stdout(), stdout_pipe);
+        let stderr_fut = pipe_lines(self.stderr(), stderr_pipe);
+
+        let (exit, _stdout, _stderr) =
+            try_join3(async { Ok(self.wait().await) }, stdout_fut, stderr_fut).await?;
+
+        Ok(exit)
+    }
+
+    pub fn label(&self) -> &str {
+        &self.label
     }
 }
 
@@ -570,12 +627,34 @@ mod test {
 
         let state = child.state.read().await;
 
-        let expected = if cfg!(unix) {
+        let _expected = if cfg!(unix) {
             ChildExit::KilledExternal
         } else {
             ChildExit::Finished(Some(1))
         };
 
-        assert_matches!(&*state, ChildState::Exited(expected));
+        assert_matches!(&*state, ChildState::Exited(_expected));
+    }
+
+    #[tokio::test]
+    async fn test_wait_with_output() {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+
+        let exit = child
+            .wait_with_piped_outputs(&mut out, &mut err)
+            .await
+            .unwrap();
+
+        assert_eq!(out, b"hello world\n");
+        assert!(err.is_empty());
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 }

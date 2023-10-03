@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::{check_path, AbsoluteSystemPath, AnchoredSystemPath, PathError, PathValidation};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct AnchoredSystemPathBuf(pub(crate) Utf8PathBuf);
 
 impl TryFrom<&str> for AnchoredSystemPathBuf {

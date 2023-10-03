@@ -68,6 +68,13 @@ jobs:
             Cargo.*
             rust-toolchain
 
+      - name: Turborepo version changes
+        id: turborepo_version
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            version.txt
+
       - name: Rust related changes
         id: rust
         uses: technote-space/get-diff-action@v6
@@ -183,10 +190,12 @@ jobs:
       turbopack_typescript: ${{ steps.ci.outputs.diff != '' || steps.turbopack_typescript.outputs.diff != '' }}
       turborepo_rust: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
       turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
-      go: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
+      turborepo_go_unit: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
+      turborepo_go_lint: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != ''}}
+      turborepo_build: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
       turborepo_e2e: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_e2e.outputs.diff != '' }}
       go_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
-      examples: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' || steps.examples.outputs.diff != '' }}
+      examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' || steps.turborepo_version.outputs.diff != '' }}
       turborepo_js: ${{ steps.ci.outputs.diff != '' || steps.turborepo_js.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
@@ -196,6 +205,8 @@ jobs:
 
   build_turborepo:
     name: Build Turborepo
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.turborepo_build == 'true'
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -207,8 +218,6 @@ jobs:
             runner: macos-latest
           - name: windows
             runner: windows-latest
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.go == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -226,7 +235,7 @@ jobs:
     name: Go linting
     runs-on: ubuntu-latest
     needs: determine_jobs
-    if: needs.determine_jobs.outputs.go == 'true'
+    if: needs.determine_jobs.outputs.turborepo_go_lint == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -255,7 +264,7 @@ jobs:
   go_unit:
     name: Go Unit Tests
     needs: determine_jobs
-    if: needs.determine_jobs.outputs.go == 'true'
+    if: needs.determine_jobs.outputs.turborepo_go_unit == 'true'
     timeout-minutes: 45
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -335,7 +344,7 @@ jobs:
 
   turborepo_examples:
     name: Turborepo Examples
-    needs: [determine_jobs, build_turborepo]
+    needs: [determine_jobs]
     if: needs.determine_jobs.outputs.examples == 'true'
     timeout-minutes: 40
 
@@ -401,7 +410,7 @@ jobs:
     name: JS Package Tests
     timeout-minutes: 30
     if: needs.determine_jobs.outputs.turborepo_js == 'true'
-    needs: [determine_jobs, build_turborepo]
+    needs: [determine_jobs]
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -641,7 +650,7 @@ jobs:
           (set -o pipefail && \
           cargo check \
             --config $BINDING --config $TASKS --config $TASKS_FS \
-            --all -p next-swc-api -p next-dev \
+            --all -p next-swc-api \
             --no-default-features --features cli,custom_allocator,rustls-tls \
             --message-format short --quiet \
           2>&1 | tee cargo_output.log)
@@ -975,7 +984,7 @@ jobs:
           # One of Turbopack with 1000 modules is benchmarked in every run
           # to create a baseline result for normalization (should the runners performance vary between jobs)
 
-          # This runs all the non next-dev benchmarks
+          # This runs all the non turbopack-bench benchmarks
           - name: generic
             cache_key: all
             args: --workspace --exclude turbopack-bench

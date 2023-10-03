@@ -22,7 +22,7 @@ use futures::Future;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
 
-use self::child::{Child, ChildExit};
+pub use self::child::{Child, ChildExit};
 
 /// A process manager that is responsible for spawning and managing child
 /// processes. When the manager is Open, new child processes can be spawned

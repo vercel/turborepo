@@ -36,7 +36,7 @@ As the current state of the art, we're including [Vite](https://vitejs.dev/) alo
 Let's break down exactly what each of these metrics mean, and how they'll impact your day-to-day developer experience.
 
 <Callout type="info">
-  Curious about how these benchmarks are implemented, or want to run them yourself? Check out [our benchmark suite documentation in the Turbo monorepo](https://github.com/vercel/turbo/blob/main/crates/next-dev/benches/README.md).
+  Curious about how these benchmarks are implemented, or want to run them yourself? Check out [our benchmark suite documentation in the Turbo monorepo](https://github.com/vercel/turbo/blob/main/crates/turbopack-bench/README.md).
 </Callout>
 
 ### Cold startup time
@@ -66,7 +66,7 @@ This test measures how fast a local development server starts up on an applicati
 To run this benchmark yourself, clone [`vercel/turbo`](https://github.com/vercel/turbo) and then use this command from the root:
 
 ```sh
-TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "startup/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)."
+TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p turbopack-bench "startup/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)."
 ```
 
 Here are the numbers we were able to produce on a 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400):
@@ -145,7 +145,7 @@ We're excited by Turbopack's performance, but we also expect to make further spe
 To run this benchmark yourself, clone [`vercel/turbo`](https://github.com/vercel/turbo) and then use this command from the root:
 
 ```
-TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p next-dev "hmr_to_commit/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)"
+TURBOPACK_BENCH_COUNTS=1000,5000,10000,30000 TURBOPACK_BENCH_BUNDLERS=all cargo bench -p turbopack-bench "hmr_to_commit/(Turbopack SSR|Next.js 12 SSR|Next.js 11 SSR|Vite SWC CSR)"
 ```
 
 Here are the numbers we were able to produce on a 16” MacBook Pro 2021, M1 Max, 32GB RAM, macOS 13.0.1 (22A400):

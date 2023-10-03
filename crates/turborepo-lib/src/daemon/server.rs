@@ -29,11 +29,11 @@ use tokio::{
 };
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
-use tracing::{error, trace, warn};
+use tracing::{error, info, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
     cookie_jar::CookieJar,
-    globwatcher::{Error as GlobWatcherError, GlobSet, GlobWatcher},
+    globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
     FileSystemWatcher, WatchError,
 };
 
@@ -68,7 +68,7 @@ enum RpcError {
     #[error("deadline exceeded")]
     DeadlineExceeded,
     #[error("invalid glob: {0}")]
-    InvalidGlob(#[from] wax::BuildError),
+    InvalidGlob(#[from] GlobError),
     #[error("globwatching failed: {0}")]
     GlobWatching(#[from] GlobWatcherError),
     #[error("filewatching unavailable")]
@@ -105,6 +105,9 @@ async fn start_filewatching(
     Ok(())
 }
 
+/// Timeout for every RPC the server handles
+const REQUEST_TIMEOUT: Duration = Duration::from_millis(100);
+
 /// run a gRPC server providing the Turbod interface. external_shutdown
 /// can be used to deliver a signal to shutdown the server. This is expected
 /// to be wired to signal handling.
@@ -120,7 +123,7 @@ where
     S: Future<Output = CloseReason>,
 {
     let running = Arc::new(AtomicBool::new(true));
-    let (_pid_lock, stream) = match listen_socket(daemon_root.clone(), running.clone()).await {
+    let (_pid_lock, stream) = match listen_socket(daemon_root, running.clone()).await {
         Ok((pid_lock, stream)) => (pid_lock, stream),
         Err(e) => return CloseReason::SocketOpenError(e),
     };
@@ -144,6 +147,7 @@ where
             error!("filewatching failed to start: {}", e);
             let _ = fw_shutdown.send(()).await;
         }
+        info!("filewatching started");
     });
     // exit_root_watch delivers a signal to the root watch loop to exit.
     // In the event that the server shuts down via some other mechanism, this
@@ -187,13 +191,15 @@ where
             ));
 
         Server::builder()
+            // set a max timeout for RPCs
+            .timeout(REQUEST_TIMEOUT)
             .add_service(service)
             .serve_with_incoming_shutdown(stream, shutdown_fut)
     };
     // Wait for the server to exit.
     // This can be triggered by timeout, root watcher, or an RPC
     let _ = server_fut.await;
-    trace!("gRPC server exited");
+    info!("gRPC server exited");
     // Ensure our timer will exit
     running.store(false, Ordering::SeqCst);
     // We expect to have a signal from the grpc server on what triggered the exit
@@ -223,6 +229,7 @@ struct TurboGrpcService {
 
 impl TurboGrpcService {
     async fn trigger_shutdown(&self) {
+        info!("triggering shutdown");
         let _ = self.shutdown.send(()).await;
     }
 

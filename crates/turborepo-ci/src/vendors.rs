@@ -13,9 +13,9 @@ pub struct Vendor {
     pub(crate) constant: &'static str,
     pub(crate) env: VendorEnvs,
     pub(crate) eval_env: Option<HashMap<&'static str, &'static str>>,
-    pub(crate) sha_env_var: Option<&'static str>,
-    pub(crate) branch_env_var: Option<&'static str>,
-    pub(crate) username_env_var: Option<&'static str>,
+    pub sha_env_var: Option<&'static str>,
+    pub branch_env_var: Option<&'static str>,
+    pub username_env_var: Option<&'static str>,
 }
 
 static VENDORS: OnceLock<[Vendor; 45]> = OnceLock::new();

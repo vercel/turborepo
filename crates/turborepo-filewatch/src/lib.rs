@@ -20,7 +20,7 @@ use notify::{Config, RecommendedWatcher};
 use notify::{Event, EventHandler, RecursiveMode, Watcher};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
-use tracing::warn;
+use tracing::{debug, warn};
 // windows -> no recursive watch, watch ancestors
 // linux -> recursive watch, watch ancestors
 #[cfg(feature = "watch_ancestors")]
@@ -33,6 +33,7 @@ use {
         ErrorKind,
     },
     std::io,
+    tracing::trace,
     walkdir::WalkDir,
 };
 
@@ -93,9 +94,11 @@ impl FileSystemWatcher {
         let (send_file_events, mut recv_file_events) = mpsc::channel(1024);
         let watch_root = root.to_owned();
         let broadcast_sender = sender.clone();
+        debug!("starting filewatcher");
         let watcher = run_watcher(&watch_root, send_file_events)?;
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
         // Ensure we are ready to receive new events, not events for existing state
+        debug!("waiting for initial filesystem cookie");
         wait_for_cookie(root, &mut recv_file_events).await?;
         tokio::task::spawn(watch_events(
             watcher,
@@ -104,6 +107,7 @@ impl FileSystemWatcher {
             exit_signal,
             broadcast_sender,
         ));
+        debug!("filewatching ready");
         Ok(Self {
             sender,
             _exit_ch: exit_ch,
@@ -273,6 +277,7 @@ fn manually_add_recursive_watches(
     for dir in WalkDir::new(root).follow_links(false).into_iter() {
         let dir = dir?;
         if dir.file_type().is_dir() {
+            trace!("manually watching {}", dir.path().display());
             match watcher.watch(dir.path(), RecursiveMode::NonRecursive) {
                 Ok(()) => {}
                 // If we try to watch a non-existent path, we can just skip
