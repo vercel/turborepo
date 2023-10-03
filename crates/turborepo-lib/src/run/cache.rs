@@ -102,8 +102,6 @@ impl RunCache {
             ui: self.ui,
         }
     }
-
-    // pub fn notify
 }
 
 pub struct TaskCache {
