@@ -487,7 +487,8 @@ impl<'a> Run<'a> {
             true,
             self.processes.clone(),
             &self.base.repo_root,
-        );
+        )
+        .dry_run();
 
         visitor.visit(engine.clone()).await?;
         let task_hash_tracker = visitor.into_task_hash_tracker();
