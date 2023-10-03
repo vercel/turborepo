@@ -1,7 +1,7 @@
 import { exec } from "node:child_process";
 import path from "node:path";
-import { existsSync } from "node:fs";
-import { getTurboRoot } from "@turbo/utils";
+import { existsSync, readFileSync } from "node:fs";
+import { getTurboRoot, withTempFile } from "@turbo/utils";
 import type { DryRun } from "@turbo/types";
 import { getComparison } from "./getComparison";
 import { getTask } from "./getTask";
@@ -104,44 +104,46 @@ export function turboIgnore(
     execOptions.maxBuffer = opts.maxBuffer;
   }
 
-  exec(command, execOptions, (err, stdout) => {
-    if (err) {
-      const { level, code, message } = shouldWarn({ err: err.message });
-      if (level === "warn") {
-        warn(message);
-      } else {
-        error(`${code}: ${err.message}`);
-      }
-      return continueBuild();
-    }
-
-    try {
-      const parsed = JSON.parse(stdout) as DryRun | null;
-      if (parsed === null) {
-        error(`Failed to parse JSON output from \`${command}\`.`);
-        return continueBuild();
-      }
-      const { packages } = parsed;
-      if (packages.length > 0) {
-        if (packages.length === 1) {
-          info(`This commit affects "${workspace}"`);
+  withTempFile((tempFile: string) => {
+    exec(`${command} > ${tempFile}`, execOptions, (err, _stdout) => {
+      if (err) {
+        const { level, code, message } = shouldWarn({ err: err.message });
+        if (level === "warn") {
+          warn(message);
         } else {
-          // subtract 1 because the first package is the workspace itself
-          info(
-            `This commit affects "${workspace}" and ${packages.length - 1} ${
-              packages.length - 1 === 1 ? "dependency" : "dependencies"
-            } (${packages.slice(1).join(", ")})`
-          );
+          error(`${code}: ${err.message}`);
         }
-
         return continueBuild();
       }
-      info(`This project and its dependencies are not affected`);
-      return ignoreBuild();
-    } catch (e) {
-      error(`Failed to parse JSON output from \`${command}\`.`);
-      error(e);
-      return continueBuild();
-    }
+      try {
+        const stdout = readFileSync(tempFile, { encoding: "utf8" });
+        const parsed = JSON.parse(stdout) as DryRun | null;
+        if (parsed === null) {
+          error(`Failed to parse JSON output from \`${command}\`.`);
+          return continueBuild();
+        }
+        const { packages } = parsed;
+        if (packages.length > 0) {
+          if (packages.length === 1) {
+            info(`This commit affects "${workspace}"`);
+          } else {
+            // subtract 1 because the first package is the workspace itself
+            info(
+              `This commit affects "${workspace}" and ${packages.length - 1} ${
+                packages.length - 1 === 1 ? "dependency" : "dependencies"
+              } (${packages.slice(1).join(", ")})`
+            );
+          }
+
+          return continueBuild();
+        }
+        info(`This project and its dependencies are not affected`);
+        return ignoreBuild();
+      } catch (e) {
+        error(`Failed to parse JSON output from \`${command}\`.`);
+        error(e);
+        return continueBuild();
+      }
+    });
   });
 }

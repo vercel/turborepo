@@ -3,7 +3,10 @@ import child_process, {
   type ChildProcess,
   type ExecException,
 } from "node:child_process";
-import {
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import testUtils, {
   spyConsole,
   spyExit,
   type SpyExit,
@@ -42,7 +45,9 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", {});
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx turbo run build --filter=test-workspace...[HEAD^] --dry=json",
+      expect.stringContaining(
+        "npx turbo run build --filter=test-workspace...[HEAD^] --dry=json"
+      ),
       expect.anything(),
       expect.anything()
     );
@@ -75,7 +80,9 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", {});
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx turbo run build --filter=test-workspace...[HEAD^] --dry=json",
+      expect.stringContaining(
+        "npx turbo run build --filter=test-workspace...[HEAD^] --dry=json"
+      ),
       expect.anything(),
       expect.anything()
     );
@@ -120,7 +127,9 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", {});
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx turbo run build --filter=test-workspace...[too-far-back] --dry=json",
+      expect.stringContaining(
+        "npx turbo run build --filter=test-workspace...[too-far-back] --dry=json"
+      ),
       expect.anything(),
       expect.anything()
     );
@@ -158,7 +167,9 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", { fallback: "HEAD^" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx turbo run build --filter=test-workspace...[HEAD^] --dry=json",
+      expect.stringContaining(
+        "npx turbo run build --filter=test-workspace...[HEAD^] --dry=json"
+      ),
       expect.anything(),
       expect.anything()
     );
@@ -471,7 +482,9 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/app" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx turbo run build --filter=test-app...[HEAD^] --dry=json",
+      expect.stringContaining(
+        "npx turbo run build --filter=test-app...[HEAD^] --dry=json"
+      ),
       expect.anything(),
       expect.anything()
     );
@@ -504,7 +517,9 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/app" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx turbo run build --filter=test-app...[HEAD^] --dry=json",
+      expect.stringContaining(
+        "npx turbo run build --filter=test-app...[HEAD^] --dry=json"
+      ),
       expect.anything(),
       expect.anything()
     );
@@ -572,15 +587,21 @@ describe("turboIgnore()", () => {
       .spyOn(child_process, "execSync")
       .mockReturnValue("commit");
 
+    const logFile = "special-log.txt";
+
+    const mockTempFile = jest
+      .spyOn(testUtils, "withTempFile")
+      .mockImplementation(<T>(task: (path: string) => T) => {
+        return task(logFile);
+      });
+
+    // const mock
+
     const mockExec = jest
       .spyOn(child_process, "exec")
       .mockImplementation((command, options, callback) => {
         if (callback) {
-          return callback(
-            null,
-            '{"packages":[],"tasks":[]}',
-            "stderr"
-          ) as unknown as ChildProcess;
+          return callback(null, "", "stderr") as unknown as ChildProcess;
         }
         return {} as unknown as ChildProcess;
       });
@@ -605,6 +626,7 @@ describe("turboIgnore()", () => {
     expectIgnore(mockExit);
     mockExecSync.mockRestore();
     mockExec.mockRestore();
+    mockRead.mockRestore();
   });
 
   it("passes max buffer to turbo exectuion", () => {
@@ -624,7 +646,9 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/app", maxBuffer: 1024 });
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx turbo run build --filter=test-app...[HEAD^] --dry=json",
+      expect.stringContaining(
+        "npx turbo run build --filter=test-app...[HEAD^] --dry=json"
+      ),
       expect.objectContaining({ maxBuffer: 1024 }),
       expect.anything()
     );
