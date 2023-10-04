@@ -12,12 +12,14 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
 
     // We are passing a closure here, but it would be cleaner if we made a
     // turborepo-config crate and imported that into turborepo-auth.
+    // TODO: We aren't using `token_path` here but these are both using the same
+    //       token path.
     let set_token = |token: &str| -> Result<(), anyhow::Error> {
         Ok(base.user_config_mut()?.set_token(Some(token.to_string()))?)
     };
 
     auth_sso_login(
-        api_client,
+        &api_client,
         &ui,
         &token_path,
         set_token,

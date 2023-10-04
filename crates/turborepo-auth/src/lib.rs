@@ -1,6 +1,9 @@
 #[cfg(not(test))]
 use std::net::SocketAddr;
-use std::{path::Path, sync::{Arc, atomic::AtomicUsize}};
+use std::{path::Path, sync::Arc};
+
+#[cfg(test)]
+use std::sync::atomic::AtomicUsize;
 
 use anyhow::{anyhow, Context, Result};
 #[cfg(not(test))]
@@ -12,7 +15,7 @@ use tokio::sync::OnceCell;
 use tracing::error;
 #[cfg(not(test))]
 use tracing::warn;
-use turborepo_api_client::{APIClient, Client};
+use turborepo_api_client::Client;
 use turborepo_ui::{start_spinner, BOLD, CYAN, GREY, UI};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
@@ -206,7 +209,7 @@ struct SsoPayload {
 /// present, and the token has access to the provided `sso_team`, we do not
 /// overwrite it and instead log that we found an existing token.
 pub async fn sso_login<F>(
-    api_client: APIClient,
+    api_client: &impl Client,
     ui: &UI,
     token_path: impl AsRef<Path>,
     mut set_token: F,
@@ -318,6 +321,7 @@ fn get_token_and_redirect(payload: SsoPayload) -> Result<(Option<String>, Url)> 
 
 #[cfg(test)]
 async fn run_sso_one_shot_server(_: u16, verification_token: Arc<OnceCell<String>>) -> Result<()> {
+    SSO_HITS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     verification_token
         .set(EXPECTED_VERIFICATION_TOKEN.to_string())
         .unwrap();
@@ -369,12 +373,19 @@ mod test {
     };
     use turborepo_vercel_api_mock::start_test_server;
 
-    use crate::{get_token_and_redirect, login, sso_login, SsoPayload, LOGIN_HITS};
+    use crate::{get_token_and_redirect, login, sso_login, SsoPayload, LOGIN_HITS, SSO_HITS, EXPECTED_VERIFICATION_TOKEN};
 
-    struct MockApiClient {}
+    struct MockApiClient {
+        pub base_url: String,
+    }
     impl MockApiClient {
         fn new() -> Self {
-            Self {}
+            Self {
+                base_url: String::new(),
+            }
+        }
+        fn set_base_url(&mut self, base_url: &str) {
+            self.base_url = base_url.to_string();
         }
     }
 
@@ -395,7 +406,7 @@ mod test {
             Ok(TeamsResponse {
                 teams: vec![Team {
                     id: "id".to_string(),
-                    slug: "slug".to_string(),
+                    slug: "something".to_string(),
                     name: "name".to_string(),
                     created_at: 0,
                     created: chrono::Utc::now(),
@@ -429,10 +440,13 @@ mod test {
         }
         async fn verify_sso_token(
             &self,
-            _token: &str,
-            _token_name: &str,
+            token: &str,
+            _: &str,
         ) -> Result<VerifiedSsoUser> {
-            unimplemented!("verify_sso_token")
+            Ok(VerifiedSsoUser{
+                token: token.to_string(),
+                team_id: Some("team_id".to_string()),
+            })
         }
         async fn put_artifact(
             &self,
@@ -484,8 +498,8 @@ mod test {
         ) -> Result<PreflightResponse> {
             unimplemented!("do_preflight")
         }
-        fn make_url(&self, _endpoint: &str) -> String {
-            unimplemented!("make_url")
+        fn make_url(&self, endpoint: &str) -> String {
+            format!("{}{}", self.base_url, endpoint)
         }
     }
 
@@ -495,10 +509,23 @@ mod test {
         let api_server = tokio::spawn(start_test_server(port));
         let ui = UI::new(false);
         let url = format!("http://localhost:{port}");
-        let token_path = Path::new("token.json");
+        let token_filename: &str = "token.json";
+        let token_path = Path::new(token_filename);
 
-        let api_client =
-            MockApiClient::new();
+        // Since we are writing to a file, we need to make sure we clean up after in the event of an assertion
+        // failure.
+        std::panic::set_hook(Box::new(|_| {
+            // Remove test token file after completion. Recreate path due to ownership rules.
+            match std::fs::remove_file(Path::new(token_filename)) {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("failed to remove token file: {}", e);
+                }
+            };
+            let _ = std::panic::take_hook();
+        }));
+
+        let api_client = MockApiClient::new();
 
         // closure that will check that the token is sent correctly
         let mut got_token = String::new();
@@ -509,14 +536,15 @@ mod test {
             Ok(())
         };
 
-        login(&api_client, &ui, Path::new("token.json"), set_token, &url)
+        login(&api_client, &ui, Path::new(token_filename), set_token, &url)
             .await
             .unwrap();
 
         // Re-assign set_token due to ownership rules. This shouldn't be called.
         let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
             got_token.clear();
-            got_token.push_str(t);
+            // Force the got token to be incorrect if this is called a second time.
+            got_token.push_str("not expected token");
             let _ = std::fs::write(token_path, t).map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
             Ok(())
         };
@@ -546,27 +574,78 @@ mod test {
         let url = format!("http://localhost:{port}");
         let ui = UI::new(false);
         let team = "something";
-        let token_path = Path::new("token.json");
+        let token_filename: &str = "sso_token.json";
+        let token_path = Path::new(token_filename);
 
-        let api_client =
-            turborepo_api_client::APIClient::new(url.clone(), 1000, "1", false).unwrap();
+        // Since we are writing to a file, we need to make sure we clean up after in the event of an assertion
+        // failure.
+        std::panic::set_hook(Box::new(|_| {
+            // Remove test token file after completion. Recreate path due to ownership rules.
+            match std::fs::remove_file(Path::new(token_filename)) {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("failed to remove token file: {}", e);
+                }
+            };
+            let _ = std::panic::take_hook();
+        }));
+
+        let mut api_client = MockApiClient::new();
+        api_client.set_base_url(&url);
 
         // closure that will check that the token is sent correctly
         let mut got_token = String::new();
         let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
             got_token.clear();
+            // Force the got token to be incorrect if this is called a second time.
             got_token.push_str(t);
             let _ = std::fs::write(token_path, t).map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
             Ok(())
         };
 
-        sso_login(api_client, &ui, Path::new(""), set_token, &url, team)
+        sso_login(
+            &api_client,
+            &ui,
+            Path::new(token_filename),
+            set_token,
+            &url,
+            team
+        )
+            .await
+            .unwrap();
+
+        // Re-assign set_token due to ownership rules. This shouldn't be called.
+        let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
+            got_token.clear();
+            got_token.push_str("not expected token");
+            let _ = std::fs::write(token_path, t).map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
+            Ok(())
+        };
+
+        // Call the login function twice to test that we check for existing tokens. Total server hits should be 1.
+        sso_login(
+            &api_client,
+            &ui,
+            Path::new(token_filename),
+            set_token,
+            &url,
+            team
+        )
             .await
             .unwrap();
 
         handle.abort();
 
-        assert_eq!(got_token, turborepo_vercel_api_mock::EXPECTED_TOKEN);
+        assert_eq!(SSO_HITS.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(got_token, EXPECTED_VERIFICATION_TOKEN);
+
+        // Remove test token file after completion.
+        match std::fs::remove_file(token_path) {
+            Ok(_) => {}
+            Err(e) => {
+                println!("failed to remove token file: {}", e);
+            }
+        }
     }
 
     #[test]
