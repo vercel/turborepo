@@ -204,11 +204,10 @@ impl Args {
     pub fn new() -> Result<Self> {
         // We always pass --single-package in from the shim.
         // We need to omit it, and then add it in for run.
-        let arg_separator_position =
-            std::env::args_os().position(|input_token| input_token == "--");
+        let arg_separator_position = env::args_os().position(|input_token| input_token == "--");
 
         let single_package_position =
-            std::env::args_os().position(|input_token| input_token == "--single-package");
+            env::args_os().position(|input_token| input_token == "--single-package");
 
         let is_single_package = match (arg_separator_position, single_package_position) {
             (_, None) => false,
