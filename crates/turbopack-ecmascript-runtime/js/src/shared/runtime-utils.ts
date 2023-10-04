@@ -31,6 +31,7 @@ interface BaseModule {
     | Promise<EsmNamespaceObject>
     | AsyncModulePromise<EsmNamespaceObject>;
   [REEXPORTED_OBJECTS]?: any[];
+  importStack: string[];
 }
 
 interface Module extends BaseModule {}

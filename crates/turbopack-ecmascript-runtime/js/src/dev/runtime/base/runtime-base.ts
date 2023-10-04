@@ -88,6 +88,7 @@ type SourceInfo =
   | {
       type: SourceType.Parent;
       parentId: ModuleId;
+      importStack: string[];
     }
   | {
       type: SourceType.Update;
@@ -300,6 +301,11 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
       parents = source.parents || [];
       break;
   }
+
+  const importStack =
+    source.type === SourceType.Parent
+      ? source.importStack.concat(source.parentId)
+      : [];
   const module: Module = {
     exports: {},
     error: undefined,
@@ -309,6 +315,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
     children: [],
     namespaceObject: undefined,
     hot,
+    importStack,
   };
 
   moduleCache[id] = module;
@@ -316,7 +323,11 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
 
   // NOTE(alexkirsz) This can fail when the module encounters a runtime error.
   try {
-    const sourceInfo: SourceInfo = { type: SourceType.Parent, parentId: id };
+    const sourceInfo = {
+      type: SourceType.Parent as const,
+      parentId: id,
+      importStack,
+    };
 
     runModuleExecutionHooks(module, (refresh) => {
       moduleFactory.call(
@@ -324,7 +335,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
         augmentContext({
           a: asyncModule.bind(null, module),
           e: module.exports,
-          r: commonJsRequire.bind(null, module),
+          r: (id: string, source = module) => commonJsRequire(source, id),
           f: requireContext.bind(null, module),
           i: esmImport.bind(null, module),
           s: esmExport.bind(null, module, module.exports),
@@ -333,7 +344,14 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
           n: exportNamespace.bind(null, module),
           m: module,
           c: moduleCache,
-          l: loadChunk.bind(null, sourceInfo),
+          l: (chunkData: ChunkData, source = module) => {
+            const sourceInfo = {
+              type: SourceType.Parent as const,
+              parentId: source.id,
+              importStack: source.importStack,
+            };
+            return loadChunk(sourceInfo, chunkData);
+          },
           w: loadWebAssembly.bind(null, sourceInfo),
           u: loadWebAssemblyModule.bind(null, sourceInfo),
           g: globalThis,
@@ -422,6 +440,7 @@ const getOrInstantiateModuleFromParent: GetOrInstantiateModuleFromParent = (
   return instantiateModule(id, {
     type: SourceType.Parent,
     parentId: sourceModule.id,
+    importStack: sourceModule.importStack,
   });
 };
 
