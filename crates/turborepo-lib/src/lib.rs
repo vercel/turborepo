@@ -22,8 +22,6 @@ pub mod graph;
 mod hash;
 mod opts;
 mod package_graph;
-mod package_json;
-mod package_manager;
 mod process;
 mod rewrite_json;
 mod run;
@@ -34,9 +32,10 @@ mod tracing;
 
 use anyhow::Result;
 pub use child::spawn_child;
+use turborepo_repository::package_manager::PackageManager;
 
+use crate::commands::CommandBase;
 pub use crate::{cli::Args, execution_state::ExecutionState};
-use crate::{commands::CommandBase, package_manager::PackageManager};
 
 /// The payload from running main, if the program can complete without using Go
 /// the Rust variant will be returned. If Go is needed then the execution state
