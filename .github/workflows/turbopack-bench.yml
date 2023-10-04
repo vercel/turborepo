@@ -843,22 +843,12 @@ jobs:
     name: Ok
     needs:
       - determine_jobs
-      - go_lint
-      - go_unit
-      - turborepo_examples
-      - turborepo_e2e
-      - go_integration
-      - js_packages
       - rust_lint
-      - turborepo_rust_check
-      - turborepo_rust_clippy
       - turbopack_rust_check
       - turbopack_rust_clippy
       - turbopack_rust_test1
       - turbopack_typescript
-      - turborepo_rust_test
       - turbopack_rust_test_bench1
-      - format_lint
     if: always()
     permissions:
       contents: read
@@ -882,22 +872,12 @@ jobs:
             fi
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
-          subjob ${{needs.go_lint.result}} "Go lints"
-          subjob ${{needs.go_unit.result}} "Go unit tests"
-          subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
-          subjob ${{needs.turborepo_e2e.result}} "Go e2e tests"
-          subjob ${{needs.go_integration.result}} "Go integration tests"
-          subjob ${{needs.js_packages.result}} "JS Package tests"
           subjob ${{needs.rust_lint.result}} "Rust lints"
-          subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
-          subjob ${{needs.turborepo_rust_clippy.result}} "Turborepo Rust clippy"
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
           subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
           subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
-          subjob ${{needs.turborepo_rust_test.result}} "Turborepo Rust tests"
           subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
-          subjob ${{needs.format_lint.result}} "Formatting"
           if [ "$cancelled" = "true" ]; then
              echo "cancelled=true" >> $GITHUB_OUTPUT
           elif [ "$failure" = "true" ]; then
@@ -997,24 +977,15 @@ jobs:
     needs:
       - final
       - determine_jobs
-      - go_lint
-      - go_unit
-      - turborepo_examples
-      - turborepo_e2e
-      - go_integration
       - rust_lint
-      - turborepo_rust_check
-      - turborepo_rust_clippy
       - turbopack_rust_check
       - turbopack_rust_clippy
       - turbopack_rust_test1
       - turbopack_rust_test2
       - turbopack_typescript
-      - turborepo_rust_test
       - turbopack_rust_test_bench1
       - turbopack_rust_test_bench2
       - turbopack_rust_bench
-      - format_lint
     if: always()
     permissions:
       contents: read
@@ -1039,23 +1010,14 @@ jobs:
             fi
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
-          subjob ${{needs.go_lint.result}} "Go lints"
-          subjob ${{needs.go_unit.result}} "Go unit tests"
-          subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
-          subjob ${{needs.turborepo_e2e.result}} "Turborepo e2e tests"
-          subjob ${{needs.go_integration.result}} "Go integration tests"
           subjob ${{needs.rust_lint.result}} "Rust lints"
-          subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
-          subjob ${{needs.turborepo_rust_clippy.result}} "Turborepo Rust clippy"
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
           subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
           subjob ${{needs.turbopack_rust_test2.result}} "Turbopack Rust tests (mac/win, non-blocking)"
           subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
-          subjob ${{needs.turborepo_rust_test.result}} "TurboRepo Rust tests"
           subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
           subjob ${{needs.turbopack_rust_test_bench2.result}} "Turbopack Rust benchmark tests (mac/win, non-blocking)"
-          subjob ${{needs.format_lint.result}} "Formatting"
           subjob ${{needs.turbopack_rust_bench.result}} "Turbopack Rust benchmarks (non-blocking)"
           if [ "$cancelled" = "true" ]; then
              echo "cancelled=true" >> $GITHUB_OUTPUT
