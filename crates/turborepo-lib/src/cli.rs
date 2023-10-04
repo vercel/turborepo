@@ -4,7 +4,6 @@ use anyhow::{anyhow, Result};
 use camino::Utf8PathBuf;
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;

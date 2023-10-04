@@ -10,5 +10,4 @@ Setup
   $ ${TURBO} run trailing-comma --filter=bad-json > tmp.log 2>&1
   [1]
   $ cat tmp.log
-   ERROR  run failed: error preparing engine: turbo.json: invalid character '}' looking for beginning of object key string
-  Turbo error: error preparing engine: turbo.json: invalid character '}' looking for beginning of object key string
+  Error: trailing comma at line 1 column 36
