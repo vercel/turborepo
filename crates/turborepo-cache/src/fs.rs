@@ -158,6 +158,7 @@ mod test {
     use anyhow::Result;
     use futures::future::try_join_all;
     use tempfile::tempdir;
+    use turbopath::AnchoredSystemPath;
 
     use super::*;
     use crate::test_cases::{get_test_cases, TestCase};
@@ -181,7 +182,11 @@ mod test {
             .expect_err("Expected cache miss");
         assert_matches!(expected_miss, CacheError::CacheMiss);
 
-        let files: Vec<_> = test_case.files.iter().map(|f| f.path.clone()).collect();
+        let files: Vec<_> = test_case
+            .files
+            .iter()
+            .map(|f| f.path().to_owned())
+            .collect();
         cache.put(repo_root_path, test_case.hash, &files, test_case.duration)?;
 
         let expected_hit = cache.exists(test_case.hash)?;
@@ -204,9 +209,14 @@ mod test {
 
         assert_eq!(files.len(), test_case.files.len());
         for (expected, actual) in test_case.files.iter().zip(files.iter()) {
-            assert_eq!(&expected.path, actual);
+            let actual: &AnchoredSystemPath = actual;
+            assert_eq!(expected.path(), actual);
             let actual_file = repo_root_path.resolve(actual);
-            assert_eq!(expected.contents, actual_file.read_to_string()?);
+            if let Some(contents) = expected.contents() {
+                assert_eq!(contents, actual_file.read_to_string()?);
+            } else {
+                assert!(actual_file.exists());
+            }
         }
 
         Ok(())
