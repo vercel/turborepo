@@ -1149,14 +1149,14 @@ jobs:
             title: Linux
             quiet: false
             runner: ubuntu-latest-16-core-oss
-          - name: macos
-            title: MacOS
-            quiet: true
-            runner: macos-latest
-          - name: windows
-            title: Windows
-            quiet: true
-            runner: windows-latest
+          # - name: macos
+          #   title: MacOS
+          #   quiet: true
+          #   runner: macos-latest
+          # - name: windows
+          #   title: Windows
+          #   quiet: true
+          #   runner: windows-latest
     runs-on: ${{ matrix.os.runner }}
     permissions:
       contents: read
@@ -1184,7 +1184,7 @@ jobs:
 
       - name: Benchmark and compare with base branch
         uses: sokra/criterion-compare-action@main
-        timeout-minutes: 180
+        timeout-minutes: 30
         with:
           branchName: base
           title: ${{ matrix.os.title }} Benchmark
