@@ -12,7 +12,6 @@ import (
 
 	"github.com/muhammadmuzzammil1998/jsonc"
 	"github.com/pkg/errors"
-	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 )
@@ -120,7 +119,7 @@ type rawTask struct {
 // stream for calculating the global hash. We want to exclude experimental fields here
 // because we don't want experimental fields to be part of the global hash.
 type taskDefinitionHashable struct {
-	Outputs                 hash.TaskOutputs
+	Outputs                 TaskOutputs
 	Cache                   bool
 	TopologicalDependencies []string
 	TaskDependencies        []string
@@ -157,7 +156,7 @@ type BookkeepingTaskDefinition struct {
 
 // TaskDefinition is a representation of the configFile pipeline for further computation.
 type TaskDefinition struct {
-	Outputs hash.TaskOutputs
+	Outputs TaskOutputs
 	Cache   bool
 
 	// TopologicalDependencies are tasks from package dependencies.
@@ -291,6 +290,18 @@ func (tj *TurboJSON) Validate(validations []TurboJSONValidation) []error {
 	}
 
 	return allErrors
+}
+
+// TaskOutputs represents the patterns for including and excluding files from outputs
+type TaskOutputs struct {
+	Inclusions []string
+	Exclusions []string
+}
+
+// Sort contents of task outputs
+func (to *TaskOutputs) Sort() {
+	sort.Strings(to.Inclusions)
+	sort.Strings(to.Exclusions)
 }
 
 // readTurboConfig reads turbo.json from a provided path
@@ -492,7 +503,7 @@ func (btd *BookkeepingTaskDefinition) UnmarshalJSON(data []byte) error {
 			}
 		}
 
-		btd.TaskDefinition.Outputs = hash.TaskOutputs{
+		btd.TaskDefinition.Outputs = TaskOutputs{
 			Inclusions: inclusions,
 			Exclusions: exclusions,
 		}
@@ -758,7 +769,7 @@ func (tj *TurboJSON) MarshalJSON() ([]byte, error) {
 }
 
 func makeRawTask(
-	outputs hash.TaskOutputs,
+	outputs TaskOutputs,
 	shouldCache bool,
 	topologicalDependencies []string,
 	taskDependencies []string,

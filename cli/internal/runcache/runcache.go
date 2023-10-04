@@ -15,7 +15,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/colorcache"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/globby"
 	"github.com/vercel/turbo/cli/internal/logstreamer"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -100,7 +99,7 @@ func New(cache cache.Cache, repoRoot turbopath.AbsoluteSystemPath, opts Opts, co
 type TaskCache struct {
 	ExpandedOutputs   []turbopath.AnchoredSystemPath
 	rc                *RunCache
-	repoRelativeGlobs hash.TaskOutputs
+	repoRelativeGlobs fs.TaskOutputs
 	hash              string
 	pt                *nodes.PackageTask
 	taskOutputMode    util.TaskOutputMode
@@ -302,10 +301,10 @@ func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termi
 
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific
 // to this run and the given PackageTask
-func (rc *RunCache) TaskCache(pt *nodes.PackageTask, packageTaskHash string) TaskCache {
+func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 	logFileName := rc.repoRoot.UntypedJoin(pt.LogFile)
 	hashableOutputs := pt.HashableOutputs()
-	repoRelativeGlobs := hash.TaskOutputs{
+	repoRelativeGlobs := fs.TaskOutputs{
 		Inclusions: make([]string, len(hashableOutputs.Inclusions)),
 		Exclusions: make([]string, len(hashableOutputs.Exclusions)),
 	}
@@ -326,7 +325,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, packageTaskHash string) Tas
 		ExpandedOutputs:   []turbopath.AnchoredSystemPath{},
 		rc:                rc,
 		repoRelativeGlobs: repoRelativeGlobs,
-		hash:              packageTaskHash,
+		hash:              hash,
 		pt:                pt,
 		taskOutputMode:    taskOutputMode,
 		cachingDisabled:   !pt.TaskDefinition.Cache,
