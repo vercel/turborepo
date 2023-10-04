@@ -102,6 +102,11 @@ pub trait ChunkableModule: Module + Asset {
             }),
         )
     }
+
+    fn as_chunk_item(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Vc<Box<dyn ChunkItem>>;
 }
 
 #[turbo_tasks::value(transparent)]

@@ -200,6 +200,14 @@ impl ChunkableModule for MdxModuleAsset {
             availability_info,
         ))
     }
+
+    #[turbo_tasks::function]
+    fn as_chunk_item(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Vc<Box<dyn turbopack_core::chunk::ChunkItem>> {
+        todo!();
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -264,10 +272,11 @@ impl EcmascriptChunkItem for MdxChunkItem {
     /// apply all of the ecma transforms
     #[turbo_tasks::function]
     async fn content(&self) -> Result<Vc<EcmascriptChunkItemContent>> {
-        Ok(into_ecmascript_module_asset(&self.module)
-            .await?
-            .as_chunk_item(self.chunking_context)
-            .content())
+        Ok(EcmascriptChunkPlaceable::as_chunk_item(
+            into_ecmascript_module_asset(&self.module).await?,
+            self.chunking_context,
+        )
+        .content())
     }
 }
 

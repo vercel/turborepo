@@ -123,6 +123,14 @@ impl ChunkableModule for CssModuleAsset {
             availability_info,
         ))
     }
+
+    #[turbo_tasks::function]
+    fn as_chunk_item(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Vc<Box<dyn turbopack_core::chunk::ChunkItem>> {
+        todo!();
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -194,7 +202,7 @@ impl CssChunkItem for CssModuleChunkItem {
                     {
                         imports.push(CssImport::Internal(
                             import_ref,
-                            placeable.as_chunk_item(chunking_context),
+                            CssChunkPlaceable::as_chunk_item(placeable, chunking_context),
                         ));
                     }
                 }
@@ -210,9 +218,10 @@ impl CssChunkItem for CssModuleChunkItem {
                     if let Some(placeable) =
                         Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(module).await?
                     {
-                        imports.push(CssImport::Composes(
-                            placeable.as_chunk_item(chunking_context),
-                        ));
+                        imports.push(CssImport::Composes(CssChunkPlaceable::as_chunk_item(
+                            placeable,
+                            chunking_context,
+                        )));
                     }
                 }
             }

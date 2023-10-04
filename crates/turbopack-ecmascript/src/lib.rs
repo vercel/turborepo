@@ -415,6 +415,14 @@ impl ChunkableModule for EcmascriptModuleAsset {
             availability_info,
         ))
     }
+
+    #[turbo_tasks::function]
+    fn as_chunk_item(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Vc<Box<dyn turbopack_core::chunk::ChunkItem>> {
+        todo!();
+    }
 }
 
 #[turbo_tasks::value_impl]

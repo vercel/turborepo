@@ -126,6 +126,14 @@ impl ChunkableModule for WebAssemblyModuleAsset {
             availability_info,
         ))
     }
+
+    #[turbo_tasks::function]
+    fn as_chunk_item(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Vc<Box<dyn turbopack_core::chunk::ChunkItem>> {
+        todo!();
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -188,7 +196,8 @@ impl ChunkItem for ModuleChunkItem {
 
     #[turbo_tasks::function]
     async fn references(&self) -> Result<Vc<ModuleReferences>> {
-        let loader = self.module.loader().as_chunk_item(self.chunking_context);
+        let loader =
+            EcmascriptChunkPlaceable::as_chunk_item(self.module.loader(), self.chunking_context);
 
         Ok(loader.references())
     }
@@ -213,10 +222,10 @@ impl EcmascriptChunkItem for ModuleChunkItem {
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let loader_asset = self.module.loader();
 
-        let chunk_item_content = loader_asset
-            .as_chunk_item(self.chunking_context)
-            .content_with_availability_info(availability_info)
-            .await?;
+        let chunk_item_content =
+            EcmascriptChunkPlaceable::as_chunk_item(loader_asset, self.chunking_context)
+                .content_with_availability_info(availability_info)
+                .await?;
 
         Ok(EcmascriptChunkItemContent {
             options: EcmascriptChunkItemOptions {

@@ -282,7 +282,7 @@ impl CodeGenerateable for RequireContextAssetReference {
         &self,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
     ) -> Result<Vc<CodeGeneration>> {
-        let chunk_item = self.inner.as_chunk_item(chunking_context);
+        let chunk_item = EcmascriptChunkPlaceable::as_chunk_item(self.inner, chunking_context);
         let module_id = chunk_item.id().await?.clone_value();
 
         let mut visitors = Vec::new();
@@ -385,6 +385,14 @@ impl ChunkableModule for RequireContextAsset {
             Vc::upcast(self),
             availability_info,
         ))
+    }
+
+    #[turbo_tasks::function]
+    fn as_chunk_item(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Vc<Box<dyn turbopack_core::chunk::ChunkItem>> {
+        todo!();
     }
 }
 

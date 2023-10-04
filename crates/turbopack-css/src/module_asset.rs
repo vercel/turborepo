@@ -222,6 +222,14 @@ impl ChunkableModule for ModuleCssAsset {
             availability_info,
         ))
     }
+
+    #[turbo_tasks::function]
+    fn as_chunk_item(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Vc<Box<dyn turbopack_core::chunk::ChunkItem>> {
+        todo!();
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -338,7 +346,12 @@ impl EcmascriptChunkItem for ModuleChunkItem {
                         let placeable: Vc<Box<dyn EcmascriptChunkPlaceable>> =
                             Vc::upcast(css_module);
 
-                        let module_id = placeable.as_chunk_item(self.chunking_context).id().await?;
+                        let module_id = EcmascriptChunkPlaceable::as_chunk_item(
+                            placeable,
+                            self.chunking_context,
+                        )
+                        .id()
+                        .await?;
                         let module_id = StringifyJs(&*module_id);
                         let original_name = StringifyJs(&original_name);
                         exported_class_names.push(format! {

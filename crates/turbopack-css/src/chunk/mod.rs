@@ -142,7 +142,7 @@ impl CssChunkContent {
         let mut body = CodeBuilder::default();
         let mut external_imports = IndexSet::new();
         for entry in this.main_entries.await?.iter() {
-            let entry_item = entry.as_chunk_item(this.chunking_context);
+            let entry_item = CssChunkPlaceable::as_chunk_item(*entry, this.chunking_context);
 
             // TODO(WEB-1261)
             for external_import in expand_imports(&mut body, entry_item).await? {
@@ -323,7 +323,7 @@ impl OutputChunk for CssChunk {
             .main_entries
             .await?
             .iter()
-            .map(|&entry| entry.as_chunk_item(self.chunking_context))
+            .map(|&entry| CssChunkPlaceable::as_chunk_item(entry, self.chunking_context))
             .collect();
         let included_ids = entries_chunk_items
             .iter()
@@ -536,7 +536,10 @@ impl FromChunkableModule for Box<dyn CssChunkItem> {
         if let Some(placeable) =
             Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(asset).await?
         {
-            return Ok(Some(placeable.as_chunk_item(chunking_context)));
+            return Ok(Some(CssChunkPlaceable::as_chunk_item(
+                placeable,
+                chunking_context,
+            )));
         }
         Ok(None)
     }

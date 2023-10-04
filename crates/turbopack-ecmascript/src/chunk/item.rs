@@ -262,7 +262,9 @@ impl FromChunkableModule for Box<dyn EcmascriptChunkItem> {
             return Ok(None);
         };
 
-        Ok(Some(placeable.as_chunk_item(context)))
+        Ok(Some(EcmascriptChunkPlaceable::as_chunk_item(
+            placeable, context,
+        )))
     }
 
     async fn from_async_asset(
