@@ -42,7 +42,6 @@ pub struct Visitor<'a> {
     ui: UI,
     manager: ProcessManager,
     repo_root: &'a AbsoluteSystemPath,
-    dry: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -102,7 +101,6 @@ impl<'a> Visitor<'a> {
             ui,
             manager,
             repo_root,
-            dry: false,
         }
     }
 
@@ -182,10 +180,6 @@ impl<'a> Visitor<'a> {
             )?;
 
             debug!("task {} hash is {}", info, task_hash);
-            if self.dry {
-                callback.send(Ok(())).ok();
-                continue;
-            }
 
             let task_cache =
                 self.run_cache
@@ -392,11 +386,6 @@ impl<'a> Visitor<'a> {
 
     pub fn into_task_hash_tracker(self) -> TaskHashTrackerState {
         self.task_hasher.into_task_hash_tracker_state()
-    }
-
-    pub fn dry_run(mut self) -> Self {
-        self.dry = true;
-        self
     }
 }
 

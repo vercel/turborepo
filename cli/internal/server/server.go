@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/filewatcher"
 	"github.com/vercel/turbo/cli/internal/fs"
-	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/globwatcher"
 	"github.com/vercel/turbo/cli/internal/turbodprotocol"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -144,7 +143,7 @@ func (s *Server) NotifyOutputsWritten(ctx context.Context, req *turbodprotocol.N
 	s.timeSavedMu.Lock()
 	s.timesSaved[req.Hash] = req.TimeSaved
 	s.timeSavedMu.Unlock()
-	outputs := hash.TaskOutputs{
+	outputs := fs.TaskOutputs{
 		Inclusions: req.OutputGlobs,
 		Exclusions: req.OutputExclusionGlobs,
 	}
