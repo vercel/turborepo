@@ -14,7 +14,7 @@ type AbsoluteSystemPath string
 const _dirPermissions = os.ModeDir | 0775
 
 // _nonRelativeSentinel is the leading sentinel that indicates traversal.
-const _nonRelativeSentinel = ".." + string(filepath.Separator)
+const _nonRelativeSentinel = ".."
 
 // ToString returns a string represenation of this Path.
 // Used for interfacing with APIs that require a string.

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "app-a#build": {
+      "dependsOn": ["app-b#build"]
+    },
+
+    "app-b#build": {
+      "dependsOn": ["app-c#build"]
+    },
+
+    "app-c#build": {
+      "dependsOn": ["app-z#dev"]
+    },
+
+    "app-z#dev": {
+      "persistent": true
+    }
+  }
+}

@@ -29,15 +29,29 @@ fn find_range<'a, 'b>(
     index: usize,
 ) -> Option<&'b [(&'a AstPath, &'a dyn VisitorFactory)]> {
     // Precondition: visitors is never empty
-    let start = if visitors.first().unwrap().0[index] >= *kind {
-        // Fast path: It's likely that the whole range is selected
+    if visitors.first().unwrap().0[index] > *kind || visitors.last().unwrap().0[index] < *kind {
+        // Fast path: If ast path of the first visitor is already out of range, then we
+        // can skip the whole visit.
+        return None;
+    }
+
+    let start = if visitors.first().unwrap().0[index] == *kind {
+        // Fast path: It looks like the whole range is selected
         0
     } else {
         visitors.partition_point(|(path, _)| path[index] < *kind)
     };
+
     if start >= visitors.len() {
         return None;
     }
+
+    if visitors[start].0[index] > *kind {
+        // Fast path: If the starting point is greater than the given kind, it's
+        // meaningless to visit later.
+        return None;
+    }
+
     let end = if visitors.last().unwrap().0[index] == *kind {
         // Fast path: It's likely that the whole range is selected
         visitors.len()
@@ -100,7 +114,13 @@ impl<'a, 'b> ApplyVisitors<'a, 'b> {
                     }
                     return;
                 } else {
+                    // `current_visitors` has the invariant that is must not be empty.
+                    // When it becomes empty, we must early exit
                     current_visitors = &visitors[nested_visitors_start..];
+                    if current_visitors.is_empty() {
+                        // Nothing to do in this subtree, skip it
+                        return;
+                    }
                 }
             } else {
                 // Skip visiting this sub tree
@@ -124,6 +144,7 @@ impl VisitMutAstPath for ApplyVisitors<'_, '_> {
     // TODO: we need a macro to apply that for all methods
     method!(visit_mut_prop, Prop);
     method!(visit_mut_expr, Expr);
+    method!(visit_mut_member_expr, MemberExpr);
     method!(visit_mut_pat, Pat);
     method!(visit_mut_stmt, Stmt);
     method!(visit_mut_module_decl, ModuleDecl);
@@ -176,7 +197,7 @@ mod tests {
 
     impl VisitorFactory for Box<StrReplacer<'_>> {
         fn create<'a>(&'a self) -> Box<dyn VisitMut + Send + Sync + 'a> {
-            box &**self
+            Box::new(&**self)
         }
     }
 
@@ -188,16 +209,13 @@ mod tests {
     }
 
     fn replacer(from: &'static str, to: &'static str) -> impl VisitorFactory {
-        box StrReplacer { from, to }
+        Box::new(StrReplacer { from, to })
     }
 
     fn to_js(m: &Module, cm: &Arc<SourceMap>) -> String {
         let mut bytes = Vec::new();
         let mut emitter = Emitter {
-            cfg: swc_core::ecma::codegen::Config {
-                minify: true,
-                ..Default::default()
-            },
+            cfg: swc_core::ecma::codegen::Config::default().with_minify(true),
             cm: cm.clone(),
             comments: None,
             wr: JsWriter::new(cm.clone(), "\n", &mut bytes, None),

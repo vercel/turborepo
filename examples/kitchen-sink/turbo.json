@@ -1,14 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local"],
+  "globalEnv": ["PORT"],
   "pipeline": {
     "build": {
-      "outputs": [
-        "dist/**",
-        ".next/**",
-        "build/**",
-        "api/**",
-        "public/build/**"
-      ],
+      // "outputs" are defined in Workspace Configurations: https://turbo.build/repo/docs/core-concepts/monorepos/configuring-workspaces
       "dependsOn": ["^build"]
     },
     "test": {
@@ -16,11 +12,15 @@
       "dependsOn": []
     },
     "lint": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
     },
     "dev": {
-      "cache": false
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
     },
     "clean": {
       "cache": false

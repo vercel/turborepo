@@ -5,29 +5,40 @@ use std::{
 
 use anyhow::{Context as _, Error, Result};
 use futures::{prelude::*, ready, stream::FusedStream, SinkExt};
-use hyper::upgrade::Upgraded;
+use hyper::{upgrade::Upgraded, HeaderMap, Uri};
 use hyper_tungstenite::{tungstenite::Message, HyperWebsocket, WebSocketStream};
 use pin_project_lite::pin_project;
 use tokio::select;
 use tokio_stream::StreamMap;
-use turbo_tasks::{TransientInstance, TurboTasksApi, Value};
-use turbopack_core::version::Update;
-
-use super::{
-    protocol::{ClientMessage, ClientUpdateInstruction, Issue, ResourceIdentifier},
-    stream::UpdateStream,
+use tracing::{instrument, Level};
+use turbo_tasks::{TransientInstance, TurboTasksApi, Vc};
+use turbo_tasks_fs::json::parse_json_with_source_context;
+use turbopack_core::{error::PrettyPrintError, issue::IssueReporter, version::Update};
+use turbopack_ecmascript_hmr_protocol::{
+    ClientMessage, ClientUpdateInstruction, Issue, ResourceIdentifier,
 };
-use crate::{update::stream::UpdateStreamItem, SourceProvider};
+
+use super::stream::UpdateStream;
+use crate::{
+    source::{request::SourceRequest, resolve::resolve_source_request, Body},
+    update::stream::UpdateStreamItem,
+    SourceProvider,
+};
 
 /// A server that listens for updates and sends them to connected clients.
 pub(crate) struct UpdateServer<P: SourceProvider> {
     source_provider: P,
+    #[allow(dead_code)]
+    issue_reporter: Vc<Box<dyn IssueReporter>>,
 }
 
 impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
     /// Create a new update server with the given websocket and content source.
-    pub fn new(source_provider: P) -> Self {
-        Self { source_provider }
+    pub fn new(source_provider: P, issue_reporter: Vc<Box<dyn IssueReporter>>) -> Self {
+        Self {
+            source_provider,
+            issue_reporter,
+        }
     }
 
     /// Run the update server loop.
@@ -40,6 +51,7 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
         }));
     }
 
+    #[instrument(level = Level::TRACE, skip_all, name = "UpdateServer::run_internal")]
     async fn run_internal(self, ws: HyperWebsocket) -> Result<()> {
         let mut client: UpdateClient = ws.await?.into();
 
@@ -52,14 +64,30 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
                         Some(ClientMessage::Subscribe { resource }) => {
                             let get_content = {
                                 let source_provider = self.source_provider.clone();
-                                let resource = resource.clone();
+                                let request = resource_to_request(&resource)?;
                                 move || {
+                                    let request = request.clone();
                                     let source = source_provider.get_source();
-                                    source.get(&resource.path, Value::new(Default::default()))
+                                    resolve_source_request(
+                                        source,
+                                        TransientInstance::new(request)
+                                    )
                                 }
                             };
-                            let stream = UpdateStream::new(resource.clone(), TransientInstance::new(Box::new(get_content))).await?;
-                            streams.insert(resource, stream);
+                            match UpdateStream::new(resource.to_string(), TransientInstance::new(Box::new(get_content))).await {
+                                Ok(stream) => {
+                                    streams.insert(resource, stream);
+                                }
+                                Err(err) => {
+                                    eprintln!("Failed to create update stream for {resource}: {}", PrettyPrintError(&err));
+                                    client
+                                        .send(ClientUpdateInstruction::not_found(&resource))
+                                        .await?;
+                                }
+                            }
+                        }
+                        Some(ClientMessage::Unsubscribe { resource }) => {
+                            streams.remove(&resource);
                         }
                         None => {
                             // WebSocket was closed, stop sending updates
@@ -68,7 +96,14 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
                     }
                 }
                 Some((resource, update)) = streams.next() => {
-                    Self::send_update(&mut client, resource, &update).await?;
+                    match update {
+                        Ok(update) => {
+                            Self::send_update(&mut client, &mut streams, resource, &update).await?;
+                        }
+                        Err(err) => {
+                            eprintln!("Failed to get update for {resource}: {}", PrettyPrintError(&err));
+                        }
+                    }
                 }
                 else => break
             }
@@ -79,40 +114,71 @@ impl<P: SourceProvider + Clone + Send + Sync> UpdateServer<P> {
 
     async fn send_update(
         client: &mut UpdateClient,
+        streams: &mut StreamMap<ResourceIdentifier, UpdateStream>,
         resource: ResourceIdentifier,
-        update: &UpdateStreamItem,
+        item: &UpdateStreamItem,
     ) -> Result<()> {
-        let issues = update
-            .issues
-            .iter()
-            .map(|p| (&**p).into())
-            .collect::<Vec<Issue<'_>>>();
-
-        match &*update.update {
-            Update::Partial(partial) => {
-                let partial_instruction = partial.instruction.await?;
+        match item {
+            UpdateStreamItem::NotFound => {
+                // If the resource was not found, we remove the stream and indicate that to the
+                // client.
+                streams.remove(&resource);
                 client
-                    .send(ClientUpdateInstruction::partial(
-                        &resource,
-                        &partial_instruction,
-                        &issues,
-                    ))
+                    .send(ClientUpdateInstruction::not_found(&resource))
                     .await?;
             }
-            Update::Total(_total) => {
-                client
-                    .send(ClientUpdateInstruction::restart(&resource, &issues))
-                    .await?;
-            }
-            Update::None => {
-                client
-                    .send(ClientUpdateInstruction::issues(&resource, &issues))
-                    .await?;
+            UpdateStreamItem::Found { update, issues } => {
+                let issues = issues
+                    .iter()
+                    .map(|p| (&**p).into())
+                    .collect::<Vec<Issue<'_>>>();
+                match &**update {
+                    Update::Partial(partial) => {
+                        let partial_instruction = &partial.instruction;
+                        client
+                            .send(ClientUpdateInstruction::partial(
+                                &resource,
+                                partial_instruction,
+                                &issues,
+                            ))
+                            .await?;
+                    }
+                    Update::Total(_total) => {
+                        client
+                            .send(ClientUpdateInstruction::restart(&resource, &issues))
+                            .await?;
+                    }
+                    Update::None => {
+                        client
+                            .send(ClientUpdateInstruction::issues(&resource, &issues))
+                            .await?;
+                    }
+                }
             }
         }
 
         Ok(())
     }
+}
+
+fn resource_to_request(resource: &ResourceIdentifier) -> Result<SourceRequest> {
+    let mut headers = HeaderMap::new();
+
+    if let Some(res_headers) = &resource.headers {
+        for (name, value) in res_headers {
+            headers.append(
+                hyper::header::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+                hyper::header::HeaderValue::from_bytes(value.as_bytes()).unwrap(),
+            );
+        }
+    }
+
+    Ok(SourceRequest {
+        uri: Uri::try_from(format!("/{}", resource.path))?,
+        headers,
+        method: "GET".to_string(),
+        body: Body::new(vec![]),
+    })
 }
 
 pin_project! {
@@ -148,12 +214,11 @@ impl Stream for UpdateClient {
             }
         };
 
-        match serde_json::from_str(&msg) {
+        match parse_json_with_source_context(&msg).context("deserializing websocket message") {
             Ok(msg) => Poll::Ready(Some(Ok(msg))),
             Err(err) => {
                 *this.ended = true;
 
-                let err = Error::new(err).context("deserializing websocket message");
                 Poll::Ready(Some(Err(err)))
             }
         }

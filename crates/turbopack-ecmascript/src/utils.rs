@@ -1,10 +1,4 @@
-use std::{
-    future::Future,
-    pin::Pin,
-    task::{Context, Poll},
-};
-
-use pin_project_lite::pin_project;
+use serde::Serialize;
 use swc_core::{
     common::DUMMY_SP,
     ecma::ast::{Expr, Lit, Str},
@@ -17,14 +11,16 @@ pub fn unparen(expr: &Expr) -> &Expr {
     if let Some(expr) = expr.as_paren() {
         return unparen(&expr.expr);
     }
+    if let Expr::Seq(seq) = expr {
+        return unparen(seq.exprs.last().unwrap());
+    }
     expr
 }
 
 pub fn js_value_to_pattern(value: &JsValue) -> Pattern {
     let mut result = match value {
         JsValue::Constant(v) => Pattern::Constant(match v {
-            ConstantValue::StrWord(str) => str.to_string(),
-            ConstantValue::StrAtom(str) => str.to_string(),
+            ConstantValue::Str(str) => str.to_string(),
             ConstantValue::True => "true".to_string(),
             ConstantValue::False => "false".to_string(),
             ConstantValue::Null => "null".to_string(),
@@ -61,19 +57,44 @@ pub fn module_id_to_lit(module_id: &ModuleId) -> Expr {
     })
 }
 
-pub fn stringify_module_id(id: &ModuleId) -> String {
-    match id {
-        ModuleId::Number(n) => stringify_number(*n),
-        ModuleId::String(s) => stringify_str(s),
+pub struct StringifyJs<'a, T>(pub &'a T)
+where
+    T: ?Sized;
+
+impl<'a, T> std::fmt::Display for StringifyJs<'a, T>
+where
+    T: Serialize + ?Sized,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        /// [`std::fmt::Formatter`] does not implement [`std::io::Write`],
+        /// so we need to wrap it in a struct that does.
+        struct DisplayWriter<'a, 'b> {
+            f: &'a mut std::fmt::Formatter<'b>,
+        }
+
+        impl<'a, 'b> std::io::Write for DisplayWriter<'a, 'b> {
+            fn write(&mut self, bytes: &[u8]) -> std::result::Result<usize, std::io::Error> {
+                self.f
+                    .write_str(
+                        std::str::from_utf8(bytes)
+                            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?,
+                    )
+                    .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+                Ok(bytes.len())
+            }
+
+            fn flush(&mut self) -> std::result::Result<(), std::io::Error> {
+                unreachable!()
+            }
+        }
+
+        let to_writer = match f.alternate() {
+            true => serde_json::to_writer_pretty,
+            false => serde_json::to_writer,
+        };
+
+        to_writer(DisplayWriter { f }, self.0).map_err(|_err| std::fmt::Error)
     }
-}
-
-pub fn stringify_str(s: &str) -> String {
-    serde_json::to_string(s).unwrap()
-}
-
-pub fn stringify_number(s: u32) -> String {
-    s.to_string()
 }
 
 pub struct FormatIter<T: Iterator, F: Fn() -> T>(pub F);
@@ -103,28 +124,3 @@ format_iter!(std::fmt::Octal);
 format_iter!(std::fmt::Pointer);
 format_iter!(std::fmt::UpperExp);
 format_iter!(std::fmt::UpperHex);
-
-pin_project! {
-    pub struct WrapFuture<F, W> {
-        wrapper: W,
-        #[pin]
-        future: F,
-    }
-}
-
-impl<F: Future, W: for<'a> Fn(Pin<&mut F>, &mut Context<'a>) -> Poll<F::Output>> WrapFuture<F, W> {
-    pub fn new(wrapper: W, future: F) -> Self {
-        Self { wrapper, future }
-    }
-}
-
-impl<F: Future, W: for<'a> Fn(Pin<&mut F>, &mut Context<'a>) -> Poll<F::Output>> Future
-    for WrapFuture<F, W>
-{
-    type Output = F::Output;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.project();
-        (this.wrapper)(this.future, cx)
-    }
-}

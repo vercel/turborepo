@@ -1,30 +1,41 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
-function searchUp({
+export function searchUp({
   target,
   cwd,
+  contentCheck,
 }: {
   target: string;
   cwd: string;
+  contentCheck?: (content: string) => boolean;
 }): string | null {
   const root = path.parse(cwd).root;
 
   let found = false;
-  while (!found && cwd !== root) {
-    if (fs.existsSync(path.join(cwd, target))) {
+  let lastCwd = cwd;
+  while (!found && lastCwd !== root) {
+    if (contentCheck) {
+      try {
+        const content = fs.readFileSync(path.join(lastCwd, target)).toString();
+        if (contentCheck(content)) {
+          found = true;
+          break;
+        }
+      } catch {
+        // keep looking
+      }
+    } else if (fs.existsSync(path.join(lastCwd, target))) {
       found = true;
       break;
     }
 
-    cwd = path.dirname(cwd);
+    lastCwd = path.dirname(lastCwd);
   }
 
   if (found) {
-    return cwd;
+    return lastCwd;
   }
 
   return null;
 }
-
-export default searchUp;

@@ -1,7 +1,8 @@
 use std::{
     cell::RefCell,
     fmt::{Debug, Display},
-    mem::ManuallyDrop,
+    mem::{transmute_copy, ManuallyDrop},
+    num::NonZeroUsize,
     ops::Deref,
 };
 
@@ -13,7 +14,16 @@ macro_rules! define_id {
     (internal $name:ident $(,$derive:ty)*) => {
         #[derive(Hash, Clone, Copy, PartialEq, Eq, PartialOrd, Ord $(,$derive)*)]
         pub struct $name {
-            id: usize,
+            id: NonZeroUsize,
+        }
+
+        impl $name {
+            /// # Safety
+            ///
+            /// The passed `id` must not be zero.
+            pub unsafe fn new_unchecked(id: usize) -> Self {
+                Self { id: unsafe { NonZeroUsize::new_unchecked(id) } }
+            }
         }
 
         impl Display for $name {
@@ -26,13 +36,13 @@ macro_rules! define_id {
             type Target = usize;
 
             fn deref(&self) -> &Self::Target {
-                &self.id
+                unsafe { transmute_copy(&&self.id) }
             }
         }
 
         impl From<usize> for $name {
             fn from(id: usize) -> Self {
-                Self { id }
+                Self { id: NonZeroUsize::new(id).expect("Ids can only be created from non zero values") }
             }
         }
 
@@ -166,15 +176,15 @@ where
         let static_box: Box<dyn IdMapping<TaskId> + 'static> =
             unsafe { std::mem::transmute(dyn_box) };
         let old = std::mem::replace(&mut *cell.borrow_mut(), Some(static_box));
-        let _swap_guard = TemporarySwapGuard(cell, ManuallyDrop::new(old.into()));
+        let _swap_guard = TemporarySwapGuard(cell, ManuallyDrop::new(old));
         func()
     })
 }
 
 pub fn without_task_id_mapping<T>(func: impl FnOnce() -> T) -> T {
     TASK_ID_MAPPING.with(|cell| {
-        let old = std::mem::replace(&mut *cell.borrow_mut(), None);
-        let _swap_guard = TemporarySwapGuard(cell, ManuallyDrop::new(old.into()));
+        let old = cell.borrow_mut().take();
+        let _swap_guard = TemporarySwapGuard(cell, ManuallyDrop::new(old));
         func()
     })
 }

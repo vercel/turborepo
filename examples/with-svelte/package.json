@@ -1,20 +1,17 @@
 {
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev --parallel",
+    "dev": "turbo run dev",
     "lint": "turbo run lint",
     "format": "prettier --write ."
   },
   "devDependencies": {
     "eslint": "^8.0.0",
-    "eslint-config-custom": "*",
+    "eslint-config-custom": "workspace:*",
     "prettier": "^2.7.1",
     "prettier-plugin-svelte": "^2.7.0",
     "turbo": "latest"
-  }
+  },
+  "packageManager": "pnpm@8.6.10"
 }

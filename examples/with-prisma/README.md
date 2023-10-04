@@ -2,6 +2,14 @@
 
 This is an official starter turborepo.
 
+## Using this example
+
+Run the following command:
+
+```sh
+npx create-turbo@latest -e with-prisma
+```
+
 ## What's inside?
 
 This turborepo includes the following packages/apps:
@@ -74,17 +82,6 @@ yarn run db:seed
 
 For further more information on migrations, seeding & more, we recommend reading through the [Prisma Documentation](https://www.prisma.io/docs/).
 
-## Using this example
-
-Run the following command:
-
-```sh
-npx degit vercel/turbo/examples/with-prisma with-prisma
-cd with-prisma
-yarn install
-git init . && git add . && git commit -m "Init"
-```
-
 ### Build
 
 To build all apps and packages, run the following command:
@@ -105,7 +102,7 @@ yarn run dev
 
 Learn more about the power of Turborepo:
 
-- [Pipelines](https://turbo.build/repo/docs/core-concepts/monorepos/running-tasks)
+- [Tasks](https://turbo.build/repo/docs/core-concepts/monorepos/running-tasks)
 - [Caching](https://turbo.build/repo/docs/core-concepts/caching)
 - [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching)
 - [Filtering](https://turbo.build/repo/docs/core-concepts/monorepos/filtering)

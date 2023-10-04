@@ -1,62 +1,61 @@
-use std::future::IntoFuture;
-
 use anyhow::Result;
-use turbo_tasks::primitives::{OptionStringVc, StringVc};
-use turbo_tasks_env::{DotenvProcessEnvVc, EnvMapVc, ProcessEnv, ProcessEnvVc};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::Vc;
+use turbo_tasks_env::{DotenvProcessEnv, EnvMap, ProcessEnv};
+use turbo_tasks_fs::FileSystemPath;
+use turbopack_core::issue::IssueExt;
 
 use crate::ProcessEnvIssue;
 
 #[turbo_tasks::value]
 pub struct TryDotenvProcessEnv {
-    prior: ProcessEnvVc,
-    path: FileSystemPathVc,
-}
-
-impl TryDotenvProcessEnv {
-    async fn with_issue<T, V: Copy + IntoFuture<Output = Result<T>>>(
-        &self,
-        op: impl Fn(ProcessEnvVc) -> V,
-    ) -> Result<V> {
-        let r = op(DotenvProcessEnvVc::new(Some(self.prior), self.path).as_process_env());
-        match r.await {
-            Ok(_) => Ok(r),
-            Err(e) => {
-                let r = op(self.prior);
-                // If the prior process env also reports an error we don't want to report our
-                // issue
-                r.await?;
-
-                ProcessEnvIssue {
-                    path: self.path,
-                    description: StringVc::cell(e.to_string()),
-                }
-                .cell()
-                .as_issue()
-                .emit();
-                Ok(r)
-            }
-        }
-    }
+    dotenv: Vc<DotenvProcessEnv>,
+    prior: Vc<Box<dyn ProcessEnv>>,
+    path: Vc<FileSystemPath>,
 }
 
 #[turbo_tasks::value_impl]
-impl TryDotenvProcessEnvVc {
+impl TryDotenvProcessEnv {
     #[turbo_tasks::function]
-    pub fn new(prior: ProcessEnvVc, path: FileSystemPathVc) -> Self {
-        TryDotenvProcessEnv { prior, path }.cell()
+    pub fn new(prior: Vc<Box<dyn ProcessEnv>>, path: Vc<FileSystemPath>) -> Vc<Self> {
+        let dotenv = DotenvProcessEnv::new(Some(prior), path);
+        TryDotenvProcessEnv {
+            dotenv,
+            prior,
+            path,
+        }
+        .cell()
     }
 }
 
 #[turbo_tasks::value_impl]
 impl ProcessEnv for TryDotenvProcessEnv {
     #[turbo_tasks::function]
-    async fn read_all(&self) -> Result<EnvMapVc> {
-        self.with_issue(|e| e.read_all()).await
-    }
+    async fn read_all(&self) -> Result<Vc<EnvMap>> {
+        let dotenv = self.dotenv;
+        let prior = dotenv.read_prior();
 
-    #[turbo_tasks::function]
-    async fn read(&self, name: &str) -> Result<OptionStringVc> {
-        self.with_issue(|e| e.read(name)).await
+        // Ensure prior succeeds. If it doesn't, then we don't want to attempt to read
+        // the dotenv file (and potentially emit an Issue), just trust that the prior
+        // will have emitted its own.
+        prior.await?;
+
+        let vars = dotenv.read_all_with_prior(prior);
+        match vars.await {
+            Ok(_) => Ok(vars),
+            Err(e) => {
+                // If parsing the dotenv file fails (but getting the prior value didn't), then
+                // we want to emit an Issue and fall back to the prior's read.
+                ProcessEnvIssue {
+                    path: self.path,
+                    // read_all_with_prior will wrap a current error with a context containing the
+                    // failing file, which we don't really care about (we report the filepath as the
+                    // Issue context, not the description). So extract the real error.
+                    description: Vc::cell(e.root_cause().to_string()),
+                }
+                .cell()
+                .emit();
+                Ok(prior)
+            }
+        }
     }
 }

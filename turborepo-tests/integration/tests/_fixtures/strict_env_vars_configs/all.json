@@ -1,0 +1,12 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"],
+      "passThroughEnv": ["LOCAL_VAR_PT"],
+      "env": ["LOCAL_VAR_DEP"]
+    }
+  },
+  "globalPassThroughEnv": ["GLOBAL_VAR_PT"],
+  "globalEnv": ["GLOBAL_VAR_DEP"]
+}

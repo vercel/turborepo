@@ -17,7 +17,7 @@ async function generate() {
     description: "Turbo news, updates, and announcements.",
     site_url: "https://turbo.build",
     feed_url: "https://turbo.build/feed.xml",
-    image_url: "https://turbo.build/og-image.png",
+    image_url: "https://turbo.build/api/og",
   });
 
   const posts = await fs.readdir(path.join(__dirname, "..", "pages", "blog"));

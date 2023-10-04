@@ -3,10 +3,9 @@
         "*anonymous function 25*",
         Function(
             2,
-            FreeVar(
-                Other(
-                    Atom('undefined' type=static),
-                ),
+            25,
+            Constant(
+                Undefined,
             ),
         ),
     ),
@@ -14,10 +13,9 @@
         "a",
         Function(
             2,
-            FreeVar(
-                Other(
-                    Atom('undefined' type=static),
-                ),
+            1,
+            Constant(
+                Undefined,
             ),
         ),
     ),
@@ -26,7 +24,7 @@
         Variable(
             (
                 Atom('a' type=static),
-                #1,
+                #2,
             ),
         ),
     ),
@@ -44,7 +42,7 @@
         Variable(
             (
                 Atom('b' type=static),
-                #1,
+                #2,
             ),
         ),
     ),
@@ -63,15 +61,17 @@
         Variable(
             (
                 Atom('c' type=inline),
-                #1,
+                #2,
             ),
         ),
     ),
     (
         "d",
         Constant(
-            StrWord(
-                Atom('hello' type=inline),
+            Str(
+                Word(
+                    Atom('hello' type=inline),
+                ),
             ),
         ),
     ),
@@ -79,8 +79,8 @@
         "dd",
         Variable(
             (
-                Atom('d' type=inline),
-                #1,
+                Atom('d' type=static),
+                #2,
             ),
         ),
     ),
@@ -95,17 +95,15 @@
         "ee",
         Variable(
             (
-                Atom('e' type=inline),
-                #1,
+                Atom('e' type=static),
+                #2,
             ),
         ),
     ),
     (
         "ff",
         FreeVar(
-            Other(
-                Atom('f' type=inline),
-            ),
+            Atom('f' type=inline),
         ),
     ),
 ]

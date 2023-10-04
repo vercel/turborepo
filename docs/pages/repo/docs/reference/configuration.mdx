@@ -1,21 +1,27 @@
 ---
-title: Configuration Options - turbo.json
+title: Configuration
 description: Learn how to configure Turborepo through `turbo.json`.
 ---
 
 import Callout from "../../../../components/Callout";
 import OutputModeTable from "../../../../components/output-mode-table.mdx";
+import Link from 'next/link'
 
 # Configuration Options (`turbo.json`)
 
-You can configure the behavior of `turbo` by adding a `turbo.json` file in your monorepo's root (i.e. the same one you specify your `workspaces` key is set for Yarn and npm users).
+You can configure the behavior of `turbo` by adding a `turbo.json` file in your monorepo's root directory.
 
 ## `globalDependencies`
 
 `type: string[]`
 
-A list of file globs for implicit global hash dependencies. The contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.
+A list of file globs for global hash dependencies. The contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.
 This is useful for busting the cache based on `.env` files (not in Git) or any root level file that impacts workspace tasks (but are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.js`, `.eslintrc`, etc.)).
+
+<Callout type="info">
+These must be relative paths from the location of `turbo.json`, and they should be valid for any machine where
+  this configuration might be used. For instance, it is not a good idea to reference files in one user's home directory.
+</Callout>
 
 **Example**
 
@@ -52,6 +58,61 @@ A list of environment variables for implicit global hash dependencies. The conte
 }
 ```
 
+## `globalPassThroughEnv`
+
+This goes at the root of your configuration.
+
+`type: string[]`
+
+An allowlist of environment variables that should be made available to all tasks
+but should not contribute to the task's cache key. Using this key opts all tasks
+into `strict` environment variable mode.
+
+Changing this list will contribute to the global cache key, but the value of each
+variable will not.
+
+**Example**
+
+`AWS_SECRET_KEY` and `GITHUB_TOKEN` are available to all tasks in `strict` [env mode][r-cli-env-mode].
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"],
+  "pipeline": {
+    // ...task definitions...
+  }
+}
+```
+
+## `globalDotEnv`
+
+`type: null | string[]`
+`default: null`
+
+The ordered list of `.env` files to include into the global hash key's file hash.
+
+Note: this does _not_ load the files into the environment.
+
+**Example**
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDotEnv": [".env.local", ".env"],
+  "pipeline": {
+    "build": {}
+  }
+}
+```
+
+## `extends`
+
+`type: string[]`
+
+The `extends` key is only valid in Workspace Configurations. It will be
+ignored in the root `turbo.json`. Read [the docs to learn more][1].
+
 ## `pipeline`
 
 An object representing the task dependency graph of your project. `turbo` interprets these conventions to properly schedule, execute, and cache the outputs of tasks in your project.
@@ -72,7 +133,8 @@ Each key in the `pipeline` object is the name of a task that can be executed by 
       "outputMode": "full"
     },
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
@@ -88,11 +150,9 @@ Prefixing an item in `dependsOn` with a `^` tells `turbo` that this pipeline tas
 
 Items in `dependsOn` without `^` prefix, express the relationships between tasks at the workspace level (e.g. "a workspace's `test` and `lint` commands depend on `build` being completed first").
 
-Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline task depends on the value of that environment variable.
-
 <Callout type="info">
-  Using `$` to declare environment variables in the `dependsOn` config is
-  deprecated. Use the `env` key instead.
+  As of version 1.5, using `$` to declare environment variables in the `dependsOn` config is
+  deprecated. <Link href="#env">Use the `env` key instead.</Link>
 </Callout>
 
 **Example**
@@ -104,6 +164,7 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
     "build": {
       // "A workspace's `build` command depends on its dependencies'
       // or devDependencies' `build` command being completed first"
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "dependsOn": ["^build"]
     },
     "test": {
@@ -118,6 +179,28 @@ Prefixing an item in `dependsOn` with a `$` tells `turbo` that this pipeline tas
     },
     // A workspace's `lint` command has no dependencies
     "lint": {}
+  }
+}
+```
+
+### `dotEnv`
+
+`type: null | string[]`
+`default: null`
+
+The ordered list of `.env` files to include into the task's file hash. These files will be included into the hash regardless of whether or not they are included in the `git` index.
+
+Note: this does _not_ load the files into the environment.
+
+**Example**
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "dotEnv": [".env.local", ".env"],
+    }
   }
 }
 ```
@@ -137,12 +220,12 @@ The list of environment variables a task depends on.
     "build": {
       "dependsOn": ["^build"],
       "env": ["SOMETHING_ELSE"], // value will impact the hashes of all build tasks
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "web#build": {
       "dependsOn": ["^build"],
       "env": ["STRIPE_SECRET_KEY"], // value will impact hash of only web's build task
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     }
   },
   "globalEnv": [
@@ -163,15 +246,55 @@ The list of environment variables a task depends on.
   caching](/repo/docs/core-concepts/caching#automatic-environment-variable-inclusion).
 </Callout>
 
+### `passThroughEnv`
+
+`type: string[]`
+
+This config goes inside each task definition in the [`pipeline`][r-config-pipeline].
+
+An allowlist of environment variables that should be made available to this task
+but should not contribute to the task's cache key. Using this key opts this task
+into `strict` environment variable mode.
+
+Changing this list will contribute to the task's cache key, but the value of each
+variable will not.
+
+**Example**
+
+`AWS_SECRET_KEY` and `GITHUB_TOKEN` are available to the `build` task, but not to the `lint` task
+in `strict` [env mode][r-cli-env-mode].
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "passThroughEnv": ["AWS_SECRET_KEY", "GITHUB_TOKEN"]
+    },
+    "lint": {},
+  }
+}
+```
+
+[r-config-pipeline]: #pipeline
+[r-cli-env-mode]: /repo/docs/reference/command-line-reference/run#--env-mode
+
 ### `outputs`
 
 `type: string[]`
 
-Defaults to `["dist/**", "build/**"]`. The set of glob patterns of a task's cacheable filesystem outputs.
+The set of glob patterns of a task's cacheable filesystem outputs.
 
-Note: `turbo` automatically logs `stderr`/`stdout` to `.turbo/run-<task>.log`. This file is _always_ treated as a cacheable artifact and never needs to be specified.
+Note: `turbo` automatically logs `stderr`/`stdout` to `.turbo/run-<task>.log`. This file is _always_
+treated as a cacheable artifact and never needs to be specified.
 
-Passing an empty array can be used to tell `turbo` that a task is a side-effect and thus doesn't emit any filesystem artifacts (e.g. like a linter), but you still want to cache its logs (and treat them like an artifact).
+Omitting this key or passing an empty array can be used to tell `turbo` that a task is a side-effect
+and thus doesn't emit any filesystem artifacts (e.g. like a linter), but you still want to cache its
+logs (and treat them like an artifact).
+
+<Callout type="info">
+  `outputs` globs must be specified as relative paths rooted at the workspace directory.
+</Callout>
 
 **Example**
 
@@ -182,13 +305,12 @@ Passing an empty array can be used to tell `turbo` that a task is a side-effect 
     "build": {
       // "Cache all files emitted to workspace's dist/** or .next
       // directories by a `build` task"
-      "outputs": ["dist/**", ".next/**"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
       "dependsOn": ["^build"]
     },
     "test": {
       // "Don't cache any artifacts of `test` tasks (aside from
       // logs)"
-      "outputs": [],
       "dependsOn": ["build"]
     },
     "test:ci": {
@@ -199,7 +321,8 @@ Passing an empty array can be used to tell `turbo` that a task is a side-effect 
     "dev": {
       // Never cache anything (including logs) emitted by a
       // `dev` task
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
@@ -218,14 +341,15 @@ Defaults to `true`. Whether or not to cache the task [`outputs`](#outputs). Sett
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
+      "outputs": [".svelte-kit/**", "dist/**"],
       "dependsOn": ["^build"]
     },
     "test": {
-      "outputs": [],
       "dependsOn": ["build"]
     },
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
@@ -241,6 +365,10 @@ changed. This can be helpful if you want to, for example, skip running tests unl
 
 Specifying `[]` will cause the task to be rerun when any file in the workspace changes.
 
+<Callout type="info">
+  `inputs` globs must be specified as relative paths rooted at the workspace directory.
+</Callout>
+
 **Example**
 
 ```jsonc
@@ -253,7 +381,7 @@ Specifying `[]` will cause the task to be rerun when any file in the workspace c
       // A workspace's `test` task depends on that workspace's
       // own `build` task being completed first.
       "dependsOn": ["build"],
-      "outputs": [""],
+      "outputs": [".next/**", "!.next/cache/**"],
       // A workspace's `test` task should only be rerun when
       // either a `.tsx` or `.ts` file has changed.
       "inputs": ["src/**/*.tsx", "src/**/*.ts", "test/**/*.ts"]
@@ -269,9 +397,9 @@ Specifying `[]` will cause the task to be rerun when any file in the workspace c
 
 ### `outputMode`
 
-`type: "full" | "hash-only" | "new-only" | "none"`
+`type: "full" | "hash-only" | "new-only" | "errors-only" | "none"`
 
-Set type of output logging.
+Set type of output logging. Can be overriden by the [`--output-logs`](/repo/docs/reference/command-line-reference/run#--output-logs) CLI option.
 
 <OutputModeTable />
 
@@ -283,12 +411,36 @@ Set type of output logging.
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
+      "outputs": [".svelte-kit/**", "dist/**"],
       "outputMode": "new-only"
     },
     "test": {
-      "outputs": [],
       "dependsOn": ["build"]
     }
   }
 }
 ```
+
+### `persistent`
+
+`type: boolean`
+
+Label a task as `persistent` if it is a long-running process, such as a dev server or `--watch` mode.
+Turbo will prevent other tasks from depending on persistent tasks. Without setting this
+config, if any other task depends on `dev`, it will never run, because `dev` never exits. With this
+option, `turbo` can warn you about an invalid configuration.
+
+**Example**
+
+```jsonc
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "dev": {
+      "persistent": true
+    }
+  }
+}
+```
+
+[1]: /repo/docs/core-concepts/monorepos/configuring-workspaces

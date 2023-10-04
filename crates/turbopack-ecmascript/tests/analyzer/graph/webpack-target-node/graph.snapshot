@@ -1,0 +1,311 @@
+[
+    (
+        "*arrow function 1213*",
+        Function(
+            4,
+            1213,
+            Call(
+                3,
+                Variable(
+                    (
+                        Atom('__webpack_require__' type=dynamic),
+                        #3,
+                    ),
+                ),
+                [
+                    Unknown(
+                        None,
+                        "unsupported expression",
+                    ),
+                ],
+            ),
+        ),
+    ),
+    (
+        "*arrow function 131*",
+        Function(
+            2,
+            131,
+            Constant(
+                Undefined,
+            ),
+        ),
+    ),
+    (
+        "*arrow function 389*",
+        Function(
+            2,
+            389,
+            Variable(
+                (
+                    Atom('handler' type=inline),
+                    #4,
+                ),
+            ),
+        ),
+    ),
+    (
+        "__unused_webpack_module",
+        Unknown(
+            Some(
+                Variable(
+                    (
+                        Atom('__unused_webpack_module' type=dynamic),
+                        #4,
+                    ),
+                ),
+            ),
+            "pattern without value",
+        ),
+    ),
+    (
+        "__webpack_exec__",
+        Variable(
+            (
+                Atom('*arrow function 1213*' type=dynamic),
+                #0,
+            ),
+        ),
+    ),
+    (
+        "__webpack_exports__#3",
+        Call(
+            3,
+            Variable(
+                (
+                    Atom('__webpack_exec__' type=dynamic),
+                    #3,
+                ),
+            ),
+            [
+                Constant(
+                    Num(
+                        ConstantNumber(
+                            5166.0,
+                        ),
+                    ),
+                ),
+            ],
+        ),
+    ),
+    (
+        "__webpack_exports__#4",
+        Unknown(
+            Some(
+                Variable(
+                    (
+                        Atom('__webpack_exports__' type=dynamic),
+                        #4,
+                    ),
+                ),
+            ),
+            "pattern without value",
+        ),
+    ),
+    (
+        "__webpack_require__#3",
+        Call(
+            3,
+            FreeVar(
+                Atom('require' type=static),
+            ),
+            [
+                Constant(
+                    Str(
+                        Word(
+                            Atom('../../webpack-api-runtime.js' type=dynamic),
+                        ),
+                    ),
+                ),
+            ],
+        ),
+    ),
+    (
+        "__webpack_require__#4",
+        Unknown(
+            Some(
+                Variable(
+                    (
+                        Atom('__webpack_require__' type=dynamic),
+                        #4,
+                    ),
+                ),
+            ),
+            "pattern without value",
+        ),
+    ),
+    (
+        "_req",
+        Argument(
+            760,
+            0,
+        ),
+    ),
+    (
+        "exports",
+        Object {
+            total_nodes: 1,
+            parts: [],
+            mutable: true,
+        },
+    ),
+    (
+        "handler",
+        Function(
+            2,
+            760,
+            Constant(
+                Undefined,
+            ),
+        ),
+    ),
+    (
+        "hello",
+        MemberCall(
+            5,
+            Variable(
+                (
+                    Atom('promises_namespaceObject' type=dynamic),
+                    #4,
+                ),
+            ),
+            Constant(
+                Str(
+                    Word(
+                        Atom('readFile' type=dynamic),
+                    ),
+                ),
+            ),
+            [
+                Constant(
+                    Str(
+                        Word(
+                            Atom('./hello.txt' type=dynamic),
+                        ),
+                    ),
+                ),
+                Constant(
+                    Str(
+                        Word(
+                            Atom('utf-8' type=inline),
+                        ),
+                    ),
+                ),
+            ],
+        ),
+    ),
+    (
+        "moduleId",
+        Unknown(
+            Some(
+                Variable(
+                    (
+                        Atom('moduleId' type=dynamic),
+                        #6,
+                    ),
+                ),
+            ),
+            "pattern without value",
+        ),
+    ),
+    (
+        "promises_namespaceObject",
+        Call(
+            3,
+            FreeVar(
+                Atom('require' type=static),
+            ),
+            [
+                Constant(
+                    Str(
+                        Word(
+                            Atom('fs/promises' type=dynamic),
+                        ),
+                    ),
+                ),
+            ],
+        ),
+    ),
+    (
+        "res",
+        Argument(
+            760,
+            1,
+        ),
+    ),
+    (
+        "users",
+        Array {
+            total_nodes: 10,
+            items: [
+                Object {
+                    total_nodes: 3,
+                    parts: [
+                        KeyValue(
+                            Constant(
+                                Str(
+                                    Word(
+                                        Atom('id' type=static),
+                                    ),
+                                ),
+                            ),
+                            Constant(
+                                Num(
+                                    ConstantNumber(
+                                        1.0,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ],
+                    mutable: true,
+                },
+                Object {
+                    total_nodes: 3,
+                    parts: [
+                        KeyValue(
+                            Constant(
+                                Str(
+                                    Word(
+                                        Atom('id' type=static),
+                                    ),
+                                ),
+                            ),
+                            Constant(
+                                Num(
+                                    ConstantNumber(
+                                        2.0,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ],
+                    mutable: true,
+                },
+                Object {
+                    total_nodes: 3,
+                    parts: [
+                        KeyValue(
+                            Constant(
+                                Str(
+                                    Word(
+                                        Atom('id' type=static),
+                                    ),
+                                ),
+                            ),
+                            Constant(
+                                Num(
+                                    ConstantNumber(
+                                        3.0,
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ],
+                    mutable: true,
+                },
+            ],
+            mutable: true,
+        },
+    ),
+]

@@ -1,10 +1,11 @@
 package filter
 
 import (
-	"errors"
-	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/pkg/errors"
+	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
 type TargetSelector struct {
@@ -14,7 +15,7 @@ type TargetSelector struct {
 	exclude             bool
 	excludeSelf         bool
 	followProdDepsOnly  bool
-	parentDir           string
+	parentDir           turbopath.RelativeSystemPath
 	namePattern         string
 	fromRef             string
 	toRefOverride       string
@@ -36,10 +37,10 @@ func (ts *TargetSelector) getToRef() string {
 
 var errCantMatchDependencies = errors.New("cannot use match dependencies without specifying either a directory or package")
 
-var targetSelectorRegex = regexp.MustCompile(`^([^.](?:[^{}[\]]*[^{}[\].])?)?(\{[^}]+\})?((?:\.{3})?\[[^\]]+\])?$`)
+var targetSelectorRegex = regexp.MustCompile(`^(?P<name>[^.](?:[^{}[\]]*[^{}[\].])?)?(?P<directory>\{[^}]*\})?(?P<commits>(?:\.{3})?\[[^\]]+\])?$`)
 
 // ParseTargetSelector is a function that returns pnpm compatible --filter command line flags
-func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, error) {
+func ParseTargetSelector(rawSelector string) (*TargetSelector, error) {
 	exclude := false
 	firstChar := rawSelector[0]
 	selector := rawSelector
@@ -68,16 +69,16 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 	matches := targetSelectorRegex.FindAllStringSubmatch(selector, -1)
 
 	if len(matches) == 0 {
-		if isSelectorByLocation(selector) {
-			return TargetSelector{
+		if relativePath, ok := isSelectorByLocation(selector); ok {
+			return &TargetSelector{
 				exclude:             exclude,
 				includeDependencies: includeDependencies,
 				includeDependents:   includeDependents,
-				parentDir:           filepath.Join(prefix, selector),
+				parentDir:           relativePath,
 				raw:                 rawSelector,
 			}, nil
 		}
-		return TargetSelector{
+		return &TargetSelector{
 			exclude:             exclude,
 			excludeSelf:         excludeSelf,
 			includeDependencies: includeDependencies,
@@ -89,22 +90,30 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 
 	fromRef := ""
 	toRefOverride := ""
-	parentDir := ""
+	var parentDir turbopath.RelativeSystemPath
 	namePattern := ""
 	preAddDepdencies := false
 	if len(matches) > 0 && len(matches[0]) > 0 {
-		if len(matches[0][1]) > 0 {
-			namePattern = matches[0][1]
+		match := matches[0]
+		namePattern = match[targetSelectorRegex.SubexpIndex("name")]
+		rawParentDir := match[targetSelectorRegex.SubexpIndex("directory")]
+		if len(rawParentDir) > 0 {
+			// trim {}
+			rawParentDir = rawParentDir[1 : len(rawParentDir)-1]
+			if rawParentDir == "" {
+				return nil, errors.New("empty path specification")
+			} else if relPath, err := turbopath.CheckedToRelativeSystemPath(rawParentDir); err == nil {
+				parentDir = relPath
+			} else {
+				return nil, errors.Wrapf(err, "invalid path specification: %v", rawParentDir)
+			}
 		}
-		if len(matches[0][2]) > 0 {
-			parentDir = matches[0][2]
-			parentDir = filepath.Join(prefix, parentDir[1:len(parentDir)-1])
-		}
-		if len(matches[0][3]) > 0 {
-			fromRef = matches[0][3]
+		rawCommits := match[targetSelectorRegex.SubexpIndex("commits")]
+		if len(rawCommits) > 0 {
+			fromRef = rawCommits
 			if strings.HasPrefix(fromRef, "...") {
 				if parentDir == "" && namePattern == "" {
-					return TargetSelector{}, errCantMatchDependencies
+					return &TargetSelector{}, errCantMatchDependencies
 				}
 				preAddDepdencies = true
 				fromRef = fromRef[3:]
@@ -119,7 +128,7 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 		}
 	}
 
-	return TargetSelector{
+	return &TargetSelector{
 		fromRef:             fromRef,
 		toRefOverride:       toRefOverride,
 		exclude:             exclude,
@@ -134,20 +143,23 @@ func ParseTargetSelector(rawSelector string, prefix string) (TargetSelector, err
 }
 
 // isSelectorByLocation returns true if the selector is by filesystem location
-func isSelectorByLocation(rawSelector string) bool {
+func isSelectorByLocation(rawSelector string) (turbopath.RelativeSystemPath, bool) {
 	if rawSelector[0:1] != "." {
-		return false
+		return "", false
 	}
 
 	// . or ./ or .\
 	if len(rawSelector) == 1 || rawSelector[1:2] == "/" || rawSelector[1:2] == "\\" {
-		return true
+		return turbopath.MakeRelativeSystemPath(rawSelector), true
 	}
 
 	if rawSelector[1:2] != "." {
-		return false
+		return "", false
 	}
 
 	// .. or ../ or ..\
-	return len(rawSelector) == 2 || rawSelector[2:3] == "/" || rawSelector[2:3] == "\\"
+	if len(rawSelector) == 2 || rawSelector[2:3] == "/" || rawSelector[2:3] == "\\" {
+		return turbopath.MakeRelativeSystemPath(rawSelector), true
+	}
+	return "", false
 }

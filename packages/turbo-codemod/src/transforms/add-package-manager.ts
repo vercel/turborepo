@@ -1,78 +1,77 @@
-import { Flags } from "../types";
-import path from "path";
-import { getWorkspaceImplementation } from "../getWorkspaceImplementation";
-import { getPackageManagerVersion } from "../getPackageManagerVersion";
-import fs from "fs-extra";
-import chalk from "chalk";
-import { skip, ok, error } from "../logger";
+import path from "node:path";
+import { readJsonSync } from "fs-extra";
+import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
+import { type PackageJson, getAvailablePackageManagers } from "@turbo/utils";
+import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import type { TransformerResults } from "../runner";
+import type { TransformerArgs } from "../types";
 
-export default function addPackageManager(files: string[], flags: Flags) {
-  if (files.length === 1) {
-    const dir = files[0];
-    const root = path.resolve(process.cwd(), dir);
-    console.log(`Set "packageManager" key in root "package.json" file...`);
-    const packageManager = getWorkspaceImplementation(root);
-    if (!packageManager) {
-      error(`Unable to determine package manager for ${dir}`);
-      process.exit(1);
-    }
-    // handle workspaces...
-    const version = getPackageManagerVersion(packageManager);
-    const pkgManagerString = `${packageManager}@${version}`;
-    const rootPackageJsonPath = path.join(root, "package.json");
-    const rootPackageJson = fs.readJsonSync(rootPackageJsonPath);
-    const allWorkspaces = [
-      {
-        name: "package.json",
-        path: root,
-        packageJson: {
-          ...rootPackageJson,
-          packageJsonPath: rootPackageJsonPath,
-        },
-      },
-    ];
+// transformer details
+const TRANSFORMER = "add-package-manager";
+const DESCRIPTION = "Set the `packageManager` key in root `package.json` file";
+const INTRODUCED_IN = "1.1.0";
 
-    let modifiedCount = 0;
-    let skippedCount = 0;
-    let errorCount = 0;
-    let unmodifiedCount = allWorkspaces.length;
-    console.log(`Found ${unmodifiedCount} files for modification...`);
-    for (const workspace of allWorkspaces) {
-      const { packageJsonPath, ...pkgJson } = workspace.packageJson;
-      const relPackageJsonPath = path.relative(root, packageJsonPath);
-      try {
-        if (pkgJson.packageManager === pkgManagerString) {
-          skip(
-            relPackageJsonPath,
-            chalk.dim(`(already set to ${pkgManagerString})`)
-          );
-        } else {
-          const newJson = { ...pkgJson, packageManager: pkgManagerString };
-          if (flags.print) {
-            console.log(JSON.stringify(newJson, null, 2));
-          }
-          if (!flags.dry) {
-            fs.writeJsonSync(packageJsonPath, newJson, {
-              spaces: 2,
-            });
+export async function transformer({
+  root,
+  options,
+}: TransformerArgs): Promise<TransformerResults> {
+  const { log, runner } = getTransformerHelpers({
+    transformer: TRANSFORMER,
+    rootPath: root,
+    options,
+  });
 
-            ok(relPackageJsonPath);
-            modifiedCount++;
-            unmodifiedCount--;
-          } else {
-            skip(relPackageJsonPath, chalk.dim(`(dry run)`));
-          }
-        }
-      } catch (err) {
-        console.error(error);
-        error(relPackageJsonPath);
-      }
-    }
-    console.log("All done.");
-    console.log("Results:");
-    console.log(chalk.red(`${errorCount} errors`));
-    console.log(chalk.yellow(`${skippedCount} skipped`));
-    console.log(chalk.yellow(`${unmodifiedCount} unmodified`));
-    console.log(chalk.green(`${modifiedCount} modified`));
+  log.info(`Set "packageManager" key in root "package.json" file...`);
+  let project: Project;
+  try {
+    project = await getWorkspaceDetails({ root });
+  } catch (e) {
+    return runner.abortTransform({
+      reason: `Unable to determine package manager for ${root}`,
+    });
   }
+
+  const availablePackageManagers = await getAvailablePackageManagers();
+  const { packageManager } = project;
+  const version = availablePackageManagers[packageManager];
+  if (!version) {
+    return runner.abortTransform({
+      reason: `Unable to determine package manager version for ${root}`,
+    });
+  }
+
+  const pkgManagerString = `${packageManager}@${version}`;
+  const rootPackageJsonPath = path.join(root, "package.json");
+  const rootPackageJson = readJsonSync(rootPackageJsonPath) as PackageJson;
+  const allWorkspaces = [
+    {
+      name: "package.json",
+      path: root,
+      packageJson: {
+        ...rootPackageJson,
+        packageJsonPath: rootPackageJsonPath,
+      },
+    },
+  ];
+
+  for (const workspace of allWorkspaces) {
+    const { packageJsonPath, ...pkgJson } = workspace.packageJson;
+    const newJson = { ...pkgJson, packageManager: pkgManagerString };
+    runner.modifyFile({
+      filePath: packageJsonPath,
+      after: newJson,
+    });
+  }
+
+  return runner.finish();
 }
+
+const transformerMeta = {
+  name: TRANSFORMER,
+  description: DESCRIPTION,
+  introducedIn: INTRODUCED_IN,
+  transformer,
+};
+
+// eslint-disable-next-line import/no-default-export -- transforms require default export
+export default transformerMeta;

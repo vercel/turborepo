@@ -2,24 +2,23 @@ package packagemanager
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 
-	"github.com/Masterminds/semver"
-	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"
-	"github.com/vercel/turbo/cli/internal/util"
 )
 
+const berryLockfile = "yarn.lock"
+
 var nodejsBerry = PackageManager{
-	Name:       "nodejs-berry",
-	Slug:       "yarn",
-	Command:    "yarn",
-	Specfile:   "package.json",
-	Lockfile:   "yarn.lock",
-	PackageDir: "node_modules",
+	Name:         "nodejs-berry",
+	Slug:         "yarn",
+	Command:      "yarn",
+	Specfile:     "package.json",
+	Lockfile:     berryLockfile,
+	PackageDir:   "node_modules",
+	ArgSeparator: func(_userArgs []string) []string { return nil },
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(rootpath.UntypedJoin("package.json"))
@@ -43,78 +42,35 @@ var nodejsBerry = PackageManager{
 	},
 
 	canPrune: func(cwd turbopath.AbsoluteSystemPath) (bool, error) {
-		if isNMLinker, err := util.IsNMLinker(cwd.ToStringDuringMigration()); err != nil {
-			return false, errors.Wrap(err, "could not determine if yarn is using `nodeLinker: node-modules`")
-		} else if !isNMLinker {
-			return false, errors.New("only yarn v2/v3 with `nodeLinker: node-modules` is supported at this time")
-		}
 		return true, nil
 	},
 
-	// Versions newer than 2.0 are berry, and before that we simply call them yarn.
-	Matches: func(manager string, version string) (bool, error) {
-		if manager != "yarn" {
-			return false, nil
-		}
-
-		v, err := semver.NewVersion(version)
-		if err != nil {
-			return false, fmt.Errorf("could not parse yarn version: %w", err)
-		}
-		// -0 allows pre-releases versions to be considered valid
-		c, err := semver.NewConstraint(">=2.0.0-0")
-		if err != nil {
-			return false, fmt.Errorf("could not create constraint: %w", err)
-		}
-
-		return c.Check(v), nil
+	GetLockfileName: func(_ turbopath.AbsoluteSystemPath) string {
+		return berryLockfile
 	},
 
-	// Detect for berry needs to identify which version of yarn is running on the system.
-	// Further, berry can be configured in an incompatible way, so we check for compatibility here as well.
-	detect: func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error) {
-		specfileExists := projectDirectory.UntypedJoin(packageManager.Specfile).FileExists()
-		lockfileExists := projectDirectory.UntypedJoin(packageManager.Lockfile).FileExists()
-
-		// Short-circuit, definitely not Yarn.
-		if !specfileExists || !lockfileExists {
-			return false, nil
-		}
-
-		cmd := exec.Command("yarn", "--version")
-		cmd.Dir = projectDirectory.ToString()
-		out, err := cmd.Output()
-		if err != nil {
-			return false, fmt.Errorf("could not detect yarn version: %w", err)
-		}
-
-		// See if we're a match when we compare these two things.
-		matches, _ := packageManager.Matches(packageManager.Slug, string(out))
-
-		// Short-circuit, definitely not Berry because version number says we're Yarn.
-		if !matches {
-			return false, nil
-		}
-
-		// We're Berry!
-
-		// Check for supported configuration.
-		isNMLinker, err := util.IsNMLinker(projectDirectory.ToStringDuringMigration())
-
-		if err != nil {
-			// Failed to read the linker state, so we treat an unknown configuration as a failure.
-			return false, fmt.Errorf("could not check if yarn is using nm-linker: %w", err)
-		} else if !isNMLinker {
-			// Not using nm-linker, so unsupported configuration.
-			return false, fmt.Errorf("only yarn nm-linker is supported")
-		}
-
-		// Berry, supported configuration.
-		return true, nil
+	GetLockfilePath: func(projectDirectory turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+		return projectDirectory.UntypedJoin(berryLockfile)
 	},
 
-	readLockfile: func(contents []byte) (lockfile.Lockfile, error) {
-		return lockfile.DecodeBerryLockfile(contents)
+	GetLockfileContents: func(projectDirectory turbopath.AbsoluteSystemPath) ([]byte, error) {
+		return projectDirectory.UntypedJoin(berryLockfile).ReadFile()
+	},
+
+	UnmarshalLockfile: func(rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {
+		var resolutions map[string]string
+		if untypedResolutions, ok := rootPackageJSON.RawJSON["resolutions"]; ok {
+			if untypedResolutions, ok := untypedResolutions.(map[string]interface{}); ok {
+				resolutions = make(map[string]string, len(untypedResolutions))
+				for resolution, reference := range untypedResolutions {
+					if reference, ok := reference.(string); ok {
+						resolutions[resolution] = reference
+					}
+				}
+			}
+		}
+
+		return lockfile.DecodeBerryLockfile(contents, resolutions)
 	},
 
 	prunePatches: func(pkgJSON *fs.PackageJSON, patches []turbopath.AnchoredUnixPath) error {

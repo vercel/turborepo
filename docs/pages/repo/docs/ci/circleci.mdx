@@ -31,12 +31,11 @@ And a `turbo.json`:
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [".next/**", "!.next/cache/**"],
+      "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "dependsOn": ["^build"]
     },
   }
 }
@@ -128,7 +127,6 @@ To use Vercel Remote Caching, you can get the value of these variables in a few 
 
 1. Create a Scoped Access Token to your account in the [Vercel Dashboard](https://vercel.com/account/tokens)
 
-![Vercel Access Tokens](/images/docs/vercel-tokens.png)
 ![Vercel Access Tokens](/images/docs/vercel-create-token.png)
 
 Copy the value to a safe place. You'll need it in a moment.

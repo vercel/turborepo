@@ -2,8 +2,11 @@ package graphvisualizer
 
 import (
 	"fmt"
+	"io"
+	"math/rand"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/fatih/color"
@@ -11,6 +14,7 @@ import (
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/ui"
+	"github.com/vercel/turbo/cli/internal/util"
 	"github.com/vercel/turbo/cli/internal/util/browser"
 )
 
@@ -25,6 +29,15 @@ type GraphVisualizer struct {
 func hasGraphViz() bool {
 	err := exec.Command("dot", "-V").Run()
 	return err == nil
+}
+
+func getRandChar() string {
+	i := rand.Intn(25) + 65
+	return string(rune(i))
+}
+
+func getRandID() string {
+	return getRandChar() + getRandChar() + getRandChar() + getRandChar()
 }
 
 // New creates an instance of ColorCache with helpers for adding colors to task outputs
@@ -55,9 +68,60 @@ func (g *GraphVisualizer) RenderDotGraph() {
 	g.ui.Output(g.generateDotString())
 }
 
+type nameCache map[string]string
+
+func (nc nameCache) getName(in string) string {
+	if existing, ok := nc[in]; ok {
+		return existing
+	}
+	newName := getRandID()
+	nc[in] = newName
+	return newName
+}
+
+type sortableEdge dag.Edge
+type sortableEdges []sortableEdge
+
+// methods mostly copied from marshalEdges in the dag library
+func (e sortableEdges) Less(i, j int) bool {
+	iSrc := dag.VertexName(e[i].Source())
+	jSrc := dag.VertexName(e[j].Source())
+	if iSrc < jSrc {
+		return true
+	} else if iSrc > jSrc {
+		return false
+	}
+	return dag.VertexName(e[i].Target()) < dag.VertexName(e[j].Target())
+}
+func (e sortableEdges) Len() int      { return len(e) }
+func (e sortableEdges) Swap(i, j int) { e[i], e[j] = e[j], e[i] }
+
+func (g *GraphVisualizer) generateMermaid(out io.StringWriter) error {
+	if _, err := out.WriteString("graph TD\n"); err != nil {
+		return err
+	}
+	cache := make(nameCache)
+	// cast edges to our custom type so we can sort them
+	// this allows us to generate the same graph every time
+	var edges sortableEdges
+	for _, edge := range g.TaskGraph.Edges() {
+		edges = append(edges, sortableEdge(edge))
+	}
+	sort.Sort(edges)
+	for _, edge := range edges {
+		left := dag.VertexName(edge.Source())
+		right := dag.VertexName(edge.Target())
+		leftName := cache.getName(left)
+		rightName := cache.getName(right)
+		if _, err := out.WriteString(fmt.Sprintf("\t%v(\"%v\") --> %v(\"%v\")\n", leftName, left, rightName, right)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GenerateGraphFile saves a visualization of the TaskGraph to a file (or renders a DotGraph as a fallback))
 func (g *GraphVisualizer) GenerateGraphFile(outputName string) error {
-	graphString := g.generateDotString()
 	outputFilename := g.repoRoot.UntypedJoin(outputName)
 	ext := outputFilename.Ext()
 	// use .jpg as default extension if none is provided
@@ -65,6 +129,19 @@ func (g *GraphVisualizer) GenerateGraphFile(outputName string) error {
 		ext = ".jpg"
 		outputFilename = g.repoRoot.UntypedJoin(outputName + ext)
 	}
+	if ext == ".mermaid" {
+		f, err := outputFilename.Create()
+		if err != nil {
+			return fmt.Errorf("error creating file: %w", err)
+		}
+		defer util.CloseAndIgnoreError(f)
+		if err := g.generateMermaid(f); err != nil {
+			return err
+		}
+		g.ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
+		return nil
+	}
+	graphString := g.generateDotString()
 	if ext == ".html" {
 		f, err := outputFilename.Create()
 		if err != nil {

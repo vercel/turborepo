@@ -2,7 +2,9 @@ import cn from "classnames";
 import { useRouter } from "next/router";
 import Link from "next/link";
 
-export function useTurboSite(): "pack" | "repo" | undefined {
+export type TurboSite = "pack" | "repo";
+
+export function useTurboSite(): TurboSite | undefined {
   const { pathname } = useRouter();
 
   if (pathname.startsWith("/repo")) {
@@ -25,8 +27,8 @@ function SiteSwitcherLink({ href, text, isActive }) {
   };
 
   return (
-    <Link href={href}>
-      <a className={cn(classes, conditionalClasses)}>{text}</a>
+    <Link href={href} className={cn(classes, conditionalClasses)}>
+      {text}
     </Link>
   );
 }

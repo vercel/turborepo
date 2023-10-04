@@ -25,11 +25,7 @@
 
 ## Getting Started
 
-Visit https://turbo.build/repo/docs/getting-started to get started with Turborepo.
-
-## Documentation
-
-Visit https://turbo.build/repo/docs to view the full documentation.
+Visit https://turbo.build/repo/docs to get started with Turborepo and read the documentation.
 
 ## Community
 

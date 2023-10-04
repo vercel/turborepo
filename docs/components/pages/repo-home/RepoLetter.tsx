@@ -1,5 +1,5 @@
 import { HeroText } from "../home-shared/Headings";
-import Image from "next/future/image";
+import Image from "next/image";
 import cn from "classnames";
 import gradients from "../home-shared/gradients.module.css";
 import { FadeIn } from "../home-shared/FadeIn";
@@ -70,7 +70,7 @@ export function RepoLetter() {
           <div className="w-24 h-24 min-w-[96px] min-h-[96px] rounded-full border dark:border-white/10 border-black/10 flex items-center justify-center ">
             <Image
               alt="Image of Jared Palmer"
-              src="/images/people/jaredpalmer_headshot.jpeg"
+              src="/images/people/jaredpalmer.jpeg"
               width={64}
               height={64}
               className="rounded-full grayscale"
@@ -101,8 +101,8 @@ export function RepoLetter() {
       <FadeIn noVertical className="relative flex justify-center w-full mt-16">
         <div className="max-w-[180px] w-full">
           <CTAButton>
-            <Link href="/repo/docs">
-              <a className="block py-3 font-sans">Start Building</a>
+            <Link href="/repo/docs" className="block py-3 font-sans">
+              Start Building
             </Link>
           </CTAButton>
         </div>

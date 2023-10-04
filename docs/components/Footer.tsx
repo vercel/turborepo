@@ -4,6 +4,7 @@ import { useState, ReactNode, ReactElement } from "react";
 import cn from "classnames";
 import { ThemeSwitch } from "nextra-theme-docs";
 import VercelLogo from "./logos/Vercel";
+import { useTurboSite, TurboSite } from "./SiteSwitcher";
 
 function FooterLink({ href, children }: { href: string; children: ReactNode }) {
   const classes =
@@ -16,8 +17,8 @@ function FooterLink({ href, children }: { href: string; children: ReactNode }) {
     );
   }
   return (
-    <Link href={href}>
-      <a className={classes}>{children}</a>
+    <Link href={href} className={classes}>
+      {children}
     </Link>
   );
 }
@@ -53,7 +54,7 @@ const navigation = {
       href: "https://turbo.build/discord",
     },
   ],
-  company: [
+  company: (site: TurboSite) => [
     { name: "Vercel", href: "https://vercel.com" },
     {
       name: "Open Source Software",
@@ -61,7 +62,9 @@ const navigation = {
     },
     {
       name: "Contact Sales",
-      href: "https://vercel.com/contact/turborepo?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-enterpriseLink",
+      href: `https://vercel.com/${
+        site === "repo" ? "solutions/turborepo" : "contact/sales"
+      }?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-enterpriseLink`,
     },
     { name: "Twitter", href: "https://twitter.com/vercel" },
   ],
@@ -72,6 +75,7 @@ const navigation = {
 };
 
 export function FooterContent() {
+  const site = useTurboSite();
   return (
     <div className="w-full" aria-labelledby="footer-heading">
       <h2 id="footer-heading" className="sr-only">
@@ -114,7 +118,7 @@ export function FooterContent() {
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Company</FooterHeader>
                 <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
-                  {navigation.company.map((item) => (
+                  {navigation.company(site).map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
                     </li>
@@ -225,7 +229,7 @@ function SubmitForm() {
 export function Footer({ menu }: { menu?: boolean }): ReactElement {
   return (
     <footer className="bg-[#FAFAFA] pb-[env(safe-area-inset-bottom)] relative dark:bg-[#111111]">
-      <div className="absolute top-0 h-12 w-full -translate-y-full bg-gradient-to-t from-[#FAFAFA] to-transparent dark:from-black" />
+      <div className="absolute top-0 h-12 w-full -translate-y-full bg-gradient-to-t from-[#FAFAFA] to-transparent dark:from-black pointer-events-none" />
       <div
         className={cn(
           "mx-auto max-w-[90rem] py-2 px-4 flex gap-2",

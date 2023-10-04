@@ -1,5 +1,5 @@
 import cn from "classnames";
-import Image from "next/future/image";
+import Image from "next/image";
 import Link from "next/link";
 // import { Marquee } from "../../clients/Marquee";
 // import { Clients } from "../../clients/Clients";
@@ -89,8 +89,8 @@ export function PackHero() {
         >
           <div className="flex flex-col w-full gap-3 md:!flex-row">
             <CTAButton>
-              <Link href="/pack/docs">
-                <a className="block py-3">Get Started</a>
+              <Link href="/pack/docs" className="block py-3">
+                Get Started
               </Link>
             </CTAButton>
             <CTAButton outline>

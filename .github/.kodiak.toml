@@ -21,9 +21,18 @@ notify_on_conflict = false
 # for tests again. This causes delays in getting easy PRs in.
 always = true
 
+# https://kodiakhq.com/docs/config-reference#updateautoupdate_label
+# PRs will get updates from the base branch (i.e. usually `main`)
+# when this label is applied. This is different from "update=always"
+# config, which only applies to PRs that have been tagged with for auto_merging_
+# (i.e. PRs with the "pr: automerge" label, which is configured above).
+# This label allows PR authors to keep their PR branch up-to-date without
+# opting into Kodiak's automerge feature. This is useful if you want to use
+# Github's AutoMerge feature instead.
+autoupdate_label = "pr: autoupdate"
+
 [merge.message]
 title = "pull_request_title"
-body = "pull_request_body"
 include_coauthors= true
 include_pr_number = true
 body_type = "markdown"

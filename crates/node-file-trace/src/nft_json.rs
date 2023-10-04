@@ -1,43 +1,52 @@
 use anyhow::Result;
 use serde_json::json;
-use turbo_tasks_fs::{File, FileSystemPathVc};
+use turbo_tasks::Vc;
+use turbo_tasks_fs::{File, FileSystem};
 use turbopack_core::{
-    asset::{Asset, AssetContentVc, AssetVc},
-    reference::{all_assets, AssetReferencesVc},
+    asset::{Asset, AssetContent},
+    ident::AssetIdent,
+    module::Module,
+    output::OutputAsset,
+    reference::all_modules,
 };
 
 #[turbo_tasks::value(shared)]
 pub struct NftJsonAsset {
-    entry: AssetVc,
+    entry: Vc<Box<dyn Module>>,
 }
 
 #[turbo_tasks::value_impl]
-impl NftJsonAssetVc {
+impl NftJsonAsset {
     #[turbo_tasks::function]
-    pub fn new(entry: AssetVc) -> Self {
-        Self::cell(NftJsonAsset { entry })
+    pub fn new(entry: Vc<Box<dyn Module>>) -> Vc<Self> {
+        NftJsonAsset { entry }.cell()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl OutputAsset for NftJsonAsset {
+    #[turbo_tasks::function]
+    async fn ident(&self) -> Result<Vc<AssetIdent>> {
+        let path = self.entry.ident().path().await?;
+        Ok(AssetIdent::from_path(
+            path.fs.root().join(format!("{}.nft.json", path.path)),
+        ))
     }
 }
 
 #[turbo_tasks::value_impl]
 impl Asset for NftJsonAsset {
     #[turbo_tasks::function]
-    async fn path(&self) -> Result<FileSystemPathVc> {
-        let path = self.entry.path().await?;
-        Ok(path.fs.root().join(&format!("{}.nft.json", path.path)))
-    }
-
-    #[turbo_tasks::function]
-    async fn content(&self) -> Result<AssetContentVc> {
-        let context = self.entry.path().parent().await?;
+    async fn content(&self) -> Result<Vc<AssetContent>> {
+        let parent_dir = self.entry.ident().path().parent().await?;
         // For clippy -- This explicit deref is necessary
-        let entry_path = &*self.entry.path().await?;
+        let entry_path = &*self.entry.ident().path().await?;
         let mut result = Vec::new();
-        if let Some(self_path) = context.get_relative_path_to(entry_path) {
-            let set = all_assets(self.entry);
+        if let Some(self_path) = parent_dir.get_relative_path_to(entry_path) {
+            let set = all_modules(self.entry);
             for asset in set.await?.iter() {
-                let path = asset.path().await?;
-                if let Some(rel_path) = context.get_relative_path_to(&path) {
+                let path = asset.ident().path().await?;
+                if let Some(rel_path) = parent_dir.get_relative_path_to(&path) {
                     if rel_path != self_path {
                         result.push(rel_path);
                     }
@@ -51,11 +60,6 @@ impl Asset for NftJsonAsset {
           "files": result
         });
 
-        Ok(File::from(json.to_string()).into())
-    }
-
-    #[turbo_tasks::function]
-    fn references(&self) -> AssetReferencesVc {
-        AssetReferencesVc::empty()
+        Ok(AssetContent::file(File::from(json.to_string()).into()))
     }
 }

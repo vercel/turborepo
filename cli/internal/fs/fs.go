@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -39,6 +40,12 @@ var nonRelativeSentinel string = ".." + string(filepath.Separator)
 // DirContainsPath returns true if the path 'target' is contained within 'dir'
 // Expects both paths to be absolute and does not verify that either path exists.
 func DirContainsPath(dir string, target string) (bool, error) {
+	// On windows, trying to get a relative path between files on different volumes
+	// is an error. We don't care about the error, it's good enough for us to say
+	// that one path doesn't contain the other if they're on different volumes.
+	if runtime.GOOS == "windows" && filepath.VolumeName(dir) != filepath.VolumeName(target) {
+		return false, nil
+	}
 	// In Go, filepath.Rel can return a path that starts with "../" or equivalent.
 	// Checking filesystem-level contains can get extremely complicated
 	// (see https://github.com/golang/dep/blob/f13583b555deaa6742f141a9c1185af947720d60/internal/fs/fs.go#L33)

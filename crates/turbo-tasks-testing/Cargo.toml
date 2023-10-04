@@ -10,8 +10,9 @@ autobenches = false
 bench = false
 
 [dependencies]
-anyhow = "1.0.47"
-event-listener = "2.5.2"
-lazy_static = "1.4.0"
-tokio = "1.11.0"
-turbo-tasks = { path = "../turbo-tasks" }
+anyhow = { workspace = true }
+auto-hash-map = { workspace = true }
+futures = { workspace = true }
+lazy_static = { workspace = true }
+tokio = { workspace = true }
+turbo-tasks = { workspace = true }

@@ -46,24 +46,12 @@ Inside the root `turbo.json`, we recommend setting up a `test` task in your [pip
 ```json filename="turbo.json"
 {
   "pipeline": {
-    "test": {
-      "outputs": []
-    }
+    "test": {}
   }
 }
 ```
 
-Now, inside your root `package.json`, add a `test` script:
-
-```json filename="package.json"
-{
-  "scripts": {
-    "test": "turbo run test"
-  }
-}
-```
-
-Now, you can run `test` using your package manager and have Turborepo test the entire repository.
+Now, you can run `turbo test` and have Turborepo test the entire repository.
 
 Because of Turborepo's [caching](/repo/docs/core-concepts/caching), this also means that only repositories that have changed files will be tested - resulting in a lot of time saved.
 
@@ -103,9 +91,7 @@ Here's an example:
 ```json filename="turbo.json"
 {
   "pipeline": {
-    "test": {
-      "outputs": []
-    },
+    "test": {},
     "test:watch": {
       "cache": false
     }

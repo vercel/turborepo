@@ -2,56 +2,75 @@
 package cmd
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"runtime/pprof"
 	"runtime/trace"
 
 	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-	"github.com/vercel/turbo/cli/internal/cmd/auth"
-	"github.com/vercel/turbo/cli/internal/cmd/info"
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/daemon"
-	"github.com/vercel/turbo/cli/internal/login"
 	"github.com/vercel/turbo/cli/internal/process"
-	"github.com/vercel/turbo/cli/internal/prune"
 	"github.com/vercel/turbo/cli/internal/run"
 	"github.com/vercel/turbo/cli/internal/signals"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
-type execOpts struct {
-	heapFile       string
-	cpuProfileFile string
-	traceFile      string
+func initializeOutputFiles(helper *cmdutil.Helper, parsedArgs *turbostate.ParsedArgsFromRust) error {
+	if parsedArgs.Trace != "" {
+		cleanup, err := createTraceFile(parsedArgs.Trace)
+		if err != nil {
+			return fmt.Errorf("failed to create trace file: %v", err)
+		}
+		helper.RegisterCleanup(cleanup)
+	}
+	if parsedArgs.Heap != "" {
+		cleanup, err := createHeapFile(parsedArgs.Heap)
+		if err != nil {
+			return fmt.Errorf("failed to create heap file: %v", err)
+		}
+		helper.RegisterCleanup(cleanup)
+	}
+	if parsedArgs.CPUProfile != "" {
+		cleanup, err := createCpuprofileFile(parsedArgs.CPUProfile)
+		if err != nil {
+			return fmt.Errorf("failed to create CPU profile file: %v", err)
+		}
+		helper.RegisterCleanup(cleanup)
+	}
+
+	return nil
 }
 
-func (eo *execOpts) addFlags(flags *pflag.FlagSet) {
-	// Note that these are relative to the actual CWD, and do not respect the --cwd flag.
-	// This is because a user likely wants to inspect them after execution, and may not immediately
-	// know the repo root, depending on how turbo was invoked.
-	flags.StringVar(&eo.heapFile, "heap", "", "Specify a file to save a pprof heap profile")
-	flags.StringVar(&eo.cpuProfileFile, "cpuprofile", "", "Specify a file to save a cpu profile")
-	flags.StringVar(&eo.traceFile, "trace", "", "Specify a file to save a pprof trace")
-}
-
-// RunWithArgs runs turbo with the specified arguments. The arguments should not
-// include the binary being invoked (e.g. "turbo").
-func RunWithArgs(args []string, turboVersion string) int {
+// RunWithExecutionState runs turbo with the ParsedArgsFromRust that is passed from the Rust side.
+func RunWithExecutionState(executionState *turbostate.ExecutionState, turboVersion string) int {
 	util.InitPrintf()
 	// TODO: replace this with a context
 	signalWatcher := signals.NewWatcher()
-	helper := cmdutil.NewHelper(turboVersion)
-	root := getCmd(helper, signalWatcher)
-	resolvedArgs := resolveArgs(root, args)
-	defer helper.Cleanup(root.Flags())
-	root.SetArgs(resolvedArgs)
+	helper := cmdutil.NewHelper(turboVersion, &executionState.CLIArgs)
+	ctx := context.Background()
+
+	err := initializeOutputFiles(helper, &executionState.CLIArgs)
+	if err != nil {
+		fmt.Printf("%v", err)
+		return 1
+	}
+	defer helper.Cleanup(&executionState.CLIArgs)
 
 	doneCh := make(chan struct{})
 	var execErr error
 	go func() {
-		execErr = root.Execute()
+		command := executionState.CLIArgs.Command
+		if command.Daemon != nil {
+			execErr = daemon.ExecuteDaemon(ctx, helper, signalWatcher, executionState)
+		} else if command.Run != nil {
+			execErr = run.ExecuteRun(ctx, helper, signalWatcher, executionState)
+		} else {
+			execErr = fmt.Errorf("unknown command: %v", command)
+		}
+
 		close(doneCh)
 	}()
 
@@ -65,6 +84,7 @@ func RunWithArgs(args []string, turboVersion string) int {
 		if errors.As(execErr, &exitErr) {
 			return exitErr.ExitCode
 		} else if execErr != nil {
+			fmt.Printf("Turbo error: %v\n", execErr)
 			return 1
 		}
 		return 0
@@ -72,78 +92,6 @@ func RunWithArgs(args []string, turboVersion string) int {
 		// We caught a signal, which already called the close handlers
 		return 1
 	}
-}
-
-const _defaultCmd string = "run"
-
-// resolveArgs adds a default command to the supplied arguments if none exists.
-func resolveArgs(root *cobra.Command, args []string) []string {
-	for _, arg := range args {
-		if arg == "--help" || arg == "-h" || arg == "--version" || arg == "completion" {
-			return args
-		}
-	}
-	cmd, _, err := root.Traverse(args)
-	if err != nil {
-		// The command is going to error, but defer to cobra
-		// to handle it
-		return args
-	} else if cmd.Name() == root.Name() {
-		// We resolved to the root, and this is not help or version,
-		// so prepend our default command
-		return append([]string{_defaultCmd}, args...)
-	}
-	// We resolved to something other than the root command, no need for a default
-	return args
-}
-
-// getCmd returns the root cobra command
-func getCmd(helper *cmdutil.Helper, signalWatcher *signals.Watcher) *cobra.Command {
-	execOpts := &execOpts{}
-
-	cmd := &cobra.Command{
-		Use:              "turbo",
-		Short:            "The build system that makes ship happen",
-		TraverseChildren: true,
-		Version:          helper.TurboVersion,
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if execOpts.traceFile != "" {
-				cleanup, err := createTraceFile(execOpts.traceFile)
-				if err != nil {
-					return err
-				}
-				helper.RegisterCleanup(cleanup)
-			}
-			if execOpts.heapFile != "" {
-				cleanup, err := createHeapFile(execOpts.heapFile)
-				if err != nil {
-					return err
-				}
-				helper.RegisterCleanup(cleanup)
-			}
-			if execOpts.cpuProfileFile != "" {
-				cleanup, err := createCpuprofileFile(execOpts.cpuProfileFile)
-				if err != nil {
-					return err
-				}
-				helper.RegisterCleanup(cleanup)
-			}
-			return nil
-		},
-	}
-	cmd.SetVersionTemplate("{{.Version}}\n")
-	flags := cmd.PersistentFlags()
-	helper.AddFlags(flags)
-	execOpts.addFlags(flags)
-	cmd.AddCommand(login.NewLinkCommand(helper))
-	cmd.AddCommand(login.NewLoginCommand(helper))
-	cmd.AddCommand(auth.LogoutCmd(helper))
-	cmd.AddCommand(auth.UnlinkCmd(helper))
-	cmd.AddCommand(info.BinCmd(helper))
-	cmd.AddCommand(daemon.GetCmd(helper, signalWatcher))
-	cmd.AddCommand(prune.GetCmd(helper))
-	cmd.AddCommand(run.GetCmd(helper, signalWatcher))
-	return cmd
 }
 
 type profileCleanup func() error

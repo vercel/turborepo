@@ -4,6 +4,7 @@ package daemonclient
 
 import (
 	"context"
+	"path/filepath"
 
 	"github.com/vercel/turbo/cli/internal/daemon/connector"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -32,24 +33,38 @@ func New(client *connector.Client) *DaemonClient {
 }
 
 // GetChangedOutputs implements runcache.OutputWatcher.GetChangedOutputs
-func (d *DaemonClient) GetChangedOutputs(ctx context.Context, hash string, repoRelativeOutputGlobs []string) ([]string, error) {
+func (d *DaemonClient) GetChangedOutputs(ctx context.Context, hash string, repoRelativeOutputGlobs []string) ([]string, int, error) {
+	// The daemon expects globs to be unix paths
+	var outputGlobs []string
+	for _, outputGlob := range repoRelativeOutputGlobs {
+		outputGlobs = append(outputGlobs, filepath.ToSlash(outputGlob))
+	}
 	resp, err := d.client.GetChangedOutputs(ctx, &turbodprotocol.GetChangedOutputsRequest{
 		Hash:        hash,
-		OutputGlobs: repoRelativeOutputGlobs,
+		OutputGlobs: outputGlobs,
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-
-	return resp.ChangedOutputGlobs, nil
+	return resp.ChangedOutputGlobs, int(resp.TimeSaved), nil
 }
 
 // NotifyOutputsWritten implements runcache.OutputWatcher.NotifyOutputsWritten
-func (d *DaemonClient) NotifyOutputsWritten(ctx context.Context, hash string, repoRelativeOutputGlobs fs.TaskOutputs) error {
+func (d *DaemonClient) NotifyOutputsWritten(ctx context.Context, hash string, repoRelativeOutputGlobs fs.TaskOutputs, timeSaved int) error {
+	// The daemon expects globs to be unix paths
+	var inclusions []string
+	var exclusions []string
+	for _, inclusion := range repoRelativeOutputGlobs.Inclusions {
+		inclusions = append(inclusions, filepath.ToSlash(inclusion))
+	}
+	for _, exclusion := range repoRelativeOutputGlobs.Exclusions {
+		exclusions = append(exclusions, filepath.ToSlash(exclusion))
+	}
 	_, err := d.client.NotifyOutputsWritten(ctx, &turbodprotocol.NotifyOutputsWrittenRequest{
 		Hash:                 hash,
-		OutputGlobs:          repoRelativeOutputGlobs.Inclusions,
-		OutputExclusionGlobs: repoRelativeOutputGlobs.Exclusions,
+		OutputGlobs:          inclusions,
+		OutputExclusionGlobs: exclusions,
+		TimeSaved:            uint64(timeSaved),
 	})
 	return err
 }

@@ -49,7 +49,7 @@ func TestParseConcurrency(t *testing.T) {
 
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d) '%s' should be parsed at '%d'", i, tc.Input, tc.Expected), func(t *testing.T) {
-			if result, err := parseConcurrency(tc.Input); err != nil {
+			if result, err := ParseConcurrency(tc.Input); err != nil {
 				t.Fatalf("invalid parse: %#v", err)
 			} else {
 				assert.EqualValues(t, tc.Expected, result)
@@ -72,7 +72,7 @@ func TestInvalidPercents(t *testing.T) {
 	}
 	for _, tc := range inputs {
 		t.Run(tc, func(t *testing.T) {
-			val, err := parseConcurrency(tc)
+			val, err := ParseConcurrency(tc)
 			assert.Error(t, err, "input %v got %v", tc, val)
 		})
 	}

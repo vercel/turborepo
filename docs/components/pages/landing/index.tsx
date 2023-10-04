@@ -67,47 +67,46 @@ function Card({
 }) {
   const [hovering, setHovering] = React.useState(false);
   return (
-    <Link href={href}>
-      <a
+    <Link
+      href={href}
+      className={cn(
+        styles["counter-border"],
+        "w-[calc(100%_-_0px)] h-[304]px sm:!w-[488px] sm:h-[352px]"
+      )}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
+      <motion.i
+        initial="hidden"
+        animate={hovering ? "active" : "hidden"}
+        variants={variants}
+        aria-hidden="true"
+      ></motion.i>
+      <div
         className={cn(
-          styles["counter-border"],
-          "w-[calc(100%_-_0px)] h-[304]px sm:!w-[488px] sm:h-[352px]"
+          "relative w-full h-full max-w-full !pb-12 pt-8 md:!pb-4 md:!pt-4 p-3 rounded-xl overflow-hidden flex flex-col items-center justify-center border border-[rgba(255,255,255,0.05)]",
+          className
         )}
-        onMouseEnter={() => setHovering(true)}
-        onMouseLeave={() => setHovering(false)}
       >
-        <motion.i
-          initial="hidden"
-          animate={hovering ? "active" : "hidden"}
-          variants={variants}
-          aria-hidden="true"
-        ></motion.i>
-        <div
-          className={cn(
-            "relative w-full h-full max-w-full !pb-12 pt-8 md:!pb-4 md:!pt-4 p-3 rounded-xl overflow-hidden flex flex-col items-center justify-center border border-[rgba(255,255,255,0.05)]",
-            className
-          )}
-        >
-          <div className="flex items-center justify-center flex-1 mb-7 md:mb-0">
-            <Icon />
-          </div>
-
-          <div className="flex flex-col items-center flex-1">
-            {title == "pack" ? (
-              <PackLogo
-                alt={alt}
-                className="w-[160px] md:w-[220px] mb-3 fill-black dark:fill-white"
-              />
-            ) : (
-              <RepoLogo
-                alt={alt}
-                className="w-[160px] md:w-[220px] mb-3 fill-black dark:fill-white"
-              />
-            )}
-            {children}
-          </div>
+        <div className="flex items-center justify-center flex-1 mb-7 md:mb-0">
+          <Icon />
         </div>
-      </a>
+
+        <div className="flex flex-col items-center flex-1">
+          {title == "pack" ? (
+            <PackLogo
+              alt={alt}
+              className="w-[160px] md:w-[220px] mb-3 fill-black dark:fill-white"
+            />
+          ) : (
+            <RepoLogo
+              alt={alt}
+              className="w-[160px] md:w-[220px] mb-3 fill-black dark:fill-white"
+            />
+          )}
+          {children}
+        </div>
+      </div>
     </Link>
   );
 }
@@ -138,7 +137,7 @@ function SiteCards() {
           className="turbopackCardBg"
         >
           <div className="absolute top-3 left-3">
-            <CardBadge>alpha</CardBadge>
+            <CardBadge>beta</CardBadge>
           </div>
           <p className="text-lg !w-[280px] md:!w-[340px] font-space-grotesk text-center opacity-50 dark:opacity-70 ">
             Introducing the Rust-powered successor to Webpack.
@@ -180,7 +179,7 @@ function LandingPage() {
       <main className="relative flex flex-col items-center justify-center w-full h-full  overflow-hidden [--geist-foreground:#fff] dark:[--geist-foreground:#000] [--gradient-stop-1:0px] [--gradient-stop-2:120px] sm:[--gradient-stop-1:0px] sm:[--gradient-stop-2:120px]">
         <Background />
         <FadeIn className="z-10 flex flex-col items-center justify-center w-full h-full">
-          <h1 className="mt-12 lg:!mt-20 mx-6 w-[300px] md:!w-full font-extrabold text-5xl lg:text-6xl leading-tight text-center mb-4 bg-clip-text text-transparent bg-gradient-to-b from-black/80 to-black dark:from-white dark:to-[#AAAAAA]">
+          <h1 className="mt-12 lg:!mt-20 mx-6 w-[300px] md:!w-full font-extrabold text-5xl lg:text-6xl  leading-tight xl:leading-snug text-center pb-4 bg-clip-text text-transparent bg-gradient-to-b from-black/80 to-black dark:from-white dark:to-[#AAAAAA]">
             Make Ship Happen
           </h1>
           <p className="mx-6 text-xl max-h-[112px] md:max-h-[96px] w-[315px] md:w-[660px] md:text-2xl font-space-grotesk text-center text-[#666666] dark:text-[#888888]">

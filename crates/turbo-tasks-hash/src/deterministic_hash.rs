@@ -102,6 +102,13 @@ impl<T: ?Sized + DeterministicHash> DeterministicHash for &T {
     }
 }
 
+impl DeterministicHash for [u8] {
+    fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
+        state.write_usize(self.len());
+        state.write_bytes(self);
+    }
+}
+
 impl DeterministicHash for String {
     fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
         state.write_usize(self.len());
@@ -109,10 +116,16 @@ impl DeterministicHash for String {
     }
 }
 
-impl DeterministicHash for [u8] {
+impl DeterministicHash for &str {
     fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
         state.write_usize(self.len());
-        state.write_bytes(self);
+        state.write_bytes(self.as_bytes());
+    }
+}
+
+impl DeterministicHash for bool {
+    fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
+        state.write_u8(*self as u8);
     }
 }
 
@@ -124,6 +137,15 @@ impl<T: DeterministicHash> DeterministicHash for Option<T> {
                 state.write_u8(1);
                 v.deterministic_hash(state);
             }
+        }
+    }
+}
+
+impl<T: DeterministicHash> DeterministicHash for Vec<T> {
+    fn deterministic_hash<H: DeterministicHasher>(&self, state: &mut H) {
+        state.write_usize(self.len());
+        for v in self {
+            v.deterministic_hash(state);
         }
     }
 }

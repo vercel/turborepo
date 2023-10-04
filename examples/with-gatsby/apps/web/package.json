@@ -1,0 +1,28 @@
+{
+  "name": "web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "gatsby develop",
+    "build": "gatsby build",
+    "start": "gatsby develop",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "gatsby": "^5.12.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^18.15.0",
+    "@types/react": "^18.0.28",
+    "@types/react-dom": "^18.0.11",
+    "eslint-config-custom": "workspace:*",
+    "gatsby-plugin-compile-es6-packages": "^2.1.1",
+    "gatsby-plugin-pnpm": "^1.2.10",
+    "tsconfig": "workspace:*",
+    "typescript": "^5.2.2"
+  }
+}

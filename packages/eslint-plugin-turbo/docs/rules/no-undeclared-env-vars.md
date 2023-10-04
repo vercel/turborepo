@@ -19,11 +19,9 @@ Examples of **incorrect** code for this rule:
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
       "cache": false
     }
@@ -35,15 +33,13 @@ Examples of **correct** code for this rule:
 
 ```json
 {
-  "globalDependencies": ["$MY_API_TOKEN"]
+  "globalEnv": ["MY_API_TOKEN"],
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
       "cache": false
     }
@@ -55,12 +51,11 @@ Examples of **correct** code for this rule:
 {
   "pipeline": {
     "build": {
-      "dependsOn": ["^build", "$MY_API_TOKEN"],
-      "outputs": ["dist/**", ".next/**"]
+      "dependsOn": ["^build"],
+      "env": ["MY_API_TOKEN"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
       "cache": false
     }
@@ -70,11 +65,10 @@ Examples of **correct** code for this rule:
 
 ## Options
 
-| Option        | Required | Default     | Details                                                                                                                                     | Example                                      |
-| ------------- | -------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `turboConfig` | No       | Auto-detect | Resolved `turbo.json` configuration                                                                                                         | `require("./turbo.json")`                    |
-| `allowList`   | No       | []          | An array of strings (or regular expressions) to exclude. NOTE: an env variable should only be excluded if it has no effect on build outputs | `["MY_API_TOKEN", "^MY_ENV_PREFIX_[A-Z]+$"]` |
+| Option      | Required | Default | Details                                                                                                                                     | Example                                      |
+| ----------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `allowList` | No       | []      | An array of strings (or regular expressions) to exclude. NOTE: an env variable should only be excluded if it has no effect on build outputs | `["MY_API_TOKEN", "^MY_ENV_PREFIX_[A-Z]+$"]` |
 
 ## Further Reading
 
-- [Altering Caching Based on Environment Variables](https://turbo.build/repo/docs/core-concepts/caching#altering-caching-based-on-environment-variables)
+- [Environment Variable Inputs](https://turbo.build/repo/docs/core-concepts/caching/environment-variable-inputs)

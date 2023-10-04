@@ -1,0 +1,6 @@
+name: "cargo-sweep"
+description: "Runs cargo-sweep to clean old build artifacts"
+runs:
+  using: "node16"
+  main: "dist/main/index.js"
+  post: "dist/post/index.js"

@@ -1,0 +1,264 @@
+[
+    (
+        "*anonymous function 170*",
+        Function(
+            3,
+            170,
+            Array {
+                total_nodes: 2,
+                items: [
+                    Variable(
+                        (
+                            Atom('file' type=static),
+                            #4,
+                        ),
+                    ),
+                ],
+                mutable: true,
+            },
+        ),
+    ),
+    (
+        "*anonymous function 254*",
+        Function(
+            5,
+            254,
+            MemberCall(
+                4,
+                FreeVar(
+                    Atom('require' type=static),
+                ),
+                Constant(
+                    Str(
+                        Word(
+                            Atom('resolve' type=inline),
+                        ),
+                    ),
+                ),
+                [
+                    Variable(
+                        (
+                            Atom('file' type=static),
+                            #5,
+                        ),
+                    ),
+                ],
+            ),
+        ),
+    ),
+    (
+        "*anonymous function 88*",
+        Function(
+            2,
+            88,
+            Variable(
+                (
+                    Atom('file' type=static),
+                    #3,
+                ),
+            ),
+        ),
+    ),
+    (
+        "a",
+        Array {
+            total_nodes: 3,
+            items: [
+                Constant(
+                    Str(
+                        Word(
+                            Atom('../lib/a.js' type=dynamic),
+                        ),
+                    ),
+                ),
+                Constant(
+                    Str(
+                        Word(
+                            Atom('../lib/b.js' type=dynamic),
+                        ),
+                    ),
+                ),
+            ],
+            mutable: true,
+        },
+    ),
+    (
+        "b",
+        MemberCall(
+            6,
+            Array {
+                total_nodes: 3,
+                items: [
+                    Constant(
+                        Str(
+                            Word(
+                                Atom('../lib/a.js' type=dynamic),
+                            ),
+                        ),
+                    ),
+                    Constant(
+                        Str(
+                            Word(
+                                Atom('../lib/b.js' type=dynamic),
+                            ),
+                        ),
+                    ),
+                ],
+                mutable: true,
+            },
+            Constant(
+                Str(
+                    Word(
+                        Atom('map' type=static),
+                    ),
+                ),
+            ),
+            [
+                Variable(
+                    (
+                        Atom('*anonymous function 88*' type=dynamic),
+                        #0,
+                    ),
+                ),
+            ],
+        ),
+    ),
+    (
+        "c",
+        MemberCall(
+            6,
+            Array {
+                total_nodes: 3,
+                items: [
+                    Constant(
+                        Str(
+                            Word(
+                                Atom('../lib/a.js' type=dynamic),
+                            ),
+                        ),
+                    ),
+                    Constant(
+                        Str(
+                            Word(
+                                Atom('../lib/b.js' type=dynamic),
+                            ),
+                        ),
+                    ),
+                ],
+                mutable: true,
+            },
+            Constant(
+                Str(
+                    Word(
+                        Atom('map' type=static),
+                    ),
+                ),
+            ),
+            [
+                Variable(
+                    (
+                        Atom('*anonymous function 170*' type=dynamic),
+                        #0,
+                    ),
+                ),
+            ],
+        ),
+    ),
+    (
+        "d",
+        MemberCall(
+            6,
+            Array {
+                total_nodes: 3,
+                items: [
+                    Constant(
+                        Str(
+                            Word(
+                                Atom('../lib/a.js' type=dynamic),
+                            ),
+                        ),
+                    ),
+                    Constant(
+                        Str(
+                            Word(
+                                Atom('../lib/b.js' type=dynamic),
+                            ),
+                        ),
+                    ),
+                ],
+                mutable: true,
+            },
+            Constant(
+                Str(
+                    Word(
+                        Atom('map' type=static),
+                    ),
+                ),
+            ),
+            [
+                Variable(
+                    (
+                        Atom('*anonymous function 254*' type=dynamic),
+                        #0,
+                    ),
+                ),
+            ],
+        ),
+    ),
+    (
+        "file#3",
+        Argument(
+            88,
+            0,
+        ),
+    ),
+    (
+        "file#4",
+        Argument(
+            170,
+            0,
+        ),
+    ),
+    (
+        "file#5",
+        Argument(
+            254,
+            0,
+        ),
+    ),
+    (
+        "file#6",
+        Argument(
+            308,
+            0,
+        ),
+    ),
+    (
+        "func",
+        Function(
+            5,
+            308,
+            MemberCall(
+                4,
+                FreeVar(
+                    Atom('require' type=static),
+                ),
+                Constant(
+                    Str(
+                        Word(
+                            Atom('resolve' type=inline),
+                        ),
+                    ),
+                ),
+                [
+                    Variable(
+                        (
+                            Atom('file' type=static),
+                            #6,
+                        ),
+                    ),
+                ],
+            ),
+        ),
+    ),
+]

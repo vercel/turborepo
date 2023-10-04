@@ -36,9 +36,23 @@ func RootTaskTaskName(taskID string) string {
 	return strings.TrimPrefix(taskID, RootPkgName+TaskDelimiter)
 }
 
-// IsPackageTask returns true if a is a package-specific task (e.g. myapp#build)
+// IsPackageTask returns true if input is a package-specific task
+// whose name has a length greater than 0.
+//
+// Accepted: myapp#build
+// Rejected: #build, build
 func IsPackageTask(task string) bool {
-	return strings.Contains(task, TaskDelimiter)
+	return strings.Index(task, TaskDelimiter) > 0
+}
+
+// IsTaskInPackage returns true if the task does not belong to a different package
+// note that this means unscoped tasks will always return true
+func IsTaskInPackage(task string, packageName string) bool {
+	if !IsPackageTask(task) {
+		return true
+	}
+	packageNameExpected, _ := GetPackageTaskFromId(task)
+	return packageNameExpected == packageName
 }
 
 // StripPackageName removes the package portion of a taskID if it

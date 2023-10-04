@@ -17,13 +17,16 @@ const (
 	HashTaskOutput
 	// NewTaskOutput will show all new task output and turbo-computed task hashes for cached output
 	NewTaskOutput
+	// ErrorTaskOutput will show task output for failures only; no cache miss/hit messages are emitted
+	ErrorTaskOutput
 )
 
 const (
-	fullTaskOutputString = "full"
-	noTaskOutputString   = "none"
-	hashTaskOutputString = "hash-only"
-	newTaskOutputString  = "new-only"
+	fullTaskOutputString  = "full"
+	noTaskOutputString    = "none"
+	hashTaskOutputString  = "hash-only"
+	newTaskOutputString   = "new-only"
+	errorTaskOutputString = "errors-only"
 )
 
 // TaskOutputModeStrings is an array containing the string representations for task output modes
@@ -32,6 +35,7 @@ var TaskOutputModeStrings = []string{
 	noTaskOutputString,
 	hashTaskOutputString,
 	newTaskOutputString,
+	errorTaskOutputString,
 }
 
 // FromTaskOutputModeString converts a task output mode's string representation into the enum value
@@ -45,6 +49,8 @@ func FromTaskOutputModeString(value string) (TaskOutputMode, error) {
 		return HashTaskOutput, nil
 	case newTaskOutputString:
 		return NewTaskOutput, nil
+	case errorTaskOutputString:
+		return ErrorTaskOutput, nil
 	}
 
 	return FullTaskOutput, fmt.Errorf("invalid task output mode: %v", value)
@@ -61,6 +67,8 @@ func ToTaskOutputModeString(value TaskOutputMode) (string, error) {
 		return hashTaskOutputString, nil
 	case NewTaskOutput:
 		return newTaskOutputString, nil
+	case ErrorTaskOutput:
+		return errorTaskOutputString, nil
 	}
 
 	return "", fmt.Errorf("invalid task output mode: %v", value)
@@ -80,4 +88,13 @@ func (c *TaskOutputMode) UnmarshalJSON(data []byte) error {
 
 	*c = taskOutputMode
 	return nil
+}
+
+// MarshalJSON converts a task output mode to its string representation
+func (c TaskOutputMode) MarshalJSON() ([]byte, error) {
+	outputModeString, err := ToTaskOutputModeString(c)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(outputModeString)
 }

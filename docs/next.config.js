@@ -1,9 +1,11 @@
 const { withSentryConfig } = require("@sentry/nextjs");
 const withNextra = require("nextra")({
   theme: "nextra-theme-docs",
-  themeConfig: "./theme.config.js",
-  unstable_flexsearch: true,
-  unstable_staticImage: true,
+  themeConfig: "./theme.config.tsx",
+  // options
+  flexsearch: true,
+  staticImage: true,
+  defaultShowCopyCode: true,
 });
 
 const sentryWebpackPluginOptions = {
@@ -19,7 +21,6 @@ const OLD_TURBOREPO_ROUTES = [
   "/docs/core-concepts/caching",
   "/docs/core-concepts/remote-caching",
   "/docs/core-concepts/scopes",
-  "/docs/core-concepts/why-turborepo",
   "/docs/core-concepts/monorepos/filtering",
   "/docs/core-concepts/monorepos/running-tasks",
   "/docs/getting-started/create-new",
@@ -54,11 +55,16 @@ const OLD_TURBOREPO_ROUTES = [
 
 const nextConfig = withNextra({
   sentry: {
+    autoInstrumentServerFunctions: false,
     hideSourceMaps: true,
   },
   reactStrictMode: true,
   experimental: {
     legacyBrowsers: false,
+  },
+  eslint: {
+    // TODO: remove after eslint has been fixed from new config introduced in vercel/turbo/pull/5752
+    ignoreDuringBuilds: true,
   },
   webpack: (config, { webpack }) => {
     config.plugins.push(
@@ -90,8 +96,13 @@ const nextConfig = withNextra({
         permanent: true,
       })),
       {
+        source: "/docs/getting-started",
+        destination: "/repo/docs",
+        permanent: true,
+      },
+      {
         source: "/usage",
-        destination: "/reference/command-line-reference",
+        destination: "/repo/docs/reference/command-line-reference",
         permanent: true,
       },
       {
@@ -111,68 +122,122 @@ const nextConfig = withNextra({
       },
       {
         source: "/docs/guides/workspaces",
-        destination: "/docs/handbook/workspaces",
+        destination: "/repo/docs/handbook/workspaces",
         permanent: true,
       },
       {
         source: "/docs/core-concepts/workspaces",
-        destination: "/docs/handbook/workspaces",
+        destination: "/repo/docs/handbook/workspaces",
         permanent: true,
       },
       {
         source: "/docs/core-concepts/pipelines",
-        destination: "/docs/core-concepts/running-tasks",
+        destination: "/repo/docs/core-concepts/monorepos/running-tasks",
         permanent: true,
       },
       {
         source: "/docs/guides/migrate-from-lerna",
-        destination: "/docs/handbook/migrating-to-a-monorepo",
-        permanent: true,
-      },
-      {
-        source: "/docs/getting-started",
-        destination: "/docs",
+        destination: "/repo/docs/handbook/migrating-to-a-monorepo",
         permanent: true,
       },
       {
         source: "/discord{/}?",
-        permanent: true,
         destination: "https://discord.gg/sSzyjxvbf5",
+        permanent: true,
       },
       {
         source: "/docs/changelog",
-        permanent: true,
         destination: "https://github.com/vercel/turbo/releases",
+        permanent: true,
       },
       {
         source: "/docs/guides/complimentary-tools",
+        destination: "/repo/docs/handbook",
         permanent: true,
-        destination: "/docs/handbook",
       },
       {
         source: "/docs/guides/monorepo-tools",
+        destination: "/repo/docs/handbook",
         permanent: true,
-        destination: "/docs/handbook",
       },
       {
         source: "/docs/glossary",
+        destination: "/repo/docs/handbook",
         permanent: true,
-        destination: "/docs/handbook",
       },
       {
         source: "/docs/guides/continuous-integration",
+        destination: "/repo/docs/ci",
         permanent: true,
-        destination: "/docs/ci",
       },
       {
+        source: "/repo/docs/handbook/prisma",
+        destination: "/repo/docs/handbook/tools/prisma",
+        permanent: true,
+      },
+      {
+        source: "/pack/docs/comparisons/turbopack-vs-vite",
+        destination: "/pack/docs/comparisons/vite",
+        permanent: true,
+      },
+      {
+        source: "/pack/docs/comparisons/turbopack-vs-webpack",
+        destination: "/pack/docs/comparisons/webpack",
+        permanent: true,
+      },
+      {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/core-concepts/running-tasks",
+        destination: "/repo/docs/core-concepts/monorepos/running-tasks",
+        permanent: true,
+      },
+      {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/core-concepts/why-turborepo",
+        destination: "/repo/docs/core-concepts/monorepos",
+        permanent: true,
+      },
+      {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/core-concepts/filtering",
+        destination: "/repo/docs/core-concepts/monorepos/filtering",
+        permanent: true,
+      },
+      {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/core-concepts/pipelines",
+        destination: "/repo/docs/core-concepts/monorepos/running-tasks",
+        permanent: true,
+      },
+      {
+        // This rule accidentally created a bunch of URLs.
+        //
+        // They've _never_ resolved, so _eventually_ we should be able to remove the
+        // redirects we added above to fix them.
         source: "/docs/features/:path*",
+        destination: "/repo/docs/core-concepts/:path*",
         permanent: true,
-        destination: "/docs/core-concepts/:path*",
       },
       {
-        source: "/docs/:path*",
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/getting-started",
+        destination: "/repo/docs",
         permanent: true,
+      },
+      {
+        // Accidentally created, eventually removable. See below.
+        source: "/repo/docs/guides/workspaces",
+        destination: "/repo/docs/handbook/workspaces",
+        permanent: true,
+      },
+      {
+        // This rule accidentally created a bunch of URLs.
+        //
+        // They've _never_ resolved, so _eventually_ we should be able to remove the
+        // redirects we added above to fix them.
+        source: "/docs/:path*",
         destination: "/repo/docs/:path*",
+        permanent: true,
       },
     ];
   },

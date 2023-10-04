@@ -1,24 +1,24 @@
 use anyhow::Result;
 use indexmap::IndexMap;
-use turbo_tasks::primitives::OptionStringVc;
+use turbo_tasks::Vc;
 
-use crate::{EnvMapVc, ProcessEnv, ProcessEnvVc};
+use crate::{EnvMap, ProcessEnv};
 
 /// Filters env variables by some prefix. Casing of the env vars is ignored for
 /// filtering.
 #[turbo_tasks::value]
 pub struct FilterProcessEnv {
-    prior: ProcessEnvVc,
-    filter: String,
+    prior: Vc<Box<dyn ProcessEnv>>,
+    filters: Vec<String>,
 }
 
 #[turbo_tasks::value_impl]
-impl FilterProcessEnvVc {
+impl FilterProcessEnv {
     #[turbo_tasks::function]
-    pub fn new(prior: ProcessEnvVc, filter: String) -> Self {
+    pub fn new(prior: Vc<Box<dyn ProcessEnv>>, filters: Vec<String>) -> Vc<Self> {
         FilterProcessEnv {
             prior,
-            filter: filter.to_uppercase(),
+            filters: filters.into_iter().map(|f| f.to_uppercase()).collect(),
         }
         .cell()
     }
@@ -27,23 +27,28 @@ impl FilterProcessEnvVc {
 #[turbo_tasks::value_impl]
 impl ProcessEnv for FilterProcessEnv {
     #[turbo_tasks::function]
-    async fn read_all(&self) -> Result<EnvMapVc> {
+    async fn read_all(&self) -> Result<Vc<EnvMap>> {
         let prior = self.prior.read_all().await?;
         let mut filtered = IndexMap::new();
         for (key, value) in &*prior {
-            if key.to_uppercase().starts_with(&self.filter) {
-                filtered.insert(key.clone(), value.clone());
+            let uppercase = key.to_uppercase();
+            for filter in &self.filters {
+                if uppercase.starts_with(filter) {
+                    filtered.insert(key.clone(), value.clone());
+                    break;
+                }
             }
         }
-        Ok(EnvMapVc::cell(filtered))
+        Ok(Vc::cell(filtered))
     }
 
     #[turbo_tasks::function]
-    fn read(&self, name: &str) -> OptionStringVc {
-        if name.to_uppercase().starts_with(&self.filter) {
-            self.prior.read(name)
-        } else {
-            OptionStringVc::cell(None)
+    fn read(&self, name: String) -> Vc<Option<String>> {
+        for filter in &self.filters {
+            if name.to_uppercase().starts_with(filter) {
+                return self.prior.read(name);
+            }
         }
+        Vc::cell(None)
     }
 }

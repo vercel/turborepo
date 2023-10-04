@@ -3,7 +3,6 @@ package filter
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 func setMatches(t *testing.T, name string, s util.Set, expected []string) {
@@ -29,11 +29,18 @@ func setMatches(t *testing.T, name string, s util.Set, expected []string) {
 }
 
 func Test_filter(t *testing.T) {
-	root, err := os.Getwd()
+	rawCwd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
-	packageJSONs := make(map[interface{}]*fs.PackageJSON)
+	root, err := fs.GetCwd(rawCwd)
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	workspaceInfos := workspace.Catalog{
+		PackageJSONs: make(map[string]*fs.PackageJSON),
+	}
+	packageJSONs := workspaceInfos.PackageJSONs
 	graph := &dag.AcyclicGraph{}
 	graph.Add("project-0")
 	packageJSONs["project-0"] = &fs.PackageJSON{
@@ -77,16 +84,11 @@ func Test_filter(t *testing.T) {
 	graph.Connect(dag.BasicEdge("project-1", "project-2"))
 	graph.Connect(dag.BasicEdge("project-1", "project-4"))
 
-	r := &Resolver{
-		Graph:        graph,
-		PackageInfos: packageJSONs,
-		Cwd:          root,
-	}
-
 	testCases := []struct {
-		Name      string
-		Selectors []*TargetSelector
-		Expected  []string
+		Name             string
+		Selectors        []*TargetSelector
+		PackageInference *PackageInference
+		Expected         []string
 	}{
 		{
 			"select root package",
@@ -95,6 +97,7 @@ func Test_filter(t *testing.T) {
 					namePattern: util.RootPkgName,
 				},
 			},
+			nil,
 			[]string{util.RootPkgName},
 		},
 		{
@@ -106,6 +109,7 @@ func Test_filter(t *testing.T) {
 					namePattern:         "project-1",
 				},
 			},
+			nil,
 			[]string{"project-2", "project-4"},
 		},
 		{
@@ -117,6 +121,7 @@ func Test_filter(t *testing.T) {
 					namePattern:         "project-1",
 				},
 			},
+			nil,
 			[]string{"project-1", "project-2", "project-4"},
 		},
 		{
@@ -129,6 +134,7 @@ func Test_filter(t *testing.T) {
 					namePattern:         "project-1",
 				},
 			},
+			nil,
 			[]string{"project-0", "project-1", "project-2", "project-4", "project-5"},
 		},
 		{
@@ -139,6 +145,7 @@ func Test_filter(t *testing.T) {
 					namePattern:       "project-2",
 				},
 			},
+			nil,
 			[]string{"project-1", "project-2", "project-0"},
 		},
 		{
@@ -150,6 +157,7 @@ func Test_filter(t *testing.T) {
 					namePattern:       "project-2",
 				},
 			},
+			nil,
 			[]string{"project-0", "project-1"},
 		},
 		{
@@ -166,6 +174,7 @@ func Test_filter(t *testing.T) {
 					namePattern:         "project-1",
 				},
 			},
+			nil,
 			[]string{"project-0", "project-1", "project-2", "project-4"},
 		},
 		{
@@ -175,6 +184,7 @@ func Test_filter(t *testing.T) {
 					namePattern: "project-2",
 				},
 			},
+			nil,
 			[]string{"project-2"},
 		},
 		// Note: we don't support the option to switch path prefix mode
@@ -191,27 +201,30 @@ func Test_filter(t *testing.T) {
 			"select by parentDir using glob",
 			[]*TargetSelector{
 				{
-					parentDir: filepath.Join(root, "/packages/*"),
+					parentDir: turbopath.MakeRelativeSystemPath("packages", "*"),
 				},
 			},
+			nil,
 			[]string{"project-0", "project-1"},
 		},
 		{
 			"select by parentDir using globstar",
 			[]*TargetSelector{
 				{
-					parentDir: filepath.Join(root, "/project-5/**"),
+					parentDir: turbopath.MakeRelativeSystemPath("project-5", "**"),
 				},
 			},
+			nil,
 			[]string{"project-5", "project-6"},
 		},
 		{
 			"select by parentDir with no glob",
 			[]*TargetSelector{
 				{
-					parentDir: filepath.Join(root, "/project-5"),
+					parentDir: turbopath.MakeRelativeSystemPath("project-5"),
 				},
 			},
+			nil,
 			[]string{"project-5"},
 		},
 		{
@@ -222,35 +235,70 @@ func Test_filter(t *testing.T) {
 					namePattern: "project-1",
 				},
 			},
+			nil,
 			[]string{"project-0", "project-2", "project-3", "project-4", "project-5", "project-6"},
 		},
 		{
 			"select by parentDir and exclude one package by pattern",
 			[]*TargetSelector{
 				{
-					parentDir: filepath.Join(root, "/packages/*"),
+					parentDir: turbopath.MakeRelativeSystemPath("packages", "*"),
 				},
 				{
 					exclude:     true,
 					namePattern: "*-1",
 				},
 			},
+			nil,
 			[]string{"project-0"},
 		},
 		{
 			"select root package by directory",
 			[]*TargetSelector{
 				{
-					parentDir: root,
+					parentDir: turbopath.MakeRelativeSystemPath("."), // input . gets cleaned to ""
 				},
 			},
+			nil,
 			[]string{util.RootPkgName},
+		},
+		{
+			"select packages directory",
+			[]*TargetSelector{},
+			&PackageInference{
+				DirectoryRoot: turbopath.MakeRelativeSystemPath("packages"),
+			},
+			[]string{"project-0", "project-1"},
+		},
+		{
+			"infer single package",
+			[]*TargetSelector{},
+			&PackageInference{
+				DirectoryRoot: turbopath.MakeRelativeSystemPath("packages", "project-0"),
+				PackageName:   "project-0",
+			},
+			[]string{"project-0"},
+		},
+		{
+			"infer single package from subdirectory",
+			[]*TargetSelector{},
+			&PackageInference{
+				DirectoryRoot: turbopath.MakeRelativeSystemPath("packages", "project-0", "src"),
+				PackageName:   "project-0",
+			},
+			[]string{"project-0"},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			pkgs, err := r.GetFilteredPackages(tc.Selectors)
+			r := &Resolver{
+				Graph:          graph,
+				WorkspaceInfos: workspaceInfos,
+				Cwd:            root,
+				Inference:      tc.PackageInference,
+			}
+			pkgs, err := r.getFilteredPackages(tc.Selectors)
 			if err != nil {
 				t.Fatalf("%v failed to filter packages: %v", tc.Name, err)
 			}
@@ -259,7 +307,12 @@ func Test_filter(t *testing.T) {
 	}
 
 	t.Run("report unmatched filters", func(t *testing.T) {
-		pkgs, err := r.GetFilteredPackages([]*TargetSelector{
+		r := &Resolver{
+			Graph:          graph,
+			WorkspaceInfos: workspaceInfos,
+			Cwd:            root,
+		}
+		pkgs, err := r.getFilteredPackages([]*TargetSelector{
 			{
 				excludeSelf:         true,
 				includeDependencies: true,
@@ -279,12 +332,19 @@ func Test_filter(t *testing.T) {
 }
 
 func Test_matchScopedPackage(t *testing.T) {
-	root, err := os.Getwd()
+	rawCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	root, err := fs.GetCwd(rawCwd)
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
 
-	packageJSONs := make(map[interface{}]*fs.PackageJSON)
+	workspaceInfos := workspace.Catalog{
+		PackageJSONs: make(map[string]*fs.PackageJSON),
+	}
+	packageJSONs := workspaceInfos.PackageJSONs
 	graph := &dag.AcyclicGraph{}
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
@@ -292,11 +352,11 @@ func Test_matchScopedPackage(t *testing.T) {
 		Dir:  turbopath.AnchoredUnixPath("packages/bar").ToSystemPath(),
 	}
 	r := &Resolver{
-		Graph:        graph,
-		PackageInfos: packageJSONs,
-		Cwd:          root,
+		Graph:          graph,
+		WorkspaceInfos: workspaceInfos,
+		Cwd:            root,
 	}
-	pkgs, err := r.GetFilteredPackages([]*TargetSelector{
+	pkgs, err := r.getFilteredPackages([]*TargetSelector{
 		{
 			namePattern: "bar",
 		},
@@ -308,12 +368,19 @@ func Test_matchScopedPackage(t *testing.T) {
 }
 
 func Test_matchExactPackages(t *testing.T) {
-	root, err := os.Getwd()
+	rawCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	root, err := fs.GetCwd(rawCwd)
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
 
-	packageJSONs := make(map[interface{}]*fs.PackageJSON)
+	workspaceInfos := workspace.Catalog{
+		PackageJSONs: make(map[string]*fs.PackageJSON),
+	}
+	packageJSONs := workspaceInfos.PackageJSONs
 	graph := &dag.AcyclicGraph{}
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
@@ -326,11 +393,11 @@ func Test_matchExactPackages(t *testing.T) {
 		Dir:  turbopath.AnchoredUnixPath("packages/bar").ToSystemPath(),
 	}
 	r := &Resolver{
-		Graph:        graph,
-		PackageInfos: packageJSONs,
-		Cwd:          root,
+		Graph:          graph,
+		WorkspaceInfos: workspaceInfos,
+		Cwd:            root,
 	}
-	pkgs, err := r.GetFilteredPackages([]*TargetSelector{
+	pkgs, err := r.getFilteredPackages([]*TargetSelector{
 		{
 			namePattern: "bar",
 		},
@@ -342,12 +409,19 @@ func Test_matchExactPackages(t *testing.T) {
 }
 
 func Test_matchMultipleScopedPackages(t *testing.T) {
-	root, err := os.Getwd()
+	rawCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	root, err := fs.GetCwd(rawCwd)
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
 
-	packageJSONs := make(map[interface{}]*fs.PackageJSON)
+	workspaceInfos := workspace.Catalog{
+		PackageJSONs: make(map[string]*fs.PackageJSON),
+	}
+	packageJSONs := workspaceInfos.PackageJSONs
 	graph := &dag.AcyclicGraph{}
 	graph.Add("@foo/bar")
 	packageJSONs["@foo/bar"] = &fs.PackageJSON{
@@ -360,11 +434,11 @@ func Test_matchMultipleScopedPackages(t *testing.T) {
 		Dir:  turbopath.AnchoredUnixPath("packages/@types/bar").ToSystemPath(),
 	}
 	r := &Resolver{
-		Graph:        graph,
-		PackageInfos: packageJSONs,
-		Cwd:          root,
+		Graph:          graph,
+		WorkspaceInfos: workspaceInfos,
+		Cwd:            root,
 	}
-	pkgs, err := r.GetFilteredPackages([]*TargetSelector{
+	pkgs, err := r.getFilteredPackages([]*TargetSelector{
 		{
 			namePattern: "bar",
 		},
@@ -376,7 +450,11 @@ func Test_matchMultipleScopedPackages(t *testing.T) {
 }
 
 func Test_SCM(t *testing.T) {
-	root, err := os.Getwd()
+	rawCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	root, err := fs.GetCwd(rawCwd)
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
@@ -386,7 +464,10 @@ func Test_SCM(t *testing.T) {
 	head1Changed.Add(util.RootPkgName)
 	head2Changed := make(util.Set)
 	head2Changed.Add("package-3")
-	packageJSONs := make(map[interface{}]*fs.PackageJSON)
+	workspaceInfos := workspace.Catalog{
+		PackageJSONs: make(map[string]*fs.PackageJSON),
+	}
+	packageJSONs := workspaceInfos.PackageJSONs
 	graph := &dag.AcyclicGraph{}
 	graph.Add("package-1")
 	packageJSONs["package-1"] = &fs.PackageJSON{
@@ -412,9 +493,9 @@ func Test_SCM(t *testing.T) {
 	graph.Connect(dag.BasicEdge("package-3", "package-20"))
 
 	r := &Resolver{
-		Graph:        graph,
-		PackageInfos: packageJSONs,
-		Cwd:          root,
+		Graph:          graph,
+		WorkspaceInfos: workspaceInfos,
+		Cwd:            root,
 		PackagesChangedInRange: func(fromRef string, toRef string) (util.Set, error) {
 			if fromRef == "HEAD~1" && toRef == "HEAD" {
 				return head1Changed, nil
@@ -450,7 +531,7 @@ func Test_SCM(t *testing.T) {
 			[]*TargetSelector{
 				{
 					fromRef:   "HEAD~1",
-					parentDir: root,
+					parentDir: ".",
 				},
 			},
 			[]string{util.RootPkgName},
@@ -460,7 +541,7 @@ func Test_SCM(t *testing.T) {
 			[]*TargetSelector{
 				{
 					fromRef:   "HEAD~1",
-					parentDir: filepath.Join(root, "package-2"),
+					parentDir: "package-2",
 				},
 			},
 			[]string{"package-2"},
@@ -519,11 +600,22 @@ func Test_SCM(t *testing.T) {
 			},
 			[]string{"package-3"},
 		},
+		{
+			"match dependency subtree",
+			[]*TargetSelector{
+				{
+					fromRef:           "HEAD~1",
+					parentDir:         "package-*",
+					matchDependencies: true,
+				},
+			},
+			[]string{"package-1", "package-2"},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			pkgs, err := r.GetFilteredPackages(tc.Selectors)
+			pkgs, err := r.getFilteredPackages(tc.Selectors)
 			if err != nil {
 				t.Fatalf("%v failed to filter packages: %v", tc.Name, err)
 			}

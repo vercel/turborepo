@@ -1,0 +1,31 @@
+{
+  "$schema": "./public/schema.json",
+  "extends": ["//"],
+  "pipeline": {
+    "build": {
+      "env": [
+        "SENTRY_DSN",
+        "TURBOREPO_SFDC_CAMPAIGN_ID",
+        "TRAY_URL",
+        "CONVERTKIT_API_KEY",
+        "CONVERTKIT_API_SECRET"
+      ],
+      "outputs": [".next/**", "!.next/cache/**"],
+      "dependsOn": ["^build", "rss", "schema"]
+    },
+    "dev": {
+      "dependsOn": ["schema"],
+      "persistent": true,
+      "cache": false
+    },
+    "schema": {
+      "inputs": [], // None of the files in this workspace matter
+      "dependsOn": ["@turbo/types#topo"],
+      "outputs": ["public/schema.json"]
+    },
+    "rss": {
+      "inputs": ["pages/blog/**", "scripts/generate-rss.js"],
+      "outputs": ["public/feed.xml"]
+    }
+  }
+}

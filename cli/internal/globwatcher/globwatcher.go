@@ -135,7 +135,7 @@ func (g *GlobWatcher) OnFileWatchEvent(ev filewatcher.Event) {
 	absolutePath := ev.Path
 	repoRelativePath, err := g.repoRoot.RelativePathString(absolutePath.ToStringDuringMigration())
 	if err != nil {
-		g.logger.Error(fmt.Sprintf("could not get relative path from %v to %v: %v", g.repoRoot, absolutePath, err))
+		g.logger.Debug(fmt.Sprintf("could not get relative path from %v to %v: %v", g.repoRoot, absolutePath, err))
 		return
 	}
 	g.mu.Lock()

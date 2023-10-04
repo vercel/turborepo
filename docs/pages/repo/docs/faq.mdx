@@ -3,7 +3,48 @@ title: Frequently Asked Questions
 description: Frequently asked questions about Turborepo.
 ---
 
+import Callout from '../../../components/Callout'
+import { Tabs, Tab } from '../../../components/Tabs'
+
 # Frequently Asked Questions
+
+## Should I install Turborepo globally?
+
+You have two options when working with Turborepo:
+
+1. Install it globally, via `npm install --global turbo`
+2. Install a local version in your project
+
+We recommend installing the `turbo` CLI globally. This gives you a smooth, ergonomic experience for running tasks.
+
+### Why isn't my global `turbo` working as expected?
+
+It's possible to end up with multiple versions of global `turbo` on your machine if you install with different package managers. This can cause unexpected behavior if you're accidentally executing an older version of `turbo`.
+
+You can quickly check which package manager's version you are using with:
+
+- macOS and Linux: `which turbo`
+- Windows: `where turbo`
+
+The easiest way to ensure stability is to run the uninstall commands for your non-preferred package managers:
+
+  <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+    <Tab>
+      ```bash
+      npm uninstall turbo --global
+      ```
+    </Tab>
+    <Tab>
+      ```bash
+      yarn global remove turbo
+      ```
+    </Tab>
+    <Tab>
+      ```bash
+      pnpm uninstall turbo --global
+      ```
+    </Tab>
+  </Tabs>
 
 ## Do I have to use Remote Caching to use Turborepo?
 
@@ -33,4 +74,15 @@ When [Remote Caching](/repo/docs/core-concepts/remote-caching) is enabled, by de
 
 ## How can I retain Fast Refresh in my Turborepo when using multiple Next.js applications?
 
-[Fast Refresh](https://nextjs.org/docs/basic-features/fast-refresh) gives you instantaneous feedback on edits made to your React components in Next.js applications. If your Turborepo has multiple Next.js applications, you can use `next-transpile-modules` to ensure that imports across workspaces will work with Fast Refresh when changes are made. Turborepo will effectively watch for any edits and the rebuild when saving. You can get started from [this example](https://github.com/vercel/turbo/tree/main/examples/basic) which is set up to handle Fast Refresh.
+[Fast Refresh](https://nextjs.org/docs/basic-features/fast-refresh) gives you instantaneous feedback on edits made to your React components in Next.js applications.
+
+If your Turborepo has multiple Next.js applications, you can use `transpilePackages` inside `next.config.js` to ensure that imports across workspaces will work with Fast Refresh when changes are made. Turborepo will effectively watch for any edits and the rebuild when saving. You can get started from [this example](https://github.com/vercel/turbo/tree/main/examples/basic) which is set up to handle Fast Refresh.
+
+<Callout type="info">If you are using a Next.js version below 13, you will want to use [`next-transpile-modules`](https://www.npmjs.com/package/next-transpile-modules) for the same Fast Refresh behavior.</Callout>
+
+## What does "experimental" mean?
+
+Some new features are marked as "experimental" in Turborepo. This means that the feature is not yet ready for production use, and may change in the future. We encourage you to try out these features and provide feedback, but please be aware that they may change in the future.
+
+- [Report a bug with an experimental feature](https://github.com/vercel/turbo/issues/new?labels=experimental,kind:+bug,area:+turborepo,needs:+triage&template=0-turborepo-bug-report.yml&title=%5Bturborepo%5D+)
+- [Provide feedback on an experimental feature](https://github.com/vercel/turbo/issues/new?labels=experimental,story,needs:+triage&template=2-feature-request.yml&title=%5Bturborepo%5D+)

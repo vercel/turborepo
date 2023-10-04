@@ -11,7 +11,10 @@ use serde::{
     ser::SerializeMap,
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use turbo_tasks::trace::{TraceRawVcs, TraceRawVcsContext};
+use turbo_tasks::{
+    debug::{internal::PassthroughDebug, ValueDebugFormat, ValueDebugFormatString},
+    trace::{TraceRawVcs, TraceRawVcsContext},
+};
 
 /// A map of [`AliasPattern`]s to the [`Template`]s they resolve to.
 ///
@@ -107,12 +110,56 @@ impl<T> TraceRawVcs for AliasMap<T>
 where
     T: TraceRawVcs,
 {
-    fn trace_raw_vcs(&self, context: &mut TraceRawVcsContext) {
+    fn trace_raw_vcs(&self, trace_context: &mut TraceRawVcsContext) {
         for (_, map) in self.map.iter() {
             for value in map.values() {
-                value.trace_raw_vcs(context);
+                value.trace_raw_vcs(trace_context);
             }
         }
+    }
+}
+
+impl<T> ValueDebugFormat for AliasMap<T>
+where
+    T: ValueDebugFormat,
+{
+    fn value_debug_format(&self, depth: usize) -> ValueDebugFormatString {
+        if depth == 0 {
+            return ValueDebugFormatString::Sync(std::any::type_name::<Self>().to_string());
+        }
+
+        let values = self
+            .map
+            .iter()
+            .flat_map(|(key, map)| {
+                let key = String::from_utf8(key).expect("invalid UTF-8 key in AliasMap");
+                map.iter().map(move |(alias_key, value)| match alias_key {
+                    AliasKey::Exact => (
+                        key.clone(),
+                        value.value_debug_format(depth.saturating_sub(1)),
+                    ),
+                    AliasKey::Wildcard { suffix } => (
+                        format!("{}*{}", key, suffix),
+                        value.value_debug_format(depth.saturating_sub(1)),
+                    ),
+                })
+            })
+            .collect::<Vec<_>>();
+
+        ValueDebugFormatString::Async(Box::pin(async move {
+            let mut values_string = std::collections::HashMap::new();
+            for (key, value) in values {
+                match value {
+                    ValueDebugFormatString::Sync(string) => {
+                        values_string.insert(key, PassthroughDebug::new_string(string));
+                    }
+                    ValueDebugFormatString::Async(future) => {
+                        values_string.insert(key, PassthroughDebug::new_string(future.await?));
+                    }
+                }
+            }
+            Ok(format!("{:#?}", values_string))
+        }))
     }
 }
 
@@ -207,6 +254,19 @@ impl<T> IntoIterator for AliasMap<T> {
     }
 }
 
+impl<'a, T> IntoIterator for &'a AliasMap<T> {
+    type Item = (AliasPattern, &'a T);
+
+    type IntoIter = AliasMapIter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        AliasMapIter {
+            iter: self.map.iter(),
+            current_prefix_iterator: None,
+        }
+    }
+}
+
 /// An owning iterator over the entries of an `AliasMap`.
 ///
 /// Beware: The items are *NOT* returned in the order defined by
@@ -267,6 +327,69 @@ impl<T> Iterator for AliasMapIntoIter<T> {
                 }
             }
         }
+    }
+}
+
+/// A borrowing iterator over the entries of an `AliasMap`.
+///
+/// Beware: The items are *NOT* returned in the order defined by
+/// [PATTERN_KEY_COMPARE].
+///
+/// [PATTERN_KEY_COMPARE]: https://nodejs.org/api/esm.html#resolver-algorithm-specification
+pub struct AliasMapIter<'a, T> {
+    iter: patricia_tree::map::Iter<'a, BTreeMap<AliasKey, T>>,
+    current_prefix_iterator: Option<AliasMapIterItem<'a, T>>,
+}
+
+struct AliasMapIterItem<'a, T> {
+    prefix: String,
+    iterator: std::collections::btree_map::Iter<'a, AliasKey, T>,
+}
+
+impl<'a, T> AliasMapIter<'a, T> {
+    fn advance_iter(&mut self) -> bool {
+        let Some((prefix, map)) = self.iter.next() else {
+            return false;
+        };
+        let prefix = String::from_utf8(prefix).expect("invalid UTF-8 key in AliasMap");
+        self.current_prefix_iterator = Some(AliasMapIterItem {
+            prefix,
+            iterator: map.iter(),
+        });
+        true
+    }
+}
+
+impl<'a, T> Iterator for AliasMapIter<'a, T> {
+    type Item = (AliasPattern, &'a T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (current_prefix_iterator, current_value) = loop {
+            let Some(current_prefix_iterator) = &mut self.current_prefix_iterator else {
+                if !self.advance_iter() {
+                    return None;
+                }
+                continue;
+            };
+            if let Some(current_value) = current_prefix_iterator.iterator.next() {
+                break (&*current_prefix_iterator, current_value);
+            }
+            self.current_prefix_iterator = None;
+            continue;
+        };
+        Some(match current_value {
+            (AliasKey::Exact, value) => (
+                AliasPattern::Exact(current_prefix_iterator.prefix.clone()),
+                value,
+            ),
+            (AliasKey::Wildcard { suffix }, value) => (
+                AliasPattern::Wildcard {
+                    prefix: current_prefix_iterator.prefix.clone(),
+                    suffix: suffix.clone(),
+                },
+                value,
+            ),
+        })
     }
 }
 

@@ -1,0 +1,11 @@
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["generate"]
+    },
+    "generate": {},
+    "workspace-b#build": {
+      "dependsOn": []
+    }
+  }
+}

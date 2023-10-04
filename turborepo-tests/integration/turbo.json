@@ -1,0 +1,17 @@
+{
+  "extends": ["//"],
+  "pipeline": {
+    // This is a synthetic tasks that lets us pull in other workspaces as dependencies
+    // So changes in internal workspaces that we depend on, will trigger this task.
+    "topo": {
+      "dependsOn": ["^topo"]
+    },
+    "test": {
+      "dependsOn": ["cli#build", "topo", "test:setup"],
+      "passThroughEnv": ["CI"]
+    },
+    "test:setup": {
+      "cache": false
+    }
+  }
+}

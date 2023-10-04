@@ -1,0 +1,28 @@
+{
+  "name": "both-configs",
+  "version": "1.0.0",
+  "dependencies": {},
+  "devDependencies": {},
+  "packageManager": "npm@1.2.3",
+  "turbo": {
+    "$schema": "https://turbo.build/schema.json",
+    "pipeline": {
+      "package-only": {
+        "cache": false,
+        "persistent": true
+      },
+      "build": {
+        "outputs": [
+          ".next/**",
+          "!.next/cache/**"
+        ]
+      },
+      "lint": {
+        "outputs": []
+      },
+      "dev": {
+        "cache": false
+      }
+    }
+  }
+}

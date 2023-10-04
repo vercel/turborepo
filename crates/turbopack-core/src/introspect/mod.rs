@@ -1,20 +1,26 @@
-pub mod asset;
+pub mod module;
+pub mod output_asset;
+pub mod source;
+pub mod utils;
 
-use std::collections::HashSet;
+use indexmap::IndexSet;
+use turbo_tasks::Vc;
 
-use turbo_tasks::primitives::StringVc;
+type VcDynIntrospectable = Vc<Box<dyn Introspectable>>;
 
 #[turbo_tasks::value(transparent)]
-pub struct IntrospectableChildren(HashSet<(StringVc, IntrospectableVc)>);
+pub struct IntrospectableChildren(IndexSet<(Vc<String>, VcDynIntrospectable)>);
 
 #[turbo_tasks::value_trait]
 pub trait Introspectable {
-    fn ty(&self) -> StringVc;
-    fn title(&self) -> StringVc {
-        StringVc::empty()
+    fn ty(self: Vc<Self>) -> Vc<String>;
+    fn title(self: Vc<Self>) -> Vc<String> {
+        Vc::<String>::default()
     }
-    fn details(&self) -> StringVc {
-        StringVc::empty()
+    fn details(self: Vc<Self>) -> Vc<String> {
+        Vc::<String>::default()
     }
-    fn children(&self) -> IntrospectableChildrenVc;
+    fn children(self: Vc<Self>) -> Vc<IntrospectableChildren> {
+        Vc::cell(IndexSet::new())
+    }
 }

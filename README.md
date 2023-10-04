@@ -41,7 +41,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for more information.
 
 The Turbo community can be found on [GitHub Discussions](https://github.com/vercel/turbo/discussions), where you can ask questions, voice ideas, and share your projects.
 
-To chat with other community members, you can join the [Turbo Discord](https://turbo.build/discord)
+To chat with other community members, you can join the [Turbo Discord](https://turbo.build/discord).
 
 Our [Code of Conduct](https://github.com/vercel/turbo/blob/main/CODE_OF_CONDUCT.md) applies to all Turbo community channels.
 
@@ -51,7 +51,7 @@ Turbo is used by the world's leading companies. Check out the [Turbo Showcase](h
 
 ## Updates
 
-Follow [@turborepo](https://twitter.com/turborepo) on Twitter and for project updates
+Follow [@turborepo](https://twitter.com/turborepo) on Twitter and for project updates.
 
 ## Authors
 
@@ -59,7 +59,7 @@ Follow [@turborepo](https://twitter.com/turborepo) on Twitter and for project up
 
 - Jared Palmer ([@jaredpalmer](https://twitter.com/jaredpalmer))
 
-**Turbopack and Turboengine**
+**Turbopack and the Turbo engine**
 
 - Tobias Koppers ([@wSokra](https://twitter.com/wSokra))
 - Maia Teegarden ([@padmaia](https://twitter.com/padmaia))

@@ -172,10 +172,10 @@ pub fn run_publish(name: &str) {
             .map(|name| (name, version.clone()))
             .collect::<HashMap<String, String>>();
         let pkg_json_content =
-            fs::read(&package_dir.join("../../package.json")).expect("Unable to read package.json");
+            fs::read(package_dir.join("../../package.json")).expect("Unable to read package.json");
         let mut pkg_json: Value = serde_json::from_slice(&pkg_json_content).unwrap();
         pkg_json["optionalDependencies"] =
-            serde_json::to_value(&optional_dependencies_with_version).unwrap();
+            serde_json::to_value(optional_dependencies_with_version).unwrap();
         fs::write(
             target_pkg_dir.join("../../package.json"),
             serde_json::to_string_pretty(&pkg_json).unwrap(),
@@ -234,7 +234,7 @@ pub fn run_bump(names: HashSet<String>, dry_run: bool) {
                 env::current_dir()
                     .unwrap()
                     .join(&workspace.path)
-                    .join("../../package.json"),
+                    .join("package.json"),
             )
             .expect("Read workspace package.json failed");
             let mut pkg_json: PackageJson = serde_json::from_str(&workspace_pkg_json)
@@ -249,8 +249,8 @@ pub fn run_bump(names: HashSet<String>, dry_run: bool) {
         .collect::<Vec<PackageJson>>();
     let mut workspaces_to_bump = workspaces
         .iter()
+        .filter(|&p| names.contains(&p.name))
         .cloned()
-        .filter(|p| names.contains(&p.name))
         .collect::<Vec<_>>();
     if workspaces_to_bump.is_empty() {
         fn name_to_title(package: &PackageJson) -> String {
@@ -283,10 +283,13 @@ pub fn run_bump(names: HashSet<String>, dry_run: bool) {
         match version_type {
             "major" => {
                 semver_version.major += 1;
+                semver_version.minor = 0;
+                semver_version.patch = 0;
                 semver_version.pre = Prerelease::EMPTY;
             }
             "minor" => {
                 semver_version.minor += 1;
+                semver_version.patch = 0;
                 semver_version.pre = Prerelease::EMPTY;
             }
             "patch" => {

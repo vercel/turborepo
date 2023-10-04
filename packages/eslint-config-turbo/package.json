@@ -1,6 +1,6 @@
 {
   "name": "eslint-config-turbo",
-  "version": "0.0.4",
+  "version": "1.10.15-canary.2",
   "description": "ESLint config for Turborepo",
   "repository": {
     "type": "git",
@@ -9,6 +9,10 @@
   },
   "bugs": {
     "url": "https://github.com/vercel/turbo/issues"
+  },
+  "scripts": {
+    "lint": "eslint ./index.js",
+    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "keywords": [
     "turbo",
@@ -23,10 +27,11 @@
     "eslint-plugin-turbo": "workspace:*"
   },
   "peerDependencies": {
-    "eslint": "^7.23.0 || ^8.0.0"
+    "eslint": ">6.6.0"
   },
   "license": "MPL-2.0",
   "devDependencies": {
-    "@types/eslint": "^8.4.5"
+    "@turbo/eslint-config": "workspace:*",
+    "@types/eslint": "^8.44.2"
   }
 }

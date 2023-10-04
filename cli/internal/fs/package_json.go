@@ -3,8 +3,11 @@ package fs
 import (
 	"bytes"
 	"encoding/json"
+	"sort"
 	"sync"
 
+	mapset "github.com/deckarep/golang-set"
+	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
@@ -31,8 +34,7 @@ type PackageJSON struct {
 	Dir                    turbopath.AnchoredSystemPath `json:"-"`
 	InternalDeps           []string                     `json:"-"`
 	UnresolvedExternalDeps map[string]string            `json:"-"`
-	ExternalDeps           []string                     `json:"-"`
-	TransitiveDeps         []string                     `json:"-"`
+	TransitiveDeps         []lockfile.Package           `json:"-"`
 	LegacyTurboConfig      *TurboJSON                   `json:"turbo"`
 	Mu                     sync.Mutex                   `json:"-"`
 	ExternalDepsHash       string                       `json:"-"`
@@ -118,6 +120,24 @@ func MarshalPackageJSON(pkgJSON *PackageJSON) ([]byte, error) {
 	}
 
 	return b.Bytes(), nil
+}
+
+// SetExternalDeps sets TransitiveDeps and populates ExternalDepsHash
+func (p *PackageJSON) SetExternalDeps(externalDeps mapset.Set) error {
+	p.Mu.Lock()
+	defer p.Mu.Unlock()
+	p.TransitiveDeps = make([]lockfile.Package, 0, externalDeps.Cardinality())
+	for _, dependency := range externalDeps.ToSlice() {
+		dependency := dependency.(lockfile.Package)
+		p.TransitiveDeps = append(p.TransitiveDeps, dependency)
+	}
+	sort.Sort(lockfile.ByKey(p.TransitiveDeps))
+	hashOfExternalDeps, err := HashLockfilePackages(p.TransitiveDeps)
+	if err != nil {
+		return err
+	}
+	p.ExternalDepsHash = hashOfExternalDeps
+	return nil
 }
 
 func isEmpty(value interface{}) bool {

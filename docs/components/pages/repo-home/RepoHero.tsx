@@ -1,5 +1,5 @@
 import cn from "classnames";
-import Image from "next/future/image";
+import Image from "next/image";
 import Link from "next/link";
 import gradients from "../home-shared/gradients.module.css";
 import { HeroText, SectionSubtext } from "../home-shared/Headings";
@@ -84,12 +84,12 @@ export function RepoHero() {
         </FadeIn>
         <FadeIn
           delay={0.3}
-          className="z-50 flex flex-col items-center w-full max-w-md gap-5 px-6 md:max-w-lg"
+          className="z-50 flex flex-col items-center w-full max-w-md gap-5 px-6"
         >
           <div className="flex flex-col w-full gap-3 md:!flex-row">
             <CTAButton>
-              <Link href="/repo/docs">
-                <a className="block py-3">Get Started</a>
+              <Link href="/repo/docs" className="block py-3">
+                Get Started
               </Link>
             </CTAButton>
             <CTAButton outline>

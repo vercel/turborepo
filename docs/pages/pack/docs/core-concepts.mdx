@@ -17,13 +17,13 @@ In a Turbo engine-powered program, you can mark certain functions as ‘to be re
 
 Here’s a simplified example of what this might look like in a bundler:
 
-![](../../../images/turbo-engine-first-run.png)
+![](/images/docs/pack/turbo-engine-first-run.png)
 
 We start with calling `readFile` on two files, `api.ts` and `sdk.ts`. We then `bundle` those files, `concat` them together, and end up with the `fullBundle` at the end. The results of all of those function calls get saved in the cache for later.
 
 Let’s imagine that we’re running on a dev server. You save the `sdk.ts` file on your machine. Turbopack receives the file system event, and knows it needs to recompute `readFile("sdk.ts")`:
 
-![](../../../images/turbo-engine-second-run.png)
+![](/images/docs/pack/turbo-engine-second-run.png)
 
 Since the result of `sdk.ts` has changed, we need to `bundle` it again, which then needs to be concatenated again.
 
@@ -51,7 +51,7 @@ There are two ways to make a process faster - work faster, or do less work. For 
 
 ### Page-level compilation
 
-Versions of Next.js from 2-3 years ago used to compile the _entire application_ before showing your dev server. In Next.js [11], we began compiling _only the code on the page you requested._
+Versions of Next.js from 2-3 years ago used to compile the _entire application_ before showing your dev server. In [Next.js 11](https://nextjs.org/blog/next-11), we began compiling _only the code on the page you requested._
 
 That’s better, but it’s not perfect. When you navigate to `/users`, we’ll bundle all the client and server modules, dynamic-imported modules, and referenced CSS and images. That means if a large part of your page is hidden from view, or hidden behind tabs, we’ll still compile it anyway.
 

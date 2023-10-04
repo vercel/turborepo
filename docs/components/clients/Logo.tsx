@@ -1,6 +1,6 @@
 import React from "react";
 import cn from "classnames";
-import Image from "next/future/image";
+import Image from "next/image";
 import { TurboUser } from "./users";
 
 const DEFAULT_SIZE = {
@@ -21,6 +21,14 @@ export function Logo({
     ...DEFAULT_SIZE,
     ...user.style,
   };
+  let numericWidth: number;
+  let numericHeight: number;
+  if (typeof styles.width === "number") {
+    numericWidth = styles.width;
+  }
+  if (typeof styles.height === "number") {
+    numericHeight = styles.height;
+  }
   const logo = (
     <Image
       src={user.image.replace(
@@ -28,8 +36,8 @@ export function Logo({
         theme === "light" ? "/logos/white" : "/logos/color"
       )}
       alt={`${user.caption}'s Logo`}
-      width={styles.width}
-      height={styles.height}
+      width={numericWidth}
+      height={numericHeight}
       priority={true}
       style={styles}
       className={cn("mx-8", {

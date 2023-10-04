@@ -153,3 +153,22 @@ func TestAbsoluteSystemPath_Findup(t *testing.T) {
 		})
 	}
 }
+
+func TestJoin(t *testing.T) {
+	rawRoot, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("cwd %v", err)
+	}
+	root := AbsoluteSystemPathFromUpstream(rawRoot)
+	testRoot := root.Join("a", "b", "c")
+	dot := testRoot.Join(".")
+	if dot != testRoot {
+		t.Errorf(". path got %v, want %v", dot, testRoot)
+	}
+
+	doubleDot := testRoot.Join("..")
+	expectedDoubleDot := root.Join("a", "b")
+	if doubleDot != expectedDoubleDot {
+		t.Errorf(".. path got %v, want %v", doubleDot, expectedDoubleDot)
+	}
+}

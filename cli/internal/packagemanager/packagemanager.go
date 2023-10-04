@@ -5,17 +5,14 @@
 package packagemanager
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
-	"regexp"
-	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/globby"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"
-	"github.com/vercel/turbo/cli/internal/util"
 )
 
 // PackageManager is an abstraction across package managers
@@ -43,7 +40,7 @@ type PackageManager struct {
 
 	// The separator that the Package Manger uses to identify arguments that
 	// should be passed through to the underlying script.
-	ArgSeparator []string
+	ArgSeparator func(userArgs []string) []string
 
 	// Return the list of workspace glob
 	getWorkspaceGlobs func(rootpath turbopath.AbsoluteSystemPath) ([]string, error)
@@ -54,14 +51,17 @@ type PackageManager struct {
 	// Detect if Turbo knows how to produce a pruned workspace for the project
 	canPrune func(cwd turbopath.AbsoluteSystemPath) (bool, error)
 
-	// Test a manager and version tuple to see if it is the Package Manager.
-	Matches func(manager string, version string) (bool, error)
+	// Gets lockfile name.
+	GetLockfileName func(projectDirectory turbopath.AbsoluteSystemPath) string
 
-	// Detect if the project is using the Package Manager by inspecting the system.
-	detect func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error)
+	// Gets lockfile path.
+	GetLockfilePath func(projectDirectory turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath
+
+	// Read from disk a lockfile for a package manager.
+	GetLockfileContents func(projectDirectory turbopath.AbsoluteSystemPath) ([]byte, error)
 
 	// Read a lockfile for a given package manager
-	readLockfile func(contents []byte) (lockfile.Lockfile, error)
+	UnmarshalLockfile func(rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error)
 
 	// Prune the given pkgJSON to only include references to the given patches
 	prunePatches func(pkgJSON *fs.PackageJSON, patches []turbopath.AnchoredUnixPath) error
@@ -73,65 +73,27 @@ var packageManagers = []PackageManager{
 	nodejsNpm,
 	nodejsPnpm,
 	nodejsPnpm6,
+	nodejsBun,
 }
 
-var (
-	packageManagerPattern = `(npm|pnpm|yarn)@(\d+)\.\d+\.\d+(-.+)?`
-	packageManagerRegex   = regexp.MustCompile(packageManagerPattern)
-)
-
-// ParsePackageManagerString takes a package manager version string parses it into consituent components
-func ParsePackageManagerString(packageManager string) (manager string, version string, err error) {
-	match := packageManagerRegex.FindString(packageManager)
-	if len(match) == 0 {
-		return "", "", fmt.Errorf("We could not parse packageManager field in package.json, expected: %s, received: %s", packageManagerPattern, packageManager)
+// GetPackageManager reads the package manager name sent by the Rust side
+func GetPackageManager(name string) (packageManager *PackageManager, err error) {
+	switch name {
+	case "yarn":
+		return &nodejsYarn, nil
+	case "bun":
+		return &nodejsBun, nil
+	case "berry":
+		return &nodejsBerry, nil
+	case "npm":
+		return &nodejsNpm, nil
+	case "pnpm":
+		return &nodejsPnpm, nil
+	case "pnpm6":
+		return &nodejsPnpm6, nil
+	default:
+		return nil, errors.New("Unknown package manager")
 	}
-
-	return strings.Split(match, "@")[0], strings.Split(match, "@")[1], nil
-}
-
-// GetPackageManager attempts all methods for identifying the package manager in use.
-func GetPackageManager(projectDirectory turbopath.AbsoluteSystemPath, pkg *fs.PackageJSON) (packageManager *PackageManager, err error) {
-	result, _ := readPackageManager(pkg)
-	if result != nil {
-		return result, nil
-	}
-
-	return detectPackageManager(projectDirectory)
-}
-
-// readPackageManager attempts to read the package manager from the package.json.
-func readPackageManager(pkg *fs.PackageJSON) (packageManager *PackageManager, err error) {
-	if pkg.PackageManager != "" {
-		manager, version, err := ParsePackageManagerString(pkg.PackageManager)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, packageManager := range packageManagers {
-			isResponsible, err := packageManager.Matches(manager, version)
-			if isResponsible && (err == nil) {
-				return &packageManager, nil
-			}
-		}
-	}
-
-	return nil, errors.New(util.Sprintf("We did not find a package manager specified in your root package.json. Please set the \"packageManager\" property in your root package.json (${UNDERLINE}https://nodejs.org/api/packages.html#packagemanager)${RESET} or run `npx @turbo/codemod add-package-manager` in the root of your monorepo."))
-}
-
-// detectPackageManager attempts to detect the package manager by inspecting the project directory state.
-func detectPackageManager(projectDirectory turbopath.AbsoluteSystemPath) (packageManager *PackageManager, err error) {
-	for _, packageManager := range packageManagers {
-		isResponsible, err := packageManager.detect(projectDirectory, &packageManager)
-		if err != nil {
-			return nil, err
-		}
-		if isResponsible {
-			return &packageManager, nil
-		}
-	}
-
-	return nil, errors.New(util.Sprintf("We did not detect an in-use package manager for your project. Please set the \"packageManager\" property in your root package.json (${UNDERLINE}https://nodejs.org/api/packages.html#packagemanager)${RESET} or run `npx @turbo/codemod add-package-manager` in the root of your monorepo."))
 }
 
 // GetWorkspaces returns the list of package.json files for the current repository.
@@ -164,31 +126,18 @@ func (pm PackageManager) GetWorkspaceIgnores(rootpath turbopath.AbsoluteSystemPa
 	return pm.getWorkspaceIgnores(pm, rootpath)
 }
 
-// CanPrune returns if turbo can produce a pruned workspace. Can error if fs issues occur
-func (pm PackageManager) CanPrune(projectDirectory turbopath.AbsoluteSystemPath) (bool, error) {
-	if pm.canPrune != nil {
-		return pm.canPrune(projectDirectory)
-	}
-	return false, nil
-}
-
 // ReadLockfile will read the applicable lockfile into memory
-func (pm PackageManager) ReadLockfile(projectDirectory turbopath.AbsoluteSystemPath) (lockfile.Lockfile, error) {
-	if pm.readLockfile == nil {
+func (pm PackageManager) ReadLockfile(projectDirectory turbopath.AbsoluteSystemPath, rootPackageJSON *fs.PackageJSON) (lockfile.Lockfile, error) {
+	if pm.UnmarshalLockfile == nil {
 		return nil, nil
 	}
-	contents, err := projectDirectory.UntypedJoin(pm.Lockfile).ReadFile()
+	contents, err := pm.GetLockfileContents(projectDirectory)
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", pm.Lockfile, err)
+		return nil, fmt.Errorf("reading %s: %w", pm.GetLockfilePath(projectDirectory).ToString(), err)
 	}
-
-	return pm.readLockfile(contents)
-}
-
-// PrunePatchedPackages will alter the provided pkgJSON to only reference the provided patches
-func (pm PackageManager) PrunePatchedPackages(pkgJSON *fs.PackageJSON, patches []turbopath.AnchoredUnixPath) error {
-	if pm.prunePatches != nil {
-		return pm.prunePatches(pkgJSON, patches)
+	lf, err := pm.UnmarshalLockfile(rootPackageJSON, contents)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error in %v", pm.GetLockfilePath(projectDirectory).ToString())
 	}
-	return nil
+	return lf, nil
 }

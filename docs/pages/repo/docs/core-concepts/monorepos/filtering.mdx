@@ -1,6 +1,6 @@
 ---
 title: Filtering Workspaces
-description: Only build the workspaces you care about
+description: Only build the workspaces you care about.
 ---
 
 import Callout from "../../../../../components/Callout";
@@ -8,13 +8,13 @@ import HeartIcon from "@heroicons/react/solid/HeartIcon";
 
 # Filtering Workspaces
 
-A monorepo can contain hundreds, or thousands, of workspaces. By default, running `turbo run test` will execute the `test` task in **all available workspaces**.
+A monorepo can contain hundreds, or thousands, of workspaces. By default, running `turbo run test` from the root of the repository will execute the `test` task in **all available workspaces**.
 
-![Without using a filter, test will be run across all packages](../../../../../public/images/docs/no-filter.png)
+![Without using a filter, test will be run across all packages](/images/docs/no-filter.png)
 
 Turborepo supports a `--filter` flag that lets you **select the workspaces you'd like to execute your task in**.
 
-![With a filter on shared, only the shared package runs test](../../../../../public/images/docs/with-filter.png)
+![With a filter on shared, only the shared package runs test](/images/docs/with-filter.png)
 
 You can use it to:
 
@@ -34,7 +34,7 @@ Turborepo will run each task against each matched workspace, ensuring that any t
 You can specify more than one filter by passing multiple `--filter` flags to the command:
 
 ```sh
-turbo run build --filter=my-pkg --filter=my-app
+turbo build --filter=my-pkg --filter=my-app
 ```
 
 ### Filter by workspace name
@@ -105,11 +105,11 @@ turbo run build --filter=my-app^...
 Useful for when you want to target a specific directory, not a workspace name. It supports:
 
 - Exact matches: `--filter=./apps/docs`
-- Globs: `--filter=./apps/*`
+- Globs: `--filter='./apps/*'`
 
 ```sh
 # Build all of the workspaces in the 'apps' directory
-turbo run build --filter=./apps/*
+turbo run build --filter='./apps/*'
 ```
 
 #### Combining with other syntaxes
@@ -144,7 +144,7 @@ turbo run test --filter=[main...my-feature]
 
 #### Ignoring changed files
 
-You can use [`--ignore`](/repo/docs/reference/command-line-reference#--ignore) to specify changed files to be ignored in the calculation of which workspaces have changed.
+You can use [`--ignore`](/repo/docs/reference/command-line-reference/run#--ignore) to specify changed files to be ignored in the calculation of which workspaces have changed.
 
 #### Combining with other syntaxes
 
@@ -190,6 +190,14 @@ turbo run build --filter=!@foo/bar
 # Build all of the workspaces in the 'apps' directory, except the 'admin' workspace
 turbo run build --filter=./apps/* --filter=!admin
 ```
+
+### Via global `turbo`
+
+If you are using a globally installed version of `turbo`, running from within a workspace automatically
+filters to that workspace's directory. That means running `turbo run test --filter={./packages/shared}` from the root of the repository is equivalent to
+running `cd packages/shared && turbo run test`.
+
+Running with an explicitly named workspace will always work from anywhere in the repository: `turbo run test --filter=shared`.
 
 <Callout
   type="idea"
