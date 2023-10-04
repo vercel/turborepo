@@ -107,13 +107,6 @@ jobs:
             crates/turbopack-bench/**
             !*.md
 
-      - name: Turbopack TypeScript related changes
-        id: turbopack_typescript
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            crates/turbopack*/js/**
-
       - name: Formatting related changes
         id: format
         uses: technote-space/get-diff-action@v6
@@ -127,7 +120,6 @@ jobs:
       # We only test workspace dependency changes on main, not on PRs to speed up CI
       cargo_on_main: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
-      turbopack_typescript: ${{ steps.ci.outputs.diff != '' || steps.turbopack_typescript.outputs.diff != '' }}
       turborepo_rust: ${{ steps.ci.outputs.diff != '' }}
       turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
@@ -135,33 +127,6 @@ jobs:
       tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
       main_push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       tag_push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace') }}
-
-  turbopack_typescript:
-    name: Turbopack TypeScript files
-    runs-on: ubuntu-latest
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.turbopack_typescript == 'true'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-
-      - name: Install dependencies
-        run: pnpm install -r --side-effects-cache false
-
-      - name: Check turbopack-node types
-        working-directory: crates/turbopack-node/js
-        run: pnpm run check
-
-      - name: Check turbopack-cli types
-        working-directory: crates/turbopack-cli/js
-        run: pnpm run check
-
-      - name: Check turbopack-ecmascript-runtime types
-        working-directory: crates/turbopack-ecmascript-runtime/js
-        run: pnpm run check
 
   rust_lint:
     needs: [determine_jobs]
@@ -780,7 +745,6 @@ jobs:
       - turbopack_rust_check
       - turbopack_rust_clippy
       - turbopack_rust_test1
-      - turbopack_typescript
       - turbopack_rust_test_bench1
     if: always()
     permissions:
@@ -809,7 +773,6 @@ jobs:
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
           subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
-          subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
           subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
           if [ "$cancelled" = "true" ]; then
              echo "cancelled=true" >> $GITHUB_OUTPUT
@@ -915,7 +878,6 @@ jobs:
       - turbopack_rust_clippy
       - turbopack_rust_test1
       - turbopack_rust_test2
-      - turbopack_typescript
       - turbopack_rust_test_bench1
       - turbopack_rust_test_bench2
       - turbopack_rust_bench
@@ -948,7 +910,6 @@ jobs:
           subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
           subjob ${{needs.turbopack_rust_test2.result}} "Turbopack Rust tests (mac/win, non-blocking)"
-          subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
           subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
           subjob ${{needs.turbopack_rust_test_bench2.result}} "Turbopack Rust benchmark tests (mac/win, non-blocking)"
           subjob ${{needs.turbopack_rust_bench.result}} "Turbopack Rust benchmarks (non-blocking)"
