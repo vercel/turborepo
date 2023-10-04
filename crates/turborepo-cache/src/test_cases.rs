@@ -3,18 +3,35 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 
 pub(crate) struct TestFile {
     path: AnchoredSystemPathBuf,
-    contents: &'static str,
+    contents: Option<&'static str>,
 }
 
 impl TestFile {
     pub fn file(path: AnchoredSystemPathBuf, contents: &'static str) -> Self {
-        Self { path, contents }
+        Self {
+            path,
+            contents: Some(contents),
+        }
+    }
+
+    pub fn directory(path: AnchoredSystemPathBuf) -> Self {
+        Self {
+            path,
+            contents: None,
+        }
     }
 
     pub fn create(&self, repo_root: &AbsoluteSystemPath) -> Result<()> {
         let file_path = repo_root.resolve(&self.path);
-        std::fs::create_dir_all(file_path.parent().unwrap())?;
-        std::fs::write(file_path, self.contents)?;
+        match self.contents {
+            Some(contents) => {
+                std::fs::create_dir_all(file_path.parent().unwrap())?;
+                std::fs::write(file_path, contents)?;
+            }
+            None => {
+                std::fs::create_dir(&file_path)?;
+            }
+        }
 
         Ok(())
     }
@@ -24,7 +41,7 @@ impl TestFile {
     }
 
     pub fn contents(&self) -> Option<&str> {
-        Some(self.contents)
+        self.contents
     }
 }
 
@@ -78,6 +95,7 @@ pub(crate) fn get_test_cases() -> Vec<TestCase> {
                     AnchoredSystemPathBuf::from_raw("package-lock.json").unwrap(),
                     "Badlands",
                 ),
+                TestFile::directory(AnchoredSystemPathBuf::from_raw("src").unwrap()),
                 TestFile::file(
                     AnchoredSystemPathBuf::from_raw("src/main.js").unwrap(),
                     "Tree of Life",
