@@ -1,6 +1,6 @@
 #[cfg(not(test))]
 use std::net::SocketAddr;
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::{Arc, atomic::AtomicUsize}};
 
 use anyhow::{anyhow, Context, Result};
 #[cfg(not(test))]
@@ -12,7 +12,7 @@ use tokio::sync::OnceCell;
 use tracing::error;
 #[cfg(not(test))]
 use tracing::warn;
-use turborepo_api_client::APIClient;
+use turborepo_api_client::{APIClient, Client};
 use turborepo_ui::{start_spinner, BOLD, CYAN, GREY, UI};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
@@ -65,9 +65,9 @@ where
 /// Login writes a token to disk at token_path. If a token is already present,
 /// we do not overwrite it and instead log that we found an existing token.
 pub async fn login<F>(
-    api_client: APIClient,
+    api_client: &impl Client,
     ui: &UI,
-    token_path: &Path,
+    token_path: impl AsRef<Path>,
     mut set_token: F,
     login_url_configuration: &str,
 ) -> Result<()>
@@ -144,12 +144,21 @@ struct LoginPayload {
     token: String,
 }
 
+// Used to track how many times the server was hit. Used primarily for
+// duplicate request tracking in tests.
+#[cfg(test)]
+lazy_static::lazy_static! {
+    static ref LOGIN_HITS: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+    static ref SSO_HITS: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+}
+
 #[cfg(test)]
 async fn run_login_one_shot_server(
     _: u16,
     _: String,
     login_token: Arc<OnceCell<String>>,
 ) -> Result<()> {
+    LOGIN_HITS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     login_token
         .set(turborepo_vercel_api_mock::EXPECTED_TOKEN.to_string())
         .unwrap();
@@ -199,7 +208,7 @@ struct SsoPayload {
 pub async fn sso_login<F>(
     api_client: APIClient,
     ui: &UI,
-    token_path: &Path,
+    token_path: impl AsRef<Path>,
     mut set_token: F,
     login_url_configuration: &str,
     sso_team: &str,
@@ -348,13 +357,137 @@ async fn run_sso_one_shot_server(
 mod test {
     use std::path::Path;
 
+    use async_trait::async_trait;
     use port_scanner;
-    use reqwest::Url;
+    use reqwest::{Method, RequestBuilder, Response, Url};
     use tokio;
+    use turborepo_api_client::{Client, Error, Result};
     use turborepo_ui::UI;
+    use turborepo_vercel_api::{
+        CachingStatusResponse, Membership, PreflightResponse, Role, SpacesResponse, Team,
+        TeamsResponse, User, UserResponse, VerifiedSsoUser,
+    };
     use turborepo_vercel_api_mock::start_test_server;
 
-    use crate::{get_token_and_redirect, login, sso_login, SsoPayload};
+    use crate::{get_token_and_redirect, login, sso_login, SsoPayload, LOGIN_HITS};
+
+    struct MockApiClient {}
+    impl MockApiClient {
+        fn new() -> Self {
+            Self {}
+        }
+    }
+
+    #[async_trait]
+    impl Client for MockApiClient {
+        async fn get_user(&self, _token: &str) -> Result<UserResponse> {
+            Ok(UserResponse {
+                user: User {
+                    id: "id".to_string(),
+                    username: "username".to_string(),
+                    email: "email".to_string(),
+                    name: None,
+                    created_at: None,
+                },
+            })
+        }
+        async fn get_teams(&self, _token: &str) -> Result<TeamsResponse> {
+            Ok(TeamsResponse {
+                teams: vec![Team {
+                    id: "id".to_string(),
+                    slug: "slug".to_string(),
+                    name: "name".to_string(),
+                    created_at: 0,
+                    created: chrono::Utc::now(),
+                    membership: Membership::new(Role::Member),
+                }],
+            })
+        }
+        async fn get_team(&self, _token: &str, _team_id: &str) -> Result<Option<Team>> {
+            unimplemented!("get_team")
+        }
+        fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
+            unimplemented!("add_ci_header")
+        }
+        fn add_team_params(
+            _request_builder: RequestBuilder,
+            _team_id: &str,
+            _team_slug: Option<&str>,
+        ) -> RequestBuilder {
+            unimplemented!("add_team_params")
+        }
+        async fn get_caching_status(
+            &self,
+            _token: &str,
+            _team_id: &str,
+            _team_slug: Option<&str>,
+        ) -> Result<CachingStatusResponse> {
+            unimplemented!("get_caching_status")
+        }
+        async fn get_spaces(&self, _token: &str, _team_id: Option<&str>) -> Result<SpacesResponse> {
+            unimplemented!("get_spaces")
+        }
+        async fn verify_sso_token(
+            &self,
+            _token: &str,
+            _token_name: &str,
+        ) -> Result<VerifiedSsoUser> {
+            unimplemented!("verify_sso_token")
+        }
+        async fn put_artifact(
+            &self,
+            _hash: &str,
+            _artifact_body: &[u8],
+            _duration: u64,
+            _tag: Option<&str>,
+            _token: &str,
+        ) -> Result<()> {
+            unimplemented!("put_artifact")
+        }
+        async fn handle_403(_response: Response) -> Error {
+            unimplemented!("handle_403")
+        }
+        async fn fetch_artifact(
+            &self,
+            _hash: &str,
+            _token: &str,
+            _team_id: &str,
+            _team_slug: Option<&str>,
+        ) -> Result<Response> {
+            unimplemented!("fetch_artifact")
+        }
+        async fn artifact_exists(
+            &self,
+            _hash: &str,
+            _token: &str,
+            _team_id: &str,
+            _team_slug: Option<&str>,
+        ) -> Result<Response> {
+            unimplemented!("artifact_exists")
+        }
+        async fn get_artifact(
+            &self,
+            _hash: &str,
+            _token: &str,
+            _team_id: &str,
+            _team_slug: Option<&str>,
+            _method: Method,
+        ) -> Result<Response> {
+            unimplemented!("get_artifact")
+        }
+        async fn do_preflight(
+            &self,
+            _token: &str,
+            _request_url: &str,
+            _request_method: &str,
+            _request_headers: &str,
+        ) -> Result<PreflightResponse> {
+            unimplemented!("do_preflight")
+        }
+        fn make_url(&self, _endpoint: &str) -> String {
+            unimplemented!("make_url")
+        }
+    }
 
     #[tokio::test]
     async fn test_login() {
@@ -362,23 +495,48 @@ mod test {
         let api_server = tokio::spawn(start_test_server(port));
         let ui = UI::new(false);
         let url = format!("http://localhost:{port}");
+        let token_path = Path::new("token.json");
 
         let api_client =
-            turborepo_api_client::APIClient::new(url.clone(), 1000, "1", false).unwrap();
+            MockApiClient::new();
 
         // closure that will check that the token is sent correctly
         let mut got_token = String::new();
-        let set_token = |t: &str| -> Result<(), anyhow::Error> {
-            got_token = t.to_string();
+        let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
+            got_token.clear();
+            got_token.push_str(t);
+            let _ = std::fs::write(token_path, t).map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
             Ok(())
         };
 
-        login(api_client, &ui, Path::new(""), set_token, &url)
+        login(&api_client, &ui, Path::new("token.json"), set_token, &url)
+            .await
+            .unwrap();
+
+        // Re-assign set_token due to ownership rules. This shouldn't be called.
+        let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
+            got_token.clear();
+            got_token.push_str(t);
+            let _ = std::fs::write(token_path, t).map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
+            Ok(())
+        };
+
+        // Call the login function twice to test that we check for existing tokens. Total server hits should be 1.
+        login(&api_client, &ui, token_path, set_token, &url)
             .await
             .unwrap();
 
         api_server.abort();
+        assert_eq!(LOGIN_HITS.load(std::sync::atomic::Ordering::SeqCst), 1);
         assert_eq!(got_token, turborepo_vercel_api_mock::EXPECTED_TOKEN);
+
+        // Remove test token file after completion.
+        match std::fs::remove_file(token_path) {
+            Ok(_) => {}
+            Err(e) => {
+                println!("failed to remove token file: {}", e);
+            }
+        }
     }
 
     #[tokio::test]
@@ -388,14 +546,17 @@ mod test {
         let url = format!("http://localhost:{port}");
         let ui = UI::new(false);
         let team = "something";
+        let token_path = Path::new("token.json");
 
         let api_client =
             turborepo_api_client::APIClient::new(url.clone(), 1000, "1", false).unwrap();
 
         // closure that will check that the token is sent correctly
         let mut got_token = String::new();
-        let set_token = |t: &str| -> Result<(), anyhow::Error> {
-            got_token = t.to_string();
+        let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
+            got_token.clear();
+            got_token.push_str(t);
+            let _ = std::fs::write(token_path, t).map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
             Ok(())
         };
 

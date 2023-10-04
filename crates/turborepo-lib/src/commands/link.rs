@@ -16,7 +16,7 @@ use dialoguer::{theme::ColorfulTheme, Confirm};
 use dirs_next::home_dir;
 #[cfg(test)]
 use rand::Rng;
-use turborepo_api_client::APIClient;
+use turborepo_api_client::{APIClient, Client};
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
 use turborepo_ui::{BOLD, GREY, UNDERLINE};
@@ -498,10 +498,12 @@ mod test {
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
-                    .with_token(Some("token".to_string()))
-                    .load()
-                    .unwrap(),
+                UserConfigLoader::new(
+                    AbsoluteSystemPathBuf::try_from(user_config_file.path()).unwrap(),
+                )
+                .with_token(Some("token".to_string()))
+                .load()
+                .unwrap(),
             ),
             repo_config: OnceCell::from(
                 RepoConfigLoader::new(repo_config_path)
@@ -551,10 +553,12 @@ mod test {
             ui: UI::new(false),
             client_config: OnceCell::from(ClientConfigLoader::new().load().unwrap()),
             user_config: OnceCell::from(
-                UserConfigLoader::new(user_config_file.path().to_str().unwrap())
-                    .with_token(Some("token".to_string()))
-                    .load()
-                    .unwrap(),
+                UserConfigLoader::new(
+                    AbsoluteSystemPathBuf::try_from(user_config_file.path()).unwrap(),
+                )
+                .with_token(Some("token".to_string()))
+                .load()
+                .unwrap(),
             ),
             repo_config: OnceCell::from(
                 RepoConfigLoader::new(repo_config_path)

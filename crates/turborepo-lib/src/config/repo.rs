@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, path::Path};
+use std::{collections::HashMap, env};
 
 use config::Config;
 use serde::{Deserialize, Serialize};
@@ -85,8 +85,8 @@ pub struct RepoConfigLoader {
 }
 
 impl RepoConfig {
-    pub fn get_path(&self) -> &Path {
-        self.path.as_std_path()
+    pub fn path(&self) -> &AbsoluteSystemPath {
+        &self.path
     }
 
     #[allow(dead_code)]
@@ -180,7 +180,7 @@ impl RepoConfig {
     }
 
     fn write_to_disk(&self) -> Result<(), Error> {
-        write_to_disk(self.path.as_path(), &self.disk_config)
+        write_to_disk(&self.path, &self.disk_config)
     }
 }
 
