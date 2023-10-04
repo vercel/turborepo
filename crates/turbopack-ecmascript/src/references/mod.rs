@@ -174,7 +174,7 @@ impl AnalyzeEcmascriptModuleResult {
                 }
             }
         }
-        return Ok(needs.cell());
+        Ok(needs.cell())
     }
 }
 
