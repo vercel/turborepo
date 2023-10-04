@@ -167,6 +167,82 @@ mod tests {
     }
 
     #[test]
+    fn test_hash_symlink() {
+        let (_tmp, turbo_root) = tmp_dir();
+        let from_to_file = turbo_root.join_component("symlink-from-to-file");
+        let from_to_dir = turbo_root.join_component("symlink-from-to-dir");
+        let broken = turbo_root.join_component("symlink-broken");
+
+        let to_file = turbo_root.join_component("the-file-target");
+        to_file.create_with_contents("contents").unwrap();
+
+        let to_dir = turbo_root.join_component("the-dir-target");
+        to_dir.create_dir_all().unwrap();
+
+        from_to_file.symlink_to_file(to_file.to_string()).unwrap();
+        from_to_dir.symlink_to_dir(to_dir.to_string()).unwrap();
+        broken.symlink_to_file("does-not-exist").unwrap();
+
+        // Symlink to file.
+        let out = hash_files(
+            &turbo_root,
+            [AnchoredSystemPathBuf::from_raw("symlink-from-to-file").unwrap()].iter(),
+            true,
+        )
+        .unwrap();
+        let from_to_file_hash = out
+            .get(&RelativeUnixPathBuf::new("symlink-from-to-file").unwrap())
+            .unwrap();
+        assert_eq!(
+            from_to_file_hash,
+            "0839b2e9412b314cb8bb9a20f587aa13752ae310"
+        );
+
+        // Symlink to dir, allow_missing = true.
+        let out = hash_files(
+            &turbo_root,
+            [AnchoredSystemPathBuf::from_raw("symlink-from-to-dir").unwrap()].iter(),
+            true,
+        );
+        match out.err().unwrap() {
+            Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::IsADirectory),
+            _ => panic!("wrong error"),
+        };
+
+        // Symlink to dir, allow_missing = false.
+        let out = hash_files(
+            &turbo_root,
+            [AnchoredSystemPathBuf::from_raw("symlink-from-to-dir").unwrap()].iter(),
+            false,
+        );
+        match out.err().unwrap() {
+            Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::IsADirectory),
+            _ => panic!("wrong error"),
+        };
+
+        // Broken symlink with allow_missing = true.
+        let out = hash_files(
+            &turbo_root,
+            [AnchoredSystemPathBuf::from_raw("symlink-broken").unwrap()].iter(),
+            true,
+        )
+        .unwrap();
+        let broken_hash = out.get(&RelativeUnixPathBuf::new("symlink-broken").unwrap());
+        assert_eq!(broken_hash, None);
+
+        // Broken symlink with allow_missing = false.
+        let out = hash_files(
+            &turbo_root,
+            [AnchoredSystemPathBuf::from_raw("symlink-broken").unwrap()].iter(),
+            false,
+        );
+        match out.err().unwrap() {
+            Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::NotFound),
+            _ => panic!("wrong error"),
+        };
+    }
+
+    #[test]
     fn test_get_package_file_hashes_from_processing_gitignore() {
         let root_ignore_contents = ["ignoreme", "ignorethisdir/"].join("\n");
         let pkg_ignore_contents = ["pkgignoreme", "pkgignorethisdir/"].join("\n");
