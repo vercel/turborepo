@@ -425,6 +425,15 @@ impl LocalTurboState {
     fn supports_skip_infer_and_single_package(&self) -> bool {
         turbo_version_has_shim(&self.version)
     }
+
+    /// Check to see if the detected local executable is the one currently
+    /// running.
+    fn local_is_self(&self) -> bool {
+        std::env::current_exe().is_ok_and(|current_exe| {
+            fs_canonicalize(current_exe)
+                .is_ok_and(|canonical_current_exe| canonical_current_exe == self.bin_path)
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -603,11 +612,21 @@ fn run_correct_turbo(
 ) -> Result<Payload> {
     if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
         try_check_for_updates(&shim_args, &turbo_state.version);
-        Ok(Payload::Rust(spawn_local_turbo(
-            &repo_state,
-            turbo_state,
-            shim_args,
-        )))
+
+        if turbo_state.local_is_self() {
+            env::set_var(
+                cli::INVOCATION_DIR_ENV_VAR,
+                shim_args.invocation_dir.as_path(),
+            );
+            debug!("Currently running turbo is local turbo.");
+            cli::run(Some(repo_state), subscriber, ui)
+        } else {
+            Ok(Payload::Rust(spawn_local_turbo(
+                &repo_state,
+                turbo_state,
+                shim_args,
+            )))
+        }
     } else {
         try_check_for_updates(&shim_args, get_version());
         // cli::run checks for this env var, rather than an arg, so that we can support
