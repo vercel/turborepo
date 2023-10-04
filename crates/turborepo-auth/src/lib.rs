@@ -375,6 +375,23 @@ mod test {
 
     use crate::{get_token_and_redirect, login, sso_login, SsoPayload, LOGIN_HITS, SSO_HITS, EXPECTED_VERIFICATION_TOKEN};
 
+    #[derive(Debug, thiserror::Error)]
+    enum MockApiError {
+        #[error("Empty token")]
+        EmptyToken,
+    }
+    impl From<MockApiError> for turborepo_api_client::Error {
+        fn from(error: MockApiError) -> Self {
+            match error {
+                MockApiError::EmptyToken => turborepo_api_client::Error::UnknownStatus {
+                    code: "empty token".to_string(),
+                    message: "token is empty".to_string(),
+                    backtrace: std::backtrace::Backtrace::capture(),
+                },
+            }
+        }
+    }
+
     struct MockApiClient {
         pub base_url: String,
     }
@@ -391,7 +408,11 @@ mod test {
 
     #[async_trait]
     impl Client for MockApiClient {
-        async fn get_user(&self, _token: &str) -> Result<UserResponse> {
+        async fn get_user(&self, token: &str) -> Result<UserResponse> {
+            if token.is_empty() {
+                return Err(MockApiError::EmptyToken.into());
+            }
+
             Ok(UserResponse {
                 user: User {
                     id: "id".to_string(),
@@ -402,7 +423,11 @@ mod test {
                 },
             })
         }
-        async fn get_teams(&self, _token: &str) -> Result<TeamsResponse> {
+        async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
+            if token.is_empty() {
+                return Err(MockApiError::EmptyToken.into());
+            }
+
             Ok(TeamsResponse {
                 teams: vec![Team {
                     id: "id".to_string(),
@@ -574,21 +599,9 @@ mod test {
         let url = format!("http://localhost:{port}");
         let ui = UI::new(false);
         let team = "something";
-        let token_filename: &str = "sso_token.json";
-        let token_path = Path::new(token_filename);
 
-        // Since we are writing to a file, we need to make sure we clean up after in the event of an assertion
-        // failure.
-        std::panic::set_hook(Box::new(|_| {
-            // Remove test token file after completion. Recreate path due to ownership rules.
-            match std::fs::remove_file(Path::new(token_filename)) {
-                Ok(_) => {}
-                Err(e) => {
-                    println!("failed to remove token file: {}", e);
-                }
-            };
-            let _ = std::panic::take_hook();
-        }));
+        let temp_file = tempfile::NamedTempFile::new().expect("failed to create temp file");
+        let token_path = temp_file.path();
 
         let mut api_client = MockApiClient::new();
         api_client.set_base_url(&url);
@@ -606,7 +619,7 @@ mod test {
         sso_login(
             &api_client,
             &ui,
-            Path::new(token_filename),
+            token_path,
             set_token,
             &url,
             team
@@ -626,7 +639,7 @@ mod test {
         sso_login(
             &api_client,
             &ui,
-            Path::new(token_filename),
+            token_path,
             set_token,
             &url,
             team
@@ -638,14 +651,6 @@ mod test {
 
         assert_eq!(SSO_HITS.load(std::sync::atomic::Ordering::SeqCst), 1);
         assert_eq!(got_token, EXPECTED_VERIFICATION_TOKEN);
-
-        // Remove test token file after completion.
-        match std::fs::remove_file(token_path) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("failed to remove token file: {}", e);
-            }
-        }
     }
 
     #[test]
