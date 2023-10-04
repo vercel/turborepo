@@ -68,13 +68,6 @@ jobs:
             Cargo.*
             rust-toolchain
 
-      - name: Turborepo version changes
-        id: turborepo_version
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            version.txt
-
       - name: Rust related changes
         id: rust
         uses: technote-space/get-diff-action@v6
@@ -121,59 +114,6 @@ jobs:
           PATTERNS: |
             crates/turbopack*/js/**
 
-      - name: Turborepo Rust related changes
-        id: turborepo_rust
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            pnpm-lock.yaml
-            package.json
-            crates/turborepo*/**
-            .cargo/**
-            rust-toolchain
-            !**.md
-            !**.mdx
-
-      - name: Turborepo Go related changes
-        id: turborepo_go
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            cli/**
-
-      - name: Turborepo integration tests changes
-        id: turborepo_integration
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            turborepo-tests/integration/**
-            turborepo-tests/helpers/**
-
-      - name: Turborepo e2e tests changes
-        id: turborepo_e2e
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            turborepo-tests/e2e/**
-            turborepo-tests/helpers/**
-
-      - name: Examples related changes
-        id: examples
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            examples/**
-            examples-tests/**
-            !**.md
-            !**.mdx
-
-      - name: Turborepo JS Package related changes
-        id: turborepo_js
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            packages/**
-
       - name: Formatting related changes
         id: format
         uses: technote-space/get-diff-action@v6
@@ -183,20 +123,13 @@ jobs:
 
     outputs:
       rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
-      cargo_only: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && steps.turbopack.outputs.diff == '' && steps.turborepo_rust.outputs.diff == '') }}
+      cargo_only: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && steps.turbopack.outputs.diff == '') }}
       # We only test workspace dependency changes on main, not on PRs to speed up CI
       cargo_on_main: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
       turbopack_typescript: ${{ steps.ci.outputs.diff != '' || steps.turbopack_typescript.outputs.diff != '' }}
-      turborepo_rust: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
+      turborepo_rust: ${{ steps.ci.outputs.diff != '' }}
       turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
-      turborepo_go_unit: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
-      turborepo_go_lint: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != ''}}
-      turborepo_build: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
-      turborepo_e2e: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_e2e.outputs.diff != '' }}
-      go_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
-      examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' || steps.turborepo_version.outputs.diff != '' }}
-      turborepo_js: ${{ steps.ci.outputs.diff != '' || steps.turborepo_js.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
       tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
