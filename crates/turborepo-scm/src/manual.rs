@@ -1,4 +1,4 @@
-use std::{fs::Metadata, io::Read};
+use std::io::{ErrorKind, Read};
 
 use globwalk::fix_glob_pattern;
 use hex::ToHex;
@@ -9,13 +9,13 @@ use wax::{any, Glob, Pattern};
 
 use crate::{package_deps::GitHashes, Error};
 
-fn git_like_hash_file(path: &AbsoluteSystemPath, metadata: &Metadata) -> Result<String, Error> {
+fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
     let mut hasher = Sha1::new();
     let mut f = path.open()?;
     let mut buffer = Vec::new();
-    f.read_to_end(&mut buffer)?;
+    let size = f.read_to_end(&mut buffer)?;
     hasher.update("blob ".as_bytes());
-    hasher.update(metadata.len().to_string().as_bytes());
+    hasher.update(size.to_string().as_bytes());
     hasher.update([b'\0']);
     hasher.update(buffer.as_slice());
     let result = hasher.finalize();
@@ -30,17 +30,19 @@ pub(crate) fn hash_files(
     let mut hashes = GitHashes::new();
     for file in files.into_iter() {
         let path = root_path.resolve(file.as_ref());
-        let metadata = match path.symlink_metadata() {
-            Ok(metadata) => metadata,
-            Err(e) => {
-                if allow_missing && e.is_io_error(std::io::ErrorKind::NotFound) {
-                    continue;
+        match git_like_hash_file(&path) {
+            Ok(hash) => hashes.insert(file.as_ref().to_unix(), hash),
+            Err(e) => match e {
+                Error::Io(ref io_error, _) => {
+                    if allow_missing && io_error.kind() == ErrorKind::NotFound {
+                        continue;
+                    } else {
+                        return Err(e);
+                    }
                 }
-                return Err(e.into());
-            }
+                _ => return Err(e),
+            },
         };
-        let hash = git_like_hash_file(&path, &metadata)?;
-        hashes.insert(file.as_ref().to_unix(), hash);
     }
     Ok(hashes)
 }
@@ -109,7 +111,7 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
         if metadata.is_symlink() {
             continue;
         }
-        let hash = git_like_hash_file(path, &metadata)?;
+        let hash = git_like_hash_file(path)?;
         hashes.insert(relative_path, hash);
     }
     Ok(hashes)
