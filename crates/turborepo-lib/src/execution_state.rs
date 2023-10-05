@@ -2,7 +2,7 @@ use serde::Serialize;
 use tracing::trace;
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
-use crate::{cli::Args, commands::CommandBase};
+use crate::{cli::Args, commands::CommandBase, config::ConfigurationOptions};
 
 #[derive(Debug, Serialize)]
 pub struct ExecutionState<'a> {

@@ -4,11 +4,11 @@ use anyhow::anyhow;
 use dirs_next::config_dir;
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
 use crate::{
     commands::CommandBase,
     config::{Error as ConfigError, RawTurboJSON},
-    package_json::PackageJson,
 };
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
@@ -400,7 +400,7 @@ impl TurborepoConfigBuilder {
 
         let root_package_json = PackageJson::load(&self.repo_root.join_component("package.json"))
             .or_else(|e| {
-            if let crate::package_json::Error::Io(e) = &e {
+            if let PackageJsonError::Io(e) = &e {
                 if matches!(e.kind(), std::io::ErrorKind::NotFound) {
                     return Ok(Default::default());
                 }
