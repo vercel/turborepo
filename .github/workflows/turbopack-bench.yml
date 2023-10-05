@@ -107,13 +107,6 @@ jobs:
             crates/turbopack-bench/**
             !*.md
 
-      - name: Formatting related changes
-        id: format
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            **/*.{yml,yaml,md,mdx,js,jsx,ts,tsx,json,toml,css}
-
     outputs:
       rust: ${{ steps.ci.outputs.diff != '' || steps.rust.outputs.diff != '' }}
       cargo_only: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && steps.turbopack.outputs.diff == '') }}
@@ -122,7 +115,6 @@ jobs:
       turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
       turborepo_rust: ${{ steps.ci.outputs.diff != '' }}
       turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
-      format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
       tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
       main_push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
