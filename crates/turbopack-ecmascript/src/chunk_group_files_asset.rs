@@ -110,7 +110,7 @@ impl ChunkableModule for ChunkGroupFilesAsset {
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
         let this = self.await?;
         let chunking_context =
-            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
                 .await?
                 .context(
                     "chunking context must impl EcmascriptChunkingContext to use \

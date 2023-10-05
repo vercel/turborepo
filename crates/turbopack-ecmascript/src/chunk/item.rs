@@ -248,7 +248,7 @@ impl FromChunkableModule for Box<dyn EcmascriptChunkItem> {
 
         let item = placeable.as_chunk_item(Vc::upcast(chunking_context));
         let Some(ecmascript_item) =
-            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkItem>>(item).await?
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkItem>>(item).await?
         else {
             return Ok(None);
         };
@@ -261,7 +261,7 @@ impl FromChunkableModule for Box<dyn EcmascriptChunkItem> {
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Option<Vc<Self>>> {
         let Some(context) =
-            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
                 .await?
         else {
             return Ok(None);

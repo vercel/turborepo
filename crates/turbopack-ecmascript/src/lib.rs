@@ -422,7 +422,7 @@ impl ChunkableModule for EcmascriptModuleAsset {
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn ChunkItem>>> {
         let chunking_context =
-            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
                 .await?
                 .context(
                     "chunking context must impl EcmascriptChunkingContext to use \

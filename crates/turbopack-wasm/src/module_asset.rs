@@ -133,7 +133,7 @@ impl ChunkableModule for WebAssemblyModuleAsset {
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
         let chunking_context =
-            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
                 .await?
                 .context(
                     "chunking context must impl EcmascriptChunkingContext to use \
@@ -229,7 +229,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         let loader_asset = self.module.loader();
         let item = loader_asset.as_chunk_item(Vc::upcast(self.chunking_context));
 
-        let ecmascript_item = Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkItem>>(item)
+        let ecmascript_item = Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkItem>>(item)
             .await?
             .context("EcmascriptModuleAsset must implement EcmascriptChunkItem")?;
 

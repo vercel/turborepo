@@ -207,7 +207,7 @@ impl ChunkableModule for MdxModuleAsset {
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
         let chunking_context =
-            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
                 .await?
                 .context(
                     "chunking context must impl EcmascriptChunkingContext to use MdxModuleAsset",
@@ -278,7 +278,7 @@ impl EcmascriptChunkItem for MdxChunkItem {
         let item = into_ecmascript_module_asset(&self.module)
             .await?
             .as_chunk_item(Vc::upcast(self.chunking_context));
-        let ecmascript_item = Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkItem>>(item)
+        let ecmascript_item = Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkItem>>(item)
             .await?
             .context("MdxChunkItem must generate an EcmascriptChunkItem")?;
         Ok(ecmascript_item.content())
