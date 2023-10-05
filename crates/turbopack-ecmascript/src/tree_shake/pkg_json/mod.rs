@@ -11,3 +11,6 @@ struct PackageJson {
 
 #[turbo_tasks::function]
 pub async fn is_side_effect_free(filename: Vc<FileSystemPath>) -> Result<Vc<bool>> {}
+
+#[turbo_tasks::function]
+async fn find_package_json_for(filename: Vc<FileSystemPath>) -> Result<Vc<FileSystemPath>> {}
