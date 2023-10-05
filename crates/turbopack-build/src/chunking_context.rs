@@ -8,7 +8,10 @@ use turbo_tasks::{
 };
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
-    chunk::{Chunk, ChunkableModuleExt, ChunkingContext, Chunks, EvaluatableAssets},
+    chunk::{
+        availability_info::AvailabilityInfo, Chunk, ChunkableModule, ChunkableModuleExt,
+        ChunkingContext, Chunks, EvaluatableAssets,
+    },
     environment::Environment,
     ident::AssetIdent,
     module::Module,
@@ -350,8 +353,10 @@ impl ChunkingContext for BuildChunkingContext {
     #[turbo_tasks::function]
     async fn chunk_group(
         self: Vc<Self>,
-        entry_chunk: Vc<Box<dyn Chunk>>,
+        module: Vc<Box<dyn ChunkableModule>>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<OutputAssets>> {
+        let entry_chunk = module.as_chunk(Vc::upcast(self), availability_info);
         let parallel_chunks = get_parallel_chunks([entry_chunk]).await?;
 
         let optimized_chunks = get_optimized_chunks(parallel_chunks).await?;

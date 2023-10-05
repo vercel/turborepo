@@ -6,7 +6,7 @@ use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
         availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkableModule, ChunkableModuleExt,
-        ChunkingContext, EvaluatableAssets,
+        ChunkingContext, ChunkingContextExt, EvaluatableAssets,
     },
     ident::AssetIdent,
     introspect::{
@@ -148,7 +148,7 @@ impl ChunkGroupFilesChunkItem {
         } else {
             module
                 .chunking_context
-                .chunk_group(module.module.as_root_chunk(module.chunking_context))
+                .root_chunk_group(Vc::upcast(module.module))
         };
         Ok(chunks)
     }

@@ -5,7 +5,9 @@ use turbo_tasks_fs::{File, FileSystemPath};
 use turbo_tasks_hash::{encode_hex, Xxh3Hash64Hasher};
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{ChunkableModule, ChunkableModuleExt, ChunkingContext, EvaluatableAssets},
+    chunk::{
+        ChunkableModule, ChunkableModuleExt, ChunkingContext, ChunkingContextExt, EvaluatableAssets,
+    },
     ident::AssetIdent,
     output::{OutputAsset, OutputAssets},
     version::{Version, VersionedContent},
@@ -131,11 +133,11 @@ impl DevHtmlAsset {
             .map(|entry| async move {
                 let (chunkable_module, chunking_context, runtime_entries) = entry;
 
-                let chunk = chunkable_module.as_root_chunk(*chunking_context);
                 let assets = if let Some(runtime_entries) = runtime_entries {
+                    let chunk = chunkable_module.as_root_chunk(*chunking_context);
                     chunking_context.evaluated_chunk_group(chunk, *runtime_entries)
                 } else {
-                    chunking_context.chunk_group(chunk)
+                    chunking_context.root_chunk_group(Vc::upcast(*chunkable_module))
                 };
 
                 assets.await
