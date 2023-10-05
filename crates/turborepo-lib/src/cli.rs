@@ -4,7 +4,6 @@ use anyhow::{anyhow, Result};
 use camino::Utf8PathBuf;
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
@@ -233,8 +232,14 @@ impl Args {
         let mut clap_args = match Args::try_parse_from(single_package_free) {
             Ok(mut args) => {
                 // And then only add them back in when we're in `run`.
+                // The value can appear in two places in the struct.
+                // We defensively attempt to set both.
                 if let Some(ref mut run_args) = args.run_args {
                     run_args.single_package = is_single_package
+                }
+
+                if let Some(Command::Run(ref mut run_args)) = args.command {
+                    run_args.single_package = is_single_package;
                 }
 
                 args
