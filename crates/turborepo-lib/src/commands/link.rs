@@ -485,7 +485,7 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<()> {
 
 fn add_space_id_to_turbo_json(base: &CommandBase, space_id: &str) -> Result<()> {
     let turbo_json_path = base.repo_root.join_component("turbo.json");
-    let turbo_json = fs::read_to_string(&turbo_json_path)?;
+    let turbo_json = turbo_json_path.read_or_default("{}")?;
     let space_id_json_value = format!("\"{}\"", space_id);
 
     let output = rewrite_json::set_path(

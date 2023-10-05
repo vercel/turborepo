@@ -44,13 +44,7 @@ pub fn set_path(
     path: &[&str],
     json_value: &str,
 ) -> Result<String, RewriteError> {
-    let string_to_process = if json_document_string.is_empty() {
-        "{}"
-    } else {
-        json_document_string
-    };
-
-    let root = get_root(string_to_process)?;
+    let root = get_root(json_document_string)?;
 
     // Find the token we'll be modifying and its path from the root.
     let current_path = &mut vec![];
@@ -101,7 +95,7 @@ pub fn set_path(
     };
 
     // Generate a new document!
-    let mut output: String = string_to_process.to_owned();
+    let mut output: String = json_document_string.to_owned();
     output.replace_range(start..end, &computed_object);
 
     Ok(output)
