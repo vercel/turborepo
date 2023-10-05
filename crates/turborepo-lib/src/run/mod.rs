@@ -80,17 +80,17 @@ impl<'a> Run<'a> {
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
 
-        let team_id = if let Some(configuration_options) = &root_turbo_json.remote_cache {
-            configuration_options.team_id.clone().unwrap_or_default()
-        } else {
-            "".to_string()
-        };
+        let team_id = root_turbo_json
+            .remote_cache
+            .as_ref()
+            .and_then(|configuration_options| configuration_options.team_id.clone())
+            .unwrap_or_default();
 
-        let signature = if let Some(configuration_options) = &root_turbo_json.remote_cache {
-            configuration_options.signature.unwrap_or_default()
-        } else {
-            false
-        };
+        let signature = root_turbo_json
+            .remote_cache
+            .as_ref()
+            .and_then(|configuration_options| configuration_options.signature.clone())
+            .unwrap_or_default();
 
         opts.cache_opts.remote_cache_opts = Some(RemoteCacheOpts::new(team_id, signature));
 
