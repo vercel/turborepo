@@ -195,15 +195,18 @@ mod tests {
         );
 
         // Symlink to dir, allow_missing = true.
-        let out = hash_files(
-            &turbo_root,
-            [AnchoredSystemPathBuf::from_raw("symlink-from-to-dir").unwrap()].iter(),
-            true,
-        );
-        match out.err().unwrap() {
-            Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::IsADirectory),
-            _ => panic!("wrong error"),
-        };
+        #[cfg(not(windows))]
+        {
+            let out = hash_files(
+                &turbo_root,
+                [AnchoredSystemPathBuf::from_raw("symlink-from-to-dir").unwrap()].iter(),
+                true,
+            );
+            match out.err().unwrap() {
+                Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::IsADirectory),
+                _ => panic!("wrong error"),
+            };
+        }
 
         // Symlink to dir, allow_missing = false.
         let out = hash_files(
