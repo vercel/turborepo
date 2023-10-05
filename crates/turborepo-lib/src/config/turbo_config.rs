@@ -109,8 +109,7 @@ impl ResolvedConfigurationOptions for PackageJson {
         match &self.legacy_turbo_config {
             Some(legacy_turbo_config) => {
                 let synthetic_raw_turbo_json: RawTurboJSON =
-                    serde_json::from_value(legacy_turbo_config.clone())
-                        .map_err(|_| ConfigError::Anyhow(anyhow!("global_de")))?;
+                    serde_json::from_value(legacy_turbo_config.clone())?;
                 synthetic_raw_turbo_json.get_configuration_options()
             }
             None => Ok(ConfigurationOptions::default()),
@@ -434,47 +433,42 @@ impl TurborepoConfigBuilder {
             override_env_var_config.get_configuration_options(),
         ];
 
-        let output = sources.iter().fold(
+        sources.into_iter().try_fold(
             ConfigurationOptions::default(),
-            |mut acc, current_source| -> ConfigurationOptions {
-                match current_source {
-                    Ok(current_source_config) => {
-                        if let Some(api_url) = current_source_config.api_url.clone() {
-                            acc.api_url = Some(api_url);
-                        }
-                        if let Some(login_url) = current_source_config.login_url.clone() {
-                            acc.login_url = Some(login_url);
-                        }
-                        if let Some(team_slug) = current_source_config.team_slug.clone() {
-                            acc.team_slug = Some(team_slug);
-                        }
-                        if let Some(team_id) = current_source_config.team_id.clone() {
-                            acc.team_id = Some(team_id);
-                        }
-                        if let Some(token) = current_source_config.token.clone() {
-                            acc.token = Some(token);
-                        }
-                        if let Some(signature) = current_source_config.signature {
-                            acc.signature = Some(signature);
-                        }
-                        if let Some(enabled) = current_source_config.enabled {
-                            acc.enabled = Some(enabled);
-                        }
-                        if let Some(preflight) = current_source_config.preflight {
-                            acc.preflight = Some(preflight);
-                        }
-                        if let Some(timeout) = current_source_config.timeout {
-                            acc.timeout = Some(timeout);
-                        }
+            |mut acc, current_source| {
+                current_source.map(|current_source_config| {
+                    if let Some(api_url) = current_source_config.api_url.clone() {
+                        acc.api_url = Some(api_url);
                     }
-                    Err(_) => todo!(),
-                }
+                    if let Some(login_url) = current_source_config.login_url.clone() {
+                        acc.login_url = Some(login_url);
+                    }
+                    if let Some(team_slug) = current_source_config.team_slug.clone() {
+                        acc.team_slug = Some(team_slug);
+                    }
+                    if let Some(team_id) = current_source_config.team_id.clone() {
+                        acc.team_id = Some(team_id);
+                    }
+                    if let Some(token) = current_source_config.token.clone() {
+                        acc.token = Some(token);
+                    }
+                    if let Some(signature) = current_source_config.signature {
+                        acc.signature = Some(signature);
+                    }
+                    if let Some(enabled) = current_source_config.enabled {
+                        acc.enabled = Some(enabled);
+                    }
+                    if let Some(preflight) = current_source_config.preflight {
+                        acc.preflight = Some(preflight);
+                    }
+                    if let Some(timeout) = current_source_config.timeout {
+                        acc.timeout = Some(timeout);
+                    }
 
-                acc
+                    acc
+                })
             },
-        );
-
-        Ok(output)
+        )
     }
 }
 
