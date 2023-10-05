@@ -358,8 +358,6 @@ async fn run_sso_one_shot_server(
 
 #[cfg(test)]
 mod test {
-    use std::path::Path;
-
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response, Url};
     use turborepo_api_client::{Client, Error, Result};
@@ -530,22 +528,10 @@ mod test {
         let api_server = tokio::spawn(start_test_server(port));
         let ui = UI::new(false);
         let url = format!("http://localhost:{port}");
-        let token_filename: &str = "token.json";
-        let token_path = Path::new(token_filename);
 
-        // Since we are writing to a file, we need to make sure we clean up after in the
-        // event of an assertion failure.
-        std::panic::set_hook(Box::new(|_| {
-            // Remove test token file after completion. Recreate path due to ownership
-            // rules.
-            match std::fs::remove_file(Path::new(token_filename)) {
-                Ok(_) => {}
-                Err(e) => {
-                    println!("failed to remove token file: {}", e);
-                }
-            };
-            let _ = std::panic::take_hook();
-        }));
+        let temp_file =
+            tempfile::NamedTempFile::new().expect("Failed to create temp file for test_login");
+        let token_path = temp_file.path();
 
         let api_client = MockApiClient::new();
 
@@ -559,7 +545,7 @@ mod test {
             Ok(())
         };
 
-        login(&api_client, &ui, Path::new(token_filename), set_token, &url)
+        login(&api_client, &ui, token_path, set_token, &url)
             .await
             .unwrap();
 
@@ -582,14 +568,6 @@ mod test {
         api_server.abort();
         assert_eq!(LOGIN_HITS.load(std::sync::atomic::Ordering::SeqCst), 1);
         assert_eq!(got_token, turborepo_vercel_api_mock::EXPECTED_TOKEN);
-
-        // Remove test token file after completion.
-        match std::fs::remove_file(token_path) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("failed to remove token file: {}", e);
-            }
-        }
     }
 
     #[tokio::test]
