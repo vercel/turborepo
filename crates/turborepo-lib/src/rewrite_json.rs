@@ -211,13 +211,13 @@ fn generate_member(path_segments: &[&str], value: &str, separator: &str) -> Stri
 pub fn unset_path(
     json_document_string: &str,
     path: &[&str],
-    case_sensitivity: bool,
+    match_case_sensitive: bool,
 ) -> Result<Option<String>, RewriteError> {
     let root = get_root(json_document_string)?;
 
     // The key path can appear multiple times. This a vec that contains each time it
     // occurs.
-    let path_ranges = find_all_paths(&root, path, case_sensitivity);
+    let path_ranges = find_all_paths(&root, path, match_case_sensitive);
 
     if path_ranges.is_empty() {
         return Ok(None);
@@ -264,7 +264,7 @@ pub fn unset_path(
 fn find_all_paths<'a>(
     current_node: &'a jsonc_parser::ast::Value<'a>,
     target_path: &[&str],
-    case_sensitivity: bool,
+    match_case_sensitive: bool,
 ) -> Vec<Range> {
     let mut ranges: Vec<Range> = vec![];
 
@@ -283,7 +283,7 @@ fn find_all_paths<'a>(
         while let Some(property) = properties_iterator.next() {
             let current_property_name = property.name.as_str();
 
-            let should_rewrite = if case_sensitivity {
+            let should_rewrite = if match_case_sensitive {
                 target_path[0] == current_property_name
             } else {
                 target_path[0].to_ascii_lowercase() == current_property_name.to_ascii_lowercase()
@@ -334,7 +334,7 @@ fn find_all_paths<'a>(
                     let next_target_path = &target_path[1..];
 
                     let mut children_ranges =
-                        find_all_paths(next_current_node, next_target_path, case_sensitivity);
+                        find_all_paths(next_current_node, next_target_path, match_case_sensitive);
                     ranges.append(&mut children_ranges);
                 }
             }
