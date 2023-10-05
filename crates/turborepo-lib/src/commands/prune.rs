@@ -7,13 +7,13 @@ use tracing::trace;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
 };
+use turborepo_repository::package_json::PackageJson;
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
 use crate::{
     config::RawTurboJSON,
     package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
-    package_json::PackageJson,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -27,7 +27,7 @@ pub enum Error {
     #[error("path error while pruning: {0}")]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
-    PackageJson(#[from] crate::package_json::Error),
+    PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(transparent)]
     PackageGraph(#[from] crate::package_graph::Error),
     #[error(transparent)]
@@ -50,6 +50,20 @@ lazy_static! {
         (RelativeUnixPath::new(".gitignore").unwrap(), None),
         (
             RelativeUnixPath::new(".npmrc").unwrap(),
+            Some(CopyDestination::Docker)
+        ),
+        (
+            RelativeUnixPath::new(".yarnrc.yml").unwrap(),
+            Some(CopyDestination::Docker)
+        ),
+    ];
+    static ref ADDITIONAL_DIRECTORIES: Vec<(&'static RelativeUnixPath, Option<CopyDestination>)> = vec![
+        (
+            RelativeUnixPath::new(".yarn/plugins").unwrap(),
+            Some(CopyDestination::Docker)
+        ),
+        (
+            RelativeUnixPath::new(".yarn/releases").unwrap(),
             Some(CopyDestination::Docker)
         ),
     ];
@@ -75,7 +89,7 @@ pub fn prune(
 
     if matches!(
         prune.package_graph.package_manager(),
-        crate::package_manager::PackageManager::Bun
+        turborepo_repository::package_manager::PackageManager::Bun
     ) {
         return Err(Error::BunUnsupported);
     }
@@ -151,6 +165,11 @@ pub fn prune(
     for (relative_path, required_for_install) in ADDITIONAL_FILES.as_slice() {
         let path = relative_path.to_anchored_system_path_buf();
         prune.copy_file(&path, *required_for_install)?;
+    }
+
+    for (relative_path, required_for_install) in ADDITIONAL_DIRECTORIES.as_slice() {
+        let path = relative_path.to_anchored_system_path_buf();
+        prune.copy_directory(&path, *required_for_install)?;
     }
 
     prune.copy_turbo_json(&workspace_names)?;
@@ -316,6 +335,34 @@ impl<'a> Prune<'a> {
         {
             let docker_to = self.docker_directory().resolve(path);
             turborepo_fs::copy_file(&from_path, docker_to)?;
+        }
+        Ok(())
+    }
+
+    fn copy_directory(
+        &self,
+        path: &AnchoredSystemPath,
+        destination: Option<CopyDestination>,
+    ) -> Result<(), Error> {
+        let from_path = self.root.resolve(path);
+        if !from_path.try_exists()? {
+            trace!("{from_path} doesn't exist, skipping copying");
+            return Ok(());
+        }
+        let full_to = self.full_directory.resolve(path);
+        turborepo_fs::recursive_copy(&from_path, full_to)?;
+        if matches!(destination, Some(CopyDestination::All)) {
+            let out_to = self.out_directory.resolve(path);
+            turborepo_fs::recursive_copy(&from_path, out_to)?;
+        }
+        if self.docker
+            && matches!(
+                destination,
+                Some(CopyDestination::Docker) | Some(CopyDestination::All)
+            )
+        {
+            let docker_to = self.docker_directory().resolve(path);
+            turborepo_fs::recursive_copy(&from_path, docker_to)?;
         }
         Ok(())
     }

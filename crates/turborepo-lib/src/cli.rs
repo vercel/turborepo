@@ -202,8 +202,48 @@ pub enum LinkTarget {
 
 impl Args {
     pub fn new() -> Result<Self> {
-        let mut clap_args = match Args::try_parse() {
-            Ok(args) => args,
+        // We always pass --single-package in from the shim.
+        // We need to omit it, and then add it in for run.
+        let arg_separator_position =
+            std::env::args_os().position(|input_token| input_token == "--");
+
+        let single_package_position =
+            std::env::args_os().position(|input_token| input_token == "--single-package");
+
+        let is_single_package = match (arg_separator_position, single_package_position) {
+            (_, None) => false,
+            (None, Some(_)) => true,
+            (Some(arg_separator_position), Some(single_package_position)) => {
+                single_package_position < arg_separator_position
+            }
+        };
+
+        // Clap supports arbitrary iterators as input.
+        // We can remove all instances of --single-package
+        let single_package_free = std::env::args_os()
+            .enumerate()
+            .filter(|(index, input_token)| {
+                arg_separator_position
+                    .is_some_and(|arg_separator_position| index > &arg_separator_position)
+                    || input_token != "--single-package"
+            })
+            .map(|(_, input_token)| input_token);
+
+        let mut clap_args = match Args::try_parse_from(single_package_free) {
+            Ok(mut args) => {
+                // And then only add them back in when we're in `run`.
+                // The value can appear in two places in the struct.
+                // We defensively attempt to set both.
+                if let Some(ref mut run_args) = args.run_args {
+                    run_args.single_package = is_single_package
+                }
+
+                if let Some(Command::Run(ref mut run_args)) = args.command {
+                    run_args.single_package = is_single_package;
+                }
+
+                args
+            }
             // Don't use error logger when displaying help text
             Err(e)
                 if matches!(
@@ -434,7 +474,7 @@ pub struct RunArgs {
     #[clap(alias = "dry", long = "dry-run", num_args = 0..=1, default_missing_value = "text")]
     pub dry_run: Option<DryRunMode>,
     /// Run turbo in single-package mode
-    #[clap(long, global = true)]
+    #[clap(long)]
     pub single_package: bool,
     /// Use the given selector to specify package(s) to act as
     /// entry points. The syntax mirrors pnpm's syntax, and
@@ -458,9 +498,11 @@ pub struct RunArgs {
     #[clap(long, num_args = 0..=1, default_missing_value = "")]
     pub graph: Option<String>,
     /// Environment variable mode.
-    /// Loose passes the entire environment.
-    /// Strict uses an allowlist specified in turbo.json.
-    #[clap(long = "env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer", hide = true)]
+    /// Use "loose" to pass the entire existing environment.
+    /// Use "strict" to use an allowlist specified in turbo.json.
+    /// Use "infer" to defer to existence of "passThroughEnv" or
+    /// "globalPassThroughEnv" in turbo.json. (default infer)
+    #[clap(long = "env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer")]
     pub env_mode: EnvMode,
     /// Files to ignore when calculating changed files (i.e. --since).
     /// Supports globs.
@@ -493,8 +535,8 @@ pub struct RunArgs {
     /// turbo decide based on its own heuristics. (default auto)
     #[clap(long, env = "TURBO_LOG_ORDER", value_enum, default_value_t = LogOrder::Auto)]
     pub log_order: LogOrder,
-
-    #[clap(long, hide = true)]
+    /// Only executes the tasks specified, does not execute parent tasks.
+    #[clap(long)]
     pub only: bool,
     /// Execute all tasks in parallel.
     #[clap(long)]
@@ -770,8 +812,8 @@ pub async fn run(
 
             if args.experimental_rust_codepath {
                 use crate::commands::run;
-                run::run(base).await?;
-                Ok(Payload::Rust(Ok(0)))
+                let exit_code = run::run(base).await?;
+                Ok(Payload::Rust(Ok(exit_code)))
             } else {
                 Ok(Payload::Go(Box::new(base)))
             }

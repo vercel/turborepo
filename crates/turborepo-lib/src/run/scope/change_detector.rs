@@ -147,9 +147,8 @@ impl<'a> SCMChangeDetector<'a> {
             .all(|(a, b)| a == b)
     }
 
-    /// Get a list of changes from the lockfile.
-    ///
-    /// Returning Ok(None) here indicates
+    /// Get a list of package names that have changed due to changes in the
+    /// lockfile across the HEAD and the given ref.
     fn get_changes_from_lockfile(
         &self,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
@@ -160,9 +159,8 @@ impl<'a> SCMChangeDetector<'a> {
             .package_manager()
             .lockfile_path(self.turbo_root);
 
-        let matcher = wax::Glob::new(lockfile_path.as_str())?;
-
-        if !changed_files.iter().any(|f| matcher.is_match(f.as_path())) {
+        // no changes to lockfile? then no changes because of lockfile
+        if !SCMChangeDetector::lockfile_changed(self.turbo_root, changed_files, &lockfile_path)? {
             return Ok(vec![]);
         }
 
@@ -178,6 +176,18 @@ impl<'a> SCMChangeDetector<'a> {
 
         Ok(additional_packages)
     }
+
+    fn lockfile_changed(
+        turbo_root: &AbsoluteSystemPath,
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+        lockfile_path: &AbsoluteSystemPath,
+    ) -> Result<bool, ChangeDetectError> {
+        let lockfile_path_relative = turbo_root
+            .anchor(lockfile_path)
+            .expect("lockfile should be in repo");
+
+        Ok(changed_files.iter().any(|f| f == &lockfile_path_relative))
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -187,7 +197,7 @@ pub enum ChangeDetectError {
     #[error("Wax error: {0}")]
     Wax(#[from] wax::BuildError),
     #[error("Package manager error: {0}")]
-    PackageManager(#[from] crate::package_manager::Error),
+    PackageManager(#[from] turborepo_repository::package_manager::Error),
     #[error("No lockfile")]
     NoLockfile,
     #[error("Lockfile error: {0}")]
@@ -200,5 +210,58 @@ impl From<ChangedPackagesError> for ChangeDetectError {
             ChangedPackagesError::NoLockfile => Self::NoLockfile,
             ChangedPackagesError::Lockfile(e) => Self::Lockfile(e),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use test_case::test_case;
+
+    use super::{ChangeDetectError, SCMChangeDetector};
+
+    #[cfg(unix)]
+    #[test_case("/a/b/c", &["package.lock"], "/a/b/c/package.lock", Ok(true) ; "simple")]
+    #[test_case("/a/b/c", &["a", "b", "c"], "/a/b/c/package.lock", Ok(false) ; "lockfile unchanged")]
+    fn test_lockfile_changed(
+        turbo_root: &str,
+        changed_files: &[&str],
+        lockfile_path: &str,
+        expected: Result<bool, ChangeDetectError>,
+    ) {
+        let turbo_root = turbopath::AbsoluteSystemPathBuf::new(turbo_root).unwrap();
+        let lockfile_path = turbopath::AbsoluteSystemPathBuf::new(lockfile_path).unwrap();
+        let changed_files = changed_files
+            .iter()
+            .map(|s| turbopath::AnchoredSystemPathBuf::from_raw(s).unwrap())
+            .collect();
+        let changes =
+            SCMChangeDetector::lockfile_changed(&turbo_root, &changed_files, &lockfile_path);
+
+        // we don't want to implement PartialEq on the error type,
+        // so simply compare the debug representations
+        assert_eq!(format!("{:?}", changes), format!("{:?}", expected));
+    }
+
+    #[cfg(windows)]
+    #[test_case("C:\\\\a\\b\\c", &["package.lock"], "C:\\\\a\\b\\c\\package.lock", Ok(true) ; "simple")]
+    #[test_case("C:\\\\a\\b\\c", &["a", "b", "c"],  "C:\\\\a\\b\\c\\package.lock", Ok(false) ; "lockfile unchanged")]
+    fn test_lockfile_changed(
+        turbo_root: &str,
+        changed_files: &[&str],
+        lockfile_path: &str,
+        expected: Result<bool, ChangeDetectError>,
+    ) {
+        let turbo_root = turbopath::AbsoluteSystemPathBuf::new(turbo_root).unwrap();
+        let lockfile_path = turbopath::AbsoluteSystemPathBuf::new(lockfile_path).unwrap();
+        let changed_files = changed_files
+            .iter()
+            .map(|s| turbopath::AnchoredSystemPathBuf::from_raw(s).unwrap())
+            .collect();
+        let changes =
+            SCMChangeDetector::lockfile_changed(&turbo_root, &changed_files, &lockfile_path);
+
+        // we don't want to implement PartialEq on the error type,
+        // so simply compare the debug representations
+        assert_eq!(format!("{:?}", changes), format!("{:?}", expected));
     }
 }

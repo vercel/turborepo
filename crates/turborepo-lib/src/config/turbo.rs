@@ -6,11 +6,12 @@ use std::{
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+use turborepo_cache::RemoteCacheOpts;
+use turborepo_repository::package_json::PackageJson;
 
 use crate::{
     cli::OutputLogsMode,
-    config::{turbo_config::ConfigurationOptions, Error},
-    package_json::PackageJson,
+    config::Error,
     run::task_id::{TaskId, TaskName, ROOT_PKG_NAME},
     task_graph::{BookkeepingTaskDefinition, Pipeline, TaskDefinitionStable, TaskOutputs},
 };
@@ -561,12 +562,12 @@ mod tests {
     use tempfile::tempdir;
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+    use turborepo_repository::package_json::PackageJson;
 
     use super::RawTurboJSON;
     use crate::{
         cli::OutputLogsMode,
         config::{turbo::RawTaskDefinition, TurboJson},
-        package_json::PackageJson,
         run::task_id::TaskName,
         task_graph::{
             BookkeepingTaskDefinition, TaskDefinitionExperiments, TaskDefinitionStable, TaskOutputs,

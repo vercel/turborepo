@@ -93,52 +93,55 @@ export function turboIgnore(
   }
 
   // Build, and execute the command
-  const command = `npx turbo run ${task} --filter=${workspace}...[${comparison.ref}] --dry=json`;
+  const command = `npx turbo run ${task} --filter="${workspace}...[${comparison.ref}]" --dry=json`;
   info(`Analyzing results of \`${command}\``);
-  exec(
-    command,
-    {
-      cwd: root,
-    },
-    (err, stdout) => {
-      if (err) {
-        const { level, code, message } = shouldWarn({ err: err.message });
-        if (level === "warn") {
-          warn(message);
-        } else {
-          error(`${code}: ${err.message}`);
-        }
-        return continueBuild();
-      }
 
-      try {
-        const parsed = JSON.parse(stdout) as DryRun | null;
-        if (parsed === null) {
-          error(`Failed to parse JSON output from \`${command}\`.`);
-          return continueBuild();
-        }
-        const { packages } = parsed;
-        if (packages.length > 0) {
-          if (packages.length === 1) {
-            info(`This commit affects "${workspace}"`);
-          } else {
-            // subtract 1 because the first package is the workspace itself
-            info(
-              `This commit affects "${workspace}" and ${packages.length - 1} ${
-                packages.length - 1 === 1 ? "dependency" : "dependencies"
-              } (${packages.slice(1).join(", ")})`
-            );
-          }
+  const execOptions: { cwd: string; maxBuffer?: number } = {
+    cwd: root,
+  };
 
-          return continueBuild();
-        }
-        info(`This project and its dependencies are not affected`);
-        return ignoreBuild();
-      } catch (e) {
-        error(`Failed to parse JSON output from \`${command}\`.`);
-        error(e);
-        return continueBuild();
+  if (opts.maxBuffer) {
+    execOptions.maxBuffer = opts.maxBuffer;
+  }
+
+  exec(command, execOptions, (err, stdout) => {
+    if (err) {
+      const { level, code, message } = shouldWarn({ err: err.message });
+      if (level === "warn") {
+        warn(message);
+      } else {
+        error(`${code}: ${err.message}`);
       }
+      return continueBuild();
     }
-  );
+
+    try {
+      const parsed = JSON.parse(stdout) as DryRun | null;
+      if (parsed === null) {
+        error(`Failed to parse JSON output from \`${command}\`.`);
+        return continueBuild();
+      }
+      const { packages } = parsed;
+      if (packages.length > 0) {
+        if (packages.length === 1) {
+          info(`This commit affects "${workspace}"`);
+        } else {
+          // subtract 1 because the first package is the workspace itself
+          info(
+            `This commit affects "${workspace}" and ${packages.length - 1} ${
+              packages.length - 1 === 1 ? "dependency" : "dependencies"
+            } (${packages.slice(1).join(", ")})`
+          );
+        }
+
+        return continueBuild();
+      }
+      info(`This project and its dependencies are not affected`);
+      return ignoreBuild();
+    } catch (e) {
+      error(`Failed to parse JSON output from \`${command}\`.`);
+      error(e);
+      return continueBuild();
+    }
+  });
 }

@@ -1,16 +1,30 @@
 use std::sync::Arc;
 
 use futures::{stream::FuturesUnordered, StreamExt};
-use tokio::task::JoinHandle;
+use tokio::{
+    sync::{mpsc, Semaphore},
+    task::JoinHandle,
+};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 
 use crate::{multiplexer::CacheMultiplexer, CacheError, CacheOpts, CacheResponse};
 
 pub struct AsyncCache {
-    workers: FuturesUnordered<JoinHandle<()>>,
-    max_workers: usize,
     real_cache: Arc<CacheMultiplexer>,
+    writer_sender: mpsc::Sender<WorkerRequest>,
+    writer_thread: JoinHandle<()>,
+}
+
+enum WorkerRequest {
+    WriteRequest {
+        anchor: AbsoluteSystemPathBuf,
+        key: String,
+        duration: u64,
+        files: Vec<AnchoredSystemPathBuf>,
+    },
+    #[cfg(test)]
+    Flush(tokio::sync::oneshot::Sender<()>),
 }
 
 impl AsyncCache {
@@ -21,32 +35,80 @@ impl AsyncCache {
         api_auth: Option<APIAuth>,
     ) -> Result<AsyncCache, CacheError> {
         let max_workers = opts.workers.try_into().expect("usize is smaller than u32");
-        let real_cache = CacheMultiplexer::new(opts, repo_root, api_client, api_auth)?;
+        let real_cache = Arc::new(CacheMultiplexer::new(
+            opts, repo_root, api_client, api_auth,
+        )?);
+        let (writer_sender, mut write_consumer) = mpsc::channel(1);
+
+        // start a task to manage workers
+        let worker_real_cache = real_cache.clone();
+        let writer_thread = tokio::spawn(async move {
+            let semaphore = Arc::new(Semaphore::new(max_workers));
+            let mut workers = FuturesUnordered::new();
+            let real_cache = worker_real_cache;
+
+            while let Some(request) = write_consumer.recv().await {
+                match request {
+                    WorkerRequest::WriteRequest {
+                        anchor,
+                        key,
+                        duration,
+                        files,
+                    } => {
+                        let permit = semaphore.clone().acquire_owned().await.unwrap();
+                        let real_cache = real_cache.clone();
+                        workers.push(tokio::spawn(async move {
+                            let _ = real_cache.put(&anchor, &key, &files, duration).await;
+                            // Release permit once we're done with the write
+                            drop(permit);
+                        }))
+                    }
+                    #[cfg(test)]
+                    WorkerRequest::Flush(callback) => {
+                        // Wait on all workers to finish writing
+                        while let Some(worker) = workers.next().await {
+                            let _ = worker;
+                        }
+                        drop(callback);
+                    }
+                };
+            }
+
+            // wait for all writers to finish
+            while let Some(worker) = workers.next().await {
+                let _ = worker;
+            }
+        });
 
         Ok(AsyncCache {
-            workers: FuturesUnordered::new(),
-            real_cache: Arc::new(real_cache),
-            max_workers,
+            real_cache,
+            writer_sender,
+            writer_thread,
         })
     }
 
     pub async fn put(
-        &mut self,
+        &self,
         anchor: AbsoluteSystemPathBuf,
         key: String,
         files: Vec<AnchoredSystemPathBuf>,
         duration: u64,
-    ) {
-        if self.workers.len() >= self.max_workers {
-            let _ = self.workers.next().await.unwrap();
+    ) -> Result<(), CacheError> {
+        if self
+            .writer_sender
+            .send(WorkerRequest::WriteRequest {
+                anchor,
+                key,
+                duration,
+                files,
+            })
+            .await
+            .is_err()
+        {
+            Err(CacheError::CacheShuttingDown)
+        } else {
+            Ok(())
         }
-
-        let real_cache = self.real_cache.clone();
-
-        let fut = tokio::spawn(async move {
-            let _ = real_cache.put(&anchor, &key, &files, duration).await;
-        });
-        self.workers.push(fut);
     }
 
     pub async fn fetch(
@@ -64,16 +126,19 @@ impl AsyncCache {
     // Used for testing to ensure that the workers resolve
     // before checking the cache.
     #[cfg(test)]
-    pub async fn wait(&mut self) {
-        while let Some(worker) = self.workers.next().await {
-            let _ = worker;
-        }
+    pub async fn wait(&self) {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.writer_sender
+            .send(WorkerRequest::Flush(tx))
+            .await
+            .expect("cache can only be shut down by consuming cache");
+        // Wait until flush callback is finished
+        rx.await.ok();
     }
 
     pub async fn shutdown(self) {
-        for worker in self.workers {
-            let _ = worker.await;
-        }
+        let Self { writer_thread, .. } = self;
+        writer_thread.await.unwrap();
     }
 }
 
@@ -98,8 +163,7 @@ mod tests {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
 
-        try_join_all(get_test_cases().into_iter().map(|test_case| async {
-            let test_case = test_case;
+        try_join_all(get_test_cases().into_iter().map(|test_case| async move {
             round_trip_test_with_both_caches(&test_case, port).await?;
             round_trip_test_without_remote_cache(&test_case).await?;
             round_trip_test_without_fs(&test_case, port).await
@@ -149,7 +213,8 @@ mod tests {
                 test_case.files.iter().map(|f| f.path.clone()).collect(),
                 test_case.duration,
             )
-            .await;
+            .await
+            .unwrap();
 
         // Wait for async cache to process
         async_cache.wait().await;
@@ -219,7 +284,8 @@ mod tests {
                 test_case.files.iter().map(|f| f.path.clone()).collect(),
                 test_case.duration,
             )
-            .await;
+            .await
+            .unwrap();
 
         // Wait for async cache to process
         async_cache.wait().await;
@@ -295,7 +361,8 @@ mod tests {
                 test_case.files.iter().map(|f| f.path.clone()).collect(),
                 test_case.duration,
             )
-            .await;
+            .await
+            .unwrap();
 
         // Wait for async cache to process
         async_cache.wait().await;
