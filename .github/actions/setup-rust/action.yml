@@ -69,7 +69,7 @@ runs:
     - name: "Install cargo-sweep"
       uses: taiki-e/install-action@v2
       with:
-        tool: cargo-sweep,cargo-groups
+        tool: cargo-sweep@0.6.2,cargo-groups
 
     - name: "Run cargo-sweep"
       uses: ./.github/actions/cargo-sweep
