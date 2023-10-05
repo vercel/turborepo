@@ -1,9 +1,8 @@
 #[cfg(not(test))]
 use std::net::SocketAddr;
-use std::{path::Path, sync::Arc};
-
 #[cfg(test)]
 use std::sync::atomic::AtomicUsize;
+use std::{path::Path, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 #[cfg(not(test))]
@@ -362,9 +361,7 @@ mod test {
     use std::path::Path;
 
     use async_trait::async_trait;
-    use port_scanner;
     use reqwest::{Method, RequestBuilder, Response, Url};
-    use tokio;
     use turborepo_api_client::{Client, Error, Result};
     use turborepo_ui::UI;
     use turborepo_vercel_api::{
@@ -373,7 +370,10 @@ mod test {
     };
     use turborepo_vercel_api_mock::start_test_server;
 
-    use crate::{get_token_and_redirect, login, sso_login, SsoPayload, LOGIN_HITS, SSO_HITS, EXPECTED_VERIFICATION_TOKEN};
+    use crate::{
+        get_token_and_redirect, login, sso_login, SsoPayload, EXPECTED_VERIFICATION_TOKEN,
+        LOGIN_HITS, SSO_HITS,
+    };
 
     #[derive(Debug, thiserror::Error)]
     enum MockApiError {
@@ -463,12 +463,8 @@ mod test {
         async fn get_spaces(&self, _token: &str, _team_id: Option<&str>) -> Result<SpacesResponse> {
             unimplemented!("get_spaces")
         }
-        async fn verify_sso_token(
-            &self,
-            token: &str,
-            _: &str,
-        ) -> Result<VerifiedSsoUser> {
-            Ok(VerifiedSsoUser{
+        async fn verify_sso_token(&self, token: &str, _: &str) -> Result<VerifiedSsoUser> {
+            Ok(VerifiedSsoUser {
                 token: token.to_string(),
                 team_id: Some("team_id".to_string()),
             })
@@ -537,10 +533,11 @@ mod test {
         let token_filename: &str = "token.json";
         let token_path = Path::new(token_filename);
 
-        // Since we are writing to a file, we need to make sure we clean up after in the event of an assertion
-        // failure.
+        // Since we are writing to a file, we need to make sure we clean up after in the
+        // event of an assertion failure.
         std::panic::set_hook(Box::new(|_| {
-            // Remove test token file after completion. Recreate path due to ownership rules.
+            // Remove test token file after completion. Recreate path due to ownership
+            // rules.
             match std::fs::remove_file(Path::new(token_filename)) {
                 Ok(_) => {}
                 Err(e) => {
@@ -557,7 +554,8 @@ mod test {
         let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
             got_token.clear();
             got_token.push_str(t);
-            let _ = std::fs::write(token_path, t).map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
+            let _ = std::fs::write(token_path, t)
+                .map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
             Ok(())
         };
 
@@ -570,11 +568,13 @@ mod test {
             got_token.clear();
             // Force the got token to be incorrect if this is called a second time.
             got_token.push_str("not expected token");
-            let _ = std::fs::write(token_path, t).map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
+            let _ = std::fs::write(token_path, t)
+                .map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
             Ok(())
         };
 
-        // Call the login function twice to test that we check for existing tokens. Total server hits should be 1.
+        // Call the login function twice to test that we check for existing tokens.
+        // Total server hits should be 1.
         login(&api_client, &ui, token_path, set_token, &url)
             .await
             .unwrap();
@@ -612,18 +612,12 @@ mod test {
             got_token.clear();
             // Force the got token to be incorrect if this is called a second time.
             got_token.push_str(t);
-            let _ = std::fs::write(token_path, t).map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
+            let _ = std::fs::write(token_path, t)
+                .map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
             Ok(())
         };
 
-        sso_login(
-            &api_client,
-            &ui,
-            token_path,
-            set_token,
-            &url,
-            team
-        )
+        sso_login(&api_client, &ui, token_path, set_token, &url, team)
             .await
             .unwrap();
 
@@ -631,19 +625,14 @@ mod test {
         let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
             got_token.clear();
             got_token.push_str("not expected token");
-            let _ = std::fs::write(token_path, t).map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
+            let _ = std::fs::write(token_path, t)
+                .map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
             Ok(())
         };
 
-        // Call the login function twice to test that we check for existing tokens. Total server hits should be 1.
-        sso_login(
-            &api_client,
-            &ui,
-            token_path,
-            set_token,
-            &url,
-            team
-        )
+        // Call the login function twice to test that we check for existing tokens.
+        // Total server hits should be 1.
+        sso_login(&api_client, &ui, token_path, set_token, &url, team)
             .await
             .unwrap();
 
