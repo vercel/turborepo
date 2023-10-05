@@ -32,16 +32,12 @@ pub(crate) fn hash_files(
         let path = root_path.resolve(file.as_ref());
         match git_like_hash_file(&path) {
             Ok(hash) => hashes.insert(file.as_ref().to_unix(), hash),
-            Err(e) => match e {
-                Error::Io(ref io_error, _) => {
-                    if allow_missing && io_error.kind() == ErrorKind::NotFound {
-                        continue;
-                    } else {
-                        return Err(e);
-                    }
-                }
-                _ => return Err(e),
-            },
+            Err(Error::Io(ref io_error, _))
+                if allow_missing && io_error.kind() == ErrorKind::NotFound =>
+            {
+                continue
+            }
+            Err(e) => return Err(e),
         };
     }
     Ok(hashes)
