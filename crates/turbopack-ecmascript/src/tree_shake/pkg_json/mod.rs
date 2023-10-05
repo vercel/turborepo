@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use serde::Deserialize;
 use turbo_tasks::Vc;
-use turbo_tasks_fs::{File, FileContent, FileSystemPath};
+use turbo_tasks_fs::{FileContent, FileSystemPath};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,11 +20,11 @@ pub async fn is_side_effect_free(filename: Vc<FileSystemPath>) -> Result<Vc<bool
 
     match &*package_json {
         FileContent::Content(file) => {
-            let json = serde_json::from_slice::<PackageJson>(&**file)?;
+            let json = serde_json::from_reader::<_, PackageJson>(file.read())?;
 
-            Ok(!json.side_effects.into())
+            Ok((!json.side_effects).into())
         }
-        FileContent::NotFound => Ok(false),
+        FileContent::NotFound => Ok(false.into()),
     }
 }
 
