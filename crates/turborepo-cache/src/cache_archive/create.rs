@@ -124,6 +124,7 @@ impl<'a> CacheWriter<'a> {
             header.set_link_name(link)?;
             header.set_entry_type(EntryType::Symlink);
         } else if file_info.is_dir() {
+            header.set_size(0);
             header.set_entry_type(EntryType::Directory);
         } else if file_info.is_file() {
             header.set_entry_type(EntryType::Regular);
@@ -246,6 +247,7 @@ mod tests {
       "bf0b4bf722f8d845dce7627606ab8af30bb6454d7c0379219e4c036a484960fe78e3d98e29ca0bac9b69b858d446b89d2d691c524e2884389032be799b6699f6",
       "4f1357753cceec5df1c8a36110ce256f3e8c5c1f62cab3283013b6266d6e97b3884711ccdd45462a4607bee7ac7a8e414d0acea4672a9f0306bcf364281edc2f",
       None
+      ; "create regular file"
     )]
     #[test_case(
         vec![
@@ -274,6 +276,7 @@ mod tests {
         "0ece16efdb0b7e2a087e622ed52f29f21a4c080d77c31c4ed940b57dcdcb1f60b910d15232c0a2747325c22dadbfd069f15de969626dc49746be2d4b9b22e239",
         "2e8ad9651964faa76082306dc95bff86fa0db821681e7a8acb982244ce0a9375417e867c3a9cb82f70bc6f03c7fb085e402712d3e9f27b980d5a0c22e086f4e2",
         None
+        ; "create symlinks"
     )]
     #[test_case(
         vec![
@@ -288,10 +291,11 @@ mod tests {
                 file_type: FileType::File,
             },
         ],
-        "027346e0349f948c0a2e7e9badb67d27fcc8ff4d5eacff1e5dd6a09c23a54d6793bf7ef1f25c9ed6b8c74f49d86d7b87478b7a00e24ea72e2ed2cadc0286c761",
-        "027346e0349f948c0a2e7e9badb67d27fcc8ff4d5eacff1e5dd6a09c23a54d6793bf7ef1f25c9ed6b8c74f49d86d7b87478b7a00e24ea72e2ed2cadc0286c761",
+        "973c16d7e8662d3483ff0679b5337d7b9ba2001dbe863604fc8cc60254305750616312b9f988112db918d50fd087d89444d43a64beb4e8102109c5c628510131",
+        "973c16d7e8662d3483ff0679b5337d7b9ba2001dbe863604fc8cc60254305750616312b9f988112db918d50fd087d89444d43a64beb4e8102109c5c628510131",
         "1a2b32fe2b252ec622e5a15af21b274d702faa623d09c6fc51a44e7562cc84ac8b8c368d98d284dfb6666680ee252b071d5fbff44564a952ebaa12fe6f389e68",
         None
+        ; "create directory"
     )]
     #[test_case(
         vec![
@@ -305,6 +309,7 @@ mod tests {
         "c113763393a9fb498cc676e1fe4843206cda665afe2144829fe7434da9e81f0cf6d11386fa79877d3c514d108f9696740256af952b57d32216fbed2eb2fb049d",
         "fe692a000551a60da6cc303a9552a16d7ed5c462e33153a96824e96596da6d642fc671448f06f34e9685a13fe5bbb4220f59db73a856626b8a0962916a8f5ea3",
         None
+        ; "create broken symlink"
     )]
     #[test_case(
         vec![
@@ -318,6 +323,7 @@ mod tests {
         "",
         "",
         Some("attempted to create unsupported file type")
+        ; "create unsupported"
     )]
     fn test_create(
         files: Vec<CreateFileDefinition>,
