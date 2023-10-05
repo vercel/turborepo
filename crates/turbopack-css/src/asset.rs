@@ -112,19 +112,6 @@ impl Asset for CssModuleAsset {
 #[turbo_tasks::value_impl]
 impl ChunkableModule for CssModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Box<dyn Chunk>> {
-        Vc::upcast(CssChunk::new(
-            chunking_context,
-            Vc::upcast(self),
-            availability_info,
-        ))
-    }
-
-    #[turbo_tasks::function]
     fn as_chunk_item(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
@@ -173,6 +160,15 @@ impl ChunkItem for CssModuleChunkItem {
     #[turbo_tasks::function]
     async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
         Vc::upcast(self.chunking_context)
+    }
+
+    #[turbo_tasks::function]
+    fn as_chunk(&self, availability_info: Value<AvailabilityInfo>) -> Vc<Box<dyn Chunk>> {
+        Vc::upcast(CssChunk::new(
+            self.chunking_context,
+            Vc::upcast(self.module),
+            availability_info,
+        ))
     }
 }
 

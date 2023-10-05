@@ -85,28 +85,47 @@ pub struct ModuleIds(Vec<Vc<ModuleId>>);
 /// A [Module] that can be converted into a [Chunk].
 #[turbo_tasks::value_trait]
 pub trait ChunkableModule: Module + Asset {
+    fn as_chunk_item(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Vc<Box<dyn ChunkItem>>;
+}
+
+pub trait ChunkableModuleExt {
     fn as_chunk(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
         availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Box<dyn Chunk>>;
+    ) -> Vc<Box<dyn Chunk>>
+    where
+        Self: Send;
+    fn as_root_chunk(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Vc<Box<dyn Chunk>>
+    where
+        Self: Send;
+}
+
+impl<T: ChunkableModule + Send + Upcast<Box<dyn Module>>> ChunkableModuleExt for T {
+    fn as_chunk(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Vc<Box<dyn Chunk>> {
+        let chunk_item = self.as_chunk_item(chunking_context);
+        chunk_item.as_chunk(availability_info)
+    }
 
     fn as_root_chunk(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Vc<Box<dyn Chunk>> {
-        self.as_chunk(
-            chunking_context,
-            Value::new(AvailabilityInfo::Root {
-                current_availability_root: Vc::upcast(self),
-            }),
-        )
+        let chunk_item = self.as_chunk_item(chunking_context);
+        chunk_item.as_chunk(Value::new(AvailabilityInfo::Root {
+            current_availability_root: Vc::upcast(self),
+        }))
     }
-
-    fn as_chunk_item(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ) -> Vc<Box<dyn ChunkItem>>;
 }
 
 #[turbo_tasks::value(transparent)]
@@ -677,6 +696,8 @@ where
 
 #[turbo_tasks::value_trait]
 pub trait ChunkItem {
+    fn as_chunk(self: Vc<Self>, availability_info: Value<AvailabilityInfo>) -> Vc<Box<dyn Chunk>>;
+
     /// The [AssetIdent] of the [Module] that this [ChunkItem] was created from.
     /// For most chunk types this must uniquely identify the asset as it's the
     /// source of the module id used at runtime.

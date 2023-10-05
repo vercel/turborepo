@@ -5,8 +5,8 @@ use turbo_tasks_fs::{File, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
-        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkableModule, ChunkingContext,
-        EvaluatableAssets,
+        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkableModule, ChunkableModuleExt,
+        ChunkingContext, EvaluatableAssets,
     },
     ident::AssetIdent,
     introspect::{
@@ -90,19 +90,6 @@ impl Asset for ChunkGroupFilesAsset {
 
 #[turbo_tasks::value_impl]
 impl ChunkableModule for ChunkGroupFilesAsset {
-    #[turbo_tasks::function]
-    fn as_chunk(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Box<dyn Chunk>> {
-        Vc::upcast(EcmascriptChunk::new(
-            chunking_context,
-            Vc::upcast(self),
-            availability_info,
-        ))
-    }
-
     #[turbo_tasks::function]
     async fn as_chunk_item(
         self: Vc<Self>,
@@ -237,6 +224,15 @@ impl ChunkItem for ChunkGroupFilesChunkItem {
     #[turbo_tasks::function]
     async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
         Vc::upcast(self.chunking_context)
+    }
+
+    #[turbo_tasks::function]
+    fn as_chunk(&self, availability_info: Value<AvailabilityInfo>) -> Vc<Box<dyn Chunk>> {
+        Vc::upcast(EcmascriptChunk::new(
+            Vc::upcast(self.chunking_context),
+            Vc::upcast(self.inner),
+            availability_info,
+        ))
     }
 }
 

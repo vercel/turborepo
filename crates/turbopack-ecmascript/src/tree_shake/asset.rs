@@ -1,8 +1,8 @@
 use anyhow::{bail, Context, Result};
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::Vc;
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{availability_info::AvailabilityInfo, Chunk, ChunkableModule, ChunkingContext},
+    chunk::{ChunkableModule, ChunkingContext},
     ident::AssetIdent,
     module::Module,
     reference::{ModuleReferences, SingleModuleReference},
@@ -11,9 +11,7 @@ use turbopack_core::{
 
 use super::{chunk_item::EcmascriptModulePartChunkItem, get_part_id, split_module, SplitResult};
 use crate::{
-    chunk::{
-        EcmascriptChunk, EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports,
-    },
+    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports},
     references::analyze_ecmascript_module,
     AnalyzeEcmascriptModuleResult, EcmascriptModuleAsset,
 };
@@ -115,19 +113,6 @@ impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
 
 #[turbo_tasks::value_impl]
 impl ChunkableModule for EcmascriptModulePartAsset {
-    #[turbo_tasks::function]
-    async fn as_chunk(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Box<dyn Chunk>> {
-        Vc::upcast(EcmascriptChunk::new(
-            chunking_context,
-            Vc::upcast(self),
-            availability_info,
-        ))
-    }
-
     #[turbo_tasks::function]
     async fn as_chunk_item(
         self: Vc<Self>,

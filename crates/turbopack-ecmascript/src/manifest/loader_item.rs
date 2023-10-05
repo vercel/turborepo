@@ -2,9 +2,12 @@ use std::io::Write as _;
 
 use anyhow::{anyhow, Result};
 use indoc::writedoc;
-use turbo_tasks::{TryJoinIterExt, Vc};
+use turbo_tasks::{TryJoinIterExt, Value, Vc};
 use turbopack_core::{
-    chunk::{ChunkData, ChunkItem, ChunkItemExt, ChunkableModule, ChunkingContext, ChunksData},
+    chunk::{
+        availability_info::AvailabilityInfo, Chunk, ChunkData, ChunkItem, ChunkItemExt,
+        ChunkableModule, ChunkingContext, ChunksData,
+    },
     ident::AssetIdent,
     module::Module,
     reference::{ModuleReference, ModuleReferences, SingleOutputAssetReference},
@@ -13,8 +16,8 @@ use turbopack_core::{
 use super::chunk_asset::ManifestChunkAsset;
 use crate::{
     chunk::{
-        data::EcmascriptChunkData, EcmascriptChunkItem, EcmascriptChunkItemContent,
-        EcmascriptChunkPlaceable, EcmascriptChunkingContext,
+        data::EcmascriptChunkData, EcmascriptChunk, EcmascriptChunkItem,
+        EcmascriptChunkItemContent, EcmascriptChunkPlaceable, EcmascriptChunkingContext,
     },
     utils::StringifyJs,
 };
@@ -39,22 +42,28 @@ fn modifier() -> Vc<String> {
 #[turbo_tasks::value]
 pub struct ManifestLoaderItem {
     manifest: Vc<ManifestChunkAsset>,
+    chunking_context: Vc<Box<dyn ChunkingContext>>,
 }
 
 #[turbo_tasks::value_impl]
 impl ManifestLoaderItem {
     #[turbo_tasks::function]
-    pub fn new(manifest: Vc<ManifestChunkAsset>) -> Vc<Self> {
-        Self::cell(ManifestLoaderItem { manifest })
+    pub fn new(
+        manifest: Vc<ManifestChunkAsset>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Vc<Self> {
+        Self::cell(ManifestLoaderItem {
+            manifest,
+            chunking_context,
+        })
     }
 
     #[turbo_tasks::function]
     pub async fn chunks_data(self: Vc<Self>) -> Result<Vc<ChunksData>> {
         let this = self.await?;
         let chunks = this.manifest.manifest_chunks();
-        let manifest = this.manifest.await?;
         Ok(ChunkData::from_assets(
-            manifest.chunking_context.output_root(),
+            this.chunking_context.output_root(),
             chunks,
         ))
     }
@@ -108,7 +117,16 @@ impl ChunkItem for ManifestLoaderItem {
 
     #[turbo_tasks::function]
     async fn chunking_context(&self) -> Result<Vc<Box<dyn ChunkingContext>>> {
-        Ok(Vc::upcast(self.manifest.await?.chunking_context))
+        Ok(Vc::upcast(self.chunking_context))
+    }
+
+    #[turbo_tasks::function]
+    fn as_chunk(&self, availability_info: Value<AvailabilityInfo>) -> Vc<Box<dyn Chunk>> {
+        Vc::upcast(EcmascriptChunk::new(
+            self.chunking_context,
+            Vc::upcast(self.manifest),
+            availability_info,
+        ))
     }
 }
 

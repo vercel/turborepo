@@ -286,7 +286,10 @@ impl FromChunkableModule for Box<dyn EcmascriptChunkItem> {
 
         let manifest_asset =
             ManifestChunkAsset::new(module, context, Value::new(next_availability_info));
-        Ok(Some(Vc::upcast(ManifestLoaderItem::new(manifest_asset))))
+        Ok(Some(Vc::upcast(ManifestLoaderItem::new(
+            manifest_asset,
+            chunking_context,
+        ))))
     }
 }
 

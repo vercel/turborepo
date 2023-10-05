@@ -2,7 +2,10 @@ use anyhow::{Context, Result};
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{availability_info::AvailabilityInfo, Chunk, ChunkableModule, ChunkingContext},
+    chunk::{
+        availability_info::AvailabilityInfo, Chunk, ChunkableModule, ChunkableModuleExt,
+        ChunkingContext,
+    },
     ident::AssetIdent,
     module::Module,
     output::OutputAssets,
@@ -10,9 +13,7 @@ use turbopack_core::{
 };
 
 use super::chunk_item::ManifestChunkItem;
-use crate::chunk::{
-    EcmascriptChunk, EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports,
-};
+use crate::chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports};
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<String> {
@@ -118,19 +119,6 @@ impl Asset for ManifestChunkAsset {
 
 #[turbo_tasks::value_impl]
 impl ChunkableModule for ManifestChunkAsset {
-    #[turbo_tasks::function]
-    fn as_chunk(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Box<dyn Chunk>> {
-        Vc::upcast(EcmascriptChunk::new(
-            chunking_context,
-            Vc::upcast(self),
-            availability_info,
-        ))
-    }
-
     #[turbo_tasks::function]
     async fn as_chunk_item(
         self: Vc<Self>,
