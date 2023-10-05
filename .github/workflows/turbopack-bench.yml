@@ -28,7 +28,7 @@ jobs:
         with:
           issue-number: ${{ github.event.pull_request.number }}
           comment-author: "github-actions[bot]"
-          body-includes: "<!-- CI COMMENT -->"
+          body-includes: "<!-- CI TURBOPACK BENCH COMMENT -->"
 
       - name: Create or update PR comment
         if: github.event_name == 'pull_request' && steps.comment.outputs.comment-id != ''
@@ -42,7 +42,7 @@ jobs:
 
             [Wait for it...](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }})
 
-            <!-- CI COMMENT -->
+            <!-- CI TURBOPACK BENCH COMMENT -->
 
           edit-mode: replace
 
@@ -535,7 +535,7 @@ jobs:
           echo >> comment.md
           echo "See [workflow summary](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}) for details">> comment.md
           echo >> comment.md
-          echo "<!-- CI COMMENT -->" >> comment.md
+          echo "<!-- CI TURBOPACK BENCH COMMENT -->" >> comment.md
 
       - name: Add success prose text
         if: steps.info.outputs.success == 'true'
@@ -544,7 +544,7 @@ jobs:
           echo >> comment.md
           echo "Thanks" >> comment.md
           echo >> comment.md
-          echo "<!-- CI COMMENT -->" >> comment.md
+          echo "<!-- CI TURBOPACK BENCH COMMENT -->" >> comment.md
 
       - name: Find PR Comment
         id: comment
@@ -553,7 +553,7 @@ jobs:
         with:
           issue-number: ${{ github.event.pull_request.number }}
           comment-author: "github-actions[bot]"
-          body-includes: "<!-- CI COMMENT -->"
+          body-includes: "<!-- CI TURBOPACK BENCH COMMENT -->"
 
       - name: Create or update PR comment
         if: always() && github.event_name == 'pull_request' && steps.info.outputs.cancelled != 'true'
