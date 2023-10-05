@@ -148,129 +148,6 @@ jobs:
         run: |
           RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack --features rustls-tls --release
 
-  turbopack_rust_test1:
-    needs: [turbopack_rust_check]
-    runs-on: ubuntu-latest-16-core-oss
-    name: Turbopack Rust testing on ubuntu
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          save-cache: true
-
-      - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-        with:
-          node-version: 18
-
-      - name: Install tests dependencies
-        working-directory: crates/turbopack/tests/node-file-trace
-        run: pnpm install -r --side-effects-cache false
-
-      - name: Install tests dependencies in examples/with-yarn
-        working-directory: examples/with-yarn
-        run: npm install
-
-      - name: Install nextest
-        uses: taiki-e/install-action@nextest
-
-      - name: Build nextest
-        timeout-minutes: 120
-        run: |
-          cargo tp-pre-test
-      - name: Run nextest
-        timeout-minutes: 120
-        run: |
-          cargo tp-test --profile tp-test-linux
-
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: test_reports
-          path: target/nextest/**/*.xml
-
-  turbopack_rust_test2:
-    needs: [turbopack_rust_check]
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: macos
-            runner: macos-latest
-          - name: windows
-            runner: windows-latest
-    runs-on: ${{ matrix.os.runner }}
-    name: Turbopack Rust testing on ${{ matrix.os.name }}
-    steps:
-      - name: Set git to use LF line endings
-        run: |
-          git config --global core.autocrlf false
-          git config --global core.eol lf
-        if: matrix.os.name == 'windows'
-
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          save-cache: true
-
-      - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-        with:
-          node-version: 18
-
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v1
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Prepare toolchain on Windows
-        run: |
-          pnpx node-gyp install
-          echo 'node-linker = "hoisted"' > crates/turbopack/tests/node-file-trace/.npmrc
-        if: matrix.os.name == 'windows'
-
-      - name: Install tests dependencies
-        working-directory: crates/turbopack/tests/node-file-trace
-        run: pnpm install -r --side-effects-cache false
-
-      - name: Install tests dependencies in examples/with-yarn
-        working-directory: examples/with-yarn
-        run: npm install
-
-      - name: Install nextest
-        uses: taiki-e/install-action@nextest
-
-      - name: Build nextest
-        timeout-minutes: 120
-        run: |
-          cargo tp-pre-test
-
-      - name: Run nextest (Mac)
-        timeout-minutes: 120
-        if: matrix.os.name == 'macos'
-        run: |
-          cargo tp-test --profile tp-test-mac
-
-      - name: Run nextest (Windows)
-        timeout-minutes: 120
-        if: matrix.os.name == 'windows'
-        run: |
-          cargo tp-test --profile tp-test-win
-
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: test_reports
-          path: target/nextest/**/*.xml
-
   turbopack_rust_test_bench1:
     needs: [turbopack_rust_check]
     runs-on: ubuntu-latest-16-core-oss
@@ -608,7 +485,6 @@ jobs:
     needs:
       - determine_jobs
       - turbopack_rust_check
-      - turbopack_rust_test1
       - turbopack_rust_test_bench1
     if: always()
     permissions:
@@ -634,7 +510,6 @@ jobs:
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
-          subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
           subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
           if [ "$cancelled" = "true" ]; then
              echo "cancelled=true" >> $GITHUB_OUTPUT
@@ -695,49 +570,12 @@ jobs:
         if: steps.info.outputs.success == 'true'
         run: echo Ok
 
-  # Upload Turbopack's test results into datadog.
-  upload_test_results:
-    name: Upload Test results
-    needs: [determine_jobs, turbopack_rust_test1, turbopack_rust_test2]
-    # We have to set condition to always, since we want to upload test results for the failed tests as well.
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    # Do not block CI if upload fails for some reason
-    continue-on-error: true
-    steps:
-      # Uploading test results does not require turbopack's src codes, but this
-      # allows datadog uploader to sync with git information.
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3.6.0
-        with:
-          node-version: 18
-
-      - name: Install datadog
-        run: npm install -g @datadog/datadog-ci@2.18.1
-
-      - name: Download test results
-        uses: actions/download-artifact@v3
-        with:
-          path: artifacts
-
-      - name: Upload
-        continue-on-error: true
-        env:
-          DATADOG_API_KEY: ${{ secrets.DD_KEY_TURBOPACK }}
-        run: |
-          DD_ENV=ci datadog-ci junit upload --service Turbopack ./artifacts/test_reports/**/*.xml
-
   done:
     name: Done
     needs:
       - final
       - determine_jobs
       - turbopack_rust_check
-      - turbopack_rust_test1
-      - turbopack_rust_test2
       - turbopack_rust_test_bench1
       - turbopack_rust_test_bench2
       - turbopack_rust_bench
@@ -766,8 +604,6 @@ jobs:
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
-          subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
-          subjob ${{needs.turbopack_rust_test2.result}} "Turbopack Rust tests (mac/win, non-blocking)"
           subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
           subjob ${{needs.turbopack_rust_test_bench2.result}} "Turbopack Rust benchmark tests (mac/win, non-blocking)"
           subjob ${{needs.turbopack_rust_bench.result}} "Turbopack Rust benchmarks (non-blocking)"
