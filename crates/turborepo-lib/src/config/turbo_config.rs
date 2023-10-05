@@ -156,26 +156,26 @@ fn get_env_var_config(
     // turbo_mapping.insert(String::from("turbo_signature"), "signature"); // new
     // turbo_mapping.insert(String::from("turbo_preflight"), "preflight"); // new
     // turbo_mapping.insert(String::from("turbo_remote_cache_enabled"), "enabled");
-    // // new
 
     let mut output_map = HashMap::new();
 
-    turbo_mapping
-        .iter()
-        .try_for_each(|(k, mapped)| -> Result<(), ConfigError> {
-            if let Some(value) = environment.get(k) {
+    turbo_mapping.into_iter().try_for_each(
+        |(mapping_key, mapped_property)| -> Result<(), ConfigError> {
+            if let Some(value) = environment.get(&mapping_key) {
                 let converted = value.to_str().ok_or_else(|| {
                     ConfigError::Anyhow(anyhow!(
                         "{} is not UTF8.",
-                        k.to_ascii_uppercase().to_str().unwrap()
+                        // CORRECTNESS: the mapping_key is hardcoded above.
+                        mapping_key.to_ascii_uppercase().to_str().unwrap()
                     ))
                 })?;
-                output_map.insert(mapped.to_string(), converted.to_owned());
+                output_map.insert(mapped_property, converted.to_owned());
                 Ok(())
             } else {
                 Ok(())
             }
-        })?;
+        },
+    )?;
 
     // Process signature
     let signature = if let Some(signature) = output_map.get("signature") {
@@ -263,22 +263,23 @@ fn get_override_env_var_config(
     let mut output_map = HashMap::new();
 
     // Process the VERCEL_ARTIFACTS_* next.
-    vercel_artifacts_mapping
-        .iter()
-        .try_for_each(|(k, mapped)| -> Result<(), ConfigError> {
-            if let Some(value) = environment.get(k) {
+    vercel_artifacts_mapping.into_iter().try_for_each(
+        |(mapping_key, mapped_property)| -> Result<(), ConfigError> {
+            if let Some(value) = environment.get(&mapping_key) {
                 let converted = value.to_str().ok_or_else(|| {
                     ConfigError::Anyhow(anyhow!(
                         "{} is not UTF8.",
-                        k.to_ascii_uppercase().to_str().unwrap()
+                        // CORRECTNESS: the mapping_key is hardcoded above.
+                        mapping_key.to_ascii_uppercase().to_str().unwrap()
                     ))
                 })?;
-                output_map.insert(mapped.to_string(), converted.to_owned());
+                output_map.insert(mapped_property, converted.to_owned());
                 Ok(())
             } else {
                 Ok(())
             }
-        })?;
+        },
+    )?;
 
     let output = ConfigurationOptions {
         api_url: None,
