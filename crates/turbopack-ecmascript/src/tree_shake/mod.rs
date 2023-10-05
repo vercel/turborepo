@@ -10,6 +10,7 @@ use self::graph::{DepGraph, ItemData, ItemId, ItemIdGroupKind, Mode, SplitModule
 use crate::{analyzer::graph::EvalContext, parse::ParseResult, EcmascriptModuleAsset};
 
 pub mod asset;
+pub mod barrel;
 pub mod chunk_item;
 mod graph;
 pub mod merge;
