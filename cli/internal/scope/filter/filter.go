@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/doublestar"
@@ -40,6 +41,7 @@ type Resolver struct {
 	Cwd                    turbopath.AbsoluteSystemPath
 	Inference              *PackageInference
 	PackagesChangedInRange PackagesChangedInRange
+	Logger                 hclog.Logger
 }
 
 // GetPackagesFromPatterns compiles filter patterns and applies them, returning
@@ -51,6 +53,7 @@ func (r *Resolver) GetPackagesFromPatterns(patterns []string) (util.Set, error) 
 		if err != nil {
 			return nil, err
 		}
+		r.Logger.Debug("Parsed selector", "selector", hclog.Fmt("%+v", selector))
 		selectors = append(selectors, selector)
 	}
 	selected, err := r.getFilteredPackages(selectors)
@@ -110,6 +113,7 @@ func (r *Resolver) getFilteredPackages(selectors []*TargetSelector) (*SelectedPa
 			allPackageSelectors = append(allPackageSelectors, selector)
 		}
 	}
+	r.Logger.Debug("Filtering packages", "allPackageSelectors", allPackageSelectors)
 	if len(allPackageSelectors) > 0 || len(prodPackageSelectors) > 0 {
 		if len(allPackageSelectors) > 0 {
 			selected, err := r.filterGraph(allPackageSelectors)
@@ -171,6 +175,7 @@ func (r *Resolver) filterGraphWithSelectors(selectors []*TargetSelector) (*Selec
 	for _, selector := range selectors {
 		// TODO(gsoltis): this should be a list?
 		entryPackages, err := r.filterGraphWithSelector(selector)
+		r.Logger.Debug("Filtered packages", "selector", hclog.Fmt("%+v", selector), "entryPackages", entryPackages)
 		if err != nil {
 			return nil, err
 		}
@@ -216,6 +221,8 @@ func (r *Resolver) filterGraphWithSelectors(selectors []*TargetSelector) (*Selec
 			}
 		}
 	}
+
+	r.Logger.Debug("Filtered packages", "cherryPickedPackages", cherryPickedPackages, "walkedDependencies", walkedDependencies, "walkedDependents", walkedDependents, "walkedDependentsDependencies", walkedDependentsDependencies)
 	allPkgs := make(util.Set)
 	for pkg := range cherryPickedPackages {
 		allPkgs.Add(pkg)

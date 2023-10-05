@@ -85,6 +85,10 @@ pub struct RepoConfigLoader {
 }
 
 impl RepoConfig {
+    pub fn path(&self) -> &AbsoluteSystemPath {
+        &self.path
+    }
+
     #[allow(dead_code)]
     pub fn api_url(&self) -> &str {
         self.config.api_url.as_deref().unwrap_or(DEFAULT_API_URL)
@@ -176,7 +180,7 @@ impl RepoConfig {
     }
 
     fn write_to_disk(&self) -> Result<(), Error> {
-        write_to_disk(self.path.as_path(), &self.disk_config)
+        write_to_disk(&self.path, &self.disk_config)
     }
 }
 

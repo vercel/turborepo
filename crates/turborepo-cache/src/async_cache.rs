@@ -210,7 +210,11 @@ mod tests {
             .put(
                 repo_root_path.clone(),
                 hash.clone(),
-                test_case.files.iter().map(|f| f.path.clone()).collect(),
+                test_case
+                    .files
+                    .iter()
+                    .map(|f| f.path().to_owned())
+                    .collect(),
                 test_case.duration,
             )
             .await
@@ -281,7 +285,11 @@ mod tests {
             .put(
                 repo_root_path.clone(),
                 hash.clone(),
-                test_case.files.iter().map(|f| f.path.clone()).collect(),
+                test_case
+                    .files
+                    .iter()
+                    .map(|f| f.path().to_owned())
+                    .collect(),
                 test_case.duration,
             )
             .await
@@ -358,7 +366,11 @@ mod tests {
             .put(
                 repo_root_path.clone(),
                 hash.clone(),
-                test_case.files.iter().map(|f| f.path.clone()).collect(),
+                test_case
+                    .files
+                    .iter()
+                    .map(|f| f.path().to_owned())
+                    .collect(),
                 test_case.duration,
             )
             .await

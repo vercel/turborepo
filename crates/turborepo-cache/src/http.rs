@@ -1,7 +1,7 @@
 use std::{backtrace::Backtrace, io::Write};
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-use turborepo_api_client::{APIAuth, APIClient, Response};
+use turborepo_api_client::{APIAuth, APIClient, Client, Response};
 
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
@@ -234,7 +234,7 @@ mod test {
 
         let cache = HTTPCache::new(api_client, &opts, repo_root_path.to_owned(), api_auth);
 
-        let anchored_files: Vec<_> = files.iter().map(|f| f.path.clone()).collect();
+        let anchored_files: Vec<_> = files.iter().map(|f| f.path().to_owned()).collect();
         cache
             .put(&repo_root_path, hash, &anchored_files, duration)
             .await?;
@@ -248,9 +248,13 @@ mod test {
         assert_eq!(cache_response.time_saved, duration);
 
         for (test_file, received_file) in files.iter().zip(received_files) {
-            assert_eq!(received_file, test_file.path);
+            assert_eq!(&*received_file, test_file.path());
             let file_path = repo_root_path.resolve(&received_file);
-            assert_eq!(std::fs::read_to_string(file_path)?, test_file.contents);
+            if let Some(contents) = test_file.contents() {
+                assert_eq!(std::fs::read_to_string(file_path)?, contents);
+            } else {
+                assert!(file_path.exists());
+            }
         }
 
         Ok(())
