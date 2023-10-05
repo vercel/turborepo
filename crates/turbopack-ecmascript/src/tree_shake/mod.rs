@@ -14,6 +14,7 @@ pub mod barrel;
 pub mod chunk_item;
 mod graph;
 pub mod merge;
+pub mod pkg_json;
 #[cfg(test)]
 mod tests;
 mod util;
