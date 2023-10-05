@@ -156,33 +156,6 @@ jobs:
         run: |
           RUSTFLAGS="-D warnings -A deprecated" cargo groups check turbopack --features rustls-tls --release
 
-  turbopack_rust_clippy:
-    needs: [turbopack_rust_check]
-    name: Turbopack rust clippy
-    runs-on: ubuntu-latest-16-core-oss
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          components: clippy
-          targets: wasm32-unknown-unknown
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Run cargo clippy
-        run: |
-          RUSTFLAGS="-D warnings -A deprecated -Aclippy::too_many_arguments -Aclippy::needless_pass_by_ref_mut -Aclippy::non_canonical_partial_ord_impl" cargo groups clippy turbopack --features rustls-tls
-
-      - name: Run ast-grep lints
-        run: |
-          npx --package @ast-grep/cli -- ast-grep scan $(cargo groups list turbopack | awk '{ print $2 }' | tr '\n' ' ')
-
   next_dev_check:
     needs: [determine_jobs]
     if: needs.determine_jobs.outputs.turbopack == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
@@ -716,7 +689,6 @@ jobs:
     needs:
       - determine_jobs
       - turbopack_rust_check
-      - turbopack_rust_clippy
       - turbopack_rust_test1
       - turbopack_rust_test_bench1
     if: always()
@@ -743,7 +715,6 @@ jobs:
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
-          subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
           subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
           if [ "$cancelled" = "true" ]; then
@@ -846,7 +817,6 @@ jobs:
       - final
       - determine_jobs
       - turbopack_rust_check
-      - turbopack_rust_clippy
       - turbopack_rust_test1
       - turbopack_rust_test2
       - turbopack_rust_test_bench1
@@ -877,7 +847,6 @@ jobs:
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
-          subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
           subjob ${{needs.turbopack_rust_test2.result}} "Turbopack Rust tests (mac/win, non-blocking)"
           subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
