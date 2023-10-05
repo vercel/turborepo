@@ -113,12 +113,9 @@ jobs:
       # We only test workspace dependency changes on main, not on PRs to speed up CI
       cargo_on_main: ${{ steps.ci.outputs.diff != '' || (steps.cargo.outputs.diff != '' && github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       turbopack: ${{ steps.ci.outputs.diff != '' || steps.turbopack.outputs.diff != '' }}
-      turborepo_rust: ${{ steps.ci.outputs.diff != '' }}
       turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
-      tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
       main_push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-      tag_push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace') }}
 
   turbopack_rust_check:
     needs: [determine_jobs]
