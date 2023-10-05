@@ -30,8 +30,8 @@ use turbopack_build::{BuildChunkingContext, MinifyType};
 use turbopack_core::{
     asset::Asset,
     chunk::{
-        ChunkableModule, ChunkableModuleExt, ChunkingContext, ChunkingContextExt,
-        EvaluatableAssetExt, EvaluatableAssets,
+        ChunkableModule, ChunkingContext, ChunkingContextExt, EvaluatableAssetExt,
+        EvaluatableAssets,
     },
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
@@ -326,7 +326,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
         // TODO: Load runtime entries from snapshots
         match options.runtime {
             Runtime::Dev => chunking_context.evaluated_chunk_group(
-                ecmascript.as_root_chunk(chunking_context),
+                ecmascript.ident(),
                 runtime_entries
                     .unwrap_or_else(EvaluatableAssets::empty)
                     .with_entry(Vc::upcast(ecmascript)),

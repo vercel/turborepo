@@ -9,7 +9,7 @@ __turbopack_export_value__([
       "[project]/crates/turbopack-tests/tests/snapshot/basic/top-level-await/input/UserAPI.js (ecmascript)"
     ]
   },
-  "output/crates_turbopack-tests_tests_snapshot_basic_top-level-await_input_UserAPI_853a42.js"
+  "output/crates_turbopack-tests_tests_snapshot_basic_top-level-await_input_UserAPI_5771e1.js"
 ]);
 
 })()),

@@ -9,8 +9,8 @@ use turbo_tasks::{
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     chunk::{
-        availability_info::AvailabilityInfo, Chunk, ChunkableModule, ChunkableModuleExt,
-        ChunkingContext, Chunks, EvaluatableAssets,
+        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkableModule, ChunkingContext,
+        Chunks, EvaluatableAssets,
     },
     environment::Environment,
     ident::AssetIdent,
@@ -166,7 +166,12 @@ impl BuildChunkingContext {
         module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
         evaluatable_assets: Vc<EvaluatableAssets>,
     ) -> Result<Vc<Box<dyn OutputAsset>>> {
-        let entry_chunk = module.as_root_chunk(Vc::upcast(self));
+        let entry_chunk =
+            module
+                .as_chunk_item(Vc::upcast(self))
+                .as_chunk(Value::new(AvailabilityInfo::Root {
+                    current_availability_root: Vc::upcast(module),
+                }));
 
         let other_chunks = self
             .get_chunk_assets(entry_chunk, evaluatable_assets)
@@ -217,7 +222,10 @@ impl BuildChunkingContext {
             .map({
                 move |evaluatable_asset| async move {
                     evaluatable_asset
-                        .as_root_chunk(Vc::upcast(self))
+                        .as_chunk_item(Vc::upcast(self))
+                        .as_chunk(Value::new(AvailabilityInfo::Root {
+                            current_availability_root: Vc::upcast(*evaluatable_asset),
+                        }))
                         .resolve()
                         .await
                 }
@@ -356,7 +364,9 @@ impl ChunkingContext for BuildChunkingContext {
         module: Vc<Box<dyn ChunkableModule>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<OutputAssets>> {
-        let entry_chunk = module.as_chunk(Vc::upcast(self), availability_info);
+        let entry_chunk = module
+            .as_chunk_item(Vc::upcast(self))
+            .as_chunk(availability_info);
         let parallel_chunks = get_parallel_chunks([entry_chunk]).await?;
 
         let optimized_chunks = get_optimized_chunks(parallel_chunks).await?;
@@ -373,7 +383,7 @@ impl ChunkingContext for BuildChunkingContext {
     #[turbo_tasks::function]
     async fn evaluated_chunk_group(
         self: Vc<Self>,
-        _entry_chunk: Vc<Box<dyn Chunk>>,
+        _ident: Vc<AssetIdent>,
         _evaluatable_assets: Vc<EvaluatableAssets>,
     ) -> Result<Vc<OutputAssets>> {
         // TODO(alexkirsz) This method should be part of a separate trait that is

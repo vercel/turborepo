@@ -7,8 +7,8 @@ use turbo_tasks::{
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     chunk::{
-        availability_info::AvailabilityInfo, Chunk, ChunkableModule, ChunkableModuleExt,
-        ChunkingContext, Chunks, EvaluatableAssets,
+        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkableModule, ChunkingContext,
+        Chunks, EvaluatableAssets,
     },
     environment::Environment,
     ident::AssetIdent,
@@ -163,13 +163,13 @@ impl DevChunkingContext {
     #[turbo_tasks::function]
     fn generate_evaluate_chunk(
         self: Vc<Self>,
-        entry_chunk: Vc<Box<dyn Chunk>>,
+        ident: Vc<AssetIdent>,
         other_chunks: Vc<OutputAssets>,
         evaluatable_assets: Vc<EvaluatableAssets>,
     ) -> Vc<Box<dyn OutputAsset>> {
         Vc::upcast(EcmascriptDevEvaluateChunk::new(
             self,
-            entry_chunk,
+            ident,
             other_chunks,
             evaluatable_assets,
         ))
@@ -178,14 +178,14 @@ impl DevChunkingContext {
     #[turbo_tasks::function]
     fn generate_chunk_list_register_chunk(
         self: Vc<Self>,
-        entry_chunk: Vc<Box<dyn Chunk>>,
+        ident: Vc<AssetIdent>,
         evaluatable_assets: Vc<EvaluatableAssets>,
         other_chunks: Vc<OutputAssets>,
         source: Value<EcmascriptDevChunkListSource>,
     ) -> Vc<Box<dyn OutputAsset>> {
         Vc::upcast(EcmascriptDevChunkList::new(
             self,
-            entry_chunk,
+            ident,
             evaluatable_assets,
             other_chunks,
             source,
@@ -346,7 +346,9 @@ impl ChunkingContext for DevChunkingContext {
         module: Vc<Box<dyn ChunkableModule>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<OutputAssets>> {
-        let entry_chunk = module.as_chunk(Vc::upcast(self), availability_info);
+        let entry_chunk = module
+            .as_chunk_item(Vc::upcast(self))
+            .as_chunk(availability_info);
         let parallel_chunks = get_parallel_chunks([entry_chunk]).await?;
 
         let optimized_chunks = get_optimized_chunks(parallel_chunks).await?;
@@ -358,7 +360,7 @@ impl ChunkingContext for DevChunkingContext {
             .collect();
 
         assets.push(self.generate_chunk_list_register_chunk(
-            entry_chunk,
+            module.ident(),
             EvaluatableAssets::empty(),
             Vc::cell(assets.clone()),
             Value::new(EcmascriptDevChunkListSource::Dynamic),
@@ -370,17 +372,20 @@ impl ChunkingContext for DevChunkingContext {
     #[turbo_tasks::function]
     async fn evaluated_chunk_group(
         self: Vc<Self>,
-        entry_chunk: Vc<Box<dyn Chunk>>,
+        ident: Vc<AssetIdent>,
         evaluatable_assets: Vc<EvaluatableAssets>,
     ) -> Result<Vc<OutputAssets>> {
         let evaluatable_assets_ref = evaluatable_assets.await?;
 
-        let mut entry_assets: IndexSet<_> = evaluatable_assets_ref
+        let entry_assets: IndexSet<_> = evaluatable_assets_ref
             .iter()
             .map({
                 move |evaluatable_asset| async move {
                     evaluatable_asset
-                        .as_root_chunk(Vc::upcast(self))
+                        .as_chunk_item(Vc::upcast(self))
+                        .as_chunk(Value::new(AvailabilityInfo::Root {
+                            current_availability_root: Vc::upcast(*evaluatable_asset),
+                        }))
                         .resolve()
                         .await
                 }
@@ -389,8 +394,6 @@ impl ChunkingContext for DevChunkingContext {
             .await?
             .into_iter()
             .collect();
-
-        entry_assets.insert(entry_chunk.resolve().await?);
 
         let parallel_chunks = get_parallel_chunks(entry_assets).await?;
 
@@ -405,13 +408,13 @@ impl ChunkingContext for DevChunkingContext {
         let other_assets = Vc::cell(assets.clone());
 
         assets.push(self.generate_chunk_list_register_chunk(
-            entry_chunk,
+            ident,
             evaluatable_assets,
             other_assets,
             Value::new(EcmascriptDevChunkListSource::Entry),
         ));
 
-        assets.push(self.generate_evaluate_chunk(entry_chunk, other_assets, evaluatable_assets));
+        assets.push(self.generate_evaluate_chunk(ident, other_assets, evaluatable_assets));
 
         Ok(Vc::cell(assets))
     }

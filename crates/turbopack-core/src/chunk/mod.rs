@@ -90,43 +90,6 @@ pub trait ChunkableModule: Module + Asset {
     ) -> Vc<Box<dyn ChunkItem>>;
 }
 
-pub trait ChunkableModuleExt {
-    fn as_chunk(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Box<dyn Chunk>>
-    where
-        Self: Send;
-    fn as_root_chunk(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ) -> Vc<Box<dyn Chunk>>
-    where
-        Self: Send;
-}
-
-impl<T: ChunkableModule + Send + Upcast<Box<dyn Module>>> ChunkableModuleExt for T {
-    fn as_chunk(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Box<dyn Chunk>> {
-        let chunk_item = self.as_chunk_item(chunking_context);
-        chunk_item.as_chunk(availability_info)
-    }
-
-    fn as_root_chunk(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ) -> Vc<Box<dyn Chunk>> {
-        let chunk_item = self.as_chunk_item(chunking_context);
-        chunk_item.as_chunk(Value::new(AvailabilityInfo::Root {
-            current_availability_root: Vc::upcast(self),
-        }))
-    }
-}
-
 #[turbo_tasks::value(transparent)]
 pub struct Chunks(Vec<Vc<Box<dyn Chunk>>>);
 
@@ -392,17 +355,20 @@ where
                 }
             }
             ChunkingType::Parallel => {
-                let chunk = chunkable_module.as_chunk(
-                    chunk_content_context.chunking_context,
-                    chunk_content_context.availability_info,
-                );
+                let chunk = chunkable_module
+                    .as_chunk_item(chunk_content_context.chunking_context)
+                    .as_chunk(chunk_content_context.availability_info);
                 graph_nodes.push((
                     Some((module, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),
                 ));
             }
             ChunkingType::IsolatedParallel => {
-                let chunk = chunkable_module.as_root_chunk(chunk_content_context.chunking_context);
+                let chunk = chunkable_module
+                    .as_chunk_item(chunk_content_context.chunking_context)
+                    .as_chunk(Value::new(AvailabilityInfo::Root {
+                        current_availability_root: Vc::upcast(chunkable_module),
+                    }));
                 graph_nodes.push((
                     Some((module, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),
@@ -431,10 +397,9 @@ where
                     }
                 }
 
-                let chunk = chunkable_module.as_chunk(
-                    chunk_content_context.chunking_context,
-                    chunk_content_context.availability_info,
-                );
+                let chunk = chunkable_module
+                    .as_chunk_item(chunk_content_context.chunking_context)
+                    .as_chunk(chunk_content_context.availability_info);
                 graph_nodes.push((
                     Some((module, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),

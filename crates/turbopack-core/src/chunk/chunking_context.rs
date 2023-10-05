@@ -2,7 +2,7 @@ use anyhow::Result;
 use turbo_tasks::{Upcast, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 
-use super::{availability_info::AvailabilityInfo, Chunk, ChunkableModule, EvaluatableAssets};
+use super::{availability_info::AvailabilityInfo, ChunkableModule, EvaluatableAssets};
 use crate::{
     chunk::{ChunkItem, ModuleId},
     environment::Environment,
@@ -65,7 +65,7 @@ pub trait ChunkingContext {
 
     fn evaluated_chunk_group(
         self: Vc<Self>,
-        entry: Vc<Box<dyn Chunk>>,
+        ident: Vc<AssetIdent>,
         evaluatable_assets: Vc<EvaluatableAssets>,
     ) -> Vc<OutputAssets>;
 
