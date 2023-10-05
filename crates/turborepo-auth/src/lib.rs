@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 #[cfg(not(test))]
 use std::net::SocketAddr;
 #[cfg(test)]
