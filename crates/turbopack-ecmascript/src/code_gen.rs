@@ -34,18 +34,20 @@ pub trait CodeGenerateable {
 
 #[turbo_tasks::value_trait]
 pub trait CodeGenerateableWithAvailabilityInfo {
+    /// Returns the pieces of AvailabilityInfo that are needed for
+    /// `code_generation`.
+    fn get_availability_info_needs(
+        self: Vc<Self>,
+        _is_async_module: bool,
+    ) -> Vc<AvailabilityInfoNeeds> {
+        AvailabilityInfoNeeds::all().cell()
+    }
+
     fn code_generation(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Vc<CodeGeneration>;
-
-    fn get_availability_info_needs(
-        self: Vc<Self>,
-        _is_async_module: bool,
-    ) -> Vc<AvailabilityInfoNeeds> {
-        AvailabilityInfoNeeds::Complete.cell()
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs, ValueDebugFormat)]

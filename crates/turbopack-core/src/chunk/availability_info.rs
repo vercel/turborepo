@@ -1,20 +1,35 @@
-use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign, BitOr, BitOrAssign};
 
 use turbo_tasks::Vc;
 
 use super::available_modules::AvailableAssets;
 use crate::module::Module;
 
+/// This specifies which information is needed from an AvailabilityInfo
 #[turbo_tasks::value(shared)]
 #[derive(Copy, Clone, Debug)]
-pub enum AvailabilityInfoNeeds {
-    None,
-    Root,
-    AvailableModules,
-    Complete,
+pub struct AvailabilityInfoNeeds {
+    pub current_availability_root: bool,
+    pub available_modules: bool,
 }
 
-impl Add for AvailabilityInfoNeeds {
+impl AvailabilityInfoNeeds {
+    pub fn all() -> Self {
+        Self {
+            current_availability_root: true,
+            available_modules: true,
+        }
+    }
+
+    pub fn none() -> Self {
+        Self {
+            current_availability_root: false,
+            available_modules: false,
+        }
+    }
+}
+
+impl BitOr for AvailabilityInfoNeeds {
     type Output = AvailabilityInfoNeeds;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -29,25 +44,43 @@ impl Add for AvailabilityInfoNeeds {
             }
         }
     }
+
+    fn bitor(mut self, rhs: Self) -> Self::Output {
+        let Self {
+            available_modules,
+            current_availability_root,
+        } = rhs;
+        self.current_availability_root |= current_availability_root;
+        self.available_modules |= available_modules;
+        self
+    }
 }
 
-impl AddAssign for AvailabilityInfoNeeds {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs;
+impl BitOrAssign for AvailabilityInfoNeeds {
+    fn bitor_assign(&mut self, rhs: Self) {
+        *self = *self | rhs;
     }
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Clone, Copy, Debug)]
 pub enum AvailabilityInfo {
+    /// Available modules are not tracked or the information is not available
+    /// due to specified needs.
     Untracked,
+    /// There are no modules available (or the information is not available due
+    /// to specified needs), but it's tracked for nested chunk groups
+    /// and the current chunk group root is defined.
     Root {
         current_availability_root: Vc<Box<dyn Module>>,
     },
+    /// There are modules already available and the current chunk group root is
+    /// defined.
     Complete {
         available_modules: Vc<AvailableAssets>,
         current_availability_root: Vc<Box<dyn Module>>,
     },
+    /// Only partial information is available, about the available modules.
     OnlyAvailableModules {
         available_modules: Vc<AvailableAssets>,
     },
@@ -81,37 +114,38 @@ impl AvailabilityInfo {
         }
     }
 
+    /// Returns AvailabilityInfo, but only with the information that is needed
     pub fn reduce_to_needs(self, needs: AvailabilityInfoNeeds) -> Self {
-        match needs {
-            AvailabilityInfoNeeds::None => Self::Untracked,
-            AvailabilityInfoNeeds::Root => match self {
-                Self::Untracked => Self::Untracked,
-                Self::OnlyAvailableModules { .. } => Self::Untracked,
+        let AvailabilityInfoNeeds {
+            available_modules,
+            current_availability_root,
+        } = needs;
+        match (current_availability_root, available_modules, self) {
+            (false, false, _) => Self::Untracked,
+            (true, true, _) => self,
+            (
+                true,
+                false,
                 Self::Root {
                     current_availability_root,
-                } => Self::Root {
-                    current_availability_root,
-                },
-                Self::Complete {
+                }
+                | Self::Complete {
                     current_availability_root,
                     ..
-                } => Self::Root {
-                    current_availability_root,
                 },
+            ) => Self::Root {
+                current_availability_root,
             },
-            AvailabilityInfoNeeds::AvailableModules => match self {
-                Self::Untracked => Self::Untracked,
-                Self::Root { .. } => Self::Untracked,
+            (true, false, _) => Self::Untracked,
+            (
+                false,
+                true,
                 Self::Complete {
-                    available_modules,
-                    current_availability_root,
-                } => Self::Complete {
-                    available_modules,
-                    current_availability_root,
-                },
-                Self::OnlyAvailableModules { .. } => Self::Untracked,
-            },
-            AvailabilityInfoNeeds::Complete => self,
+                    available_modules, ..
+                }
+                | Self::OnlyAvailableModules { available_modules },
+            ) => Self::OnlyAvailableModules { available_modules },
+            (false, true, _) => Self::Untracked,
         }
     }
 }

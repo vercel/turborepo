@@ -127,6 +127,8 @@ impl AsyncModuleScc {
         for scc in &*this.scope.get_scc_children(this.scc).await? {
             // Because we generated SCCs there can be no loops in the children, so calling
             // recursively is fine.
+            // AsyncModuleScc::new is resolved here to avoid unnecessary resolve tasks for
+            // is_async in this hot code path.
             if *AsyncModuleScc::new(*scc, this.scope)
                 .resolve()
                 .await?

@@ -512,6 +512,10 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             .analyze()
             .get_availability_info_needs(is_async_module)
             .await?;
+        // We reduce the availability info to the needs of the chunk item to improve
+        // caching of the methods that are called with availability info. e. g.
+        // module_content() can be cached for different availability info when it
+        // doesn't really need that info.
         let availability_info = availability_info.reduce_to_needs(availability_info_needs);
         let content = this
             .module

@@ -140,6 +140,8 @@ pub struct AnalyzeEcmascriptModuleResult {
 
 #[turbo_tasks::value_impl]
 impl AnalyzeEcmascriptModuleResult {
+    /// Returns the pieces of AvailabilityInfo that are required for code
+    /// generation.
     #[turbo_tasks::function]
     pub async fn get_availability_info_needs(
         self: Vc<Self>,
