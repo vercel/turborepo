@@ -169,7 +169,7 @@ pub async fn link(
 
             let before = base
                 .local_config_path()
-                .read_or_default("{}".into())
+                .read_or_default("{}")
                 .map_err(|e| {
                     anyhow!(
                         "Encountered an IO error while attempting to read {}: {}",
@@ -268,7 +268,7 @@ pub async fn link(
 
             let before = base
                 .local_config_path()
-                .read_or_default("{}".into())
+                .read_or_default("{}")
                 .map_err(|e| {
                     anyhow!(
                         "Encountered an IO error while attempting to read {}: {}",

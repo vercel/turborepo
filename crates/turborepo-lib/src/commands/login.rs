@@ -13,15 +13,13 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
     // turborepo-config crate and imported that into turborepo-auth.
     let set_token = |token: &str| -> Result<(), anyhow::Error> {
         let global_config_path = base.global_config_path()?;
-        let before = global_config_path
-            .read_or_default("{}".into())
-            .map_err(|e| {
-                anyhow!(
-                    "Encountered an IO error while attempting to read {}: {}",
-                    global_config_path,
-                    e
-                )
-            })?;
+        let before = global_config_path.read_or_default("{}").map_err(|e| {
+            anyhow!(
+                "Encountered an IO error while attempting to read {}: {}",
+                global_config_path,
+                e
+            )
+        })?;
         let after = set_path(&before, &["token"], &format!("\"{}\"", token))?;
         global_config_path.ensure_dir()?;
         global_config_path.create_with_contents(after)?;
@@ -40,15 +38,13 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
     // turborepo-config crate and imported that into turborepo-auth.
     let set_token = |token: &str| -> Result<(), anyhow::Error> {
         let global_config_path = base.global_config_path()?;
-        let before = global_config_path
-            .read_or_default("{}".into())
-            .map_err(|e| {
-                anyhow!(
-                    "Encountered an IO error while attempting to read {}: {}",
-                    global_config_path,
-                    e
-                )
-            })?;
+        let before = global_config_path.read_or_default("{}").map_err(|e| {
+            anyhow!(
+                "Encountered an IO error while attempting to read {}: {}",
+                global_config_path,
+                e
+            )
+        })?;
         let after = set_path(&before, &["token"], &format!("\"{}\"", token))?;
         global_config_path.ensure_dir()?;
         global_config_path.create_with_contents(after)?;

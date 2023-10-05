@@ -151,7 +151,7 @@ impl<'a> Run<'a> {
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
-        let config = self.base.config().expect("FIXME");
+        let config = self.base.config()?;
         let team_id = config.team_id();
         let team_slug = config.team_slug();
         let token = config.token();

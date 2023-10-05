@@ -21,7 +21,7 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<()> {
     let output = if needs_disabling {
         let before = base
             .local_config_path()
-            .read_or_default("{}".into())
+            .read_or_default("{}")
             .map_err(|e| {
                 anyhow!(
                     "Encountered an IO error while attempting to read {}: {}",
@@ -52,7 +52,7 @@ fn unlink_spaces(base: &mut CommandBase) -> Result<()> {
     if needs_disabling {
         let before = base
             .local_config_path()
-            .read_or_default("{}".into())
+            .read_or_default("{}")
             .map_err(|e| {
                 anyhow!(
                     "Encountered an IO error while attempting to read {}: {}",
