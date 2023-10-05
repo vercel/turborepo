@@ -128,32 +128,6 @@ jobs:
       main_push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       tag_push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace') }}
 
-  rust_lint:
-    needs: [determine_jobs]
-    if: needs.determine_jobs.outputs.rust == 'true'
-    name: Rust lints
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          components: rustfmt
-
-      - name: Run cargo fmt check
-        run: |
-          cargo fmt --check
-
-      - name: Check Cargo.toml formatting (taplo)
-        run: npx @taplo/cli format --check
-
-      - name: Check licenses
-        uses: EmbarkStudios/cargo-deny-action@v1
-        with:
-          command: check licenses
-
   turbopack_rust_check:
     needs: [determine_jobs]
     # We test dependency changes only on main
@@ -741,7 +715,6 @@ jobs:
     name: Ok
     needs:
       - determine_jobs
-      - rust_lint
       - turbopack_rust_check
       - turbopack_rust_clippy
       - turbopack_rust_test1
@@ -769,7 +742,6 @@ jobs:
             fi
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
-          subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
           subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
@@ -873,7 +845,6 @@ jobs:
     needs:
       - final
       - determine_jobs
-      - rust_lint
       - turbopack_rust_check
       - turbopack_rust_clippy
       - turbopack_rust_test1
@@ -905,7 +876,6 @@ jobs:
             fi
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
-          subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
           subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
