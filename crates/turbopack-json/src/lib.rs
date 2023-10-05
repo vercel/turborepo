@@ -11,7 +11,7 @@
 
 use std::fmt::Write;
 
-use anyhow::{bail, Error, Result};
+use anyhow::{bail, Context, Error, Result};
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileJsonContent};
 use turbopack_core::{
@@ -79,11 +79,20 @@ impl ChunkableModule for JsonModuleAsset {
     }
 
     #[turbo_tasks::function]
-    fn as_chunk_item(
+    async fn as_chunk_item(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ) -> Vc<Box<dyn turbopack_core::chunk::ChunkItem>> {
-        todo!();
+    ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
+        let chunking_context =
+            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+                .await?
+                .context(
+                    "chunking context must impl EcmascriptChunkingContext to use JsonModuleAsset",
+                )?;
+        Ok(Vc::upcast(JsonChunkItem::cell(JsonChunkItem {
+            module: self,
+            chunking_context,
+        })))
     }
 }
 

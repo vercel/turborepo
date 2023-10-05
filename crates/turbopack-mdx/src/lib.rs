@@ -2,7 +2,7 @@
 #![feature(arbitrary_self_types)]
 #![feature(async_fn_in_trait)]
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use mdxjs::{compile, Options};
 use turbo_tasks::{Value, ValueDefault, Vc};
 use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPath};
@@ -202,11 +202,20 @@ impl ChunkableModule for MdxModuleAsset {
     }
 
     #[turbo_tasks::function]
-    fn as_chunk_item(
+    async fn as_chunk_item(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ) -> Vc<Box<dyn turbopack_core::chunk::ChunkItem>> {
-        todo!();
+    ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
+        let chunking_context =
+            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+                .await?
+                .context(
+                    "chunking context must impl EcmascriptChunkingContext to use MdxModuleAsset",
+                )?;
+        Ok(Vc::upcast(MdxChunkItem::cell(MdxChunkItem {
+            module: self,
+            chunking_context,
+        })))
     }
 }
 

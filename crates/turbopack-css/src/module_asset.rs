@@ -1,6 +1,6 @@
 use std::{fmt::Write, iter::once, sync::Arc};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use indexmap::IndexMap;
 use indoc::formatdoc;
 use swc_core::{
@@ -224,11 +224,23 @@ impl ChunkableModule for ModuleCssAsset {
     }
 
     #[turbo_tasks::function]
-    fn as_chunk_item(
+    async fn as_chunk_item(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ) -> Vc<Box<dyn turbopack_core::chunk::ChunkItem>> {
-        todo!();
+    ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
+        let chunking_context =
+            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+                .await?
+                .context(
+                    "chunking context must impl EcmascriptChunkingContext to use ModuleCssAsset",
+                )?;
+        Ok(Vc::upcast(
+            ModuleChunkItem {
+                chunking_context,
+                module: self,
+            }
+            .cell(),
+        ))
     }
 }
 

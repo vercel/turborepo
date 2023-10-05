@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -86,11 +86,25 @@ impl ChunkableModule for RawWebAssemblyModuleAsset {
     }
 
     #[turbo_tasks::function]
-    fn as_chunk_item(
+    async fn as_chunk_item(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ) -> Vc<Box<dyn turbopack_core::chunk::ChunkItem>> {
-        todo!();
+    ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
+        let chunking_context =
+            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+                .await?
+                .context(
+                    "chunking context must impl EcmascriptChunkingContext to use \
+                     RawWebAssemblyModuleAsset",
+                )?;
+        Ok(Vc::upcast(
+            RawModuleChunkItem {
+                module: self,
+                chunking_context,
+                wasm_asset: self.wasm_asset(Vc::upcast(chunking_context)),
+            }
+            .cell(),
+        ))
     }
 }
 

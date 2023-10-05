@@ -129,7 +129,10 @@ impl ChunkableModule for CssModuleAsset {
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Vc<Box<dyn turbopack_core::chunk::ChunkItem>> {
-        todo!();
+        Vc::upcast(CssModuleChunkItem::cell(CssModuleChunkItem {
+            module: self,
+            chunking_context,
+        }))
     }
 }
 

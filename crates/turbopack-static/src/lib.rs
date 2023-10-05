@@ -14,7 +14,7 @@
 
 pub mod fixed;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbo_tasks_fs::FileContent;
 use turbopack_core::{
@@ -104,11 +104,21 @@ impl ChunkableModule for StaticModuleAsset {
     }
 
     #[turbo_tasks::function]
-    fn as_chunk_item(
+    async fn as_chunk_item(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ) -> Vc<Box<dyn turbopack_core::chunk::ChunkItem>> {
-        todo!();
+    ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
+        let chunking_context =
+            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+                .await?
+                .context(
+                    "chunking context must impl EcmascriptChunkingContext to use StaticModuleAsset",
+                )?;
+        Ok(Vc::upcast(ModuleChunkItem::cell(ModuleChunkItem {
+            module: self,
+            chunking_context,
+            static_asset: self.static_asset(Vc::upcast(chunking_context)),
+        })))
     }
 }
 
