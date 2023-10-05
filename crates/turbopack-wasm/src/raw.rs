@@ -111,21 +111,6 @@ impl ChunkableModule for RawWebAssemblyModuleAsset {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkPlaceable for RawWebAssemblyModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk_item(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    ) -> Vc<Box<dyn EcmascriptChunkItem>> {
-        Vc::upcast(
-            RawModuleChunkItem {
-                module: self,
-                chunking_context,
-                wasm_asset: self.wasm_asset(Vc::upcast(chunking_context)),
-            }
-            .cell(),
-        )
-    }
-
-    #[turbo_tasks::function]
     fn get_exports(self: Vc<Self>) -> Vc<EcmascriptExports> {
         EcmascriptExports::Value.cell()
     }
@@ -154,6 +139,11 @@ impl ChunkItem for RawModuleChunkItem {
                 self.wasm_asset.ident().to_string().await?
             )),
         ))]))
+    }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
     }
 }
 

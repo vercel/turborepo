@@ -152,20 +152,6 @@ impl ChunkableModule for WebAssemblyModuleAsset {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkPlaceable for WebAssemblyModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk_item(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    ) -> Vc<Box<dyn EcmascriptChunkItem>> {
-        Vc::upcast(
-            ModuleChunkItem {
-                module: self,
-                chunking_context,
-            }
-            .cell(),
-        )
-    }
-
-    #[turbo_tasks::function]
     fn get_exports(self: Vc<Self>) -> Vc<EcmascriptExports> {
         self.loader().get_exports()
     }
@@ -209,10 +195,17 @@ impl ChunkItem for ModuleChunkItem {
 
     #[turbo_tasks::function]
     async fn references(&self) -> Result<Vc<ModuleReferences>> {
-        let loader =
-            EcmascriptChunkPlaceable::as_chunk_item(self.module.loader(), self.chunking_context);
+        let loader = self
+            .module
+            .loader()
+            .as_chunk_item(Vc::upcast(self.chunking_context));
 
         Ok(loader.references())
+    }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
     }
 }
 
@@ -234,11 +227,15 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let loader_asset = self.module.loader();
+        let item = loader_asset.as_chunk_item(Vc::upcast(self.chunking_context));
 
-        let chunk_item_content =
-            EcmascriptChunkPlaceable::as_chunk_item(loader_asset, self.chunking_context)
-                .content_with_availability_info(availability_info)
-                .await?;
+        let ecmascript_item = Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkItem>>(item)
+            .await?
+            .context("EcmascriptModuleAsset must implement EcmascriptChunkItem")?;
+
+        let chunk_item_content = ecmascript_item
+            .content_with_availability_info(availability_info)
+            .await?;
 
         Ok(EcmascriptChunkItemContent {
             options: EcmascriptChunkItemOptions {

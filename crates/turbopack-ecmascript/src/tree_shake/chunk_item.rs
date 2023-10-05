@@ -1,7 +1,7 @@
 use anyhow::Result;
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
-    chunk::{availability_info::AvailabilityInfo, ChunkItem},
+    chunk::{availability_info::AvailabilityInfo, ChunkItem, ChunkingContext},
     ident::AssetIdent,
     module::Module,
     reference::ModuleReferences,
@@ -85,5 +85,10 @@ impl ChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
     async fn asset_ident(&self) -> Result<Vc<AssetIdent>> {
         Ok(self.module.ident())
+    }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
     }
 }

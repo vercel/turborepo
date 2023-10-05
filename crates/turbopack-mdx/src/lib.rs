@@ -222,17 +222,6 @@ impl ChunkableModule for MdxModuleAsset {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkPlaceable for MdxModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk_item(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    ) -> Vc<Box<dyn EcmascriptChunkItem>> {
-        Vc::upcast(MdxChunkItem::cell(MdxChunkItem {
-            module: self,
-            chunking_context,
-        }))
-    }
-
-    #[turbo_tasks::function]
     fn get_exports(&self) -> Vc<EcmascriptExports> {
         EcmascriptExports::Value.cell()
     }
@@ -268,6 +257,11 @@ impl ChunkItem for MdxChunkItem {
     fn references(&self) -> Vc<ModuleReferences> {
         self.module.references()
     }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -281,11 +275,13 @@ impl EcmascriptChunkItem for MdxChunkItem {
     /// apply all of the ecma transforms
     #[turbo_tasks::function]
     async fn content(&self) -> Result<Vc<EcmascriptChunkItemContent>> {
-        Ok(EcmascriptChunkPlaceable::as_chunk_item(
-            into_ecmascript_module_asset(&self.module).await?,
-            self.chunking_context,
-        )
-        .content())
+        let item = into_ecmascript_module_asset(&self.module)
+            .await?
+            .as_chunk_item(Vc::upcast(self.chunking_context));
+        let ecmascript_item = Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkItem>>(item)
+            .await?
+            .context("MdxChunkItem must generate an EcmascriptChunkItem")?;
+        Ok(ecmascript_item.content())
     }
 }
 

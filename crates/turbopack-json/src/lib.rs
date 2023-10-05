@@ -99,17 +99,6 @@ impl ChunkableModule for JsonModuleAsset {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkPlaceable for JsonModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk_item(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    ) -> Vc<Box<dyn EcmascriptChunkItem>> {
-        Vc::upcast(JsonChunkItem::cell(JsonChunkItem {
-            module: self,
-            chunking_context,
-        }))
-    }
-
-    #[turbo_tasks::function]
     fn get_exports(&self) -> Vc<EcmascriptExports> {
         EcmascriptExports::Value.cell()
     }
@@ -131,6 +120,11 @@ impl ChunkItem for JsonChunkItem {
     #[turbo_tasks::function]
     fn references(&self) -> Vc<ModuleReferences> {
         self.module.references()
+    }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
     }
 }
 

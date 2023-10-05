@@ -12,8 +12,7 @@ use turbopack_core::{
 use super::{chunk_item::EcmascriptModulePartChunkItem, get_part_id, split_module, SplitResult};
 use crate::{
     chunk::{
-        EcmascriptChunk, EcmascriptChunkItem, EcmascriptChunkPlaceable, EcmascriptChunkingContext,
-        EcmascriptExports,
+        EcmascriptChunk, EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports,
     },
     references::analyze_ecmascript_module,
     AnalyzeEcmascriptModuleResult, EcmascriptModuleAsset,
@@ -108,20 +107,6 @@ impl Asset for EcmascriptModulePartAsset {
 
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkPlaceable for EcmascriptModulePartAsset {
-    #[turbo_tasks::function]
-    async fn as_chunk_item(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    ) -> Result<Vc<Box<dyn EcmascriptChunkItem>>> {
-        Ok(Vc::upcast(
-            EcmascriptModulePartChunkItem {
-                module: self,
-                chunking_context,
-            }
-            .cell(),
-        ))
-    }
-
     #[turbo_tasks::function]
     async fn get_exports(self: Vc<Self>) -> Result<Vc<EcmascriptExports>> {
         Ok(self.analyze().await?.exports)

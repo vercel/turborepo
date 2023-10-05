@@ -14,7 +14,8 @@ use turbo_tasks_fs::FileSystemPathOption;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
-        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkingContext, Chunks, ModuleIds,
+        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkItemExt, ChunkableModule,
+        ChunkingContext, Chunks, ModuleIds,
     },
     ident::AssetIdent,
     introspect::{
@@ -165,7 +166,7 @@ impl EcmascriptChunk {
             .main_entries
             .await?
             .iter()
-            .map(|&entry| entry.as_chunk_item(this.chunking_context).id())
+            .map(|&entry| entry.as_chunk_item(Vc::upcast(this.chunking_context)).id())
             .collect();
         Ok(Vc::cell(entries))
     }

@@ -130,22 +130,6 @@ impl ChunkableModule for ChunkGroupFilesAsset {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkPlaceable for ChunkGroupFilesAsset {
     #[turbo_tasks::function]
-    async fn as_chunk_item(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    ) -> Result<Vc<Box<dyn EcmascriptChunkItem>>> {
-        let this = self.await?;
-        Ok(Vc::upcast(
-            ChunkGroupFilesChunkItem {
-                chunking_context,
-                client_root: this.client_root,
-                inner: self,
-            }
-            .cell(),
-        ))
-    }
-
-    #[turbo_tasks::function]
     fn get_exports(&self) -> Vc<EcmascriptExports> {
         EcmascriptExports::Value.cell()
     }
@@ -248,6 +232,11 @@ impl ChunkItem for ChunkGroupFilesChunkItem {
                 .map(Vc::upcast)
                 .collect(),
         ))
+    }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
     }
 }
 

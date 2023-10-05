@@ -137,18 +137,7 @@ impl ChunkableModule for CssModuleAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl CssChunkPlaceable for CssModuleAsset {
-    #[turbo_tasks::function]
-    fn as_chunk_item(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ) -> Vc<Box<dyn CssChunkItem>> {
-        Vc::upcast(CssModuleChunkItem::cell(CssModuleChunkItem {
-            module: self,
-            chunking_context,
-        }))
-    }
-}
+impl CssChunkPlaceable for CssModuleAsset {}
 
 #[turbo_tasks::value_impl]
 impl ResolveOrigin for CssModuleAsset {
@@ -180,6 +169,11 @@ impl ChunkItem for CssModuleChunkItem {
     fn references(&self) -> Vc<ModuleReferences> {
         self.module.references()
     }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -203,10 +197,12 @@ impl CssChunkItem for CssModuleChunkItem {
                     if let Some(placeable) =
                         Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(module).await?
                     {
-                        imports.push(CssImport::Internal(
-                            import_ref,
-                            CssChunkPlaceable::as_chunk_item(placeable, chunking_context),
-                        ));
+                        let item = placeable.as_chunk_item(chunking_context);
+                        if let Some(css_item) =
+                            Vc::try_resolve_downcast::<Box<dyn CssChunkItem>>(item).await?
+                        {
+                            imports.push(CssImport::Internal(import_ref, css_item));
+                        }
                     }
                 }
             } else if let Some(compose_ref) =
@@ -221,10 +217,12 @@ impl CssChunkItem for CssModuleChunkItem {
                     if let Some(placeable) =
                         Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(module).await?
                     {
-                        imports.push(CssImport::Composes(CssChunkPlaceable::as_chunk_item(
-                            placeable,
-                            chunking_context,
-                        )));
+                        let item = placeable.as_chunk_item(chunking_context);
+                        if let Some(css_item) =
+                            Vc::try_resolve_downcast::<Box<dyn CssChunkItem>>(item).await?
+                        {
+                            imports.push(CssImport::Composes(css_item));
+                        }
                     }
                 }
             }

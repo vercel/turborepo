@@ -125,18 +125,6 @@ impl ChunkableModule for StaticModuleAsset {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkPlaceable for StaticModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk_item(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    ) -> Vc<Box<dyn EcmascriptChunkItem>> {
-        Vc::upcast(ModuleChunkItem::cell(ModuleChunkItem {
-            module: self,
-            chunking_context,
-            static_asset: self.static_asset(Vc::upcast(chunking_context)),
-        }))
-    }
-
-    #[turbo_tasks::function]
     fn get_exports(&self) -> Vc<EcmascriptExports> {
         EcmascriptExports::Value.into()
     }
@@ -214,6 +202,11 @@ impl ChunkItem for ModuleChunkItem {
                 self.static_asset.ident().to_string().await?
             )),
         ))]))
+    }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
     }
 }
 

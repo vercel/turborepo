@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use indoc::writedoc;
 use turbo_tasks::{TryJoinIterExt, Vc};
 use turbopack_core::{
-    chunk::{ChunkData, ChunkItem, ChunkingContext, ChunksData},
+    chunk::{ChunkData, ChunkItem, ChunkItemExt, ChunkableModule, ChunkingContext, ChunksData},
     ident::AssetIdent,
     module::Module,
     reference::{ModuleReference, ModuleReferences, SingleOutputAssetReference},
@@ -13,8 +13,8 @@ use turbopack_core::{
 use super::chunk_asset::ManifestChunkAsset;
 use crate::{
     chunk::{
-        data::EcmascriptChunkData, item::EcmascriptChunkItemExt, EcmascriptChunkItem,
-        EcmascriptChunkItemContent, EcmascriptChunkPlaceable, EcmascriptChunkingContext,
+        data::EcmascriptChunkData, EcmascriptChunkItem, EcmascriptChunkItemContent,
+        EcmascriptChunkPlaceable, EcmascriptChunkingContext,
     },
     utils::StringifyJs,
 };
@@ -105,6 +105,11 @@ impl ChunkItem for ManifestLoaderItem {
 
         Ok(Vc::cell(references))
     }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Result<Vc<Box<dyn ChunkingContext>>> {
+        Ok(Vc::upcast(self.manifest.await?.chunking_context))
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -131,7 +136,7 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
         // exports a promise for all of the necessary chunk loads.
         let item_id = &*this
             .manifest
-            .as_chunk_item(manifest.chunking_context)
+            .as_chunk_item(Vc::upcast(manifest.chunking_context))
             .id()
             .await?;
 
@@ -142,7 +147,7 @@ impl EcmascriptChunkItem for ManifestLoaderItem {
                 .await?
                 .ok_or_else(|| anyhow!("asset is not placeable in ecmascript chunk"))?;
         let dynamic_id = &*placeable
-            .as_chunk_item(manifest.chunking_context)
+            .as_chunk_item(Vc::upcast(manifest.chunking_context))
             .id()
             .await?;
 

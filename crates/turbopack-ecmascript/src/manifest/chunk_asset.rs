@@ -11,8 +11,7 @@ use turbopack_core::{
 
 use super::chunk_item::ManifestChunkItem;
 use crate::chunk::{
-    EcmascriptChunk, EcmascriptChunkItem, EcmascriptChunkPlaceable, EcmascriptChunkingContext,
-    EcmascriptExports,
+    EcmascriptChunk, EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports,
 };
 
 #[turbo_tasks::function]
@@ -156,20 +155,6 @@ impl ChunkableModule for ManifestChunkAsset {
 
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkPlaceable for ManifestChunkAsset {
-    #[turbo_tasks::function]
-    async fn as_chunk_item(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    ) -> Result<Vc<Box<dyn EcmascriptChunkItem>>> {
-        Ok(Vc::upcast(
-            ManifestChunkItem {
-                chunking_context,
-                manifest: self,
-            }
-            .cell(),
-        ))
-    }
-
     #[turbo_tasks::function]
     fn get_exports(&self) -> Vc<EcmascriptExports> {
         EcmascriptExports::Value.cell()

@@ -22,7 +22,7 @@ use turbo_tasks::{
     debug::ValueDebugFormat,
     graph::{AdjacencyMap, GraphTraversal, GraphTraversalResult, Visit, VisitControlFlow},
     trace::TraceRawVcs,
-    ReadRef, TryJoinIterExt, Value, ValueToString, Vc,
+    ReadRef, TryJoinIterExt, Upcast, Value, ValueToString, Vc,
 };
 use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::DeterministicHash;
@@ -686,7 +686,25 @@ pub trait ChunkItem {
     /// TODO(alexkirsz) This should have a default impl that returns empty
     /// references.
     fn references(self: Vc<Self>) -> Vc<ModuleReferences>;
+
+    fn chunking_context(self: Vc<Self>) -> Vc<Box<dyn ChunkingContext>>;
 }
 
 #[turbo_tasks::value(transparent)]
 pub struct ChunkItems(Vec<Vc<Box<dyn ChunkItem>>>);
+
+pub trait ChunkItemExt: Send {
+    /// Returns the module id of this chunk item.
+    fn id(self: Vc<Self>) -> Vc<ModuleId>;
+}
+
+impl<T> ChunkItemExt for T
+where
+    T: Upcast<Box<dyn ChunkItem>>,
+{
+    /// Returns the module id of this chunk item.
+    fn id(self: Vc<Self>) -> Vc<ModuleId> {
+        let chunk_item = Vc::upcast(self);
+        chunk_item.chunking_context().chunk_item_id(chunk_item)
+    }
+}

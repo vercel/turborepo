@@ -18,7 +18,7 @@ use turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
-        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkableModule,
+        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkItemExt, ChunkableModule,
         ChunkableModuleReference, ChunkingContext,
     },
     ident::AssetIdent,
@@ -31,8 +31,8 @@ use turbopack_core::{
 
 use crate::{
     chunk::{
-        item::EcmascriptChunkItemExt, EcmascriptChunk, EcmascriptChunkItem,
-        EcmascriptChunkItemContent, EcmascriptChunkingContext, EcmascriptExports,
+        EcmascriptChunk, EcmascriptChunkItem, EcmascriptChunkItemContent,
+        EcmascriptChunkingContext, EcmascriptExports,
     },
     code_gen::CodeGeneration,
     create_visitor,
@@ -282,7 +282,7 @@ impl CodeGenerateable for RequireContextAssetReference {
         &self,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
     ) -> Result<Vc<CodeGeneration>> {
-        let chunk_item = EcmascriptChunkPlaceable::as_chunk_item(self.inner, chunking_context);
+        let chunk_item = self.inner.as_chunk_item(Vc::upcast(chunking_context));
         let module_id = chunk_item.id().await?.clone_value();
 
         let mut visitors = Vec::new();
@@ -416,24 +416,6 @@ impl ChunkableModule for RequireContextAsset {
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkPlaceable for RequireContextAsset {
     #[turbo_tasks::function]
-    async fn as_chunk_item(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    ) -> Result<Vc<Box<dyn EcmascriptChunkItem>>> {
-        let this = self.await?;
-        Ok(Vc::upcast(
-            RequireContextChunkItem {
-                chunking_context,
-                inner: self,
-
-                origin: this.origin,
-                map: this.map,
-            }
-            .cell(),
-        ))
-    }
-
-    #[turbo_tasks::function]
     fn get_exports(&self) -> Vc<EcmascriptExports> {
         EcmascriptExports::Value.cell()
     }
@@ -539,5 +521,10 @@ impl ChunkItem for RequireContextChunkItem {
     #[turbo_tasks::function]
     fn references(&self) -> Vc<ModuleReferences> {
         self.inner.references()
+    }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
     }
 }
