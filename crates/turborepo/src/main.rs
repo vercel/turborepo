@@ -1,5 +1,6 @@
 #![deny(clippy::all)]
 
+// Testing CI DO NOT COMMIT
 use std::{
     env::{consts, current_exe},
     process,
