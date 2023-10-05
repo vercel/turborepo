@@ -16,6 +16,7 @@ pub mod magic_identifier;
 pub mod manifest;
 pub mod parse;
 mod path_visitor;
+mod pkg_json;
 pub mod references;
 pub mod resolve;
 pub(crate) mod special_cases;
