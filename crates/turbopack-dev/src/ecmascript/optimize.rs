@@ -78,7 +78,6 @@ async fn merge_chunks(
     Ok(EcmascriptChunk::new_normalized(
         first.chunking_context,
         Vc::cell(main_entries.into_iter().collect()),
-        None,
         Value::new(first.availability_info),
     ))
 }
@@ -403,7 +402,6 @@ async fn optimize_ecmascript(
             *chunk = EcmascriptChunk::new_normalized(
                 content.chunking_context,
                 content.main_entries,
-                content.omit_entries,
                 Value::new(content.availability_info),
             )
         }

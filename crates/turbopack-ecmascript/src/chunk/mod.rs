@@ -47,7 +47,6 @@ use crate::utils::FormatIter;
 pub struct EcmascriptChunk {
     pub chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
     pub main_entries: Vc<EcmascriptChunkPlaceables>,
-    pub omit_entries: Option<Vc<EcmascriptChunkPlaceables>>,
     pub availability_info: AvailabilityInfo,
 }
 
@@ -60,13 +59,11 @@ impl EcmascriptChunk {
     pub fn new_normalized(
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         main_entries: Vc<EcmascriptChunkPlaceables>,
-        omit_entries: Option<Vc<EcmascriptChunkPlaceables>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Vc<Self> {
         EcmascriptChunk {
             chunking_context,
             main_entries,
-            omit_entries,
             availability_info: availability_info.into_value(),
         }
         .cell()
@@ -88,7 +85,6 @@ impl EcmascriptChunk {
         Ok(Self::new_normalized(
             context,
             Vc::cell(vec![main_entry]),
-            None,
             availability_info,
         ))
     }
@@ -108,7 +104,6 @@ impl EcmascriptChunk {
         Ok(Self::new_normalized(
             context,
             Vc::cell(vec![main_entry]),
-            None,
             Value::new(AvailabilityInfo::Root {
                 current_availability_root: Vc::upcast(main_entry),
             }),
@@ -127,7 +122,6 @@ impl EcmascriptChunk {
         Ok(Self::new_normalized(
             chunking_context,
             Vc::cell(main_entries),
-            None,
             Value::new(AvailabilityInfo::Root {
                 current_availability_root: Vc::upcast(main_entry),
             }),
@@ -184,13 +178,11 @@ impl EcmascriptChunk {
         let a = ecmascript_chunk_content(
             a.chunking_context,
             a.main_entries,
-            a.omit_entries,
             Value::new(a.availability_info),
         );
         let b = ecmascript_chunk_content(
             b.chunking_context,
             b.main_entries,
-            b.omit_entries,
             Value::new(b.availability_info),
         );
 
@@ -251,15 +243,6 @@ impl Chunk for EcmascriptChunk {
             ident.path()
         };
 
-        // All omit entries are included
-        if let Some(omit_entries) = this.omit_entries {
-            let omit_entries = omit_entries.await?;
-            let omit_entry_key = Vc::cell("omit".to_string());
-            for entry in omit_entries.iter() {
-                assets.push((omit_entry_key, entry.ident()))
-            }
-        }
-
         // Current availability root is included
         if let Some(current_availability_root) = this.availability_info.current_availability_root()
         {
@@ -309,7 +292,6 @@ impl Chunk for EcmascriptChunk {
         let content = ecmascript_chunk_content(
             self.chunking_context,
             self.main_entries,
-            self.omit_entries,
             Value::new(self.availability_info),
         )
         .await?;
@@ -326,7 +308,6 @@ impl Chunk for EcmascriptChunk {
         let content = ecmascript_chunk_content(
             this.chunking_context,
             this.main_entries,
-            this.omit_entries,
             Value::new(this.availability_info),
         )
         .await?;
@@ -365,14 +346,8 @@ impl ValueToString for EcmascriptChunk {
         }
         let entry_strings = entries_to_string(Some(self.main_entries)).await?;
         let entry_strs = || entry_strings.iter().map(|s| s.as_str()).intersperse(" + ");
-        let omit_entry_strings = entries_to_string(self.omit_entries).await?;
-        let omit_entry_strs = || omit_entry_strings.iter().flat_map(|s| [" - ", s.as_str()]);
 
-        Ok(Vc::cell(format!(
-            "chunk {}{}",
-            FormatIter(entry_strs),
-            FormatIter(omit_entry_strs),
-        )))
+        Ok(Vc::cell(format!("chunk {}", FormatIter(entry_strs),)))
     }
 }
 
@@ -384,7 +359,6 @@ impl EcmascriptChunk {
         Ok(ecmascript_chunk_content(
             this.chunking_context,
             this.main_entries,
-            this.omit_entries,
             Value::new(this.availability_info),
         ))
     }
@@ -439,7 +413,6 @@ impl Introspectable for EcmascriptChunk {
         let chunk_content = ecmascript_chunk_content(
             this.chunking_context,
             this.main_entries,
-            this.omit_entries,
             Value::new(this.availability_info),
         )
         .await?;

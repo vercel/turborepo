@@ -34,31 +34,14 @@ impl From<ChunkContentResult<Vc<Box<dyn EcmascriptChunkItem>>>> for EcmascriptCh
     }
 }
 
-#[turbo_tasks::value_impl]
-impl EcmascriptChunkContent {
-    #[turbo_tasks::function]
-    pub fn filter(
-        self: Vc<Self>,
-        _other: Vc<EcmascriptChunkContent>,
-    ) -> Vc<EcmascriptChunkContent> {
-        todo!()
-    }
-}
-
 #[turbo_tasks::function]
 pub(crate) fn ecmascript_chunk_content(
     chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
     main_entries: Vc<EcmascriptChunkPlaceables>,
-    omit_entries: Option<Vc<EcmascriptChunkPlaceables>>,
     availability_info: Value<AvailabilityInfo>,
 ) -> Vc<EcmascriptChunkContent> {
-    let mut chunk_content =
+    let chunk_content =
         ecmascript_chunk_content_internal(chunking_context, main_entries, availability_info);
-    if let Some(omit_entries) = omit_entries {
-        let omit_chunk_content =
-            ecmascript_chunk_content_internal(chunking_context, omit_entries, availability_info);
-        chunk_content = chunk_content.filter(omit_chunk_content);
-    }
     chunk_content
 }
 
