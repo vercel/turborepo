@@ -40,7 +40,6 @@ use swc_core::{
     },
     ecma::{
         ast::*,
-        atoms::Atom,
         visit::{
             fields::{AssignExprField, ExprField, PatField, PatOrExprField},
             AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath,
