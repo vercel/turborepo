@@ -1,0 +1,166 @@
+{
+  "name": "base",
+  "benchmarks": {
+    "bench_hmr_to_eval/Turbopack CSR/1000 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_hmr_to_eval/Turbopack CSR/1000 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_hmr_to_eval",
+        "function_id": "Turbopack CSR",
+        "value_str": "1000 modules",
+        "throughput": null,
+        "full_id": "bench_hmr_to_eval/Turbopack CSR/1000 modules",
+        "directory_name": "bench_hmr_to_eval/Turbopack CSR/1000 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5801987.357474747,
+            "upper_bound": 6509233.8298661625
+          },
+          "point_estimate": 6207421.26020202,
+          "standard_error": 179589.61973898008
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5798767.776515151,
+            "upper_bound": 6556379.1022727275
+          },
+          "point_estimate": 6471087.545454546,
+          "standard_error": 166594.69356133864
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 6104.582927984955,
+            "upper_bound": 928252.9850224884
+          },
+          "point_estimate": 128359.40610752798,
+          "standard_error": 170024.51377320074
+        },
+        "slope": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 5962330.934524946,
+            "upper_bound": 6532390.133269009
+          },
+          "point_estimate": 6321935.560566706,
+          "standard_error": 144319.49183100736
+        },
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 68959.24549255517,
+            "upper_bound": 755886.4832210144
+          },
+          "point_estimate": 598533.895932946,
+          "standard_error": 183675.78251806012
+        }
+      }
+    },
+    "bench_startup/Turbopack CSR/1000 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_startup/Turbopack CSR/1000 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_startup",
+        "function_id": "Turbopack CSR",
+        "value_str": "1000 modules",
+        "throughput": null,
+        "full_id": "bench_startup/Turbopack CSR/1000 modules",
+        "directory_name": "bench_startup/Turbopack CSR/1000 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1451992213.0,
+            "upper_bound": 1496762015.2
+          },
+          "point_estimate": 1471146353.2,
+          "standard_error": 11616007.095120808
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1449620012.5,
+            "upper_bound": 1492121718.5
+          },
+          "point_estimate": 1457704331.0,
+          "standard_error": 8745527.499202192
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 1752104.7729939222,
+            "upper_bound": 50422130.94602823
+          },
+          "point_estimate": 9174005.430328846,
+          "standard_error": 10236178.368676344
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 6334478.063247667,
+            "upper_bound": 51776523.60797175
+          },
+          "point_estimate": 38502143.224467605,
+          "standard_error": 12217613.53246541
+        }
+      }
+    },
+    "bench_startup/Turbopack CSR/10000 modules": {
+      "baseline": "base",
+      "fullname": "base/bench_startup/Turbopack CSR/10000 modules",
+      "criterion_benchmark_v1": {
+        "group_id": "bench_startup",
+        "function_id": "Turbopack CSR",
+        "value_str": "10000 modules",
+        "throughput": null,
+        "full_id": "bench_startup/Turbopack CSR/10000 modules",
+        "directory_name": "bench_startup/Turbopack CSR/10000 modules"
+      },
+      "criterion_estimates_v1": {
+        "mean": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 13697005867.4,
+            "upper_bound": 14099206658.2
+          },
+          "point_estimate": 13890105792.9,
+          "standard_error": 102687794.91689935
+        },
+        "median": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 13636841532.0,
+            "upper_bound": 14148990020.0
+          },
+          "point_estimate": 13848795917.5,
+          "standard_error": 151158986.29632837
+        },
+        "median_abs_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 46722717.839705944,
+            "upper_bound": 598238500.9239435
+          },
+          "point_estimate": 315132214.5485848,
+          "standard_error": 136823644.99532276
+        },
+        "slope": null,
+        "std_dev": {
+          "confidence_interval": {
+            "confidence_level": 0.95,
+            "lower_bound": 184923716.54536748,
+            "upper_bound": 445218056.5081912
+          },
+          "point_estimate": 341795635.90572244,
+          "standard_error": 69382346.4896271
+        }
+      }
+    }
+  }
+}
