@@ -272,11 +272,11 @@ impl CodeGenerateableWithAvailabilityInfo for AsyncModule {
         self: Vc<Self>,
         is_async_module: bool,
     ) -> Result<Vc<AvailabilityInfoNeeds>> {
-        Ok(if is_async_module {
-            AvailabilityInfoNeeds::Root.cell()
-        } else {
-            AvailabilityInfoNeeds::None.cell()
-        })
+        let mut needs = AvailabilityInfoNeeds::none();
+        if is_async_module {
+            needs.current_availability_root = true;
+        }
+        Ok(needs.cell())
     }
 }
 

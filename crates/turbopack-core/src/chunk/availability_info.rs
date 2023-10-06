@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign, BitOr, BitOrAssign};
+use std::ops::{BitOr, BitOrAssign};
 
 use turbo_tasks::Vc;
 
@@ -27,23 +27,18 @@ impl AvailabilityInfoNeeds {
             available_modules: false,
         }
     }
+
+    pub fn is_complete(self) -> bool {
+        let Self {
+            current_availability_root,
+            available_modules,
+        } = self;
+        current_availability_root && available_modules
+    }
 }
 
 impl BitOr for AvailabilityInfoNeeds {
     type Output = AvailabilityInfoNeeds;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (Self::None, rhs) => rhs,
-            (lhs, Self::None) => lhs,
-            (Self::Complete, _) | (_, Self::Complete) => Self::Complete,
-            (Self::Root, Self::Root) => Self::Root,
-            (Self::AvailableModules, Self::AvailableModules) => Self::AvailableModules,
-            (Self::Root, Self::AvailableModules) | (Self::AvailableModules, Self::Root) => {
-                Self::Complete
-            }
-        }
-    }
 
     fn bitor(mut self, rhs: Self) -> Self::Output {
         let Self {

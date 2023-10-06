@@ -152,13 +152,13 @@ impl AnalyzeEcmascriptModuleResult {
             code_generation,
             ..
         } = &*self.await?;
-        let mut needs = AvailabilityInfoNeeds::None;
+        let mut needs = AvailabilityInfoNeeds::none();
         for c in code_generation.await?.iter() {
             if let CodeGen::CodeGenerateableWithAvailabilityInfo(code_gen) = c {
-                needs += *code_gen
+                needs |= *code_gen
                     .get_availability_info_needs(is_async_module)
                     .await?;
-                if matches!(needs, AvailabilityInfoNeeds::Complete) {
+                if needs.is_complete() {
                     return Ok(needs.cell());
                 }
             }
@@ -168,10 +168,10 @@ impl AnalyzeEcmascriptModuleResult {
                 Vc::try_resolve_sidecast::<Box<dyn CodeGenerateableWithAvailabilityInfo>>(*r)
                     .await?
             {
-                needs += *code_gen
+                needs |= *code_gen
                     .get_availability_info_needs(is_async_module)
                     .await?;
-                if matches!(needs, AvailabilityInfoNeeds::Complete) {
+                if needs.is_complete() {
                     return Ok(needs.cell());
                 }
             }
