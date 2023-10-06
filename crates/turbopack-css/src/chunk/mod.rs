@@ -627,7 +627,7 @@ impl ChunkType for CssChunkType {
         chunk_item: Vc<Box<dyn ChunkItem>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<Box<dyn Chunk>>> {
-        let placeable = Vc::try_resolve_sidecast::<Box<dyn CssChunkPlaceable>>(chunk_item.module())
+        let placeable = Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(chunk_item.module())
             .await?
             .context("Module must implmement CssChunkPlaceable to be used as a CSS Chunk")?;
         Ok(Vc::upcast(CssChunk::new(
