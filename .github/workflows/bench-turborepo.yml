@@ -1,9 +1,9 @@
-name: Large Repo Benchmark
+name: Benchmark Turborepo
 
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: [Release]
+    workflows: [Turborepo Release]
     types:
       - completed
 
