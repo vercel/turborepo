@@ -95,7 +95,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                 self.references.push(Vc::upcast(ImportAssetReference::new(
                     self.origin,
                     Request::parse(Value::new(src.to_string().into())),
-                    ImportAttributes::new_from_prelude(&import_rule_to_static(i)).into(),
+                    ImportAttributes::new_from_prelude(&i.clone().into_owned()).into(),
                     IssueSource::new(
                         Vc::upcast(self.source),
                         SourcePos {
