@@ -152,12 +152,7 @@ Locate a repository with no turbo.json. We'll get the right root, but there's no
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
-  [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
-  [-0-9:.TWZ+]+ \[ERROR] turbo: error: run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist (re)
-   ERROR  run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
-  Turbo error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
+  Error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one
   [1]
 
 Locate a repository with no turbo.json. We'll get the right root and inference directory, but there's nothing to run
@@ -168,12 +163,7 @@ Locate a repository with no turbo.json. We'll get the right root and inference d
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::cli: pkg_inference_root set to "apps" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
-  [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
-  [-0-9:.TWZ+]+ \[ERROR] turbo: error: run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist (re)
-   ERROR  run failed: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
-  Turbo error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one: file does not exist
+  Error: Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create one
   [1]
 
   $ cd $TARGET_DIR/outer-no-turbo && ${TURBO} run build --filter=nothing -vv
