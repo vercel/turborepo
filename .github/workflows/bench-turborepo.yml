@@ -3,6 +3,7 @@ name: Benchmark Turborepo
 on:
   workflow_dispatch:
   workflow_run:
+    # Make sure this matches the name of the workflow in ./github/workflows/turborepo-release.yml.
     workflows: [Turborepo Release]
     types:
       - completed
