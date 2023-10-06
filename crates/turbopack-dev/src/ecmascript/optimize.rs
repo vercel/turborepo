@@ -2,11 +2,11 @@
 
 use std::{cmp::Ordering, collections::HashSet};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use indexmap::{IndexMap, IndexSet};
 use turbo_tasks::{TryJoinIterExt, Value, Vc};
 use turbo_tasks_fs::FileSystemPathOption;
-use turbopack_core::chunk::optimize::optimize_by_common_parent;
+use turbopack_core::{chunk::optimize::optimize_by_common_parent, ident::AssetIdent};
 use turbopack_ecmascript::chunk::{EcmascriptChunk, EcmascriptChunkingContext, EcmascriptChunks};
 
 #[turbo_tasks::function]
@@ -65,21 +65,10 @@ async fn merge_chunks(
     first: Vc<EcmascriptChunk>,
     chunks: &[Vc<EcmascriptChunk>],
 ) -> Result<Vc<EcmascriptChunk>> {
-    let first = first.await?;
-    let chunks = chunks.iter().copied().try_join().await?;
-    let main_entries = chunks
-        .iter()
-        .map(|c| c.main_entries)
-        .try_join()
-        .await?
-        .iter()
-        .flat_map(|e| e.iter().copied())
-        .collect::<IndexSet<_>>();
-    Ok(EcmascriptChunk::new_normalized(
-        first.chunking_context,
-        Vc::cell(main_entries.into_iter().collect()),
-        Value::new(first.availability_info),
-    ))
+    todo!(
+        "Merge chunks by merging their content, come up with a new ident, maybe using the common \
+         parent path"
+    )
 }
 
 /// Number of chunks to compare with to chunk for duplication.

@@ -29,9 +29,7 @@ pub mod utils;
 pub mod webpack;
 
 use anyhow::{Context, Result};
-use chunk::{
-    EcmascriptChunk, EcmascriptChunkItem, EcmascriptChunkPlaceables, EcmascriptChunkingContext,
-};
+use chunk::{EcmascriptChunkItem, EcmascriptChunkingContext};
 use code_gen::CodeGenerateable;
 pub use parse::ParseResultSourceMap;
 use parse::{parse, ParseResult};
@@ -54,7 +52,7 @@ use turbo_tasks_fs::{rope::Rope, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
-        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkType, ChunkableModule,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkType, ChunkableModule,
         ChunkingContext, EvaluatableAsset,
     },
     compile_time_info::CompileTimeInfo,
@@ -267,19 +265,6 @@ impl EcmascriptModuleAsset {
             inner_assets: Some(inner_assets),
             last_successful_analysis: Default::default(),
         })
-    }
-
-    #[turbo_tasks::function]
-    pub fn as_root_chunk_with_entries(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-        other_entries: Vc<EcmascriptChunkPlaceables>,
-    ) -> Vc<Box<dyn Chunk>> {
-        Vc::upcast(EcmascriptChunk::new_root_with_entries(
-            chunking_context,
-            Vc::upcast(self),
-            other_entries,
-        ))
     }
 
     #[turbo_tasks::function]

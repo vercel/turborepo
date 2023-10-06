@@ -1,8 +1,14 @@
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use turbo_tasks::{Value, ValueDefault, Vc};
-use turbopack_core::chunk::{availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkType};
+use turbopack_core::{
+    chunk::{availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkType},
+    module::Module,
+};
 
-use super::{EcmascriptChunk, EcmascriptChunkPlaceable};
+use super::{
+    content::ecmascript_chunk_content, EcmascriptChunk, EcmascriptChunkPlaceable,
+    EcmascriptChunkingContext,
+};
 
 #[derive(Default)]
 #[turbo_tasks::value]
@@ -17,16 +23,30 @@ impl ChunkType for EcmascriptChunkType {
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<Box<dyn Chunk>>> {
         let placeable =
-            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(chunk_item.module())
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkPlaceable>>(chunk_item.module())
                 .await?
                 .context(
-                    "Module must implmement EcmascriptChunkPlaceable to be used as a EcmaScript \
+                    "Module must implement EcmascriptChunkPlaceable to be used as a EcmaScript \
                      Chunk",
                 )?;
-        Ok(Vc::upcast(EcmascriptChunk::new(
-            chunk_item.chunking_context(),
-            placeable,
+        let Some(chunking_context) =
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(
+                chunk_item.chunking_context(),
+            )
+            .await?
+        else {
+            bail!("Ecmascript chunking context not found");
+        };
+        let ident = placeable.ident();
+        let content = ecmascript_chunk_content(
+            chunking_context,
+            Vc::cell(vec![placeable]),
             availability_info,
+        );
+        Ok(Vc::upcast(EcmascriptChunk::new(
+            chunking_context,
+            ident,
+            content,
         )))
     }
 }
