@@ -189,6 +189,7 @@ jobs:
         timeout-minutes: 120
         run: |
           cargo test --benches --release -p turbopack-bench --no-run
+          echo done
 
       - name: Run cargo test on benchmarks for other bundlers
         if: needs.determine_jobs.outputs.turbopack_bench == 'true'
