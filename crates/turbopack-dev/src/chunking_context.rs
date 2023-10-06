@@ -360,7 +360,7 @@ impl ChunkingContext for DevChunkingContext {
             .collect();
 
         assets.push(self.generate_chunk_list_register_chunk(
-            module.ident(),
+            entry_chunk.ident(),
             EvaluatableAssets::empty(),
             Vc::cell(assets.clone()),
             Value::new(EcmascriptDevChunkListSource::Dynamic),
