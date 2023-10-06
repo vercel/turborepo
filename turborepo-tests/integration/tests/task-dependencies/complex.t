@@ -34,14 +34,12 @@ We can scope the run to specific packages
 
 Can't depend on unknown tasks
   $ ${TURBO} run build2
-   ERROR  run failed: error preparing engine: Could not find "app-a#custom" in root turbo.json or "app-a" workspace
-  Turbo error: error preparing engine: Could not find "app-a#custom" in root turbo.json or "app-a" workspace
+  Error: Could not find "app-a#custom" in root turbo.json or "custom" in workspace
   [1]
 
 Can't depend on tasks from unknown packages
   $ ${TURBO} run build3
-   ERROR  run failed: error preparing engine: Could not find workspace "unknown" from task "unknown#custom" in project
-  Turbo error: error preparing engine: Could not find workspace "unknown" from task "unknown#custom" in project
+  Error: Could not find workspace "unknown" from task "unknown#custom" in project
   [1]
 
 
@@ -101,8 +99,5 @@ Check that --only only runs leaf tasks
 
 Can't depend on itself
   $ ${TURBO} run build4
-   ERROR  run failed: error preparing engine: Invalid task dependency graph:
-  .*#build4 depends on itself (re)
-  Turbo error: error preparing engine: Invalid task dependency graph:
-  .*#build4 depends on itself (re)
+  Error: (lib-a|lib-b|lib-c|lib-d|app-a|app-b)#build4 depends on itself (re)
   [1]

@@ -28,7 +28,7 @@ pub mod typescript;
 pub mod utils;
 pub mod webpack;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chunk::{
     EcmascriptChunk, EcmascriptChunkItem, EcmascriptChunkPlaceables, EcmascriptChunkingContext,
 };
@@ -54,8 +54,8 @@ use turbo_tasks_fs::{rope::Rope, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
-        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkableModule, ChunkingContext,
-        EvaluatableAsset,
+        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkType, ChunkableModule,
+        ChunkingContext, EvaluatableAsset,
     },
     compile_time_info::CompileTimeInfo,
     context::AssetContext,
@@ -68,7 +68,7 @@ use turbopack_core::{
 };
 
 use self::{
-    chunk::{EcmascriptChunkItemContent, EcmascriptExports},
+    chunk::{EcmascriptChunkItemContent, EcmascriptChunkType, EcmascriptExports},
     code_gen::{CodeGen, CodeGenerateableWithAvailabilityInfo, VisitorFactory},
     tree_shake::asset::EcmascriptModulePartAsset,
 };
@@ -353,11 +353,6 @@ impl EcmascriptModuleAsset {
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<EcmascriptModuleContent>> {
         let this = self.await?;
-        let availability_info = if *self.analyze().needs_availability_info().await? {
-            availability_info
-        } else {
-            Value::new(AvailabilityInfo::Untracked)
-        };
 
         let parsed = parse(this.source, Value::new(this.ty), this.transforms);
 
@@ -404,32 +399,26 @@ impl Asset for EcmascriptModuleAsset {
 #[turbo_tasks::value_impl]
 impl ChunkableModule for EcmascriptModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk(
+    async fn as_chunk_item(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Box<dyn Chunk>> {
-        Vc::upcast(EcmascriptChunk::new(
+    ) -> Result<Vc<Box<dyn ChunkItem>>> {
+        let chunking_context =
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+                .await?
+                .context(
+                    "chunking context must impl EcmascriptChunkingContext to use \
+                     EcmascriptModuleAsset",
+                )?;
+        Ok(Vc::upcast(ModuleChunkItem::cell(ModuleChunkItem {
+            module: self,
             chunking_context,
-            Vc::upcast(self),
-            availability_info,
-        ))
+        })))
     }
 }
 
 #[turbo_tasks::value_impl]
 impl EcmascriptChunkPlaceable for EcmascriptModuleAsset {
-    #[turbo_tasks::function]
-    fn as_chunk_item(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    ) -> Vc<Box<dyn EcmascriptChunkItem>> {
-        Vc::upcast(ModuleChunkItem::cell(ModuleChunkItem {
-            module: self,
-            chunking_context,
-        }))
-    }
-
     #[turbo_tasks::function]
     async fn get_exports(self: Vc<Self>) -> Result<Vc<EcmascriptExports>> {
         Ok(self.failsafe_analyze().await?.exports)
@@ -487,6 +476,21 @@ impl ChunkItem for ModuleChunkItem {
     fn references(&self) -> Vc<ModuleReferences> {
         self.module.references()
     }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
+    }
+
+    #[turbo_tasks::function]
+    fn ty(&self) -> Vc<Box<dyn ChunkType>> {
+        Vc::upcast(Vc::<EcmascriptChunkType>::default())
+    }
+
+    #[turbo_tasks::function]
+    fn module(&self) -> Vc<Box<dyn Module>> {
+        Vc::upcast(self.module)
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -507,13 +511,24 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let this = self.await?;
-        let content = this
-            .module
-            .module_content(this.chunking_context, availability_info);
         let async_module_options = this
             .module
             .get_async_module()
-            .module_options(availability_info);
+            .module_options(availability_info.current_availability_root());
+        let is_async_module = async_module_options.await?.is_some();
+        let availability_info_needs = *this
+            .module
+            .analyze()
+            .get_availability_info_needs(is_async_module)
+            .await?;
+        // We reduce the availability info to the needs of the chunk item to improve
+        // caching of the methods that are called with availability info. e. g.
+        // module_content() can be cached for different availability info when it
+        // doesn't really need that info.
+        let availability_info = availability_info.reduce_to_needs(availability_info_needs);
+        let content = this
+            .module
+            .module_content(this.chunking_context, Value::new(availability_info));
 
         Ok(EcmascriptChunkItemContent::new(
             content,

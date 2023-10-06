@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 #[cfg(not(test))]
 use std::net::SocketAddr;
 #[cfg(test)]
@@ -57,7 +59,7 @@ where
 {
     if let Err(err) = set_token() {
         error!("could not logout. Something went wrong: {}", err);
-        return Err(err.into());
+        return Err(err);
     }
 
     println!("{}", ui.apply(GREY.apply_to(">>> Logged out")));
@@ -80,7 +82,7 @@ where
     if let Ok(token) = std::fs::read_to_string(token_path) {
         if let Ok(response) = api_client.get_user(&token).await {
             println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
-            print_cli_authorized(&response.user.email, &ui);
+            print_cli_authorized(&response.user.email, ui);
             return Ok(());
         }
     }
@@ -231,7 +233,7 @@ where
                 .any(|team| team.slug == sso_team)
             {
                 println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
-                print_cli_authorized(&response_user.user.email, &ui);
+                print_cli_authorized(&response_user.user.email, ui);
                 return Ok(());
             }
         }

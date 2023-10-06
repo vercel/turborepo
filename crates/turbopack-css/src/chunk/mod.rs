@@ -4,16 +4,16 @@ pub(crate) mod writer;
 
 use std::fmt::Write;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use indexmap::IndexSet;
-use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{TryJoinIterExt, Value, ValueDefault, ValueToString, Vc};
 use turbo_tasks_fs::{rope::Rope, File, FileSystemPathOption};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
         availability_info::AvailabilityInfo, chunk_content, chunk_content_split, Chunk,
-        ChunkContentResult, ChunkItem, ChunkableModule, ChunkingContext, Chunks,
-        FromChunkableModule, ModuleId, OutputChunk, OutputChunkRuntimeInfo,
+        ChunkContentResult, ChunkItem, ChunkItemExt, ChunkType, ChunkableModule, ChunkingContext,
+        Chunks, FromChunkableModule, ModuleId, OutputChunk, OutputChunkRuntimeInfo,
     },
     code_builder::{Code, CodeBuilder},
     ident::AssetIdent,
@@ -144,9 +144,13 @@ impl CssChunkContent {
         for entry in this.main_entries.await?.iter() {
             let entry_item = entry.as_chunk_item(this.chunking_context);
 
-            // TODO(WEB-1261)
-            for external_import in expand_imports(&mut body, entry_item).await? {
-                external_imports.insert(external_import.await?.to_owned());
+            if let Some(css_item) =
+                Vc::try_resolve_downcast::<Box<dyn CssChunkItem>>(entry_item).await?
+            {
+                // TODO(WEB-1261)
+                for external_import in expand_imports(&mut body, css_item).await? {
+                    external_imports.insert(external_import.await?.to_owned());
+                }
             }
         }
 
@@ -332,7 +336,12 @@ impl OutputChunk for CssChunk {
         let imports_chunk_items: Vec<_> = entries_chunk_items
             .iter()
             .map(|&chunk_item| async move {
-                Ok(chunk_item
+                let Some(css_item) =
+                    Vc::try_resolve_downcast::<Box<dyn CssChunkItem>>(chunk_item).await?
+                else {
+                    return Ok(vec![]);
+                };
+                Ok(css_item
                     .content()
                     .await?
                     .imports
@@ -492,13 +501,9 @@ impl CssChunkContext {
     }
 }
 
+// TODO: remove
 #[turbo_tasks::value_trait]
-pub trait CssChunkPlaceable: ChunkableModule + Module + Asset {
-    fn as_chunk_item(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ) -> Vc<Box<dyn CssChunkItem>>;
-}
+pub trait CssChunkPlaceable: ChunkableModule + Module + Asset {}
 
 #[turbo_tasks::value(transparent)]
 pub struct CssChunkPlaceables(Vec<Vc<Box<dyn CssChunkPlaceable>>>);
@@ -523,7 +528,7 @@ pub trait CssChunkItem: ChunkItem {
     fn content(self: Vc<Self>) -> Vc<CssChunkItemContent>;
     fn chunking_context(self: Vc<Self>) -> Vc<Box<dyn ChunkingContext>>;
     fn id(self: Vc<Self>) -> Vc<ModuleId> {
-        CssChunkContext::of(self.chunking_context()).chunk_item_id(self)
+        CssChunkContext::of(CssChunkItem::chunking_context(self)).chunk_item_id(self)
     }
 }
 
@@ -536,7 +541,10 @@ impl FromChunkableModule for Box<dyn CssChunkItem> {
         if let Some(placeable) =
             Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(asset).await?
         {
-            return Ok(Some(placeable.as_chunk_item(chunking_context)));
+            let item = placeable.as_chunk_item(chunking_context);
+            if let Some(css_item) = Vc::try_resolve_downcast::<Box<dyn CssChunkItem>>(item).await? {
+                return Ok(Some(css_item));
+            }
         }
         Ok(None)
     }
@@ -604,5 +612,36 @@ impl Introspectable for CssChunk {
             ));
         }
         Ok(Vc::cell(children))
+    }
+}
+
+#[derive(Default)]
+#[turbo_tasks::value]
+pub struct CssChunkType {}
+
+#[turbo_tasks::value_impl]
+impl ChunkType for CssChunkType {
+    #[turbo_tasks::function]
+    async fn as_chunk(
+        &self,
+        chunk_item: Vc<Box<dyn ChunkItem>>,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Result<Vc<Box<dyn Chunk>>> {
+        let placeable = Vc::try_resolve_sidecast::<Box<dyn CssChunkPlaceable>>(chunk_item.module())
+            .await?
+            .context("Module must implmement CssChunkPlaceable to be used as a CSS Chunk")?;
+        Ok(Vc::upcast(CssChunk::new(
+            chunk_item.chunking_context(),
+            placeable,
+            availability_info,
+        )))
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ValueDefault for CssChunkType {
+    #[turbo_tasks::function]
+    fn value_default() -> Vc<Self> {
+        Self::default().cell()
     }
 }

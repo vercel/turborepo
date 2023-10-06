@@ -31,11 +31,11 @@ func IsNil(l Lockfile) bool {
 // Package Structure representing a possible Pack
 type Package struct {
 	// Key used to lookup a package in the lockfile
-	Key string
+	Key string `json:"key"`
 	// The resolved version of a package as it appears in the lockfile
-	Version string
+	Version string `json:"version"`
 	// Set to true iff Key and Version are set
-	Found bool
+	Found bool `json:"-"`
 }
 
 // ByKey sort package structures by key
@@ -50,7 +50,11 @@ func (p ByKey) Swap(i, j int) {
 }
 
 func (p ByKey) Less(i, j int) bool {
-	return p[i].Key+p[i].Version < p[j].Key+p[j].Version
+	if p[i].Key == p[j].Key {
+		return p[i].Version < p[j].Version
+	}
+
+	return p[i].Key < p[j].Key
 }
 
 var _ (sort.Interface) = (*ByKey)(nil)

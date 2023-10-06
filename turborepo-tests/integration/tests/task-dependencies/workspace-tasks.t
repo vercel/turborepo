@@ -37,8 +37,7 @@ Can depend on root tasks
 
 Can't depend on a missing root task
   $ ${TURBO} run build3 --graph
-   ERROR  run failed: error preparing engine: //#not-exists needs an entry in turbo.json before it can be depended on because it is a task run from the root package
-  Turbo error: error preparing engine: //#not-exists needs an entry in turbo.json before it can be depended on because it is a task run from the root package
+  Error: //#not-exists needs an entry in turbo.json before it can be depended on because it is a task run from the root package
   [1]
 
 Package tasks can depend on things

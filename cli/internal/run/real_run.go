@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
 )
@@ -136,6 +138,7 @@ func RealRun(
 	runSummary runsummary.Meta,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
+	executionState *turbostate.ExecutionState,
 ) error {
 	singlePackage := rs.Opts.runOpts.SinglePackage
 
@@ -277,6 +280,26 @@ func RealRun(
 	if isGrouped {
 		close(logChan)
 		logWaitGroup.Wait()
+	}
+
+	if executionState.TaskHashTracker != nil {
+		expectedTaskHashes := taskHashTracker.GetTaskHashes()
+		// If we have errors, not all the Go hashes may be calculated.
+		// We just check the ones that have been calculated
+		if len(errs) > 0 {
+			for task, expectedHash := range expectedTaskHashes {
+				hash, ok := executionState.TaskHashTracker.PackageTaskHashes[task]
+				if !ok {
+					return fmt.Errorf("task %s not found in Rust hash tracker", task)
+				}
+				if hash != expectedHash {
+					return fmt.Errorf("task %s hash differs between Rust and Go: rust %s go %s", task, hash, expectedHash)
+				}
+			}
+		} else if !reflect.DeepEqual(executionState.TaskHashTracker.PackageTaskHashes, expectedTaskHashes) {
+			return fmt.Errorf("task hashes differ between Rust and Go: rust %v go %v", executionState.TaskHashTracker.PackageTaskHashes, expectedTaskHashes)
+		}
+		base.Logger.Debug("task hashes match")
 	}
 
 	// Track if we saw any child with a non-zero exit code
