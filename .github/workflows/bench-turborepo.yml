@@ -28,8 +28,8 @@ jobs:
       - name: Build
         run: cd cli && make turbo-prod
 
-      - name: Run benchmarks
-        run: pnpm -F benchmark benchmark
+      # - name: Run benchmarks
+      #   run: pnpm -F benchmark benchmark
 
       - name: Save to Tinybird
         run: |
@@ -37,5 +37,5 @@ jobs:
             -i \
             -F "ndjson=@./benchmark/tinybird.ndjson" \
             -X POST \
-            -H 'Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}' \
+            -H 'Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN_2 }}' \
             'https://api.us-east.tinybird.co/v0/datasources?format=ndjson&name=turbo_benchmarks&mode=append'
