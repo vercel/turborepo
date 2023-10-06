@@ -493,6 +493,7 @@ jobs:
       - name: Run cargo fmt check
         run: |
           cargo fmt --check
+          echo donefoo
 
       - name: Check Cargo.toml formatting (taplo)
         run: npx @taplo/cli format --check
