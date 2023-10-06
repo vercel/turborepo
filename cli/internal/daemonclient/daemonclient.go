@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/vercel/turbo/cli/internal/daemon/connector"
-	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/turbodprotocol"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -50,7 +50,7 @@ func (d *DaemonClient) GetChangedOutputs(ctx context.Context, hash string, repoR
 }
 
 // NotifyOutputsWritten implements runcache.OutputWatcher.NotifyOutputsWritten
-func (d *DaemonClient) NotifyOutputsWritten(ctx context.Context, hash string, repoRelativeOutputGlobs fs.TaskOutputs, timeSaved int) error {
+func (d *DaemonClient) NotifyOutputsWritten(ctx context.Context, hash string, repoRelativeOutputGlobs hash.TaskOutputs, timeSaved int) error {
 	// The daemon expects globs to be unix paths
 	var inclusions []string
 	var exclusions []string

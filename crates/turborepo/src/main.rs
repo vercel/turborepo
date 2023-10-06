@@ -68,7 +68,10 @@ fn run_go_binary(execution_state: ExecutionState) -> Result<i32> {
 fn main() -> Result<()> {
     let exit_code = match turborepo_lib::main() {
         Payload::Rust(res) => res.unwrap_or(1),
-        Payload::Go(base) => run_go_binary((&*base).try_into()?)?,
+        Payload::Go(base) => {
+            let execution_state = (&*base).try_into()?;
+            run_go_binary(execution_state)?
+        }
     };
 
     process::exit(exit_code)

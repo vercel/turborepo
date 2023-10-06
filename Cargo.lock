@@ -434,9 +434,9 @@ checksum = "7a40729d2133846d9ed0ea60a8b9541bccddab49cd30f0715a1da672fe9a2524"
 
 [[package]]
 name = "async-trait"
-version = "0.1.68"
+version = "0.1.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9ccdd8f2a161be9bd5c023df56f1b2a0bd1d83872ae53b71a84a12c9bf6e842"
+checksum = "bc00ceb34980c03614e35a3a4e218276a0a824e911d07651cd0d858a51e8c0f0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -977,12 +977,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95e65021d89250bbfe7c2791789ced2c4bdc21b0e8bb59c64f3fd6145a5fd678"
 
 [[package]]
-name = "capnpc"
-version = "0.17.2"
+name = "capnp"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbbc3763fb3e6635188e9cc51ee11a26f8777c553ca377430818dbebaaf6042b"
+checksum = "9eddbd729bd9742aa22d29e871a42ffea7f216a4ddbfdaf09ea88150ef2e7f76"
 dependencies = [
- "capnp",
+ "embedded-io",
+]
+
+[[package]]
+name = "capnpc"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5067f3c8ee94d993d03150153e9a57a6ff330127b1c1ad76475051e1cef79c2d"
+dependencies = [
+ "capnp 0.18.1",
 ]
 
 [[package]]
@@ -2328,6 +2337,12 @@ name = "either"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
+
+[[package]]
+name = "embedded-io"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "658bbadc628dc286b9ae02f0cb0f5411c056eb7487b72f0083203f115de94060"
 
 [[package]]
 name = "encode_unicode"
@@ -9973,6 +9988,7 @@ name = "turborepo-api-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "lazy_static",
  "port_scanner",
@@ -9993,17 +10009,22 @@ name = "turborepo-auth"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "axum-server",
+ "chrono",
  "hostname",
+ "lazy_static",
  "port_scanner",
  "reqwest",
  "serde",
+ "tempfile",
  "thiserror",
  "tokio",
  "tracing",
  "turborepo-api-client",
  "turborepo-ui",
+ "turborepo-vercel-api",
  "turborepo-vercel-api-mock",
  "webbrowser",
 ]
@@ -10126,7 +10147,7 @@ dependencies = [
  "axum",
  "axum-server",
  "camino",
- "capnp",
+ "capnp 0.17.2",
  "capnpc",
  "chrono",
  "clap 4.4.2",

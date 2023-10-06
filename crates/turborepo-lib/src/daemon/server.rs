@@ -447,8 +447,6 @@ mod test {
         let (tx, rx) = oneshot::channel::<CloseReason>();
         let exit_signal = rx.map(|_result| CloseReason::Interrupt);
         let handle = tokio::task::spawn(async move {
-            let repo_root = repo_root;
-            let daemon_root = daemon_root;
             serve(
                 &repo_root,
                 cookie_dir,
@@ -540,7 +538,6 @@ mod test {
         let server_repo_root = repo_root.clone();
         let handle = tokio::task::spawn(async move {
             let repo_root = server_repo_root;
-            let daemon_root = daemon_root;
             serve(
                 &repo_root,
                 cookie_dir,

@@ -9,7 +9,7 @@ pub const ROOT_PKG_NAME: &str = "//";
 
 /// A task identifier as it will appear in the task graph
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize)]
-#[serde(from = "String")]
+#[serde(from = "String", into = "String")]
 pub struct TaskId<'a> {
     package: Cow<'a, str>,
     task: Cow<'a, str>,

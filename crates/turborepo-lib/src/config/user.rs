@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use camino::Utf8PathBuf;
 use config::{Config, Environment};
 use serde::{Deserialize, Serialize};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use super::write_to_disk;
 use crate::config::Error;
@@ -20,13 +20,13 @@ pub struct UserConfig {
     // environment variables or command line flags.
     disk_config: UserConfigValue,
     config: UserConfigValue,
-    path: Utf8PathBuf,
+    path: AbsoluteSystemPathBuf,
 }
 
 /// Configuration options for loading a UserConfig object
 #[derive(Debug, Clone)]
 pub struct UserConfigLoader {
-    path: Utf8PathBuf,
+    path: AbsoluteSystemPathBuf,
     token: Option<String>,
     environment: Option<HashMap<String, String>>,
 }
@@ -35,6 +35,11 @@ impl UserConfig {
     #[allow(dead_code)]
     pub fn token(&self) -> Option<&str> {
         self.config.token.as_deref()
+    }
+
+    /// Returns where a token will be written to.
+    pub fn path(&self) -> &AbsoluteSystemPath {
+        &self.path
     }
 
     /// Set token and sync the changes to disk
@@ -51,7 +56,7 @@ impl UserConfig {
 
 impl UserConfigLoader {
     /// Creates a loader that will load the config file at the given path
-    pub fn new(path: impl Into<Utf8PathBuf>) -> Self {
+    pub fn new(path: impl Into<AbsoluteSystemPathBuf>) -> Self {
         Self {
             path: path.into(),
             token: None,
@@ -124,7 +129,7 @@ mod test {
         let mut config_path = config_dir.path().to_path_buf();
         config_path.push("turbo");
         config_path.push("config.json");
-        let loader = UserConfigLoader::new(config_path.to_str().unwrap());
+        let loader = UserConfigLoader::new(AbsoluteSystemPathBuf::try_from(config_path).unwrap());
         let mut config = loader.clone().load()?;
         assert_eq!(config.token(), None);
         config.set_token(Some("foo".to_string()))?;
@@ -137,12 +142,15 @@ mod test {
     fn test_disk_value_preserved() -> Result<()> {
         let mut config_file = NamedTempFile::new()?;
         writeln!(&mut config_file, "{{\"token\": \"foo\"}}")?;
-        let loader = UserConfigLoader::new(config_file.path().to_str().unwrap())
-            .with_token(Some("bar".into()));
+        let loader =
+            UserConfigLoader::new(AbsoluteSystemPathBuf::try_from(config_file.path()).unwrap())
+                .with_token(Some("bar".into()));
         let config = loader.load()?;
         assert_eq!(config.token(), Some("bar"));
         config.write_to_disk()?;
-        let new_config = UserConfigLoader::new(config_file.path().to_str().unwrap()).load()?;
+        let new_config =
+            UserConfigLoader::new(AbsoluteSystemPathBuf::try_from(config_file.path()).unwrap())
+                .load()?;
         assert_eq!(new_config.token(), Some("foo"));
         Ok(())
     }
@@ -162,9 +170,10 @@ mod test {
                 map.insert(env_var.into(), env_var_value.clone());
                 map
             };
-            let config = UserConfigLoader::new(config_file.path().to_str().unwrap())
-                .with_environment(Some(env))
-                .load()?;
+            let config =
+                UserConfigLoader::new(AbsoluteSystemPathBuf::try_from(config_file.path()).unwrap())
+                    .with_environment(Some(env))
+                    .load()?;
 
             assert_eq!(config.token(), Some(env_var_value.as_str()));
         }
