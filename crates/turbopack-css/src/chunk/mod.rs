@@ -4,16 +4,16 @@ pub(crate) mod writer;
 
 use std::fmt::Write;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use indexmap::IndexSet;
 use turbo_tasks::{TryJoinIterExt, Value, ValueDefault, ValueToString, Vc};
-use turbo_tasks_fs::{rope::Rope, File, FileSystemPathOption};
+use turbo_tasks_fs::{rope::Rope, File};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
         availability_info::AvailabilityInfo, chunk_content, chunk_content_split, Chunk,
-        ChunkContentResult, ChunkItem, ChunkItemExt, ChunkType, ChunkableModule, ChunkingContext,
-        Chunks, FromChunkableModule, ModuleId, OutputChunk, OutputChunkRuntimeInfo,
+        ChunkContentResult, ChunkItem, ChunkType, ChunkableModule, ChunkingContext, Chunks,
+        FromChunkableModule, ModuleId, OutputChunk, OutputChunkRuntimeInfo,
     },
     code_builder::{Code, CodeBuilder},
     ident::AssetIdent,
@@ -40,8 +40,8 @@ use crate::{
 #[turbo_tasks::value]
 pub struct CssChunk {
     pub chunking_context: Vc<Box<dyn ChunkingContext>>,
-    pub main_entries: Vc<CssChunkPlaceables>,
-    pub availability_info: AvailabilityInfo,
+    pub ident: Vc<AssetIdent>,
+    pub content: Vc<CssChunkContentResult>,
 }
 
 #[turbo_tasks::value(transparent)]
@@ -50,86 +50,22 @@ pub struct CssChunks(Vec<Vc<CssChunk>>);
 #[turbo_tasks::value_impl]
 impl CssChunk {
     #[turbo_tasks::function]
-    pub fn new_normalized(
+    pub fn new(
         chunking_context: Vc<Box<dyn ChunkingContext>>,
-        main_entries: Vc<CssChunkPlaceables>,
-        availability_info: Value<AvailabilityInfo>,
+        ident: Vc<AssetIdent>,
+        content: Vc<CssChunkContentResult>,
     ) -> Vc<Self> {
         CssChunk {
             chunking_context,
-            main_entries,
-            availability_info: availability_info.into_value(),
+            ident,
+            content,
         }
         .cell()
     }
 
     #[turbo_tasks::function]
-    pub fn new(
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-        entry: Vc<Box<dyn CssChunkPlaceable>>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Self> {
-        Self::new_normalized(chunking_context, Vc::cell(vec![entry]), availability_info)
-    }
-
-    /// Return the most specific directory which contains all elements of the
-    /// chunk.
-    #[turbo_tasks::function]
-    pub async fn common_parent(self: Vc<Self>) -> Result<Vc<FileSystemPathOption>> {
-        let this = self.await?;
-        let main_entries = this.main_entries.await?;
-        let mut paths = main_entries
-            .iter()
-            .map(|entry| entry.ident().path().parent());
-        let mut current = paths
-            .next()
-            .ok_or_else(|| anyhow!("Chunks must have at least one entry"))?
-            .resolve()
-            .await?;
-        for path in paths {
-            while !*path.is_inside(current).await? {
-                let parent = current.parent().resolve().await?;
-                if parent == current {
-                    return Ok(FileSystemPathOption::none());
-                }
-                current = parent;
-            }
-        }
-        Ok(Vc::cell(Some(current)))
-    }
-
-    #[turbo_tasks::function]
-    async fn chunk_content(self: Vc<Self>) -> Result<Vc<CssChunkContent>> {
-        let this = self.await?;
-        Ok(CssChunkContent::new(
-            this.main_entries,
-            this.chunking_context,
-            self,
-        ))
-    }
-}
-
-#[turbo_tasks::value]
-struct CssChunkContent {
-    main_entries: Vc<CssChunkPlaceables>,
-    chunking_context: Vc<Box<dyn ChunkingContext>>,
-    chunk: Vc<CssChunk>,
-}
-
-#[turbo_tasks::value_impl]
-impl CssChunkContent {
-    #[turbo_tasks::function]
-    async fn new(
-        main_entries: Vc<CssChunkPlaceables>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-        chunk: Vc<CssChunk>,
-    ) -> Result<Vc<Self>> {
-        Ok(CssChunkContent {
-            main_entries,
-            chunking_context,
-            chunk,
-        }
-        .cell())
+    fn chunk_content(&self) -> Vc<CssChunkContentResult> {
+        self.content
     }
 
     #[turbo_tasks::function]
@@ -137,20 +73,14 @@ impl CssChunkContent {
         use std::io::Write;
 
         let this = self.await?;
-        let chunk_name = this.chunk.path().to_string();
+        let chunk_name = this.ident.path().to_string();
 
         let mut body = CodeBuilder::default();
         let mut external_imports = IndexSet::new();
-        for entry in this.main_entries.await?.iter() {
-            let entry_item = entry.as_chunk_item(this.chunking_context);
-
-            if let Some(css_item) =
-                Vc::try_resolve_downcast::<Box<dyn CssChunkItem>>(entry_item).await?
-            {
-                // TODO(WEB-1261)
-                for external_import in expand_imports(&mut body, css_item).await? {
-                    external_imports.insert(external_import.await?.to_owned());
-                }
+        for css_item in this.content.await?.chunk_items.iter() {
+            // TODO(WEB-1261)
+            for external_import in expand_imports(&mut body, *css_item).await? {
+                external_imports.insert(external_import.await?.to_owned());
             }
         }
 
@@ -164,11 +94,11 @@ impl CssChunkContent {
 
         if *this
             .chunking_context
-            .reference_chunk_source_maps(Vc::upcast(this.chunk))
+            .reference_chunk_source_maps(Vc::upcast(self))
             .await?
             && code.has_source_map()
         {
-            let chunk_path = this.chunk.path().await?;
+            let chunk_path = self.path().await?;
             write!(
                 code,
                 "\n/*# sourceMappingURL={}.map*/",
@@ -186,14 +116,6 @@ impl CssChunkContent {
         Ok(AssetContent::file(
             File::from(code.source_code().clone()).into(),
         ))
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl GenerateSourceMap for CssChunkContent {
-    #[turbo_tasks::function]
-    fn generate_source_map(self: Vc<Self>) -> Vc<OptionSourceMap> {
-        self.code().generate_source_map()
     }
 }
 
@@ -294,12 +216,7 @@ impl Chunk for CssChunk {
 
     #[turbo_tasks::function]
     async fn parallel_chunks(&self) -> Result<Vc<Chunks>> {
-        let content = css_chunk_content(
-            self.chunking_context,
-            self.main_entries,
-            Value::new(self.availability_info),
-        )
-        .await?;
+        let content = self.content.await?;
         let mut chunks = Vec::new();
         for chunk in content.chunks.iter() {
             chunks.push(*chunk);
@@ -317,21 +234,11 @@ impl Chunk for CssChunk {
 impl OutputChunk for CssChunk {
     #[turbo_tasks::function]
     async fn runtime_info(&self) -> Result<Vc<OutputChunkRuntimeInfo>> {
-        let content = css_chunk_content(
-            self.chunking_context,
-            self.main_entries,
-            Value::new(self.availability_info),
-        )
-        .await?;
-        let entries_chunk_items: Vec<_> = self
-            .main_entries
-            .await?
-            .iter()
-            .map(|&entry| entry.as_chunk_item(self.chunking_context))
-            .collect();
+        let content = self.content.await?;
+        let entries_chunk_items = &content.chunk_items;
         let included_ids = entries_chunk_items
             .iter()
-            .map(|chunk_item| chunk_item.id())
+            .map(|chunk_item| CssChunkItem::id(*chunk_item))
             .collect();
         let imports_chunk_items: Vec<_> = entries_chunk_items
             .iter()
@@ -375,47 +282,45 @@ impl OutputChunk for CssChunk {
     }
 }
 
+#[turbo_tasks::function]
+fn chunk_item_key() -> Vc<String> {
+    Vc::cell("chunk item".to_string())
+}
+
 #[turbo_tasks::value_impl]
 impl OutputAsset for CssChunk {
     #[turbo_tasks::function]
     async fn ident(self: Vc<Self>) -> Result<Vc<AssetIdent>> {
         let this = self.await?;
 
-        let main_entries = this.main_entries.await?;
-        let main_entry_key = Vc::cell(String::new());
-        let assets = main_entries
-            .iter()
-            .map(|entry| (main_entry_key, entry.ident()))
-            .collect::<Vec<_>>();
+        let mut ident = this.ident.await?.clone_value();
 
-        let ident = if let [(_, ident)] = assets[..] {
+        let CssChunkContentResult { chunk_items, .. } = &*this.content.await?;
+
+        // The included chunk items and the availability info describe the chunk
+        // uniquely
+        let chunk_item_key = chunk_item_key();
+        for &chunk_item in chunk_items.iter() {
             ident
-        } else {
-            let (_, ident) = assets[0];
-            AssetIdent::new(Value::new(AssetIdent {
-                path: ident.path(),
-                query: Vc::<String>::default(),
-                fragment: None,
-                assets,
-                modifiers: Vec::new(),
-                part: None,
-            }))
-        };
+                .assets
+                .push((chunk_item_key, chunk_item.asset_ident()));
+        }
 
-        Ok(AssetIdent::from_path(
-            this.chunking_context.chunk_path(ident, ".css".to_string()),
-        ))
+        // Make sure the idents are resolved
+        for (_, ident) in ident.assets.iter_mut() {
+            *ident = ident.resolve().await?;
+        }
+
+        Ok(AssetIdent::from_path(this.chunking_context.chunk_path(
+            AssetIdent::new(Value::new(ident)),
+            ".css".to_string(),
+        )))
     }
 
     #[turbo_tasks::function]
     async fn references(self: Vc<Self>) -> Result<Vc<OutputAssets>> {
         let this = self.await?;
-        let content = css_chunk_content(
-            this.chunking_context,
-            this.main_entries,
-            Value::new(this.availability_info),
-        )
-        .await?;
+        let content = this.content.await?;
         let mut references = Vec::new();
         let output_assets = content
             .external_module_references
@@ -463,7 +368,7 @@ impl OutputAsset for CssChunk {
 impl Asset for CssChunk {
     #[turbo_tasks::function]
     fn content(self: Vc<Self>) -> Vc<AssetContent> {
-        self.chunk_content().content()
+        self.content()
     }
 }
 
@@ -471,7 +376,7 @@ impl Asset for CssChunk {
 impl GenerateSourceMap for CssChunk {
     #[turbo_tasks::function]
     fn generate_source_map(self: Vc<Self>) -> Vc<OptionSourceMap> {
-        self.chunk_content().generate_source_map()
+        self.code().generate_source_map()
     }
 }
 
@@ -585,12 +490,7 @@ impl Introspectable for CssChunk {
         let content = content_to_details(self.content());
         let mut details = String::new();
         let this = self.await?;
-        let chunk_content = css_chunk_content(
-            this.chunking_context,
-            this.main_entries,
-            Value::new(this.availability_info),
-        )
-        .await?;
+        let chunk_content = this.content.await?;
         details += "Chunk items:\n\n";
         for item in chunk_content.chunk_items.iter() {
             writeln!(details, "- {}", item.asset_ident().to_string().await?)?;
@@ -605,10 +505,10 @@ impl Introspectable for CssChunk {
         let mut children = children_from_output_assets(OutputAsset::references(self))
             .await?
             .clone_value();
-        for &entry in &*self.await?.main_entries.await? {
+        for &chunk_item in self.await?.content.await?.chunk_items.iter() {
             children.insert((
                 entry_module_key(),
-                IntrospectableModule::new(Vc::upcast(entry)),
+                IntrospectableModule::new(chunk_item.module()),
             ));
         }
         Ok(Vc::cell(children))
@@ -630,11 +530,14 @@ impl ChunkType for CssChunkType {
         let placeable = Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(chunk_item.module())
             .await?
             .context("Module must implmement CssChunkPlaceable to be used as a CSS Chunk")?;
-        Ok(Vc::upcast(CssChunk::new(
-            chunk_item.chunking_context(),
-            placeable,
+        let chunking_context = chunk_item.chunking_context();
+        let ident = placeable.ident();
+        let content = css_chunk_content(
+            chunking_context,
+            Vc::cell(vec![placeable]),
             availability_info,
-        )))
+        );
+        Ok(Vc::upcast(CssChunk::new(chunking_context, ident, content)))
     }
 }
 
