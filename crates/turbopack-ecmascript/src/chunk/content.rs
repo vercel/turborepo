@@ -40,9 +40,7 @@ pub(crate) fn ecmascript_chunk_content(
     main_entries: Vc<EcmascriptChunkPlaceables>,
     availability_info: Value<AvailabilityInfo>,
 ) -> Vc<EcmascriptChunkContent> {
-    let chunk_content =
-        ecmascript_chunk_content_internal(chunking_context, main_entries, availability_info);
-    chunk_content
+    ecmascript_chunk_content_internal(chunking_context, main_entries, availability_info)
 }
 
 #[turbo_tasks::function]
