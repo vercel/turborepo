@@ -14,7 +14,7 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
     let set_token = |token: &str| -> Result<(), anyhow::Error> {
         let global_config_path = base.global_config_path()?;
         let before = global_config_path
-            .read_existing_to_string_or("{}")
+            .read_existing_to_string_or(Ok("{}"))
             .map_err(|e| {
                 anyhow!(
                     "Encountered an IO error while attempting to read {}: {}",
@@ -41,7 +41,7 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
     let set_token = |token: &str| -> Result<(), anyhow::Error> {
         let global_config_path = base.global_config_path()?;
         let before = global_config_path
-            .read_existing_to_string_or("{}")
+            .read_existing_to_string_or(Ok("{}"))
             .map_err(|e| {
                 anyhow!(
                     "Encountered an IO error while attempting to read {}: {}",

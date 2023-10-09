@@ -11,7 +11,7 @@ pub fn logout(base: &mut CommandBase) -> Result<()> {
     let set_token = || -> Result<(), Error> {
         let global_config_path = base.global_config_path()?;
         let before = global_config_path
-            .read_existing_to_string_or("{}")
+            .read_existing_to_string_or(Ok("{}"))
             .map_err(|e| {
                 anyhow!(
                     "Encountered an IO error while attempting to read {}: {}",

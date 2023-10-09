@@ -352,7 +352,7 @@ impl TurborepoConfigBuilder {
     fn get_global_config(&self) -> Result<ConfigurationOptions, ConfigError> {
         let global_config_path = self.global_config_path()?;
         let mut contents = global_config_path
-            .read_existing_to_string_or("{}")
+            .read_existing_to_string_or(Ok("{}"))
             .map_err(|e| {
                 anyhow!(
                     "Encountered an IO error while attempting to read {}: {}",
@@ -370,7 +370,7 @@ impl TurborepoConfigBuilder {
     fn get_local_config(&self) -> Result<ConfigurationOptions, ConfigError> {
         let local_config_path = self.local_config_path();
         let mut contents = local_config_path
-            .read_existing_to_string_or("{}")
+            .read_existing_to_string_or(Ok("{}"))
             .map_err(|e| {
                 anyhow!(
                     "Encountered an IO error while attempting to read {}: {}",
