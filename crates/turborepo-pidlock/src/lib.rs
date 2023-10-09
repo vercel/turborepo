@@ -210,7 +210,7 @@ impl Pidlock {
                         })?;
                 Ok(Some(pid))
             }
-            Ok(_pid) => {
+            Ok(pid) => {
                 warn!("stale pid file at {:?}", self.path);
                 if let Err(e) = fs::remove_file(&self.path) {
                     Err(PidFileError::FailedDelete(
