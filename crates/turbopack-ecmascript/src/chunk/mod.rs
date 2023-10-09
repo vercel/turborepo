@@ -1,3 +1,4 @@
+pub(crate) mod chunk_type;
 pub(crate) mod content;
 pub(crate) mod context;
 pub(crate) mod data;
@@ -14,7 +15,8 @@ use turbo_tasks_fs::FileSystemPathOption;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
-        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkingContext, Chunks, ModuleIds,
+        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkItemExt, ChunkableModule,
+        ChunkingContext, Chunks, ModuleIds,
     },
     ident::AssetIdent,
     introspect::{
@@ -29,6 +31,7 @@ use turbopack_core::{
 
 use self::content::ecmascript_chunk_content;
 pub use self::{
+    chunk_type::EcmascriptChunkType,
     content::EcmascriptChunkContent,
     context::EcmascriptChunkingContext,
     data::EcmascriptChunkData,
@@ -76,7 +79,7 @@ impl EcmascriptChunk {
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<Self>> {
         let Some(context) =
-            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
                 .await?
         else {
             bail!("Ecmascript chunking context not found");
@@ -96,7 +99,7 @@ impl EcmascriptChunk {
         main_entry: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     ) -> Result<Vc<Self>> {
         let Some(context) =
-            Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
                 .await?
         else {
             bail!("Ecmascript chunking context not found");
@@ -165,7 +168,7 @@ impl EcmascriptChunk {
             .main_entries
             .await?
             .iter()
-            .map(|&entry| entry.as_chunk_item(this.chunking_context).id())
+            .map(|&entry| entry.as_chunk_item(Vc::upcast(this.chunking_context)).id())
             .collect();
         Ok(Vc::cell(entries))
     }

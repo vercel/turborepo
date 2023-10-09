@@ -7,13 +7,11 @@ use swc_core::{
         visit::{VisitMutWith, VisitMutWithPath},
     },
 };
-use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{TryJoinIterExt, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{
-        availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkableModule, ChunkingContext,
-    },
+    chunk::{ChunkItem, ChunkType, ChunkableModule, ChunkingContext},
     context::AssetContext,
     ident::AssetIdent,
     module::Module,
@@ -23,7 +21,7 @@ use turbopack_core::{
 };
 
 use crate::{
-    chunk::{CssChunk, CssChunkItem, CssChunkItemContent, CssChunkPlaceable, CssImport},
+    chunk::{CssChunkItem, CssChunkItemContent, CssChunkPlaceable, CssChunkType, CssImport},
     code_gen::CodeGenerateable,
     parse::{parse_css, ParseCss, ParseCssResult, ParseCssResultSourceMap},
     path_visitor::ApplyVisitors,
@@ -112,32 +110,19 @@ impl Asset for CssModuleAsset {
 #[turbo_tasks::value_impl]
 impl ChunkableModule for CssModuleAsset {
     #[turbo_tasks::function]
-    fn as_chunk(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Box<dyn Chunk>> {
-        Vc::upcast(CssChunk::new(
-            chunking_context,
-            Vc::upcast(self),
-            availability_info,
-        ))
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl CssChunkPlaceable for CssModuleAsset {
-    #[turbo_tasks::function]
     fn as_chunk_item(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ) -> Vc<Box<dyn CssChunkItem>> {
+    ) -> Vc<Box<dyn turbopack_core::chunk::ChunkItem>> {
         Vc::upcast(CssModuleChunkItem::cell(CssModuleChunkItem {
             module: self,
             chunking_context,
         }))
     }
 }
+
+#[turbo_tasks::value_impl]
+impl CssChunkPlaceable for CssModuleAsset {}
 
 #[turbo_tasks::value_impl]
 impl ResolveOrigin for CssModuleAsset {
@@ -169,6 +154,21 @@ impl ChunkItem for CssModuleChunkItem {
     fn references(&self) -> Vc<ModuleReferences> {
         self.module.references()
     }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
+    }
+
+    #[turbo_tasks::function]
+    fn ty(&self) -> Vc<Box<dyn ChunkType>> {
+        Vc::upcast(Vc::<CssChunkType>::default())
+    }
+
+    #[turbo_tasks::function]
+    fn module(&self) -> Vc<Box<dyn Module>> {
+        Vc::upcast(self.module)
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -192,10 +192,12 @@ impl CssChunkItem for CssModuleChunkItem {
                     if let Some(placeable) =
                         Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(module).await?
                     {
-                        imports.push(CssImport::Internal(
-                            import_ref,
-                            placeable.as_chunk_item(chunking_context),
-                        ));
+                        let item = placeable.as_chunk_item(chunking_context);
+                        if let Some(css_item) =
+                            Vc::try_resolve_downcast::<Box<dyn CssChunkItem>>(item).await?
+                        {
+                            imports.push(CssImport::Internal(import_ref, css_item));
+                        }
                     }
                 }
             } else if let Some(compose_ref) =
@@ -210,9 +212,12 @@ impl CssChunkItem for CssModuleChunkItem {
                     if let Some(placeable) =
                         Vc::try_resolve_downcast::<Box<dyn CssChunkPlaceable>>(module).await?
                     {
-                        imports.push(CssImport::Composes(
-                            placeable.as_chunk_item(chunking_context),
-                        ));
+                        let item = placeable.as_chunk_item(chunking_context);
+                        if let Some(css_item) =
+                            Vc::try_resolve_downcast::<Box<dyn CssChunkItem>>(item).await?
+                        {
+                            imports.push(CssImport::Composes(css_item));
+                        }
                     }
                 }
             }

@@ -1,9 +1,10 @@
 use anyhow::Result;
-use turbo_tasks::Vc;
+use turbo_tasks::{Upcast, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 
-use super::{Chunk, EvaluatableAssets};
+use super::{availability_info::AvailabilityInfo, ChunkableModule, EvaluatableAssets};
 use crate::{
+    chunk::{ChunkItem, ModuleId},
     environment::Environment,
     ident::AssetIdent,
     module::Module,
@@ -56,11 +57,44 @@ pub trait ChunkingContext {
 
     fn with_layer(self: Vc<Self>, layer: String) -> Vc<Self>;
 
-    fn chunk_group(self: Vc<Self>, entry: Vc<Box<dyn Chunk>>) -> Vc<OutputAssets>;
+    fn chunk_group(
+        self: Vc<Self>,
+        module: Vc<Box<dyn ChunkableModule>>,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Vc<OutputAssets>;
 
     fn evaluated_chunk_group(
         self: Vc<Self>,
-        entry: Vc<Box<dyn Chunk>>,
+        ident: Vc<AssetIdent>,
         evaluatable_assets: Vc<EvaluatableAssets>,
     ) -> Vc<OutputAssets>;
+
+    async fn chunk_item_id(
+        self: Vc<Self>,
+        chunk_item: Vc<Box<dyn ChunkItem>>,
+    ) -> Result<Vc<ModuleId>> {
+        let layer = self.layer();
+        let mut ident = chunk_item.asset_ident();
+        if !layer.await?.is_empty() {
+            ident = ident.with_modifier(layer)
+        }
+        Ok(ModuleId::String(ident.to_string().await?.clone_value()).cell())
+    }
+}
+
+pub trait ChunkingContextExt {
+    fn root_chunk_group(self: Vc<Self>, module: Vc<Box<dyn ChunkableModule>>) -> Vc<OutputAssets>
+    where
+        Self: Send;
+}
+
+impl<T: ChunkingContext + Send + Upcast<Box<dyn ChunkingContext>>> ChunkingContextExt for T {
+    fn root_chunk_group(self: Vc<Self>, module: Vc<Box<dyn ChunkableModule>>) -> Vc<OutputAssets> {
+        self.chunk_group(
+            module,
+            Value::new(AvailabilityInfo::Root {
+                current_availability_root: Vc::upcast(module),
+            }),
+        )
+    }
 }

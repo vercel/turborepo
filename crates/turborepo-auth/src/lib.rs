@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 #[cfg(not(test))]
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -37,7 +39,7 @@ where
 {
     if let Err(err) = set_token() {
         error!("could not logout. Something went wrong: {}", err);
-        return Err(err.into());
+        return Err(err);
     }
 
     println!("{}", ui.apply(GREY.apply_to(">>> Logged out")));
