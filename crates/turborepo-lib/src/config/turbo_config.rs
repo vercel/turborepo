@@ -121,7 +121,14 @@ impl ResolvedConfigurationOptions for RawTurboJSON {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, ConfigError> {
         match &self.remote_cache {
             Some(configuration_options) => {
-                configuration_options.clone().get_configuration_options()
+                configuration_options
+                    .clone()
+                    .get_configuration_options()
+                    // Don't allow token to be set for shared config.
+                    .map(|mut configuration_options| {
+                        configuration_options.token = None;
+                        configuration_options
+                    })
             }
             None => Ok(ConfigurationOptions::default()),
         }
@@ -579,5 +586,21 @@ mod test {
         let config = builder.build().unwrap();
         assert_eq!(config.team_id().unwrap(), vercel_artifacts_owner);
         assert_eq!(config.token().unwrap(), vercel_artifacts_token);
+    }
+
+    #[test]
+    fn test_shared_no_token() {
+        let mut test_shared_config: RawTurboJSON = Default::default();
+        let mut configuration_options: ConfigurationOptions = Default::default();
+        configuration_options.token = Some("IF YOU CAN SEE THIS WE HAVE PROBLEMS".to_string());
+        test_shared_config.remote_cache = Some(configuration_options);
+
+        assert_eq!(
+            test_shared_config
+                .get_configuration_options()
+                .unwrap()
+                .token(),
+            None
+        );
     }
 }
