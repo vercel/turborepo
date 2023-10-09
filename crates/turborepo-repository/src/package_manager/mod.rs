@@ -351,6 +351,8 @@ impl PackageManager {
         Ok((inclusions, exclusions))
     }
 
+    // TODO: consider if this method should not need an Option, and possibly be a
+    // method on PackageJSON
     pub fn get_package_manager(
         repo_root: &AbsoluteSystemPath,
         pkg: Option<&PackageJson>,

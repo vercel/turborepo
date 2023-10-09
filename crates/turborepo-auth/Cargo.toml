@@ -6,21 +6,16 @@ license = "MPL-2.0"
 
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
-async-trait = "0.1.73"
 axum-server = { workspace = true }
 axum.workspace = true
-chrono = { workspace = true, features = ["serde"] }
 hostname = "0.3.1"
-lazy_static.workspace = true
 reqwest.workspace = true
 serde.workspace = true
-tempfile.workspace = true
 thiserror = "1.0.38"
 tokio.workspace = true
 tracing.workspace = true
 turborepo-api-client = { workspace = true }
 turborepo-ui.workspace = true
-turborepo-vercel-api = { workspace = true }
 turborepo-vercel-api-mock = { workspace = true }
 webbrowser = { workspace = true }
 
