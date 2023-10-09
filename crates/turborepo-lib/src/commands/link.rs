@@ -501,7 +501,7 @@ fn add_space_id_to_turbo_json(base: &CommandBase, space_id: &str) -> Result<()> 
 
 #[cfg(test)]
 mod test {
-    use std::{cell::OnceCell, collections::HashMap, fs};
+    use std::{cell::OnceCell, fs};
 
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
