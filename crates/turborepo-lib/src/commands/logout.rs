@@ -10,13 +10,15 @@ pub fn logout(base: &mut CommandBase) -> Result<()> {
     // crate manage its own configuration for the path to the token.
     let set_token = || -> Result<(), Error> {
         let global_config_path = base.global_config_path()?;
-        let before = global_config_path.read_or_default("{}").map_err(|e| {
-            anyhow!(
-                "Encountered an IO error while attempting to read {}: {}",
-                global_config_path,
-                e
-            )
-        })?;
+        let before = global_config_path
+            .read_existing_to_string_or("{}")
+            .map_err(|e| {
+                anyhow!(
+                    "Encountered an IO error while attempting to read {}: {}",
+                    global_config_path,
+                    e
+                )
+            })?;
 
         if let Some(after) = unset_path(&before, &["token"], true)? {
             global_config_path
