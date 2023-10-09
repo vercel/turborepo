@@ -6,6 +6,7 @@ mod user;
 
 use std::path::PathBuf;
 
+use camino::{Utf8Path, Utf8PathBuf};
 pub use client::{ClientConfig, ClientConfigLoader};
 use config::ConfigError;
 #[cfg(not(windows))]
@@ -23,7 +24,6 @@ use thiserror::Error;
 pub use turbo::{
     validate_extends, validate_no_package_task_syntax, RawTurboJSON, SpacesJson, TurboJson,
 };
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 pub use user::{UserConfig, UserConfigLoader};
 
 #[derive(Debug, Error)]
@@ -71,8 +71,8 @@ pub enum Error {
     NoExtends,
 }
 
-pub fn default_user_config_path() -> Result<AbsoluteSystemPathBuf, Error> {
-    Ok(AbsoluteSystemPathBuf::try_from(
+pub fn default_user_config_path() -> Result<Utf8PathBuf, Error> {
+    Ok(Utf8PathBuf::try_from(
         config_dir()
             .map(|p| p.join("turborepo").join("config.json"))
             .ok_or(Error::NoDefaultConfigPath)?,
@@ -84,7 +84,7 @@ pub fn data_dir() -> Option<PathBuf> {
     dirs_next::data_dir().map(|p| p.join("turborepo"))
 }
 
-fn write_to_disk<T>(path: &AbsoluteSystemPath, config: &T) -> Result<(), Error>
+fn write_to_disk<T>(path: &Utf8Path, config: &T) -> Result<(), Error>
 where
     T: Serialize,
 {
