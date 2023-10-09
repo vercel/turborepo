@@ -1,13 +1,14 @@
-use anyhow::{bail, Context, Result};
-use turbo_tasks::{Value, ValueDefault, Vc};
+use anyhow::{bail, Result};
+use turbo_tasks::{TryJoinIterExt, ValueDefault, Vc};
 use turbopack_core::{
-    chunk::{availability_info::AvailabilityInfo, Chunk, ChunkItem, ChunkType},
+    chunk::{Chunk, ChunkItems, ChunkType, ChunkingContext},
+    ident::AssetIdent,
     module::Module,
+    output::OutputAssets,
 };
 
 use super::{
-    content::ecmascript_chunk_content, EcmascriptChunk, EcmascriptChunkPlaceable,
-    EcmascriptChunkingContext,
+    EcmascriptChunk, EcmascriptChunkContent, EcmascriptChunkItem, EcmascriptChunkingContext,
 };
 
 #[derive(Default)]
@@ -17,32 +18,42 @@ pub struct EcmascriptChunkType {}
 #[turbo_tasks::value_impl]
 impl ChunkType for EcmascriptChunkType {
     #[turbo_tasks::function]
-    async fn as_chunk(
+    async fn chunk(
         &self,
-        chunk_item: Vc<Box<dyn ChunkItem>>,
-        availability_info: Value<AvailabilityInfo>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+        ident: Vc<AssetIdent>,
+        chunk_items: Vc<ChunkItems>,
+        referenced_output_assets: Vc<OutputAssets>,
+        chunk_group_root: Option<Vc<Box<dyn Module>>>,
     ) -> Result<Vc<Box<dyn Chunk>>> {
-        let placeable =
-            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkPlaceable>>(chunk_item.module())
-                .await?
-                .context(
-                    "Module must implement EcmascriptChunkPlaceable to be used as a EcmaScript \
-                     Chunk",
-                )?;
         let Some(chunking_context) =
-            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(
-                chunk_item.chunking_context(),
-            )
-            .await?
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+                .await?
         else {
             bail!("Ecmascript chunking context not found");
         };
-        let ident = placeable.ident();
-        let content = ecmascript_chunk_content(
-            chunking_context,
-            Vc::cell(vec![placeable]),
-            availability_info,
-        );
+        let content = EcmascriptChunkContent {
+            chunk_items: chunk_items
+                .await?
+                .iter()
+                .map(|&chunk_item| async move {
+                    let Some(chunk_item) =
+                        Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkItem>>(chunk_item)
+                            .await?
+                    else {
+                        bail!(
+                            "Chunk item is not an ecmascript chunk item but reporting chunk type \
+                             ecmascript"
+                        );
+                    };
+                    Ok(chunk_item)
+                })
+                .try_join()
+                .await?,
+            referenced_output_assets: referenced_output_assets.await?.clone_value(),
+            chunk_group_root,
+        }
+        .cell();
         Ok(Vc::upcast(EcmascriptChunk::new(
             chunking_context,
             ident,

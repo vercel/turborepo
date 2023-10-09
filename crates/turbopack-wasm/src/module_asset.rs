@@ -4,9 +4,7 @@ use turbo_tasks::{Value, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkType, ChunkableModule, ChunkingContext,
-    },
+    chunk::{ChunkItem, ChunkType, ChunkableModule, ChunkingContext},
     context::AssetContext,
     ident::AssetIdent,
     module::{Module, OptionModule},
@@ -196,8 +194,10 @@ impl ChunkItem for ModuleChunkItem {
     }
 
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<Box<dyn ChunkType>> {
-        Vc::upcast(Vc::<EcmascriptChunkType>::default())
+    async fn ty(&self) -> Result<Vc<Box<dyn ChunkType>>> {
+        Ok(Vc::upcast(
+            Vc::<EcmascriptChunkType>::default().resolve().await?,
+        ))
     }
 
     #[turbo_tasks::function]
@@ -215,13 +215,13 @@ impl EcmascriptChunkItem for ModuleChunkItem {
 
     #[turbo_tasks::function]
     fn content(self: Vc<Self>) -> Vc<EcmascriptChunkItemContent> {
-        self.content_with_availability_info(Value::new(AvailabilityInfo::Untracked))
+        panic!("content() should not be called");
     }
 
     #[turbo_tasks::function]
-    async fn content_with_availability_info(
+    async fn content_with_async_module_info(
         &self,
-        availability_info: Value<AvailabilityInfo>,
+        chunk_group_root: Option<Vc<Box<dyn Module>>>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let loader_asset = self.module.loader();
         let item = loader_asset.as_chunk_item(Vc::upcast(self.chunking_context));
@@ -231,7 +231,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
             .context("EcmascriptModuleAsset must implement EcmascriptChunkItem")?;
 
         let chunk_item_content = ecmascript_item
-            .content_with_availability_info(availability_info)
+            .content_with_async_module_info(chunk_group_root)
             .await?;
 
         Ok(EcmascriptChunkItemContent {

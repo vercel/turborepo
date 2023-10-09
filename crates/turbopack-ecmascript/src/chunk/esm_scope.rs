@@ -1,11 +1,16 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::once};
 
 use anyhow::{Context, Result};
+use indexmap::IndexSet;
 use petgraph::{algo::tarjan_scc, prelude::DiGraphMap};
-use turbo_tasks::{TryFlatJoinIterExt, Vc};
+use turbo_tasks::{
+    graph::{AdjacencyMap, GraphTraversal},
+    TryFlatJoinIterExt, TryJoinIterExt, Vc,
+};
 use turbopack_core::{
-    chunk::available_modules::chunkable_modules_set,
+    chunk::{ChunkableModuleReference, ChunkingType},
     module::{Module, ModulesSet},
+    reference::ModuleReference,
 };
 
 use crate::{
@@ -38,12 +43,8 @@ pub(crate) struct EsmScopeSccs(Vec<Vc<EsmScopeScc>>);
 impl EsmScope {
     /// Create a new [EsmScope] from the availability root given.
     #[turbo_tasks::function]
-    pub(crate) async fn new(availability_root: Option<Vc<Box<dyn Module>>>) -> Result<Vc<Self>> {
-        let assets = if let Some(root) = availability_root {
-            chunkable_modules_set(root)
-        } else {
-            ModulesSet::empty()
-        };
+    pub(crate) async fn new(chunk_group_root: Vc<Box<dyn Module>>) -> Result<Vc<Self>> {
+        let assets = chunkable_modules_set(chunk_group_root);
 
         let esm_assets = get_ecmascript_module_assets(assets);
         let import_references = collect_import_references(esm_assets).await?;
@@ -169,4 +170,46 @@ async fn collect_import_references(
         .await?;
 
     Ok(Vc::cell(import_references))
+}
+
+// TODO this should be removed
+#[turbo_tasks::function]
+pub async fn chunkable_modules_set(root: Vc<Box<dyn Module>>) -> Result<Vc<ModulesSet>> {
+    let modules = AdjacencyMap::new()
+        .skip_duplicates()
+        .visit(once(root), |&module: &Vc<Box<dyn Module>>| async move {
+            Ok(module
+                .references()
+                .await?
+                .iter()
+                .copied()
+                .map(|reference| async move {
+                    if let Some(chunkable) =
+                        Vc::try_resolve_downcast::<Box<dyn ChunkableModuleReference>>(reference)
+                            .await?
+                    {
+                        if matches!(
+                            &*chunkable.chunking_type().await?,
+                            Some(ChunkingType::Parallel)
+                        ) {
+                            return Ok(chunkable
+                                .resolve_reference()
+                                .primary_modules()
+                                .await?
+                                .clone_value());
+                        }
+                    }
+                    Ok(Vec::new())
+                })
+                .try_join()
+                .await?
+                .into_iter()
+                .flatten()
+                .collect::<IndexSet<_>>())
+        })
+        .await
+        .completed()?;
+    Ok(Vc::cell(
+        modules.into_inner().into_reverse_topological().collect(),
+    ))
 }

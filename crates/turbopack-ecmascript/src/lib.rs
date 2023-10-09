@@ -13,7 +13,7 @@ pub mod chunk_group_files_asset;
 pub mod code_gen;
 mod errors;
 pub mod magic_identifier;
-pub(crate) mod manifest;
+pub mod manifest;
 pub mod parse;
 mod path_visitor;
 pub mod references;
@@ -51,10 +51,7 @@ use turbo_tasks::{trace::TraceRawVcs, ReadRef, TryJoinIterExt, Value, ValueToStr
 use turbo_tasks_fs::{rope::Rope, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{
-        availability_info::AvailabilityInfo, ChunkItem, ChunkType, ChunkableModule,
-        ChunkingContext, EvaluatableAsset,
-    },
+    chunk::{ChunkItem, ChunkType, ChunkableModule, ChunkingContext, EvaluatableAsset},
     compile_time_info::CompileTimeInfo,
     context::AssetContext,
     ident::AssetIdent,
@@ -67,7 +64,7 @@ use turbopack_core::{
 
 use self::{
     chunk::{EcmascriptChunkItemContent, EcmascriptChunkType, EcmascriptExports},
-    code_gen::{CodeGen, CodeGenerateableWithAvailabilityInfo, VisitorFactory},
+    code_gen::{CodeGen, CodeGenerateableWithAsyncModuleInfo, VisitorFactory},
     tree_shake::asset::EcmascriptModulePartAsset,
 };
 use crate::{
@@ -335,7 +332,7 @@ impl EcmascriptModuleAsset {
     pub async fn module_content(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
+        chunk_group_root: Option<Vc<Box<dyn Module>>>,
     ) -> Result<Vc<EcmascriptModuleContent>> {
         let this = self.await?;
 
@@ -346,7 +343,7 @@ impl EcmascriptModuleAsset {
             self.ident(),
             chunking_context,
             self.analyze(),
-            availability_info,
+            chunk_group_root,
         ))
     }
 }
@@ -468,8 +465,10 @@ impl ChunkItem for ModuleChunkItem {
     }
 
     #[turbo_tasks::function]
-    fn ty(&self) -> Vc<Box<dyn ChunkType>> {
-        Vc::upcast(Vc::<EcmascriptChunkType>::default())
+    async fn ty(&self) -> Result<Vc<Box<dyn ChunkType>>> {
+        Ok(Vc::upcast(
+            Vc::<EcmascriptChunkType>::default().resolve().await?,
+        ))
     }
 
     #[turbo_tasks::function]
@@ -487,33 +486,24 @@ impl EcmascriptChunkItem for ModuleChunkItem {
 
     #[turbo_tasks::function]
     fn content(self: Vc<Self>) -> Vc<EcmascriptChunkItemContent> {
-        self.content_with_availability_info(Value::new(AvailabilityInfo::Untracked))
+        panic!("content() should not be called");
     }
 
     #[turbo_tasks::function]
-    async fn content_with_availability_info(
+    async fn content_with_async_module_info(
         self: Vc<Self>,
-        availability_info: Value<AvailabilityInfo>,
+        chunk_group_root: Option<Vc<Box<dyn Module>>>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let this = self.await?;
         let async_module_options = this
             .module
             .get_async_module()
-            .module_options(availability_info.current_availability_root());
-        let is_async_module = async_module_options.await?.is_some();
-        let availability_info_needs = *this
-            .module
-            .analyze()
-            .get_availability_info_needs(is_async_module)
-            .await?;
-        // We reduce the availability info to the needs of the chunk item to improve
-        // caching of the methods that are called with availability info. e. g.
-        // module_content() can be cached for different availability info when it
-        // doesn't really need that info.
-        let availability_info = availability_info.reduce_to_needs(availability_info_needs);
+            .module_options(chunk_group_root);
+
+        // TODO check if we need to pass chunk_group_root at all
         let content = this
             .module
-            .module_content(this.chunking_context, Value::new(availability_info));
+            .module_content(this.chunking_context, chunk_group_root);
 
         Ok(EcmascriptChunkItemContent::new(
             content,
@@ -540,7 +530,7 @@ impl EcmascriptModuleContent {
         ident: Vc<AssetIdent>,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         analyzed: Vc<AnalyzeEcmascriptModuleResult>,
-        availability_info: Value<AvailabilityInfo>,
+        chunk_group_root: Option<Vc<Box<dyn Module>>>,
     ) -> Result<Vc<Self>> {
         let AnalyzeEcmascriptModuleResult {
             references,
@@ -552,9 +542,9 @@ impl EcmascriptModuleContent {
         for r in references.await?.iter() {
             let r = r.resolve().await?;
             if let Some(code_gen) =
-                Vc::try_resolve_sidecast::<Box<dyn CodeGenerateableWithAvailabilityInfo>>(r).await?
+                Vc::try_resolve_sidecast::<Box<dyn CodeGenerateableWithAsyncModuleInfo>>(r).await?
             {
-                code_gens.push(code_gen.code_generation(chunking_context, availability_info));
+                code_gens.push(code_gen.code_generation(chunking_context, chunk_group_root));
             } else if let Some(code_gen) =
                 Vc::try_resolve_sidecast::<Box<dyn CodeGenerateable>>(r).await?
             {
@@ -566,8 +556,8 @@ impl EcmascriptModuleContent {
                 CodeGen::CodeGenerateable(c) => {
                     code_gens.push(c.code_generation(chunking_context));
                 }
-                CodeGen::CodeGenerateableWithAvailabilityInfo(c) => {
-                    code_gens.push(c.code_generation(chunking_context, availability_info));
+                CodeGen::CodeGenerateableWithAsyncModuleInfo(c) => {
+                    code_gens.push(c.code_generation(chunking_context, chunk_group_root));
                 }
             }
         }

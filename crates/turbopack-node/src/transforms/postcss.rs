@@ -238,6 +238,7 @@ impl PostCssTransformedAsset {
             vec![Vc::cell(content.into()), Vc::cell(css_path.into())],
             extra_configs_changed,
             should_debug("postcss_transform"),
+            Some(Vc::upcast(postcss_executor)),
         )
         .await?;
 

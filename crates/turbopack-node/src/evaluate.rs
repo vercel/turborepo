@@ -103,6 +103,7 @@ pub async fn get_evaluate_pool(
     runtime_entries: Option<Vc<EvaluatableAssets>>,
     additional_invalidation: Vc<Completion>,
     debug: bool,
+    chunk_group_root: Option<Vc<Box<dyn Module>>>,
 ) -> Result<Vc<NodeJsPool>> {
     let runtime_asset = asset_context.process(
         Vc::upcast(FileSource::new(embed_file_path(
@@ -175,6 +176,7 @@ pub async fn get_evaluate_pool(
             path,
             chunking_context,
             evaluatable_assets: runtime_entries.with_entry(entry_module),
+            chunk_group_root,
         }
         .cell(),
     );
@@ -238,6 +240,7 @@ pub fn evaluate(
     args: Vec<Vc<JsonValue>>,
     additional_invalidation: Vc<Completion>,
     debug: bool,
+    chunk_group_root: Option<Vc<Box<dyn Module>>>,
 ) -> Vc<JavaScriptEvaluation> {
     // Note the following code uses some hacks to create a child task that produces
     // a stream that is returned by this task.
@@ -267,6 +270,7 @@ pub fn evaluate(
         args,
         additional_invalidation,
         debug,
+        chunk_group_root,
         JavaScriptStreamSender {
             get: Box::new(move || {
                 if let Some(sender) = initial.lock().take() {
@@ -302,6 +306,7 @@ async fn compute_evaluate_stream(
     args: Vec<Vc<JsonValue>>,
     additional_invalidation: Vc<Completion>,
     debug: bool,
+    chunk_group_root: Option<Vc<Box<dyn Module>>>,
     sender: Vc<JavaScriptStreamSender>,
 ) -> Result<Vc<()>> {
     mark_finished();
@@ -320,6 +325,7 @@ async fn compute_evaluate_stream(
             runtime_entries,
             additional_invalidation,
             debug,
+    chunk_group_root
         );
 
         // Read this strongly consistent, since we don't want to run inconsistent

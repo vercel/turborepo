@@ -9,11 +9,10 @@ pub(crate) mod placeable;
 use std::fmt::Write;
 
 use anyhow::{bail, Result};
-use indexmap::IndexSet;
-use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{Chunk, ChunkItem, ChunkingContext, Chunks, ModuleIds},
+    chunk::{Chunk, ChunkItem, ChunkingContext, ModuleIds},
     ident::AssetIdent,
     introspect::{
         module::IntrospectableModule,
@@ -22,7 +21,6 @@ use turbopack_core::{
     },
     module::Module,
     output::OutputAssets,
-    reference::ModuleReference,
 };
 
 pub use self::{
@@ -68,46 +66,6 @@ impl EcmascriptChunk {
         // TODO return something usefull
         Ok(Vc::cell(Default::default()))
     }
-
-    #[turbo_tasks::function]
-    pub async fn compare(
-        left: Vc<EcmascriptChunk>,
-        right: Vc<EcmascriptChunk>,
-    ) -> Result<Vc<EcmascriptChunkComparison>> {
-        let a = left.await?;
-        let b = right.await?;
-
-        let a = a.content;
-        let b = b.content;
-
-        let a: IndexSet<_> = a.await?.chunk_items.iter().copied().collect();
-        let b: IndexSet<_> = b.await?.chunk_items.iter().copied().collect();
-
-        let mut unshared_a = a.clone();
-        let mut unshared_b = b.clone();
-        let mut shared = IndexSet::new();
-        for item in b {
-            if unshared_a.remove(&item) {
-                shared.insert(item);
-            }
-        }
-        for item in &shared {
-            unshared_b.remove(item);
-        }
-        Ok(EcmascriptChunkComparison {
-            shared_chunk_items: shared.len(),
-            left_chunk_items: unshared_a.len(),
-            right_chunk_items: unshared_b.len(),
-        }
-        .cell())
-    }
-}
-
-#[turbo_tasks::value]
-pub struct EcmascriptChunkComparison {
-    pub shared_chunk_items: usize,
-    pub left_chunk_items: usize,
-    pub right_chunk_items: usize,
 }
 
 #[turbo_tasks::function]
@@ -130,7 +88,7 @@ impl Chunk for EcmascriptChunk {
 
         let EcmascriptChunkContent {
             chunk_items,
-            availability_info,
+            chunk_group_root,
             ..
         } = &*this.content.await?;
 
@@ -143,17 +101,12 @@ impl Chunk for EcmascriptChunk {
                 .push((chunk_item_key, chunk_item.asset_ident()));
         }
 
-        // Current availability root is included
-        if let Some(current_availability_root) = availability_info.current_availability_root() {
-            let root_ident = current_availability_root.ident();
-            ident.assets.push((availability_root_key(), root_ident));
-        }
-
-        // Available assets are included
-        if let Some(available_modules) = availability_info.available_modules() {
+        // TODO this need to be removed
+        // Current chunk_group_root is included
+        if let Some(chunk_group_root) = *chunk_group_root {
             ident
-                .modifiers
-                .push(Vc::cell(available_modules.hash().await?.to_string()));
+                .assets
+                .push((availability_root_key(), chunk_group_root.ident()));
         }
 
         // Make sure the idents are resolved
@@ -170,31 +123,10 @@ impl Chunk for EcmascriptChunk {
     }
 
     #[turbo_tasks::function]
-    async fn parallel_chunks(&self) -> Result<Vc<Chunks>> {
-        let content = self.content.await?;
-        let mut chunks = Vec::new();
-        for chunk in content.chunks.iter() {
-            chunks.push(*chunk);
-        }
-        Ok(Vc::cell(chunks))
-    }
-
-    #[turbo_tasks::function]
     async fn references(self: Vc<Self>) -> Result<Vc<OutputAssets>> {
         let this = self.await?;
         let content = this.content.await?;
-        let mut references = Vec::new();
-        let assets = content
-            .external_module_references
-            .iter()
-            .map(|r| r.resolve_reference().primary_output_assets())
-            .try_join()
-            .await?;
-        for &output_asset in assets.iter().flatten() {
-            references.push(output_asset);
-        }
-
-        Ok(Vc::cell(references))
+        Ok(Vc::cell(content.referenced_output_assets.clone()))
     }
 }
 

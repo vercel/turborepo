@@ -269,6 +269,7 @@ pub async fn get_intermediate_asset(
             path: chunking_context.chunk_path(main_entry.ident(), ".js".to_string()),
             chunking_context,
             evaluatable_assets: other_entries.with_entry(main_entry),
+            chunk_group_root: Some(Vc::upcast(main_entry)),
         }
         .cell(),
     ))
