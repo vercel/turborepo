@@ -416,12 +416,12 @@ impl<'a> Run<'a> {
         };
 
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
+        let config = self.base.config()?;
 
-        let repo_config = self.base.repo_config()?;
-        let team_id = repo_config.team_id();
-        let team_slug = repo_config.team_slug();
+        let team_id = config.team_id();
+        let team_slug = config.team_slug();
 
-        let token = self.base.user_config()?.token();
+        let token = config.token();
 
         let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
             team_id: team_id.to_string(),
