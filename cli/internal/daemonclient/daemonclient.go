@@ -5,6 +5,7 @@ package daemonclient
 import (
 	"context"
 	"path/filepath"
+	"strings"
 
 	"github.com/vercel/turbo/cli/internal/daemon/connector"
 	"github.com/vercel/turbo/cli/internal/fs/hash"
@@ -32,12 +33,19 @@ func New(client *connector.Client) *DaemonClient {
 	}
 }
 
+// Our globs are expected to be in unix format, and to have : escaped.
+// Important Note: these are _repository relative_ globs, and so will not
+// include Windows drive letters with their own ':' token.
+func formatRepoRelativeGlob(input string) string {
+	return strings.ReplaceAll(filepath.ToSlash(input), ":", "\\:")
+}
+
 // GetChangedOutputs implements runcache.OutputWatcher.GetChangedOutputs
 func (d *DaemonClient) GetChangedOutputs(ctx context.Context, hash string, repoRelativeOutputGlobs []string) ([]string, int, error) {
 	// The daemon expects globs to be unix paths
 	var outputGlobs []string
 	for _, outputGlob := range repoRelativeOutputGlobs {
-		outputGlobs = append(outputGlobs, filepath.ToSlash(outputGlob))
+		outputGlobs = append(outputGlobs, formatRepoRelativeGlob(outputGlob))
 	}
 	resp, err := d.client.GetChangedOutputs(ctx, &turbodprotocol.GetChangedOutputsRequest{
 		Hash:        hash,
@@ -55,10 +63,10 @@ func (d *DaemonClient) NotifyOutputsWritten(ctx context.Context, hash string, re
 	var inclusions []string
 	var exclusions []string
 	for _, inclusion := range repoRelativeOutputGlobs.Inclusions {
-		inclusions = append(inclusions, filepath.ToSlash(inclusion))
+		inclusions = append(inclusions, formatRepoRelativeGlob(inclusion))
 	}
 	for _, exclusion := range repoRelativeOutputGlobs.Exclusions {
-		exclusions = append(exclusions, filepath.ToSlash(exclusion))
+		exclusions = append(exclusions, formatRepoRelativeGlob(exclusion))
 	}
 	_, err := d.client.NotifyOutputsWritten(ctx, &turbodprotocol.NotifyOutputsWrittenRequest{
 		Hash:                 hash,
