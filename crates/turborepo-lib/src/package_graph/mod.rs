@@ -326,10 +326,7 @@ impl PackageGraph {
 
         let closures = turborepo_lockfiles::all_transitive_closures(previous, external_deps)?;
 
-        let current_key = current.global_change_key();
-        let previous_key = previous.global_change_key();
-
-        let global_change = current_key != previous_key;
+        let global_change = current.global_change(previous);
 
         let changed = if global_change {
             None
