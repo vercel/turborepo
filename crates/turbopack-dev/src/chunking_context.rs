@@ -353,9 +353,9 @@ impl ChunkingContext for DevChunkingContext {
 
         for module in async_modules {
             let loader = self.async_loader_chunk_item(module, Value::new(inner_availability_info));
-            chunk_items.push(loader);
+            chunk_items.insert(loader);
             for &reference in loader.references().await?.iter() {
-                external_module_references.push(reference);
+                external_module_references.insert(reference);
             }
         }
 
@@ -424,9 +424,9 @@ impl ChunkingContext for DevChunkingContext {
 
         for module in async_modules {
             let loader = self.async_loader_chunk_item(module, Value::new(inner_availability_info));
-            chunk_items.push(loader);
+            chunk_items.insert(loader);
             for &reference in loader.references().await?.iter() {
-                external_module_references.push(reference);
+                external_module_references.insert(reference);
             }
         }
 
