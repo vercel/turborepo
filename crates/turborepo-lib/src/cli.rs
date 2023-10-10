@@ -7,12 +7,12 @@ use clap_complete::{generate, Shell};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_ui::UI;
 
 use crate::{
     commands::{bin, daemon, generate, info, link, login, logout, prune, unlink, CommandBase},
     get_version,
-    shim::{RepoMode, RepoState},
     tracing::TurboSubscriber,
     Payload,
 };

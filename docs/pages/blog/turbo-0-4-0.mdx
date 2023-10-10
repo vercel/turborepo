@@ -91,7 +91,7 @@ RUN npm i -g turbo
 FROM base as pruner
 WORKDIR /app
 COPY . .
-RUN turbo prune --scope=frontend --docker
+RUN turbo prune frontend --docker
 
 # Add pruned lockfile and package.json's of the pruned subworkspace
 FROM base AS installer
@@ -107,7 +107,7 @@ WORKDIR /app
 COPY --from=pruner /app/.git ./.git
 COPY --from=pruner /app/out/full/ .
 COPY --from=installer /app/ .
-RUN turbo run build --scope=frontend
+RUN turbo run build frontend
 
 # Start the app
 FROM builder as runner

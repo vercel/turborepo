@@ -555,7 +555,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     ) {
         let mut state = self.state.write();
         let change = aggregation_context.apply_change(&mut state.data, change);
-        propagate_change_to_upper(&mut state, aggregation_context, change);
+        propagate_change_to_upper(&state, aggregation_context, change);
     }
 
     pub fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
@@ -627,7 +627,7 @@ fn propagate_new_following_to_uppers<C: AggregationContext>(
 }
 
 fn propagate_change_to_upper<C: AggregationContext>(
-    state: &mut RwLockWriteGuard<BottomTreeState<C::Info, C::ItemRef>>,
+    state: &RwLockWriteGuard<BottomTreeState<C::Info, C::ItemRef>>,
     aggregation_context: &C,
     change: Option<C::ItemChange>,
 ) {
@@ -642,6 +642,7 @@ fn propagate_change_to_upper<C: AggregationContext>(
     }
 }
 
+#[allow(clippy::disallowed_methods)] // Allow VecDeque::new() in this test
 #[cfg(test)]
 fn visit_graph<C: AggregationContext>(
     aggregation_context: &C,
@@ -667,6 +668,7 @@ fn visit_graph<C: AggregationContext>(
     (visited.len(), edges)
 }
 
+#[allow(clippy::disallowed_methods)] // Allow VecDeque::new() in this test
 #[cfg(test)]
 pub fn print_graph<C: AggregationContext>(
     aggregation_context: &C,
@@ -696,7 +698,7 @@ pub fn print_graph<C: AggregationContext>(
     while let Some(item) = queue.pop_front() {
         let tree = bottom_tree(aggregation_context, &item, height);
         let name = name_fn(&item);
-        let label = format!("{}", name);
+        let label = name.to_string();
         let state = tree.state.read();
         if color_upper {
             print!(r#""{} {}" [color=red];"#, height - 1, name);
