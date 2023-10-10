@@ -348,4 +348,8 @@ impl TaskCache {
 
         Ok(())
     }
+
+    pub fn expanded_outputs(&self) -> &[AnchoredSystemPathBuf] {
+        &self.expanded_outputs
+    }
 }

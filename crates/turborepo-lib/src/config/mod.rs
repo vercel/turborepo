@@ -1,35 +1,16 @@
-mod client;
-mod env;
-mod repo;
 mod turbo;
-mod user;
+mod turbo_config;
 
-use std::path::PathBuf;
-
-pub use client::{ClientConfig, ClientConfigLoader};
-use config::ConfigError;
-#[cfg(not(windows))]
-use dirs_next::config_dir;
-// Go's xdg implementation uses FOLDERID_LocalAppData for config home
-// https://github.com/adrg/xdg/blob/master/paths_windows.go#L28
-// Rust xdg implementations uses FOLDERID_RoamingAppData for config home
-// We use cache_dir so we can find the config dir that the Go code uses
-#[cfg(windows)]
-use dirs_next::data_local_dir as config_dir;
-pub use env::MappedEnvironment;
-pub use repo::{get_repo_config_path, RepoConfig, RepoConfigLoader};
-use serde::Serialize;
 use thiserror::Error;
 pub use turbo::{
     validate_extends, validate_no_package_task_syntax, RawTurboJSON, SpacesJson, TurboJson,
 };
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-pub use user::{UserConfig, UserConfigLoader};
+pub use turbo_config::{ConfigurationOptions, TurborepoConfigBuilder};
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("default config path not found")]
-    NoDefaultConfigPath,
+    #[error("Global config path not found")]
+    NoGlobalConfigPath,
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
@@ -39,8 +20,6 @@ pub enum Error {
     NoTurboJSON,
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
-    #[error(transparent)]
-    Config(#[from] ConfigError),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -52,6 +31,8 @@ pub enum Error {
     PackageTaskInSinglePackageMode { task_id: String },
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
     #[error(
         "You specified \"{value}\" in the \"{key}\" key. You should not prefix your environment \
          variables with \"{env_pipeline_delimiter}\""
@@ -69,30 +50,4 @@ pub enum Error {
     ExtendFromNonRoot,
     #[error("No \"extends\" key found")]
     NoExtends,
-}
-
-pub fn default_user_config_path() -> Result<AbsoluteSystemPathBuf, Error> {
-    Ok(AbsoluteSystemPathBuf::try_from(
-        config_dir()
-            .map(|p| p.join("turborepo").join("config.json"))
-            .ok_or(Error::NoDefaultConfigPath)?,
-    )?)
-}
-
-#[allow(dead_code)]
-pub fn data_dir() -> Option<PathBuf> {
-    dirs_next::data_dir().map(|p| p.join("turborepo"))
-}
-
-fn write_to_disk<T>(path: &AbsoluteSystemPath, config: &T) -> Result<(), Error>
-where
-    T: Serialize,
-{
-    if let Some(parent_dir) = path.parent() {
-        std::fs::create_dir_all(parent_dir)?;
-    }
-    let config_file = std::fs::File::create(path)?;
-    serde_json::to_writer_pretty(&config_file, &config)?;
-    config_file.sync_all()?;
-    Ok(())
 }

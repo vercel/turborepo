@@ -22,7 +22,7 @@ use std::{
 };
 
 use command_group::AsyncCommandGroup;
-use futures::future::try_join3;
+use futures::future::{try_join3, try_join4};
 use itertools::Itertools;
 pub use tokio::process::Command;
 use tokio::{
@@ -397,6 +397,61 @@ impl Child {
         Ok(exit)
     }
 
+    /// Wait for the `Child` to exit and pipe any stdout and stderr to a
+    /// single writers.
+    pub async fn wait_with_single_piped_output<W: Write>(
+        &mut self,
+        pipe: W,
+    ) -> Result<Option<ChildExit>, std::io::Error> {
+        // Note this is similar to tokio::process::Command::wait_with_outputs
+        // but allows us to provide our own sinks instead of just writing to a buffers.
+        async fn pipe_lines<R: AsyncRead + Unpin>(
+            stream: Option<R>,
+            tx: mpsc::Sender<String>,
+        ) -> std::io::Result<()> {
+            let Some(stream) = stream else { return Ok(()) };
+            let mut stream = BufReader::new(stream);
+            loop {
+                let mut buffer = String::new();
+                // If 0 bytes are read that indicates we've hit EOF
+                if stream.read_line(&mut buffer).await? == 0 {
+                    break;
+                }
+                if tx.send(buffer).await.is_err() {
+                    // If the receiver is dropped then we have nothing to do with these bytes
+                    break;
+                }
+            }
+            Ok(())
+        }
+
+        async fn write_lines<W: Write>(
+            mut rx: mpsc::Receiver<String>,
+            mut writer: W,
+        ) -> std::io::Result<()> {
+            while let Some(buffer) = rx.recv().await {
+                writer.write_all(buffer.as_bytes())?;
+            }
+            Ok(())
+        }
+
+        let (tx, rx) = mpsc::channel(16);
+
+        let stdout_fut = pipe_lines(self.stdout(), tx.clone());
+        let stderr_fut = pipe_lines(self.stderr(), tx);
+        let write_fut = write_lines(rx, pipe);
+
+        let (exit, _stdout, _stderr, _write) = try_join4(
+            async { Ok(self.wait().await) },
+            stdout_fut,
+            stderr_fut,
+            write_fut,
+        )
+        .await?;
+
+        Ok(exit)
+    }
+
     pub fn label(&self) -> &str {
         &self.label
     }
@@ -655,6 +710,27 @@ mod test {
 
         assert_eq!(out, b"hello world\n");
         assert!(err.is_empty());
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    #[tokio::test]
+    async fn test_wait_with_single_output() {
+        let script = find_script_dir().join_component("hello_world_hello_moon.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+
+        let mut buffer = Vec::new();
+
+        let exit = child
+            .wait_with_single_piped_output(&mut buffer)
+            .await
+            .unwrap();
+
+        // There are no ordering guarantees so we accept either order of the logs
+        assert!(buffer == b"hello world\nhello moon\n" || buffer == b"hello moon\nhello world\n");
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 }

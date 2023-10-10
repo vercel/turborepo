@@ -18,7 +18,7 @@ use rayon::iter::ParallelBridge;
 use tracing::{debug, info};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::APIAuth;
-use turborepo_cache::AsyncCache;
+use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_json::PackageJson;
 use turborepo_scm::SCM;
@@ -80,7 +80,19 @@ impl<'a> Run<'a> {
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
 
-        opts.cache_opts.remote_cache_opts = root_turbo_json.remote_cache_options.clone();
+        let team_id = root_turbo_json
+            .remote_cache
+            .as_ref()
+            .and_then(|configuration_options| configuration_options.team_id.clone())
+            .unwrap_or_default();
+
+        let signature = root_turbo_json
+            .remote_cache
+            .as_ref()
+            .and_then(|configuration_options| configuration_options.signature)
+            .unwrap_or_default();
+
+        opts.cache_opts.remote_cache_opts = Some(RemoteCacheOpts::new(team_id, signature));
 
         if opts.run_opts.experimental_space_id.is_none() {
             opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
@@ -139,11 +151,10 @@ impl<'a> Run<'a> {
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
-        let repo_config = self.base.repo_config()?;
-        let team_id = repo_config.team_id();
-        let team_slug = repo_config.team_slug();
-
-        let token = self.base.user_config()?.token();
+        let config = self.base.config()?;
+        let team_id = config.team_id();
+        let team_slug = config.team_slug();
+        let token = config.token();
 
         let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
             team_id: team_id.to_string(),
@@ -405,12 +416,12 @@ impl<'a> Run<'a> {
         };
 
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
+        let config = self.base.config()?;
 
-        let repo_config = self.base.repo_config()?;
-        let team_id = repo_config.team_id();
-        let team_slug = repo_config.team_slug();
+        let team_id = config.team_id();
+        let team_slug = config.team_slug();
 
-        let token = self.base.user_config()?.token();
+        let token = config.token();
 
         let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
             team_id: team_id.to_string(),

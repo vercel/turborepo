@@ -1,7 +1,7 @@
 use std::{backtrace::Backtrace, io::Write};
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-use turborepo_api_client::{APIAuth, APIClient, Client, Response};
+use turborepo_api_client::{APIAuth, APIClient, Response};
 
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
