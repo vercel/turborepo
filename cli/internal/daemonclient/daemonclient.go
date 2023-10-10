@@ -5,6 +5,7 @@ package daemonclient
 import (
 	"context"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/vercel/turbo/cli/internal/daemon/connector"
@@ -33,11 +34,24 @@ func New(client *connector.Client) *DaemonClient {
 	}
 }
 
-// Our globs are expected to be in unix format, and to have : escaped.
-// Important Note: these are _repository relative_ globs, and so will not
-// include Windows drive letters with their own ':' token.
+// formats a repo-relative glob to unix format with ':' characters handled.
+// On windows, ':' is an invalid path character, but you can, and Turborepo does,
+// read to and write from files that contain alternate data streams denoted by ':'.
+// In the case of windows and an alternate data stream, we want change notifications just
+// for the root file. Note that since ':' denotes a data stream for a _file_, it cannot
+// appear in a directory name. Thus, if we find one, we know it's in the filename.
+// See https://learn.microsoft.com/en-us/sysinternals/downloads/streams
 func formatRepoRelativeGlob(input string) string {
-	return strings.ReplaceAll(filepath.ToSlash(input), ":", "\\:")
+	unixInput := filepath.ToSlash(input)
+	if runtime.GOOS == "windows" {
+		colonIndex := strings.Index(input, ":")
+		if colonIndex > -1 {
+			// we found an alternate data stream
+			unixInput = unixInput[:colonIndex]
+		}
+		return unixInput
+	}
+	return strings.ReplaceAll(unixInput, ":", "\\:")
 }
 
 // GetChangedOutputs implements runcache.OutputWatcher.GetChangedOutputs
