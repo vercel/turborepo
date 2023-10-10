@@ -9,7 +9,16 @@
     "HOME",
     "TMP",
     "GOROOT",
-    "USERPROFILE"
+    "USERPROFILE",
+    "SCCACHE_GHA_ENABLED",
+    "SCCACHE_BUCKET",
+    "SCCACHE_REGION",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "RUSTC_WRAPPER",
+    "CARGO_INCREMENTAL",
+    "ACTIONS_CACHE_URL",
+    "ACTIONS_RUNTIME_TOKEN"
   ],
   // This is probably overkill, but we do things per-platform often enough that we should segment
   // everything by OS and RUNNER_OS. This will segment between GH actions and everything else for now.
