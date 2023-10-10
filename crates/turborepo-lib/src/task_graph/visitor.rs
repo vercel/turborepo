@@ -64,8 +64,8 @@ pub enum Error {
 
 impl<'a> Visitor<'a> {
     // Disabling this lint until we stop adding state to the visitor.
-    // Once we have the full picture we will go about grouping
-    // these pieces of data together
+    // Once we have the full picture we will go about grouping these pieces of data
+    // together
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         package_graph: Arc<PackageGraph>,
