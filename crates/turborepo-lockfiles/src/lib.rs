@@ -1,3 +1,4 @@
+#![feature(trait_upcasting)]
 #![deny(clippy::all)]
 
 mod berry;
@@ -56,18 +57,8 @@ pub trait Lockfile: Send + Sync + Any {
         Ok(Vec::new())
     }
 
-    /// Present a global change key which is compared against two lockfiles
-    ///
-    /// Impl notes: please prefix this key with some magic identifier
-    /// to prevent clashes. we are not worried about inter-version
-    /// compatibility so these keys don't need to be stable. They are
-    /// ephemeral.
-    fn global_change_key(&self) -> Vec<u8>;
-
     /// Determine if there's a global change between two lockfiles
-    fn global_change(&self, other: &dyn Lockfile) -> bool {
-        self.global_change_key() == other.global_change_key()
-    }
+    fn global_change(&self, other: &dyn Lockfile) -> bool;
 }
 
 /// Takes a lockfile, and a map of workspace directory paths -> (package name,

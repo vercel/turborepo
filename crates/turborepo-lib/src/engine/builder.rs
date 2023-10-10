@@ -436,7 +436,7 @@ mod test {
             unreachable!()
         }
 
-        fn global_change_key(&self) -> Vec<u8> {
+        fn global_change(&self, _other: &dyn Lockfile) -> bool {
             unreachable!()
         }
     }

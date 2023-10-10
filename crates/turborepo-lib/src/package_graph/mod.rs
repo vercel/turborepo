@@ -545,8 +545,8 @@ mod test {
             unreachable!("lockfile encoding not necessary for package graph construction")
         }
 
-        fn global_change_key(&self) -> Vec<u8> {
-            unreachable!()
+        fn global_change(&self, _other: &dyn Lockfile) -> bool {
+            unreachable!("global change detection not necessary for package graph construction")
         }
     }
 
