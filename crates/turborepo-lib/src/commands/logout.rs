@@ -23,7 +23,7 @@ pub fn logout(base: &mut CommandBase) -> Result<()> {
         if let Some(after) = unset_path(&before, &["token"], true)? {
             global_config_path
                 .create_with_contents(after)
-                .map_err(|e| Error::from(e))
+                .map_err(Error::from)
         } else {
             Ok(())
         }

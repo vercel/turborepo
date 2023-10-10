@@ -89,7 +89,7 @@ impl<'a> Run<'a> {
         let signature = root_turbo_json
             .remote_cache
             .as_ref()
-            .and_then(|configuration_options| configuration_options.signature.clone())
+            .and_then(|configuration_options| configuration_options.signature)
             .unwrap_or_default();
 
         opts.cache_opts.remote_cache_opts = Some(RemoteCacheOpts::new(team_id, signature));
