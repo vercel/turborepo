@@ -14,8 +14,9 @@ use turbopack_core::{
     output::{OutputAsset, OutputAssets},
     reference::ModuleReference,
 };
-use turbopack_ecmascript::chunk::{
-    EcmascriptChunk, EcmascriptChunkPlaceable, EcmascriptChunkingContext,
+use turbopack_ecmascript::{
+    chunk::{EcmascriptChunk, EcmascriptChunkPlaceable, EcmascriptChunkingContext},
+    manifest::{chunk_asset::ManifestAsyncModule, loader_item::ManifestLoaderChunkItem},
 };
 use turbopack_ecmascript_runtime::RuntimeType;
 
@@ -418,16 +419,23 @@ impl ChunkingContext for BuildChunkingContext {
 
     #[turbo_tasks::function]
     fn async_loader_chunk_item(
-        &self,
+        self: Vc<Self>,
         module: Vc<Box<dyn ChunkableModule>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Vc<Box<dyn ChunkItem>> {
-        todo!();
+        let manifest_asset = ManifestAsyncModule::new(module, Vc::upcast(self), availability_info);
+        Vc::upcast(ManifestLoaderChunkItem::new(
+            manifest_asset,
+            Vc::upcast(self),
+        ))
     }
 
     #[turbo_tasks::function]
-    fn async_loader_chunk_item_id(&self, module: Vc<Box<dyn ChunkableModule>>) -> Vc<ModuleId> {
-        todo!();
+    fn async_loader_chunk_item_id(
+        self: Vc<Self>,
+        module: Vc<Box<dyn ChunkableModule>>,
+    ) -> Vc<ModuleId> {
+        self.chunk_item_id_from_ident(ManifestLoaderChunkItem::asset_ident_for(module))
     }
 }
 
