@@ -99,11 +99,11 @@ var ErrNoCachesEnabled = errors.New("no caches are enabled")
 // Opts holds configuration options for the cache
 // TODO(gsoltis): further refactor this into fs cache opts and http cache opts
 type Opts struct {
-	OverrideDir     string
-	SkipRemote      bool
-	SkipFilesystem  bool
-	Workers         int
-	RemoteCacheOpts fs.RemoteCacheOptions
+	OverrideDir    string
+	SkipRemote     bool
+	SkipFilesystem bool
+	Workers        int
+	Signature      bool
 }
 
 // resolveCacheDir calculates the location turbo should use to cache artifacts,

@@ -2,10 +2,14 @@ use serde::Serialize;
 use tracing::trace;
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
-use crate::{cli::Args, commands::CommandBase, run::Run, task_hash::TaskHashTrackerState};
+use crate::{
+    cli::Args, commands::CommandBase, config::ConfigurationOptions, run::Run,
+    task_hash::TaskHashTrackerState,
+};
 
 #[derive(Debug, Serialize)]
 pub struct ExecutionState<'a> {
+    pub config: &'a ConfigurationOptions,
     global_hash: Option<String>,
     task_hash_tracker: Option<TaskHashTrackerState>,
     pub api_client_config: APIClientConfig<'a>,
@@ -64,30 +68,28 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
             PackageManager::get_package_manager(&base.repo_root, root_package_json.as_ref())?;
         trace!("Found {} as package manager", package_manager);
 
-        let repo_config = base.repo_config()?;
-        let user_config = base.user_config()?;
-        let client_config = base.client_config()?;
-        let args = base.args();
+        let config = base.config()?;
 
         let api_client_config = APIClientConfig {
-            token: user_config.token(),
-            team_id: repo_config.team_id(),
-            team_slug: repo_config.team_slug(),
-            api_url: repo_config.api_url(),
-            use_preflight: args.preflight,
-            timeout: client_config.remote_cache_timeout(),
+            token: config.token(),
+            team_id: config.team_id(),
+            team_slug: config.team_slug(),
+            api_url: config.api_url(),
+            use_preflight: config.preflight(),
+            timeout: config.timeout(),
         };
 
         let spaces_api_client_config = SpacesAPIClientConfig {
-            token: user_config.token(),
-            team_id: repo_config.space_team_id(),
-            team_slug: repo_config.space_team_slug(),
-            api_url: repo_config.space_api_url(),
-            use_preflight: args.preflight,
-            timeout: client_config.remote_cache_timeout(),
+            token: config.token(),
+            team_id: config.team_id(),
+            team_slug: config.team_slug(),
+            api_url: config.api_url(),
+            use_preflight: config.preflight(),
+            timeout: config.timeout(),
         };
 
         Ok(ExecutionState {
+            config,
             global_hash,
             task_hash_tracker,
             api_client_config,
