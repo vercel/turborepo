@@ -188,7 +188,6 @@ impl ChunkableModuleReference for EsmAssetReference {
             if let Some(chunking_type) = self.annotations.chunking_type() {
                 match chunking_type {
                     "parallel" => Some(ChunkingType::Parallel),
-                    "isolatedParallel" => Some(ChunkingType::IsolatedParallel),
                     "none" => None,
                     _ => return Err(anyhow!("unknown chunking_type: {}", chunking_type)),
                 }

@@ -22,7 +22,7 @@ use turbo_tasks::{
     debug::ValueDebugFormat,
     graph::{AdjacencyMap, GraphTraversal, GraphTraversalResult, Visit, VisitControlFlow},
     trace::TraceRawVcs,
-    ReadRef, TryFlatJoinIterExt, TryJoinIterExt, Upcast, Value, ValueToString, Vc,
+    ReadRef, TryFlatJoinIterExt, Upcast, Value, ValueToString, Vc,
 };
 use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::DeterministicHash;
@@ -150,10 +150,6 @@ pub enum ChunkingType {
     /// Asset is placed in the same chunk group and is loaded in parallel.
     #[default]
     Parallel,
-    /// Asset is placed in the same chunk group and is loaded in parallel.
-    /// Referenced asset will not inherit the available modules, but form a
-    /// new availability root.
-    IsolatedParallel,
     /// An async loader is placed into the referencing chunk and loads the
     /// separate chunk group in which the asset is placed.
     Async,
@@ -297,9 +293,6 @@ async fn reference_to_graph_nodes(
                     },
                 ));
             }
-            ChunkingType::IsolatedParallel => {
-                todo!();
-            }
             ChunkingType::Async => {
                 graph_nodes.push((
                     Some((module, chunking_type)),
@@ -369,7 +362,7 @@ impl Visit<ChunkContentGraphNode, ()> for ChunkContentVisit {
                 ChunkContentGraphNode::PassthroughModule { asset } => asset.references(),
                 ChunkContentGraphNode::ChunkItem { item, .. } => item.references(),
                 _ => {
-                    return Ok(vec![].into_iter().flatten());
+                    return Ok(vec![].into_iter());
                 }
             };
 
@@ -377,10 +370,9 @@ impl Visit<ChunkContentGraphNode, ()> for ChunkContentVisit {
                 .await?
                 .into_iter()
                 .map(|reference| reference_to_graph_nodes(chunk_content_context, *reference))
-                .try_join()
+                .try_flat_join()
                 .await?
-                .into_iter()
-                .flatten())
+                .into_iter())
         }
     }
 
