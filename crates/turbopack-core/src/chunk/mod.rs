@@ -243,6 +243,17 @@ async fn reference_to_graph_nodes(
     for &module in &modules {
         let module = module.resolve().await?;
 
+        if Vc::try_resolve_sidecast::<Box<dyn PassthroughModule>>(module)
+            .await?
+            .is_some()
+        {
+            graph_nodes.push((
+                Some(module),
+                ChunkContentGraphNode::PassthroughModule { module },
+            ));
+            continue;
+        }
+
         let chunkable_module =
             match Vc::try_resolve_sidecast::<Box<dyn ChunkableModule>>(module).await? {
                 Some(chunkable_module) => chunkable_module,
@@ -260,17 +271,6 @@ async fn reference_to_graph_nodes(
                 graph_nodes.push((None, ChunkContentGraphNode::AvailableAsset(module)));
                 continue;
             }
-        }
-
-        if Vc::try_resolve_sidecast::<Box<dyn PassthroughModule>>(module)
-            .await?
-            .is_some()
-        {
-            graph_nodes.push((
-                Some(module),
-                ChunkContentGraphNode::PassthroughModule { module },
-            ));
-            continue;
         }
 
         match chunking_type {
@@ -337,7 +337,7 @@ impl Visit<ChunkContentGraphNode, ()> for ChunkContentVisit {
 
         async move {
             let references = match node {
-                ChunkContentGraphNode::PassthroughModule { module: asset } => asset.references(),
+                ChunkContentGraphNode::PassthroughModule { module } => module.references(),
                 ChunkContentGraphNode::ChunkItem { item, .. } => item.references(),
                 _ => {
                     return Ok(vec![].into_iter());
