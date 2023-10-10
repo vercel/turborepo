@@ -406,19 +406,19 @@ impl ChunkingContext for DevChunkingContext {
 
         let evaluatable_assets_ref = evaluatable_assets.await?;
 
+        // TODO this collect is unnecessary, but it hits a compiler bug when it's not
+        // used
+        let entries = evaluatable_assets_ref
+            .iter()
+            .map(|&evaluatable| Vc::upcast(evaluatable))
+            .collect::<Vec<_>>();
+
         let ChunkContentResult {
             modules,
             mut chunk_items,
             async_modules,
             mut external_module_references,
-        } = chunk_content(
-            Vc::upcast(self),
-            evaluatable_assets_ref
-                .iter()
-                .map(|&evaluatable| Vc::upcast(evaluatable)),
-            Value::new(availability_info),
-        )
-        .await?;
+        } = chunk_content(Vc::upcast(self), entries, Value::new(availability_info)).await?;
 
         let inner_availability_info = availability_info.with_modules(modules);
 
