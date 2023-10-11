@@ -290,6 +290,7 @@ impl<'a> Run<'a> {
             opts.run_opts.env_mode,
             opts.run_opts.framework_inference,
             root_turbo_json.global_dot_env.as_deref(),
+            &scm,
         )?;
 
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
@@ -458,6 +459,8 @@ impl<'a> Run<'a> {
         let root_external_dependencies_hash =
             is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
+        let scm = SCM::new(&self.base.repo_root);
+
         let mut global_hash_inputs = get_global_hash_inputs(
             root_external_dependencies_hash.as_deref(),
             &self.base.repo_root,
@@ -470,9 +473,8 @@ impl<'a> Run<'a> {
             opts.run_opts.env_mode,
             opts.run_opts.framework_inference,
             root_turbo_json.global_dot_env.as_deref(),
+            &scm,
         )?;
-
-        let scm = SCM::new(&self.base.repo_root);
 
         let filtered_pkgs = {
             let mut filtered_pkgs = scope::resolve_packages(
