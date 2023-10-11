@@ -2,7 +2,7 @@ use std::mem::take;
 
 use anyhow::Result;
 use indexmap::IndexMap;
-use turbo_tasks::{TryJoinIterExt, ValueToString, Vc};
+use turbo_tasks::{TryJoinIterExt, Vc};
 
 use super::{Chunk, ChunkItem, ChunkType, ChunkingContext};
 use crate::{ident::AssetIdent, module::Module, output::OutputAsset};
@@ -22,19 +22,6 @@ pub async fn make_chunks(
         })
         .try_join()
         .await?;
-    let names = chunk_items
-        .iter()
-        .map(|(_, chunk_item)| chunk_item.asset_ident().to_string())
-        .try_join()
-        .await?;
-    println!(
-        "make_chunks(\n  {}\n)",
-        names
-            .iter()
-            .map(|s| s.as_str())
-            .collect::<Vec<_>>()
-            .join(",\n  ")
-    );
     let mut map = IndexMap::<_, Vec<_>>::new();
     for (ty, chunk_item) in chunk_items {
         map.entry(ty).or_default().push(chunk_item);
