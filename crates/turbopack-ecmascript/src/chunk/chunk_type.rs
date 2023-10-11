@@ -2,7 +2,6 @@ use anyhow::{bail, Result};
 use turbo_tasks::{TryJoinIterExt, ValueDefault, ValueToString, Vc};
 use turbopack_core::{
     chunk::{Chunk, ChunkItem, ChunkItems, ChunkType, ChunkingContext},
-    ident::AssetIdent,
     module::Module,
     output::OutputAssets,
 };
@@ -29,7 +28,6 @@ impl ChunkType for EcmascriptChunkType {
     async fn chunk(
         &self,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
-        ident: Vc<AssetIdent>,
         chunk_items: Vc<ChunkItems>,
         referenced_output_assets: Vc<OutputAssets>,
         chunk_group_root: Option<Vc<Box<dyn Module>>>,
@@ -62,11 +60,7 @@ impl ChunkType for EcmascriptChunkType {
             chunk_group_root,
         }
         .cell();
-        Ok(Vc::upcast(EcmascriptChunk::new(
-            chunking_context,
-            ident,
-            content,
-        )))
+        Ok(Vc::upcast(EcmascriptChunk::new(chunking_context, content)))
     }
 
     #[turbo_tasks::function]

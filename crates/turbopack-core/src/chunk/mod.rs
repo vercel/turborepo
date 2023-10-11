@@ -469,7 +469,6 @@ pub trait ChunkType: ValueToString {
     fn chunk(
         &self,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
-        ident: Vc<AssetIdent>,
         chunk_items: Vc<ChunkItems>,
         referenced_output_assets: Vc<OutputAssets>,
         // TODO This need to go away, it's only needed for EsmScope

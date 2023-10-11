@@ -12,14 +12,12 @@ use turbo_tasks::{keyed_cell, KeyedCellContext, ReadRef, TryJoinIterExt, ValueTo
 
 use super::{Chunk, ChunkItem, ChunkItems, ChunkType, ChunkingContext};
 use crate::{
-    ident::AssetIdent,
     module::Module,
     output::{OutputAsset, OutputAssets},
 };
 
 pub async fn make_chunks(
     chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ident: Vc<AssetIdent>,
     chunk_items: impl IntoIterator<Item = Vc<Box<dyn ChunkItem>>>,
     referenced_output_assets: Vec<Vc<Box<dyn OutputAsset>>>,
     chunk_group_root: Option<Vc<Box<dyn Module>>>,
@@ -63,7 +61,6 @@ pub async fn make_chunks(
             ty,
             cell_context,
             chunking_context,
-            ident,
             chunk_group_root,
             chunks: &mut chunks,
             referenced_output_assets: &mut referenced_output_assets,
@@ -82,7 +79,6 @@ struct SplitContext<'a> {
     ty: Vc<Box<dyn ChunkType>>,
     cell_context: Vc<KeyedCellContext>,
     chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ident: Vc<AssetIdent>,
     chunk_group_root: Option<Vc<Box<dyn Module>>>,
     chunks: &'a mut Vec<Vc<Box<dyn Chunk>>>,
     referenced_output_assets: &'a mut Vc<OutputAssets>,
@@ -116,9 +112,6 @@ async fn make_chunk(
     split_context.chunks.push(
         split_context.ty.chunk(
             split_context.chunking_context,
-            split_context
-                .ident
-                .with_modifier(singleton_string(key.to_string())),
             keyed_cell(
                 split_context.cell_context,
                 take(key),
@@ -323,9 +316,4 @@ fn chunk_size(chunk_items: &[ChunkItemWithInfo]) -> ChunkSize {
     } else {
         ChunkSize::Small
     }
-}
-
-#[turbo_tasks::function]
-fn singleton_string(str: String) -> Vc<String> {
-    Vc::cell(str)
 }

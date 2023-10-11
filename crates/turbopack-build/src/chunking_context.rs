@@ -200,7 +200,6 @@ impl BuildChunkingContext {
 
         let chunks = make_chunks(
             Vc::upcast(self),
-            module.ident(),
             chunk_items,
             output_assets,
             Some(Vc::upcast(module)),
@@ -390,7 +389,6 @@ impl ChunkingContext for BuildChunkingContext {
 
         let chunks = make_chunks(
             Vc::upcast(self),
-            module.ident(),
             chunk_items,
             output_assets,
             Some(Vc::upcast(module)),

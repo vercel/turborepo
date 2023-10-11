@@ -5,7 +5,7 @@
 (globalThis.TURBOPACK_CHUNK_LISTS = globalThis.TURBOPACK_CHUNK_LISTS || []).push({
   "path": "output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_98eac3.js",
   "chunks": [
-    "output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_index_d0c768.js"
+    "output/crates_turbopack-tests_tests_snapshot_basic_shebang_input_d0c768._.js"
   ],
   "source": "entry"
 });

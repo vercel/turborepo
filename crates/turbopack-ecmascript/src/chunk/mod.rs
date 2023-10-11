@@ -10,6 +10,7 @@ use std::fmt::Write;
 
 use anyhow::{bail, Result};
 use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks_fs::FileSystem;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{Chunk, ChunkItem, ChunkingContext, ModuleIds},
@@ -20,6 +21,7 @@ use turbopack_core::{
         Introspectable, IntrospectableChildren,
     },
     output::OutputAssets,
+    server_fs::ServerFileSystem,
 };
 
 pub use self::{
@@ -37,7 +39,6 @@ pub use self::{
 #[turbo_tasks::value]
 pub struct EcmascriptChunk {
     pub chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    pub ident: Vc<AssetIdent>,
     pub content: Vc<EcmascriptChunkContent>,
 }
 
@@ -49,12 +50,10 @@ impl EcmascriptChunk {
     #[turbo_tasks::function]
     pub async fn new(
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-        ident: Vc<AssetIdent>,
         content: Vc<EcmascriptChunkContent>,
     ) -> Result<Vc<Self>> {
         Ok(EcmascriptChunk {
             chunking_context,
-            ident,
             content,
         }
         .cell())
@@ -83,16 +82,32 @@ impl Chunk for EcmascriptChunk {
     async fn ident(self: Vc<Self>) -> Result<Vc<AssetIdent>> {
         let this = self.await?;
 
-        let mut ident = this.ident.await?.clone_value();
+        let mut assets = Vec::new();
 
         let EcmascriptChunkContent { chunk_items, .. } = &*this.content.await?;
+        let mut common_path = if let Some(chunk_item) = chunk_items.first() {
+            let path = chunk_item.asset_ident().path().resolve().await?;
+            Some((path, path.await?))
+        } else {
+            None
+        };
 
         // The included chunk items describe the chunk uniquely
         let chunk_item_key = chunk_item_key();
         for &chunk_item in chunk_items.iter() {
-            ident
-                .assets
-                .push((chunk_item_key, chunk_item.asset_ident()));
+            if let Some((common_path_vc, common_path_ref)) = common_path.as_mut() {
+                let path = chunk_item.asset_ident().path().await?;
+                while !path.is_inside_or_equal_ref(&common_path_ref) {
+                    let parent = common_path_vc.parent().resolve().await?;
+                    if parent == *common_path_vc {
+                        common_path = None;
+                        break;
+                    }
+                    *common_path_vc = parent;
+                    *common_path_ref = (*common_path_vc).await?;
+                }
+            }
+            assets.push((chunk_item_key, chunk_item.asset_ident()));
         }
 
         // TODO this need to be removed
@@ -100,9 +115,22 @@ impl Chunk for EcmascriptChunk {
         // the chunk content, it's only a tool for computation optimization
 
         // Make sure the idents are resolved
-        for (_, ident) in ident.assets.iter_mut() {
+        for (_, ident) in assets.iter_mut() {
             *ident = ident.resolve().await?;
         }
+
+        let ident = AssetIdent {
+            path: if let Some((common_path, _)) = common_path {
+                common_path
+            } else {
+                ServerFileSystem::new().root()
+            },
+            query: Vc::<String>::default(),
+            fragment: None,
+            assets,
+            modifiers: Vec::new(),
+            part: None,
+        };
 
         Ok(AssetIdent::new(Value::new(ident)))
     }
@@ -123,8 +151,11 @@ impl Chunk for EcmascriptChunk {
 #[turbo_tasks::value_impl]
 impl ValueToString for EcmascriptChunk {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(format!("chunk {}", self.ident.to_string().await?)))
+    async fn to_string(self: Vc<Self>) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
+            "chunk {}",
+            self.ident().to_string().await?
+        )))
     }
 }
 

@@ -373,7 +373,6 @@ impl ChunkingContext for DevChunkingContext {
 
         let chunks = make_chunks(
             Vc::upcast(self),
-            module.ident(),
             chunk_items,
             output_assets,
             Some(Vc::upcast(module)),
@@ -444,7 +443,6 @@ impl ChunkingContext for DevChunkingContext {
 
         let chunks = make_chunks(
             Vc::upcast(self),
-            ident,
             chunk_items,
             output_assets,
             chunk_group_root,

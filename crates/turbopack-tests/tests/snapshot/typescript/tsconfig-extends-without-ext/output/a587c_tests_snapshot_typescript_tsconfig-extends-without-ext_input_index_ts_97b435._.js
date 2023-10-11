@@ -5,7 +5,7 @@
 (globalThis.TURBOPACK_CHUNK_LISTS = globalThis.TURBOPACK_CHUNK_LISTS || []).push({
   "path": "output/a587c_tests_snapshot_typescript_tsconfig-extends-without-ext_input_index_ts_97b435._.js",
   "chunks": [
-    "output/a587c_tests_snapshot_typescript_tsconfig-extends-without-ext_input_index_ts_9f09a0._.js"
+    "output/a587c_tests_snapshot_typescript_tsconfig-extends-without-ext_input_9f09a0._.js"
   ],
   "source": "entry"
 });
