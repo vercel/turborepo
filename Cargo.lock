@@ -1599,6 +1599,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cpp_demangle"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e8227005286ec39567949b33df9896bcadfa6051bccca2488129f108ca23119"
+dependencies = [
+ "cfg-if 1.0.0",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2536,6 +2545,18 @@ dependencies = [
  "libc",
  "redox_syscall 0.3.5",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "findshlibs"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40b9e59cd0f7e0806cca4be089683ecb6434e602038df21fe6bf6711b2f07f64"
+dependencies = [
+ "cc",
+ "lazy_static",
+ "libc",
+ "winapi 0.3.9",
 ]
 
 [[package]]
@@ -5394,6 +5415,30 @@ dependencies = [
  "cobs",
  "heapless",
  "serde",
+]
+
+[[package]]
+name = "pprof"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "978385d59daf9269189d052ca8a84c1acfd0715c0599a5d5188d4acc078ca46a"
+dependencies = [
+ "backtrace",
+ "cfg-if 1.0.0",
+ "findshlibs",
+ "libc",
+ "log",
+ "nix",
+ "once_cell",
+ "parking_lot",
+ "prost",
+ "prost-build",
+ "prost-derive",
+ "sha2",
+ "smallvec",
+ "symbolic-demangle",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -8423,6 +8468,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "symbolic-common"
+version = "12.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fac08504d60cf5bdffeb8a6a028f1a4868a5da1098bb19eb46239440039163fb"
+dependencies = [
+ "debugid",
+ "memmap2 0.5.10",
+ "stable_deref_trait",
+ "uuid",
+]
+
+[[package]]
+name = "symbolic-demangle"
+version = "12.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b212728d4f6c527c1d50d6169e715f6e02d849811843c13e366d8ca6d0cf5c4"
+dependencies = [
+ "cpp_demangle",
+ "rustc-demangle",
+ "symbolic-common",
+]
+
+[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10392,6 +10460,7 @@ dependencies = [
  "petgraph",
  "pidlock",
  "port_scanner",
+ "pprof",
  "pretty_assertions",
  "prost",
  "rand 0.8.5",
