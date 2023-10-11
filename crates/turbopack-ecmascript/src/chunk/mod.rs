@@ -19,7 +19,6 @@ use turbopack_core::{
         utils::{children_from_output_assets, content_to_details},
         Introspectable, IntrospectableChildren,
     },
-    module::Module,
     output::OutputAssets,
 };
 
@@ -86,14 +85,9 @@ impl Chunk for EcmascriptChunk {
 
         let mut ident = this.ident.await?.clone_value();
 
-        let EcmascriptChunkContent {
-            chunk_items,
-            chunk_group_root,
-            ..
-        } = &*this.content.await?;
+        let EcmascriptChunkContent { chunk_items, .. } = &*this.content.await?;
 
-        // The included chunk items and the availability info describe the chunk
-        // uniquely
+        // The included chunk items describe the chunk uniquely
         let chunk_item_key = chunk_item_key();
         for &chunk_item in chunk_items.iter() {
             ident
@@ -102,12 +96,8 @@ impl Chunk for EcmascriptChunk {
         }
 
         // TODO this need to be removed
-        // Current chunk_group_root is included
-        if let Some(chunk_group_root) = *chunk_group_root {
-            ident
-                .assets
-                .push((availability_root_key(), chunk_group_root.ident()));
-        }
+        // Note: chunk_group_root doesn't need to be included since it doesn't affect
+        // the chunk content, it's only a tool for computation optimization
 
         // Make sure the idents are resolved
         for (_, ident) in ident.assets.iter_mut() {
