@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
-use turbo_tasks::{TryJoinIterExt, ValueDefault, Vc};
+use turbo_tasks::{TryJoinIterExt, ValueDefault, ValueToString, Vc};
 use turbopack_core::{
-    chunk::{Chunk, ChunkItems, ChunkType, ChunkingContext},
+    chunk::{Chunk, ChunkItem, ChunkItems, ChunkType, ChunkingContext},
     ident::AssetIdent,
     module::Module,
     output::OutputAssets,
@@ -14,6 +14,14 @@ use super::{
 #[derive(Default)]
 #[turbo_tasks::value]
 pub struct EcmascriptChunkType {}
+
+#[turbo_tasks::value_impl]
+impl ValueToString for EcmascriptChunkType {
+    #[turbo_tasks::function]
+    fn to_string(&self) -> Vc<String> {
+        Vc::cell("ecmascript".to_string())
+    }
+}
 
 #[turbo_tasks::value_impl]
 impl ChunkType for EcmascriptChunkType {
@@ -59,6 +67,27 @@ impl ChunkType for EcmascriptChunkType {
             ident,
             content,
         )))
+    }
+
+    #[turbo_tasks::function]
+    async fn chunk_item_size(
+        &self,
+        _chunking_context: Vc<Box<dyn ChunkingContext>>,
+        chunk_item: Vc<Box<dyn ChunkItem>>,
+        // TODO This need to go away, it's only needed for EsmScope
+        chunk_group_root: Option<Vc<Box<dyn Module>>>,
+    ) -> Result<Vc<usize>> {
+        let Some(chunk_item) =
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkItem>>(chunk_item).await?
+        else {
+            bail!("Chunk item is not an ecmascript chunk item but reporting chunk type ecmascript");
+        };
+        Ok(Vc::cell(
+            chunk_item
+                .content_with_async_module_info(chunk_group_root)
+                .await
+                .map_or(0, |content| content.inner_code.len()),
+        ))
     }
 }
 

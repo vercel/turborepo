@@ -1478,7 +1478,7 @@ pub(crate) async fn read_task_cell(
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CurrentCellRef {
     current_task: TaskId,
     index: CellId,

@@ -376,6 +376,14 @@ impl Introspectable for CssChunk {
 pub struct CssChunkType {}
 
 #[turbo_tasks::value_impl]
+impl ValueToString for CssChunkType {
+    #[turbo_tasks::function]
+    fn to_string(&self) -> Vc<String> {
+        Vc::cell("css".to_string())
+    }
+}
+
+#[turbo_tasks::value_impl]
 impl ChunkType for CssChunkType {
     #[turbo_tasks::function]
     fn chunk(
@@ -392,6 +400,27 @@ impl ChunkType for CssChunkType {
             chunk_items,
             referenced_output_assets,
         )
+    }
+
+    #[turbo_tasks::function]
+    async fn chunk_item_size(
+        &self,
+        _chunking_context: Vc<Box<dyn ChunkingContext>>,
+        chunk_item: Vc<Box<dyn ChunkItem>>,
+        // TODO This need to go away, it's only needed for EsmScope
+        _chunk_group_root: Option<Vc<Box<dyn Module>>>,
+    ) -> Result<Vc<usize>> {
+        let Some(chunk_item) =
+            Vc::try_resolve_downcast::<Box<dyn CssChunkItem>>(chunk_item).await?
+        else {
+            bail!("Chunk item is not an css chunk item but reporting chunk type css");
+        };
+        Ok(Vc::cell(
+            chunk_item
+                .content()
+                .await
+                .map_or(0, |content| content.inner_code.len()),
+        ))
     }
 }
 

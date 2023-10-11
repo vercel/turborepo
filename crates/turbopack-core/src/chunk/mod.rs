@@ -464,7 +464,7 @@ pub trait ChunkItem {
 }
 
 #[turbo_tasks::value_trait]
-pub trait ChunkType {
+pub trait ChunkType: ValueToString {
     /// Create a new chunk for the given chunk items
     fn chunk(
         &self,
@@ -475,6 +475,14 @@ pub trait ChunkType {
         // TODO This need to go away, it's only needed for EsmScope
         chunk_group_root: Option<Vc<Box<dyn Module>>>,
     ) -> Vc<Box<dyn Chunk>>;
+
+    fn chunk_item_size(
+        &self,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+        chunk_item: Vc<Box<dyn ChunkItem>>,
+        // TODO This need to go away, it's only needed for EsmScope
+        chunk_group_root: Option<Vc<Box<dyn Module>>>,
+    ) -> Vc<usize>;
 }
 
 #[turbo_tasks::value(transparent)]
