@@ -271,14 +271,17 @@ impl EcmascriptChunkItem for MdxChunkItem {
     /// Once we have mdx contents, we should treat it as j|tsx components and
     /// apply all of the ecma transforms
     #[turbo_tasks::function]
-    async fn content(&self) -> Result<Vc<EcmascriptChunkItemContent>> {
+    async fn content_with_async_module_info(
+        &self,
+        chunk_group_root: Option<Vc<Box<dyn Module>>>,
+    ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let item = into_ecmascript_module_asset(&self.module)
             .await?
             .as_chunk_item(Vc::upcast(self.chunking_context));
         let ecmascript_item = Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkItem>>(item)
             .await?
             .context("MdxChunkItem must generate an EcmascriptChunkItem")?;
-        Ok(ecmascript_item.content())
+        Ok(ecmascript_item.content_with_async_module_info(chunk_group_root))
     }
 }
 
