@@ -142,7 +142,7 @@ Here's a checklist of testing strategies to cover:
 - Test `login`, `logout`, `login --sso-team`, `link`, `unlink`
 - Test `prune` (Note `turbo` here is the unreleased turbo binary)
   - `pnpm dlx create-turbo@latest prune-test --package-manager pnpm && cd prune-test`
-  - `turbo --skip-infer prune --scope=docs && cd out && pnpm install --frozen-lockfile`
+  - `turbo --skip-infer prune docs && cd out && pnpm install --frozen-lockfile`
   - `turbo --skip-infer build`
 - Test `--dry-run` and `--graph`.
 - Test with and without daemon.

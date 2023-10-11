@@ -4,7 +4,7 @@ Setup
 
 Test that absolute paths can be passed as out-dir
   $ TMPFILE=$(mktemp -d)
-  $ ${TURBO} prune --scope=web --out-dir=${TMPFILE}
+  $ ${TURBO} prune web --out-dir=${TMPFILE}
   Generating pruned monorepo for web in .* (re)
    - Added shared
    - Added util

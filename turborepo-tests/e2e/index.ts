@@ -617,7 +617,7 @@ function runSmokeTests<T>(
   );
 
   if (["npm", "yarn", "pnpm6", "pnpm", "berry"].includes(npmClient)) {
-    // Test `turbo prune --scope=a`
+    // Test `turbo prune a`
     // @todo refactor with other package managers
     const [installCmd, ...installArgs] =
       getImmutableInstallForPackageManager(npmClient);
@@ -626,7 +626,7 @@ function runSmokeTests<T>(
       async () => {
         const scope = "a";
         const pruneCommandOutput = getCommandOutputAsArray(
-          repo.turbo("prune", [`--scope=${scope}`], options)
+          repo.turbo("prune", [scope], options)
         );
         assert.fixture(pruneCommandOutput[1], " - Added a");
         assert.fixture(pruneCommandOutput[2], " - Added b");
@@ -701,7 +701,7 @@ function runSmokeTests<T>(
       async () => {
         const scope = "a";
         const pruneCommandOutput = getCommandOutputAsArray(
-          repo.turbo("prune", [`--scope=${scope}`, "--docker"], options)
+          repo.turbo("prune", [scope, "--docker"], options)
         );
         assert.fixture(pruneCommandOutput[1], " - Added a");
         assert.fixture(pruneCommandOutput[2], " - Added b");

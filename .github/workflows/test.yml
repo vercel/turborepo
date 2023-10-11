@@ -224,12 +224,26 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
       - uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        env:
+          SCCACHE_BUCKET: turborepo-sccache
+          SCCACHE_REGION: us-east-2
+          RUSTC_WRAPPER: "sccache"
+          CARGO_INCREMENTAL: 0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Run sccache stat for check
+        shell: bash
+        run: ${SCCACHE_PATH} --show-stats
 
   go_lint:
     name: Go linting
@@ -612,7 +626,7 @@ jobs:
 
       - name: Run cargo clippy
         run: |
-          RUSTFLAGS="-D warnings -A deprecated -Aclippy::too_many_arguments -Aclippy::needless_pass_by_ref_mut -Aclippy::non_canonical_partial_ord_impl" cargo groups clippy turbopack --features rustls-tls
+          RUSTFLAGS="-D warnings -A deprecated -Aclippy::too_many_arguments" cargo groups clippy turbopack --features rustls-tls
 
       - name: Run ast-grep lints
         run: |

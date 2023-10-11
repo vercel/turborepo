@@ -1,9 +1,10 @@
-name: Large Repo Benchmark
+name: Benchmark Turborepo
 
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: [Release]
+    # Make sure this matches the name of the workflow in ./github/workflows/turborepo-release.yml.
+    workflows: [Turborepo Release]
     types:
       - completed
 
@@ -20,14 +21,18 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          target: ubuntu-latest
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Build
         run: cd cli && make turbo-prod
 
       - name: Run benchmarks
-        run: cd benchmark && pnpm benchmark
+        run: pnpm -F benchmark benchmark
 
       - name: Save to Tinybird
-        if: github.ref == 'refs/heads/main'
         run: |
           curl \
             -i \
