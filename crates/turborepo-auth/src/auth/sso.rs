@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use reqwest::Url;
@@ -31,6 +31,7 @@ pub async fn sso_login<F>(
     mut set_token: F,
     login_url_configuration: &str,
     sso_team: &str,
+    login_server: &impl server::SSOLoginServer,
 ) -> Result<()>
 where
     F: FnMut(&str) -> Result<()>,
@@ -72,15 +73,13 @@ where
 
     println!(">>> Opening browser to {login_url}");
     let spinner = start_spinner("Waiting for your authorization...");
-    {
-        let url = login_url.as_str();
-        if webbrowser::open(url).is_err() {
-            warn!("Failed to open browser. Please visit {url} in your browser.");
-        }
-    };
+    let url = login_url.as_str();
+    if webbrowser::open(url).is_err() {
+        warn!("Failed to open browser. Please visit {url} in your browser.");
+    }
 
     let token_cell = Arc::new(OnceCell::new());
-    server::run_sso_one_shot_server(DEFAULT_PORT, token_cell.clone()).await?;
+    login_server.run(DEFAULT_PORT, token_cell.clone()).await?;
     spinner.finish_and_clear();
 
     let token = token_cell
@@ -113,6 +112,7 @@ mod tests {
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
+    use crate::SSOLoginServer;
     const EXPECTED_VERIFICATION_TOKEN: &str = "expected_verification_token";
 
     lazy_static::lazy_static! {
@@ -124,6 +124,7 @@ mod tests {
         #[error("Empty token")]
         EmptyToken,
     }
+
     impl From<MockApiError> for turborepo_api_client::Error {
         fn from(error: MockApiError) -> Self {
             match error {
@@ -139,12 +140,14 @@ mod tests {
     struct MockApiClient {
         pub base_url: String,
     }
+
     impl MockApiClient {
         fn new() -> Self {
             Self {
                 base_url: String::new(),
             }
         }
+
         fn set_base_url(&mut self, base_url: &str) {
             self.base_url = base_url.to_string();
         }
@@ -268,6 +271,25 @@ mod tests {
         }
     }
 
+    struct MockSSOLoginServer {
+        hits: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl SSOLoginServer for MockSSOLoginServer {
+        async fn run(
+            &self,
+            _port: u16,
+            verification_token: Arc<OnceCell<String>>,
+        ) -> anyhow::Result<()> {
+            self.hits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            verification_token
+                .set(EXPECTED_VERIFICATION_TOKEN.to_string())
+                .unwrap();
+            Ok(())
+        }
+    }
+
     #[tokio::test]
     async fn test_sso_login() {
         let port = port_scanner::request_open_port().unwrap();
@@ -276,45 +298,57 @@ mod tests {
         let ui = UI::new(false);
         let team = "something";
 
-        let temp_file = tempfile::NamedTempFile::new().expect("failed to create temp file");
-        let token_path = temp_file.path();
-
         let mut api_client = MockApiClient::new();
         api_client.set_base_url(&url);
 
+        let mut got_token: Option<String> = None;
+
         // closure that will check that the token is sent correctly
-        let mut got_token = String::new();
         let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
-            got_token.clear();
             // Force the got token to be incorrect if this is called a second time.
-            got_token.push_str(t);
-            let _ = std::fs::write(token_path, t)
-                .map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
+            got_token = Some(t.to_owned());
             Ok(())
         };
 
-        sso_login(&api_client, &ui, token_path, set_token, &url, team)
+        let login_server = MockSSOLoginServer {
+            hits: Arc::new(0.into()),
+        };
+
+        sso_login(&api_client, &ui, None, set_token, &url, team, &login_server)
             .await
             .unwrap();
 
+        assert_eq!(got_token, Some(EXPECTED_VERIFICATION_TOKEN.to_owned()));
+
         // Re-assign set_token due to ownership rules. This shouldn't be called.
-        let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
-            got_token.clear();
-            got_token.push_str("not expected token");
-            let _ = std::fs::write(token_path, t)
-                .map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
+        let mut second_token: Option<&str> = None;
+        let set_token = |_: &str| -> anyhow::Result<(), anyhow::Error> {
+            second_token = Some("not expected");
             Ok(())
         };
 
         // Call the login function twice to test that we check for existing tokens.
         // Total server hits should be 1.
-        sso_login(&api_client, &ui, token_path, set_token, &url, team)
-            .await
-            .unwrap();
+        sso_login(
+            &api_client,
+            &ui,
+            got_token.as_deref(),
+            set_token,
+            &url,
+            team,
+            &login_server,
+        )
+        .await
+        .unwrap();
 
         handle.abort();
 
-        assert_eq!(SSO_HITS.load(std::sync::atomic::Ordering::SeqCst), 1);
-        assert_eq!(got_token, EXPECTED_VERIFICATION_TOKEN);
+        // This makes sure we never make it to the login server.
+        assert_eq!(
+            login_server.hits.load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+        // If our set_token was called a second time, it'll set second_token as Some.
+        assert_eq!(second_token, None);
     }
 }

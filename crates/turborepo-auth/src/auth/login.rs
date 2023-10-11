@@ -103,12 +103,10 @@ mod tests {
 
     use super::*;
 
-    // Used to track how many times the server was hit.
-    lazy_static::lazy_static! {
-        static ref LOGIN_HITS: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+    struct MockLoginServer {
+        hits: Arc<AtomicUsize>,
     }
 
-    struct MockLoginServer;
     #[async_trait]
     impl LoginServer for MockLoginServer {
         async fn run(
@@ -117,7 +115,7 @@ mod tests {
             _: String,
             login_token: Arc<OnceCell<String>>,
         ) -> anyhow::Result<()> {
-            LOGIN_HITS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.hits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             login_token
                 .set(turborepo_vercel_api_mock::EXPECTED_TOKEN.to_string())
                 .unwrap();
@@ -130,6 +128,7 @@ mod tests {
         #[error("Empty token")]
         EmptyToken,
     }
+
     impl From<MockApiError> for turborepo_api_client::Error {
         fn from(error: MockApiError) -> Self {
             match error {
@@ -145,6 +144,7 @@ mod tests {
     struct MockApiClient {
         pub base_url: String,
     }
+
     impl MockApiClient {
         fn new() -> Self {
             Self {
@@ -152,6 +152,7 @@ mod tests {
             }
         }
     }
+
     #[async_trait]
     impl Client for MockApiClient {
         async fn get_user(&self, token: &str) -> Result<UserResponse> {
@@ -277,58 +278,59 @@ mod tests {
         let ui = UI::new(false);
         let url = format!("http://localhost:{port}");
 
-        let temp_file =
-            tempfile::NamedTempFile::new().expect("Failed to create temp file for test_login");
-        let token_path = temp_file.path();
-
         let api_client = MockApiClient::new();
 
-        // closure that will check that the token is sent correctly
-        let mut got_token = String::new();
+        // Because of the borrow checker, we wrap the option in a ref cell since we have
+        // multiple types of borrows happening in this test.
+        let mut got_token: Option<String> = None;
+
+        // set_token is called by login. Ignore the string given since that escapes
         let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
-            got_token.clear();
-            got_token.push_str(t);
-            let _ = std::fs::write(token_path, t)
-                .map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
+            // Make the fetched token the expectation
+            got_token = Some(t.to_owned());
             Ok(())
         };
 
-        login(
-            &api_client,
-            &ui,
-            token_path,
-            set_token,
-            &url,
-            &MockLoginServer,
-        )
-        .await
-        .unwrap();
+        let login_server = MockLoginServer {
+            hits: Arc::new(0.into()),
+        };
+
+        login(&api_client, &ui, None, set_token, &url, &login_server)
+            .await
+            .unwrap();
+
+        // Token should be set now
+        assert_eq!(
+            got_token.as_deref(),
+            Some(turborepo_vercel_api_mock::EXPECTED_TOKEN)
+        );
 
         // Re-assign set_token due to ownership rules. This shouldn't be called.
-        let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
-            got_token.clear();
-            // Force the got token to be incorrect if this is called a second time.
-            got_token.push_str("not expected token");
-            let _ = std::fs::write(token_path, t)
-                .map_err(|e| anyhow::anyhow!("failed to write token to file: {}", e));
+        let mut second_token: Option<&str> = None;
+        let set_token = |_: &str| -> anyhow::Result<(), anyhow::Error> {
+            // Set it to literally anything but the expected token.
+            second_token = Some("not expected");
             Ok(())
         };
 
-        // Call the login function twice to test that we check for existing tokens.
-        // Total server hits should be 1.
+        // Call the login function a second time to test that we check for existing
+        // tokens. Total server hits should be 1.
         login(
             &api_client,
             &ui,
-            token_path,
+            got_token.as_deref(),
             set_token,
             &url,
-            &MockLoginServer,
+            &login_server,
         )
         .await
         .unwrap();
 
         api_server.abort();
-        assert_eq!(LOGIN_HITS.load(std::sync::atomic::Ordering::SeqCst), 1);
-        assert_eq!(got_token, turborepo_vercel_api_mock::EXPECTED_TOKEN);
+        assert_eq!(
+            login_server.hits.load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+        assert_eq!(second_token, None);
     }
 }

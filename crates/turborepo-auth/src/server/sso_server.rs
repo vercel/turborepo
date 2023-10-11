@@ -1,6 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
+use async_trait::async_trait;
 use axum::{extract::Query, response::Redirect, routing::get, Router};
 use reqwest::Url;
 use serde::Deserialize;
@@ -17,32 +18,45 @@ pub struct SsoPayload {
     email: Option<String>,
 }
 
-pub async fn run_sso_one_shot_server(
-    port: u16,
-    verification_token: Arc<OnceCell<String>>,
-) -> Result<()> {
-    let handle = axum_server::Handle::new();
-    let route_handle = handle.clone();
-    let app = Router::new()
-        // `GET /` goes to `root`
-        .route(
-            "/",
-            get(|sso_payload: Query<SsoPayload>| async move {
-                let (token, location) = get_token_and_redirect(sso_payload.0).unwrap();
-                if let Some(token) = token {
-                    // If token is already set, it's not a big deal, so we ignore the error.
-                    let _ = verification_token.set(token);
-                }
-                route_handle.shutdown();
-                Redirect::to(location.as_str())
-            }),
-        );
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+#[async_trait]
+pub trait SSOLoginServer {
+    async fn run(&self, port: u16, verification_token: Arc<OnceCell<String>>) -> Result<()>;
+}
 
-    Ok(axum_server::bind(addr)
-        .handle(handle)
-        .serve(app.into_make_service())
-        .await?)
+/// TODO: Document this.
+pub struct DefaultSSOLoginServer;
+impl DefaultSSOLoginServer {
+    pub fn new() -> Self {
+        DefaultSSOLoginServer {}
+    }
+}
+
+#[async_trait]
+impl SSOLoginServer for DefaultSSOLoginServer {
+    async fn run(&self, port: u16, verification_token: Arc<OnceCell<String>>) -> Result<()> {
+        let handle = axum_server::Handle::new();
+        let route_handle = handle.clone();
+        let app = Router::new()
+            // `GET /` goes to `root`
+            .route(
+                "/",
+                get(|sso_payload: Query<SsoPayload>| async move {
+                    let (token, location) = get_token_and_redirect(sso_payload.0).unwrap();
+                    if let Some(token) = token {
+                        // If token is already set, it's not a big deal, so we ignore the error.
+                        let _ = verification_token.set(token);
+                    }
+                    route_handle.shutdown();
+                    Redirect::to(location.as_str())
+                }),
+            );
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+
+        Ok(axum_server::bind(addr)
+            .handle(handle)
+            .serve(app.into_make_service())
+            .await?)
+    }
 }
 
 fn get_token_and_redirect(payload: SsoPayload) -> Result<(Option<String>, Url)> {
