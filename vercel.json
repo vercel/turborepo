@@ -4,5 +4,6 @@
       "benchmark-data": false,
       "gh-pages": false
     }
-  }
+  },
+  "buildCommand": "cd .. && turbo --version && turbo run build  --filter=docs... --remote-only"
 }
