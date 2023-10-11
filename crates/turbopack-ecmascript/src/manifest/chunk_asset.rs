@@ -69,6 +69,15 @@ impl ManifestAsyncModule {
     pub fn module_ident(&self) -> Vc<AssetIdent> {
         self.inner.ident()
     }
+
+    #[turbo_tasks::function]
+    pub async fn content_ident(&self) -> Result<Vc<AssetIdent>> {
+        let mut ident = self.inner.ident();
+        if let Some(available_modules) = self.availability_info.available_modules() {
+            ident = ident.with_modifier(Vc::cell(available_modules.hash().await?.to_string()));
+        }
+        Ok(ident)
+    }
 }
 
 #[turbo_tasks::function]

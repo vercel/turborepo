@@ -444,9 +444,16 @@ async fn chunk_content_internal_parallel(
 #[turbo_tasks::value_trait]
 pub trait ChunkItem {
     /// The [AssetIdent] of the [Module] that this [ChunkItem] was created from.
-    /// For most chunk types this must uniquely identify the asset as it's the
-    /// source of the module id used at runtime.
+    /// For most chunk types this must uniquely identify the chunk item at
+    /// runtime as it's the source of the module id used at runtime.
     fn asset_ident(self: Vc<Self>) -> Vc<AssetIdent>;
+    /// A [AssetIdent] that uniquely identifies the content of this [ChunkItem].
+    /// It is unusally identical to [ChunkItem::asset_ident] but can be
+    /// different when the chunk item content depends on available modules e. g.
+    /// for chunk loaders.
+    fn content_ident(self: Vc<Self>) -> Vc<AssetIdent> {
+        self.asset_ident()
+    }
     /// A [ChunkItem] can describe different `references` than its original
     /// [Module].
     /// TODO(alexkirsz) This should have a default impl that returns empty

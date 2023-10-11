@@ -222,7 +222,7 @@ impl OutputAsset for CssChunk {
                     *common_path_ref = (*common_path_vc).await?;
                 }
             }
-            assets.push((chunk_item_key, chunk_item.asset_ident()));
+            assets.push((chunk_item_key, chunk_item.content_ident()));
         }
 
         // Make sure the idents are resolved

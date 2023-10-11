@@ -77,6 +77,11 @@ impl ChunkItem for ManifestChunkItem {
     }
 
     #[turbo_tasks::function]
+    fn content_ident(&self) -> Vc<AssetIdent> {
+        self.manifest.content_ident()
+    }
+
+    #[turbo_tasks::function]
     async fn references(self: Vc<Self>) -> Result<Vc<ModuleReferences>> {
         let this = self.await?;
         let mut references = this.manifest.references().await?.clone_value();
