@@ -268,6 +268,11 @@ impl EcmascriptChunkItem for MdxChunkItem {
         self.chunking_context
     }
 
+    #[turbo_tasks::function]
+    fn content(self: Vc<Self>) -> Vc<EcmascriptChunkItemContent> {
+        panic!("MdxChunkItem::content should never be called");
+    }
+
     /// Once we have mdx contents, we should treat it as j|tsx components and
     /// apply all of the ecma transforms
     #[turbo_tasks::function]
