@@ -8,6 +8,7 @@ use futures::Future;
 use indexmap::IndexMap;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use tracing::Level;
 use turbo_tasks::{keyed_cell, KeyedCellContext, ReadRef, TryJoinIterExt, ValueToString, Vc};
 
 use super::{Chunk, ChunkItem, ChunkItems, ChunkType, ChunkingContext};
@@ -16,6 +17,7 @@ use crate::{
     output::{OutputAsset, OutputAssets},
 };
 
+#[tracing::instrument(level = Level::TRACE, skip_all)]
 pub async fn make_chunks(
     chunking_context: Vc<Box<dyn ChunkingContext>>,
     chunk_items: impl IntoIterator<Item = Vc<Box<dyn ChunkItem>>>,
@@ -104,6 +106,7 @@ async fn handle_split_group(
     })
 }
 
+#[tracing::instrument(level = Level::TRACE, skip(chunk_items, split_context))]
 async fn make_chunk(
     chunk_items: &[ChunkItemWithInfo],
     key: &mut String,
@@ -133,6 +136,7 @@ async fn make_chunk(
     Ok(())
 }
 
+#[tracing::instrument(level = Level::TRACE, skip(chunk_items, split_context))]
 async fn app_vendors_split(
     chunk_items: Vec<ChunkItemWithInfo>,
     mut name: String,
@@ -178,6 +182,7 @@ async fn app_vendors_split(
     Ok(())
 }
 
+#[tracing::instrument(level = Level::TRACE, skip(chunk_items, split_context))]
 async fn package_name_split(
     chunk_items: Vec<ChunkItemWithInfo>,
     mut name: String,
@@ -219,6 +224,7 @@ fn folder_split_boxed<'a, 'b>(
     Box::pin(folder_split(chunk_items, location, name, split_context))
 }
 
+#[tracing::instrument(level = Level::TRACE, skip(chunk_items, split_context))]
 async fn folder_split(
     mut chunk_items: Vec<ChunkItemWithInfo>,
     mut location: usize,
@@ -268,7 +274,7 @@ async fn folder_split(
     }
     if !remaining.is_empty() {
         if !handle_split_group(&mut remaining, &mut name, split_context, None).await? {
-            folder_split_boxed(remaining, 0, name, split_context).await?;
+            make_chunk(&remaining, &mut name, split_context).await?;
         }
     }
     Ok(())
