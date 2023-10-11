@@ -5,7 +5,7 @@
 (globalThis.TURBOPACK_CHUNK_LISTS = globalThis.TURBOPACK_CHUNK_LISTS || []).push({
   "path": "output/a587c_tests_snapshot_imports_subpath-imports-nested_input_index_b775c8.js",
   "chunks": [
-    "output/a587c_tests_snapshot_imports_subpath-imports-nested_input_index_909945.js"
+    "output/a587c_tests_snapshot_imports_subpath-imports-nested_input_index_655244.js"
   ],
   "source": "entry"
 });
