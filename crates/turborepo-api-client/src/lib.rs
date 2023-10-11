@@ -436,7 +436,7 @@ impl APIClient {
         timeout: u64,
         version: &str,
         use_preflight: bool,
-    ) -> Result<APIClient> {
+    ) -> Result<Self> {
         let client = if timeout != 0 {
             reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(timeout))
