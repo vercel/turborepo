@@ -442,7 +442,7 @@ impl APIClient {
                 .timeout(std::time::Duration::from_secs(timeout))
                 .build()?
         } else {
-            reqwest::Client::builder().build()?
+            reqwest::Client::builder().build()
         };
 
         let user_agent = format!(
