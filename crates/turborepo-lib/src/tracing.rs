@@ -1,6 +1,13 @@
 use std::{marker::PhantomData, path::Path, sync::Mutex};
 
 use chrono::Local;
+use opentelemetry::{
+    global, runtime,
+    sdk::{trace::Tracer, Resource},
+    trace::noop,
+    KeyValue,
+};
+use opentelemetry_otlp::WithExportConfig;
 use owo_colors::{
     colors::{Black, Default, Red, Yellow},
     Color, OwoColorize,
@@ -8,6 +15,7 @@ use owo_colors::{
 use tracing::{field::Visit, metadata::LevelFilter, trace, Event, Level, Subscriber};
 use tracing_appender::{non_blocking::NonBlocking, rolling::RollingFileAppender};
 use tracing_chrome::ChromeLayer;
+use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{
     filter::{Filtered, Targets},
     fmt::{
@@ -59,6 +67,10 @@ type ChromeLogFiltered = Filtered<ChromeReload, EnvFilter, DaemonLogLayered>;
 /// `ChromeLogLayered`, which forms the base for the next layer.
 type ChromeLogLayered = layer::Layered<ChromeLogFiltered, DaemonLogLayered>;
 
+type OtelLog = OpenTelemetryLayer<ChromeLogLayered, Tracer>;
+type OtelReload = reload::Layer<Option<OtelLog>, ChromeLogLayered>;
+type OtelLogFiltered = Filtered<OtelReload, EnvFilter, ChromeLogLayered>;
+
 pub struct TurboSubscriber {
     daemon_update: Handle<Option<DaemonLog>, StdOutLogLayered>,
 
@@ -68,6 +80,8 @@ pub struct TurboSubscriber {
 
     chrome_update: Handle<Option<ChromeLog>, DaemonLogLayered>,
     chrome_guard: Mutex<Option<tracing_chrome::FlushGuard>>,
+
+    otel_update: Handle<Option<OtelLog>, ChromeLogLayered>,
 
     #[cfg(feature = "pprof")]
     pprof_guard: pprof::ProfilerGuard<'static>,
@@ -128,10 +142,14 @@ impl TurboSubscriber {
         let (chrome, chrome_update) = reload::Layer::new(Option::<ChromeLog>::None);
         let chrome: ChromeLogFiltered = chrome.with_filter(env_filter());
 
+        let (otel, otel_update) = reload::Layer::new(Option::<OtelLog>::None);
+        let otel = otel.with_filter(env_filter());
+
         let registry = Registry::default()
             .with(stdout)
             .with(logrotate)
-            .with(chrome);
+            .with(chrome)
+            .with(otel);
 
         #[cfg(feature = "pprof")]
         let pprof_guard = pprof::ProfilerGuardBuilder::default()
@@ -147,6 +165,7 @@ impl TurboSubscriber {
             daemon_guard: Mutex::new(None),
             chrome_update,
             chrome_guard: Mutex::new(None),
+            otel_update,
             #[cfg(feature = "pprof")]
             pprof_guard,
         }
@@ -190,6 +209,33 @@ impl TurboSubscriber {
 
         Ok(())
     }
+
+    #[tracing::instrument(skip(self))]
+    pub fn enable_otel_tracing(&self) -> Result<(), Error> {
+        // First, create a OTLP exporter builder. Configure it as you need.
+        let otlp_exporter = opentelemetry_otlp::new_exporter()
+            .tonic()
+            .with_endpoint("http://localhost:4317");
+        // Then pass it into pipeline builder
+        let tracer =
+            opentelemetry_otlp::new_pipeline()
+                .tracing()
+                .with_exporter(otlp_exporter)
+                .with_trace_config(opentelemetry::sdk::trace::config().with_resource(
+                    Resource::new(vec![KeyValue::new(
+                        opentelemetry_semantic_conventions::resource::SERVICE_NAME,
+                        "turborepo",
+                    )]),
+                ))
+                .install_batch(runtime::Tokio)
+                .unwrap();
+
+        let layer: OtelLog = tracing_opentelemetry::layer().with_tracer(tracer);
+
+        self.otel_update.reload(Some(layer))?;
+
+        Ok(())
+    }
 }
 
 impl Drop for TurboSubscriber {
@@ -217,6 +263,8 @@ impl Drop for TurboSubscriber {
         } else {
             tracing::error!("failed to generate pprof report")
         }
+
+        global::shutdown_tracer_provider();
     }
 }
 
