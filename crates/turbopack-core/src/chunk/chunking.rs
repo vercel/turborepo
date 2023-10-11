@@ -145,7 +145,7 @@ async fn app_vendors_split(
     let mut app_chunk_items = Vec::new();
     let mut vendors_chunk_items = Vec::new();
     for (chunk_item, size, asset_ident) in chunk_items {
-        if is_app_code(&*asset_ident) {
+        if is_app_code(&asset_ident) {
             app_chunk_items.push((chunk_item, size, asset_ident));
         } else {
             vendors_chunk_items.push((chunk_item, size, asset_ident));
@@ -174,10 +174,10 @@ async fn app_vendors_split(
     {
         package_name_split(vendors_chunk_items, key, split_context).await?;
     }
-    if !remaining.is_empty() {
-        if !handle_split_group(&mut remaining, &mut name, split_context, None).await? {
-            package_name_split(remaining, name, split_context).await?;
-        }
+    if !remaining.is_empty()
+        && !handle_split_group(&mut remaining, &mut name, split_context, None).await?
+    {
+        package_name_split(remaining, name, split_context).await?;
     }
     Ok(())
 }
@@ -190,7 +190,7 @@ async fn package_name_split(
 ) -> Result<()> {
     let mut map = IndexMap::<_, Vec<ChunkItemWithInfo>>::new();
     for (chunk_item, size, asset_ident) in chunk_items {
-        let package_name = package_name(&*asset_ident);
+        let package_name = package_name(&asset_ident);
         if let Some(list) = map.get_mut(package_name) {
             list.push((chunk_item, size, asset_ident));
         } else {
@@ -207,10 +207,10 @@ async fn package_name_split(
             folder_split(list, 0, key, split_context).await?;
         }
     }
-    if !remaining.is_empty() {
-        if !handle_split_group(&mut remaining, &mut name, split_context, None).await? {
-            folder_split(remaining, 0, name, split_context).await?;
-        }
+    if !remaining.is_empty()
+        && !handle_split_group(&mut remaining, &mut name, split_context, None).await?
+    {
+        folder_split(remaining, 0, name, split_context).await?;
     }
     Ok(())
 }
@@ -234,7 +234,7 @@ async fn folder_split(
     let mut map = IndexMap::<_, (_, Vec<ChunkItemWithInfo>)>::new();
     loop {
         for (chunk_item, size, asset_ident) in chunk_items {
-            let (folder_name, new_location) = folder_name(&*asset_ident, location);
+            let (folder_name, new_location) = folder_name(&asset_ident, location);
             if let Some((_, list)) = map.get_mut(folder_name) {
                 list.push((chunk_item, size, asset_ident));
             } else {
@@ -272,10 +272,10 @@ async fn folder_split(
             }
         }
     }
-    if !remaining.is_empty() {
-        if !handle_split_group(&mut remaining, &mut name, split_context, None).await? {
-            make_chunk(&remaining, &mut name, split_context).await?;
-        }
+    if !remaining.is_empty()
+        && !handle_split_group(&mut remaining, &mut name, split_context, None).await?
+    {
+        make_chunk(&remaining, &mut name, split_context).await?;
     }
     Ok(())
 }
@@ -286,7 +286,7 @@ fn is_app_code(ident: &str) -> bool {
 fn package_name(ident: &str) -> &str {
     static PACKAGE_NAME_REGEX: Lazy<Regex> =
         Lazy::new(|| Regex::new(r"/node_modules/((?:@[^/]+/)?[^/]+)").unwrap());
-    if let Some(result) = PACKAGE_NAME_REGEX.find_iter(&ident).last() {
+    if let Some(result) = PACKAGE_NAME_REGEX.find_iter(ident).last() {
         &result.as_str()["/node_modules/".len()..]
     } else {
         ""
