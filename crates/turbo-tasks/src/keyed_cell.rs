@@ -28,9 +28,8 @@ impl KeyedCell {
     #[turbo_tasks::function]
     fn new(_context: Vc<KeyedCellContext>, _key: String, value_type_id: ValueTypeId) -> Vc<Self> {
         let cell_ref = find_cell_by_type(value_type_id);
-        let raw: RawVc = cell_ref.into();
         KeyedCell {
-            cell: raw.into(),
+            cell: cell_ref.into(),
             cell_ref,
         }
         .cell()
