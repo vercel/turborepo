@@ -4,13 +4,13 @@ use std::{
 };
 
 use nom::Finish;
-use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
 use crate::{package_deps::GitHashes, wait_for_success, Error, Git};
 
 impl Git {
     #[tracing::instrument(skip(self))]
-    pub fn git_ls_tree(&self, root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error> {
+    pub fn git_ls_tree(&self, root_path: &AbsoluteSystemPath) -> Result<GitHashes, Error> {
         let mut hashes = GitHashes::new();
         let mut git = Command::new(self.bin.as_std_path())
             .args(["ls-tree", "-r", "-z", "HEAD"])

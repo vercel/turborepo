@@ -1,13 +1,13 @@
 use tracing::Span;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath};
 
 use crate::{package_deps::GitHashes, Error};
 
 #[tracing::instrument(skip(git_root, hashes, to_hash))]
-pub(crate) fn hash_objects(
+pub(crate) fn hash_objects<P: AsRef<RelativeUnixPath> + std::fmt::Debug>(
     git_root: &AbsoluteSystemPath,
     pkg_path: &AbsoluteSystemPath,
-    to_hash: Vec<RelativeUnixPathBuf>,
+    to_hash: &[P],
     hashes: &mut GitHashes,
 ) -> Result<(), Error> {
     let parent = Span::current();
@@ -95,8 +95,8 @@ mod test {
 
             let expected_hashes = GitHashes::from_iter(file_hashes);
             let mut hashes = GitHashes::new();
-            let to_hash = expected_hashes.keys().map(|k| pkg_prefix.join(k)).collect();
-            hash_objects(&git_root, pkg_path, to_hash, &mut hashes).unwrap();
+            let to_hash: Vec<_> = expected_hashes.keys().map(|k| pkg_prefix.join(k)).collect();
+            hash_objects(&git_root, pkg_path, &to_hash, &mut hashes).unwrap();
             assert_eq!(hashes, expected_hashes);
         }
 
@@ -110,13 +110,13 @@ mod test {
             let git_to_pkg_path = git_root.anchor(pkg_path).unwrap();
             let pkg_prefix = git_to_pkg_path.to_unix();
 
-            let to_hash = to_hash
+            let to_hash: Vec<_> = to_hash
                 .into_iter()
                 .map(|k| pkg_prefix.join(&RelativeUnixPathBuf::new(k).unwrap()))
                 .collect();
 
             let mut hashes = GitHashes::new();
-            let result = hash_objects(&git_root, pkg_path, to_hash, &mut hashes);
+            let result = hash_objects(&git_root, pkg_path, &to_hash, &mut hashes);
             assert!(result.is_err());
         }
     }

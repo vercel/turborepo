@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::{AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Hash)]
 #[serde(transparent)]
 pub struct AnchoredSystemPath(Utf8Path);
 

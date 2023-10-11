@@ -75,6 +75,13 @@ impl PackageInputsHashes {
 
         let span = Span::current();
 
+        // pre-calculate some state to avoid re-computing it for each task
+        let package_paths = workspaces
+            .values()
+            .map(|workspace| workspace.package_path());
+        let cached_package_file_hashes =
+            scm.prepare_cached_package_file_hasher(repo_root, package_paths);
+
         let (hashes, expanded_hashes): (HashMap<_, _>, HashMap<_, _>) = all_tasks
             .filter_map(|task| {
                 let span = tracing::info_span!(parent: &span, "calculate_file_hash", ?task);
@@ -106,7 +113,7 @@ impl PackageInputsHashes {
                     .parent()
                     .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
 
-                let mut hash_object = match scm.get_package_file_hashes(
+                let mut hash_object = match cached_package_file_hashes.get_package_file_hashes(
                     repo_root,
                     package_path,
                     &task_definition.inputs,
