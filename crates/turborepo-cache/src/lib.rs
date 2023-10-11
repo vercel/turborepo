@@ -102,3 +102,9 @@ pub struct RemoteCacheOpts {
     team_id: String,
     signature: bool,
 }
+
+impl RemoteCacheOpts {
+    pub fn new(team_id: String, signature: bool) -> Self {
+        Self { team_id, signature }
+    }
+}

@@ -98,12 +98,26 @@ type TaskHashTracker struct {
 
 // ExecutionState is the entire state of a turbo execution that is passed from the Rust shim.
 type ExecutionState struct {
+	Config                Config             `json:"config"`
 	APIClientConfig       APIClientConfig    `json:"api_client_config"`
 	SpacesAPIClientConfig APIClientConfig    `json:"spaces_api_client_config"`
 	PackageManager        string             `json:"package_manager"`
 	CLIArgs               ParsedArgsFromRust `json:"cli_args"`
 	GlobalHash            *string            `json:"global_hash"`
 	TaskHashTracker       *TaskHashTracker   `json:"task_hash_tracker"`
+}
+
+// Config holds the resolved configuration from the combination of all sources.
+type Config struct {
+	APIURL    string `json:"apiUrl"`
+	LoginURL  string `json:"loginUrl"`
+	TeamSlug  string `json:"teamSlug"`
+	TeamID    string `json:"teamId"`
+	Token     string `json:"token"`
+	Signature bool   `json:"signature"`
+	Preflight bool   `json:"preflight"`
+	Timeout   uint64 `json:"timeout"`
+	Enabled   *bool  `json:"enabled"`
 }
 
 // APIClientConfig holds the authentication and endpoint details for the API client

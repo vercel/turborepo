@@ -370,13 +370,14 @@ impl APIClient {
         version: &str,
         use_preflight: bool,
     ) -> Result<Self> {
-        let client = if timeout != 0 {
+        let builder_result = if timeout != 0 {
             reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(timeout))
-                .build()?
+                .build()
         } else {
-            reqwest::Client::builder().build()?
+            reqwest::Client::builder().build()
         };
+        let client = builder_result.map_err(Error::TlsError)?;
 
         let user_agent = format!(
             "turbo {} {} {} {}",
