@@ -89,12 +89,18 @@ pub fn replay_logs<W: Write>(
         Error::CannotReadLogs(err)
     })?;
 
+    // Construct a PrefixedWriter which allows for non UTF-8 bytes to be written to
+    // it.
+    let mut prefixed_writer = output.output_prefixed_writer();
     let log_reader = BufReader::new(log_file);
     let lines = ByteLines::new(log_reader);
 
     for line in lines.into_iter() {
-        let line = line.map_err(Error::CannotReadLogs)?;
-        output.output(String::from_utf8_lossy(&line));
+        let mut line = line.map_err(Error::CannotReadLogs)?;
+        line.push(b'\n');
+        prefixed_writer
+            .write_all(&line)
+            .map_err(Error::CannotReadLogs)?;
     }
 
     debug!("finish replaying logs");
@@ -188,7 +194,7 @@ mod tests {
         fs::write(&log_file_path, [0, 159, 146, 150, b'\n'])?;
         replay_logs(&mut prefixed_ui, &log_file_path)?;
 
-        assert_eq!(output, ">\0���\n".as_bytes());
+        assert_eq!(output, [b'>', 0, 159, 146, 150, b'\n']);
         Ok(())
     }
 }

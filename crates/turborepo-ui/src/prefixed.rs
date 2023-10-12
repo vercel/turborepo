@@ -82,6 +82,19 @@ impl<W: Write> PrefixedUI<W> {
             error!("cannot write to logs: {:?}", err);
         }
     }
+
+    /// Construct a PrefixedWriter which will behave the same as `output`, but
+    /// without the requirement that messages be valid UTF-8
+    pub(crate) fn output_prefixed_writer(&mut self) -> PrefixedWriter<&mut W> {
+        PrefixedWriter {
+            prefix: self
+                .output_prefix
+                .as_ref()
+                .map(|prefix| prefix.to_string())
+                .unwrap_or_default(),
+            writer: &mut self.out,
+        }
+    }
 }
 
 //
