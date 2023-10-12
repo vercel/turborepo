@@ -21,6 +21,16 @@ pub trait TaskInput: Send + Sync + Clone {
     fn into_concrete(self) -> ConcreteTaskInput;
 }
 
+impl TaskInput for ConcreteTaskInput {
+    fn try_from_concrete(input: &ConcreteTaskInput) -> Result<Self> {
+        Ok(input.clone())
+    }
+
+    fn into_concrete(self) -> ConcreteTaskInput {
+        self
+    }
+}
+
 impl TaskInput for String {
     fn try_from_concrete(input: &ConcreteTaskInput) -> Result<Self> {
         match input {

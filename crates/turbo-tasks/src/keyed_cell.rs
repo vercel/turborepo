@@ -1,8 +1,8 @@
 use anyhow::Result;
 
 use crate::{
-    self as turbo_tasks, macro_helpers::find_cell_by_type, manager::current_task, CurrentCellRef,
-    RawVc, TaskId, ValueTypeId, Vc, VcValueType,
+    self as turbo_tasks, macro_helpers::find_cell_by_type, manager::current_task,
+    ConcreteTaskInput, CurrentCellRef, RawVc, TaskId, TaskInput, ValueTypeId, Vc, VcValueType,
 };
 
 #[turbo_tasks::value]
@@ -17,7 +17,7 @@ impl KeyedCell {}
 #[turbo_tasks::value_impl]
 impl KeyedCell {
     #[turbo_tasks::function]
-    fn new(_task: TaskId, _key: String, value_type_id: ValueTypeId) -> Vc<Self> {
+    fn new(_task: TaskId, _key: ConcreteTaskInput, value_type_id: ValueTypeId) -> Vc<Self> {
         let cell_ref = find_cell_by_type(value_type_id);
         KeyedCell {
             cell: cell_ref.into(),
@@ -40,8 +40,16 @@ impl KeyedCell {
 ///
 /// Internally it creates a new Task based on the key and cells the value into
 /// that task. This is a implementation detail and might change in the future.
-pub async fn keyed_cell<T: PartialEq + Eq + VcValueType>(key: String, content: T) -> Result<Vc<T>> {
-    let cell = KeyedCell::new(current_task("keyed_cell"), key, T::get_value_type_id()).await?;
+pub async fn keyed_cell<T: PartialEq + Eq + VcValueType, K: TaskInput>(
+    key: K,
+    content: T,
+) -> Result<Vc<T>> {
+    let cell = KeyedCell::new(
+        current_task("keyed_cell"),
+        key.into_concrete(),
+        T::get_value_type_id(),
+    )
+    .await?;
     cell.cell_ref.compare_and_update_shared(content);
     Ok(cell.cell.into())
 }
