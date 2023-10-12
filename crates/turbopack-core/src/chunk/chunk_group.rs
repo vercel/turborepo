@@ -1,5 +1,7 @@
+use std::collections::HashSet;
+
 use anyhow::Result;
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::{TryJoinIterExt, Value, Vc};
 
 use super::{
     availability_info::AvailabilityInfo, chunk_content, chunking::make_chunks, Chunk,
@@ -27,26 +29,38 @@ pub async fn make_chunk_group(
 
     let inner_availability_info = availability_info.with_modules(modules);
 
-    for module in async_modules {
-        let loader =
-            chunking_context.async_loader_chunk_item(module, Value::new(inner_availability_info));
-        chunk_items.insert(loader);
-        for &reference in loader.references().await?.iter() {
+    let async_loaders = async_modules
+        .into_iter()
+        .map(|module| {
+            let loader = chunking_context
+                .async_loader_chunk_item(module, Value::new(inner_availability_info));
+            loader
+        })
+        .collect::<Vec<_>>();
+    chunk_items.extend(async_loaders.iter().copied());
+    let async_loader_references = async_loaders
+        .into_iter()
+        .map(|loader| loader.references())
+        .try_join()
+        .await?;
+    for references in async_loader_references {
+        for &reference in references.iter() {
             external_module_references.insert(reference);
         }
     }
 
-    let mut output_assets = Vec::new();
-    for reference in external_module_references {
-        for &output_asset in reference
-            .resolve_reference()
-            .primary_output_assets()
-            .await?
-            .iter()
-        {
-            output_assets.push(output_asset);
-        }
-    }
+    let output_assets = external_module_references
+        .into_iter()
+        .map(|reference| reference.resolve_reference().primary_output_assets())
+        .try_join()
+        .await?;
+    let mut set = HashSet::new();
+    let output_assets = output_assets
+        .iter()
+        .flatten()
+        .copied()
+        .filter(|&asset| set.insert(asset))
+        .collect::<Vec<_>>();
 
     let chunks = make_chunks(
         chunking_context,
