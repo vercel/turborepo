@@ -224,7 +224,7 @@ mod test {
             duration,
         } = test_case;
 
-        let api_client = APIClient::new(&format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
         let opts = CacheOpts::default();
         let api_auth = APIAuth {
             team_id: "my-team".to_string(),
