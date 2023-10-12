@@ -11,6 +11,14 @@ const turboPath = path.join(
 );
 import type { PackageManager } from "./types";
 
+const PACKAGE_MANAGER_VERSIONS: { [key in PackageManager]: string } = {
+  yarn: "yarn@1.22.17",
+  berry: "yarn@3.1.1",
+  pnpm6: "pnpm@6.22.2",
+  pnpm: "pnpm@7.2.1",
+  npm: "npm@8.3.0",
+};
+
 interface MonorepoOptions {
   root: string;
   pm: PackageManager;
@@ -86,23 +94,7 @@ export class Monorepo {
     const data = fsNormal.readFileSync(`${cwd}/package.json`, "utf8");
 
     const pkg = JSON.parse(data.toString());
-    switch (this.npmClient) {
-      case "yarn":
-        pkg.packageManager = "yarn@1.22.17";
-        break;
-      case "berry":
-        pkg.packageManager = "yarn@3.1.1";
-        break;
-      case "pnpm6":
-        pkg.packageManager = "pnpm@6.22.2";
-        break;
-      case "pnpm":
-        pkg.packageManager = "pnpm@7.2.1";
-        break;
-      case "npm":
-        pkg.packageManager = "npm@8.3.0";
-        break;
-    }
+    pkg.packageManager = PACKAGE_MANAGER_VERSIONS[this.npmClient];
 
     fsNormal.writeFileSync(`${cwd}/package.json`, JSON.stringify(pkg, null, 2));
     // Ensure that the package.json file is committed
