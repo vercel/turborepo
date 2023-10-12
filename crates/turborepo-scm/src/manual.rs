@@ -13,6 +13,10 @@ fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
     let mut hasher = Sha1::new();
     let mut f = path.open()?;
     let mut buffer = Vec::new();
+    // Note that read_to_end reads the target if f is a symlink. Currently, this can happen when we are hashing
+    // a specific set of files, which in turn only happens for handling dotEnv files. It is likely that in the future we
+    // will want to ensure that the target is better accounted for in the set of inputs to the task.
+    // Manual hashing, as well as global deps and other places that support globs all ignore symlinks.
     let size = f.read_to_end(&mut buffer)?;
     hasher.update("blob ".as_bytes());
     hasher.update(size.to_string().as_bytes());
