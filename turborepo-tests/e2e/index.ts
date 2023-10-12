@@ -44,13 +44,9 @@ const testCombinations = [
 process.env.TURBO_TOKEN = "";
 
 let suites: uvu.uvu.Test<uvu.Context>[] = [];
-for (let {
-  npmClient,
-  pipeline,
-  name,
-  includePrune,
-  excludePrune,
-} of testCombinations) {
+for (const combo of testCombinations) {
+  const { npmClient, pipeline, name, includePrune, excludePrune } = combo;
+
   const Suite = uvu.suite(`${name ?? npmClient}`);
 
   const repo = new Monorepo({
