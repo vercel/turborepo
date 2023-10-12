@@ -201,7 +201,7 @@ async fn package_name_split(
     let mut map = IndexMap::<_, Vec<ChunkItemWithInfo>>::new();
     for item in chunk_items {
         let (_, _, _, asset_ident) = &item;
-        let package_name = package_name(&asset_ident);
+        let package_name = package_name(asset_ident);
         if let Some(list) = map.get_mut(package_name) {
             list.push(item);
         } else {
@@ -245,7 +245,7 @@ async fn folder_split(
     loop {
         for item in chunk_items {
             let (_, _, _, asset_ident) = &item;
-            let (folder_name, new_location) = folder_name(&asset_ident, location);
+            let (folder_name, new_location) = folder_name(asset_ident, location);
             if let Some((_, list)) = map.get_mut(folder_name) {
                 list.push(item);
             } else {

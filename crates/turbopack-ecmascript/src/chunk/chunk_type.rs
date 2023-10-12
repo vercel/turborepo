@@ -53,7 +53,7 @@ impl ChunkType for EcmascriptChunkType {
                              ecmascript"
                         );
                     };
-                    Ok((chunk_item, async_info.clone()))
+                    Ok((chunk_item, *async_info))
                 })
                 .try_join()
                 .await?,

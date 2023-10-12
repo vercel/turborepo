@@ -131,7 +131,7 @@ impl AsyncModule {
         self: Vc<Self>,
         async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<OptionAsyncModuleOptions>> {
-        if !async_module_info.is_some() {
+        if async_module_info.is_none() {
             return Ok(Vc::cell(None));
         }
 

@@ -178,21 +178,21 @@ pub trait ChunkableModuleReference: ModuleReference + ValueToString {
     }
 }
 
+type AsyncInfo = IndexMap<Vc<Box<dyn ChunkItem>>, Vec<Vc<Box<dyn ChunkItem>>>>;
+
 pub struct ChunkContentResult {
     pub chunk_items: IndexSet<Vc<Box<dyn ChunkItem>>>,
     pub async_modules: IndexSet<Vc<Box<dyn ChunkableModule>>>,
     pub external_module_references: IndexSet<Vc<Box<dyn ModuleReference>>>,
     /// A map from local module to all children from which the async module
     /// status is inherited
-    pub forward_edges_inherit_async: IndexMap<Vc<Box<dyn ChunkItem>>, Vec<Vc<Box<dyn ChunkItem>>>>,
+    pub forward_edges_inherit_async: AsyncInfo,
     /// A map from local module to all parents that inherit the async module
     /// status
-    pub local_back_edges_inherit_async:
-        IndexMap<Vc<Box<dyn ChunkItem>>, Vec<Vc<Box<dyn ChunkItem>>>>,
+    pub local_back_edges_inherit_async: AsyncInfo,
     /// A map from already available async modules to all local parents that
     /// inherit the async module status
-    pub available_async_modules_back_edges_inherit_async:
-        IndexMap<Vc<Box<dyn ChunkItem>>, Vec<Vc<Box<dyn ChunkItem>>>>,
+    pub available_async_modules_back_edges_inherit_async: AsyncInfo,
 }
 
 pub async fn chunk_content(
@@ -607,10 +607,10 @@ impl AsyncModuleInfo {
     }
 }
 
+pub type ChunkItemWithAsyncModuleInfo = (Vc<Box<dyn ChunkItem>>, Option<Vc<AsyncModuleInfo>>);
+
 #[turbo_tasks::value(transparent)]
-pub struct ChunkItemsWithAsyncModuleInfo(
-    Vec<(Vc<Box<dyn ChunkItem>>, Option<Vc<AsyncModuleInfo>>)>,
-);
+pub struct ChunkItemsWithAsyncModuleInfo(Vec<ChunkItemWithAsyncModuleInfo>);
 
 pub trait ChunkItemExt: Send {
     /// Returns the module id of this chunk item.

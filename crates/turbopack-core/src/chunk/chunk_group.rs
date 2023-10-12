@@ -121,9 +121,8 @@ pub async fn make_chunk_group(
         async_modules
             .into_iter()
             .map(|module| {
-                let loader = chunking_context
-                    .async_loader_chunk_item(module, Value::new(*inner_availability_info));
-                loader
+                chunking_context
+                    .async_loader_chunk_item(module, Value::new(*inner_availability_info))
             })
             .collect::<Vec<_>>()
     };
