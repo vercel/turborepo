@@ -26,7 +26,11 @@ impl KeyedCell {}
 #[turbo_tasks::value_impl]
 impl KeyedCell {
     #[turbo_tasks::function]
-    fn new(_context: Vc<KeyedCellContext>, _key: String, value_type_id: ValueTypeId) -> Vc<Self> {
+    fn new(
+        _cell_context: Vc<KeyedCellContext>,
+        _key: String,
+        value_type_id: ValueTypeId,
+    ) -> Vc<Self> {
         let cell_ref = find_cell_by_type(value_type_id);
         KeyedCell {
             cell: cell_ref.into(),
@@ -37,11 +41,11 @@ impl KeyedCell {
 }
 
 pub async fn keyed_cell<T: PartialEq + Eq + VcValueType>(
-    context: Vc<KeyedCellContext>,
+    cell_context: Vc<KeyedCellContext>,
     key: String,
     content: T,
 ) -> Result<Vc<T>> {
-    let cell = KeyedCell::new(context, key, T::get_value_type_id()).await?;
+    let cell = KeyedCell::new(cell_context, key, T::get_value_type_id()).await?;
     cell.cell_ref.compare_and_update_shared(content);
     Ok(cell.cell.into())
 }
