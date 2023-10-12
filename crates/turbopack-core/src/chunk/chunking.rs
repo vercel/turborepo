@@ -280,11 +280,12 @@ async fn folder_split(
             }
         }
     }
-    let mut name = name.into();
-    if !remaining.is_empty()
-        && !handle_split_group(&mut remaining, &mut name, split_context, None).await?
-    {
-        make_chunk(remaining, &mut name, split_context).await?;
+    if !remaining.is_empty() {
+        let (_, _, _, asset_ident) = &remaining[0];
+        let mut key = format!("{}-{}", name, &asset_ident[..location]);
+        if !handle_split_group(&mut remaining, &mut key, split_context, None).await? {
+            make_chunk(remaining, &mut key, split_context).await?;
+        }
     }
     Ok(())
 }
