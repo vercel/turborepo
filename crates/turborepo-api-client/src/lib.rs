@@ -476,7 +476,7 @@ mod test {
         let handle = tokio::spawn(start_test_server(port));
         let base_url = format!("http://localhost:{}", port);
 
-        let client: Client = APIClient::new(&base_url, 200, "2.0.0", true)?;
+        let client = APIClient::new(&base_url, 200, "2.0.0", true)?;
 
         let response = client
             .do_preflight(
