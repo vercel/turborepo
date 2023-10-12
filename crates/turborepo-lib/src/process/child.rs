@@ -21,6 +21,7 @@ use std::{
     time::Duration,
 };
 
+use bytelines::AsyncByteLines;
 use command_group::AsyncCommandGroup;
 use futures::future::{try_join3, try_join4};
 use itertools::Itertools;
@@ -375,15 +376,12 @@ impl Child {
             mut sink: W,
         ) -> std::io::Result<()> {
             let Some(stream) = stream else { return Ok(()) };
-            let mut stream = BufReader::new(stream);
-            let mut buffer = String::new();
-            loop {
-                // If 0 bytes are read that indicates we've hit EOF
-                if stream.read_line(&mut buffer).await? == 0 {
-                    break;
-                }
-                sink.write_all(buffer.as_bytes())?;
-                buffer.clear();
+            let stream = BufReader::new(stream);
+            let mut lines = AsyncByteLines::new(stream);
+            while let Some(line) = lines.next().await? {
+                sink.write_all(line)?;
+                // Line iterator doesn't return newline delimiter so we must add it here
+                sink.write_all(b"\n")?;
             }
             Ok(())
         }
@@ -407,17 +405,22 @@ impl Child {
         // but allows us to provide our own sinks instead of just writing to a buffers.
         async fn pipe_lines<R: AsyncRead + Unpin>(
             stream: Option<R>,
-            tx: mpsc::Sender<String>,
+            tx: mpsc::Sender<Vec<u8>>,
         ) -> std::io::Result<()> {
             let Some(stream) = stream else { return Ok(()) };
-            let mut stream = BufReader::new(stream);
-            loop {
-                let mut buffer = String::new();
-                // If 0 bytes are read that indicates we've hit EOF
-                if stream.read_line(&mut buffer).await? == 0 {
-                    break;
-                }
-                if tx.send(buffer).await.is_err() {
+            let stream = BufReader::new(stream);
+            let mut lines = AsyncByteLines::new(stream);
+            while let Some(line) = lines.next().await? {
+                let line = {
+                    // Allocate vector with enough capacity for trailing newline
+                    let mut buffer = Vec::with_capacity(line.len() + 1);
+                    buffer.extend_from_slice(line);
+                    // Line iterator doesn't return newline delimiter so we must add it here
+                    buffer.push(b'\n');
+                    buffer
+                };
+
+                if tx.send(line).await.is_err() {
                     // If the receiver is dropped then we have nothing to do with these bytes
                     break;
                 }
@@ -426,11 +429,11 @@ impl Child {
         }
 
         async fn write_lines<W: Write>(
-            mut rx: mpsc::Receiver<String>,
+            mut rx: mpsc::Receiver<Vec<u8>>,
             mut writer: W,
         ) -> std::io::Result<()> {
             while let Some(buffer) = rx.recv().await {
-                writer.write_all(buffer.as_bytes())?;
+                writer.write_all(&buffer)?;
             }
             Ok(())
         }
