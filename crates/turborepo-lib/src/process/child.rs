@@ -27,7 +27,7 @@ use futures::future::{try_join3, try_join4};
 use itertools::Itertools;
 pub use tokio::process::Command;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncRead, BufReader},
+    io::{AsyncRead, BufReader},
     join,
     sync::{mpsc, watch, RwLock},
 };
