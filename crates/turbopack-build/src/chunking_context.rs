@@ -4,15 +4,14 @@ use turbo_tasks::{trace::TraceRawVcs, TaskInput, Value, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     chunk::{
-        availability_info::AvailabilityInfo, chunk_content, chunking::make_chunks, Chunk,
-        ChunkContentResult, ChunkItem, ChunkableModule, ChunkingContext, EvaluatableAssets,
-        ModuleId,
+        availability_info::AvailabilityInfo,
+        chunk_group::{make_chunk_group, MakeChunkGroupResult},
+        Chunk, ChunkItem, ChunkableModule, ChunkingContext, EvaluatableAssets, ModuleId,
     },
     environment::Environment,
     ident::AssetIdent,
     module::Module,
     output::{OutputAsset, OutputAssets},
-    reference::ModuleReference,
 };
 use turbopack_ecmascript::{
     chunk::{EcmascriptChunk, EcmascriptChunkPlaceable, EcmascriptChunkingContext},
@@ -164,44 +163,11 @@ impl BuildChunkingContext {
         evaluatable_assets: Vc<EvaluatableAssets>,
     ) -> Result<Vc<Box<dyn OutputAsset>>> {
         let availability_info = AvailabilityInfo::Root;
-        let ChunkContentResult {
-            modules,
-            mut chunk_items,
-            async_modules,
-            mut external_module_references,
-        } = chunk_content(
+
+        let MakeChunkGroupResult { chunks } = make_chunk_group(
             Vc::upcast(self),
             [Vc::upcast(module)],
-            Value::new(availability_info),
-        )
-        .await?;
-
-        let inner_availability_info = availability_info.with_modules(modules);
-
-        for module in async_modules {
-            let loader = self.async_loader_chunk_item(module, Value::new(inner_availability_info));
-            chunk_items.insert(loader);
-            for &reference in loader.references().await?.iter() {
-                external_module_references.insert(reference);
-            }
-        }
-
-        let mut output_assets = Vec::new();
-        for reference in external_module_references {
-            for &output_asset in reference
-                .resolve_reference()
-                .primary_output_assets()
-                .await?
-                .iter()
-            {
-                output_assets.push(output_asset);
-            }
-        }
-
-        let chunks = make_chunks(
-            Vc::upcast(self),
-            chunk_items,
-            output_assets,
+            availability_info,
             Some(Vc::upcast(module)),
         )
         .await?;
@@ -358,39 +324,10 @@ impl ChunkingContext for BuildChunkingContext {
         module: Vc<Box<dyn ChunkableModule>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<OutputAssets>> {
-        let ChunkContentResult {
-            modules,
-            mut chunk_items,
-            async_modules,
-            mut external_module_references,
-        } = chunk_content(Vc::upcast(self), [Vc::upcast(module)], availability_info).await?;
-
-        let inner_availability_info = availability_info.with_modules(modules);
-
-        for module in async_modules {
-            let loader = self.async_loader_chunk_item(module, Value::new(inner_availability_info));
-            chunk_items.insert(loader);
-            for &reference in loader.references().await?.iter() {
-                external_module_references.insert(reference);
-            }
-        }
-
-        let mut output_assets = Vec::new();
-        for reference in external_module_references {
-            for &output_asset in reference
-                .resolve_reference()
-                .primary_output_assets()
-                .await?
-                .iter()
-            {
-                output_assets.push(output_asset);
-            }
-        }
-
-        let chunks = make_chunks(
+        let MakeChunkGroupResult { chunks } = make_chunk_group(
             Vc::upcast(self),
-            chunk_items,
-            output_assets,
+            [Vc::upcast(module)],
+            availability_info.into_value(),
             Some(Vc::upcast(module)),
         )
         .await?;
