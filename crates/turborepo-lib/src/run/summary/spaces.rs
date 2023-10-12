@@ -1,6 +1,7 @@
 use std::{
     fmt,
     fmt::{Debug, Formatter},
+    sync::Arc,
     time::Duration,
 };
 
@@ -8,16 +9,16 @@ use chrono::{DateTime, Local};
 use serde::Serialize;
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use turborepo_api_client::{
-    spaces::{CreateSpaceRunPayload, RunStatus, SpaceClientSummary, SpaceRun, SpaceTaskSummary},
+    spaces::{CreateSpaceRunPayload, SpaceRun, SpaceTaskSummary},
     APIAuth, APIClient,
 };
 
-use crate::run::summary::{Error, RunSummary};
+use crate::run::summary::Error;
 
 pub struct SpacesClient {
     space_id: String,
-    api_client: APIClient,
-    api_auth: APIAuth,
+    api_client: Arc<APIClient>,
+    api_auth: Arc<APIAuth>,
     request_timeout: Duration,
     errors: Vec<Error>,
 }
@@ -84,44 +85,11 @@ pub enum SpaceRequest {
     Task { summary: Box<SpaceTaskSummary> },
 }
 
-impl<'a> From<&'a RunSummary<'a>> for CreateSpaceRunPayload {
-    fn from(rsm: &'a RunSummary) -> Self {
-        let start_time = rsm
-            .inner
-            .execution_summary
-            .as_ref()
-            .map(|execution_summary| execution_summary.start_time)
-            .unwrap_or_default()
-            .timestamp_millis();
-        let run_context = turborepo_ci::Vendor::get_constant().unwrap_or("LOCAL");
-
-        CreateSpaceRunPayload {
-            start_time,
-            status: RunStatus::Running,
-            command: rsm.synthesized_command.to_string(),
-            package_inference_root: rsm
-                .package_inference_root
-                .map(|p| p.to_string())
-                .unwrap_or_default(),
-            ty: "TURBO",
-            run_context,
-            git_branch: rsm.inner.scm.branch.to_owned(),
-            git_sha: rsm.inner.scm.sha.to_owned(),
-            user: rsm.inner.user.to_owned(),
-            client: SpaceClientSummary {
-                id: "turbo",
-                name: "Turbo",
-                version: rsm.inner.turbo_version.to_string(),
-            },
-        }
-    }
-}
-
 impl SpacesClient {
     pub fn new(
         space_id: Option<String>,
-        api_client: APIClient,
-        api_auth: Option<APIAuth>,
+        api_client: Arc<APIClient>,
+        api_auth: Option<Arc<APIAuth>>,
     ) -> Option<Self> {
         // If space_id is empty, we don't build a client
         let space_id = space_id?;
@@ -142,7 +110,7 @@ impl SpacesClient {
         })
     }
 
-    pub async fn start(
+    pub fn start(
         mut self,
         create_run_payload: CreateSpaceRunPayload,
     ) -> Result<SpacesClientHandle, Error> {

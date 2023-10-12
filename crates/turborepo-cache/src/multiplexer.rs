@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
@@ -20,8 +23,8 @@ impl CacheMultiplexer {
     pub fn new(
         opts: &CacheOpts,
         repo_root: &AbsoluteSystemPath,
-        api_client: APIClient,
-        api_auth: Option<APIAuth>,
+        api_client: Arc<APIClient>,
+        api_auth: Option<Arc<APIAuth>>,
     ) -> Result<Self, CacheError> {
         let use_fs_cache = !opts.skip_filesystem;
         let use_http_cache = !opts.skip_remote;

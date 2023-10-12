@@ -3,9 +3,10 @@
 mod cache;
 mod global_hash;
 mod scope;
-mod summary;
+pub(crate) mod summary;
 pub mod task_id;
 use std::{
+    env,
     io::{BufWriter, IsTerminal, Write},
     sync::Arc,
     time::SystemTime,
@@ -19,6 +20,7 @@ use rayon::iter::ParallelBridge;
 use tracing::{debug, info, trace};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
+use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_json::PackageJson;
 use turborepo_scm::SCM;
@@ -36,7 +38,7 @@ use crate::{
     process::ProcessManager,
     run::{
         global_hash::get_global_hash_inputs,
-        summary::{GlobalHashSummary, RunSummary},
+        summary::{GlobalHashSummary, RunTracker},
     },
     shim::TurboState,
     task_graph::Visitor,
@@ -292,13 +294,13 @@ impl<'a> Run<'a> {
 
         let color_selector = ColorSelector::default();
 
-        let api_auth = self.base.api_auth()?;
-        let api_client = self.base.api_client()?;
+        let api_auth = self.base.api_auth()?.map(Arc::new);
+        let api_client = Arc::new(self.base.api_client()?);
 
         let async_cache = AsyncCache::new(
             &opts.cache_opts,
             &self.base.repo_root,
-            api_client,
+            api_client.clone(),
             api_auth.clone(),
         )?;
 
@@ -344,9 +346,44 @@ impl<'a> Run<'a> {
             env
         };
 
+        let pass_through_env = global_hash_inputs.pass_through_env.unwrap_or_default();
+        let resolved_pass_through_env_vars =
+            env_at_execution_start.from_wildcards(pass_through_env)?;
+
+        let global_hash_summary = GlobalHashSummary::new(
+            global_hash_inputs.global_cache_key,
+            global_hash_inputs.global_file_hash_map,
+            &root_external_dependencies_hash,
+            global_hash_inputs.env,
+            pass_through_env,
+            global_hash_inputs.dot_env,
+            global_hash_inputs.resolved_env_vars.unwrap_or_default(),
+            resolved_pass_through_env_vars,
+        );
+
+        let vendor = Vendor::infer();
+        let user = vendor
+            .map(|v| v.username_env_var)
+            .flatten()
+            .and_then(|v| env::var(v).ok());
+
+        let run_tracker = RunTracker::new(
+            start_at,
+            "todo",
+            opts.scope_opts.pkg_inference_root.as_deref(),
+            &env_at_execution_start,
+            &self.base.repo_root,
+            self.base.version(),
+            opts.run_opts.experimental_space_id.clone(),
+            api_client,
+            api_auth,
+            user.clone(),
+        );
+
         let visitor = Visitor::new(
             pkg_dep_graph.clone(),
             runcache,
+            run_tracker,
             &opts,
             package_inputs_hashes,
             &env_at_execution_start,
@@ -376,51 +413,23 @@ impl<'a> Run<'a> {
             writeln!(std::io::stderr(), "{err}").ok();
         }
 
-        let pass_through_env = global_hash_inputs.pass_through_env.unwrap_or_default();
-        let resolved_pass_through_env_vars =
-            env_at_execution_start.from_wildcards(pass_through_env)?;
+        let run_tracker = visitor.into_run_tracker();
 
-        let global_hash_summary = GlobalHashSummary::new(
-            global_hash_inputs.global_cache_key,
-            global_hash_inputs.global_file_hash_map,
-            &root_external_dependencies_hash,
-            global_hash_inputs.env,
-            pass_through_env,
-            global_hash_inputs.dot_env,
-            global_hash_inputs.resolved_env_vars.unwrap_or_default(),
-            resolved_pass_through_env_vars,
-        );
-
-        let workspaces = pkg_dep_graph.workspaces().collect();
-
-        let package_file_hashes = PackageInputsHashes::calculate_file_hashes(
-            &scm,
-            engine.tasks().par_bridge(),
-            workspaces,
-            engine.task_definitions(),
-            &self.base.repo_root,
-        )?;
-
-        trace!("package file hashes: {:?}", package_file_hashes);
-
-        let spaces_client = self.base.api_client()?;
-
-        let mut run_summary = RunSummary::new(
-            start_at,
-            &self.base.repo_root,
-            opts.scope_opts.pkg_inference_root.as_deref(),
-            self.base.version(),
-            spaces_client,
-            &opts.run_opts,
-            filtered_pkgs.clone(),
-            env_at_execution_start,
-            global_hash_summary,
-            "todo".to_string(),
-            api_auth,
-        )
-        .await;
-
-        run_summary.close(0, &pkg_dep_graph, self.base.ui).await?;
+        run_tracker
+            .finish(
+                start_at,
+                0,
+                &pkg_dep_graph,
+                self.base.ui,
+                &self.base.repo_root,
+                opts.scope_opts.pkg_inference_root.as_deref(),
+                self.base.version(),
+                user,
+                &opts.run_opts,
+                filtered_pkgs,
+                global_hash_summary,
+            )
+            .await?;
 
         Ok(exit_code)
     }
@@ -491,7 +500,7 @@ impl<'a> Run<'a> {
         };
 
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
-        let api_auth = self.base.api_auth()?;
+        let api_auth = self.base.api_auth()?.map(Arc::new);
 
         let engine = EngineBuilder::new(
             &self.base.repo_root,
@@ -531,12 +540,13 @@ impl<'a> Run<'a> {
 
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
+        let api_client = Arc::new(self.base.api_client()?);
 
         let async_cache = AsyncCache::new(
             &opts.cache_opts,
             &self.base.repo_root,
-            self.base.api_client()?,
-            api_auth,
+            api_client.clone(),
+            api_auth.clone(),
         )?;
 
         let color_selector = ColorSelector::default();
@@ -550,9 +560,23 @@ impl<'a> Run<'a> {
             self.base.ui,
         ));
 
+        let run_tracker = RunTracker::new(
+            Local::now(),
+            "todo",
+            opts.scope_opts.pkg_inference_root.as_deref(),
+            &env_at_execution_start,
+            &self.base.repo_root,
+            self.base.version(),
+            opts.run_opts.experimental_space_id.clone(),
+            api_client,
+            api_auth,
+            None,
+        );
+
         let visitor = Visitor::new(
             pkg_dep_graph.clone(),
             runcache,
+            run_tracker,
             &opts,
             package_inputs_hashes,
             &env_at_execution_start,

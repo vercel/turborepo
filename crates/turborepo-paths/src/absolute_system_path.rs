@@ -14,7 +14,6 @@ use std::{
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use path_clean::PathClean;
-use serde::Serialize;
 use wax::CandidatePath;
 
 use crate::{
@@ -31,8 +30,7 @@ pub enum PathRelation {
     Child,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
-#[serde(transparent)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct AbsoluteSystemPath(Utf8Path);
 
 impl ToOwned for AbsoluteSystemPath {

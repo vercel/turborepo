@@ -22,6 +22,7 @@ use crate::{
     package_graph::{PackageGraph, WorkspaceName},
     process::{ChildExit, ProcessManager},
     run::{
+        summary::RunTracker,
         task_id::{self, TaskId},
         RunCache,
     },
@@ -31,6 +32,7 @@ use crate::{
 // This holds the whole world
 pub struct Visitor<'a> {
     run_cache: Arc<RunCache>,
+    run_tracker: RunTracker,
     package_graph: Arc<PackageGraph>,
     opts: &'a Opts<'a>,
     task_hasher: TaskHasher<'a>,
@@ -71,6 +73,7 @@ impl<'a> Visitor<'a> {
     pub fn new(
         package_graph: Arc<PackageGraph>,
         run_cache: Arc<RunCache>,
+        run_tracker: RunTracker,
         opts: &'a Opts,
         package_inputs_hashes: PackageInputsHashes,
         env_at_execution_start: &'a EnvironmentVariableMap,
@@ -93,6 +96,7 @@ impl<'a> Visitor<'a> {
 
         Self {
             run_cache,
+            run_tracker,
             package_graph,
             opts,
             task_hasher,
@@ -458,6 +462,10 @@ impl<'a> Visitor<'a> {
 
     pub fn into_task_hash_tracker(self) -> TaskHashTrackerState {
         self.task_hasher.into_task_hash_tracker_state()
+    }
+
+    pub fn into_run_tracker(self) -> RunTracker {
+        self.run_tracker
     }
 
     pub fn dry_run(mut self) -> Self {

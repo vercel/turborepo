@@ -1,6 +1,8 @@
+use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
+use turbopath::AnchoredSystemPath;
 
-use crate::{retry, APIClient, Client, Error};
+use crate::{retry, APIClient, Error};
 
 #[derive(Deserialize)]
 pub struct SpaceRun {
@@ -61,6 +63,41 @@ pub struct CreateSpaceRunPayload {
     #[serde(rename = "originationUser")]
     pub user: Option<String>,
     pub client: SpaceClientSummary,
+}
+
+impl CreateSpaceRunPayload {
+    pub fn new(
+        start_time: DateTime<Local>,
+        synthesized_command: &str,
+        package_inference_root: Option<&AnchoredSystemPath>,
+        git_branch: Option<String>,
+        git_sha: Option<String>,
+        version: String,
+        user: Option<String>,
+    ) -> Self {
+        let start_time = start_time.timestamp_millis();
+        let vendor = turborepo_ci::Vendor::infer();
+        let run_context = vendor.map(|v| v.constant).unwrap_or("LOCAL");
+
+        CreateSpaceRunPayload {
+            start_time,
+            status: RunStatus::Running,
+            command: synthesized_command.to_string(),
+            package_inference_root: package_inference_root
+                .map(|p| p.to_string())
+                .unwrap_or_default(),
+            ty: "TURBO",
+            run_context,
+            git_branch,
+            git_sha,
+            user,
+            client: SpaceClientSummary {
+                id: "turbo",
+                name: "Turbo",
+                version,
+            },
+        }
+    }
 }
 
 #[derive(Serialize)]

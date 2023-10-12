@@ -8,6 +8,7 @@ use crate::vendors::get_vendors;
 pub use crate::vendors::Vendor;
 
 static IS_CI: OnceLock<bool> = OnceLock::new();
+static VENDOR: OnceLock<Option<&'static Vendor>> = OnceLock::new();
 
 const CI_ENV_VARS: &[&str] = [
     "BUILD_ID",
@@ -36,7 +37,11 @@ pub fn is_ci() -> bool {
 
 impl Vendor {
     // Returns info about a CI vendor
-    pub fn get_info() -> Option<&'static Vendor> {
+    pub fn infer() -> Option<&'static Vendor> {
+        *VENDOR.get_or_init(|| Self::infer_inner())
+    }
+
+    pub fn infer_inner() -> Option<&'static Vendor> {
         for env in get_vendors() {
             if let Some(eval_env) = &env.eval_env {
                 for (name, expected_value) in eval_env {
@@ -68,11 +73,11 @@ impl Vendor {
 
     #[allow(dead_code)]
     fn get_name() -> Option<&'static str> {
-        Self::get_info().map(|v| v.name)
+        Self::infer().map(|v| v.name)
     }
 
     pub fn get_constant() -> Option<&'static str> {
-        Self::get_info().map(|v| v.constant)
+        Self::infer().map(|v| v.constant)
     }
 }
 
@@ -170,7 +175,7 @@ mod tests {
                 env::set_var(key, val);
             }
 
-            assert_eq!(Vendor::get_info(), want.as_ref());
+            assert_eq!(Vendor::infer(), want.as_ref());
 
             if Vendor::get_name() == Some("GitHub Actions") {
                 if let Some(live_ci) = live_ci {

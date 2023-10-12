@@ -31,8 +31,8 @@ impl AsyncCache {
     pub fn new(
         opts: &CacheOpts,
         repo_root: &AbsoluteSystemPath,
-        api_client: APIClient,
-        api_auth: Option<APIAuth>,
+        api_client: Arc<APIClient>,
+        api_auth: Option<Arc<APIAuth>>,
     ) -> Result<AsyncCache, CacheError> {
         let max_workers = opts.workers.try_into().expect("usize is smaller than u32");
         let real_cache = Arc::new(CacheMultiplexer::new(

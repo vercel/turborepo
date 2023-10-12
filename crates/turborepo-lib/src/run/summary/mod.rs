@@ -1,3 +1,8 @@
+//! Module for summarizing and tracking a run.
+//! We have two separate types of structs here: Trackers and Summaries.
+//! A tracker tracks the live data and then gets turned into a summary for
+//! displaying it We have this split because the tracker representation is not
+//! exactly what we want to display to the user.
 #[allow(dead_code)]
 mod execution;
 mod global_hash;
@@ -5,9 +10,9 @@ mod scm;
 mod spaces;
 mod task;
 
-use std::{collections::HashSet, io, io::Write};
+use std::{collections::HashSet, io, io::Write, sync::Arc};
 
-use chrono::Local;
+use chrono::{DateTime, Local};
 pub use global_hash::GlobalHashSummary;
 use itertools::Itertools;
 use serde::Serialize;
@@ -17,7 +22,6 @@ use thiserror::Error;
 use tracing::log::warn;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
-use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
@@ -26,7 +30,7 @@ use crate::{
     opts::RunOpts,
     package_graph::{PackageGraph, WorkspaceName},
     run::summary::{
-        execution::{ExecutionState, ExecutionSummary},
+        execution::{ExecutionState, ExecutionSummary, ExecutionTracker},
         scm::SCMState,
         spaces::{SpaceRequest, SpacesClient, SpacesClientHandle},
         task::TaskSummary,
@@ -63,91 +67,78 @@ enum RunType {
     DryJson,
 }
 
-fn get_user(env_vars: &EnvironmentVariableMap) -> Option<String> {
-    if turborepo_ci::is_ci() {
-        return Vendor::get_info()
-            .and_then(|vendor| vendor.username_env_var)
-            .and_then(|username_env_var| env_vars.get(username_env_var).cloned());
-    }
-
-    None
-}
-
-// Wrapper around the serializable RunSummaryInner, with some extra information
-// about the Run and references to other things that we need.
-#[derive(Debug)]
-pub struct RunSummary<'a> {
-    inner: RunSummaryInner<'a>,
-    repo_root: &'a AbsoluteSystemPath,
-    package_inference_root: Option<&'a AnchoredSystemPath>,
-    single_package: bool,
-    should_save: bool,
-    spaces_client_handle: Option<SpacesClientHandle>,
-    run_type: RunType,
-    synthesized_command: String,
-}
-
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RunSummaryInner<'a> {
+pub struct RunSummary<'a> {
     id: Ksuid,
     version: String,
     turbo_version: String,
     monorepo: bool,
     #[serde(rename = "globalCacheInputs")]
     global_hash_summary: GlobalHashSummary<'a>,
+    execution: Option<ExecutionSummary<'a>>,
     packages: HashSet<WorkspaceName>,
     env_mode: EnvMode,
     framework_inference: bool,
-    #[serde(rename = "execution", skip_serializing_if = "Option::is_none")]
-    execution_summary: Option<ExecutionSummary<'a>>,
     tasks: Vec<TaskSummary<'a>>,
     user: Option<String>,
     pub scm: SCMState,
+    #[serde(skip)]
+    repo_root: &'a AbsoluteSystemPath,
+    #[serde(skip)]
+    should_save: bool,
+    #[serde(skip)]
+    run_type: RunType,
+    #[serde(skip)]
+    spaces_client_handle: Option<SpacesClientHandle>,
 }
 
-// This is an exact copy of RunSummary, but the JSON tags are structured
-// for rendering a single-package run of turbo. Notably, we want to always omit
-// packages since there is no concept of packages in a single-workspace repo.
-// This struct exists solely for the purpose of serializing to JSON and should
-// not be used anywhere else.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct NonMonorepoRunSummary<'a, 'b> {
-    id: Ksuid,
-    version: &'b str,
-    turbo_version: &'b str,
-    monorepo: bool,
-    #[serde(rename = "globalCacheInputs")]
-    global_hash_summary: &'b GlobalHashSummary<'a>,
-    env_mode: EnvMode,
-    framework_inference: bool,
-    #[serde(rename = "execution", skip_serializing_if = "Option::is_none")]
-    execution_summary: Option<&'b ExecutionSummary<'a>>,
-    tasks: &'b [TaskSummary<'a>],
-    user: Option<&'b str>,
-    pub scm: &'b SCMState,
+/// We use this to track the run, so it's constructed before the run.
+pub struct RunTracker {
+    scm: SCMState,
+    execution_tracker: ExecutionTracker,
+    spaces_client_handle: Option<SpacesClientHandle>,
 }
 
-impl<'a, 'b> From<&'b RunSummaryInner<'a>> for NonMonorepoRunSummary<'a, 'b> {
-    fn from(rsm: &'b RunSummaryInner<'a>) -> Self {
-        NonMonorepoRunSummary {
-            id: rsm.id,
-            version: &rsm.version,
-            turbo_version: &rsm.turbo_version,
-            monorepo: rsm.monorepo,
-            global_hash_summary: &rsm.global_hash_summary,
-            env_mode: rsm.env_mode,
-            framework_inference: rsm.framework_inference,
-            execution_summary: rsm.execution_summary.as_ref(),
-            tasks: &rsm.tasks,
-            user: rsm.user.as_deref(),
-            scm: &rsm.scm,
+impl RunTracker {
+    pub fn new(
+        start_time: DateTime<Local>,
+        synthesized_command: &str,
+        package_inference_root: Option<&AnchoredSystemPath>,
+        env_at_execution_start: &EnvironmentVariableMap,
+        repo_root: &AbsoluteSystemPath,
+        turbo_version: &str,
+        spaces_id: Option<String>,
+        spaces_api_client: Arc<APIClient>,
+        api_auth: Option<Arc<APIAuth>>,
+        user: Option<String>,
+    ) -> Self {
+        let scm = SCMState::get(env_at_execution_start, repo_root);
+
+        let mut run_tracker = RunTracker {
+            scm: scm.clone(),
+            execution_tracker: ExecutionTracker::new(),
+            spaces_client_handle: None,
+        };
+
+        if let Some(spaces_client) =
+            SpacesClient::new(spaces_id.clone(), spaces_api_client, api_auth)
+        {
+            let payload = CreateSpaceRunPayload::new(
+                start_time,
+                synthesized_command,
+                package_inference_root,
+                scm.branch,
+                scm.sha,
+                turbo_version.to_string(),
+                user,
+            );
+            run_tracker.spaces_client_handle = spaces_client.start(payload).ok();
         }
-    }
-}
 
-impl<'a> RunSummary<'a> {
+        run_tracker
+    }
+
     #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip(
         repo_root,
@@ -158,19 +149,19 @@ impl<'a> RunSummary<'a> {
         global_hash_summary,
         synthesized_command
     ))]
-    pub async fn new(
-        start_at: chrono::DateTime<Local>,
+    pub async fn to_summary<'a>(
+        self,
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&'a AnchoredSystemPath>,
-        turbo_version: &'static str,
-        spaces_api_client: APIClient,
+        exit_code: u32,
+        start_time: DateTime<Local>,
+        end_time: DateTime<Local>,
+        turbo_version: &str,
+        user: Option<String>,
         run_opts: &RunOpts<'a>,
         packages: HashSet<WorkspaceName>,
-        env_at_execution_start: EnvironmentVariableMap,
         global_hash_summary: GlobalHashSummary<'a>,
-        synthesized_command: String,
-        api_auth: Option<APIAuth>,
-    ) -> RunSummary<'a> {
+    ) -> Result<RunSummary<'a>, Error> {
         let single_package = run_opts.single_package;
         let should_save = run_opts.summarize.flatten().is_some_and(|s| s);
 
@@ -184,54 +175,111 @@ impl<'a> RunSummary<'a> {
             RunType::Real
         };
 
-        let execution_summary = ExecutionSummary::new(
-            synthesized_command.clone(),
-            package_inference_root,
-            start_at,
-        );
+        let execution_summary = self
+            .execution_tracker
+            .finish(package_inference_root, exit_code, start_time, end_time)
+            .await?;
 
-        let mut rsm = RunSummary {
-            inner: RunSummaryInner {
-                id: Ksuid::new(None, None),
-                version: RUN_SUMMARY_SCHEMA_VERSION.to_string(),
-                execution_summary: Some(execution_summary),
-                turbo_version: turbo_version.to_string(),
-                packages,
-                env_mode: run_opts.env_mode,
-                framework_inference: run_opts.framework_inference,
-                tasks: vec![],
-                global_hash_summary,
-                scm: SCMState::get(&env_at_execution_start, repo_root),
-                user: get_user(&env_at_execution_start),
-                monorepo: !single_package,
-            },
-            run_type,
+        Ok(RunSummary {
+            id: Ksuid::new(None, None),
+            version: RUN_SUMMARY_SCHEMA_VERSION.to_string(),
+            turbo_version: turbo_version.to_string(),
+            packages,
+            execution: Some(execution_summary),
+            env_mode: run_opts.env_mode,
+            framework_inference: run_opts.framework_inference,
+            tasks: vec![],
+            global_hash_summary,
+            scm: self.scm,
+            user,
+            monorepo: !single_package,
             repo_root,
-            package_inference_root,
-            single_package,
             should_save,
-            spaces_client_handle: None,
-
-            synthesized_command,
-        };
-
-        if let Some(spaces_client) = SpacesClient::new(
-            run_opts.experimental_space_id.clone(),
-            spaces_api_client,
-            api_auth,
-        ) {
-            let payload = CreateSpaceRunPayload::from(&rsm);
-            if let Ok(handle) = spaces_client.start(payload).await {
-                rsm.spaces_client_handle = Some(handle)
-            }
-        }
-
-        rsm
+            run_type,
+            spaces_client_handle: self.spaces_client_handle,
+        })
     }
 
     #[tracing::instrument(skip(pkg_dep_graph, ui))]
-    pub async fn close(
-        &mut self,
+    pub async fn finish<'a>(
+        self,
+        start_time: DateTime<Local>,
+        exit_code: u32,
+        pkg_dep_graph: &PackageGraph,
+        ui: UI,
+        repo_root: &'a AbsoluteSystemPath,
+        package_inference_root: Option<&AnchoredSystemPath>,
+        version: &str,
+        user: Option<String>,
+        run_opts: &RunOpts<'a>,
+        packages: HashSet<WorkspaceName>,
+        global_hash_summary: GlobalHashSummary<'a>,
+    ) -> Result<(), Error> {
+        let end_time = Local::now();
+
+        let run_summary: RunSummary = self
+            .to_summary(
+                repo_root,
+                package_inference_root,
+                exit_code,
+                start_time,
+                end_time,
+                version,
+                user,
+                run_opts,
+                packages,
+                global_hash_summary,
+            )
+            .await?;
+
+        run_summary
+            .finish(end_time, exit_code, pkg_dep_graph, ui)
+            .await
+    }
+}
+
+// This is an exact copy of RunSummary, but the JSON tags are structured
+// for rendering a single-package run of turbo. Notably, we want to always omit
+// packages since there is no concept of packages in a single-workspace repo.
+// This struct exists solely for the purpose of serializing to JSON and should
+// not be used anywhere else.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SinglePackageRunSummary<'a, 'b> {
+    id: Ksuid,
+    version: &'b str,
+    turbo_version: &'b str,
+    monorepo: bool,
+    #[serde(rename = "globalCacheInputs")]
+    global_hash_summary: &'b GlobalHashSummary<'a>,
+    env_mode: EnvMode,
+    framework_inference: bool,
+    tasks: &'b [TaskSummary<'a>],
+    user: Option<&'b str>,
+    pub scm: &'b SCMState,
+}
+
+impl<'a, 'b> From<&'b RunSummary<'a>> for SinglePackageRunSummary<'a, 'b> {
+    fn from(run_summary: &'b RunSummary<'a>) -> Self {
+        SinglePackageRunSummary {
+            id: run_summary.id,
+            version: &run_summary.version,
+            turbo_version: &run_summary.turbo_version,
+            monorepo: run_summary.monorepo,
+            global_hash_summary: &run_summary.global_hash_summary,
+            env_mode: run_summary.env_mode,
+            framework_inference: run_summary.framework_inference,
+            tasks: &run_summary.tasks,
+            user: run_summary.user.as_deref(),
+            scm: &run_summary.scm,
+        }
+    }
+}
+
+impl<'a> RunSummary<'a> {
+    async fn finish(
+        mut self,
+        end_time: DateTime<Local>,
         exit_code: u32,
         pkg_dep_graph: &PackageGraph,
         ui: UI,
@@ -240,23 +288,16 @@ impl<'a> RunSummary<'a> {
             self.close_dry_run(pkg_dep_graph, ui)?;
         }
 
-        let end_time = Local::now();
-
-        if let Some(execution_summary) = &mut self.inner.execution_summary {
-            execution_summary.exit_code = Some(exit_code);
-            execution_summary.end_time = Some(end_time);
-        }
-
         if self.should_save {
             if let Err(err) = self.save() {
                 warn!("Error writing run summary: {}", err)
             }
         }
 
-        if let Some(execution_summary) = &self.inner.execution_summary {
+        if let Some(execution) = &self.execution {
             let path = self.get_path();
             let failed_tasks = self.get_failed_tasks();
-            execution_summary.print(ui, path, failed_tasks);
+            execution.print(ui, path, failed_tasks);
         }
 
         if let Some(spaces_client_handle) = self.spaces_client_handle.take() {
@@ -314,11 +355,11 @@ impl<'a> RunSummary<'a> {
     fn format_and_print_text(&mut self, pkg_dep_graph: &PackageGraph, ui: UI) -> Result<(), Error> {
         self.normalize();
 
-        if !self.single_package {
+        if self.monorepo {
             println!("\n{}", color!(ui, BOLD_CYAN, "Packages in Scope"));
             let mut tab_writer = TabWriter::new(io::stdout());
             writeln!(tab_writer, "Name\tPath")?;
-            for pkg in &self.inner.packages {
+            for pkg in &self.packages {
                 if matches!(pkg, WorkspaceName::Root) {
                     continue;
                 }
@@ -332,7 +373,7 @@ impl<'a> RunSummary<'a> {
             }
         }
 
-        let file_count = self.inner.global_hash_summary.global_file_hash_map.len();
+        let file_count = self.global_hash_summary.global_file_hash_map.len();
 
         let mut tab_writer = TabWriter::new(io::stdout());
         cprintln!(ui, BOLD_CYAN, "\nGlobal Hash Inputs");
@@ -342,60 +383,51 @@ impl<'a> RunSummary<'a> {
             ui,
             GREY,
             "  External Dependencies Hash\t=\t{}",
-            self.inner.global_hash_summary.root_external_deps_hash
+            self.global_hash_summary.root_external_deps_hash
         )?;
         cwriteln!(
             tab_writer,
             ui,
             GREY,
             "  Global Cache Key\t=\t{}",
-            self.inner.global_hash_summary.global_cache_key
+            self.global_hash_summary.global_cache_key
         )?;
         cwriteln!(
             tab_writer,
             ui,
             GREY,
             "  Global .env Files considered\t=\t{}",
-            self.inner.global_hash_summary.dot_env.len()
+            self.global_hash_summary.dot_env.len()
         )?;
         cwriteln!(
             tab_writer,
             ui,
             GREY,
             "  Global Env Vars\t=\t{}",
-            self.inner
-                .global_hash_summary
-                .env_vars
-                .specified
-                .env
-                .join(", ")
+            self.global_hash_summary.env_vars.specified.env.join(", ")
         )?;
         cwriteln!(
             tab_writer,
             ui,
             GREY,
             "  Global Env Vars Values\t=\t{}",
-            self.inner
-                .global_hash_summary
-                .env_vars
-                .configured
-                .join(", ")
+            self.global_hash_summary.env_vars.configured.join(", ")
         )?;
         cwriteln!(
             tab_writer,
             ui,
             GREY,
             "  Inferred Global Env Vars Values\t=\t{}",
-            self.inner.global_hash_summary.env_vars.inferred.join(", ")
+            self.global_hash_summary.env_vars.inferred.join(", ")
         )?;
 
         tab_writer.flush()?;
 
-        for task in &self.inner.tasks {
-            if self.single_package {
-                cprintln!(ui, BOLD, "{}", task.task_id.task());
-            } else {
+        for task in &self.tasks {
+            if self.monorepo {
                 cprintln!(ui, BOLD, "{}", task.task_id);
+            } else {
+                cprintln!(ui, BOLD, "{}", task.task_id.task());
             };
 
             let mut tab_writer = TabWriter::new(io::stdout());
@@ -506,43 +538,42 @@ impl<'a> RunSummary<'a> {
     fn format_json(&mut self) -> Result<String, Error> {
         self.normalize();
 
-        if self.single_package {
-            let monorepo_rsm: NonMonorepoRunSummary<'a, '_> = (&self.inner).into();
-            Ok(serde_json::to_string_pretty(&monorepo_rsm)?)
+        if self.monorepo {
+            Ok(serde_json::to_string_pretty(&self)?)
         } else {
-            Ok(serde_json::to_string_pretty(&self.inner)?)
+            let monorepo_rsm: SinglePackageRunSummary<'a, '_> = (&*self).into();
+            Ok(serde_json::to_string_pretty(&monorepo_rsm)?)
         }
     }
 
     fn normalize(&mut self) {
         // Remove execution summary for dry runs
         if matches!(self.run_type, RunType::DryJson) {
-            self.inner.execution_summary = None;
+            self.execution = None;
         }
 
         // For single packages, we don't need the packages
         // and each task summary needs some cleaning
-        if self.single_package {
-            self.inner.packages.drain();
+        if !self.monorepo {
+            self.packages.drain();
 
-            for task_summary in &mut self.inner.tasks {
+            for task_summary in &mut self.tasks {
                 task_summary.clean_for_single_package();
             }
         }
 
-        self.inner.tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
+        self.tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
     }
 
     fn get_path(&self) -> AbsoluteSystemPathBuf {
-        let filename = format!("{}.json", self.inner.id);
+        let filename = format!("{}.json", self.id);
 
         self.repo_root
             .join_components(&[".turbo", "runs", &filename])
     }
 
     fn get_failed_tasks(&self) -> Vec<&TaskSummary<'a>> {
-        self.inner
-            .tasks
+        self.tasks
             .iter()
             .filter(|task| matches!(task.execution.state, ExecutionState::BuildFailed { .. }))
             .collect()
