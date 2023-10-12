@@ -706,7 +706,7 @@ jobs:
           comment_tag: check_next_swc_turbopack
 
   turborepo_rust_test:
-    needs: [turborepo_rust_check, build_turborepo]
+    needs: [turborepo_rust_check]
     strategy:
       fail-fast: false
       matrix:
