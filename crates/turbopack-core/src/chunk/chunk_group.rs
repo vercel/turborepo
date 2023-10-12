@@ -1,13 +1,14 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use once_cell::unsync::Lazy;
 use turbo_tasks::{TryFlatJoinIterExt, TryJoinIterExt, Value, Vc};
 
 use super::{
     availability_info::AvailabilityInfo, available_chunk_items::AvailableChunkItemInfo,
-    chunk_content, chunking::make_chunks, Chunk, ChunkContentResult, ChunkItem, ChunkingContext,
+    chunk_content, chunking::make_chunks, AsyncModuleInfo, Chunk, ChunkContentResult, ChunkItem,
+    ChunkingContext,
 };
 use crate::{module::Module, reference::ModuleReference};
 
@@ -23,7 +24,7 @@ pub async fn make_chunk_group(
     chunk_group_root: Option<Vc<Box<dyn Module>>>,
 ) -> Result<MakeChunkGroupResult> {
     let ChunkContentResult {
-        mut chunk_items,
+        chunk_items,
         async_modules,
         mut external_module_references,
         local_back_edges_inherit_async,
@@ -71,32 +72,62 @@ pub async fn make_chunk_group(
         i += 1;
     }
 
-    // If necessary, compute new [AvailabilityInfo]
-    let inner_availability_info = Lazy::new(|| {
-        let map = chunk_items
-            .iter()
-            .map(|&chunk_item| {
-                (
-                    chunk_item,
-                    AvailableChunkItemInfo {
-                        is_async: async_chunk_items.contains(&chunk_item),
-                    },
-                )
-            })
-            .collect();
-        let map = Vc::cell(map);
-        availability_info.with_chunk_items(map)
-    });
-
-    let async_loaders = async_modules
+    // Create map for chunk items with empty [Option<AsyncModuleInfo>]
+    let mut chunk_items = chunk_items
         .into_iter()
-        .map(|module| {
-            let loader = chunking_context
-                .async_loader_chunk_item(module, Value::new(*inner_availability_info));
-            loader
-        })
-        .collect::<Vec<_>>();
-    chunk_items.extend(async_loaders.iter().copied());
+        .map(|chunk_item| (chunk_item, None))
+        .collect::<IndexMap<_, Option<AsyncModuleInfo>>>();
+
+    // Insert AsyncModuleInfo for every async module
+    for &async_item in async_chunk_items.iter() {
+        chunk_items.insert(
+            async_item,
+            Some(AsyncModuleInfo {
+                referenced_async_modules: local_back_edges_inherit_async
+                    .get(&async_item)
+                    .map(|references| {
+                        references
+                            .iter()
+                            .filter(|&item| async_chunk_items.contains(item))
+                            .copied()
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            }),
+        );
+    }
+
+    // Insert async chunk loaders for every referenced async module
+    let async_loaders = {
+        // If necessary, compute new [AvailabilityInfo]
+        let inner_availability_info = Lazy::new(|| {
+            let map = chunk_items
+                .iter()
+                .map(|(&chunk_item, async_info)| {
+                    (
+                        chunk_item,
+                        AvailableChunkItemInfo {
+                            is_async: async_info.is_some(),
+                        },
+                    )
+                })
+                .collect();
+            let map = Vc::cell(map);
+            availability_info.with_chunk_items(map)
+        });
+
+        async_modules
+            .into_iter()
+            .map(|module| {
+                let loader = chunking_context
+                    .async_loader_chunk_item(module, Value::new(*inner_availability_info));
+                loader
+            })
+            .collect::<Vec<_>>()
+    };
+    chunk_items.extend(async_loaders.iter().map(|&chunk_item| (chunk_item, None)));
+
+    // And also add output assets referenced by async chunk loaders
     let async_loader_references = async_loaders
         .into_iter()
         .map(|loader| loader.references())
@@ -108,6 +139,7 @@ pub async fn make_chunk_group(
         }
     }
 
+    // Extract output assets from references
     let output_assets = external_module_references
         .into_iter()
         .map(|reference| reference.resolve_reference().primary_output_assets())
@@ -121,6 +153,7 @@ pub async fn make_chunk_group(
         .filter(|&asset| set.insert(asset))
         .collect::<Vec<_>>();
 
+    // Pass chunk items to chunking algorithm
     let chunks = make_chunks(
         chunking_context,
         chunk_items,

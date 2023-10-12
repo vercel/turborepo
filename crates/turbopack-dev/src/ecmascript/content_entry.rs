@@ -58,7 +58,7 @@ impl EcmascriptDevChunkContentEntries {
         let entries: IndexMap<_, _> = chunk_content
             .chunk_items
             .iter()
-            .map(|chunk_item| async move {
+            .map(|(chunk_item, _)| async move {
                 async move {
                     Ok((
                         chunk_item.id().await?,

@@ -85,7 +85,7 @@ impl Chunk for EcmascriptChunk {
         let mut assets = Vec::new();
 
         let EcmascriptChunkContent { chunk_items, .. } = &*this.content.await?;
-        let mut common_path = if let Some(chunk_item) = chunk_items.first() {
+        let mut common_path = if let Some((chunk_item, _)) = chunk_items.first() {
             let path = chunk_item.asset_ident().path().resolve().await?;
             Some((path, path.await?))
         } else {
@@ -94,7 +94,7 @@ impl Chunk for EcmascriptChunk {
 
         // The included chunk items describe the chunk uniquely
         let chunk_item_key = chunk_item_key();
-        for &chunk_item in chunk_items.iter() {
+        for &(chunk_item, _) in chunk_items.iter() {
             if let Some((common_path_vc, common_path_ref)) = common_path.as_mut() {
                 let path = chunk_item.asset_ident().path().await?;
                 while !path.is_inside_or_equal_ref(common_path_ref) {
@@ -209,7 +209,7 @@ impl Introspectable for EcmascriptChunk {
         let this = self.await?;
         let chunk_content = this.content.await?;
         details += "Chunk items:\n\n";
-        for chunk_item in chunk_content.chunk_items.iter() {
+        for (chunk_item, _) in chunk_content.chunk_items.iter() {
             writeln!(details, "- {}", chunk_item.asset_ident().to_string().await?)?;
         }
         details += "\nContent:\n\n";
@@ -223,7 +223,7 @@ impl Introspectable for EcmascriptChunk {
             .await?
             .clone_value();
         let chunk_item_module_key = chunk_item_module_key();
-        for &chunk_item in self.await?.content.await?.chunk_items.iter() {
+        for &(chunk_item, _) in self.await?.content.await?.chunk_items.iter() {
             children.insert((
                 chunk_item_module_key,
                 IntrospectableModule::new(chunk_item.module()),

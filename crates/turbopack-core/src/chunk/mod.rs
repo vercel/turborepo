@@ -568,7 +568,7 @@ pub trait ChunkType: ValueToString {
     fn chunk(
         &self,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
-        chunk_items: Vc<ChunkItems>,
+        chunk_items: Vc<ChunkItemsWithAsyncModuleInfo>,
         referenced_output_assets: Vc<OutputAssets>,
         // TODO This need to go away, it's only needed for EsmScope
         chunk_group_root: Option<Vc<Box<dyn Module>>>,
@@ -585,6 +585,14 @@ pub trait ChunkType: ValueToString {
 
 #[turbo_tasks::value(transparent)]
 pub struct ChunkItems(Vec<Vc<Box<dyn ChunkItem>>>);
+
+#[derive(PartialEq, Eq, Clone, TraceRawVcs, Serialize, Deserialize, ValueDebugFormat)]
+pub struct AsyncModuleInfo {
+    pub referenced_async_modules: Vec<Vc<Box<dyn ChunkItem>>>,
+}
+
+#[turbo_tasks::value(transparent)]
+pub struct ChunkItemsWithAsyncModuleInfo(Vec<(Vc<Box<dyn ChunkItem>>, Option<AsyncModuleInfo>)>);
 
 pub trait ChunkItemExt: Send {
     /// Returns the module id of this chunk item.

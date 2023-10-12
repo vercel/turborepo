@@ -66,7 +66,7 @@ impl EcmascriptBuildNodeChunkContent {
         for (id, item_code) in content
             .chunk_items
             .iter()
-            .map(|chunk_item| async move {
+            .map(|(chunk_item, _)| async move {
                 Ok((
                     chunk_item.id().await?,
                     chunk_item.code(chunk_group_root).await?,

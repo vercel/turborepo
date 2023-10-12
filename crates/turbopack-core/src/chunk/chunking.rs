@@ -12,7 +12,9 @@ use regex::Regex;
 use tracing::Level;
 use turbo_tasks::{keyed_cell, ReadRef, TryJoinIterExt, ValueToString, Vc};
 
-use super::{Chunk, ChunkItem, ChunkItems, ChunkType, ChunkingContext};
+use super::{
+    AsyncModuleInfo, Chunk, ChunkItem, ChunkItemsWithAsyncModuleInfo, ChunkType, ChunkingContext,
+};
 use crate::{
     module::Module,
     output::{OutputAsset, OutputAssets},
@@ -23,21 +25,21 @@ use crate::{
 #[tracing::instrument(level = Level::TRACE, skip_all)]
 pub async fn make_chunks(
     chunking_context: Vc<Box<dyn ChunkingContext>>,
-    chunk_items: impl IntoIterator<Item = Vc<Box<dyn ChunkItem>>>,
+    chunk_items: impl IntoIterator<Item = (Vc<Box<dyn ChunkItem>>, Option<AsyncModuleInfo>)>,
     referenced_output_assets: Vec<Vc<Box<dyn OutputAsset>>>,
     chunk_group_root: Option<Vc<Box<dyn Module>>>,
 ) -> Result<Vec<Vc<Box<dyn Chunk>>>> {
     let chunk_items = chunk_items
         .into_iter()
-        .map(|chunk_item| async move {
+        .map(|(chunk_item, async_info)| async move {
             let ty = chunk_item.ty().resolve().await?;
-            Ok((ty, chunk_item))
+            Ok((ty, chunk_item, async_info))
         })
         .try_join()
         .await?;
     let mut map = IndexMap::<_, Vec<_>>::new();
-    for (ty, chunk_item) in chunk_items {
-        map.entry(ty).or_default().push(chunk_item);
+    for (ty, chunk_item, async_info) in chunk_items {
+        map.entry(ty).or_default().push((chunk_item, async_info));
     }
 
     let mut referenced_output_assets = Vc::cell(referenced_output_assets);
@@ -49,9 +51,10 @@ pub async fn make_chunks(
 
         let chunk_items = chunk_items
             .into_iter()
-            .map(|chunk_item| async move {
+            .map(|(chunk_item, async_info)| async move {
                 Ok((
                     chunk_item,
+                    async_info,
                     *ty.chunk_item_size(chunking_context, chunk_item, chunk_group_root)
                         .await?,
                     chunk_item.asset_ident().to_string().await?,
@@ -75,7 +78,12 @@ pub async fn make_chunks(
     Ok(chunks)
 }
 
-type ChunkItemWithInfo = (Vc<Box<dyn ChunkItem>>, usize, ReadRef<String>);
+type ChunkItemWithInfo = (
+    Vc<Box<dyn ChunkItem>>,
+    Option<AsyncModuleInfo>,
+    usize,
+    ReadRef<String>,
+);
 
 struct SplitContext<'a> {
     ty: Vc<Box<dyn ChunkType>>,
@@ -99,7 +107,7 @@ async fn handle_split_group(
     Ok(match (chunk_size(chunk_items), remaining) {
         (ChunkSize::Large, _) => false,
         (ChunkSize::Perfect, _) | (ChunkSize::Small, None) => {
-            make_chunk(chunk_items, key, split_context).await?;
+            make_chunk(take(chunk_items), key, split_context).await?;
             true
         }
         (ChunkSize::Small, Some(remaining)) => {
@@ -113,7 +121,7 @@ async fn handle_split_group(
 /// used with [keyed_cell] to place the chunk items into a cell.
 #[tracing::instrument(level = Level::TRACE, skip(chunk_items, split_context))]
 async fn make_chunk(
-    chunk_items: &[ChunkItemWithInfo],
+    chunk_items: Vec<ChunkItemWithInfo>,
     key: &mut String,
     split_context: &mut SplitContext<'_>,
 ) -> Result<()> {
@@ -122,10 +130,10 @@ async fn make_chunk(
             split_context.chunking_context,
             keyed_cell(
                 take(key),
-                ChunkItems(
+                ChunkItemsWithAsyncModuleInfo(
                     chunk_items
-                        .iter()
-                        .map(|&(chunk_item, ..)| chunk_item)
+                        .into_iter()
+                        .map(|(chunk_item, async_info, ..)| (chunk_item, async_info))
                         .collect(),
                 ),
             )
@@ -150,11 +158,12 @@ async fn app_vendors_split(
 ) -> Result<()> {
     let mut app_chunk_items = Vec::new();
     let mut vendors_chunk_items = Vec::new();
-    for (chunk_item, size, asset_ident) in chunk_items {
-        if is_app_code(&asset_ident) {
-            app_chunk_items.push((chunk_item, size, asset_ident));
+    for item in chunk_items {
+        let (_, _, _, asset_ident) = &item;
+        if is_app_code(asset_ident) {
+            app_chunk_items.push(item);
         } else {
-            vendors_chunk_items.push((chunk_item, size, asset_ident));
+            vendors_chunk_items.push(item);
         }
     }
     let mut remaining = Vec::new();
@@ -197,15 +206,13 @@ async fn package_name_split(
     split_context: &mut SplitContext<'_>,
 ) -> Result<()> {
     let mut map = IndexMap::<_, Vec<ChunkItemWithInfo>>::new();
-    for (chunk_item, size, asset_ident) in chunk_items {
+    for item in chunk_items {
+        let (_, _, _, asset_ident) = &item;
         let package_name = package_name(&asset_ident);
         if let Some(list) = map.get_mut(package_name) {
-            list.push((chunk_item, size, asset_ident));
+            list.push(item);
         } else {
-            map.insert(
-                package_name.to_string(),
-                vec![(chunk_item, size, asset_ident)],
-            );
+            map.insert(package_name.to_string(), vec![item]);
         }
     }
     let mut remaining = Vec::new();
@@ -243,15 +250,13 @@ async fn folder_split(
 ) -> Result<()> {
     let mut map = IndexMap::<_, (_, Vec<ChunkItemWithInfo>)>::new();
     loop {
-        for (chunk_item, size, asset_ident) in chunk_items {
+        for item in chunk_items {
+            let (_, _, _, asset_ident) = &item;
             let (folder_name, new_location) = folder_name(&asset_ident, location);
             if let Some((_, list)) = map.get_mut(folder_name) {
-                list.push((chunk_item, size, asset_ident));
+                list.push(item);
             } else {
-                map.insert(
-                    folder_name.to_string(),
-                    (new_location, vec![(chunk_item, size, asset_ident)]),
-                );
+                map.insert(folder_name.to_string(), (new_location, vec![item]));
             }
         }
         if map.len() == 1 {
@@ -264,7 +269,7 @@ async fn folder_split(
                 continue;
             } else {
                 let mut key = format!("{}-{}", name, folder_name);
-                make_chunk(&list, &mut key, split_context).await?;
+                make_chunk(list, &mut key, split_context).await?;
                 return Ok(());
             }
         } else {
@@ -278,7 +283,7 @@ async fn folder_split(
             if let Some(new_location) = new_location {
                 folder_split_boxed(list, new_location, Cow::Borrowed(&name), split_context).await?;
             } else {
-                make_chunk(&list, &mut key, split_context).await?;
+                make_chunk(list, &mut key, split_context).await?;
             }
         }
     }
@@ -286,7 +291,7 @@ async fn folder_split(
     if !remaining.is_empty()
         && !handle_split_group(&mut remaining, &mut name, split_context, None).await?
     {
-        make_chunk(&remaining, &mut name, split_context).await?;
+        make_chunk(remaining, &mut name, split_context).await?;
     }
     Ok(())
 }
@@ -331,7 +336,7 @@ enum ChunkSize {
 /// large or perfect fit.
 fn chunk_size(chunk_items: &[ChunkItemWithInfo]) -> ChunkSize {
     let mut total_size = 0;
-    for (_, size, _) in chunk_items {
+    for (_, _, size, _) in chunk_items {
         total_size += size;
     }
     if total_size >= LARGE_CHUNK {

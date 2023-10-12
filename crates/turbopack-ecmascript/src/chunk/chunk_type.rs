@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use turbo_tasks::{TryJoinIterExt, ValueDefault, ValueToString, Vc};
 use turbopack_core::{
-    chunk::{Chunk, ChunkItem, ChunkItems, ChunkType, ChunkingContext},
+    chunk::{Chunk, ChunkItem, ChunkItemsWithAsyncModuleInfo, ChunkType, ChunkingContext},
     module::Module,
     output::OutputAssets,
 };
@@ -28,7 +28,7 @@ impl ChunkType for EcmascriptChunkType {
     async fn chunk(
         &self,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
-        chunk_items: Vc<ChunkItems>,
+        chunk_items: Vc<ChunkItemsWithAsyncModuleInfo>,
         referenced_output_assets: Vc<OutputAssets>,
         chunk_group_root: Option<Vc<Box<dyn Module>>>,
     ) -> Result<Vc<Box<dyn Chunk>>> {
@@ -42,9 +42,9 @@ impl ChunkType for EcmascriptChunkType {
             chunk_items: chunk_items
                 .await?
                 .iter()
-                .map(|&chunk_item| async move {
+                .map(|(chunk_item, async_info)| async move {
                     let Some(chunk_item) =
-                        Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkItem>>(chunk_item)
+                        Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkItem>>(*chunk_item)
                             .await?
                     else {
                         bail!(
@@ -52,7 +52,7 @@ impl ChunkType for EcmascriptChunkType {
                              ecmascript"
                         );
                     };
-                    Ok(chunk_item)
+                    Ok((chunk_item, async_info.clone()))
                 })
                 .try_join()
                 .await?,
