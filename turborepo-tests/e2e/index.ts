@@ -4,7 +4,7 @@ import { Readable } from "stream";
 import { ZstdCodec } from "zstd-codec";
 import * as uvu from "uvu";
 import * as assert from "uvu/assert";
-import { Monorepo, type PackageManager } from "./monorepo";
+import { Monorepo } from "./monorepo";
 import path from "path";
 import * as fs from "fs";
 import {
@@ -12,6 +12,7 @@ import {
   prunePipeline,
   explicitPrunePipeline,
 } from "./fixtures";
+import type { DryRun, PackageManager } from "./types";
 
 const testCombinations = [
   { npmClient: "yarn" as PackageManager, pipeline: basicPipeline },
@@ -93,24 +94,6 @@ for (const combo of testCombinations) {
 for (let suite of suites) {
   suite.run();
 }
-
-type Task = {
-  taskId: string;
-  task: string;
-  package: string;
-  hash: string;
-  command: string;
-  outputs: string[];
-  logFile: string;
-  directory: string;
-  dependencies: string[];
-  dependents: string[];
-};
-
-type DryRun = {
-  packages: string[];
-  tasks: Task[];
-};
 
 const matchTask =
   <T, V>(predicate: (dryRun: DryRun, val: T) => V) =>
@@ -686,8 +669,6 @@ function runSmokeTests<T>(
     );
   });
 }
-
-type PackageManager = "yarn" | "pnpm6" | "pnpm" | "npm" | "berry";
 
 // getLockfileForPackageManager returns the name of the lockfile for the given package manager
 function getLockfileForPackageManager(ws: PackageManager) {

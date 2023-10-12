@@ -9,8 +9,7 @@ const turboPath = path.join(
   __dirname,
   "../../target/debug/turbo" + (isWin ? ".exe" : "")
 );
-
-export type PackageManager = "npm" | "pnpm6" | "pnpm" | "yarn" | "berry";
+import type { PackageManager } from "./types";
 
 interface MonorepoOptions {
   root: string;
