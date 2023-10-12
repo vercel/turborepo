@@ -182,6 +182,9 @@ pub struct ChunkContentResult {
     pub chunk_items: IndexSet<Vc<Box<dyn ChunkItem>>>,
     pub async_modules: IndexSet<Vc<Box<dyn ChunkableModule>>>,
     pub external_module_references: IndexSet<Vc<Box<dyn ModuleReference>>>,
+    /// A map from local module to all children from which the async module
+    /// status is inherited
+    pub forward_edges_inherit_async: IndexMap<Vc<Box<dyn ChunkItem>>, Vec<Vc<Box<dyn ChunkItem>>>>,
     /// A map from local module to all parents that inherit the async module
     /// status
     pub local_back_edges_inherit_async:
@@ -485,6 +488,7 @@ async fn chunk_content_internal_parallel(
     let mut chunk_items = IndexSet::new();
     let mut async_modules = IndexSet::new();
     let mut external_module_references = IndexSet::new();
+    let mut forward_edges_inherit_async = IndexMap::new();
     let mut local_back_edges_inherit_async = IndexMap::new();
     let mut available_async_modules_back_edges_inherit_async = IndexMap::new();
 
@@ -517,6 +521,8 @@ async fn chunk_content_internal_parallel(
                         }
                     }
                 }
+                forward_edges_inherit_async
+                    .insert(item, references.into_iter().map(|(r, _)| r).collect());
             }
         }
     }
@@ -525,6 +531,7 @@ async fn chunk_content_internal_parallel(
         chunk_items,
         async_modules,
         external_module_references,
+        forward_edges_inherit_async,
         local_back_edges_inherit_async,
         available_async_modules_back_edges_inherit_async,
     })
@@ -587,6 +594,17 @@ pub struct ChunkItems(Vec<Vc<Box<dyn ChunkItem>>>);
 #[turbo_tasks::value]
 pub struct AsyncModuleInfo {
     pub referenced_async_modules: AutoSet<Vc<Box<dyn ChunkItem>>>,
+}
+
+#[turbo_tasks::value_impl]
+impl AsyncModuleInfo {
+    #[turbo_tasks::function]
+    pub fn new(referenced_async_modules: Vec<Vc<Box<dyn ChunkItem>>>) -> Vc<Self> {
+        Self {
+            referenced_async_modules: referenced_async_modules.into_iter().collect(),
+        }
+        .cell()
+    }
 }
 
 #[turbo_tasks::value(transparent)]
