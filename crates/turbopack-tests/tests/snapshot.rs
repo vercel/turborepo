@@ -331,7 +331,6 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
                 runtime_entries
                     .unwrap_or_else(EvaluatableAssets::empty)
                     .with_entry(Vc::upcast(ecmascript)),
-                Some(Vc::upcast(ecmascript)),
             ),
             Runtime::Build => {
                 Vc::cell(vec![Vc::try_resolve_downcast_type::<BuildChunkingContext>(

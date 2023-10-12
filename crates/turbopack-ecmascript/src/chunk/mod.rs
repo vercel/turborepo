@@ -2,7 +2,6 @@ pub(crate) mod chunk_type;
 pub(crate) mod content;
 pub(crate) mod context;
 pub(crate) mod data;
-pub(crate) mod esm_scope;
 pub(crate) mod item;
 pub(crate) mod placeable;
 
@@ -109,10 +108,6 @@ impl Chunk for EcmascriptChunk {
             }
             assets.push((chunk_item_key, chunk_item.content_ident()));
         }
-
-        // TODO this need to be removed
-        // Note: chunk_group_root doesn't need to be included since it doesn't affect
-        // the chunk content, it's only a tool for computation optimization
 
         // Make sure the idents are resolved
         for (_, ident) in assets.iter_mut() {

@@ -15,19 +15,15 @@ use turbo_tasks::{keyed_cell, ReadRef, TryJoinIterExt, ValueToString, Vc};
 use super::{
     AsyncModuleInfo, Chunk, ChunkItem, ChunkItemsWithAsyncModuleInfo, ChunkType, ChunkingContext,
 };
-use crate::{
-    module::Module,
-    output::{OutputAsset, OutputAssets},
-};
+use crate::output::{OutputAsset, OutputAssets};
 
 /// Creates chunks based on heuristics for the passed `chunk_items`. Also
 /// attaches `referenced_output_assets` to the first chunk.
 #[tracing::instrument(level = Level::TRACE, skip_all)]
 pub async fn make_chunks(
     chunking_context: Vc<Box<dyn ChunkingContext>>,
-    chunk_items: impl IntoIterator<Item = (Vc<Box<dyn ChunkItem>>, Option<AsyncModuleInfo>)>,
+    chunk_items: impl IntoIterator<Item = (Vc<Box<dyn ChunkItem>>, Option<Vc<AsyncModuleInfo>>)>,
     referenced_output_assets: Vec<Vc<Box<dyn OutputAsset>>>,
-    chunk_group_root: Option<Vc<Box<dyn Module>>>,
 ) -> Result<Vec<Vc<Box<dyn Chunk>>>> {
     let chunk_items = chunk_items
         .into_iter()
@@ -55,7 +51,7 @@ pub async fn make_chunks(
                 Ok((
                     chunk_item,
                     async_info,
-                    *ty.chunk_item_size(chunking_context, chunk_item, chunk_group_root)
+                    *ty.chunk_item_size(chunking_context, chunk_item, async_info)
                         .await?,
                     chunk_item.asset_ident().to_string().await?,
                 ))
@@ -66,7 +62,6 @@ pub async fn make_chunks(
         let mut split_context = SplitContext {
             ty,
             chunking_context,
-            chunk_group_root,
             chunks: &mut chunks,
             referenced_output_assets: &mut referenced_output_assets,
             empty_referenced_output_assets: other_referenced_output_assets,
@@ -80,7 +75,7 @@ pub async fn make_chunks(
 
 type ChunkItemWithInfo = (
     Vc<Box<dyn ChunkItem>>,
-    Option<AsyncModuleInfo>,
+    Option<Vc<AsyncModuleInfo>>,
     usize,
     ReadRef<String>,
 );
@@ -88,7 +83,6 @@ type ChunkItemWithInfo = (
 struct SplitContext<'a> {
     ty: Vc<Box<dyn ChunkType>>,
     chunking_context: Vc<Box<dyn ChunkingContext>>,
-    chunk_group_root: Option<Vc<Box<dyn Module>>>,
     chunks: &'a mut Vec<Vc<Box<dyn Chunk>>>,
     referenced_output_assets: &'a mut Vc<OutputAssets>,
     empty_referenced_output_assets: Vc<OutputAssets>,
@@ -142,7 +136,6 @@ async fn make_chunk(
                 split_context.referenced_output_assets,
                 split_context.empty_referenced_output_assets,
             ),
-            split_context.chunk_group_root,
         ),
     );
     Ok(())

@@ -74,9 +74,6 @@ pub trait ChunkingContext {
         self: Vc<Self>,
         ident: Vc<AssetIdent>,
         evaluatable_assets: Vc<EvaluatableAssets>,
-        // TODO this should be removed, it incorrect since there is not a single root of the chunk
-        // group And anyway, we should not need to know that or depend on that.
-        chunk_group_root: Option<Vc<Box<dyn Module>>>,
     ) -> Vc<OutputAssets>;
 
     async fn chunk_item_id_from_ident(

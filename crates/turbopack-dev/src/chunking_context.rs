@@ -345,7 +345,6 @@ impl ChunkingContext for DevChunkingContext {
             Vc::upcast(self),
             [Vc::upcast(module)],
             availability_info.into_value(),
-            Some(Vc::upcast(module)),
         )
         .await?;
 
@@ -369,7 +368,6 @@ impl ChunkingContext for DevChunkingContext {
         self: Vc<Self>,
         ident: Vc<AssetIdent>,
         evaluatable_assets: Vc<EvaluatableAssets>,
-        chunk_group_root: Option<Vc<Box<dyn Module>>>,
     ) -> Result<Vc<OutputAssets>> {
         let availability_info = AvailabilityInfo::Root;
 
@@ -382,13 +380,8 @@ impl ChunkingContext for DevChunkingContext {
             .map(|&evaluatable| Vc::upcast(evaluatable))
             .collect::<Vec<_>>();
 
-        let MakeChunkGroupResult { chunks } = make_chunk_group(
-            Vc::upcast(self),
-            entries,
-            availability_info,
-            chunk_group_root,
-        )
-        .await?;
+        let MakeChunkGroupResult { chunks } =
+            make_chunk_group(Vc::upcast(self), entries, availability_info).await?;
 
         let mut assets: Vec<Vc<Box<dyn OutputAsset>>> = chunks
             .iter()

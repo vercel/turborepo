@@ -5,11 +5,10 @@ use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, Upcast, ValueToString, Vc};
 use turbo_tasks_fs::rope::Rope;
 use turbopack_core::{
-    chunk::{ChunkItem, ChunkItemExt, ChunkingContext},
+    chunk::{AsyncModuleInfo, ChunkItem, ChunkItemExt, ChunkingContext},
     code_builder::{Code, CodeBuilder},
     error::PrettyPrintError,
     issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity},
-    module::Module,
 };
 
 use super::EcmascriptChunkingContext;
@@ -168,7 +167,7 @@ pub trait EcmascriptChunkItem: ChunkItem {
     fn content(self: Vc<Self>) -> Vc<EcmascriptChunkItemContent>;
     fn content_with_async_module_info(
         self: Vc<Self>,
-        _chunk_group_root: Option<Vc<Box<dyn Module>>>,
+        _async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Vc<EcmascriptChunkItemContent> {
         self.content()
     }
@@ -183,7 +182,7 @@ pub trait EcmascriptChunkItem: ChunkItem {
 
 pub trait EcmascriptChunkItemExt: Send {
     /// Generates the module factory for this chunk item.
-    fn code(self: Vc<Self>, chunk_group_root: Option<Vc<Box<dyn Module>>>) -> Vc<Code>;
+    fn code(self: Vc<Self>, async_module_info: Option<Vc<AsyncModuleInfo>>) -> Vc<Code>;
 }
 
 impl<T> EcmascriptChunkItemExt for T
@@ -191,19 +190,19 @@ where
     T: Upcast<Box<dyn EcmascriptChunkItem>>,
 {
     /// Generates the module factory for this chunk item.
-    fn code(self: Vc<Self>, chunk_group_root: Option<Vc<Box<dyn Module>>>) -> Vc<Code> {
-        module_factory_with_code_generation_issue(Vc::upcast(self), chunk_group_root)
+    fn code(self: Vc<Self>, async_module_info: Option<Vc<AsyncModuleInfo>>) -> Vc<Code> {
+        module_factory_with_code_generation_issue(Vc::upcast(self), async_module_info)
     }
 }
 
 #[turbo_tasks::function]
 async fn module_factory_with_code_generation_issue(
     chunk_item: Vc<Box<dyn EcmascriptChunkItem>>,
-    chunk_group_root: Option<Vc<Box<dyn Module>>>,
+    async_module_info: Option<Vc<AsyncModuleInfo>>,
 ) -> Result<Vc<Code>> {
     Ok(
         match chunk_item
-            .content_with_async_module_info(chunk_group_root)
+            .content_with_async_module_info(async_module_info)
             .module_factory()
             .resolve()
             .await

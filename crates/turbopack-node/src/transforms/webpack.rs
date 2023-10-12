@@ -173,7 +173,6 @@ impl WebpackLoadersProcessedAsset {
             ],
             Completion::immutable(),
             should_debug("webpack_loader"),
-            Some(Vc::upcast(webpack_loaders_executor)),
         )
         .await?;
 

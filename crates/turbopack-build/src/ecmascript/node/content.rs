@@ -62,14 +62,13 @@ impl EcmascriptBuildNodeChunkContent {
         )?;
 
         let content = this.content.await?;
-        let chunk_group_root = content.chunk_group_root;
         for (id, item_code) in content
             .chunk_items
             .iter()
-            .map(|(chunk_item, _)| async move {
+            .map(|&(chunk_item, async_module_info)| async move {
                 Ok((
                     chunk_item.id().await?,
-                    chunk_item.code(chunk_group_root).await?,
+                    chunk_item.code(async_module_info).await?,
                 ))
             })
             .try_join()

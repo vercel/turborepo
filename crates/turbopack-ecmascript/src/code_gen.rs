@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use swc_core::ecma::visit::{AstParentKind, VisitMut};
 use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, Vc};
-use turbopack_core::module::Module;
+use turbopack_core::chunk::AsyncModuleInfo;
 
 use crate::chunk::EcmascriptChunkingContext;
 
@@ -37,7 +37,7 @@ pub trait CodeGenerateableWithAsyncModuleInfo {
     fn code_generation(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-        chunk_group_root: Option<Vc<Box<dyn Module>>>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Vc<CodeGeneration>;
 }
 

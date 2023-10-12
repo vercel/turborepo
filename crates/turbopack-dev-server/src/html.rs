@@ -140,11 +140,8 @@ impl DevHtmlAsset {
                     } else {
                         runtime_entries
                     };
-                    chunking_context.evaluated_chunk_group(
-                        chunkable_module.ident(),
-                        runtime_entries,
-                        Some(Vc::upcast(chunkable_module)),
-                    )
+                    chunking_context
+                        .evaluated_chunk_group(chunkable_module.ident(), runtime_entries)
                 } else {
                     chunking_context.root_chunk_group(Vc::upcast(chunkable_module))
                 };

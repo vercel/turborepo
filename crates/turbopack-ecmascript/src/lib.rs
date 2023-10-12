@@ -51,7 +51,9 @@ use turbo_tasks::{trace::TraceRawVcs, ReadRef, TryJoinIterExt, Value, ValueToStr
 use turbo_tasks_fs::{rope::Rope, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{ChunkItem, ChunkType, ChunkableModule, ChunkingContext, EvaluatableAsset},
+    chunk::{
+        AsyncModuleInfo, ChunkItem, ChunkType, ChunkableModule, ChunkingContext, EvaluatableAsset,
+    },
     compile_time_info::CompileTimeInfo,
     context::AssetContext,
     ident::AssetIdent,
@@ -332,7 +334,7 @@ impl EcmascriptModuleAsset {
     pub async fn module_content(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-        chunk_group_root: Option<Vc<Box<dyn Module>>>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<EcmascriptModuleContent>> {
         let this = self.await?;
 
@@ -343,7 +345,7 @@ impl EcmascriptModuleAsset {
             self.ident(),
             chunking_context,
             self.analyze(),
-            chunk_group_root,
+            async_module_info,
         ))
     }
 }
@@ -492,18 +494,18 @@ impl EcmascriptChunkItem for ModuleChunkItem {
     #[turbo_tasks::function]
     async fn content_with_async_module_info(
         self: Vc<Self>,
-        chunk_group_root: Option<Vc<Box<dyn Module>>>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let this = self.await?;
         let async_module_options = this
             .module
             .get_async_module()
-            .module_options(chunk_group_root);
+            .module_options(async_module_info);
 
-        // TODO check if we need to pass chunk_group_root at all
+        // TODO check if we need to pass async_module_info at all
         let content = this
             .module
-            .module_content(this.chunking_context, chunk_group_root);
+            .module_content(this.chunking_context, async_module_info);
 
         Ok(EcmascriptChunkItemContent::new(
             content,
@@ -530,7 +532,7 @@ impl EcmascriptModuleContent {
         ident: Vc<AssetIdent>,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         analyzed: Vc<AnalyzeEcmascriptModuleResult>,
-        chunk_group_root: Option<Vc<Box<dyn Module>>>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<Self>> {
         let AnalyzeEcmascriptModuleResult {
             references,
@@ -544,7 +546,7 @@ impl EcmascriptModuleContent {
             if let Some(code_gen) =
                 Vc::try_resolve_sidecast::<Box<dyn CodeGenerateableWithAsyncModuleInfo>>(r).await?
             {
-                code_gens.push(code_gen.code_generation(chunking_context, chunk_group_root));
+                code_gens.push(code_gen.code_generation(chunking_context, async_module_info));
             } else if let Some(code_gen) =
                 Vc::try_resolve_sidecast::<Box<dyn CodeGenerateable>>(r).await?
             {
@@ -557,7 +559,7 @@ impl EcmascriptModuleContent {
                     code_gens.push(c.code_generation(chunking_context));
                 }
                 CodeGen::CodeGenerateableWithAsyncModuleInfo(c) => {
-                    code_gens.push(c.code_generation(chunking_context, chunk_group_root));
+                    code_gens.push(c.code_generation(chunking_context, async_module_info));
                 }
             }
         }

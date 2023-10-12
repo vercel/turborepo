@@ -164,13 +164,8 @@ impl BuildChunkingContext {
     ) -> Result<Vc<Box<dyn OutputAsset>>> {
         let availability_info = AvailabilityInfo::Root;
 
-        let MakeChunkGroupResult { chunks } = make_chunk_group(
-            Vc::upcast(self),
-            [Vc::upcast(module)],
-            availability_info,
-            Some(Vc::upcast(module)),
-        )
-        .await?;
+        let MakeChunkGroupResult { chunks } =
+            make_chunk_group(Vc::upcast(self), [Vc::upcast(module)], availability_info).await?;
 
         let other_chunks: Vec<_> = chunks
             .iter()
@@ -328,7 +323,6 @@ impl ChunkingContext for BuildChunkingContext {
             Vc::upcast(self),
             [Vc::upcast(module)],
             availability_info.into_value(),
-            Some(Vc::upcast(module)),
         )
         .await?;
 
@@ -345,7 +339,6 @@ impl ChunkingContext for BuildChunkingContext {
         self: Vc<Self>,
         _ident: Vc<AssetIdent>,
         _evaluatable_assets: Vc<EvaluatableAssets>,
-        _chunk_group_root: Option<Vc<Box<dyn Module>>>,
     ) -> Result<Vc<OutputAssets>> {
         // TODO(alexkirsz) This method should be part of a separate trait that is
         // only implemented for client/edge runtimes.

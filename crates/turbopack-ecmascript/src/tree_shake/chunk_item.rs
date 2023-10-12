@@ -1,7 +1,7 @@
 use anyhow::Result;
 use turbo_tasks::Vc;
 use turbopack_core::{
-    chunk::{ChunkItem, ChunkType, ChunkingContext},
+    chunk::{AsyncModuleInfo, ChunkItem, ChunkType, ChunkingContext},
     ident::AssetIdent,
     module::Module,
     reference::ModuleReferences,
@@ -36,14 +36,14 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
     async fn content_with_async_module_info(
         self: Vc<Self>,
-        chunk_group_root: Option<Vc<Box<dyn Module>>>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let this = self.await?;
         let module = this.module.await?;
         let async_module_options = module
             .full_module
             .get_async_module()
-            .module_options(chunk_group_root);
+            .module_options(async_module_info);
 
         let split_data = split_module(module.full_module);
         let parsed = part_of_module(split_data, module.part);
@@ -53,7 +53,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             module.full_module.ident(),
             this.chunking_context,
             this.module.analyze(),
-            chunk_group_root,
+            async_module_info,
         );
 
         Ok(EcmascriptChunkItemContent::new(

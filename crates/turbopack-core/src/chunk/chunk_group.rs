@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use anyhow::Result;
 use indexmap::{IndexMap, IndexSet};
 use once_cell::unsync::Lazy;
-use turbo_tasks::{TryFlatJoinIterExt, TryJoinIterExt, Value, Vc};
+use turbo_tasks::{keyed_cell, TryFlatJoinIterExt, TryJoinIterExt, Value, Vc};
 
 use super::{
     availability_info::AvailabilityInfo, available_chunk_items::AvailableChunkItemInfo,
@@ -21,7 +21,6 @@ pub async fn make_chunk_group(
     chunking_context: Vc<Box<dyn ChunkingContext>>,
     entries: impl IntoIterator<Item = Vc<Box<dyn Module>>>,
     availability_info: AvailabilityInfo,
-    chunk_group_root: Option<Vc<Box<dyn Module>>>,
 ) -> Result<MakeChunkGroupResult> {
     let ChunkContentResult {
         chunk_items,
@@ -72,28 +71,34 @@ pub async fn make_chunk_group(
         i += 1;
     }
 
-    // Create map for chunk items with empty [Option<AsyncModuleInfo>]
+    // Create map for chunk items with empty [Option<Vc<AsyncModuleInfo>>]
     let mut chunk_items = chunk_items
         .into_iter()
         .map(|chunk_item| (chunk_item, None))
-        .collect::<IndexMap<_, Option<AsyncModuleInfo>>>();
+        .collect::<IndexMap<_, Option<Vc<AsyncModuleInfo>>>>();
 
     // Insert AsyncModuleInfo for every async module
     for &async_item in async_chunk_items.iter() {
         chunk_items.insert(
             async_item,
-            Some(AsyncModuleInfo {
-                referenced_async_modules: local_back_edges_inherit_async
-                    .get(&async_item)
-                    .map(|references| {
-                        references
-                            .iter()
-                            .filter(|&item| async_chunk_items.contains(item))
-                            .copied()
-                            .collect()
-                    })
-                    .unwrap_or_default(),
-            }),
+            Some(
+                keyed_cell(
+                    async_item,
+                    AsyncModuleInfo {
+                        referenced_async_modules: local_back_edges_inherit_async
+                            .get(&async_item)
+                            .map(|references| {
+                                references
+                                    .iter()
+                                    .filter(|&item| async_chunk_items.contains(item))
+                                    .copied()
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                    },
+                )
+                .await?,
+            ),
         );
     }
 
@@ -154,13 +159,7 @@ pub async fn make_chunk_group(
         .collect::<Vec<_>>();
 
     // Pass chunk items to chunking algorithm
-    let chunks = make_chunks(
-        chunking_context,
-        chunk_items,
-        output_assets,
-        chunk_group_root,
-    )
-    .await?;
+    let chunks = make_chunks(chunking_context, chunk_items, output_assets).await?;
 
     Ok(MakeChunkGroupResult { chunks })
 }

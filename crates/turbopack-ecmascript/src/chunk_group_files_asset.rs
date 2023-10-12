@@ -144,7 +144,6 @@ impl ChunkGroupFilesChunkItem {
                     .runtime_entries
                     .unwrap_or_else(EvaluatableAssets::empty)
                     .with_entry(Vc::upcast(ecma)),
-                Some(Vc::upcast(ecma)),
             )
         } else {
             inner

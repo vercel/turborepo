@@ -11,8 +11,8 @@ use turbo_tasks_fs::{rope::Rope, File, FileSystem};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
-        Chunk, ChunkItem, ChunkItemsWithAsyncModuleInfo, ChunkType, ChunkableModule,
-        ChunkingContext, ModuleId, OutputChunk, OutputChunkRuntimeInfo,
+        AsyncModuleInfo, Chunk, ChunkItem, ChunkItemsWithAsyncModuleInfo, ChunkType,
+        ChunkableModule, ChunkingContext, ModuleId, OutputChunk, OutputChunkRuntimeInfo,
     },
     code_builder::{Code, CodeBuilder},
     ident::AssetIdent,
@@ -416,7 +416,6 @@ impl ChunkType for CssChunkType {
         chunking_context: Vc<Box<dyn ChunkingContext>>,
         chunk_items: Vc<ChunkItemsWithAsyncModuleInfo>,
         referenced_output_assets: Vc<OutputAssets>,
-        _chunk_group_root: Option<Vc<Box<dyn Module>>>,
     ) -> Vc<Box<dyn Chunk>> {
         css_chunk(chunking_context, chunk_items, referenced_output_assets)
     }
@@ -426,8 +425,7 @@ impl ChunkType for CssChunkType {
         &self,
         _chunking_context: Vc<Box<dyn ChunkingContext>>,
         chunk_item: Vc<Box<dyn ChunkItem>>,
-        // TODO This need to go away, it's only needed for EsmScope
-        _chunk_group_root: Option<Vc<Box<dyn Module>>>,
+        _async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<usize>> {
         let Some(chunk_item) =
             Vc::try_resolve_downcast::<Box<dyn CssChunkItem>>(chunk_item).await?

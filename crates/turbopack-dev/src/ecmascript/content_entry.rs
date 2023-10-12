@@ -5,11 +5,10 @@ use indexmap::IndexMap;
 use tracing::{info_span, Instrument};
 use turbo_tasks::{ReadRef, TryJoinIterExt, ValueToString, Vc};
 use turbopack_core::{
-    chunk::{ChunkItem, ChunkItemExt, ModuleId},
+    chunk::{AsyncModuleInfo, ChunkItem, ChunkItemExt, ModuleId},
     code_builder::{Code, CodeBuilder},
     error::PrettyPrintError,
     issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity},
-    module::Module,
 };
 use turbopack_ecmascript::chunk::{
     EcmascriptChunkContent, EcmascriptChunkItem, EcmascriptChunkItemExt,
@@ -31,9 +30,9 @@ pub(super) struct EcmascriptDevChunkContentEntry {
 impl EcmascriptDevChunkContentEntry {
     pub async fn new(
         chunk_item: Vc<Box<dyn EcmascriptChunkItem>>,
-        chunk_group_root: Option<Vc<Box<dyn Module>>>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Self> {
-        let code = chunk_item.code(chunk_group_root).resolve().await?;
+        let code = chunk_item.code(async_module_info).resolve().await?;
         Ok(EcmascriptDevChunkContentEntry {
             code,
             hash: code.source_code_hash().resolve().await?,
@@ -53,16 +52,15 @@ impl EcmascriptDevChunkContentEntries {
         chunk_content: Vc<EcmascriptChunkContent>,
     ) -> Result<Vc<EcmascriptDevChunkContentEntries>> {
         let chunk_content = chunk_content.await?;
-        let chunk_group_root = chunk_content.chunk_group_root;
 
         let entries: IndexMap<_, _> = chunk_content
             .chunk_items
             .iter()
-            .map(|(chunk_item, _)| async move {
+            .map(|&(chunk_item, async_module_info)| async move {
                 async move {
                     Ok((
                         chunk_item.id().await?,
-                        EcmascriptDevChunkContentEntry::new(*chunk_item, chunk_group_root).await?,
+                        EcmascriptDevChunkContentEntry::new(chunk_item, async_module_info).await?,
                     ))
                 }
                 .instrument(info_span!(
@@ -83,11 +81,11 @@ impl EcmascriptDevChunkContentEntries {
 #[turbo_tasks::function]
 async fn item_code(
     item: Vc<Box<dyn EcmascriptChunkItem>>,
-    chunk_group_root: Option<Vc<Box<dyn Module>>>,
+    async_module_info: Option<Vc<AsyncModuleInfo>>,
 ) -> Result<Vc<Code>> {
     Ok(
         match item
-            .content_with_async_module_info(chunk_group_root)
+            .content_with_async_module_info(async_module_info)
             .module_factory()
             .resolve()
             .await

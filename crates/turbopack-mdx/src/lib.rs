@@ -8,7 +8,7 @@ use turbo_tasks::{Value, ValueDefault, Vc};
 use turbo_tasks_fs::{rope::Rope, File, FileContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{ChunkItem, ChunkType, ChunkableModule, ChunkingContext},
+    chunk::{AsyncModuleInfo, ChunkItem, ChunkType, ChunkableModule, ChunkingContext},
     context::AssetContext,
     ident::AssetIdent,
     module::Module,
@@ -278,7 +278,7 @@ impl EcmascriptChunkItem for MdxChunkItem {
     #[turbo_tasks::function]
     async fn content_with_async_module_info(
         &self,
-        chunk_group_root: Option<Vc<Box<dyn Module>>>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let item = into_ecmascript_module_asset(&self.module)
             .await?
@@ -286,7 +286,7 @@ impl EcmascriptChunkItem for MdxChunkItem {
         let ecmascript_item = Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkItem>>(item)
             .await?
             .context("MdxChunkItem must generate an EcmascriptChunkItem")?;
-        Ok(ecmascript_item.content_with_async_module_info(chunk_group_root))
+        Ok(ecmascript_item.content_with_async_module_info(async_module_info))
     }
 }
 

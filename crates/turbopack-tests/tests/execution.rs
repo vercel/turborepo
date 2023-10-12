@@ -268,7 +268,6 @@ async fn run_test(resource: String) -> Result<Vc<RunTestResult>> {
         vec![],
         Completion::immutable(),
         should_debug("execution_test"),
-        Some(Vc::upcast(test_evaluatable)),
     )
     .await?;
 

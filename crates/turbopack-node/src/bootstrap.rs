@@ -7,7 +7,6 @@ use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkingContext, EvaluatableAssets},
     ident::AssetIdent,
-    module::Module,
     output::{OutputAsset, OutputAssets},
 };
 use turbopack_ecmascript::utils::StringifyJs;
@@ -17,7 +16,6 @@ pub(super) struct NodeJsBootstrapAsset {
     pub(super) path: Vc<FileSystemPath>,
     pub(super) chunking_context: Vc<Box<dyn ChunkingContext>>,
     pub(super) evaluatable_assets: Vc<EvaluatableAssets>,
-    pub(super) chunk_group_root: Option<Vc<Box<dyn Module>>>,
 }
 
 #[turbo_tasks::function]
@@ -27,11 +25,8 @@ fn node_js_bootstrap_chunk_reference_description() -> Vc<String> {
 
 impl NodeJsBootstrapAsset {
     fn chunks(&self) -> Vc<OutputAssets> {
-        self.chunking_context.evaluated_chunk_group(
-            AssetIdent::from_path(self.path),
-            self.evaluatable_assets,
-            self.chunk_group_root,
-        )
+        self.chunking_context
+            .evaluated_chunk_group(AssetIdent::from_path(self.path), self.evaluatable_assets)
     }
 }
 
