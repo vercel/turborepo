@@ -593,7 +593,12 @@ mod test {
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
 
+        // On windows, we expect different sanitization before the
+        // globs are passed in, due to alternative data streams in files.
+        #[cfg(windows)]
         let raw_includes = &["my-pkg/.next/next-file"];
+        #[cfg(not(windows))]
+        let raw_includes = &["my-pkg/.next/next-file\\:build"];
         let raw_excludes: [&str; 0] = [];
         let globs = GlobSet {
             include: make_includes(raw_includes),
@@ -618,10 +623,8 @@ mod test {
         assert!(results.is_empty());
 
         // Change the watched file
-        repo_root
-            .join_components(&["my-pkg", ".next", "next-file"])
-            .create_with_contents("hello")
-            .unwrap();
+        let watched_file = repo_root.join_components(&["my-pkg", ".next", "next-file:build"]);
+        watched_file.create_with_contents("hello").unwrap();
         let results = glob_watcher
             .get_changed_globs(hash.clone(), candidates.clone())
             .await
