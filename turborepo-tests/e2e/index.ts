@@ -53,8 +53,12 @@ for (let {
 } of testCombinations) {
   const Suite = uvu.suite(`${name ?? npmClient}`);
 
-  const repo = new Monorepo("basics");
-  repo.init(npmClient, pipeline);
+  const repo = new Monorepo({
+    root: "basics",
+    pm: npmClient,
+    pipeline,
+  });
+  repo.init();
   repo.install();
   repo.addPackage("a", ["b"]);
   repo.addPackage("b");
@@ -63,8 +67,13 @@ for (let {
   repo.expectCleanGitStatus();
   runSmokeTests(Suite, repo, npmClient, includePrune ?? [], excludePrune ?? []);
 
-  const sub = new Monorepo("in-subdirectory");
-  sub.init(npmClient, pipeline, "js");
+  const sub = new Monorepo({
+    root: "in-subdirectory",
+    pm: npmClient,
+    pipeline,
+    subdir: "js",
+  });
+  sub.init();
   sub.install();
   sub.addPackage("a", ["b"]);
   sub.addPackage("b");

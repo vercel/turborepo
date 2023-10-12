@@ -12,11 +12,19 @@ const turboPath = path.join(
 
 type NPMClient = "npm" | "pnpm6" | "pnpm" | "yarn" | "berry";
 
+interface MonorepoOptions {
+  root: string;
+  pm: NPMClient;
+  pipeline: any;
+  subdir?: string;
+}
+
 export class Monorepo {
   static tmpdir = os.tmpdir();
   static yarnCache = path.join(__dirname, "yarn-cache-");
   root: string;
   subdir?: string;
+  turboConfig: any;
   binDir: string;
   name: string;
   npmClient: NPMClient;
@@ -26,18 +34,23 @@ export class Monorepo {
       : path.join(this.root, "node_modules");
   }
 
-  constructor(name: string) {
-    this.root = fs.mkdtempSync(path.join(__dirname, `turbo-monorepo-${name}-`));
+  constructor(options: MonorepoOptions) {
+    this.root = fs.mkdtempSync(
+      path.join(__dirname, `turbo-monorepo-${options.root}-`)
+    );
+    this.npmClient = options.pm;
+    this.turboConfig = options.pipeline;
+    this.subdir = options.subdir;
   }
 
-  init(npmClient: NPMClient, turboConfig = {}, subdir?: string) {
-    this.npmClient = npmClient;
-    this.subdir = subdir;
+  init() {
     fs.removeSync(path.join(this.root, ".git"));
     fs.ensureDirSync(path.join(this.root, ".git"));
+
     if (this.subdir) {
       fs.ensureDirSync(path.join(this.root, this.subdir));
     }
+
     fs.writeFileSync(
       path.join(this.root, ".git", "config"),
       `
@@ -50,7 +63,7 @@ export class Monorepo {
   `
     );
     execa.sync("git", ["init", "-q"], { cwd: this.root });
-    this.generateRepoFiles(turboConfig);
+    this.generateRepoFiles(this.turboConfig);
   }
 
   install() {
