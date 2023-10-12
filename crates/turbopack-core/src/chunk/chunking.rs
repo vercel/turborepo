@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     mem::{replace, take},
     pin::Pin,
 };
@@ -166,7 +167,7 @@ async fn app_vendors_split(
     )
     .await?
     {
-        package_name_split(app_chunk_items, key, split_context).await?;
+        folder_split(app_chunk_items, 0, key.into(), split_context).await?;
     }
     let mut key = format!("{}-vendors", name);
     if !handle_split_group(
@@ -211,13 +212,13 @@ async fn package_name_split(
     for (package_name, mut list) in map {
         let mut key = format!("{}-{}", name, package_name);
         if !handle_split_group(&mut list, &mut key, split_context, Some(&mut remaining)).await? {
-            folder_split(list, 0, key, split_context).await?;
+            folder_split(list, 0, key.into(), split_context).await?;
         }
     }
     if !remaining.is_empty()
         && !handle_split_group(&mut remaining, &mut name, split_context, None).await?
     {
-        folder_split(remaining, 0, name, split_context).await?;
+        folder_split(remaining, 0, name.into(), split_context).await?;
     }
     Ok(())
 }
@@ -226,7 +227,7 @@ async fn package_name_split(
 fn folder_split_boxed<'a, 'b>(
     chunk_items: Vec<ChunkItemWithInfo>,
     location: usize,
-    name: String,
+    name: Cow<'a, str>,
     split_context: &'a mut SplitContext<'b>,
 ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
     Box::pin(folder_split(chunk_items, location, name, split_context))
@@ -237,7 +238,7 @@ fn folder_split_boxed<'a, 'b>(
 async fn folder_split(
     mut chunk_items: Vec<ChunkItemWithInfo>,
     mut location: usize,
-    mut name: String,
+    name: Cow<'_, str>,
     split_context: &mut SplitContext<'_>,
 ) -> Result<()> {
     let mut map = IndexMap::<_, (_, Vec<ChunkItemWithInfo>)>::new();
@@ -275,12 +276,13 @@ async fn folder_split(
         let mut key = format!("{}-{}", name, folder_name);
         if !handle_split_group(&mut list, &mut key, split_context, Some(&mut remaining)).await? {
             if let Some(new_location) = new_location {
-                folder_split_boxed(list, new_location, key, split_context).await?;
+                folder_split_boxed(list, new_location, Cow::Borrowed(&name), split_context).await?;
             } else {
                 make_chunk(&list, &mut key, split_context).await?;
             }
         }
     }
+    let mut name = name.into();
     if !remaining.is_empty()
         && !handle_split_group(&mut remaining, &mut name, split_context, None).await?
     {
