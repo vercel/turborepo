@@ -23,25 +23,25 @@ import {
 } from "./helpers";
 
 const testCombinations = [
-  { npmClient: "yarn" as PackageManager, pipeline: basicPipeline },
-  { npmClient: "berry" as PackageManager, pipeline: basicPipeline },
-  { npmClient: "pnpm6" as PackageManager, pipeline: basicPipeline },
-  { npmClient: "pnpm" as PackageManager, pipeline: basicPipeline },
-  { npmClient: "npm" as PackageManager, pipeline: basicPipeline },
+  { pkgManager: "yarn" as PackageManager, pipeline: basicPipeline },
+  { pkgManager: "berry" as PackageManager, pipeline: basicPipeline },
+  { pkgManager: "pnpm6" as PackageManager, pipeline: basicPipeline },
+  { pkgManager: "pnpm" as PackageManager, pipeline: basicPipeline },
+  { pkgManager: "npm" as PackageManager, pipeline: basicPipeline },
 
   // there is probably no need to test every
   // pipeline against every package manager,
   // so specify directly rather than use the
   // cartesian product
   {
-    npmClient: "yarn" as PackageManager,
+    pkgManager: "yarn" as PackageManager,
     pipeline: prunePipeline,
     name: "basicPrune",
     excludePrune: ["c#build"],
     includePrune: ["a#build"],
   }, // expect c#build to be removed, since there is no dep between a -> c
   {
-    npmClient: "yarn" as PackageManager,
+    pkgManager: "yarn" as PackageManager,
     pipeline: explicitPrunePipeline,
     name: "explicitDepPrune",
     excludePrune: ["c#build"],
@@ -56,18 +56,18 @@ let suites: uvu.uvu.Test<uvu.Context>[] = [];
 
 for (const combo of testCombinations) {
   const {
-    npmClient,
+    pkgManager,
     pipeline,
     name,
     includePrune = [],
     excludePrune = [],
   } = combo;
 
-  const Suite = uvu.suite(`${name ?? npmClient}`);
+  const Suite = uvu.suite(`${name ?? pkgManager}`);
 
   const repo = new Monorepo({
     root: "basics",
-    pm: npmClient,
+    pm: pkgManager,
     pipeline,
   });
   repo.init();
@@ -77,12 +77,12 @@ for (const combo of testCombinations) {
   repo.addPackage("c");
   repo.linkPackages();
   repo.expectCleanGitStatus();
-  runSmokeTests(Suite, repo, npmClient, includePrune, excludePrune);
+  runSmokeTests(Suite, repo, pkgManager, includePrune, excludePrune);
 
   // test that turbo can run from a subdirectory
   const sub = new Monorepo({
     root: "in-subdirectory",
-    pm: npmClient,
+    pm: pkgManager,
     pipeline,
     subdir: "js",
   });
@@ -93,7 +93,7 @@ for (const combo of testCombinations) {
   sub.addPackage("c");
   sub.linkPackages();
 
-  runSmokeTests(Suite, sub, npmClient, includePrune, excludePrune, {
+  runSmokeTests(Suite, sub, pkgManager, includePrune, excludePrune, {
     cwd: sub.subdir ? path.join(sub.root, sub.subdir) : sub.root,
   });
 
@@ -107,7 +107,7 @@ for (let suite of suites) {
 function runSmokeTests<T>(
   suite: uvu.Test<T>,
   repo: Monorepo,
-  npmClient: PackageManager,
+  pkgManager: PackageManager,
   includePrune: string[],
   excludePrune: string[],
   options: execa.SyncOptions<string> = {}
@@ -118,7 +118,7 @@ function runSmokeTests<T>(
 
   const suffix = `${options.cwd ? " from " + options.cwd : ""}`;
 
-  suite(`${npmClient} builds${suffix}`, async () => {
+  suite(`${pkgManager} builds${suffix}`, async () => {
     const results = repo.turbo("run", ["build", "--dry=json"], options);
     const dryRun: DryRun = JSON.parse(results.stdout);
     // expect to run all packages
@@ -158,7 +158,7 @@ function runSmokeTests<T>(
     }
   });
 
-  suite(`${npmClient} runs tests and logs${suffix}`, async () => {
+  suite(`${pkgManager} runs tests and logs${suffix}`, async () => {
     const results = repo.turbo("run", ["test"], options);
     assert.equal(0, results.exitCode, "exit code should be 0");
     const commandOutput = getCommandOutputAsArray(results);
@@ -180,7 +180,7 @@ function runSmokeTests<T>(
     assert.ok(text.includes("testing c"), "Contains correct output");
   });
 
-  suite(`${npmClient} runs lint and logs${suffix}`, async () => {
+  suite(`${pkgManager} runs lint and logs${suffix}`, async () => {
     const results = repo.turbo("run", ["lint"], options);
     assert.equal(0, results.exitCode, "exit code should be 0");
     const commandOutput = getCommandOutputAsArray(results);
@@ -202,7 +202,7 @@ function runSmokeTests<T>(
     assert.ok(text.includes("linting c"), "Contains correct output");
   });
 
-  suite(`${npmClient} handles filesystem changes${suffix}`, async () => {
+  suite(`${pkgManager} handles filesystem changes${suffix}`, async () => {
     repo.newBranch("my-feature-branch");
     repo.commitFiles({
       [path.join("packages", "a", "test.js")]: `console.log('testingz a');`,
@@ -432,7 +432,7 @@ function runSmokeTests<T>(
     );
   });
 
-  suite(`${npmClient} runs root tasks${suffix}`, async () => {
+  suite(`${pkgManager} runs root tasks${suffix}`, async () => {
     const result = getCommandOutputAsArray(
       repo.turbo("run", ["special"], options)
     );
@@ -455,7 +455,7 @@ function runSmokeTests<T>(
     );
   });
 
-  suite(`${npmClient} passes through correct args${suffix}`, async () => {
+  suite(`${pkgManager} passes through correct args${suffix}`, async () => {
     const expectArgsPassed = (inputArgs: string[], passedArgs: string[]) => {
       const result = getCommandOutputAsArray(
         repo.turbo("run", inputArgs, options)
@@ -512,9 +512,9 @@ function runSmokeTests<T>(
   // Test `turbo prune a`
   // @todo refactor with other package managers
   const [installCmd, ...installArgs] =
-    getImmutableInstallForPackageManager(npmClient);
+    getImmutableInstallForPackageManager(pkgManager);
 
-  suite(`${npmClient} + turbo prune${suffix}`, async () => {
+  suite(`${pkgManager} + turbo prune${suffix}`, async () => {
     const scope = "a";
     const pruneCommandOutput = getCommandOutputAsArray(
       repo.turbo("prune", [scope], options)
@@ -531,7 +531,7 @@ function runSmokeTests<T>(
     const expected = [
       "out/package.json",
       "out/turbo.json",
-      `out/${getLockfileForPackageManager(npmClient)}`,
+      `out/${getLockfileForPackageManager(pkgManager)}`,
       "out/packages/a/build.js",
       "out/packages/a/lint.js",
       "out/packages/a/package.json",
@@ -571,11 +571,11 @@ function runSmokeTests<T>(
     assert.is(
       install.exitCode,
       0,
-      `Expected ${npmClient} install --frozen-lockfile to succeed`
+      `Expected ${pkgManager} install --frozen-lockfile to succeed`
     );
   });
 
-  suite(`${npmClient} + turbo prune --docker${suffix}`, async () => {
+  suite(`${pkgManager} + turbo prune --docker${suffix}`, async () => {
     const scope = "a";
     const pruneCommandOutput = getCommandOutputAsArray(
       repo.turbo("prune", [scope, "--docker"], options)
@@ -593,7 +593,7 @@ function runSmokeTests<T>(
       "out/full/package.json",
       "out/json/package.json",
       "out/full/turbo.json",
-      `out/${getLockfileForPackageManager(npmClient)}`,
+      `out/${getLockfileForPackageManager(pkgManager)}`,
       "out/full/packages/a/build.js",
       "out/full/packages/a/lint.js",
       "out/full/packages/a/package.json",
@@ -635,7 +635,7 @@ function runSmokeTests<T>(
     assert.is(
       install.exitCode,
       0,
-      `Expected ${npmClient} install --frozen-lockfile to succeed`
+      `Expected ${pkgManager} install --frozen-lockfile to succeed`
     );
   });
 }
