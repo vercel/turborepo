@@ -34,14 +34,14 @@ const testCombinations = [
   // so specify directly rather than use the
   // cartesian product
   {
-    npmClient: "yarn" as const,
+    npmClient: "yarn" as PackageManager,
     pipeline: prunePipeline,
     name: "basicPrune",
     excludePrune: ["c#build"],
     includePrune: ["a#build"],
   }, // expect c#build to be removed, since there is no dep between a -> c
   {
-    npmClient: "yarn" as const,
+    npmClient: "yarn" as PackageManager,
     pipeline: explicitPrunePipeline,
     name: "explicitDepPrune",
     excludePrune: ["c#build"],
