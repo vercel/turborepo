@@ -8,7 +8,7 @@ Check
   Global Hash Inputs
     Global Files                          = 2
     External Dependencies Hash            = 
-    Global Cache Key                      = You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.
+    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
     Global .env Files Considered          = 0
     Global Env Vars                       = 
     Global Env Vars Values                = 
@@ -19,7 +19,7 @@ Check
   Tasks to Run
   build
     Task                           = build                                                                                                                                           
-    Hash                           = cd720138f792fbca                                                                                                                                
+    Hash                           = cb6df6cef2cfd596                                                                                                                                
     Cached (Local)                 = false                                                                                                                                           
     Cached (Remote)                = false                                                                                                                                           
     Command                        = echo 'building' > foo                                                                                                                           
@@ -38,7 +38,7 @@ Check
     Framework                      = <NO FRAMEWORK DETECTED>                                                                                                                         
   test
     Task                           = test                                                                                                                                              
-    Hash                           = 118e4fe7f2e841be                                                                                                                                  
+    Hash                           = af35177522814c73                                                                                                                                  
     Cached (Local)                 = false                                                                                                                                             
     Cached (Remote)                = false                                                                                                                                             
     Command                        = [[ ( -f foo ) && $(cat foo) == 'building' ]]                                                                                                      

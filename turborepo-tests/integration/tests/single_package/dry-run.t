@@ -8,7 +8,7 @@ Check
   Global Hash Inputs
     Global Files                          = 3
     External Dependencies Hash            = 
-    Global Cache Key                      = You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.
+    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
     Global .env Files Considered          = 0
     Global Env Vars                       = 
     Global Env Vars Values                = 
@@ -19,7 +19,7 @@ Check
   Tasks to Run
   build
     Task                           = build                                                                                                                                           
-    Hash                           = f9360c1870434eb2                                                                                                                                
+    Hash                           = 414559dcbbf03c41                                                                                                                                
     Cached (Local)                 = false                                                                                                                                           
     Cached (Remote)                = false                                                                                                                                           
     Command                        = echo 'building' > foo                                                                                                                           

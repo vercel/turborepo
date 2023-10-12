@@ -13,7 +13,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task-with-deps in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  override-values:override-values-task-with-deps: cache miss, executing 57270f0d2280c18d
+  override-values:override-values-task-with-deps: cache miss, executing 24d612e894a6fd7e
   override-values:override-values-task-with-deps: 
   override-values:override-values-task-with-deps: > override-values-task-with-deps
   override-values:override-values-task-with-deps: > echo "running override-values-task-with-deps" > out/foo.min.txt

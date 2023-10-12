@@ -10,7 +10,7 @@ Check
   Global Hash Inputs
     Global Files                          = 2
     External Dependencies Hash            = 
-    Global Cache Key                      = You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.
+    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
     Global .env Files Considered          = 0
     Global Env Vars                       = 
     Global Env Vars Values                = 
@@ -21,7 +21,7 @@ Check
   Tasks to Run
   build
     Task                           = build                                                                                                                                       
-    Hash                           = 3f02bc73f1ab0cce                                                                                                                            
+    Hash                           = c58c190da9fcd80a                                                                                                                            
     Cached (Local)                 = false                                                                                                                                       
     Cached (Remote)                = false                                                                                                                                       
     Command                        = echo 'building' > foo                                                                                                                       
@@ -53,7 +53,7 @@ Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing 3f02bc73f1ab0cce
+  build: cache bypass, force executing c58c190da9fcd80a
   build: 
   build: > build
   build: > echo 'building' > foo
@@ -67,7 +67,7 @@ Run a second time, verify no caching because there is no config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing 3f02bc73f1ab0cce
+  build: cache bypass, force executing c58c190da9fcd80a
   build: 
   build: > build
   build: > echo 'building' > foo

@@ -7,7 +7,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  cache miss, executing a1cf9d257ab9b1bf
+  cache miss, executing 724fbf5201e1b2c8
   
   \> build (re)
   \> echo 'build app-a' (re)
@@ -31,7 +31,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  cache hit, replaying logs a1cf9d257ab9b1bf
+  cache hit, replaying logs 724fbf5201e1b2c8
   
   \> build (re)
   \> echo 'build app-a' (re)
@@ -47,7 +47,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  app-a:build: cache hit, replaying logs a1cf9d257ab9b1bf
+  app-a:build: cache hit, replaying logs 724fbf5201e1b2c8
   app-a:build: 
   app-a:build: > build
   app-a:build: > echo 'build app-a'
