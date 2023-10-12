@@ -119,20 +119,20 @@ export class Monorepo {
 
 importers:
 
-.:
-  specifiers: {}
+  .:
+    specifiers: {}
 
-packages/a:
-  specifiers:
-    b: workspace:*
-  dependencies:
-    b: link:../b
+  packages/a:
+    specifiers:
+      b: workspace:*
+    dependencies:
+      b: link:../b
 
-packages/b:
-  specifiers: {}
+  packages/b:
+    specifiers: {}
 
-packages/c:
-  specifiers: {}${this.npmClient == "pnpm6" ? "" : "\n"}`,
+  packages/c:
+    specifiers: {}${this.npmClient == "pnpm6" ? "" : "\n"}`,
     });
 
     execa.sync("pnpm", ["install", "--recursive"], { cwd });
