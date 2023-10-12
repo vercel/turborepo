@@ -4,7 +4,7 @@ import { Readable } from "stream";
 import { ZstdCodec } from "zstd-codec";
 import * as uvu from "uvu";
 import * as assert from "uvu/assert";
-import { Monorepo } from "./monorepo";
+import { Monorepo, type PackageManager } from "./monorepo";
 import path from "path";
 import * as fs from "fs";
 import {
@@ -14,11 +14,11 @@ import {
 } from "./fixtures";
 
 const testCombinations = [
-  { npmClient: "yarn" as const, pipeline: basicPipeline },
-  { npmClient: "berry" as const, pipeline: basicPipeline },
-  { npmClient: "pnpm6" as const, pipeline: basicPipeline },
-  { npmClient: "pnpm" as const, pipeline: basicPipeline },
-  { npmClient: "npm" as const, pipeline: basicPipeline },
+  { npmClient: "yarn" as PackageManager, pipeline: basicPipeline },
+  { npmClient: "berry" as PackageManager, pipeline: basicPipeline },
+  { npmClient: "pnpm6" as PackageManager, pipeline: basicPipeline },
+  { npmClient: "pnpm" as PackageManager, pipeline: basicPipeline },
+  { npmClient: "npm" as PackageManager, pipeline: basicPipeline },
 
   // there is probably no need to test every
   // pipeline against every package manager,
@@ -139,7 +139,7 @@ const taskHashPredicate = (dryRun: DryRun, taskId: string): string => {
 function runSmokeTests<T>(
   suite: uvu.Test<T>,
   repo: Monorepo,
-  npmClient: "yarn" | "berry" | "pnpm6" | "pnpm" | "npm",
+  npmClient: PackageManager,
   includePrune: string[],
   excludePrune: string[],
   options: execa.SyncOptions<string> = {}

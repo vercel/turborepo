@@ -10,11 +10,11 @@ const turboPath = path.join(
   "../../target/debug/turbo" + (isWin ? ".exe" : "")
 );
 
-type NPMClient = "npm" | "pnpm6" | "pnpm" | "yarn" | "berry";
+export type PackageManager = "npm" | "pnpm6" | "pnpm" | "yarn" | "berry";
 
 interface MonorepoOptions {
   root: string;
-  pm: NPMClient;
+  pm: PackageManager;
   pipeline: any;
   subdir?: string;
 }
