@@ -53,6 +53,7 @@ const testCombinations = [
 process.env.TURBO_TOKEN = "";
 
 let suites: uvu.uvu.Test<uvu.Context>[] = [];
+
 for (const combo of testCombinations) {
   const {
     npmClient,
@@ -78,6 +79,7 @@ for (const combo of testCombinations) {
   repo.expectCleanGitStatus();
   runSmokeTests(Suite, repo, npmClient, includePrune, excludePrune);
 
+  // test that turbo can run from a subdirectory
   const sub = new Monorepo({
     root: "in-subdirectory",
     pm: npmClient,
@@ -96,7 +98,6 @@ for (const combo of testCombinations) {
   });
 
   suites.push(Suite);
-  // test that turbo can run from a subdirectory
 }
 
 for (let suite of suites) {
@@ -454,7 +455,7 @@ function runSmokeTests<T>(
     );
   });
 
-  suite(`${npmClient} passes through correct args ${suffix}`, async () => {
+  suite(`${npmClient} passes through correct args${suffix}`, async () => {
     const expectArgsPassed = (inputArgs: string[], passedArgs: string[]) => {
       const result = getCommandOutputAsArray(
         repo.turbo("run", inputArgs, options)
