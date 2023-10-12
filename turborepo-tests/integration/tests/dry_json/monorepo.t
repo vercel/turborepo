@@ -11,7 +11,7 @@ Setup
 
   $ cat tmpjson.log | jq .globalCacheInputs
   {
-    "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
+    "rootKey": "YOLO",
     "files": {
       "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
     },
