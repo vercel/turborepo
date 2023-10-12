@@ -216,7 +216,7 @@ packages/c:
   }
 
   /**
-   * Simulates a "yarn" call by linking internal packages and generates a yarn.lock file
+   * Simulates how each package manager installs and links
    */
   linkPackages() {
     if (this.npmClient == "npm") {
