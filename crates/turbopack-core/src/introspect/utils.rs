@@ -24,6 +24,11 @@ fn parallel_reference_ty() -> Vc<String> {
 }
 
 #[turbo_tasks::function]
+fn parallel_inherit_async_reference_ty() -> Vc<String> {
+    Vc::cell("parallel reference (inherit async module)".to_string())
+}
+
+#[turbo_tasks::function]
 fn async_reference_ty() -> Vc<String> {
     Vc::cell("async reference".to_string())
 }
@@ -62,6 +67,9 @@ pub async fn children_from_module_references(
             match &*chunkable.chunking_type().await? {
                 None => {}
                 Some(ChunkingType::Parallel) => key = parallel_reference_ty(),
+                Some(ChunkingType::ParallelInheritAsync) => {
+                    key = parallel_inherit_async_reference_ty()
+                }
                 Some(ChunkingType::Async) => key = async_reference_ty(),
             }
         }

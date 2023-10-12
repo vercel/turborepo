@@ -1,11 +1,13 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use turbo_tasks::{TryJoinIterExt, Value, Vc};
+use indexmap::IndexSet;
+use once_cell::unsync::Lazy;
+use turbo_tasks::{TryFlatJoinIterExt, TryJoinIterExt, Value, Vc};
 
 use super::{
-    availability_info::AvailabilityInfo, chunk_content, chunking::make_chunks, Chunk,
-    ChunkContentResult, ChunkItem, ChunkingContext,
+    availability_info::AvailabilityInfo, available_chunk_items::AvailableChunkItemInfo,
+    chunk_content, chunking::make_chunks, Chunk, ChunkContentResult, ChunkItem, ChunkingContext,
 };
 use crate::{module::Module, reference::ModuleReference};
 
@@ -21,19 +23,76 @@ pub async fn make_chunk_group(
     chunk_group_root: Option<Vc<Box<dyn Module>>>,
 ) -> Result<MakeChunkGroupResult> {
     let ChunkContentResult {
-        modules,
         mut chunk_items,
         async_modules,
         mut external_module_references,
+        local_back_edges_inherit_async,
+        available_async_modules_back_edges_inherit_async,
     } = chunk_content(chunking_context, entries, Value::new(availability_info)).await?;
 
-    let inner_availability_info = availability_info.with_modules(modules);
+    // Find all local chunk items that are self async
+    let self_async_children = chunk_items
+        .iter()
+        .copied()
+        .map(|chunk_item| async move {
+            let is_self_async = *chunk_item.is_self_async().await?;
+            Ok(is_self_async.then_some(chunk_item))
+        })
+        .try_flat_join()
+        .await?;
+
+    // Get all available async modules and concatenate with local async modules
+    let mut async_chunk_items = available_async_modules_back_edges_inherit_async
+        .keys()
+        .copied()
+        .chain(self_async_children.into_iter())
+        .collect::<IndexSet<_>>();
+
+    // Propagate async inheritance
+    let mut i = 0;
+    loop {
+        let Some(&chunk_item) = async_chunk_items.get_index(i) else {
+            break;
+        };
+        // The first few entries are from
+        // available_async_modules_back_edges_inherit_async and need to use that map,
+        // all other entries are local
+        let map = if i < available_async_modules_back_edges_inherit_async.len() {
+            &available_async_modules_back_edges_inherit_async
+        } else {
+            &local_back_edges_inherit_async
+        };
+        if let Some(parents) = map.get(&chunk_item) {
+            for &parent in parents.iter() {
+                // Add item, it will be iterated by this loop too
+                async_chunk_items.insert(parent);
+            }
+        }
+        i += 1;
+    }
+
+    // If necessary, compute new [AvailabilityInfo]
+    let inner_availability_info = Lazy::new(|| {
+        let map = chunk_items
+            .iter()
+            .map(|&chunk_item| {
+                (
+                    chunk_item,
+                    AvailableChunkItemInfo {
+                        is_async: async_chunk_items.contains(&chunk_item),
+                    },
+                )
+            })
+            .collect();
+        let map = Vc::cell(map);
+        availability_info.with_chunk_items(map)
+    });
 
     let async_loaders = async_modules
         .into_iter()
         .map(|module| {
             let loader = chunking_context
-                .async_loader_chunk_item(module, Value::new(inner_availability_info));
+                .async_loader_chunk_item(module, Value::new(*inner_availability_info));
             loader
         })
         .collect::<Vec<_>>();
