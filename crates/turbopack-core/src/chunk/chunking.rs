@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use tracing::Level;
-use turbo_tasks::{keyed_cell, KeyedCellContext, ReadRef, TryJoinIterExt, ValueToString, Vc};
+use turbo_tasks::{keyed_cell, ReadRef, TryJoinIterExt, ValueToString, Vc};
 
 use super::{Chunk, ChunkItem, ChunkItems, ChunkType, ChunkingContext};
 use crate::{
@@ -17,6 +17,8 @@ use crate::{
     output::{OutputAsset, OutputAssets},
 };
 
+/// Creates chunks based on heuristics for the passed `chunk_items`. Also
+/// attaches `referenced_output_assets` to the first chunk.
 #[tracing::instrument(level = Level::TRACE, skip_all)]
 pub async fn make_chunks(
     chunking_context: Vc<Box<dyn ChunkingContext>>,
@@ -40,8 +42,6 @@ pub async fn make_chunks(
     let mut referenced_output_assets = Vc::cell(referenced_output_assets);
     let other_referenced_output_assets = Vc::cell(Vec::new());
 
-    let cell_context = KeyedCellContext::new();
-
     let mut chunks = Vec::new();
     for (ty, chunk_items) in map {
         let ty_name = ty.to_string().await?.clone_value();
@@ -61,7 +61,6 @@ pub async fn make_chunks(
 
         let mut split_context = SplitContext {
             ty,
-            cell_context,
             chunking_context,
             chunk_group_root,
             chunks: &mut chunks,
@@ -79,7 +78,6 @@ type ChunkItemWithInfo = (Vc<Box<dyn ChunkItem>>, usize, ReadRef<String>);
 
 struct SplitContext<'a> {
     ty: Vc<Box<dyn ChunkType>>,
-    cell_context: Vc<KeyedCellContext>,
     chunking_context: Vc<Box<dyn ChunkingContext>>,
     chunk_group_root: Option<Vc<Box<dyn Module>>>,
     chunks: &'a mut Vec<Vc<Box<dyn Chunk>>>,
@@ -87,6 +85,10 @@ struct SplitContext<'a> {
     empty_referenced_output_assets: Vc<OutputAssets>,
 }
 
+/// Handle chunk items based on their total size. If the total size is too
+/// small, they will be pushed into `remaining`, if possible. If the total size
+/// is too large, it will return `false` and the caller should hand of the chunk
+/// items to be further split. Otherwise it creates a chunk.
 async fn handle_split_group(
     chunk_items: &mut Vec<ChunkItemWithInfo>,
     key: &mut String,
@@ -106,6 +108,8 @@ async fn handle_split_group(
     })
 }
 
+/// Creates a chunk with the given `chunk_items. `key` should be unique and is
+/// used with [keyed_cell] to place the chunk items into a cell.
 #[tracing::instrument(level = Level::TRACE, skip(chunk_items, split_context))]
 async fn make_chunk(
     chunk_items: &[ChunkItemWithInfo],
@@ -116,7 +120,6 @@ async fn make_chunk(
         split_context.ty.chunk(
             split_context.chunking_context,
             keyed_cell(
-                split_context.cell_context,
                 take(key),
                 ChunkItems(
                     chunk_items
@@ -136,6 +139,8 @@ async fn make_chunk(
     Ok(())
 }
 
+/// Split chunk items into app code and vendor code. Continues splitting with
+/// [package_name_split] if necessary.
 #[tracing::instrument(level = Level::TRACE, skip(chunk_items, split_context))]
 async fn app_vendors_split(
     chunk_items: Vec<ChunkItemWithInfo>,
@@ -182,6 +187,8 @@ async fn app_vendors_split(
     Ok(())
 }
 
+/// Split chunk items by node_modules package name. Continues splitting with
+/// [folder_split] if necessary.
 #[tracing::instrument(level = Level::TRACE, skip(chunk_items, split_context))]
 async fn package_name_split(
     chunk_items: Vec<ChunkItemWithInfo>,
@@ -215,6 +222,7 @@ async fn package_name_split(
     Ok(())
 }
 
+/// A boxed version of [folder_split] for recursion.
 fn folder_split_boxed<'a, 'b>(
     chunk_items: Vec<ChunkItemWithInfo>,
     location: usize,
@@ -224,6 +232,7 @@ fn folder_split_boxed<'a, 'b>(
     Box::pin(folder_split(chunk_items, location, name, split_context))
 }
 
+/// Split chunk items by folder structure.
 #[tracing::instrument(level = Level::TRACE, skip(chunk_items, split_context))]
 async fn folder_split(
     mut chunk_items: Vec<ChunkItemWithInfo>,
@@ -280,9 +289,12 @@ async fn folder_split(
     Ok(())
 }
 
+/// Returns `true` if the given `ident` is app code.
 fn is_app_code(ident: &str) -> bool {
     !ident.contains("/node_modules/")
 }
+
+/// Returns the package name of the given `ident`.
 fn package_name(ident: &str) -> &str {
     static PACKAGE_NAME_REGEX: Lazy<Regex> =
         Lazy::new(|| Regex::new(r"/node_modules/((?:@[^/]+/)?[^/]+)").unwrap());
@@ -292,6 +304,9 @@ fn package_name(ident: &str) -> &str {
         ""
     }
 }
+
+/// Returns the folder name at the given `location` of the given `ident`. Also
+/// returns the next folder name location if any.
 fn folder_name(ident: &str, location: usize) -> (&str, Option<usize>) {
     if let Some(offset) = ident[location..].find('/') {
         let new_location = location + offset + 1;
@@ -310,6 +325,8 @@ enum ChunkSize {
     Small,
 }
 
+/// Determines the total size of the passed chunk items. Returns too small, too
+/// large or perfect fit.
 fn chunk_size(chunk_items: &[ChunkItemWithInfo]) -> ChunkSize {
     let mut total_size = 0;
     for (_, size, _) in chunk_items {

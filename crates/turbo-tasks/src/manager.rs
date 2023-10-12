@@ -1159,7 +1159,7 @@ impl<B: Backend + 'static> TaskIdProvider for TurboTasks<B> {
     }
 }
 
-fn current_task(from: &str) -> TaskId {
+pub(crate) fn current_task(from: &str) -> TaskId {
     match CURRENT_TASK_ID.try_with(|id| *id) {
         Ok(id) => id,
         Err(_) => panic!(

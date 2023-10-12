@@ -1,18 +1,9 @@
 use anyhow::Result;
 
-use crate as turbo_tasks;
 use crate::{
-    macro_helpers::find_cell_by_type, CurrentCellRef, RawVc, ValueTypeId, Vc, VcValueType,
+    self as turbo_tasks, macro_helpers::find_cell_by_type, manager::current_task, CurrentCellRef,
+    RawVc, TaskId, ValueTypeId, Vc, VcValueType,
 };
-
-#[turbo_tasks::value]
-pub struct KeyedCellContext;
-
-impl KeyedCellContext {
-    pub fn new() -> Vc<Self> {
-        KeyedCellContext.cell()
-    }
-}
 
 #[turbo_tasks::value]
 struct KeyedCell {
@@ -26,11 +17,7 @@ impl KeyedCell {}
 #[turbo_tasks::value_impl]
 impl KeyedCell {
     #[turbo_tasks::function]
-    fn new(
-        _cell_context: Vc<KeyedCellContext>,
-        _key: String,
-        value_type_id: ValueTypeId,
-    ) -> Vc<Self> {
+    fn new(_task: TaskId, _key: String, value_type_id: ValueTypeId) -> Vc<Self> {
         let cell_ref = find_cell_by_type(value_type_id);
         KeyedCell {
             cell: cell_ref.into(),
@@ -40,12 +27,21 @@ impl KeyedCell {
     }
 }
 
-pub async fn keyed_cell<T: PartialEq + Eq + VcValueType>(
-    cell_context: Vc<KeyedCellContext>,
-    key: String,
-    content: T,
-) -> Result<Vc<T>> {
-    let cell = KeyedCell::new(cell_context, key, T::get_value_type_id()).await?;
+/// Cells a value in a cell with a given key. A key MUST only be used once per
+/// function.
+///
+/// Usually calling [Vc::cell] will create cells for a give type based on the
+/// call order of [Vc::cell]. But this can yield to over-invalidation when the
+/// number of cells changes. e. g. not doing the first [Vc::cell] call will move
+/// all remaining values into different cells, causing invalidation of all of
+/// them.
+///
+/// A keyed cell avoids this problem by not using call order, but a key instead.
+///
+/// Internally it creates a new Task based on the key and cells the value into
+/// that task. This is a implementation detail and might change in the future.
+pub async fn keyed_cell<T: PartialEq + Eq + VcValueType>(key: String, content: T) -> Result<Vc<T>> {
+    let cell = KeyedCell::new(current_task("keyed_cell"), key, T::get_value_type_id()).await?;
     cell.cell_ref.compare_and_update_shared(content);
     Ok(cell.cell.into())
 }
