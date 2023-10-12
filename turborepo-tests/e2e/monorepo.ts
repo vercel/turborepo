@@ -26,7 +26,8 @@ export class Monorepo {
   turboConfig: any;
   binDir: string;
   name: string;
-  npmClient: NPMClient;
+  npmClient: PackageManager;
+
   get nodeModulesPath() {
     return this.subdir
       ? path.join(this.root, this.subdir, "node_modules")
