@@ -98,13 +98,10 @@ export class Monorepo {
     // Ensure that the package.json file is committed
     this.commitAll();
 
-    if (this.npmClient == "npm") {
-      execa.sync("npm", ["install"], {
-        cwd,
-      });
-      this.commitAll();
-      return;
-    }
+    execa.sync("npm", ["install"], {
+      cwd,
+    });
+    this.commitAll();
   }
 
   /**
