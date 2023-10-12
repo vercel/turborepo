@@ -3,6 +3,7 @@ use std::{
     io::{BufRead, BufReader, BufWriter, Write},
 };
 
+use bytelines::ByteLines;
 use tracing::{debug, warn};
 use turbopath::AbsoluteSystemPath;
 
@@ -89,10 +90,11 @@ pub fn replay_logs<W: Write>(
     })?;
 
     let log_reader = BufReader::new(log_file);
+    let lines = ByteLines::new(log_reader);
 
-    for line in log_reader.lines() {
+    for line in lines.into_iter() {
         let line = line.map_err(Error::CannotReadLogs)?;
-        output.output(line);
+        output.output(String::from_utf8_lossy(&line));
     }
 
     debug!("finish replaying logs");
@@ -186,7 +188,7 @@ mod tests {
         fs::write(&log_file_path, [0, 159, 146, 150, b'\n'])?;
         replay_logs(&mut prefixed_ui, &log_file_path)?;
 
-        assert_eq!(output, b">\n");
+        assert_eq!(output, ">\0���\n".as_bytes());
         Ok(())
     }
 }
