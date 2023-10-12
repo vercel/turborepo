@@ -9,7 +9,7 @@ Setup
     "turboVersion": "[a-z0-9\.-]+", (re)
     "monorepo": false,
     "globalCacheInputs": {
-      "rootKey": "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.",
+      "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
       "files": {
         "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
         "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0"
@@ -32,7 +32,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "cd720138f792fbca",
+        "hash": "cb6df6cef2cfd596",
         "inputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
@@ -87,7 +87,7 @@ Setup
       {
         "taskId": "test",
         "task": "test",
-        "hash": "118e4fe7f2e841be",
+        "hash": "af35177522814c73",
         "inputs": {
           ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
