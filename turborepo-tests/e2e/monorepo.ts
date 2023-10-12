@@ -82,7 +82,40 @@ export class Monorepo {
   /**
    * Simulates a "yarn" call by linking internal packages and generates a yarn.lock file
    */
+  _linkNpmPackages() {
+    const cwd = this.subdir ? path.join(this.root, this.subdir) : this.root;
+
+    if (!fs.existsSync(this.nodeModulesPath)) {
+      fs.mkdirSync(this.nodeModulesPath, { recursive: true });
+    }
+
+    const data = fsNormal.readFileSync(`${cwd}/package.json`, "utf8");
+
+    const pkg = JSON.parse(data.toString());
+    pkg.packageManager = PACKAGE_MANAGER_VERSIONS[this.npmClient];
+
+    fsNormal.writeFileSync(`${cwd}/package.json`, JSON.stringify(pkg, null, 2));
+    // Ensure that the package.json file is committed
+    this.commitAll();
+
+    if (this.npmClient == "npm") {
+      execa.sync("npm", ["install"], {
+        cwd,
+      });
+      this.commitAll();
+      return;
+    }
+  }
+
+  /**
+   * Simulates a "yarn" call by linking internal packages and generates a yarn.lock file
+   */
   linkPackages() {
+    if (this.npmClient == "npm") {
+      this._linkNpmPackages();
+      return;
+    }
+
     const cwd = this.subdir ? path.join(this.root, this.subdir) : this.root;
     const pkgs = fs.readdirSync(path.join(cwd, "packages"));
 
@@ -129,13 +162,6 @@ importers:
       execa.sync("pnpm", ["install", "--recursive"], {
         cwd,
       });
-      return;
-    }
-    if (this.npmClient == "npm") {
-      execa.sync("npm", ["install"], {
-        cwd,
-      });
-      this.commitAll();
       return;
     }
 
