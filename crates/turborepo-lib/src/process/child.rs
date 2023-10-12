@@ -760,7 +760,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_wait_with_non_utf8_single_outut() {
+    async fn test_wait_with_non_utf8_single_output() {
         let script = find_script_dir().join_component("hello_non_utf8.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
@@ -775,7 +775,6 @@ mod test {
             .await
             .unwrap();
 
-        // There are no ordering guarantees so we accept either order of the logs
         assert_eq!(buffer, &[0, 159, 146, 150, b'\n']);
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
