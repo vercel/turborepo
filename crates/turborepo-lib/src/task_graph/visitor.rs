@@ -13,9 +13,7 @@ use tokio::{process::Command, sync::mpsc};
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
-use turborepo_ui::{
-    ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, PrefixedWriter, UI,
-};
+use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
 
 use crate::{
     cli::EnvMode,
@@ -42,6 +40,7 @@ pub struct Visitor<'a> {
     ui: UI,
     manager: ProcessManager,
     repo_root: &'a AbsoluteSystemPath,
+    dry: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -101,6 +100,7 @@ impl<'a> Visitor<'a> {
             ui,
             manager,
             repo_root,
+            dry: false,
         }
     }
 
@@ -180,6 +180,10 @@ impl<'a> Visitor<'a> {
             )?;
 
             debug!("task {} hash is {}", info, task_hash);
+            if self.dry {
+                callback.send(Ok(())).ok();
+                continue;
+            }
 
             let task_cache =
                 self.run_cache
@@ -202,18 +206,45 @@ impl<'a> Visitor<'a> {
             let workspace_directory = self.repo_root.resolve(workspace_dir);
             let errors = errors.clone();
             let task_id_for_display = self.display_task_id(&info);
+            let hash_tracker = self.task_hasher.task_hash_tracker();
 
             tasks.push(tokio::spawn(async move {
                 let task_id = info;
-                let _task_cache = task_cache;
+                let mut task_cache = task_cache;
                 let mut prefixed_ui =
                     Self::prefixed_ui(ui, is_github_actions, &output_client, pretty_prefix.clone());
+
+                match task_cache.restore_outputs(&mut prefixed_ui).await {
+                    Ok(_hit) => {
+                        // we need to set expanded outputs
+                        hash_tracker.insert_expanded_outputs(
+                            task_id,
+                            task_cache.expanded_outputs().to_vec(),
+                        );
+                        callback.send(Ok(())).ok();
+                        return;
+                    }
+                    Err(e) if e.is_cache_miss() => (),
+                    Err(e) => {
+                        prefixed_ui.error(format!("error fetching from cache: {e}"));
+                    }
+                }
 
                 let mut cmd = Command::new(package_manager.to_string());
                 cmd.args(["run", task_id.task()]);
                 cmd.current_dir(workspace_directory.as_path());
                 cmd.stdout(Stdio::piped());
                 cmd.stderr(Stdio::piped());
+
+                let mut stdout_writer =
+                    match task_cache.output_writer(pretty_prefix.clone(), output_client.stdout()) {
+                        Ok(w) => w,
+                        Err(e) => {
+                            error!("failed to capture outputs for \"{task_id}\": {e}");
+                            callback.send(Err(StopExecution)).ok();
+                            return;
+                        }
+                    };
 
                 let mut process = match manager.spawn(cmd, Duration::from_millis(500)) {
                     Some(Ok(child)) => child,
@@ -242,10 +273,7 @@ impl<'a> Visitor<'a> {
                 };
 
                 let exit_status = match process
-                    .wait_with_piped_outputs(
-                        PrefixedWriter::new(ui, pretty_prefix.clone(), output_client.stdout()),
-                        PrefixedWriter::new(ui, pretty_prefix.clone(), output_client.stderr()),
-                    )
+                    .wait_with_single_piped_output(&mut stdout_writer)
                     .await
                 {
                     Ok(Some(exit_status)) => exit_status,
@@ -269,6 +297,10 @@ impl<'a> Visitor<'a> {
                     // The task was successful, nothing special needs to happen.
                     ChildExit::Finished(Some(0)) => (),
                     ChildExit::Finished(Some(code)) => {
+                        // If there was an error, flush the buffered output
+                        if let Err(e) = task_cache.on_error(&mut prefixed_ui) {
+                            error!("error reading logs: {e}");
+                        }
                         let error =
                             TaskErrorCause::from_execution(process.label().to_string(), code);
                         if continue_on_error {
@@ -293,6 +325,20 @@ impl<'a> Visitor<'a> {
                         callback.send(Err(StopExecution)).ok();
                         return;
                     }
+                }
+
+                if let Err(e) = stdout_writer.flush() {
+                    error!("{e}");
+                } else if let Err(e) = task_cache
+                    .save_outputs(&mut prefixed_ui, Duration::from_secs(1))
+                    .await
+                {
+                    error!("error caching output: {e}");
+                } else {
+                    hash_tracker.insert_expanded_outputs(
+                        task_id.clone(),
+                        task_cache.expanded_outputs().to_vec(),
+                    );
                 }
 
                 if let Err(e) = output_client.finish() {
@@ -386,6 +432,11 @@ impl<'a> Visitor<'a> {
 
     pub fn into_task_hash_tracker(self) -> TaskHashTrackerState {
         self.task_hasher.into_task_hash_tracker_state()
+    }
+
+    pub fn dry_run(mut self) -> Self {
+        self.dry = true;
+        self
     }
 }
 

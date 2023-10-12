@@ -18,7 +18,7 @@ use rayon::iter::ParallelBridge;
 use tracing::{debug, info};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::APIAuth;
-use turborepo_cache::AsyncCache;
+use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_json::PackageJson;
 use turborepo_scm::SCM;
@@ -39,7 +39,7 @@ use crate::{
         summary::{GlobalHashSummary, RunSummary},
     },
     task_graph::Visitor,
-    task_hash::PackageInputsHashes,
+    task_hash::{PackageInputsHashes, TaskHashTrackerState},
 };
 
 #[derive(Debug)]
@@ -80,7 +80,19 @@ impl<'a> Run<'a> {
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
 
-        opts.cache_opts.remote_cache_opts = root_turbo_json.remote_cache_options.clone();
+        let team_id = root_turbo_json
+            .remote_cache
+            .as_ref()
+            .and_then(|configuration_options| configuration_options.team_id.clone())
+            .unwrap_or_default();
+
+        let signature = root_turbo_json
+            .remote_cache
+            .as_ref()
+            .and_then(|configuration_options| configuration_options.signature)
+            .unwrap_or_default();
+
+        opts.cache_opts.remote_cache_opts = Some(RemoteCacheOpts::new(team_id, signature));
 
         if opts.run_opts.experimental_space_id.is_none() {
             opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
@@ -139,11 +151,10 @@ impl<'a> Run<'a> {
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
-        let repo_config = self.base.repo_config()?;
-        let team_id = repo_config.team_id();
-        let team_slug = repo_config.team_slug();
-
-        let token = self.base.user_config()?.token();
+        let config = self.base.config()?;
+        let team_id = config.team_id();
+        let team_slug = config.team_slug();
+        let token = config.token();
 
         let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
             team_id: team_id.to_string(),
@@ -254,7 +265,7 @@ impl<'a> Run<'a> {
 
         let workspaces = pkg_dep_graph.workspaces().collect();
         let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
-            scm,
+            &scm,
             engine.tasks().par_bridge(),
             workspaces,
             engine.task_definitions(),
@@ -311,6 +322,18 @@ impl<'a> Run<'a> {
             resolved_pass_through_env_vars,
         );
 
+        let workspaces = pkg_dep_graph.workspaces().collect();
+
+        let package_file_hashes = PackageInputsHashes::calculate_file_hashes(
+            &scm,
+            engine.tasks().par_bridge(),
+            workspaces,
+            engine.task_definitions(),
+            &self.base.repo_root,
+        )?;
+
+        debug!("package file hashes: {:?}", package_file_hashes);
+
         let mut run_summary = RunSummary::new(
             start_at,
             &self.base.repo_root,
@@ -326,5 +349,161 @@ impl<'a> Run<'a> {
         run_summary.close(0, &pkg_dep_graph, self.base.ui)?;
 
         Ok(exit_code)
+    }
+
+    #[tokio::main]
+    pub async fn get_hashes(&self) -> Result<(String, TaskHashTrackerState)> {
+        let env_at_execution_start = EnvironmentVariableMap::infer();
+
+        let package_json_path = self.base.repo_root.join_component("package.json");
+        let root_package_json =
+            PackageJson::load(&package_json_path).context("failed to read package.json")?;
+
+        let opts = self.opts()?;
+
+        let is_single_package = opts.run_opts.single_package;
+
+        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+            .with_single_package_mode(opts.run_opts.single_package)
+            .build()?;
+
+        let root_turbo_json =
+            TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
+
+        let root_workspace = pkg_dep_graph
+            .workspace_info(&WorkspaceName::Root)
+            .expect("must have root workspace");
+
+        let root_external_dependencies_hash = root_workspace.get_external_deps_hash();
+
+        let mut global_hash_inputs = get_global_hash_inputs(
+            !opts.run_opts.single_package,
+            &root_external_dependencies_hash,
+            &self.base.repo_root,
+            pkg_dep_graph.package_manager(),
+            pkg_dep_graph.lockfile(),
+            &root_turbo_json.global_deps,
+            &env_at_execution_start,
+            &root_turbo_json.global_env,
+            root_turbo_json.global_pass_through_env.as_deref(),
+            opts.run_opts.env_mode,
+            opts.run_opts.framework_inference,
+            &root_turbo_json.global_dot_env,
+        )?;
+
+        let scm = SCM::new(&self.base.repo_root);
+
+        let filtered_pkgs = {
+            let mut filtered_pkgs = scope::resolve_packages(
+                &opts.scope_opts,
+                &self.base.repo_root,
+                &pkg_dep_graph,
+                &scm,
+            )?;
+
+            if filtered_pkgs.len() != pkg_dep_graph.len() {
+                for target in self.targets() {
+                    let task_name = TaskName::from(target.as_str()).into_root_task();
+
+                    if root_turbo_json.pipeline.contains_key(&task_name) {
+                        filtered_pkgs.insert(WorkspaceName::Root);
+                        break;
+                    }
+                }
+            }
+
+            filtered_pkgs
+        };
+
+        let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
+        let config = self.base.config()?;
+
+        let team_id = config.team_id();
+        let team_slug = config.team_slug();
+
+        let token = config.token();
+
+        let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
+            team_id: team_id.to_string(),
+            token: token.to_string(),
+            team_slug: team_slug.map(|s| s.to_string()),
+        });
+
+        let engine = EngineBuilder::new(
+            &self.base.repo_root,
+            &pkg_dep_graph,
+            opts.run_opts.single_package,
+        )
+        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
+        .with_turbo_jsons(Some(
+            Some((WorkspaceName::Root, root_turbo_json.clone()))
+                .into_iter()
+                .collect(),
+        ))
+        .with_tasks_only(opts.run_opts.only)
+        .with_workspaces(filtered_pkgs.into_iter().collect())
+        .with_tasks(
+            opts.run_opts
+                .tasks
+                .iter()
+                .map(|task| TaskName::from(task.as_str()).into_owned()),
+        )
+        .build()?;
+
+        let mut global_env_mode = opts.run_opts.env_mode;
+        if matches!(global_env_mode, EnvMode::Infer)
+            && root_turbo_json.global_pass_through_env.is_some()
+        {
+            global_env_mode = EnvMode::Strict;
+        }
+
+        let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
+            &scm,
+            engine.tasks().par_bridge(),
+            pkg_dep_graph.workspaces().collect(),
+            engine.task_definitions(),
+            &self.base.repo_root,
+        )?;
+
+        let pkg_dep_graph = Arc::new(pkg_dep_graph);
+        let engine = Arc::new(engine);
+
+        let async_cache = AsyncCache::new(
+            &opts.cache_opts,
+            &self.base.repo_root,
+            self.base.api_client()?,
+            api_auth,
+        )?;
+
+        let color_selector = ColorSelector::default();
+
+        let runcache = Arc::new(RunCache::new(
+            async_cache,
+            &self.base.repo_root,
+            &opts.runcache_opts,
+            color_selector,
+            None,
+            self.base.ui,
+        ));
+
+        let visitor = Visitor::new(
+            pkg_dep_graph.clone(),
+            runcache,
+            &opts,
+            package_inputs_hashes,
+            &env_at_execution_start,
+            &global_hash,
+            global_env_mode,
+            self.base.ui,
+            true,
+            self.processes.clone(),
+            &self.base.repo_root,
+        )
+        .dry_run();
+
+        visitor.visit(engine.clone()).await?;
+        let task_hash_tracker = visitor.into_task_hash_tracker();
+
+        Ok((global_hash, task_hash_tracker))
     }
 }

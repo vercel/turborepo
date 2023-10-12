@@ -7,7 +7,10 @@ use turbo_tasks::{ReadRef, TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::File;
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{Chunk, ChunkData, ChunkingContext, ChunksData, EvaluatableAssets, ModuleId},
+    chunk::{
+        ChunkData, ChunkItemExt, ChunkableModule, ChunkingContext, ChunksData, EvaluatableAssets,
+        ModuleId,
+    },
     code_builder::{Code, CodeBuilder},
     ident::AssetIdent,
     module::Module,
@@ -15,7 +18,7 @@ use turbopack_core::{
     source_map::{GenerateSourceMap, OptionSourceMap, SourceMapAsset},
 };
 use turbopack_ecmascript::{
-    chunk::{EcmascriptChunkData, EcmascriptChunkItemExt, EcmascriptChunkPlaceable},
+    chunk::{EcmascriptChunkData, EcmascriptChunkPlaceable},
     utils::StringifyJs,
 };
 use turbopack_ecmascript_runtime::RuntimeType;
@@ -28,7 +31,7 @@ use crate::DevChunkingContext;
 #[turbo_tasks::value(shared)]
 pub(crate) struct EcmascriptDevEvaluateChunk {
     chunking_context: Vc<DevChunkingContext>,
-    entry_chunk: Vc<Box<dyn Chunk>>,
+    ident: Vc<AssetIdent>,
     other_chunks: Vc<OutputAssets>,
     evaluatable_assets: Vc<EvaluatableAssets>,
 }
@@ -39,13 +42,13 @@ impl EcmascriptDevEvaluateChunk {
     #[turbo_tasks::function]
     pub fn new(
         chunking_context: Vc<DevChunkingContext>,
-        entry_chunk: Vc<Box<dyn Chunk>>,
+        ident: Vc<AssetIdent>,
         other_chunks: Vc<OutputAssets>,
         evaluatable_assets: Vc<EvaluatableAssets>,
     ) -> Vc<Self> {
         EcmascriptDevEvaluateChunk {
             chunking_context,
-            entry_chunk,
+            ident,
             other_chunks,
             evaluatable_assets,
         }
@@ -178,13 +181,13 @@ fn modifier() -> Vc<String> {
 impl OutputAsset for EcmascriptDevEvaluateChunk {
     #[turbo_tasks::function]
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
-        let mut ident = self.entry_chunk.ident().await?.clone_value();
+        let mut ident = self.ident.await?.clone_value();
 
         ident.add_modifier(modifier());
 
+        let evaluatable_assets = self.evaluatable_assets.await?;
         ident.modifiers.extend(
-            self.evaluatable_assets
-                .await?
+            evaluatable_assets
                 .iter()
                 .map(|entry| entry.ident().to_string()),
         );

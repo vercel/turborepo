@@ -2,7 +2,7 @@ use anyhow::Result;
 use indoc::formatdoc;
 use turbo_tasks::{TryJoinIterExt, Vc};
 use turbopack_core::{
-    chunk::{ChunkData, ChunkItem, ChunkingContext, ChunksData},
+    chunk::{ChunkData, ChunkItem, ChunkType, ChunkingContext, ChunksData},
     ident::AssetIdent,
     module::Module,
     reference::{ModuleReferences, SingleOutputAssetReference},
@@ -12,7 +12,7 @@ use super::chunk_asset::ManifestChunkAsset;
 use crate::{
     chunk::{
         data::EcmascriptChunkData, EcmascriptChunkItem, EcmascriptChunkItemContent,
-        EcmascriptChunkingContext,
+        EcmascriptChunkType, EcmascriptChunkingContext,
     },
     utils::StringifyJs,
 };
@@ -90,5 +90,20 @@ impl ChunkItem for ManifestChunkItem {
         }
 
         Ok(Vc::cell(references))
+    }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
+    }
+
+    #[turbo_tasks::function]
+    fn ty(&self) -> Vc<Box<dyn ChunkType>> {
+        Vc::upcast(Vc::<EcmascriptChunkType>::default())
+    }
+
+    #[turbo_tasks::function]
+    fn module(&self) -> Vc<Box<dyn Module>> {
+        Vc::upcast(self.manifest)
     }
 }

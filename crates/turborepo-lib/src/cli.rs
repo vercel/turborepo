@@ -7,12 +7,12 @@ use clap_complete::{generate, Shell};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_ui::UI;
 
 use crate::{
     commands::{bin, daemon, generate, info, link, login, logout, prune, unlink, CommandBase},
     get_version,
-    shim::{RepoMode, RepoState},
     tracing::TurboSubscriber,
     Payload,
 };
@@ -202,8 +202,48 @@ pub enum LinkTarget {
 
 impl Args {
     pub fn new() -> Result<Self> {
-        let mut clap_args = match Args::try_parse() {
-            Ok(args) => args,
+        // We always pass --single-package in from the shim.
+        // We need to omit it, and then add it in for run.
+        let arg_separator_position =
+            std::env::args_os().position(|input_token| input_token == "--");
+
+        let single_package_position =
+            std::env::args_os().position(|input_token| input_token == "--single-package");
+
+        let is_single_package = match (arg_separator_position, single_package_position) {
+            (_, None) => false,
+            (None, Some(_)) => true,
+            (Some(arg_separator_position), Some(single_package_position)) => {
+                single_package_position < arg_separator_position
+            }
+        };
+
+        // Clap supports arbitrary iterators as input.
+        // We can remove all instances of --single-package
+        let single_package_free = std::env::args_os()
+            .enumerate()
+            .filter(|(index, input_token)| {
+                arg_separator_position
+                    .is_some_and(|arg_separator_position| index > &arg_separator_position)
+                    || input_token != "--single-package"
+            })
+            .map(|(_, input_token)| input_token);
+
+        let mut clap_args = match Args::try_parse_from(single_package_free) {
+            Ok(mut args) => {
+                // And then only add them back in when we're in `run`.
+                // The value can appear in two places in the struct.
+                // We defensively attempt to set both.
+                if let Some(ref mut run_args) = args.run_args {
+                    run_args.single_package = is_single_package
+                }
+
+                if let Some(Command::Run(ref mut run_args)) = args.command {
+                    run_args.single_package = is_single_package;
+                }
+
+                args
+            }
             // Don't use error logger when displaying help text
             Err(e)
                 if matches!(
@@ -665,7 +705,7 @@ pub async fn run(
         }
         #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
             match command {
                 Some(command) => daemon::daemon_client(command, &base).await,
@@ -700,7 +740,7 @@ pub async fn run(
         }
         Command::Info { workspace } => {
             let workspace = workspace.clone();
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui);
             info::run(&mut base, workspace.as_deref())?;
 
             Ok(Payload::Rust(Ok(0)))
@@ -716,7 +756,7 @@ pub async fn run(
 
             let modify_gitignore = !*no_gitignore;
             let to = *target;
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui);
 
             if let Err(err) = link::link(&mut base, modify_gitignore, to).await {
                 error!("error: {}", err.to_string())
@@ -725,7 +765,7 @@ pub async fn run(
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Logout { .. } => {
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui);
             logout::logout(&mut base)?;
 
             Ok(Payload::Rust(Ok(0)))
@@ -738,7 +778,7 @@ pub async fn run(
 
             let sso_team = sso_team.clone();
 
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui);
 
             if let Some(sso_team) = sso_team {
                 login::sso_login(&mut base, &sso_team).await?;
@@ -755,7 +795,7 @@ pub async fn run(
             }
 
             let from = *target;
-            let mut base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let mut base = CommandBase::new(cli_args, repo_root, version, ui);
 
             unlink::unlink(&mut base, from)?;
 
@@ -768,7 +808,10 @@ pub async fn run(
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
             }
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui)?;
+            if let Some(file_path) = &args.profile {
+                logger.enable_chrome_tracing(file_path);
+            }
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
             if args.experimental_rust_codepath {
                 use crate::commands::run;
@@ -783,10 +826,13 @@ pub async fn run(
             if args.experimental_rust_codepath {
                 tracing::warn!("rust codepath enabled, but not compiled with support");
             }
+            if let Some(file_path) = &args.profile {
+                logger.enable_chrome_tracing(file_path);
+            }
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
             }
-            let base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let base = CommandBase::new(cli_args, repo_root, version, ui);
             Ok(Payload::Go(Box::new(base)))
         }
         Command::Prune {
@@ -802,7 +848,7 @@ pub async fn run(
                 .unwrap_or_default();
             let docker = *docker;
             let output_dir = output_dir.clone();
-            let base = CommandBase::new(cli_args, repo_root, version, ui)?;
+            let base = CommandBase::new(cli_args, repo_root, version, ui);
             prune::prune(&base, &scope, docker, &output_dir)?;
             Ok(Payload::Rust(Ok(0)))
         }

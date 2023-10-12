@@ -174,6 +174,7 @@ func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase
 		UIFactory:       uiFactory,
 		Logger:          logger,
 		RepoRoot:        repoRoot,
+		Config:          executionState.Config,
 		APIClient:       apiClient,
 		SpacesAPIClient: spacesClient,
 		TurboVersion:    h.TurboVersion,
@@ -186,6 +187,7 @@ type CmdBase struct {
 	UIFactory       ui.Factory
 	Logger          hclog.Logger
 	RepoRoot        turbopath.AbsoluteSystemPath
+	Config          turbostate.Config
 	APIClient       *client.APIClient
 	SpacesAPIClient *client.APIClient
 	TurboVersion    string

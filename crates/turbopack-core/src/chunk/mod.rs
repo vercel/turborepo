@@ -22,14 +22,14 @@ use turbo_tasks::{
     debug::ValueDebugFormat,
     graph::{AdjacencyMap, GraphTraversal, GraphTraversalResult, Visit, VisitControlFlow},
     trace::TraceRawVcs,
-    ReadRef, TryJoinIterExt, Value, ValueToString, Vc,
+    ReadRef, TryJoinIterExt, Upcast, Value, ValueToString, Vc,
 };
 use turbo_tasks_fs::FileSystemPath;
 use turbo_tasks_hash::DeterministicHash;
 
 use self::availability_info::AvailabilityInfo;
 pub use self::{
-    chunking_context::ChunkingContext,
+    chunking_context::{ChunkingContext, ChunkingContextExt},
     data::{ChunkData, ChunkDataOption, ChunksData},
     evaluate::{EvaluatableAsset, EvaluatableAssetExt, EvaluatableAssets},
     passthrough_asset::PassthroughModule,
@@ -40,7 +40,6 @@ use crate::{
     module::{Module, Modules},
     output::OutputAssets,
     reference::{ModuleReference, ModuleReferences},
-    resolve::ModuleResolveResult,
 };
 
 /// A module id, which can be a number or string
@@ -85,23 +84,10 @@ pub struct ModuleIds(Vec<Vc<ModuleId>>);
 /// A [Module] that can be converted into a [Chunk].
 #[turbo_tasks::value_trait]
 pub trait ChunkableModule: Module + Asset {
-    fn as_chunk(
+    fn as_chunk_item(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Box<dyn Chunk>>;
-
-    fn as_root_chunk(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-    ) -> Vc<Box<dyn Chunk>> {
-        self.as_chunk(
-            chunking_context,
-            Value::new(AvailabilityInfo::Root {
-                current_availability_root: Vc::upcast(self),
-            }),
-        )
-    }
+    ) -> Vc<Box<dyn ChunkItem>>;
 }
 
 #[turbo_tasks::value(transparent)]
@@ -197,53 +183,6 @@ pub struct ChunkingTypeOption(Option<ChunkingType>);
 pub trait ChunkableModuleReference: ModuleReference + ValueToString {
     fn chunking_type(self: Vc<Self>) -> Vc<ChunkingTypeOption> {
         Vc::cell(Some(ChunkingType::default()))
-    }
-}
-
-/// A reference to multiple chunks from a [ChunkGroup]
-#[turbo_tasks::value]
-pub struct ChunkGroupReference {
-    chunking_context: Vc<Box<dyn ChunkingContext>>,
-    entry: Vc<Box<dyn Chunk>>,
-}
-
-#[turbo_tasks::value_impl]
-impl ChunkGroupReference {
-    #[turbo_tasks::function]
-    pub fn new(
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-        entry: Vc<Box<dyn Chunk>>,
-    ) -> Vc<Self> {
-        Self::cell(ChunkGroupReference {
-            chunking_context,
-            entry,
-        })
-    }
-
-    #[turbo_tasks::function]
-    async fn chunks(self: Vc<Self>) -> Result<Vc<OutputAssets>> {
-        let this = self.await?;
-        Ok(this.chunking_context.chunk_group(this.entry))
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ModuleReference for ChunkGroupReference {
-    #[turbo_tasks::function]
-    async fn resolve_reference(self: Vc<Self>) -> Result<Vc<ModuleResolveResult>> {
-        let set = self.chunks().await?.clone_value();
-        Ok(ModuleResolveResult::output_assets(set).cell())
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ValueToString for ChunkGroupReference {
-    #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(format!(
-            "chunk group ({})",
-            self.entry.ident().to_string().await?
-        )))
     }
 }
 
@@ -416,17 +355,25 @@ where
                 }
             }
             ChunkingType::Parallel => {
-                let chunk = chunkable_module.as_chunk(
-                    chunk_content_context.chunking_context,
-                    chunk_content_context.availability_info,
-                );
+                let chunk_item =
+                    chunkable_module.as_chunk_item(chunk_content_context.chunking_context);
+                let chunk = chunk_item
+                    .ty()
+                    .as_chunk(chunk_item, chunk_content_context.availability_info);
                 graph_nodes.push((
                     Some((module, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),
                 ));
             }
             ChunkingType::IsolatedParallel => {
-                let chunk = chunkable_module.as_root_chunk(chunk_content_context.chunking_context);
+                let chunk_item =
+                    chunkable_module.as_chunk_item(chunk_content_context.chunking_context);
+                let chunk = chunk_item.ty().as_chunk(
+                    chunk_item,
+                    Value::new(AvailabilityInfo::Root {
+                        current_availability_root: Vc::upcast(chunkable_module),
+                    }),
+                );
                 graph_nodes.push((
                     Some((module, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),
@@ -455,10 +402,11 @@ where
                     }
                 }
 
-                let chunk = chunkable_module.as_chunk(
-                    chunk_content_context.chunking_context,
-                    chunk_content_context.availability_info,
-                );
+                let chunk_item =
+                    chunkable_module.as_chunk_item(chunk_content_context.chunking_context);
+                let chunk = chunk_item
+                    .ty()
+                    .as_chunk(chunk_item, chunk_content_context.availability_info);
                 graph_nodes.push((
                     Some((module, chunking_type)),
                     ChunkContentGraphNode::Chunk(chunk),
@@ -681,7 +629,42 @@ pub trait ChunkItem {
     /// TODO(alexkirsz) This should have a default impl that returns empty
     /// references.
     fn references(self: Vc<Self>) -> Vc<ModuleReferences>;
+
+    /// The type of chunk this item should be assembled into.
+    fn ty(self: Vc<Self>) -> Vc<Box<dyn ChunkType>>;
+
+    /// A temporary method to retrieve the module associated with this
+    /// ChunkItem. TODO: Remove this as part of the chunk refactoring.
+    fn module(self: Vc<Self>) -> Vc<Box<dyn Module>>;
+
+    fn chunking_context(self: Vc<Self>) -> Vc<Box<dyn ChunkingContext>>;
+}
+
+#[turbo_tasks::value_trait]
+pub trait ChunkType {
+    /// Create a new chunk for the given subgraph.
+    fn as_chunk(
+        &self,
+        chunk_item: Vc<Box<dyn ChunkItem>>,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Vc<Box<dyn Chunk>>;
 }
 
 #[turbo_tasks::value(transparent)]
 pub struct ChunkItems(Vec<Vc<Box<dyn ChunkItem>>>);
+
+pub trait ChunkItemExt: Send {
+    /// Returns the module id of this chunk item.
+    fn id(self: Vc<Self>) -> Vc<ModuleId>;
+}
+
+impl<T> ChunkItemExt for T
+where
+    T: Upcast<Box<dyn ChunkItem>>,
+{
+    /// Returns the module id of this chunk item.
+    fn id(self: Vc<Self>) -> Vc<ModuleId> {
+        let chunk_item = Vc::upcast(self);
+        chunk_item.chunking_context().chunk_item_id(chunk_item)
+    }
+}

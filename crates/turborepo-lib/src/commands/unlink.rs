@@ -1,9 +1,13 @@
 use std::fs;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use turborepo_ui::GREY;
 
-use crate::{cli::LinkTarget, commands::CommandBase, rewrite_json};
+use crate::{
+    cli::LinkTarget,
+    commands::CommandBase,
+    rewrite_json::{self, unset_path},
+};
 
 enum UnlinkSpacesResult {
     Unlinked,
@@ -11,11 +15,26 @@ enum UnlinkSpacesResult {
 }
 
 fn unlink_remote_caching(base: &mut CommandBase) -> Result<()> {
-    let repo_config: &mut crate::config::RepoConfig = base.repo_config_mut()?;
-    let needs_disabling = repo_config.team_id().is_some() || repo_config.team_slug().is_some();
+    let needs_disabling =
+        base.config()?.team_id().is_some() || base.config()?.team_slug().is_some();
 
     let output = if needs_disabling {
-        repo_config.set_team_id(None)?;
+        let before = base
+            .local_config_path()
+            .read_existing_to_string_or(Ok("{}"))
+            .map_err(|e| {
+                anyhow!(
+                    "Encountered an IO error while attempting to read {}: {}",
+                    base.local_config_path(),
+                    e
+                )
+            })?;
+        let no_id = unset_path(&before, &["teamid"], false)?.unwrap_or(before);
+        let no_slug = unset_path(&no_id, &["teamslug"], false)?.unwrap_or(no_id);
+
+        base.local_config_path().ensure_dir()?;
+        base.local_config_path().create_with_contents(no_slug)?;
+
         "> Disabled Remote Caching"
     } else {
         "> No Remote Caching config found"
@@ -27,17 +46,30 @@ fn unlink_remote_caching(base: &mut CommandBase) -> Result<()> {
 }
 
 fn unlink_spaces(base: &mut CommandBase) -> Result<()> {
-    let repo_config: &mut crate::config::RepoConfig = base.repo_config_mut()?;
     let needs_disabling =
-        repo_config.space_team_id().is_some() || repo_config.space_team_slug().is_some();
+        base.config()?.team_id().is_some() || base.config()?.team_slug().is_some();
 
     if needs_disabling {
-        repo_config.set_space_team_id(None)?;
+        let before = base
+            .local_config_path()
+            .read_existing_to_string_or(Ok("{}"))
+            .map_err(|e| {
+                anyhow!(
+                    "Encountered an IO error while attempting to read {}: {}",
+                    base.local_config_path(),
+                    e
+                )
+            })?;
+        let no_id = unset_path(&before, &["teamid"], false)?.unwrap_or(before);
+        let no_slug = unset_path(&no_id, &["teamslug"], false)?.unwrap_or(no_id);
+
+        base.local_config_path().ensure_dir()?;
+        base.local_config_path().create_with_contents(no_slug)?;
     }
 
     // Space config is _also_ in turbo.json.
     let result =
-        remove_spaces_from_turbo_json(base).context("could not unlink. Something went wrong")?;
+        remove_spaces_from_turbo_json(base).context("Could not unlink. Something went wrong")?;
 
     let output = match (needs_disabling, result) {
         (_, UnlinkSpacesResult::Unlinked) => "> Unlinked Spaces",
@@ -66,7 +98,7 @@ fn remove_spaces_from_turbo_json(base: &CommandBase) -> Result<UnlinkSpacesResul
     let turbo_json_path = base.repo_root.join_component("turbo.json");
     let turbo_json = fs::read_to_string(&turbo_json_path)?;
 
-    let output = rewrite_json::unset_path(&turbo_json, &["experimentalSpaces", "id"])?;
+    let output = rewrite_json::unset_path(&turbo_json, &["experimentalSpaces", "id"], true)?;
     if let Some(output) = output {
         fs::write(turbo_json_path, output)?;
         Ok(UnlinkSpacesResult::Unlinked)
