@@ -63,7 +63,12 @@ for (const combo of testCombinations) {
     excludePrune = [],
   } = combo;
 
+  const subdir = "js";
   const Suite = uvu.suite(`${name ?? pkgManager}`);
+
+  const SubDirSuite = uvu.suite(
+    `${name ?? pkgManager} from subdirectory ./${subdir}`
+  );
 
   const repo = new Monorepo({
     root: "basics",
@@ -84,7 +89,7 @@ for (const combo of testCombinations) {
     root: "in-subdirectory",
     pm: pkgManager,
     pipeline,
-    subdir: "js",
+    subdir,
   });
   sub.init();
   sub.install();
@@ -93,11 +98,12 @@ for (const combo of testCombinations) {
   sub.addPackage("c");
   sub.linkPackages();
 
-  runSmokeTests(Suite, sub, pkgManager, includePrune, excludePrune, {
+  runSmokeTests(SubDirSuite, sub, pkgManager, includePrune, excludePrune, {
     cwd: path.join(sub.root, sub.subdir),
   });
 
   suites.push(Suite);
+  suites.push(SubDirSuite);
 }
 
 for (let suite of suites) {
@@ -116,9 +122,7 @@ function runSmokeTests<T>(
     repo.cleanup();
   });
 
-  const suffix = `${options.cwd ? " from " + options.cwd : ""}`;
-
-  suite(`${pkgManager} builds${suffix}`, async () => {
+  suite(`${pkgManager} builds`, async () => {
     const results = repo.turbo("run", ["build", "--dry=json"], options);
     const dryRun: DryRun = JSON.parse(results.stdout);
     // expect to run all packages
@@ -158,7 +162,7 @@ function runSmokeTests<T>(
     }
   });
 
-  suite(`${pkgManager} runs tests and logs${suffix}`, async () => {
+  suite(`${pkgManager} runs tests and logs`, async () => {
     const results = repo.turbo("run", ["test"], options);
     assert.equal(0, results.exitCode, "exit code should be 0");
     const commandOutput = getCommandOutputAsArray(results);
@@ -180,7 +184,7 @@ function runSmokeTests<T>(
     assert.ok(text.includes("testing c"), "Contains correct output");
   });
 
-  suite(`${pkgManager} runs lint and logs${suffix}`, async () => {
+  suite(`${pkgManager} runs lint and logs`, async () => {
     const results = repo.turbo("run", ["lint"], options);
     assert.equal(0, results.exitCode, "exit code should be 0");
     const commandOutput = getCommandOutputAsArray(results);
@@ -202,7 +206,7 @@ function runSmokeTests<T>(
     assert.ok(text.includes("linting c"), "Contains correct output");
   });
 
-  suite(`${pkgManager} handles filesystem changes${suffix}`, async () => {
+  suite(`${pkgManager} handles filesystem changes`, async () => {
     repo.newBranch("my-feature-branch");
     repo.commitFiles({
       [path.join("packages", "a", "test.js")]: `console.log('testingz a');`,
@@ -432,7 +436,7 @@ function runSmokeTests<T>(
     );
   });
 
-  suite(`${pkgManager} runs root tasks${suffix}`, async () => {
+  suite(`${pkgManager} runs root tasks`, async () => {
     const result = getCommandOutputAsArray(
       repo.turbo("run", ["special"], options)
     );
@@ -455,7 +459,7 @@ function runSmokeTests<T>(
     );
   });
 
-  suite(`${pkgManager} passes through correct args${suffix}`, async () => {
+  suite(`${pkgManager} passes through correct args`, async () => {
     const expectArgsPassed = (inputArgs: string[], passedArgs: string[]) => {
       const result = getCommandOutputAsArray(
         repo.turbo("run", inputArgs, options)
@@ -514,7 +518,7 @@ function runSmokeTests<T>(
   const [installCmd, ...installArgs] =
     getImmutableInstallForPackageManager(pkgManager);
 
-  suite(`${pkgManager} + turbo prune${suffix}`, async () => {
+  suite(`${pkgManager} + turbo prune`, async () => {
     const scope = "a";
     const pruneCommandOutput = getCommandOutputAsArray(
       repo.turbo("prune", [scope], options)
@@ -575,7 +579,7 @@ function runSmokeTests<T>(
     );
   });
 
-  suite(`${pkgManager} + turbo prune --docker${suffix}`, async () => {
+  suite(`${pkgManager} + turbo prune --docker`, async () => {
     const scope = "a";
     const pruneCommandOutput = getCommandOutputAsArray(
       repo.turbo("prune", [scope, "--docker"], options)
