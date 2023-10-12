@@ -204,6 +204,11 @@ impl ChunkItem for ModuleChunkItem {
     fn module(&self) -> Vc<Box<dyn Module>> {
         Vc::upcast(self.module)
     }
+
+    #[turbo_tasks::function]
+    fn is_self_async(self: Vc<Self>) -> Vc<bool> {
+        Vc::cell(true)
+    }
 }
 
 #[turbo_tasks::value_impl]

@@ -98,7 +98,10 @@ impl AsyncModule {
                         None
                     }
                     ReferencedAsset::Some(placeable) => {
-                        let chunk_item = placeable.as_chunk_item(Vc::upcast(chunking_context));
+                        let chunk_item = placeable
+                            .as_chunk_item(Vc::upcast(chunking_context))
+                            .resolve()
+                            .await?;
                         if async_module_info
                             .referenced_async_modules
                             .contains(&chunk_item)

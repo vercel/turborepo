@@ -17,6 +17,7 @@ use std::{
 };
 
 use anyhow::Result;
+use auto_hash_map::AutoSet;
 use indexmap::{IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use tracing::{info_span, Span};
@@ -502,7 +503,7 @@ async fn chunk_content_internal_parallel(
                 external_module_references.insert(reference);
             }
             ChunkContentGraphNode::InheritAsyncInfo { item, references } => {
-                for (reference, ty) in references {
+                for &(reference, ty) in &references {
                     match ty {
                         InheritAsyncEdge::LocalModule => local_back_edges_inherit_async
                             .entry(reference)
@@ -585,7 +586,7 @@ pub struct ChunkItems(Vec<Vc<Box<dyn ChunkItem>>>);
 
 #[turbo_tasks::value]
 pub struct AsyncModuleInfo {
-    pub referenced_async_modules: HashSet<Vc<Box<dyn ChunkItem>>>,
+    pub referenced_async_modules: AutoSet<Vc<Box<dyn ChunkItem>>>,
 }
 
 #[turbo_tasks::value(transparent)]

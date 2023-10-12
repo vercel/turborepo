@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use indexmap::{IndexMap, IndexSet};
+use auto_hash_map::AutoSet;
+use indexmap::IndexMap;
 use once_cell::unsync::Lazy;
 use turbo_tasks::{keyed_cell, TryFlatJoinIterExt, TryJoinIterExt, Value, Vc};
 
@@ -46,12 +47,13 @@ pub async fn make_chunk_group(
         .keys()
         .copied()
         .chain(self_async_children.into_iter())
-        .collect::<IndexSet<_>>();
+        .map(|chunk_item| (chunk_item, AutoSet::<Vc<Box<dyn ChunkItem>>>::new()))
+        .collect::<IndexMap<_, _>>();
 
     // Propagate async inheritance
     let mut i = 0;
     loop {
-        let Some(&chunk_item) = async_chunk_items.get_index(i) else {
+        let Some((&chunk_item, _)) = async_chunk_items.get_index(i) else {
             break;
         };
         // The first few entries are from
@@ -65,7 +67,10 @@ pub async fn make_chunk_group(
         if let Some(parents) = map.get(&chunk_item) {
             for &parent in parents.iter() {
                 // Add item, it will be iterated by this loop too
-                async_chunk_items.insert(parent);
+                async_chunk_items
+                    .entry(parent)
+                    .or_default()
+                    .insert(chunk_item);
             }
         }
         i += 1;
@@ -78,23 +83,14 @@ pub async fn make_chunk_group(
         .collect::<IndexMap<_, Option<Vc<AsyncModuleInfo>>>>();
 
     // Insert AsyncModuleInfo for every async module
-    for &async_item in async_chunk_items.iter() {
+    for (async_item, referenced_async_modules) in async_chunk_items {
         chunk_items.insert(
             async_item,
             Some(
                 keyed_cell(
                     async_item,
                     AsyncModuleInfo {
-                        referenced_async_modules: local_back_edges_inherit_async
-                            .get(&async_item)
-                            .map(|references| {
-                                references
-                                    .iter()
-                                    .filter(|&item| async_chunk_items.contains(item))
-                                    .copied()
-                                    .collect()
-                            })
-                            .unwrap_or_default(),
+                        referenced_async_modules,
                     },
                 )
                 .await?,
