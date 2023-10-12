@@ -32,7 +32,6 @@ export class Monorepo {
   root: string;
   subdir?: string;
   turboConfig: any;
-  binDir: string;
   name: string;
   npmClient: PackageManager;
 
