@@ -468,7 +468,7 @@ mod test {
     use anyhow::Result;
     use turborepo_vercel_api_mock::start_test_server;
 
-    use crate::APIClient;
+    use crate::{APIClient, Client};
 
     #[tokio::test]
     async fn test_do_preflight() -> Result<()> {
@@ -476,7 +476,7 @@ mod test {
         let handle = tokio::spawn(start_test_server(port));
         let base_url = format!("http://localhost:{}", port);
 
-        let client = APIClient::new(&base_url, 200, "2.0.0", true)?;
+        let client: Client = APIClient::new(&base_url, 200, "2.0.0", true)?;
 
         let response = client
             .do_preflight(
