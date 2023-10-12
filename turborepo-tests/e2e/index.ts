@@ -7,70 +7,11 @@ import * as assert from "uvu/assert";
 import { Monorepo } from "./monorepo";
 import path from "path";
 import * as fs from "fs";
-
-const basicPipeline = {
-  pipeline: {
-    test: {
-      dependsOn: ["^build"],
-      outputs: [],
-    },
-    lint: {
-      inputs: ["build.js", "lint.js"],
-      outputs: [],
-    },
-    build: {
-      dependsOn: ["^build"],
-      outputs: ["dist/**", "!dist/cache/**"],
-    },
-    "//#build": {
-      dependsOn: [],
-      outputs: ["dist/**"],
-      inputs: ["rootbuild.js"],
-    },
-    "//#special": {
-      dependsOn: ["^build"],
-      outputs: ["dist/**"],
-      inputs: [],
-    },
-    "//#args": {
-      dependsOn: [],
-      outputs: [],
-    },
-  },
-  globalEnv: ["GLOBAL_ENV_DEPENDENCY"],
-};
-
-const prunePipeline = {
-  ...basicPipeline,
-  pipeline: {
-    ...basicPipeline.pipeline,
-    // add some package specific pipeline tasks to test pruning
-    "a#build": {
-      outputs: ["dist/**", "!dist/cache/**"],
-    },
-    "c#build": {
-      outputs: ["dist/**", "!dist/cache/**"],
-    },
-  },
-};
-
-const explicitPrunePipeline = {
-  ...basicPipeline,
-  pipeline: {
-    ...basicPipeline.pipeline,
-    // add some package specific pipeline tasks to test pruning
-    "a#build": {
-      dependsOn: ["b#build"],
-      outputs: ["dist/**", "!dist/cache/**"],
-    },
-    "b#build": {
-      outputs: ["dist/**", "!dist/cache/**"],
-    },
-    "c#build": {
-      outputs: ["dist/**", "!dist/cache/**"],
-    },
-  },
-};
+import {
+  basicPipeline,
+  prunePipeline,
+  explicitPrunePipeline,
+} from "./fixtures";
 
 const testCombinations = [
   { npmClient: "yarn" as const, pipeline: basicPipeline },
