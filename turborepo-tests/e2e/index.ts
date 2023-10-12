@@ -45,7 +45,13 @@ process.env.TURBO_TOKEN = "";
 
 let suites: uvu.uvu.Test<uvu.Context>[] = [];
 for (const combo of testCombinations) {
-  const { npmClient, pipeline, name, includePrune, excludePrune } = combo;
+  const {
+    npmClient,
+    pipeline,
+    name,
+    includePrune = [],
+    excludePrune = [],
+  } = combo;
 
   const Suite = uvu.suite(`${name ?? npmClient}`);
 
@@ -61,7 +67,7 @@ for (const combo of testCombinations) {
   repo.addPackage("c");
   repo.linkPackages();
   repo.expectCleanGitStatus();
-  runSmokeTests(Suite, repo, npmClient, includePrune ?? [], excludePrune ?? []);
+  runSmokeTests(Suite, repo, npmClient, includePrune, excludePrune);
 
   const sub = new Monorepo({
     root: "in-subdirectory",
@@ -76,7 +82,7 @@ for (const combo of testCombinations) {
   sub.addPackage("c");
   sub.linkPackages();
 
-  runSmokeTests(Suite, sub, npmClient, includePrune ?? [], excludePrune ?? [], {
+  runSmokeTests(Suite, sub, npmClient, includePrune, excludePrune, {
     cwd: sub.subdir ? path.join(sub.root, sub.subdir) : sub.root,
   });
 
