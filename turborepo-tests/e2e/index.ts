@@ -146,51 +146,47 @@ function runSmokeTests<T>(
     repo.cleanup();
   });
 
-  suite(
-    `${npmClient} builds${options.cwd ? " from " + options.cwd : ""}`,
-    async () => {
-      const results = repo.turbo("run", ["build", "--dry=json"], options);
-      const dryRun: DryRun = JSON.parse(results.stdout);
-      // expect to run all packages
-      const expectTaskId = includesTaskId(dryRun);
-      for (const pkg of ["a", "b", "c", "//"]) {
-        assert.ok(
-          dryRun.packages.includes(pkg),
-          `Expected to include package ${pkg}`
-        );
-        assert.ok(
-          expectTaskId(pkg + "#build"),
-          `Expected to include task ${pkg}#build`
-        );
-      }
+  const suffix = `${options.cwd ? " from " + options.cwd : ""}`;
 
-      // actually run the build
-      const buildOutput = getCommandOutputAsArray(
-        repo.turbo("run", ["build"], options)
+  suite(`${npmClient} builds${suffix}`, async () => {
+    const results = repo.turbo("run", ["build", "--dry=json"], options);
+    const dryRun: DryRun = JSON.parse(results.stdout);
+    // expect to run all packages
+    const expectTaskId = includesTaskId(dryRun);
+    for (const pkg of ["a", "b", "c", "//"]) {
+      assert.ok(
+        dryRun.packages.includes(pkg),
+        `Expected to include package ${pkg}`
       );
       assert.ok(
-        buildOutput.includes("//:build: building"),
-        "Missing root build"
+        expectTaskId(pkg + "#build"),
+        `Expected to include task ${pkg}#build`
       );
-
-      // assert that hashes are stable across multiple runs
-      const secondRun = repo.turbo("run", ["build", "--dry=json"], options);
-      const secondDryRun: DryRun = JSON.parse(secondRun.stdout);
-
-      repo.turbo("run", ["build"], options);
-
-      const thirdRun = repo.turbo("run", ["build", "--dry=json"], options);
-      const thirdDryRun: DryRun = JSON.parse(thirdRun.stdout);
-      const getThirdRunHash = matchTask(taskHashPredicate)(thirdDryRun);
-      for (const entry of secondDryRun.tasks) {
-        assert.equal(
-          getThirdRunHash(entry.taskId),
-          entry.hash,
-          `Hashes for ${entry.taskId} did not match`
-        );
-      }
     }
-  );
+
+    // actually run the build
+    const buildOutput = getCommandOutputAsArray(
+      repo.turbo("run", ["build"], options)
+    );
+    assert.ok(buildOutput.includes("//:build: building"), "Missing root build");
+
+    // assert that hashes are stable across multiple runs
+    const secondRun = repo.turbo("run", ["build", "--dry=json"], options);
+    const secondDryRun: DryRun = JSON.parse(secondRun.stdout);
+
+    repo.turbo("run", ["build"], options);
+
+    const thirdRun = repo.turbo("run", ["build", "--dry=json"], options);
+    const thirdDryRun: DryRun = JSON.parse(thirdRun.stdout);
+    const getThirdRunHash = matchTask(taskHashPredicate)(thirdDryRun);
+    for (const entry of secondDryRun.tasks) {
+      assert.equal(
+        getThirdRunHash(entry.taskId),
+        entry.hash,
+        `Hashes for ${entry.taskId} did not match`
+      );
+    }
+  });
 
   suite(
     `${npmClient} runs tests and logs${
@@ -481,246 +477,227 @@ function runSmokeTests<T>(
     }
   );
 
-  suite(
-    `${npmClient} runs root tasks${options.cwd ? " from " + options.cwd : ""}`,
-    async () => {
+  suite(`${npmClient} runs root tasks${suffix}`, async () => {
+    const result = getCommandOutputAsArray(
+      repo.turbo("run", ["special"], options)
+    );
+    assert.ok(result.includes("//:special: root task"));
+    const secondPass = getCommandOutputAsArray(
+      repo.turbo(
+        "run",
+        ["special", "--filter=//", "--output-logs=hash-only"],
+        options
+      )
+    );
+    assert.ok(
+      secondPass.includes(
+        `//:special: cache hit, suppressing logs ${getHashFromOutput(
+          secondPass,
+          "//#special"
+        )}`
+      ),
+      "Rerun of //:special should be cached"
+    );
+  });
+
+  suite(`${npmClient} passes through correct args ${suffix}`, async () => {
+    const expectArgsPassed = (inputArgs: string[], passedArgs: string[]) => {
       const result = getCommandOutputAsArray(
-        repo.turbo("run", ["special"], options)
+        repo.turbo("run", inputArgs, options)
       );
-      assert.ok(result.includes("//:special: root task"));
-      const secondPass = getCommandOutputAsArray(
-        repo.turbo(
-          "run",
-          ["special", "--filter=//", "--output-logs=hash-only"],
-          options
-        )
-      );
+      // Find the output logs of the test script
+      const needle = "//:args: Output:";
+      const script_output = result.find((line) => line.startsWith(needle));
+
       assert.ok(
-        secondPass.includes(
-          `//:special: cache hit, suppressing logs ${getHashFromOutput(
-            secondPass,
-            "//#special"
-          )}`
-        ),
-        "Rerun of //:special should be cached"
+        script_output != undefined && script_output.startsWith(needle),
+        `Unable to find '//:arg' output in '${result}'`
       );
+      const [node, ...args] = JSON.parse(
+        script_output.substring(needle.length)
+      );
+
+      assert.match(
+        node,
+        "node",
+        `Expected node binary path (${node}) to contain 'node'`
+      );
+      assert.equal(args, passedArgs);
+    };
+
+    const tests = [
+      [["args", "--filter=//", "--", "--script-arg=42"], ["--script-arg=42"]],
+      [["args", "--filter=//", "--", "--filter=//"], ["--filter=//"]],
+      [["--filter=//", "args", "--", "--filter=//"], ["--filter=//"]],
+      [
+        ["args", "--", "--script-arg", "42"],
+        ["--script-arg", "42"],
+      ],
+      [["args"], []],
+      [["args", "--"], []],
+      [
+        ["args", "--", "--", "--"],
+        ["--", "--"],
+      ],
+      [
+        ["args", "--", "first", "--", "second"],
+        ["first", "--", "second"],
+      ],
+      [
+        ["args", "--", "-f", "--f", "---f", "----f"],
+        ["-f", "--f", "---f", "----f"],
+      ],
+    ];
+
+    for (const [input, expected] of tests) {
+      expectArgsPassed(input, expected);
     }
-  );
-
-  suite(
-    `${npmClient} passes through correct args ${
-      options.cwd ? " from " + options.cwd : ""
-    }`,
-    async () => {
-      const expectArgsPassed = (inputArgs: string[], passedArgs: string[]) => {
-        const result = getCommandOutputAsArray(
-          repo.turbo("run", inputArgs, options)
-        );
-        // Find the output logs of the test script
-        const needle = "//:args: Output:";
-        const script_output = result.find((line) => line.startsWith(needle));
-
-        assert.ok(
-          script_output != undefined && script_output.startsWith(needle),
-          `Unable to find '//:arg' output in '${result}'`
-        );
-        const [node, ...args] = JSON.parse(
-          script_output.substring(needle.length)
-        );
-
-        assert.match(
-          node,
-          "node",
-          `Expected node binary path (${node}) to contain 'node'`
-        );
-        assert.equal(args, passedArgs);
-      };
-
-      const tests = [
-        [["args", "--filter=//", "--", "--script-arg=42"], ["--script-arg=42"]],
-        [["args", "--filter=//", "--", "--filter=//"], ["--filter=//"]],
-        [["--filter=//", "args", "--", "--filter=//"], ["--filter=//"]],
-        [
-          ["args", "--", "--script-arg", "42"],
-          ["--script-arg", "42"],
-        ],
-        [["args"], []],
-        [["args", "--"], []],
-        [
-          ["args", "--", "--", "--"],
-          ["--", "--"],
-        ],
-        [
-          ["args", "--", "first", "--", "second"],
-          ["first", "--", "second"],
-        ],
-        [
-          ["args", "--", "-f", "--f", "---f", "----f"],
-          ["-f", "--f", "---f", "----f"],
-        ],
-      ];
-
-      for (const [input, expected] of tests) {
-        expectArgsPassed(input, expected);
-      }
-    }
-  );
+  });
 
   if (["npm", "yarn", "pnpm6", "pnpm", "berry"].includes(npmClient)) {
     // Test `turbo prune a`
     // @todo refactor with other package managers
     const [installCmd, ...installArgs] =
       getImmutableInstallForPackageManager(npmClient);
-    suite(
-      `${npmClient} + turbo prune${options.cwd ? " from " + options.cwd : ""}`,
-      async () => {
-        const scope = "a";
-        const pruneCommandOutput = getCommandOutputAsArray(
-          repo.turbo("prune", [scope], options)
-        );
-        assert.fixture(pruneCommandOutput[1], " - Added a");
-        assert.fixture(pruneCommandOutput[2], " - Added b");
 
-        let files = [];
-        assert.not.throws(() => {
-          files = repo.globbySync("out/**/*", {
-            cwd: options.cwd ?? repo.root,
-          });
-        }, `Could not read generated \`out\` directory after \`turbo prune\``);
-        const expected = [
-          "out/package.json",
-          "out/turbo.json",
-          `out/${getLockfileForPackageManager(npmClient)}`,
-          "out/packages/a/build.js",
-          "out/packages/a/lint.js",
-          "out/packages/a/package.json",
-          "out/packages/a/test.js",
-          "out/packages/b/build.js",
-          "out/packages/b/lint.js",
-          "out/packages/b/package.json",
-          "out/packages/b/test.js",
-        ];
-        for (const file of expected) {
-          assert.ok(
-            files.includes(file),
-            `Expected file ${file} to be generated`
-          );
-        }
+    suite(`${npmClient} + turbo prune${suffix}`, async () => {
+      const scope = "a";
+      const pruneCommandOutput = getCommandOutputAsArray(
+        repo.turbo("prune", [scope], options)
+      );
+      assert.fixture(pruneCommandOutput[1], " - Added a");
+      assert.fixture(pruneCommandOutput[2], " - Added b");
 
-        // grab the first turbo.json in an out folder
-        let turbos = repo
-          .globbySync("**/out/turbo.json")
-          .map((t: string) => JSON.parse(repo.readFileSync(t)));
-        for (const turbo of turbos) {
-          const pipelines = Object.keys(turbo.pipeline);
-          const missingInclude = includePrune.filter(
-            (i) => !pipelines.includes(i)
-          );
-          const presentExclude = excludePrune.filter((i) =>
-            pipelines.includes(i)
-          );
-
-          if (missingInclude.length || presentExclude.length) {
-            assert.unreachable(
-              "failed to validate prune in pipeline" +
-                (missingInclude.length ? `, expecting ${missingInclude}` : "") +
-                (presentExclude.length
-                  ? `, not expecting ${presentExclude}`
-                  : "")
-            );
-          }
-        }
-
-        const install = repo.run(installCmd, installArgs, {
-          cwd: options.cwd
-            ? path.join(options.cwd, "out")
-            : path.join(repo.root, "out"),
+      let files = [];
+      assert.not.throws(() => {
+        files = repo.globbySync("out/**/*", {
+          cwd: options.cwd ?? repo.root,
         });
-        assert.is(
-          install.exitCode,
-          0,
-          `Expected ${npmClient} install --frozen-lockfile to succeed`
+      }, `Could not read generated \`out\` directory after \`turbo prune\``);
+      const expected = [
+        "out/package.json",
+        "out/turbo.json",
+        `out/${getLockfileForPackageManager(npmClient)}`,
+        "out/packages/a/build.js",
+        "out/packages/a/lint.js",
+        "out/packages/a/package.json",
+        "out/packages/a/test.js",
+        "out/packages/b/build.js",
+        "out/packages/b/lint.js",
+        "out/packages/b/package.json",
+        "out/packages/b/test.js",
+      ];
+      for (const file of expected) {
+        assert.ok(
+          files.includes(file),
+          `Expected file ${file} to be generated`
         );
       }
-    );
 
-    suite(
-      `${npmClient} + turbo prune --docker${
-        options.cwd ? " from " + options.cwd : ""
-      }`,
-      async () => {
-        const scope = "a";
-        const pruneCommandOutput = getCommandOutputAsArray(
-          repo.turbo("prune", [scope, "--docker"], options)
+      // grab the first turbo.json in an out folder
+      let turbos = repo
+        .globbySync("**/out/turbo.json")
+        .map((t: string) => JSON.parse(repo.readFileSync(t)));
+      for (const turbo of turbos) {
+        const pipelines = Object.keys(turbo.pipeline);
+        const missingInclude = includePrune.filter(
+          (i) => !pipelines.includes(i)
         );
-        assert.fixture(pruneCommandOutput[1], " - Added a");
-        assert.fixture(pruneCommandOutput[2], " - Added b");
+        const presentExclude = excludePrune.filter((i) =>
+          pipelines.includes(i)
+        );
 
-        let files: string[] = [];
-        assert.not.throws(() => {
-          files = repo.globbySync("out/**/*", {
-            cwd: options.cwd ?? repo.root,
-          });
-        }, `Could not read generated \`out\` directory after \`turbo prune\``);
-        const expected = [
-          "out/full/package.json",
-          "out/json/package.json",
-          "out/full/turbo.json",
-          `out/${getLockfileForPackageManager(npmClient)}`,
-          "out/full/packages/a/build.js",
-          "out/full/packages/a/lint.js",
-          "out/full/packages/a/package.json",
-          "out/json/packages/a/package.json",
-          "out/full/packages/a/test.js",
-          "out/full/packages/b/build.js",
-          "out/full/packages/b/lint.js",
-          "out/full/packages/b/package.json",
-          "out/json/packages/b/package.json",
-          "out/full/packages/b/test.js",
-        ];
-        for (const file of expected) {
-          assert.ok(
-            files.includes(file),
-            `Expected file ${file} to be generated`
+        if (missingInclude.length || presentExclude.length) {
+          assert.unreachable(
+            "failed to validate prune in pipeline" +
+              (missingInclude.length ? `, expecting ${missingInclude}` : "") +
+              (presentExclude.length ? `, not expecting ${presentExclude}` : "")
           );
         }
+      }
 
-        // grab the first turbo.json in an out folder
-        let turbos = repo
-          .globbySync("**/out/turbo.json")
-          .map((t: string) => JSON.parse(repo.readFileSync(t)));
-        for (const turbo of turbos) {
-          const pipelines = Object.keys(turbo.pipeline);
-          const missingInclude = includePrune.filter(
-            (i) => !pipelines.includes(i)
-          );
-          const presentExclude = excludePrune.filter((i) =>
-            pipelines.includes(i)
-          );
+      const install = repo.run(installCmd, installArgs, {
+        cwd: options.cwd
+          ? path.join(options.cwd, "out")
+          : path.join(repo.root, "out"),
+      });
+      assert.is(
+        install.exitCode,
+        0,
+        `Expected ${npmClient} install --frozen-lockfile to succeed`
+      );
+    });
 
-          if (missingInclude.length || presentExclude.length) {
-            assert.unreachable(
-              "failed to validate prune in pipeline" +
-                (missingInclude.length ? `, expecting ${missingInclude}` : "") +
-                (presentExclude.length
-                  ? `, not expecting ${presentExclude}`
-                  : "")
-            );
-          }
-        }
+    suite(`${npmClient} + turbo prune --docker${suffix}`, async () => {
+      const scope = "a";
+      const pruneCommandOutput = getCommandOutputAsArray(
+        repo.turbo("prune", [scope, "--docker"], options)
+      );
+      assert.fixture(pruneCommandOutput[1], " - Added a");
+      assert.fixture(pruneCommandOutput[2], " - Added b");
 
-        const install = repo.run(installCmd, installArgs, {
-          cwd: options.cwd
-            ? path.join(options.cwd, "out")
-            : path.join(repo.root, "out"),
+      let files: string[] = [];
+      assert.not.throws(() => {
+        files = repo.globbySync("out/**/*", {
+          cwd: options.cwd ?? repo.root,
         });
-        assert.is(
-          install.exitCode,
-          0,
-          `Expected ${npmClient} install --frozen-lockfile to succeed`
+      }, `Could not read generated \`out\` directory after \`turbo prune\``);
+      const expected = [
+        "out/full/package.json",
+        "out/json/package.json",
+        "out/full/turbo.json",
+        `out/${getLockfileForPackageManager(npmClient)}`,
+        "out/full/packages/a/build.js",
+        "out/full/packages/a/lint.js",
+        "out/full/packages/a/package.json",
+        "out/json/packages/a/package.json",
+        "out/full/packages/a/test.js",
+        "out/full/packages/b/build.js",
+        "out/full/packages/b/lint.js",
+        "out/full/packages/b/package.json",
+        "out/json/packages/b/package.json",
+        "out/full/packages/b/test.js",
+      ];
+      for (const file of expected) {
+        assert.ok(
+          files.includes(file),
+          `Expected file ${file} to be generated`
         );
       }
-    );
+
+      // grab the first turbo.json in an out folder
+      let turbos = repo
+        .globbySync("**/out/turbo.json")
+        .map((t: string) => JSON.parse(repo.readFileSync(t)));
+      for (const turbo of turbos) {
+        const pipelines = Object.keys(turbo.pipeline);
+        const missingInclude = includePrune.filter(
+          (i) => !pipelines.includes(i)
+        );
+        const presentExclude = excludePrune.filter((i) =>
+          pipelines.includes(i)
+        );
+
+        if (missingInclude.length || presentExclude.length) {
+          assert.unreachable(
+            "failed to validate prune in pipeline" +
+              (missingInclude.length ? `, expecting ${missingInclude}` : "") +
+              (presentExclude.length ? `, not expecting ${presentExclude}` : "")
+          );
+        }
+      }
+
+      const install = repo.run(installCmd, installArgs, {
+        cwd: options.cwd
+          ? path.join(options.cwd, "out")
+          : path.join(repo.root, "out"),
+      });
+      assert.is(
+        install.exitCode,
+        0,
+        `Expected ${npmClient} install --frozen-lockfile to succeed`
+      );
+    });
   }
 }
 
