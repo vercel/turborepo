@@ -158,17 +158,7 @@ packages/c:
   /**
    * Simulates a "yarn" call by linking internal packages and generates a yarn.lock file
    */
-  linkPackages() {
-    if (this.npmClient == "npm") {
-      this._linkNpmPackages();
-      return;
-    }
-
-    if (this.npmClient == "pnpm6" || this.npmClient == "pnpm") {
-      this._linkPnpmPackages();
-      return;
-    }
-
+  _linkYarnPackages() {
     const cwd = this.subdir ? path.join(this.root, this.subdir) : this.root;
     const pkgs = fs.readdirSync(path.join(cwd, "packages"));
 
@@ -194,36 +184,54 @@ packages/c:
         "junction"
       );
 
-      if (this.npmClient == "yarn" || this.npmClient == "berry") {
-        const pkgJson = JSON.parse(
-          fs.readFileSync(
-            path.join(cwd, "packages", pkg, "package.json"),
-            "utf-8"
-          )
-        );
-        const deps = pkgJson.dependencies;
+      const pkgJson = JSON.parse(
+        fs.readFileSync(
+          path.join(cwd, "packages", pkg, "package.json"),
+          "utf-8"
+        )
+      );
+      const deps = pkgJson.dependencies;
 
-        yarnYaml += `\n"${pkg}@^${pkgJson.version}":\n  version "${pkgJson.version}"\n`;
+      yarnYaml += `\n"${pkg}@^${pkgJson.version}":\n  version "${pkgJson.version}"\n`;
 
-        if (deps && Object.keys(deps).length > 0) {
-          yarnYaml += `  dependencies:\n`;
-          for (const dep of Object.keys(deps)) {
-            yarnYaml += `    "${dep}" "0.1.0"\n`;
-          }
-        }
-        this.commitFiles({ "yarn.lock": yarnYaml });
-
-        if (this.npmClient == "berry") {
-          execa.sync("yarn", ["install"], {
-            cwd,
-            env: {
-              YARN_ENABLE_IMMUTABLE_INSTALLS: "false",
-            },
-          });
-          this.commitAll();
-          return;
+      if (deps && Object.keys(deps).length > 0) {
+        yarnYaml += `  dependencies:\n`;
+        for (const dep of Object.keys(deps)) {
+          yarnYaml += `    "${dep}" "0.1.0"\n`;
         }
       }
+      this.commitFiles({ "yarn.lock": yarnYaml });
+
+      if (this.npmClient == "berry") {
+        execa.sync("yarn", ["install"], {
+          cwd,
+          env: {
+            YARN_ENABLE_IMMUTABLE_INSTALLS: "false",
+          },
+        });
+        this.commitAll();
+        return;
+      }
+    }
+  }
+
+  /**
+   * Simulates a "yarn" call by linking internal packages and generates a yarn.lock file
+   */
+  linkPackages() {
+    if (this.npmClient == "npm") {
+      this._linkNpmPackages();
+      return;
+    }
+
+    if (this.npmClient == "pnpm6" || this.npmClient == "pnpm") {
+      this._linkPnpmPackages();
+      return;
+    }
+
+    if (this.npmClient == "yarn" || this.npmClient == "berry") {
+      this._linkYarnPackages();
+      return;
     }
   }
 
