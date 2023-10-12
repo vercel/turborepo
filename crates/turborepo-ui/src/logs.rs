@@ -172,4 +172,21 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_replay_logs_invalid_utf8() -> Result<()> {
+        let ui = UI::new(true);
+        let mut output = Vec::new();
+        let mut err = Vec::new();
+        let mut prefixed_ui = PrefixedUI::new(ui, &mut output, &mut err)
+            .with_output_prefix(CYAN.apply_to(">".to_string()))
+            .with_warn_prefix(BOLD.apply_to(">!".to_string()));
+        let dir = tempdir()?;
+        let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
+        fs::write(&log_file_path, [0, 159, 146, 150, b'\n'])?;
+        replay_logs(&mut prefixed_ui, &log_file_path)?;
+
+        assert_eq!(output, b">\n");
+        Ok(())
+    }
 }
