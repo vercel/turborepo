@@ -94,7 +94,7 @@ for (const combo of testCombinations) {
   sub.linkPackages();
 
   runSmokeTests(Suite, sub, pkgManager, includePrune, excludePrune, {
-    cwd: sub.subdir ? path.join(sub.root, sub.subdir) : sub.root,
+    cwd: path.join(sub.root, sub.subdir),
   });
 
   suites.push(Suite);
