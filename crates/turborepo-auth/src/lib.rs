@@ -328,9 +328,8 @@ async fn run_sso_one_shot_server(
 
 #[cfg(test)]
 mod test {
-    use port_scanner;
+
     use reqwest::Url;
-    use tokio;
     use turborepo_ui::UI;
     use turborepo_vercel_api_mock::start_test_server;
 

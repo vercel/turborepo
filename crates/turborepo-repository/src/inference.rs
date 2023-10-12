@@ -72,17 +72,17 @@ impl RepoState {
             .filter_map(|path| {
                 PackageJson::load(&path.join_component("package.json"))
                     .ok()
-                    .and_then(|package_json| {
+                    .map(|package_json| {
                         // FIXME: We should save this package manager that we detected
                         let workspace_globs =
                             PackageManager::get_package_manager(path, Some(&package_json))
                                 .and_then(|mgr| mgr.get_workspace_globs(path))
                                 .ok();
 
-                        Some(InferInfo {
+                        InferInfo {
                             path: path.to_owned(),
                             workspace_globs,
-                        })
+                        }
                     })
             })
             .reduce(|current, candidate| {
