@@ -194,7 +194,7 @@ jobs:
       turborepo_go_lint: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != ''}}
       turborepo_build: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' || steps.turborepo_integration.outputs.diff != '' || steps.turborepo_e2e.outputs.diff != ''}}
       turborepo_e2e: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_e2e.outputs.diff != '' }}
-      go_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
+      turborepo_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' || steps.turborepo_version.outputs.diff != '' }}
       turborepo_js: ${{ steps.ci.outputs.diff != '' || steps.turborepo_js.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
@@ -301,10 +301,10 @@ jobs:
 
       - run: turbo run test --filter=cli --color
 
-  go_integration:
+  turborepo_integration:
     name: Go Integration Tests
     needs: [determine_jobs, build_turborepo]
-    if: needs.determine_jobs.outputs.go_integration == 'true'
+    if: needs.determine_jobs.outputs.turborepo_integration == 'true'
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -910,7 +910,7 @@ jobs:
       - go_unit
       - turborepo_examples
       - turborepo_e2e
-      - go_integration
+      - turborepo_integration
       - js_packages
       - rust_lint
       - turborepo_rust_check
@@ -948,7 +948,7 @@ jobs:
           subjob ${{needs.go_unit.result}} "Go unit tests"
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.turborepo_e2e.result}} "Go e2e tests"
-          subjob ${{needs.go_integration.result}} "Go integration tests"
+          subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
           subjob ${{needs.js_packages.result}} "JS Package tests"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
@@ -1062,7 +1062,7 @@ jobs:
       - go_unit
       - turborepo_examples
       - turborepo_e2e
-      - go_integration
+      - turborepo_integration
       - rust_lint
       - turborepo_rust_check
       - turborepo_rust_clippy
@@ -1101,7 +1101,7 @@ jobs:
           subjob ${{needs.go_unit.result}} "Go unit tests"
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.turborepo_e2e.result}} "Turborepo e2e tests"
-          subjob ${{needs.go_integration.result}} "Go integration tests"
+          subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
           subjob ${{needs.turborepo_rust_clippy.result}} "Turborepo Rust clippy"
