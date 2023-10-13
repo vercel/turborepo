@@ -8,6 +8,7 @@ pub mod task_id;
 use std::{
     io::{BufWriter, IsTerminal, Write},
     sync::Arc,
+    time::SystemTime,
 };
 
 use anyhow::{anyhow, Context as ErrorContext, Result};
@@ -38,6 +39,7 @@ use crate::{
         global_hash::get_global_hash_inputs,
         summary::{GlobalHashSummary, RunSummary},
     },
+    shim::TurboState,
     task_graph::Visitor,
     task_hash::{PackageInputsHashes, TaskHashTrackerState},
 };
@@ -63,6 +65,14 @@ impl<'a> Run<'a> {
     }
 
     pub async fn run(&mut self) -> Result<i32> {
+        tracing::trace!(
+            platform = %TurboState::platform_name(),
+            start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
+            turbo_version = %TurboState::version(),
+            "performing run on {:?}",
+            TurboState::platform_name(),
+        );
+
         let start_at = Local::now();
         let package_json_path = self.base.repo_root.join_component("package.json");
         let root_package_json =
@@ -293,6 +303,10 @@ impl<'a> Run<'a> {
             self.processes.clone(),
             &self.base.repo_root,
         );
+
+        // we look for this log line to mark the start of the run
+        // in benchmarks, so please don't remove it
+        debug!("running visitor");
 
         let errors = visitor.visit(engine.clone()).await?;
 
