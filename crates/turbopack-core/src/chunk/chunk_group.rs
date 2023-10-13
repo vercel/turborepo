@@ -85,18 +85,20 @@ pub async fn make_chunk_group(
 
     // Insert AsyncModuleInfo for every async module
     for (async_item, referenced_async_modules) in async_chunk_items {
-        if let Some(references) = forward_edges_inherit_async.get(&async_item) {
-            chunk_items.insert(
-                async_item,
-                Some(AsyncModuleInfo::new(
-                    references
-                        .iter()
-                        .copied()
-                        .filter(|item| referenced_async_modules.contains(item))
-                        .collect(),
-                )),
-            );
-        }
+        let referenced_async_modules =
+            if let Some(references) = forward_edges_inherit_async.get(&async_item) {
+                references
+                    .iter()
+                    .copied()
+                    .filter(|item| referenced_async_modules.contains(item))
+                    .collect()
+            } else {
+                Default::default()
+            };
+        chunk_items.insert(
+            async_item,
+            Some(AsyncModuleInfo::new(referenced_async_modules)),
+        );
     }
 
     // Insert async chunk loaders for every referenced async module
@@ -143,6 +145,7 @@ pub async fn make_chunk_group(
     let mut chunks = make_chunks(
         chunking_context,
         chunk_items,
+        "",
         references_to_output_assets(external_module_references).await?,
     )
     .await?;
@@ -153,6 +156,7 @@ pub async fn make_chunk_group(
     let async_loader_chunks = make_chunks(
         chunking_context,
         async_loader_chunk_items,
+        "async-loader-",
         references_to_output_assets(async_loader_external_module_references).await?,
     )
     .await?;

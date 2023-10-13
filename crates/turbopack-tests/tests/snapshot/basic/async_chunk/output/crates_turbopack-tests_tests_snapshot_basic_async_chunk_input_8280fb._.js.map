@@ -5,6 +5,6 @@
     {"offset": {"line": 5, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}},
     {"offset": {"line": 9, "column": 0}, "map": {"version":3,"sources":["/turbopack/[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk/input/index.js"],"sourcesContent":["import { bar } from \"bar\";\nimport \"./shared\";\n\nbar(true);\n\nimport(\"./import\").then(({ foo }) => {\n  foo(true);\n});\n"],"names":[],"mappings":";;;;;AAGA,sMAAI;AAEJ,sJAAmB,IAAI,CAAC,CAAC,EAAE,GAAG,EAAE;IAC9B,IAAI;AACN"}},
     {"offset": {"line": 18, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}},
-    {"offset": {"line": 35, "column": 0}, "map": {"version":3,"sources":["/turbopack/[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk/input/node_modules/bar/index.js"],"sourcesContent":["export function bar(value) {\n  console.assert(value);\n}\n"],"names":[],"mappings":";;;AAAO,SAAS,IAAI,KAAK;IACvB,QAAQ,MAAM,CAAC;AACjB"}},
-    {"offset": {"line": 41, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}}]
+    {"offset": {"line": 22, "column": 0}, "map": {"version":3,"sources":["/turbopack/[project]/crates/turbopack-tests/tests/snapshot/basic/async_chunk/input/node_modules/bar/index.js"],"sourcesContent":["export function bar(value) {\n  console.assert(value);\n}\n"],"names":[],"mappings":";;;AAAO,SAAS,IAAI,KAAK;IACvB,QAAQ,MAAM,CAAC;AACjB"}},
+    {"offset": {"line": 28, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}}]
 }

@@ -23,6 +23,7 @@ use crate::output::{OutputAsset, OutputAssets};
 pub async fn make_chunks(
     chunking_context: Vc<Box<dyn ChunkingContext>>,
     chunk_items: impl IntoIterator<Item = (Vc<Box<dyn ChunkItem>>, Option<Vc<AsyncModuleInfo>>)>,
+    key_prefix: &str,
     referenced_output_assets: Vec<Vc<Box<dyn OutputAsset>>>,
 ) -> Result<Vec<Vc<Box<dyn Chunk>>>> {
     let chunk_items = chunk_items
@@ -43,7 +44,7 @@ pub async fn make_chunks(
 
     let mut chunks = Vec::new();
     for (ty, chunk_items) in map {
-        let ty_name = ty.to_string().await?.clone_value();
+        let ty_name = ty.to_string().await?;
 
         let chunk_items = chunk_items
             .into_iter()
@@ -67,7 +68,12 @@ pub async fn make_chunks(
             empty_referenced_output_assets: other_referenced_output_assets,
         };
 
-        app_vendors_split(chunk_items, ty_name, &mut split_context).await?;
+        app_vendors_split(
+            chunk_items,
+            format!("{key_prefix}{ty_name}"),
+            &mut split_context,
+        )
+        .await?;
     }
 
     Ok(chunks)
