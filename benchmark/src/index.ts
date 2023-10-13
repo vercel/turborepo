@@ -3,7 +3,12 @@ import fs from "fs";
 import fse from "fs-extra";
 import path from "path";
 import ndjson from "ndjson";
-import { setup, REPO_PATH, DEFAULT_EXEC_OPTS } from "./helpers";
+import {
+  DEFAULT_EXEC_OPTS,
+  getCommitDetails,
+  REPO_PATH,
+  setup,
+} from "./helpers";
 
 const REPETITIONS = 5;
 const TURBO_BIN = path.resolve(path.join("..", "target", "release", "turbo"));
@@ -210,23 +215,6 @@ class Benchmarks {
 }
 
 cp.execSync(`${TURBO_BIN} --version`, { stdio: "inherit" });
-
-function getCommitDetails(): { commitSha: string; commitTimestamp: Date } {
-  const envSha = process.env["GITHUB_SHA"];
-  if (envSha === undefined) {
-    return {
-      commitSha: "unknown sha",
-      commitTimestamp: new Date(),
-    };
-  }
-  const buf = cp.execSync(`git show -s --format=%ci ${envSha}`);
-  const dateString = String(buf).trim();
-  const commitTimestamp = new Date(dateString);
-  return {
-    commitSha: envSha,
-    commitTimestamp,
-  };
-}
 
 const { commitSha, commitTimestamp } = getCommitDetails();
 const platform = process.env["RUNNER_OS"] ?? "unknown";

@@ -24,3 +24,27 @@ export function setup(): void {
   // Run install so we aren't benchmarking node_modules
   cp.execSync("yarn install", DEFAULT_EXEC_OPTS);
 }
+
+export function getCommitTimestamp(sha: string | undefined) {
+  if (sha === undefined) {
+    return new Date();
+  }
+
+  const buf = cp.execSync(`git show -s --format=%ci ${sha}`);
+  const dateString = String(buf).trim();
+  return new Date(dateString);
+}
+
+interface CommitDetails {
+  commitSha: string;
+  commitTimestamp: Date;
+}
+
+export function getCommitDetails(): CommitDetails {
+  const sha = process.env["GITHUB_SHA"];
+
+  return {
+    commitSha: sha ?? "unknown sha",
+    commitTimestamp: getCommitTimestamp(sha),
+  };
+}
