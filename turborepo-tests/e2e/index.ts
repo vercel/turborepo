@@ -32,7 +32,7 @@ let suites: uvu.uvu.Test<uvu.Context>[] = [];
 for (const mgr of packageManagers) {
   // Run all the tests from the root of the repo
   const Basic = uvu.suite(mgr);
-  const repo = createMonorepo(mgr, basicPipeline);
+  const repo = createMonorepo(`${mgr}-basic`, mgr, basicPipeline);
   repo.expectCleanGitStatus();
   testBuild(Basic, repo, mgr);
   testsAndLogs(Basic, repo, mgr);
@@ -45,7 +45,12 @@ for (const mgr of packageManagers) {
 
   // test that turbo can run from a subdirectory
   const BasicFromSubDir = uvu.suite(`${mgr} from subdirectory`);
-  const repo2 = createMonorepo(mgr, basicPipeline, "js");
+  const repo2 = createMonorepo(
+    `${mgr}-in-subdirectory`,
+    mgr,
+    basicPipeline,
+    "js"
+  );
   const cwd = path.join(repo2.root, repo2.subdir);
   testBuild(BasicFromSubDir, repo2, mgr, { cwd });
   testsAndLogs(BasicFromSubDir, repo2, mgr, { cwd });

@@ -27,12 +27,13 @@ interface MonorepoOptions {
 }
 
 export function createMonorepo(
+  name: string,
   pkgManager: string,
   pipeline: string,
   subdir: string
 ): Monorepo {
   const repo = new Monorepo({
-    root: `${pkgManager}-basic`,
+    root: name,
     pm: pkgManager,
     pipeline,
     subdir,
