@@ -522,7 +522,9 @@ async fn chunk_content_internal_parallel(
                     }
                 }
                 forward_edges_inherit_async
-                    .insert(item, references.into_iter().map(|(r, _)| r).collect());
+                    .entry(item)
+                    .or_insert_with(Vec::new)
+                    .extend(references.into_iter().map(|(r, _)| r));
             }
         }
     }
