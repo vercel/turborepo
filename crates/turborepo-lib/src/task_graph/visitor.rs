@@ -1,11 +1,13 @@
 use std::{
     borrow::Cow,
+    collections::HashSet,
     io::Write,
     process::Stdio,
     sync::{Arc, Mutex, OnceLock},
     time::Duration,
 };
 
+use chrono::{DateTime, Local};
 use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
@@ -22,7 +24,8 @@ use crate::{
     package_graph::{PackageGraph, WorkspaceName},
     process::{ChildExit, ProcessManager},
     run::{
-        summary::RunTracker,
+        summary,
+        summary::{GlobalHashSummary, RunTracker},
         task_id::{self, TaskId},
         RunCache,
     },
@@ -31,19 +34,23 @@ use crate::{
 
 // This holds the whole world
 pub struct Visitor<'a> {
+    color_cache: ColorSelector,
+    dry: bool,
+    global_env_mode: EnvMode,
+    global_hash_summary: GlobalHashSummary<'a>,
+    manager: ProcessManager,
+    opts: &'a Opts<'a>,
+    package_graph: Arc<PackageGraph>,
+    packages: HashSet<WorkspaceName>,
+    repo_root: &'a AbsoluteSystemPath,
     run_cache: Arc<RunCache>,
     run_tracker: RunTracker,
-    package_graph: Arc<PackageGraph>,
-    opts: &'a Opts<'a>,
-    task_hasher: TaskHasher<'a>,
-    global_env_mode: EnvMode,
     sink: OutputSink<StdWriter>,
-    color_cache: ColorSelector,
+    started_at: DateTime<Local>,
+    task_hasher: TaskHasher<'a>,
     ui: UI,
-    manager: ProcessManager,
-    repo_root: &'a AbsoluteSystemPath,
     global_env: EnvironmentVariableMap,
-    dry: bool,
+    pub version: &'static str,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -63,6 +70,8 @@ pub enum Error {
     Engine(#[from] crate::engine::ExecuteError),
     #[error(transparent)]
     TaskHash(#[from] task_hash::Error),
+    #[error(transparent)]
+    RunSummary(#[from] summary::Error),
 }
 
 impl<'a> Visitor<'a> {
@@ -81,9 +90,13 @@ impl<'a> Visitor<'a> {
         global_env_mode: EnvMode,
         ui: UI,
         silent: bool,
+        version: &'static str,
         manager: ProcessManager,
         repo_root: &'a AbsoluteSystemPath,
         global_env: EnvironmentVariableMap,
+        packages: HashSet<WorkspaceName>,
+        started_at: DateTime<Local>,
+        global_hash_summary: GlobalHashSummary<'a>,
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,
@@ -95,19 +108,23 @@ impl<'a> Visitor<'a> {
         let color_cache = ColorSelector::default();
 
         Self {
+            color_cache,
+            dry: false,
+            global_env_mode,
+            global_hash_summary,
+            manager,
+            opts,
+            package_graph,
+            packages,
+            repo_root,
             run_cache,
             run_tracker,
-            package_graph,
-            opts,
-            task_hasher,
-            global_env_mode,
             sink,
-            color_cache,
+            started_at,
+            task_hasher,
             ui,
-            manager,
-            repo_root,
-            dry: false,
             global_env,
+            version,
         }
     }
 
@@ -396,6 +413,36 @@ impl<'a> Visitor<'a> {
         Ok(errors)
     }
 
+    /// Finishes visiting the tasks, creates the run summary, and either
+    /// prints, saves, or sends it to spaces.
+    pub(crate) async fn finish(self, user: Option<String>) -> Result<(), Error> {
+        let started_at = self.started_at;
+        let pkg_dep_graph = self.package_graph;
+        let ui = self.ui;
+        let opts = self.opts;
+        let repo_root = self.repo_root;
+        let version = self.version;
+        let packages = self.packages;
+        let global_hash_summary = self.global_hash_summary;
+
+        Ok(self
+            .run_tracker
+            .finish(
+                started_at,
+                0,
+                &*pkg_dep_graph,
+                ui,
+                repo_root,
+                opts.scope_opts.pkg_inference_root.as_deref(),
+                version,
+                user,
+                &opts.run_opts,
+                packages,
+                global_hash_summary,
+            )
+            .await?)
+    }
+
     fn sink(opts: &Opts, silent: bool) -> OutputSink<StdWriter> {
         let (out, err) = if silent {
             (std::io::sink().into(), std::io::sink().into())
@@ -460,12 +507,10 @@ impl<'a> Visitor<'a> {
         prefixed_ui
     }
 
+    /// Only used for the hashing comparison between Rust and Go. After port,
+    /// should delete
     pub fn into_task_hash_tracker(self) -> TaskHashTrackerState {
         self.task_hasher.into_task_hash_tracker_state()
-    }
-
-    pub fn into_run_tracker(self) -> RunTracker {
-        self.run_tracker
     }
 
     pub fn dry_run(mut self) -> Self {

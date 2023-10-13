@@ -41,6 +41,16 @@ impl Vendor {
         *VENDOR.get_or_init(|| Self::infer_inner())
     }
 
+    /// Gets user from CI environment variables
+    pub fn get_user() -> Option<String> {
+        let vendor = Vendor::infer();
+
+        vendor
+            .map(|v| v.username_env_var)
+            .flatten()
+            .and_then(|v| env::var(v).ok())
+    }
+
     pub fn infer_inner() -> Option<&'static Vendor> {
         for env in get_vendors() {
             if let Some(eval_env) = &env.eval_env {

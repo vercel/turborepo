@@ -6,7 +6,6 @@ mod scope;
 pub(crate) mod summary;
 pub mod task_id;
 use std::{
-    env,
     io::{BufWriter, IsTerminal, Write},
     sync::Arc,
     time::SystemTime,
@@ -361,11 +360,7 @@ impl<'a> Run<'a> {
             resolved_pass_through_env_vars,
         );
 
-        let vendor = Vendor::infer();
-        let user = vendor
-            .map(|v| v.username_env_var)
-            .flatten()
-            .and_then(|v| env::var(v).ok());
+        let user = Vendor::get_user();
 
         let run_tracker = RunTracker::new(
             start_at,
@@ -391,9 +386,13 @@ impl<'a> Run<'a> {
             global_env_mode,
             self.base.ui,
             false,
+            self.base.version(),
             self.processes.clone(),
             &self.base.repo_root,
             global_env,
+            filtered_pkgs,
+            start_at,
+            global_hash_summary,
         );
 
         // we look for this log line to mark the start of the run
@@ -413,23 +412,7 @@ impl<'a> Run<'a> {
             writeln!(std::io::stderr(), "{err}").ok();
         }
 
-        let run_tracker = visitor.into_run_tracker();
-
-        run_tracker
-            .finish(
-                start_at,
-                0,
-                &pkg_dep_graph,
-                self.base.ui,
-                &self.base.repo_root,
-                opts.scope_opts.pkg_inference_root.as_deref(),
-                self.base.version(),
-                user,
-                &opts.run_opts,
-                filtered_pkgs,
-                global_hash_summary,
-            )
-            .await?;
+        visitor.finish(user).await?;
 
         Ok(exit_code)
     }
@@ -437,6 +420,7 @@ impl<'a> Run<'a> {
     #[tokio::main]
     #[tracing::instrument(skip(self))]
     pub async fn get_hashes(&self) -> Result<(String, TaskHashTrackerState)> {
+        let started_at = Local::now();
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
         let package_json_path = self.base.repo_root.join_component("package.json");
@@ -514,7 +498,7 @@ impl<'a> Run<'a> {
                 .collect(),
         ))
         .with_tasks_only(opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.into_iter().collect())
+        .with_workspaces(filtered_pkgs.clone().into_iter().collect())
         .with_tasks(
             opts.run_opts
                 .tasks
@@ -529,6 +513,21 @@ impl<'a> Run<'a> {
         {
             global_env_mode = EnvMode::Strict;
         }
+
+        let pass_through_env = global_hash_inputs.pass_through_env.unwrap_or_default();
+        let resolved_pass_through_env_vars =
+            env_at_execution_start.from_wildcards(pass_through_env)?;
+
+        let global_hash_summary = GlobalHashSummary::new(
+            global_hash_inputs.global_cache_key,
+            global_hash_inputs.global_file_hash_map,
+            &root_external_dependencies_hash,
+            global_hash_inputs.env,
+            pass_through_env,
+            global_hash_inputs.dot_env,
+            global_hash_inputs.resolved_env_vars.unwrap_or_default(),
+            resolved_pass_through_env_vars,
+        );
 
         let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
             &scm,
@@ -584,11 +583,15 @@ impl<'a> Run<'a> {
             global_env_mode,
             self.base.ui,
             true,
+            self.base.version(),
             self.processes.clone(),
             &self.base.repo_root,
             // TODO: this is only needed for full execution, figure out better way to model this
             // not affecting a dry run
             EnvironmentVariableMap::default(),
+            filtered_pkgs,
+            started_at,
+            global_hash_summary,
         )
         .dry_run();
 
