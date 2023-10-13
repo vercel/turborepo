@@ -1,6 +1,5 @@
-import execa from "execa";
 import * as uvu from "uvu";
-import { Monorepo, createMonorepo } from "./monorepo";
+import { createMonorepo } from "./monorepo";
 // @ts-ignore-next-line
 import path from "path";
 import {
@@ -29,8 +28,6 @@ const packageManagers: PackageManager[] = [
 
 // This is injected by github actions
 process.env.TURBO_TOKEN = "";
-
-let suites: uvu.uvu.Test<uvu.Context>[] = [];
 
 for (const mgr of packageManagers) {
   // Run all the tests from the root of the repo
