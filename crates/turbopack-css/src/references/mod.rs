@@ -22,12 +22,9 @@ use turbopack_core::{
     source_pos::SourcePos,
 };
 
-use crate::{
-    lifetime_util::import_rule_to_static,
-    references::{
-        import::{ImportAssetReference, ImportAttributes},
-        url::UrlAssetReference,
-    },
+use crate::references::{
+    import::{ImportAssetReference, ImportAttributes},
+    url::UrlAssetReference,
 };
 
 pub(crate) mod compose;
