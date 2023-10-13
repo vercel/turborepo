@@ -44,8 +44,17 @@ jobs:
   time-to-first-task:
     name: Time to First Task
     timeout-minutes: 60
-    runs-on: ubuntu-latest
-
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-node
