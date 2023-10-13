@@ -941,6 +941,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c676a478f63e9fa2dd5368a42f28bba0d6c560b775f38583c8bbaa7fcd67c9c"
 
 [[package]]
+name = "bytelines"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "784face321c535fcd9a1456632fa720aa53ea0640b57341d961c8c09de2da59f"
+dependencies = [
+ "futures",
+ "tokio",
+]
+
+[[package]]
 name = "bytemuck"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10073,6 +10083,7 @@ dependencies = [
  "atty",
  "axum",
  "axum-server",
+ "bytelines",
  "camino",
  "capnp 0.17.2",
  "capnpc",
@@ -10235,6 +10246,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "atty",
+ "bytelines",
  "console",
  "indicatif",
  "lazy_static",

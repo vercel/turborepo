@@ -11,7 +11,7 @@ Setup
 
   $ cat tmpjson.log | jq .globalCacheInputs
   {
-    "rootKey": "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.",
+    "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
     "files": {
       "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
     },
@@ -51,7 +51,7 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "0cd306aa8e337d8a",
+    "hash": "b42768856d16033a",
     "inputs": {
       ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
       "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
@@ -113,7 +113,7 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "12af4a2f5c5af4e1",
+    "hash": "9b9969f14caa05a4",
     "inputs": {
       "package.json": "4d57bb28c9967640d812981198a743b3188f713e"
     },

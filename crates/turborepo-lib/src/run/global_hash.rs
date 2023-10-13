@@ -17,9 +17,7 @@ use crate::{
 
 static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 
-const GLOBAL_CACHE_KEY: &str = "You don't understand! I coulda had class. I coulda been a \
-                                contender. I could've been somebody, instead of a bum, which is \
-                                what I am.";
+const GLOBAL_CACHE_KEY: &str = "HEY STELLLLLLLAAAAAAAAAAAAA";
 
 #[derive(Debug, Error)]
 enum GlobalHashError {}

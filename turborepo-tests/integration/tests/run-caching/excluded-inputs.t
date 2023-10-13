@@ -7,7 +7,7 @@ Running build for my-app succeeds
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache miss, executing 48b509716a9c0812
+  my-app:build: cache miss, executing 95ba903b23f2d68b
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo 'building'
@@ -24,7 +24,7 @@ Update exluded file and try again
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache hit, replaying logs 48b509716a9c0812
+  my-app:build: cache hit, replaying logs 95ba903b23f2d68b
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo 'building'

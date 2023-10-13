@@ -494,9 +494,9 @@ mod test {
         assert_eq!(defaults.team_slug(), None);
         assert_eq!(defaults.team_id(), None);
         assert_eq!(defaults.token(), None);
-        assert_eq!(defaults.signature(), false);
-        assert_eq!(defaults.enabled(), true);
-        assert_eq!(defaults.preflight(), false);
+        assert!(!defaults.signature());
+        assert!(defaults.enabled());
+        assert!(!defaults.preflight());
         assert_eq!(defaults.timeout(), DEFAULT_TIMEOUT);
     }
 
