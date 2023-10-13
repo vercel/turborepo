@@ -513,9 +513,8 @@ impl<'a> Visitor<'a> {
         self.task_hasher.into_task_hash_tracker_state()
     }
 
-    pub fn dry_run(mut self) -> Self {
+    pub fn dry_run(&mut self) {
         self.dry = true;
-        self
     }
 }
 

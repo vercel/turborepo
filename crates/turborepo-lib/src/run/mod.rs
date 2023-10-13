@@ -375,7 +375,7 @@ impl<'a> Run<'a> {
             user.clone(),
         );
 
-        let visitor = Visitor::new(
+        let mut visitor = Visitor::new(
             pkg_dep_graph.clone(),
             runcache,
             run_tracker,
@@ -394,6 +394,10 @@ impl<'a> Run<'a> {
             start_at,
             global_hash_summary,
         );
+
+        if opts.run_opts.dry_run {
+            visitor.dry_run();
+        }
 
         // we look for this log line to mark the start of the run
         // in benchmarks, so please don't remove it
@@ -572,7 +576,7 @@ impl<'a> Run<'a> {
             None,
         );
 
-        let visitor = Visitor::new(
+        let mut visitor = Visitor::new(
             pkg_dep_graph.clone(),
             runcache,
             run_tracker,
@@ -592,8 +596,9 @@ impl<'a> Run<'a> {
             filtered_pkgs,
             started_at,
             global_hash_summary,
-        )
-        .dry_run();
+        );
+
+        visitor.dry_run();
 
         visitor.visit(engine.clone()).await?;
         let task_hash_tracker = visitor.into_task_hash_tracker();

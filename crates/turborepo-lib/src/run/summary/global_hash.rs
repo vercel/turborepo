@@ -23,12 +23,13 @@ pub struct GlobalEnvVarSummary<'a> {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GlobalHashSummary<'a> {
-    pub global_cache_key: &'static str,
-    pub global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
-    pub root_external_deps_hash: &'a str,
-    pub dot_env: &'a [RelativeUnixPathBuf],
-    pub env_vars: GlobalEnvVarSummary<'a>,
+    pub root_key: &'static str,
+    pub files: HashMap<RelativeUnixPathBuf, String>,
+    pub hash_of_external_dependencies: &'a str,
+    pub global_dot_env: &'a [RelativeUnixPathBuf],
+    pub environment_variables: GlobalEnvVarSummary<'a>,
 }
 
 impl<'a> GlobalHashSummary<'a> {
@@ -44,11 +45,11 @@ impl<'a> GlobalHashSummary<'a> {
         resolved_pass_through_env_vars: EnvironmentVariableMap,
     ) -> Self {
         Self {
-            global_cache_key,
-            global_file_hash_map,
-            root_external_deps_hash,
+            root_key: global_cache_key,
+            files: global_file_hash_map,
+            hash_of_external_dependencies: root_external_deps_hash,
 
-            env_vars: GlobalEnvVarSummary {
+            environment_variables: GlobalEnvVarSummary {
                 specified: GlobalEnvConfiguration {
                     env: global_env,
                     pass_through_env: global_pass_through_env,
@@ -58,7 +59,7 @@ impl<'a> GlobalHashSummary<'a> {
                 pass_through: resolved_pass_through_env_vars.to_secret_hashable(),
             },
 
-            dot_env: global_dot_env,
+            global_dot_env: global_dot_env,
         }
     }
 }

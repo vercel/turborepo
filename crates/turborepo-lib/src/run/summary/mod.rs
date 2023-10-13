@@ -76,6 +76,7 @@ pub struct RunSummary<'a> {
     monorepo: bool,
     #[serde(rename = "globalCacheInputs")]
     global_hash_summary: GlobalHashSummary<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     execution: Option<ExecutionSummary<'a>>,
     packages: HashSet<WorkspaceName>,
     env_mode: EnvMode,
@@ -373,7 +374,7 @@ impl<'a> RunSummary<'a> {
             }
         }
 
-        let file_count = self.global_hash_summary.global_file_hash_map.len();
+        let file_count = self.global_hash_summary.files.len();
 
         let mut tab_writer = TabWriter::new(io::stdout());
         cprintln!(ui, BOLD_CYAN, "\nGlobal Hash Inputs");
@@ -383,42 +384,52 @@ impl<'a> RunSummary<'a> {
             ui,
             GREY,
             "  External Dependencies Hash\t=\t{}",
-            self.global_hash_summary.root_external_deps_hash
+            self.global_hash_summary.hash_of_external_dependencies
         )?;
         cwriteln!(
             tab_writer,
             ui,
             GREY,
             "  Global Cache Key\t=\t{}",
-            self.global_hash_summary.global_cache_key
+            self.global_hash_summary.root_key
         )?;
         cwriteln!(
             tab_writer,
             ui,
             GREY,
             "  Global .env Files considered\t=\t{}",
-            self.global_hash_summary.dot_env.len()
+            self.global_hash_summary.global_dot_env.len()
         )?;
         cwriteln!(
             tab_writer,
             ui,
             GREY,
             "  Global Env Vars\t=\t{}",
-            self.global_hash_summary.env_vars.specified.env.join(", ")
+            self.global_hash_summary
+                .environment_variables
+                .specified
+                .env
+                .join(", ")
         )?;
         cwriteln!(
             tab_writer,
             ui,
             GREY,
             "  Global Env Vars Values\t=\t{}",
-            self.global_hash_summary.env_vars.configured.join(", ")
+            self.global_hash_summary
+                .environment_variables
+                .configured
+                .join(", ")
         )?;
         cwriteln!(
             tab_writer,
             ui,
             GREY,
             "  Inferred Global Env Vars Values\t=\t{}",
-            self.global_hash_summary.env_vars.inferred.join(", ")
+            self.global_hash_summary
+                .environment_variables
+                .inferred
+                .join(", ")
         )?;
 
         tab_writer.flush()?;
