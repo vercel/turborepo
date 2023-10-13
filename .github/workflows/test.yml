@@ -302,7 +302,7 @@ jobs:
       - run: turbo run test --filter=cli --color
 
   turborepo_integration:
-    name: Go Integration Tests
+    name: Turborepo Integration Tests
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
     timeout-minutes: 30
