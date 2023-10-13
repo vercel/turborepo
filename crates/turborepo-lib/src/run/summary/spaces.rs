@@ -50,7 +50,7 @@ impl SpacesClientHandle {
     pub async fn finish_run(&self, exit_code: u32, end_time: DateTime<Local>) -> Result<(), Error> {
         Ok(self
             .tx
-            .send(SpaceRequest::Completed {
+            .send(SpaceRequest::FinishedRun {
                 exit_code,
                 end_time: end_time.timestamp_millis(),
             })
@@ -79,10 +79,8 @@ impl SpacesClientHandle {
 #[derive(Serialize)]
 #[serde(tag = "status", rename_all = "lowercase")]
 pub enum SpaceRequest {
-    // These are not the greatest names, but they correspond
-    // to the status tags in the Go implementation
-    Completed { end_time: i64, exit_code: u32 },
-    Task { summary: Box<SpaceTaskSummary> },
+    FinishedRun { end_time: i64, exit_code: u32 },
+    FinishedTask { summary: Box<SpaceTaskSummary> },
 }
 
 impl SpacesClient {
@@ -119,11 +117,11 @@ impl SpacesClient {
             let run = self.create_run(create_run_payload).await?;
             while let Some(req) = rx.recv().await {
                 let resp = match req {
-                    SpaceRequest::Completed {
+                    SpaceRequest::FinishedRun {
                         end_time,
                         exit_code,
                     } => self.finish_run_handler(&run, end_time, exit_code).await,
-                    SpaceRequest::Task { summary } => {
+                    SpaceRequest::FinishedTask { summary } => {
                         self.finish_task_handler(*summary, &run).await
                     }
                 };
@@ -163,7 +161,7 @@ impl SpacesClient {
         .await??)
     }
 
-    // Called by the worker thread upon receiving a SpaceRequest::Completed
+    // Called by the worker thread upon receiving a SpaceRequest::FinishedRun
     async fn finish_run_handler(
         &self,
         run: &SpaceRun,

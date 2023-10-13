@@ -403,7 +403,8 @@ mod test {
 
     #[tokio::test]
     async fn test_multiple_tasks() {
-        let summary = ExecutionTracker::new("turbo run build".to_string(), None, Local::now());
+        let started_at = Local::now();
+        let summary = ExecutionTracker::new();
         let mut tasks = Vec::new();
         {
             let tracker = summary.task_tracker(TaskId::new("foo", "build"));
@@ -440,7 +441,9 @@ mod test {
         for task in tasks {
             task.await.unwrap();
         }
-        let state = summary.finish().await.unwrap();
+
+        let ended_at = Local::now();
+        let state = summary.finish(None, 0, started_at, ended_at).await.unwrap();
         assert_eq!(state.attempted, 4);
         assert_eq!(state.cached, 1);
         assert_eq!(state.failed, 1);
@@ -449,9 +452,9 @@ mod test {
 
     #[tokio::test]
     async fn test_timing() {
-        let summary = ExecutionTracker::new("turbo run build".to_string(), None, Local::now());
+        let summary = ExecutionTracker::new();
         let tracker = summary.task_tracker(TaskId::new("foo", "build"));
-        let post_construction_time = Local::now();
+        let post_construction_time = Local::now().timestamp_millis();
         let sleep_duration = Duration::milliseconds(5);
         tokio::time::sleep(sleep_duration.to_std().unwrap()).await;
 
@@ -464,7 +467,7 @@ mod test {
             "tracker start time should start when start is called"
         );
         assert!(
-            sleep_duration <= summary.duration(),
+            sleep_duration <= summary.duration.0,
             "tracker duration should be at least as long as the time between calls"
         );
     }
