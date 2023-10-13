@@ -74,7 +74,6 @@ jobs:
 
       - name: Save to Tinybird
         run: |
-          myjson=$(cat ./benchmark/ttft.json | jq -c) && curl -i -X POST \
-          -d "$myjson" \
-          -H "Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}" \
-          https://api.us-east.tinybird.co/v0/events?name=turborepo_perf_ttft
+          myjson=$(cat ./benchmark/ttft.json | jq -c)
+          echo $myjson
+          curl -i -X POST -d "$myjson" -H "Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}" https://api.us-east.tinybird.co/v0/events?name=turborepo_perf_ttft
