@@ -61,14 +61,13 @@ for (const combo of testCombinations) {
   } = combo;
 
   const subdir = "js";
-  const Suite = uvu.suite(`${name ?? pkgManager}`);
+  const suiteNamePrefix = `${pkgManager}${name ? ": " + name : ""}`;
 
-  const SubDirSuite = uvu.suite(
-    `${name ?? pkgManager} from subdirectory ./${subdir}`
-  );
+  const Suite = uvu.suite(suiteNamePrefix);
+  const SubDirSuite = uvu.suite(`${suiteNamePrefix} from subdirectory`);
 
   const repo = new Monorepo({
-    root: "basics",
+    root: `${pkgManager}-basic`,
     pm: pkgManager,
     pipeline,
   });
@@ -83,7 +82,7 @@ for (const combo of testCombinations) {
 
   // test that turbo can run from a subdirectory
   const sub = new Monorepo({
-    root: "in-subdirectory",
+    root: `${pkgManager}-in-subdirectory`,
     pm: pkgManager,
     pipeline,
     subdir,
