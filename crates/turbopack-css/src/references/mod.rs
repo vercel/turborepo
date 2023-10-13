@@ -4,6 +4,7 @@ use anyhow::Result;
 use lightningcss::{
     rules::CssRule,
     stylesheet::StyleSheet,
+    traits::IntoOwned,
     values::url::Url,
     visitor::{Visit, Visitor},
 };
