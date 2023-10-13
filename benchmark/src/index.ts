@@ -3,13 +3,9 @@ import fs from "fs";
 import fse from "fs-extra";
 import path from "path";
 import ndjson from "ndjson";
+import { setup, REPO_PATH, DEFAULT_EXEC_OPTS } from "./helpers";
 
-const REPO_ROOT = "large-monorepo";
-const REPO_ORIGIN = "https://github.com/gsoltis/large-monorepo.git";
-const REPO_PATH = path.join(process.cwd(), REPO_ROOT);
 const REPETITIONS = 5;
-
-const DEFAULT_EXEC_OPTS = { stdio: "ignore" as const, cwd: REPO_PATH };
 const TURBO_BIN = path.resolve(path.join("..", "target", "release", "turbo"));
 const DEFAULT_CACHE_PATH = path.join(
   REPO_PATH,
@@ -41,25 +37,6 @@ type TBirdEvent = {
   benchmark: string;
   durationMs: number;
 };
-
-function setup(): void {
-  // Clone repo if it doesn't exist, run clean
-  if (fs.existsSync(REPO_ROOT)) {
-    // reset the repo, remove all changed or untracked files
-    cp.execSync(
-      `cd ${REPO_ROOT} && git reset --hard HEAD && git clean -f -d -X`,
-      {
-        stdio: "inherit",
-      }
-    );
-  } else {
-    cp.execSync(`git clone ${REPO_ORIGIN}`, { stdio: "ignore" });
-  }
-
-  // Run install so we aren't benchmarking node_modules ...
-
-  cp.execSync("yarn install", DEFAULT_EXEC_OPTS);
-}
 
 function cleanTurboCache(): void {
   if (fs.existsSync(DEFAULT_CACHE_PATH)) {
