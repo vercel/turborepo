@@ -1889,6 +1889,7 @@ dependencies = [
  "phf",
  "proc-macro2",
  "quote",
+ "serde",
  "smallvec",
  "syn 1.0.109",
 ]
@@ -4972,6 +4973,7 @@ dependencies = [
  "phf",
  "phf_codegen",
  "precomputed-hash",
+ "serde",
  "smallvec",
 ]
 
@@ -7240,13 +7242,6 @@ dependencies = [
  "swc_bundler",
  "swc_cached",
  "swc_common",
- "swc_css_ast",
- "swc_css_codegen",
- "swc_css_compat",
- "swc_css_modules",
- "swc_css_parser",
- "swc_css_utils",
- "swc_css_visit",
  "swc_ecma_ast",
  "swc_ecma_codegen",
  "swc_ecma_loader",
@@ -7278,7 +7273,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fab824eff88884673de1d6b84cdb5d3d71c0b903fcef62a3ec1f44f40477433f"
 dependencies = [
  "is-macro",
- "serde",
  "string_enum",
  "swc_atoms",
  "swc_common",
@@ -7315,23 +7309,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "swc_css_compat"
-version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1ee1b2b77e7daaf389237ca2656df01cf8c1a6f2d9b158459921b202a661f8a"
-dependencies = [
- "bitflags 2.4.0",
- "once_cell",
- "serde",
- "serde_json",
- "swc_atoms",
- "swc_common",
- "swc_css_ast",
- "swc_css_utils",
- "swc_css_visit",
-]
-
-[[package]]
 name = "swc_css_minifier"
 version = "0.114.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7342,22 +7319,6 @@ dependencies = [
  "swc_common",
  "swc_css_ast",
  "swc_css_utils",
- "swc_css_visit",
-]
-
-[[package]]
-name = "swc_css_modules"
-version = "0.27.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac80e62e3221cb2abc0edd33886c74c7d2a64ca3756adce0047527026dff71ca"
-dependencies = [
- "rustc-hash",
- "serde",
- "swc_atoms",
- "swc_common",
- "swc_css_ast",
- "swc_css_codegen",
- "swc_css_parser",
  "swc_css_visit",
 ]
 
@@ -9567,9 +9528,13 @@ dependencies = [
  "async-trait",
  "indexmap 1.9.3",
  "indoc",
+ "lightningcss",
  "once_cell",
+ "parcel_selectors",
+ "parcel_sourcemap",
  "regex",
  "serde",
+ "smallvec",
  "swc_core",
  "turbo-tasks",
  "turbo-tasks-build",
