@@ -193,6 +193,10 @@ impl SCM {
             SCM::Manual
         })
     }
+
+    pub fn is_manual(&self) -> bool {
+        matches!(self, SCM::Manual)
+    }
 }
 
 #[cfg(test)]
