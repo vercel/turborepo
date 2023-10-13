@@ -10,7 +10,7 @@ export default function (
   suite,
   repo,
   pkgManager,
-  options,
+  options = {},
   includePrune = [],
   excludePrune = []
 ) {

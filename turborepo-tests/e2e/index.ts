@@ -30,49 +30,38 @@ process.env.TURBO_TOKEN = "";
 let suites: uvu.uvu.Test<uvu.Context>[] = [];
 
 for (const combo of testCombinations) {
-  const { pkgManager, pipeline, name } = combo;
+  const { pkgManager, pipeline } = combo;
 
-  const suiteNamePrefix = `${pkgManager}${name ? ": " + name : ""}`;
-
-  const Suite = uvu.suite(suiteNamePrefix);
-  const SubDirSuite = uvu.suite(`${suiteNamePrefix} from subdirectory`);
-
+  // Run all the tests from the root of the repo
+  const Basic = uvu.suite(pkgManager);
   const repo = createMonorepo(pkgManager, pipeline);
   repo.expectCleanGitStatus();
-  runSmokeTests(Suite, repo, pkgManager);
+  testBuild(Basic, repo, pkgManager);
+  testsAndLogs(Basic, repo, pkgManager);
+  lintAndLogs(Basic, repo, pkgManager);
+  changes(Basic, repo, pkgManager);
+  rootTasks(Basic, repo, pkgManager);
+  passThroughArgs(Basic, repo, pkgManager);
+  prune(Basic, repo, pkgManager);
+  pruneDocker(Basic, repo, pkgManager);
 
   // test that turbo can run from a subdirectory
+  const BasicFromSubDir = uvu.suite(`${pkgManager} from subdirectory`);
   const repo2 = createMonorepo(pkgManager, pipeline, "js");
-  runSmokeTests(SubDirSuite, repo2, pkgManager, {
-    cwd: path.join(repo2.root, repo2.subdir),
-  });
+  const cwd = path.join(repo2.root, repo2.subdir);
+  testBuild(BasicFromSubDir, repo2, pkgManager, { cwd });
+  testsAndLogs(BasicFromSubDir, repo2, pkgManager, { cwd });
+  lintAndLogs(BasicFromSubDir, repo2, pkgManager, { cwd });
+  changes(BasicFromSubDir, repo2, pkgManager, { cwd });
+  rootTasks(BasicFromSubDir, repo2, pkgManager, { cwd });
+  passThroughArgs(BasicFromSubDir, repo2, pkgManager, { cwd });
+  prune(BasicFromSubDir, repo2, pkgManager, { cwd });
+  pruneDocker(BasicFromSubDir, repo2, pkgManager, { cwd });
 
-  suites.push(Suite);
-  suites.push(SubDirSuite);
-}
-
-for (let suite of suites) {
-  suite.run();
-}
-
-function runSmokeTests<T>(
-  suite: uvu.Test<T>,
-  repo: Monorepo,
-  pkgManager: PackageManager,
-  options: execa.SyncOptions<string> = {}
-) {
-  suite.after(() => {
-    repo.cleanup();
-  });
-
-  testBuild(suite, repo, pkgManager, options);
-  testsAndLogs(suite, repo, pkgManager, options);
-  lintAndLogs(suite, repo, pkgManager, options);
-  changes(suite, repo, pkgManager, options);
-  rootTasks(suite, repo, pkgManager, options);
-  passThroughArgs(suite, repo, pkgManager, options);
-  prune(suite, repo, pkgManager, options);
-  pruneDocker(suite, repo, pkgManager, options);
+  Basic.after(() => repo.cleanup());
+  BasicFromSubDir.after(() => repo2.cleanup());
+  Basic.run();
+  BasicFromSubDir.run();
 }
 
 pruneTests();
