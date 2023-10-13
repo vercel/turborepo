@@ -92,7 +92,7 @@ pruneDocker(PruneFromSubDir, repo1, "yarn", { cwd }, ["a#build"], ["c#build"]);
 ////////////////// Explicit Deps Prune //////////////////
 
 // prune and prune --docker
-// expect c#build to be included, since a depends on c
+// expect b#build to be included, since a depends on b
 const ExplicitDepPrune = uvu.suite("explicitDepPrune");
 const repo2 = createMonorepo("yarn-basic", "yarn", explicitPrunePipeline);
 prune(ExplicitDepPrune, repo2, "yarn", {}, ["a#build", "b#build"], ["c#build"]);
