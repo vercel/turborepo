@@ -1,18 +1,21 @@
 import path from "path";
 import * as assert from "uvu/assert";
+import * as uvu from "uvu";
 import {
   getImmutableInstallForPackageManager,
   getCommandOutputAsArray,
   getLockfileForPackageManager,
 } from "../helpers";
+import { PackageManager } from "../types";
+import { Monorepo } from "../monorepo";
 
 export default function (
-  suite,
-  repo,
-  pkgManager,
-  options = {},
-  includePrune = [],
-  excludePrune = []
+  suite: uvu.uvu.Test<uvu.Context>,
+  repo: Monorepo,
+  pkgManager: PackageManager,
+  options: { cwd?: string } = {},
+  includePrune: string[] = [],
+  excludePrune: string[] = []
 ) {
   return suite(`${pkgManager} + turbo prune --docker`, async () => {
     const [installCmd, ...installArgs] =

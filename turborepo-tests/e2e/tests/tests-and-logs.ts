@@ -1,3 +1,5 @@
+// @ts-ignore-next-line
+import * as uvu from "uvu";
 import path from "path";
 import * as assert from "uvu/assert";
 import {
@@ -7,8 +9,14 @@ import {
   getCachedLogFilePathForTask,
   extractZst,
 } from "../helpers";
+import { Monorepo } from "../monorepo";
 
-export default function (suite, repo, pkgManager, options) {
+export default function (
+  suite: uvu.uvu.Test<uvu.Context>,
+  repo: Monorepo,
+  pkgManager: string,
+  options?: { cwd?: string }
+) {
   return suite(`${pkgManager} runs tests and logs`, async () => {
     const results = repo.turbo("run", ["test"], options);
     assert.equal(0, results.exitCode, "exit code should be 0");

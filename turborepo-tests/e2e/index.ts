@@ -1,6 +1,7 @@
 import execa from "execa";
 import * as uvu from "uvu";
 import { Monorepo, createMonorepo } from "./monorepo";
+// @ts-ignore-next-line
 import path from "path";
 import {
   basicPipeline,
@@ -9,7 +10,6 @@ import {
 } from "./fixtures";
 import type { PackageManager } from "./types";
 
-import testBuild from "./tests/builds";
 import testBuild from "./tests/builds";
 import testsAndLogs from "./tests/tests-and-logs";
 import lintAndLogs from "./tests/lint-and-logs";
@@ -54,7 +54,7 @@ for (const mgr of packageManagers) {
     basicPipeline,
     "js"
   );
-  const cwd = path.join(repo2.root, repo2.subdir);
+  const cwd = path.join(repo2.root, repo2.subdir ? repo2.subdir : ""); // We know repo2 always has a subdir, but typescript doesn't
   testBuild(BasicFromSubDir, repo2, mgr, { cwd });
   testsAndLogs(BasicFromSubDir, repo2, mgr, { cwd });
   lintAndLogs(BasicFromSubDir, repo2, mgr, { cwd });
@@ -75,15 +75,20 @@ for (const mgr of packageManagers) {
 // prune and prune --docker with a
 // expect c#build to be removed, since there is no dep between a -> c
 const Prune = uvu.suite("basicPrune");
-const repo = createMonorepo("yarn", prunePipeline);
+const repo = createMonorepo("yarn-basic", "yarn", prunePipeline);
 prune(Prune, repo, "yarn", {}, ["a#build"], ["c#build"]);
 pruneDocker(Prune, repo, "yarn", {}, ["a#build"], ["c#build"]);
 
 // prune and prune --docker from subdir
 // expect c#build to be removed, since there is no dep between a -> c
 const PruneFromSubDir = uvu.suite("basicPrune from subdirectory");
-const repo1 = createMonorepo("yarn", prunePipeline, "js");
-const cwd = path.join(repo1.root, repo1.subdir);
+const repo1 = createMonorepo(
+  "yarn-in-subdirectory",
+  "yarn",
+  prunePipeline,
+  "js"
+);
+const cwd = path.join(repo1.root, repo1.subdir ? repo1.subdir : ""); // We know repo1 always has a subdir, but typescript doesn't
 prune(PruneFromSubDir, repo, "yarn", { cwd }, ["a#build"], ["c#build"]);
 pruneDocker(PruneFromSubDir, repo1, "yarn", { cwd }, ["a#build"], ["c#build"]);
 
@@ -92,7 +97,7 @@ pruneDocker(PruneFromSubDir, repo1, "yarn", { cwd }, ["a#build"], ["c#build"]);
 // prune and prune --docker
 // expect c#build to be included, since a depends on c
 const ExplicitDepPrune = uvu.suite("explicitDepPrune");
-const repo2 = createMonorepo("yarn", explicitPrunePipeline);
+const repo2 = createMonorepo("yarn-basic", "yarn", explicitPrunePipeline);
 prune(ExplicitDepPrune, repo2, "yarn", {}, ["a#build", "b#build"], ["c#build"]);
 pruneDocker(
   ExplicitDepPrune,
@@ -108,8 +113,13 @@ pruneDocker(
 const ExplicitDepPruneFromSubDir = uvu.suite(
   "explicitDepPrune from subdirectory"
 );
-const repo3 = createMonorepo("yarn", explicitPrunePipeline, "js");
-const repo3cwd = path.join(repo3.root, repo3.subdir);
+const repo3 = createMonorepo(
+  "yarn-in-subdirectory",
+  "yarn",
+  explicitPrunePipeline,
+  "js"
+);
+const repo3cwd = path.join(repo3.root, repo3.subdir ? repo3.subdir : ""); // We know repo3 always has a subdir, but typescript doesn't
 prune(
   ExplicitDepPruneFromSubDir,
   repo,

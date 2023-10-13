@@ -1,7 +1,15 @@
 import * as assert from "uvu/assert";
+import * as uvu from "uvu";
 import { getCommandOutputAsArray } from "../helpers";
+import { PackageManager } from "../types";
+import { Monorepo } from "../monorepo";
 
-export default function (suite, repo, pkgManager, options) {
+export default function (
+  suite: uvu.uvu.Test<uvu.Context>,
+  repo: Monorepo,
+  pkgManager: PackageManager,
+  options: { cwd?: string } = {}
+) {
   return suite(`${pkgManager} passes through correct args`, async () => {
     const expectArgsPassed = (inputArgs: string[], passedArgs: string[]) => {
       const result = getCommandOutputAsArray(

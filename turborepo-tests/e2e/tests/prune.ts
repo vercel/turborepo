@@ -1,18 +1,21 @@
 import path from "path";
 import * as assert from "uvu/assert";
+import * as uvu from "uvu";
 import {
   getImmutableInstallForPackageManager,
   getCommandOutputAsArray,
   getLockfileForPackageManager,
 } from "../helpers";
+import { Monorepo } from "../monorepo";
+import { PackageManager } from "../types";
 
 export default function (
-  suite,
-  repo,
-  pkgManager,
-  options = {},
-  includePrune = [],
-  excludePrune = []
+  suite: uvu.uvu.Test<uvu.Context>,
+  repo: Monorepo,
+  pkgManager: PackageManager,
+  options: { cwd?: string } = {},
+  includePrune: string[] = [],
+  excludePrune: string[] = []
 ) {
   return suite(`${pkgManager} + turbo prune`, async () => {
     const [installCmd, ...installArgs] =
@@ -24,7 +27,7 @@ export default function (
     assert.fixture(pruneCommandOutput[1], " - Added a");
     assert.fixture(pruneCommandOutput[2], " - Added b");
 
-    let files = [];
+    let files: string[] = [];
     assert.not.throws(() => {
       files = repo.globbySync("out/**/*", {
         cwd: options.cwd ?? repo.root,

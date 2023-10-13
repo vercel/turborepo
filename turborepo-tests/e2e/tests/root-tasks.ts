@@ -1,12 +1,15 @@
+import * as uvu from "uvu";
 import * as assert from "uvu/assert";
-import {
-  getCommandOutputAsArray,
-  getHashFromOutput,
-  getCacheItemForHash,
-  getCachedLogFilePathForTask,
-} from "../helpers";
+import { getCommandOutputAsArray, getHashFromOutput } from "../helpers";
+import { Monorepo } from "../monorepo";
+import { PackageManager } from "../types";
 
-export default function (suite, repo, pkgManager, options) {
+export default function (
+  suite: uvu.uvu.Test<uvu.Context>,
+  repo: Monorepo,
+  pkgManager: PackageManager,
+  options?: { cwd?: string }
+) {
   return suite(`${pkgManager} runs root tasks`, async () => {
     const result = getCommandOutputAsArray(
       repo.turbo("run", ["special"], options)

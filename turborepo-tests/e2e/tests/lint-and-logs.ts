@@ -1,5 +1,6 @@
 import path from "path";
 import * as assert from "uvu/assert";
+import * as uvu from "uvu";
 import {
   getCommandOutputAsArray,
   getHashFromOutput,
@@ -7,8 +8,15 @@ import {
   getCachedLogFilePathForTask,
   extractZst,
 } from "../helpers";
+import { PackageManager } from "../types";
+import { Monorepo } from "../monorepo";
 
-export default function (suite, repo, pkgManager, options) {
+export default function (
+  suite: uvu.uvu.Test<uvu.Context>,
+  repo: Monorepo,
+  pkgManager: PackageManager,
+  options: { cwd?: string } = {}
+) {
   return suite(`${pkgManager} runs lint and logs`, async () => {
     const results = repo.turbo("run", ["lint"], options);
     assert.equal(0, results.exitCode, "exit code should be 0");

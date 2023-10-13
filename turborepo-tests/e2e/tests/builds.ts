@@ -1,14 +1,20 @@
+import * as uvu from "uvu";
 import * as assert from "uvu/assert";
 import {
   matchTask,
   includesTaskId,
   taskHashPredicate,
   getCommandOutputAsArray,
-  getThirdRunHash,
 } from "../helpers";
-import type { DryRun } from "../types";
+import type { DryRun, PackageManager } from "../types";
+import { Monorepo } from "../monorepo";
 
-export default function (suite, repo, pkgManager, options) {
+export default function (
+  suite: uvu.uvu.Test<uvu.Context>,
+  repo: Monorepo,
+  pkgManager: PackageManager,
+  options: { cwd?: string } = {}
+) {
   return suite(`${pkgManager} builds`, async () => {
     const results = repo.turbo("run", ["build", "--dry=json"], options);
     const dryRun: DryRun = JSON.parse(results.stdout);

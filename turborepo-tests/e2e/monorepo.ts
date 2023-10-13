@@ -1,9 +1,11 @@
 import execa from "execa";
 import fsNormal from "fs";
 import globby from "globby";
-import fs from "fs-extra";
 import os from "os";
 import path from "path";
+// @ts-ignore-next-line
+import fs from "fs-extra";
+
 const isWin = process.platform === "win32";
 const turboPath = path.join(
   __dirname,
@@ -28,9 +30,9 @@ interface MonorepoOptions {
 
 export function createMonorepo(
   name: string,
-  pkgManager: string,
-  pipeline: string,
-  subdir: string
+  pkgManager: PackageManager,
+  pipeline: any,
+  subdir?: string
 ): Monorepo {
   const repo = new Monorepo({
     root: name,
@@ -53,6 +55,7 @@ export class Monorepo {
   root: string;
   subdir?: string;
   turboConfig: any;
+  // @ts-ignore-next-line
   name: string;
   npmClient: PackageManager;
 
@@ -257,7 +260,7 @@ importers:
     });
   }
 
-  addPackage(name, internalDeps: string[] = []) {
+  addPackage(name: string, internalDeps: string[] = []) {
     return this.commitFiles({
       [`packages/${name}/build.js`]: `
 const fs = require('fs');
@@ -302,19 +305,19 @@ fs.copyFileSync(
     });
   }
 
-  clone(origin) {
+  clone(origin: string) {
     return execa.sync("git", ["clone", origin], { cwd: this.root });
   }
 
-  push(origin, branch) {
+  push(origin: string, branch: string) {
     return execa.sync("git", ["push", origin, branch], { cwd: this.root });
   }
 
-  newBranch(branch) {
+  newBranch(branch: string) {
     return execa.sync("git", ["checkout", "-B", branch], { cwd: this.root });
   }
 
-  modifyFiles(files: { [filename: string]: string }) {
+  modifyFiles(files: { [filename: string]: string | object }) {
     for (const [file, contents] of Object.entries(files)) {
       let out = "";
       if (typeof contents !== "string") {
@@ -336,7 +339,7 @@ fs.copyFileSync(
     }
   }
 
-  commitFiles(files) {
+  commitFiles(files: { [filename: string]: string | object }) {
     this.modifyFiles(files);
     execa.sync(
       "git",
@@ -378,10 +381,11 @@ fs.copyFileSync(
   }
 
   turbo(
-    command,
+    command: string,
     args?: readonly string[],
     options?: execa.SyncOptions<string>
   ) {
+    // @ts-ignore-next-line
     const resolvedArgs = [...args];
 
     return execa.sync(turboPath, [command, ...resolvedArgs], {
@@ -391,7 +395,11 @@ fs.copyFileSync(
     });
   }
 
-  run(command, args?: readonly string[], options?: execa.SyncOptions<string>) {
+  run(
+    command: string,
+    args?: readonly string[],
+    options?: execa.SyncOptions<string>
+  ) {
     switch (this.npmClient) {
       case "yarn":
         return execa.sync("yarn", [command, ...(args || [])], {
@@ -423,11 +431,11 @@ fs.copyFileSync(
     }
   }
 
-  readFileSync(filepath) {
+  readFileSync(filepath: string) {
     return fs.readFileSync(path.join(this.root, filepath), "utf-8");
   }
 
-  readdirSync(filepath) {
+  readdirSync(filepath: string) {
     return fs.readdirSync(path.join(this.root, filepath), "utf-8");
   }
 

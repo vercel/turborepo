@@ -1,10 +1,12 @@
-import execa from "execa";
-import tar from "tar";
-import { Readable } from "stream";
-import { ZstdCodec } from "zstd-codec";
-import { Monorepo } from "./monorepo";
 import path from "path";
 import * as fs from "fs";
+import execa from "execa";
+import { Readable } from "stream";
+// @ts-ignore-next-line
+import tar from "tar";
+// @ts-ignore-next-line
+import { ZstdCodec } from "zstd-codec";
+import { Monorepo } from "./monorepo";
 import type { DryRun, PackageManager } from "./types";
 
 export const matchTask =
@@ -80,7 +82,7 @@ export function getCommandOutputAsArray(
 
 export function getHashFromOutput(lines: string[], taskId: string): string {
   const normalizedTaskId = taskId.replace("#", ":");
-  const line = lines.find((l) => l.startsWith(normalizedTaskId));
+  const line = lines.find((l) => l.startsWith(normalizedTaskId)) as string;
   const splitMessage = line.split(" ");
   const hash = splitMessage[splitMessage.length - 1];
   return hash;
@@ -111,11 +113,13 @@ export function getCachedLogFilePathForTask(
 
 function createDecoder() {
   return new Promise((resolve) => {
+    // @ts-ignore-next-line
     ZstdCodec.run((zstd) => resolve(new zstd.Streaming()));
   });
 }
 
-export async function extractZst(zst, dest) {
+// @ts-ignore-next-line
+export async function extractZst(zst, dest: string) {
   let decoder = await createDecoder();
   const fileBuffer = fs.readFileSync(zst);
   const data = new Uint8Array(
@@ -124,6 +128,7 @@ export async function extractZst(zst, dest) {
       fileBuffer.byteOffset + fileBuffer.byteLength
     )
   );
+  // @ts-ignore-next-line
   const decompressed = decoder.decompress(data);
   const stream = Readable.from(Buffer.from(decompressed));
   const output = stream.pipe(

@@ -1,8 +1,16 @@
 import path from "path";
 import * as assert from "uvu/assert";
 import { getCommandOutputAsArray, getHashFromOutput } from "../helpers";
+import { Monorepo } from "../monorepo";
+import { PackageManager } from "../types";
+import * as uvu from "uvu";
 
-export default function (suite, repo, pkgManager, options) {
+export default function (
+  suite: uvu.uvu.Test<uvu.Context>,
+  repo: Monorepo,
+  pkgManager: PackageManager,
+  options: { cwd?: string } = {}
+) {
   return suite(`${pkgManager} handles filesystem changes`, async () => {
     repo.newBranch("my-feature-branch");
     repo.commitFiles({
