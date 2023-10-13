@@ -26,6 +26,26 @@ interface MonorepoOptions {
   subdir?: string;
 }
 
+export function createMonorepo(
+  pkgManager: string,
+  pipeline: string,
+  subdir: string
+): Monorepo {
+  const repo = new Monorepo({
+    root: `${pkgManager}-basic`,
+    pm: pkgManager,
+    pipeline,
+    subdir,
+  });
+  repo.init();
+  repo.install();
+  repo.addPackage("a", ["b"]);
+  repo.addPackage("b");
+  repo.addPackage("c");
+  repo.linkPackages();
+  return repo;
+}
+
 export class Monorepo {
   static tmpdir = os.tmpdir();
   static yarnCache = path.join(__dirname, "yarn-cache-");

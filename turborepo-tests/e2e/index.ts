@@ -1,13 +1,10 @@
 import execa from "execa";
 import * as uvu from "uvu";
-import { Monorepo } from "./monorepo";
+import { Monorepo, createMonorepo } from "./monorepo";
 import path from "path";
-import {
-  basicPipeline,
-  prunePipeline,
-  explicitPrunePipeline,
-} from "./fixtures";
+import { basicPipeline } from "./fixtures";
 import type { PackageManager } from "./types";
+import pruneTests from "./prune-test";
 
 import testBuild from "./tests/builds";
 import testBuild from "./tests/builds";
@@ -25,25 +22,6 @@ const testCombinations = [
   { pkgManager: "pnpm6" as PackageManager, pipeline: basicPipeline },
   { pkgManager: "pnpm" as PackageManager, pipeline: basicPipeline },
   { pkgManager: "npm" as PackageManager, pipeline: basicPipeline },
-
-  // there is probably no need to test every
-  // pipeline against every package manager,
-  // so specify directly rather than use the
-  // cartesian product
-  {
-    pkgManager: "yarn" as PackageManager,
-    pipeline: prunePipeline,
-    name: "basicPrune",
-    excludePrune: ["c#build"],
-    includePrune: ["a#build"],
-  }, // expect c#build to be removed, since there is no dep between a -> c
-  {
-    pkgManager: "yarn" as PackageManager,
-    pipeline: explicitPrunePipeline,
-    name: "explicitDepPrune",
-    excludePrune: ["c#build"],
-    includePrune: ["a#build", "b#build"],
-  }, // expect c#build to be included, since a depends on c
 ];
 
 // This is injected by github actions
@@ -52,50 +30,21 @@ process.env.TURBO_TOKEN = "";
 let suites: uvu.uvu.Test<uvu.Context>[] = [];
 
 for (const combo of testCombinations) {
-  const {
-    pkgManager,
-    pipeline,
-    name,
-    includePrune = [],
-    excludePrune = [],
-  } = combo;
+  const { pkgManager, pipeline, name } = combo;
 
-  const subdir = "js";
   const suiteNamePrefix = `${pkgManager}${name ? ": " + name : ""}`;
 
   const Suite = uvu.suite(suiteNamePrefix);
   const SubDirSuite = uvu.suite(`${suiteNamePrefix} from subdirectory`);
 
-  const repo = new Monorepo({
-    root: `${pkgManager}-basic`,
-    pm: pkgManager,
-    pipeline,
-  });
-  repo.init();
-  repo.install();
-  repo.addPackage("a", ["b"]);
-  repo.addPackage("b");
-  repo.addPackage("c");
-  repo.linkPackages();
+  const repo = createMonorepo(pkgManager, pipeline);
   repo.expectCleanGitStatus();
-  runSmokeTests(Suite, repo, pkgManager, includePrune, excludePrune);
+  runSmokeTests(Suite, repo, pkgManager);
 
   // test that turbo can run from a subdirectory
-  const sub = new Monorepo({
-    root: `${pkgManager}-in-subdirectory`,
-    pm: pkgManager,
-    pipeline,
-    subdir,
-  });
-  sub.init();
-  sub.install();
-  sub.addPackage("a", ["b"]);
-  sub.addPackage("b");
-  sub.addPackage("c");
-  sub.linkPackages();
-
-  runSmokeTests(SubDirSuite, sub, pkgManager, includePrune, excludePrune, {
-    cwd: path.join(sub.root, sub.subdir),
+  const repo2 = createMonorepo(pkgManager, pipeline, "js");
+  runSmokeTests(SubDirSuite, repo2, pkgManager, {
+    cwd: path.join(repo2.root, repo2.subdir),
   });
 
   suites.push(Suite);
@@ -110,8 +59,6 @@ function runSmokeTests<T>(
   suite: uvu.Test<T>,
   repo: Monorepo,
   pkgManager: PackageManager,
-  includePrune: string[],
-  excludePrune: string[],
   options: execa.SyncOptions<string> = {}
 ) {
   suite.after(() => {
@@ -124,6 +71,8 @@ function runSmokeTests<T>(
   changes(suite, repo, pkgManager, options);
   rootTasks(suite, repo, pkgManager, options);
   passThroughArgs(suite, repo, pkgManager, options);
-  prune(suite, repo, pkgManager, options, includePrune, excludePrune);
-  pruneDocker(suite, repo, pkgManager, options, includePrune, excludePrune);
+  prune(suite, repo, pkgManager, options);
+  pruneDocker(suite, repo, pkgManager, options);
 }
+
+pruneTests();

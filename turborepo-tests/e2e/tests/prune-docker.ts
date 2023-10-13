@@ -11,8 +11,8 @@ export default function (
   repo,
   pkgManager,
   options,
-  includePrune,
-  excludePrune
+  includePrune = [],
+  excludePrune = []
 ) {
   return suite(`${pkgManager} + turbo prune --docker`, async () => {
     const [installCmd, ...installArgs] =
