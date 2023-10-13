@@ -809,7 +809,7 @@ pub async fn run(
                 return Err(anyhow!("at least one task must be specified"));
             }
             if let Some(file_path) = &args.profile {
-                logger.enable_chrome_tracing(file_path);
+                logger.enable_chrome_tracing(file_path)?;
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
@@ -827,7 +827,7 @@ pub async fn run(
                 tracing::warn!("rust codepath enabled, but not compiled with support");
             }
             if let Some(file_path) = &args.profile {
-                logger.enable_chrome_tracing(file_path);
+                logger.enable_chrome_tracing(file_path)?;
             }
             if args.tasks.is_empty() {
                 return Err(anyhow!("at least one task must be specified"));
