@@ -1,9 +1,4 @@
-use std::{
-    marker::PhantomData,
-    path::Path,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use std::{marker::PhantomData, path::Path, sync::Mutex};
 
 use chrono::Local;
 use owo_colors::{
@@ -11,10 +6,7 @@ use owo_colors::{
     Color, OwoColorize,
 };
 use tracing::{field::Visit, metadata::LevelFilter, trace, Event, Level, Subscriber};
-use tracing_appender::{
-    non_blocking::{NonBlocking, WorkerGuard},
-    rolling::RollingFileAppender,
-};
+use tracing_appender::{non_blocking::NonBlocking, rolling::RollingFileAppender};
 use tracing_chrome::ChromeLayer;
 use tracing_subscriber::{
     filter::{Filtered, Targets},

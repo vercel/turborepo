@@ -286,12 +286,12 @@ mod tests {
 
         let root_ignore_file = turbo_root.join_component(".gitignore");
         root_ignore_file
-            .create_with_contents(&root_ignore_contents)
+            .create_with_contents(root_ignore_contents)
             .unwrap();
         let pkg_ignore_file = turbo_root.resolve(&pkg_path).join_component(".gitignore");
         pkg_ignore_file.ensure_dir().unwrap();
         pkg_ignore_file
-            .create_with_contents(&pkg_ignore_contents)
+            .create_with_contents(pkg_ignore_contents)
             .unwrap();
 
         let mut expected = GitHashes::new();

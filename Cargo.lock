@@ -434,9 +434,9 @@ checksum = "7a40729d2133846d9ed0ea60a8b9541bccddab49cd30f0715a1da672fe9a2524"
 
 [[package]]
 name = "async-trait"
-version = "0.1.68"
+version = "0.1.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9ccdd8f2a161be9bd5c023df56f1b2a0bd1d83872ae53b71a84a12c9bf6e842"
+checksum = "bc00ceb34980c03614e35a3a4e218276a0a824e911d07651cd0d858a51e8c0f0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -939,6 +939,16 @@ name = "bytecount"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c676a478f63e9fa2dd5368a42f28bba0d6c560b775f38583c8bbaa7fcd67c9c"
+
+[[package]]
+name = "bytelines"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "784face321c535fcd9a1456632fa720aa53ea0640b57341d961c8c09de2da59f"
+dependencies = [
+ "futures",
+ "tokio",
+]
 
 [[package]]
 name = "bytemuck"
@@ -3951,9 +3961,9 @@ dependencies = [
 
 [[package]]
 name = "libwebp-sys"
-version = "0.9.3"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c94b08ea3ec9eedea0fa779848e7fa183dc52aa60882488828883503faf630f"
+checksum = "3e0df0a0f9444d52aee6335cd724d21a2ee3285f646291799a72be518ec8ee3c"
 dependencies = [
  "cc",
  "glob",
@@ -9516,6 +9526,7 @@ dependencies = [
  "futures",
  "indexmap 1.9.3",
  "lazy_static",
+ "once_cell",
  "patricia_tree",
  "qstring",
  "regex",
@@ -10073,6 +10084,7 @@ dependencies = [
  "atty",
  "axum",
  "axum-server",
+ "bytelines",
  "camino",
  "capnp 0.17.2",
  "capnpc",
@@ -10235,6 +10247,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "atty",
+ "bytelines",
  "console",
  "indicatif",
  "lazy_static",
