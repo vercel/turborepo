@@ -75,11 +75,13 @@ export default function () {
     ["c#build"]
   );
 
+  // Setup the cleanup in after hooks for each suite
   Prune.after(() => repo.cleanup());
   PruneFromSubDir.after(() => repo1.cleanup());
   ExplicitDepPrune.after(() => repo2.cleanup());
   ExplicitDepPruneFromSubDir.after(() => repo3.cleanup());
 
+  // Actually execute all the tests
   Prune.run();
   PruneFromSubDir.run();
   ExplicitDepPrune.run();
