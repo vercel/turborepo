@@ -8,10 +8,12 @@ use std::{
 use chrono::{DateTime, Local};
 use serde::Serialize;
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
+use tracing::debug;
 use turborepo_api_client::{
-    spaces::{CreateSpaceRunPayload, SpaceRun, SpaceTaskSummary},
+    spaces::{CreateSpaceRunPayload, SpaceTaskSummary},
     APIAuth, APIClient,
 };
+use turborepo_vercel_api::SpaceRun;
 
 use crate::run::summary::Error;
 
@@ -114,7 +116,17 @@ impl SpacesClient {
     ) -> Result<SpacesClientHandle, Error> {
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let handle = tokio::spawn(async move {
-            let run = self.create_run(create_run_payload).await?;
+            let run = match self.create_run(create_run_payload).await {
+                Ok(run) => run,
+                Err(e) => {
+                    debug!("error creating space run: {}", e);
+                    self.errors.push(e);
+                    return Ok(SpacesClientResult {
+                        errors: self.errors,
+                        run: None,
+                    });
+                }
+            };
             while let Some(req) = rx.recv().await {
                 let resp = match req {
                     SpaceRequest::FinishedRun {
@@ -143,7 +155,8 @@ impl SpacesClient {
     async fn create_run(&self, payload: CreateSpaceRunPayload) -> Result<SpaceRun, Error> {
         Ok(tokio::time::timeout(
             self.request_timeout,
-            self.api_client.create_space_run(&self.space_id, payload),
+            self.api_client
+                .create_space_run(&self.space_id, &self.api_auth.token, payload),
         )
         .await??)
     }

@@ -12,7 +12,7 @@ use axum::{
 use futures_util::StreamExt;
 use tokio::sync::Mutex;
 use turborepo_vercel_api::{
-    CachingStatus, CachingStatusResponse, Membership, Role, Space, SpacesResponse, Team,
+    CachingStatus, CachingStatusResponse, Membership, Role, Space, SpaceRun, SpacesResponse, Team,
     TeamsResponse, User, UserResponse, VerificationResponse,
 };
 
@@ -29,6 +29,8 @@ pub const EXPECTED_TEAM_CREATED_AT: u64 = 0;
 
 pub const EXPECTED_SPACE_ID: &str = "expected_space_id";
 pub const EXPECTED_SPACE_NAME: &str = "expected_space_name";
+pub const EXPECTED_SPACE_RUN_ID: &str = "expected_space_run_id";
+pub const EXPECTED_SPACE_RUN_URL: &str = "https://example.com";
 
 pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
@@ -79,6 +81,22 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                         name: EXPECTED_SPACE_NAME.to_string(),
                     }],
                 })
+            }),
+        )
+        .route(
+            "/v0/spaces/:space_id/runs",
+            get(|Path(space_id): Path<String>| async move {
+                if space_id != EXPECTED_SPACE_ID {
+                    return (StatusCode::NOT_FOUND, Json(None));
+                }
+
+                (
+                    StatusCode::OK,
+                    Json(Some(SpaceRun {
+                        id: EXPECTED_SPACE_RUN_ID.to_string(),
+                        url: EXPECTED_SPACE_RUN_URL.to_string(),
+                    })),
+                )
             }),
         )
         .route(

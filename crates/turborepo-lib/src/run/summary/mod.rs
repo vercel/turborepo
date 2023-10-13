@@ -302,6 +302,7 @@ impl<'a> RunSummary<'a> {
         }
 
         if let Some(spaces_client_handle) = self.spaces_client_handle.take() {
+            println!("Sending to space");
             self.send_to_space(spaces_client_handle, end_time, exit_code)
                 .await?;
         }

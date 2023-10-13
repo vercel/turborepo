@@ -93,6 +93,12 @@ pub struct SpacesResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpaceRun {
+    pub id: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: String,
     pub username: String,

@@ -1,14 +1,9 @@
 use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use turbopath::AnchoredSystemPath;
+use turborepo_vercel_api::SpaceRun;
 
 use crate::{retry, APIClient, Error};
-
-#[derive(Deserialize)]
-pub struct SpaceRun {
-    pub id: String,
-    pub url: String,
-}
 
 #[derive(Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -121,10 +116,30 @@ impl APIClient {
     pub async fn create_space_run(
         &self,
         space_id: &str,
+        token: &str,
         payload: CreateSpaceRunPayload,
     ) -> Result<SpaceRun, Error> {
-        let url = self.make_url(&format!("/v0/spaces/{}/runs", space_id));
-        let request_builder = self.client.post(&url).json(&payload);
+        let mut url = self.make_url(&format!("/v0/spaces/{}/runs", space_id));
+        let mut allow_auth = true;
+
+        if self.use_preflight {
+            let preflight_response = self
+                .do_preflight(token, &url, "POST", "Authorization, User-Agent")
+                .await?;
+
+            allow_auth = preflight_response.allow_authorization_header;
+            url = preflight_response.location.to_string();
+        }
+
+        let mut request_builder = self.client.post(&url).json(&payload);
+
+        if allow_auth {
+            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+        }
+
+        if let Some(constant) = turborepo_ci::Vendor::get_constant() {
+            request_builder = request_builder.header("x-artifact-client-ci", constant);
+        }
 
         let response = retry::make_retryable_request(request_builder)
             .await?
