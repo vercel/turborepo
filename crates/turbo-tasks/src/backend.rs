@@ -376,7 +376,7 @@ impl PersistentTaskType {
     pub async fn run_resolve_trait<B: Backend + 'static>(
         trait_type: TraitTypeId,
         name: Cow<'static, str>,
-        inputs: Vec<ConcreteTaskInput>,
+        mut inputs: Vec<ConcreteTaskInput>,
         turbo_tasks: Arc<dyn TurboTasksBackendApi<B>>,
     ) -> Result<RawVc> {
         let span = tracing::trace_span!(
@@ -384,19 +384,18 @@ impl PersistentTaskType {
             name = format!("{}::{name}", &registry::get_trait(trait_type).name),
         );
         async move {
-            let mut resolved_inputs = Vec::with_capacity(inputs.len());
-            let mut iter = inputs.into_iter();
-            if let Some(this) = iter.next() {
-                let this = this.resolve().await?;
+            // Resolve all inputs
+            for i in 0..inputs.len() {
+                let input = unsafe { take(inputs.get_unchecked_mut(i)) };
+                let input = input.resolve().await?;
+                unsafe {
+                    *inputs.get_unchecked_mut(i) = input;
+                }
+            }
+            if let Some(this) = inputs.first() {
                 let this_value = this.clone().resolve_to_value().await?;
                 match this_value.get_trait_method(trait_type, name) {
-                    Ok(native_fn) => {
-                        resolved_inputs.push(this);
-                        for input in iter {
-                            resolved_inputs.push(input)
-                        }
-                        Ok(turbo_tasks.dynamic_call(native_fn, resolved_inputs))
-                    }
+                    Ok(native_fn) => Ok(turbo_tasks.native_call(native_fn, inputs)),
                     Err(name) => {
                         if !this_value.has_trait(trait_type) {
                             let traits =
