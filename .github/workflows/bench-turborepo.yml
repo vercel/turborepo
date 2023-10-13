@@ -61,11 +61,6 @@ jobs:
       - name: Build
         run: cd cli && make turbo-prod
 
-      # Install jq, because we use it to parse the output of the ttft command.
-      # TODO: not sure we need jq, we might already have it
-      # - name: Install jq
-      #   uses: dcarbone/install-jq-action@main
-
       - name: Clone Fixture
         run: cd benchmark && node -r esbuild-register src/setup-ttft.ts
 
