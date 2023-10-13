@@ -16,12 +16,12 @@ import passThroughArgs from "./tests/passthru-args";
 import prune from "./tests/prune";
 import pruneDocker from "./tests/prune-docker";
 
-const testCombinations = [
-  { pkgManager: "yarn" as PackageManager, pipeline: basicPipeline },
-  { pkgManager: "berry" as PackageManager, pipeline: basicPipeline },
-  { pkgManager: "pnpm6" as PackageManager, pipeline: basicPipeline },
-  { pkgManager: "pnpm" as PackageManager, pipeline: basicPipeline },
-  { pkgManager: "npm" as PackageManager, pipeline: basicPipeline },
+const packageManagers: PackageManager[] = [
+  "yarn",
+  "berry",
+  "pnpm6",
+  "pnpm",
+  "npm",
 ];
 
 // This is injected by github actions
@@ -29,34 +29,32 @@ process.env.TURBO_TOKEN = "";
 
 let suites: uvu.uvu.Test<uvu.Context>[] = [];
 
-for (const combo of testCombinations) {
-  const { pkgManager, pipeline } = combo;
-
+for (const mgr of packageManagers) {
   // Run all the tests from the root of the repo
-  const Basic = uvu.suite(pkgManager);
-  const repo = createMonorepo(pkgManager, pipeline);
+  const Basic = uvu.suite(mgr);
+  const repo = createMonorepo(mgr, basicPipeline);
   repo.expectCleanGitStatus();
-  testBuild(Basic, repo, pkgManager);
-  testsAndLogs(Basic, repo, pkgManager);
-  lintAndLogs(Basic, repo, pkgManager);
-  changes(Basic, repo, pkgManager);
-  rootTasks(Basic, repo, pkgManager);
-  passThroughArgs(Basic, repo, pkgManager);
-  prune(Basic, repo, pkgManager);
-  pruneDocker(Basic, repo, pkgManager);
+  testBuild(Basic, repo, mgr);
+  testsAndLogs(Basic, repo, mgr);
+  lintAndLogs(Basic, repo, mgr);
+  changes(Basic, repo, mgr);
+  rootTasks(Basic, repo, mgr);
+  passThroughArgs(Basic, repo, mgr);
+  prune(Basic, repo, mgr);
+  pruneDocker(Basic, repo, mgr);
 
   // test that turbo can run from a subdirectory
-  const BasicFromSubDir = uvu.suite(`${pkgManager} from subdirectory`);
-  const repo2 = createMonorepo(pkgManager, pipeline, "js");
+  const BasicFromSubDir = uvu.suite(`${mgr} from subdirectory`);
+  const repo2 = createMonorepo(mgr, basicPipeline, "js");
   const cwd = path.join(repo2.root, repo2.subdir);
-  testBuild(BasicFromSubDir, repo2, pkgManager, { cwd });
-  testsAndLogs(BasicFromSubDir, repo2, pkgManager, { cwd });
-  lintAndLogs(BasicFromSubDir, repo2, pkgManager, { cwd });
-  changes(BasicFromSubDir, repo2, pkgManager, { cwd });
-  rootTasks(BasicFromSubDir, repo2, pkgManager, { cwd });
-  passThroughArgs(BasicFromSubDir, repo2, pkgManager, { cwd });
-  prune(BasicFromSubDir, repo2, pkgManager, { cwd });
-  pruneDocker(BasicFromSubDir, repo2, pkgManager, { cwd });
+  testBuild(BasicFromSubDir, repo2, mgr, { cwd });
+  testsAndLogs(BasicFromSubDir, repo2, mgr, { cwd });
+  lintAndLogs(BasicFromSubDir, repo2, mgr, { cwd });
+  changes(BasicFromSubDir, repo2, mgr, { cwd });
+  rootTasks(BasicFromSubDir, repo2, mgr, { cwd });
+  passThroughArgs(BasicFromSubDir, repo2, mgr, { cwd });
+  prune(BasicFromSubDir, repo2, mgr, { cwd });
+  pruneDocker(BasicFromSubDir, repo2, mgr, { cwd });
 
   Basic.after(() => repo.cleanup());
   BasicFromSubDir.after(() => repo2.cleanup());
