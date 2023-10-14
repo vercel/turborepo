@@ -78,7 +78,7 @@ jobs:
 
       - name: Augment ttft data
         run: |
-          cd benchmark && node -r esbuild-register ./src/ttft-augment.ts ./ttft.json ${{github.run_id}}
+          cd benchmark && node -r esbuild-register ./src/ttft-augment.ts "$PWD/ttft.json" ${{github.run_id}}
           cat ./ttft.json
 
       # - name: Add Github Action Run URL to JSON
