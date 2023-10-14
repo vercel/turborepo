@@ -5,8 +5,8 @@ console.log(path.join(process.cwd(), "./test-results/main"));
 
 const resultsDir = path.join(process.cwd(), "./test-results/main");
 // get a list of all the file names in the test-results/main directory
-//const files = await fs.readdir(resultsDir);
-const files = ["202310090855-v13.5.5-canary.4-7e7a5fc.json"];
+const files = await fs.readdir(resultsDir);
+//const files = ["202310090855-v13.5.5-canary.4-7e7a5fc.json"];
 
 let passingTests = "";
 let failingTests = "";
@@ -17,7 +17,7 @@ try {
     let passCount = 0;
     let failCount = 0;
     // skip if file name does not start with a number
-    //if (!file.match(/^\d+/)) continue;
+    if (!file.match(/^\d+/)) continue;
     let timestamp = `${file.slice(0, 4)}-${file.slice(4, 6)}-${file.slice(
       6,
       8
