@@ -89,7 +89,7 @@ jobs:
         run: pnpm -F benchmark ttft
 
       - name: Augment Data and Send to TinyBird
-        run: cd benchmark && node -r esbuild-register ./src/ttft-augment.ts "$PWD/ttft.json" ${{github.run_id}}
+        run: cd benchmark && node -r esbuild-register ./src/ttft-send.ts "$PWD/ttft.json" ${{github.run_id}}
 
       # The benchmark always produces profile.json, but we can change the name for the purpose of saving it
       - name: Prep artifact

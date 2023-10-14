@@ -4,6 +4,11 @@ import { getCommitDetails } from "./helpers";
 
 const filePath = process.argv[2];
 const runID = process.argv[3];
+const token = process.env.TINYBIRD_TOKEN;
+
+if (!token) {
+  throw new Error("Missing TINYBIRD_TOKEN env variable");
+}
 
 const DATA_SOURCE_URL =
   "https://api.us-east.tinybird.co/v0/events?name=turborepo_perf_ttft";
@@ -23,7 +28,7 @@ const DATA_SOURCE_URL =
   const res = await fetch(DATA_SOURCE_URL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.TINYBIRD_TOKEN}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(data),
@@ -32,7 +37,7 @@ const DATA_SOURCE_URL =
   if (res.ok) {
     console.log("Data sent to Tinybird successfully");
   } else {
-    const resJSON = await res.json();
-    console.log({ response: resJSON });
+    const text = await res.text();
+    console.log(text);
   }
 })();
