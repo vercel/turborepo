@@ -94,5 +94,5 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: profile.json
+          name: profile-${{matrix.os.runner}}.json
           path: ./benchmark/profile-${{matrix.os.runner}}.json
