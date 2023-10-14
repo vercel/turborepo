@@ -79,8 +79,8 @@ jobs:
           target: ubuntu-latest
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Build
-        run: cd cli && make turbo-prod
+      - name: Build Turborepo from source
+        run: pnpm -F cli build
 
       - name: Clone Fixture
         run: cd benchmark && node -r esbuild-register src/setup-ttft.ts
