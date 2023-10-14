@@ -78,14 +78,15 @@ jobs:
 
       - name: Augment ttft data
         run: |
-          cd benchmark && node -r esbuild-register ./src/ttft-augment.ts "$PWD/ttft.json" ${{github.run_id}}
-          cat ./ttft.json
+          cd benchmark && TINYBIRD_TOKEN=${{secrets.TINYBIRD_TOKEN}} node -r esbuild-register ./src/ttft-augment.ts "$PWD/ttft.json" ${{github.job_url}}
+          ${{github.job}}
 
-      - name: Save to Tinybird
-        run: |
-          myjson=$(cat ./benchmark/ttft.json | jq -c)
-          echo $myjson
-          curl --retry 3 -i -X POST -d "$myjson" -H "Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}" https://api.us-east.tinybird.co/v0/events?name=turborepo_perf_ttft
+      # - name: Save to Tinybird
+      #   run: |
+
+      #     myjson=$(cat ./benchmark/ttft.json)
+      #     echo $myjson
+      #     curl --retry 3 -i -X POST -d "$myjson" -H "Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}" https://api.us-east.tinybird.co/v0/events?name=turborepo_perf_ttft
 
       # The benchmark always produces profile.json, but we can change the name for the purpose of saving it
       - name: Prep artifact

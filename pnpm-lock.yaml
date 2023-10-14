@@ -125,6 +125,9 @@ importers:
       ndjson:
         specifier: ^2.0.0
         version: 2.0.0
+      node-fetch:
+        specifier: ^2.6.8
+        version: 2.6.11
     devDependencies:
       '@turbo/tsconfig':
         specifier: workspace:*
@@ -138,6 +141,9 @@ importers:
       '@types/node':
         specifier: ^18.17.4
         version: 18.17.4
+      '@types/node-fetch':
+        specifier: ^2.6.6
+        version: 2.6.6
       typescript:
         specifier: ^5.2.2
         version: 5.2.2
@@ -3574,6 +3580,13 @@ packages:
     dependencies:
       '@types/node': 20.8.5
       '@types/through': 0.0.30
+    dev: true
+
+  /@types/node-fetch@2.6.6:
+    resolution: {integrity: sha512-95X8guJYhfqiuVVhRFxVQcf4hW/2bCuoPwDasMf/531STFoNoWTT7YDnWdXHEZKqAGUigmpG31r2FE70LwnzJw==}
+    dependencies:
+      '@types/node': 18.17.4
+      form-data: 4.0.0
     dev: true
 
   /@types/node@12.20.55:
@@ -7586,7 +7599,6 @@ packages:
       asynckit: 0.4.0
       combined-stream: 1.0.8
       mime-types: 2.1.35
-    dev: false
 
   /fraction.js@4.2.0:
     resolution: {integrity: sha512-MhLuK+2gUcnZe8ZHlaaINnQLl0xRIGRfcGk2yl8xoQAfHrSsL3rYu6FCmBdkdbhc9EPlwyGHewaRsvwRMJtAlA==}
@@ -7963,6 +7975,7 @@ packages:
 
   /graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
+    requiresBuild: true
 
   /gradient-string@2.0.1:
     resolution: {integrity: sha512-+xDOYR2fMa4QHGysTgyQsl8g16mcAKqvvsKI014qYP2XVf1SWUPlD8KhdBJPUM8AVwDUB+ls0NFkqRzAB5URkA==}
