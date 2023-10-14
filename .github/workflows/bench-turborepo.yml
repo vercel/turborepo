@@ -87,6 +87,10 @@ jobs:
           echo $myjson
           curl --retry 3 -i -X POST -d "$myjson" -H "Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}" https://api.us-east.tinybird.co/v0/events?name=turborepo_perf_ttft
 
+      # The benchmark always produces profile.json, but we can change the name for the purpose of saving it
+      - name: Prep artifact
+        run: mv ./benchmark/profile-${{matrix.os.runner}}.json
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
