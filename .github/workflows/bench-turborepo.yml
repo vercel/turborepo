@@ -7,6 +7,13 @@ on:
     workflows: [Turborepo Release]
     types:
       - completed
+  push:
+    branches:
+      - main
+    paths:
+      - "cli/**"
+      - crates/turborepo*/**
+      # - "benchmark/**" (we don't need to run benchmarks when the benchmark changes, next push will capture it)
 
 jobs:
   # benchmark:
@@ -77,9 +84,7 @@ jobs:
       #   run: pnpm -F benchmark ttft
 
       - name: Augment ttft data
-        run: |
-          cd benchmark && TINYBIRD_TOKEN=${{secrets.TINYBIRD_TOKEN}} node -r esbuild-register ./src/ttft-augment.ts "$PWD/ttft.json" ${{github.job_url}}
-          ${{github.job}}
+        run: cd benchmark && TINYBIRD_TOKEN=${{secrets.TINYBIRD_TOKEN}} node -r esbuild-register ./src/ttft-augment.ts "$PWD/ttft.json" ${{github.job}}
 
       # - name: Save to Tinybird
       #   run: |
