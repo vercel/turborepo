@@ -89,7 +89,7 @@ jobs:
 
       # The benchmark always produces profile.json, but we can change the name for the purpose of saving it
       - name: Prep artifact
-        run: mv ./benchmark/profile-${{matrix.os.runner}}.json
+        run: mv ./benchmark/profile.json ./benchmark/profile-${{matrix.os.runner}}.json
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
