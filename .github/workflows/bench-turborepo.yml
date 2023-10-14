@@ -81,18 +81,6 @@ jobs:
           cd benchmark && node -r esbuild-register ./src/ttft-augment.ts "$PWD/ttft.json" ${{github.run_id}}
           cat ./ttft.json
 
-      # - name: Add Github Action Run URL to JSON
-      #   run: |
-      #     mv ./benchmark/ttft.json ./benchmark/ttft.json.bak
-      #     jq '. + {"url": "https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}"}' ./benchmark/ttft.json.bak > ./benchmark/ttft.json
-      #     cat ./benchmark/ttft.json
-
-      # - name: Add SHA to JSON
-      #   run: |
-      #     mv ./benchmark/ttft.json ./benchmark/ttft.json.bak
-      #     jq '. + {"sha": "${{ github.sha }}"}' ./benchmark/ttft.json.bak > ./benchmark/ttft.json
-      #     cat ./benchmark/ttft.json
-
       - name: Save to Tinybird
         run: |
           myjson=$(cat ./benchmark/ttft.json | jq -c)
@@ -103,4 +91,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: profile.json
-          path: ./benchmark/profile.json
+          path: ./benchmark/profile-${{matrix.os.runner}}.json
