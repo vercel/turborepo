@@ -80,7 +80,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build Turborepo from source
-        run: pnpm -F cli build
+        run: cd cli && make turbo-prod
 
       - name: Clone Fixture
         run: cd benchmark && node -r esbuild-register src/setup-ttft.ts
