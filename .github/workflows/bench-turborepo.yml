@@ -16,37 +16,37 @@ on:
       # - "benchmark/**" (we don't need to run benchmarks when the benchmark changes, next push will capture it)
 
 jobs:
-  # benchmark:
-  #   name: Run Benchmarks
-  #   timeout-minutes: 60
-  #   runs-on: ubuntu-latest
+  benchmark:
+    name: Run Benchmarks
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - uses: ./.github/actions/setup-node
-  #     - uses: ./.github/actions/setup-go
-  #       with:
-  #         github-token: "${{ secrets.GITHUB_TOKEN }}"
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-  #     - uses: ./.github/actions/setup-turborepo-environment
-  #       with:
-  #         target: ubuntu-latest
-  #         github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          target: ubuntu-latest
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-  #     - name: Build
-  #       run: cd cli && make turbo-prod
+      - name: Build
+        run: cd cli && make turbo-prod
 
-  #     - name: Run benchmarks
-  #       run: pnpm -F benchmark benchmark
+      - name: Run benchmarks
+        run: pnpm -F benchmark benchmark
 
-  #     - name: Save to Tinybird
-  #       run: |
-  #         curl \
-  #           -i \
-  #           -F "ndjson=@./benchmark/tinybird.ndjson" \
-  #           -X POST \
-  #           -H 'Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}' \
-  #           'https://api.us-east.tinybird.co/v0/datasources?format=ndjson&name=turbo_benchmarks&mode=append'
+      - name: Save to Tinybird
+        run: |
+          curl \
+            -i \
+            -F "ndjson=@./benchmark/tinybird.ndjson" \
+            -X POST \
+            -H 'Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}' \
+            'https://api.us-east.tinybird.co/v0/datasources?format=ndjson&name=turbo_benchmarks&mode=append'
 
   time-to-first-task:
     name: Time to First Task
@@ -70,33 +70,26 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-node
-      # - uses: ./.github/actions/setup-go
-      #   with:
-      #     github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      # - uses: ./.github/actions/setup-turborepo-environment
-      #   with:
-      #     target: ubuntu-latest
-      #     github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          target: ubuntu-latest
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      # - name: Build
-      #   run: cd cli && make turbo-prod
+      - name: Build
+        run: cd cli && make turbo-prod
 
-      # - name: Clone Fixture
-      #   run: cd benchmark && node -r esbuild-register src/setup-ttft.ts
+      - name: Clone Fixture
+        run: cd benchmark && node -r esbuild-register src/setup-ttft.ts
 
-      # - name: Run benchmarks
-      #   run: pnpm -F benchmark ttft
+      - name: Run benchmarks
+        run: pnpm -F benchmark ttft
 
-      - name: Augment ttft data
+      - name: Augment Data and Send to TinyBird
         run: cd benchmark && node -r esbuild-register ./src/ttft-augment.ts "$PWD/ttft.json" ${{github.run_id}}
-
-      # - name: Save to Tinybird
-      #   run: |
-
-      #     myjson=$(cat ./benchmark/ttft.json)
-      #     echo $myjson
-      #     curl --retry 3 -i -X POST -d "$myjson" -H "Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}" https://api.us-east.tinybird.co/v0/events?name=turborepo_perf_ttft
 
       # The benchmark always produces profile.json, but we can change the name for the purpose of saving it
       - name: Prep artifact
