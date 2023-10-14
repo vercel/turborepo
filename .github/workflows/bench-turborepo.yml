@@ -81,3 +81,9 @@ jobs:
           myjson=$(cat ./benchmark/ttft.json | jq -c)
           echo $myjson
           curl --retry 3 -i -X POST -d "$myjson" -H "Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}" https://api.us-east.tinybird.co/v0/events?name=turborepo_perf_ttft
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: profile.json
+          path: ./benchmark/profile.json
