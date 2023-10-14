@@ -62,6 +62,11 @@ jobs:
             runner: macos-latest
           - name: windows
             runner: windows-latest
+
+    # Set the secret as an env var so we can use it in the script
+    env:
+      TINYBIRD_TOKEN: ${{secrets.TINYBIRD_TOKEN}}
+
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-node
@@ -84,7 +89,7 @@ jobs:
       #   run: pnpm -F benchmark ttft
 
       - name: Augment ttft data
-        run: cd benchmark && TINYBIRD_TOKEN=${{secrets.TINYBIRD_TOKEN}} node -r esbuild-register ./src/ttft-augment.ts "$PWD/ttft.json" ${{github.run_id}}
+        run: cd benchmark && node -r esbuild-register ./src/ttft-augment.ts "$PWD/ttft.json" ${{github.run_id}}
 
       # - name: Save to Tinybird
       #   run: |
