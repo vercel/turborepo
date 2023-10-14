@@ -3,7 +3,7 @@ import fetch from "node-fetch";
 import { getCommitDetails } from "./helpers";
 
 const filePath = process.argv[2];
-const url = process.argv[3];
+const runID = process.argv[3];
 
 const DATA_SOURCE_URL =
   "https://api.us-east.tinybird.co/v0/events?name=turborepo_perf_ttft";
@@ -16,7 +16,7 @@ const DATA_SOURCE_URL =
 
   data.commitSha = commitDetails.commitSha;
   data.commitTimestamp = commitDetails.commitTimestamp;
-  data.url = url;
+  data.url = `https://github.com/vercel/turbo/actions/runs/${runID}`;
 
   console.log("Sending data to Tinybird: ", data);
 

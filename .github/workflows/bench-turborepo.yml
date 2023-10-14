@@ -84,7 +84,7 @@ jobs:
       #   run: pnpm -F benchmark ttft
 
       - name: Augment ttft data
-        run: cd benchmark && TINYBIRD_TOKEN=${{secrets.TINYBIRD_TOKEN}} node -r esbuild-register ./src/ttft-augment.ts "$PWD/ttft.json" ${{github.job}}
+        run: cd benchmark && TINYBIRD_TOKEN=${{secrets.TINYBIRD_TOKEN}} node -r esbuild-register ./src/ttft-augment.ts "$PWD/ttft.json" ${{github.run_id}}
 
       # - name: Save to Tinybird
       #   run: |
