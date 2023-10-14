@@ -20,7 +20,7 @@ const DATA_SOURCE_URL =
 
   console.log("Sending data to Tinybird: ", data);
 
-  await fetch(DATA_SOURCE_URL, {
+  const res = await fetch(DATA_SOURCE_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${process.env.TINYBIRD_TOKEN}`,
@@ -28,4 +28,11 @@ const DATA_SOURCE_URL =
     },
     body: JSON.stringify(data),
   });
+
+  if (res.ok) {
+    console.log("Data sent to Tinybird successfully");
+  } else {
+    const resJSON = await res.json();
+    console.log({ response: resJSON });
+  }
 })();
