@@ -76,7 +76,7 @@ jobs:
 
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          target: ubuntu-latest
+          target: ${{ matrix.os.runner }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build Turborepo from source
