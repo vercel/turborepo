@@ -76,17 +76,21 @@ jobs:
       # - name: Run benchmarks
       #   run: pnpm -F benchmark ttft
 
-      - name: Add Github Action Run URL to JSON
+      - name: Augment ttft data
         run: |
-          mv ./benchmark/ttft.json ./benchmark/ttft.json.bak
-          jq '. + {"url": "https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}"}' ./benchmark/ttft.json.bak > ./benchmark/ttft.json
-          cat ./benchmark/ttft.json
+          node -r esbuild-register ./benchmark/src/ttft-augment.ts ./benchmark/ttft.json ${{github.run_id}}
 
-      - name: Add SHA to JSON
-        run: |
-          mv ./benchmark/ttft.json ./benchmark/ttft.json.bak
-          jq '. + {"sha": "${{ github.sha }}"}' ./benchmark/ttft.json.bak > ./benchmark/ttft.json
-          cat ./benchmark/ttft.json
+      # - name: Add Github Action Run URL to JSON
+      #   run: |
+      #     mv ./benchmark/ttft.json ./benchmark/ttft.json.bak
+      #     jq '. + {"url": "https://github.com/vercel/turbo/actions/runs/${{ github.run_id }}"}' ./benchmark/ttft.json.bak > ./benchmark/ttft.json
+      #     cat ./benchmark/ttft.json
+
+      # - name: Add SHA to JSON
+      #   run: |
+      #     mv ./benchmark/ttft.json ./benchmark/ttft.json.bak
+      #     jq '. + {"sha": "${{ github.sha }}"}' ./benchmark/ttft.json.bak > ./benchmark/ttft.json
+      #     cat ./benchmark/ttft.json
 
       - name: Save to Tinybird
         run: |
