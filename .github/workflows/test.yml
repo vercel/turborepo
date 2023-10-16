@@ -236,7 +236,8 @@ jobs:
         env:
           SCCACHE_BUCKET: turborepo-sccache
           SCCACHE_REGION: us-east-2
-          RUSTC_WRAPPER: "sccache"
+          # Only use sccache if we're in the Vercel repo.
+          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
           CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -244,6 +245,7 @@ jobs:
       - name: Run sccache stat for check
         shell: bash
         run: ${SCCACHE_PATH} --show-stats
+        if: ${{ !github.event.pull_request.head.repo.fork }}
 
   go_lint:
     name: Go linting
