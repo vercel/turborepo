@@ -121,6 +121,8 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches::assert_matches;
+
     use test_case::test_case;
     use turbopath::{
         AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf,
@@ -220,10 +222,11 @@ mod tests {
             [AnchoredSystemPathBuf::from_raw("symlink-from-to-dir").unwrap()].iter(),
             false,
         );
-        match out.err().unwrap() {
-            Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::IsADirectory),
-            _ => panic!("wrong error"),
-        };
+        #[cfg(windows)]
+        let expected_err_kind = ErrorKind::PermissionDenied;
+        #[cfg(not(windows))]
+        let expected_err_kind = ErrorKind::IsADirectory;
+        assert_matches!(out.unwrap_err(), Error::Io(io_error, _) if io_error.kind() == expected_err_kind);
 
         // Broken symlink with allow_missing = true.
         let out = hash_files(
