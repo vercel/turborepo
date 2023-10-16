@@ -387,7 +387,7 @@ jobs:
         uses: thomaseizinger/create-pull-request@master
         if: ${{ !inputs.dry_run }}
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           head: ${{ needs.stage.outputs.stage-branch }}
           base: main
           title: "release(turborepo): ${{ steps.getVersion.outputs.version }}"
