@@ -45,7 +45,15 @@ const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
 const moduleFactories: ModuleFactories = Object.create(null);
 const moduleCache: ModuleCache = Object.create(null);
 
-function loadChunk(chunkPath: ChunkPath) {
+function loadChunk(chunkData: ChunkData): void {
+  if (typeof chunkData === "string") {
+    return loadChunkPath(chunkData);
+  } else {
+    return loadChunkPath(chunkData.path);
+  }
+}
+
+function loadChunkPath(chunkPath: ChunkPath): void {
   if (!chunkPath.endsWith(".js")) {
     // We only support loading JS chunks in Node.js.
     // This branch can be hit when trying to load a CSS chunk.
@@ -62,10 +70,24 @@ function loadChunk(chunkPath: ChunkPath) {
   }
 }
 
-function loadChunkAsync(source: SourceInfo, chunkPath: string): Promise<void> {
+async function loadChunkAsync(
+  source: SourceInfo,
+  chunkData: ChunkData
+): Promise<any> {
+  if (typeof chunkData === "string") {
+    return loadChunkPathAsync(source, chunkData);
+  } else {
+    return loadChunkPathAsync(source, chunkData.path);
+  }
+}
+
+function loadChunkPathAsync(
+  source: SourceInfo,
+  chunkPath: string
+): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     try {
-      loadChunk(chunkPath);
+      loadChunkPath(chunkPath);
     } catch (err) {
       reject(err);
       return;
