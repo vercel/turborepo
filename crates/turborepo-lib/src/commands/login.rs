@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Result};
 use turborepo_api_client::APIClient;
-use turborepo_auth::{login as auth_login, sso_login as auth_sso_login};
+use turborepo_auth::{
+    login as auth_login, sso_login as auth_sso_login, DefaultLoginServer, DefaultSSOLoginServer,
+};
 
 use crate::{commands::CommandBase, rewrite_json::set_path};
 
@@ -28,7 +30,16 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
         Ok(())
     };
 
-    auth_sso_login(api_client, &ui, set_token, &login_url_config, sso_team).await
+    auth_sso_login(
+        &api_client,
+        &ui,
+        base.config()?.token(),
+        set_token,
+        &login_url_config,
+        sso_team,
+        &DefaultSSOLoginServer::new(),
+    )
+    .await
 }
 
 pub async fn login(base: &mut CommandBase) -> Result<()> {
@@ -55,5 +66,13 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
         Ok(())
     };
 
-    auth_login(api_client, &ui, set_token, &login_url_config).await
+    auth_login(
+        &api_client,
+        &ui,
+        base.config()?.token(),
+        set_token,
+        &login_url_config,
+        &DefaultLoginServer::new(),
+    )
+    .await
 }
