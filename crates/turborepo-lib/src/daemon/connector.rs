@@ -86,6 +86,7 @@ impl DaemonConnector {
     /// 1. the versions do not match
     /// 2. the server is not running
     /// 3. the server is unresponsive
+    #[tracing::instrument(skip(self))]
     pub async fn connect(self) -> Result<DaemonClient<DaemonConnector>, DaemonConnectorError> {
         let time = Instant::now();
         for _ in 0..Self::CONNECT_RETRY_MAX {
@@ -175,6 +176,7 @@ impl DaemonConnector {
     /// On Windows the socket file cannot be interacted with via any filesystem
     /// apis, due to this we need to just naively attempt to connect on that
     /// platform and retry in case of error.
+    #[tracing::instrument(skip(self))]
     async fn get_connection(
         &self,
         path: turbopath::AbsoluteSystemPathBuf,
@@ -312,7 +314,7 @@ pub enum FileWaitError {
 ///
 /// It does this by watching the parent directory of the path, and waiting for
 /// events on that path.
-#[tracing::instrument(skip(path))]
+#[tracing::instrument]
 async fn wait_for_file(
     path: &turbopath::AbsoluteSystemPathBuf,
     action: WaitAction,

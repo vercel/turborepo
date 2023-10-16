@@ -455,6 +455,7 @@ impl PackageManager {
         }
     }
 
+    #[tracing::instrument(skip(self, root_package_json))]
     pub fn read_lockfile(
         &self,
         root_path: &AbsoluteSystemPath,
@@ -474,6 +475,7 @@ impl PackageManager {
         self.parse_lockfile(root_package_json, &contents)
     }
 
+    #[tracing::instrument(skip(self, root_package_json))]
     pub fn parse_lockfile(
         &self,
         root_package_json: &PackageJson,

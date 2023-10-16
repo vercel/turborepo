@@ -15,6 +15,7 @@ use crate::{
     package_graph::{PackageGraph, WorkspaceName},
 };
 
+#[tracing::instrument(skip(opts, pkg_graph, scm))]
 pub fn resolve_packages(
     opts: &ScopeOpts,
     turbo_root: &AbsoluteSystemPath,

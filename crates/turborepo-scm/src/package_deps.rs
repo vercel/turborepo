@@ -22,6 +22,7 @@ impl SCM {
         }
     }
 
+    #[tracing::instrument(skip(self, turbo_root, package_path, inputs))]
     pub fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -87,6 +88,7 @@ impl Git {
         }
     }
 
+    #[tracing::instrument(skip(self, turbo_root))]
     fn get_package_file_hashes_from_index(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -121,6 +123,7 @@ impl Git {
         Ok(hashes)
     }
 
+    #[tracing::instrument(skip(self, turbo_root, inputs))]
     fn get_package_file_hashes_from_inputs<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
