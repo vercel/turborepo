@@ -6,8 +6,11 @@ export const REPO_ROOT = "large-monorepo";
 export const REPO_ORIGIN = "https://github.com/gsoltis/large-monorepo.git";
 export const REPO_PATH = path.join(process.cwd(), REPO_ROOT);
 export const DEFAULT_EXEC_OPTS = { stdio: "ignore" as const, cwd: REPO_PATH };
+
+const isWin = process.platform === "win32";
+
 export const TURBO_BIN = path.resolve(
-  path.join("..", "target", "release", "turbo")
+  path.join("..", "target", "release", "turbo" + (isWin ? ".exe" : ""))
 );
 
 export function setup(): void {
