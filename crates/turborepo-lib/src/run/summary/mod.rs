@@ -89,6 +89,15 @@ pub struct RunSummaryInner<'a> {
 
 impl<'a> RunSummary<'a> {
     #[allow(clippy::too_many_arguments)]
+    #[tracing::instrument(skip(
+        repo_root,
+        package_inference_root,
+        run_opts,
+        packages,
+        env_at_execution_start,
+        global_hash_summary,
+        synthesized_command
+    ))]
     pub fn new(
         start_at: chrono::DateTime<Local>,
         repo_root: &'a AbsoluteSystemPath,
@@ -143,6 +152,7 @@ impl<'a> RunSummary<'a> {
         }
     }
 
+    #[tracing::instrument(skip(pkg_dep_graph, ui))]
     pub fn close(
         &mut self,
         _exit_code: u32,

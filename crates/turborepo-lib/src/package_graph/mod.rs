@@ -115,6 +115,7 @@ impl PackageGraph {
         PackageGraphBuilder::new(repo_root, root_package_json)
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn validate(&self) -> Result<(), Error> {
         Ok(graph::validate_graph(&self.workspace_graph)?)
     }
