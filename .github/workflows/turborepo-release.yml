@@ -76,7 +76,7 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          target: ${{ matrix.os.name }}
+          target: ubuntu
       - name: Run Go Unit Tests
         run: turbo run test --filter=cli --color
 
@@ -94,7 +94,7 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          target: ${{ matrix.os.name }}
+          target: ubuntu
       - name: Run Rust Unit Tests
         run: cargo groups test turborepo
 
@@ -112,7 +112,7 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          target: ${{ matrix.os.name }}
+          target: ubuntu
       - name: Run JS Package Tests
         run: turbo run check-types test --filter="./packages/*" --color
 
@@ -387,7 +387,7 @@ jobs:
         uses: thomaseizinger/create-pull-request@master
         if: ${{ !inputs.dry_run }}
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           head: ${{ needs.stage.outputs.stage-branch }}
           base: main
           title: "release(turborepo): ${{ steps.getVersion.outputs.version }}"

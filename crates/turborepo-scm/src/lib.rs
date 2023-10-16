@@ -188,6 +188,7 @@ pub enum SCM {
 }
 
 impl SCM {
+    #[tracing::instrument]
     pub fn new(path_in_repo: &AbsoluteSystemPath) -> SCM {
         Git::find(path_in_repo).map(SCM::Git).unwrap_or_else(|e| {
             debug!("{}, continuing with manual hashing", e);
