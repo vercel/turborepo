@@ -40,7 +40,6 @@ import { setup, TURBO_BIN, DEFAULT_EXEC_OPTS, REPO_PATH } from "./helpers";
   }
 
   // TODO: just do this in JS and send to TB here instead of child process?
-  // TODO: write this to ttft.json
   const out = cp.execSync("jq -f src/fold.jq < profile.json > ttft.json", {
     stdio: "inherit",
   });
