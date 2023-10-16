@@ -133,12 +133,6 @@ impl Display for ConstantString {
     }
 }
 
-impl From<JsWord> for ConstantString {
-    fn from(v: JsWord) -> Self {
-        ConstantString::Word(v)
-    }
-}
-
 impl From<Atom> for ConstantString {
     fn from(v: Atom) -> Self {
         ConstantString::Atom(v)
