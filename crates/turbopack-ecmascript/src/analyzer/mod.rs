@@ -449,12 +449,6 @@ impl From<&'_ str> for JsValue {
     }
 }
 
-impl From<JsWord> for JsValue {
-    fn from(v: JsWord) -> Self {
-        ConstantValue::Str(ConstantString::Word(v)).into()
-    }
-}
-
 impl From<Atom> for JsValue {
     fn from(v: Atom) -> Self {
         ConstantValue::Str(ConstantString::Atom(v)).into()
