@@ -25,7 +25,7 @@ use tracing::{debug, warn};
 // linux -> recursive watch, watch ancestors
 #[cfg(feature = "watch_ancestors")]
 use turbopath::PathRelation;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
 #[cfg(feature = "manual_recursive_watch")]
 use {
     notify::{
@@ -93,6 +93,9 @@ impl FileSystemWatcher {
     pub async fn new_with_default_cookie_dir(
         root: &AbsoluteSystemPath,
     ) -> Result<Self, WatchError> {
+        // We already store logs in .turbo and recommend it be gitignore'd.
+        // Watchman uses .git, but we can't guarantee that git is present _or_
+        // that the turbo root is the same as the git root.
         Self::new(root, &root.join_components(&[".turbo", "cookies"])).await
     }
 
@@ -138,6 +141,13 @@ impl FileSystemWatcher {
 }
 
 fn setup_cookie_dir(cookie_dir: &AbsoluteSystemPath) -> Result<(), WatchError> {
+    // We need to ensure that the cookie directory is cleared out first so
+    // that we can start over with cookies.
+    if cookie_dir.exists() {
+        cookie_dir.remove_dir_all().map_err(|e| {
+            WatchError::Setup(format!("failed to clear cookie dir {}: {}", cookie_dir, e))
+        })?;
+    }
     cookie_dir.create_dir_all().map_err(|e| {
         WatchError::Setup(format!("failed to setup cookie dir {}: {}", cookie_dir, e))
     })?;
