@@ -56,7 +56,6 @@ struct ModuleReferencesVisitor<'a> {
     origin: Vc<Box<dyn ResolveOrigin>>,
     references: &'a mut Vec<Vc<Box<dyn ModuleReference>>>,
     urls: &'a mut Vec<(String, Vc<UrlAssetReference>)>,
-    is_import: bool,
 }
 
 impl<'a> ModuleReferencesVisitor<'a> {
@@ -71,7 +70,6 @@ impl<'a> ModuleReferencesVisitor<'a> {
             origin,
             references,
             urls,
-            is_import: false,
         }
     }
 }
@@ -107,9 +105,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                     ),
                 )));
 
-                self.is_import = true;
                 let res = i.visit_children(self);
-                self.is_import = false;
                 res
             }
 
@@ -118,10 +114,6 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
     }
 
     fn visit_url(&mut self, u: &mut Url) -> std::result::Result<(), Self::Error> {
-        if self.is_import {
-            return u.visit_children(self);
-        }
-
         let src = &*u.url;
 
         // ignore internal urls like `url(#noiseFilter)`
