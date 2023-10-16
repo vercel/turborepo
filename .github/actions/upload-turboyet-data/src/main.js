@@ -66,7 +66,8 @@ async function main() {
       token: process.env.TURBOYET_KV_REST_API_TOKEN,
     });
 
-    console.log("URL", process.env.TURBOYET_KV_REST_API_URL);
+    console.log("TYPEOF URL", process.env.TURBOYET_KV_REST_API_URL);
+    console.log("TYPEOF TOKEN", process.env.TURBOYET_KV_REST_API_TOKEN);
 
     const testRun = `${ref}\t${timestamp}\t${passCount}/${
       passCount + failCount
