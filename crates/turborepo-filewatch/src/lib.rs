@@ -86,10 +86,27 @@ pub struct FileSystemWatcher {
     // dropping the other sender for the broadcast channel, causing all receivers
     // to be notified of a close.
     _exit_ch: tokio::sync::oneshot::Sender<()>,
+    pub cookie_dir: AbsoluteSystemPathBuf,
 }
 
 impl FileSystemWatcher {
-    pub async fn new(root: &AbsoluteSystemPath) -> Result<Self, WatchError> {
+    pub async fn new_with_default_cookie_dir(
+        root: &AbsoluteSystemPath,
+    ) -> Result<Self, WatchError> {
+        Self::new(root, &root.join_components(&[".turbo", "cookies"])).await
+    }
+
+    pub async fn new(
+        root: &AbsoluteSystemPath,
+        cookie_dir: &AbsoluteSystemPath,
+    ) -> Result<Self, WatchError> {
+        if root.relation_to_path(cookie_dir) != PathRelation::Parent {
+            return Err(WatchError::Setup(format!(
+                "Invalid cookie directory: {} does not contain {}",
+                root, cookie_dir
+            )));
+        }
+        setup_cookie_dir(cookie_dir)?;
         let (sender, _) = broadcast::channel(1024);
         let (send_file_events, mut recv_file_events) = mpsc::channel(1024);
         let watch_root = root.to_owned();
@@ -99,7 +116,7 @@ impl FileSystemWatcher {
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
         // Ensure we are ready to receive new events, not events for existing state
         debug!("waiting for initial filesystem cookie");
-        wait_for_cookie(root, &mut recv_file_events).await?;
+        wait_for_cookie(cookie_dir, &mut recv_file_events).await?;
         tokio::task::spawn(watch_events(
             watcher,
             watch_root,
@@ -111,12 +128,20 @@ impl FileSystemWatcher {
         Ok(Self {
             sender,
             _exit_ch: exit_ch,
+            cookie_dir: cookie_dir.to_owned(),
         })
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<Result<Event, NotifyError>> {
         self.sender.subscribe()
     }
+}
+
+fn setup_cookie_dir(cookie_dir: &AbsoluteSystemPath) -> Result<(), WatchError> {
+    cookie_dir.create_dir_all().map_err(|e| {
+        WatchError::Setup(format!("failed to setup cookie dir {}: {}", cookie_dir, e))
+    })?;
+    Ok(())
 }
 
 #[cfg(not(any(feature = "watch_ancestors", feature = "manual_recursive_watch")))]
@@ -333,19 +358,13 @@ fn make_watcher<F: EventHandler>(event_handler: F) -> Result<Backend, notify::Er
 /// This ensures that we are ready to receive *new* filesystem events, rather
 /// than receiving events from existing state, which some backends can do.
 async fn wait_for_cookie(
-    root: &AbsoluteSystemPath,
+    cookie_dir: &AbsoluteSystemPath,
     recv: &mut mpsc::Receiver<EventResult>,
 ) -> Result<(), WatchError> {
     // TODO: should this be passed in? Currently the caller guarantees that the
     // directory is empty, but it could be the responsibility of the
     // filewatcher...
-    let cookie_path = root.join_components(&[".turbo", "cookies", ".turbo-cookie"]);
-    cookie_path.ensure_dir().map_err(|e| {
-        WatchError::Setup(format!(
-            "failed to create filesystem cookie dir for {}: {}",
-            cookie_path, e
-        ))
-    })?;
+    let cookie_path = cookie_dir.join_component(".turbo-cookie");
     cookie_path.create_with_contents("cookie").map_err(|e| {
         WatchError::Setup(format!("failed to write cookie to {}: {}", cookie_path, e))
     })?;
@@ -450,7 +469,9 @@ mod test {
         let sibling_path = parent_path.join_component("sibling");
         sibling_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+            .await
+            .unwrap();
         let mut recv = watcher.subscribe();
 
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
@@ -508,7 +529,9 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+            .await
+            .unwrap();
         let mut recv = watcher.subscribe();
 
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
@@ -550,7 +573,9 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+            .await
+            .unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -579,7 +604,9 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+            .await
+            .unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -611,7 +638,9 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+            .await
+            .unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -642,7 +671,9 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+            .await
+            .unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -683,7 +714,9 @@ mod test {
         let symlink_path = repo_root.join_component("symlink");
         symlink_path.symlink_to_dir(child_path.as_str()).unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+            .await
+            .unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -722,7 +755,9 @@ mod test {
         let symlink_path = repo_root.join_component("symlink");
         symlink_path.symlink_to_dir(child_path.as_str()).unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+            .await
+            .unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -766,7 +801,9 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+            .await
+            .unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -804,7 +841,9 @@ mod test {
         let child_path = parent_path.join_component("child");
         child_path.create_dir_all().unwrap();
 
-        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+            .await
+            .unwrap();
         let mut recv = watcher.subscribe();
         expect_watching(&mut recv, &[&repo_root, &parent_path, &child_path]).await;
 
@@ -825,7 +864,9 @@ mod test {
         let mut recv = {
             // create and immediately drop the watcher, which should trigger the exit
             // channel
-            let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+            let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+                .await
+                .unwrap();
             watcher.subscribe()
         };
 

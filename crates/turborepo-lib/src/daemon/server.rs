@@ -93,8 +93,12 @@ async fn start_filewatching(
     cookie_dir: AbsoluteSystemPathBuf,
     watcher_tx: watch::Sender<Option<Arc<FileWatching>>>,
 ) -> Result<(), WatchError> {
-    let watcher = FileSystemWatcher::new(&repo_root).await?;
-    let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_millis(100), watcher.subscribe());
+    let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).await?;
+    let cookie_jar = CookieJar::new(
+        &watcher.cookie_dir,
+        Duration::from_millis(100),
+        watcher.subscribe(),
+    );
     let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
     // We can ignore failures here, it means the server is shutting down and
     // receivers have gone out of scope.
