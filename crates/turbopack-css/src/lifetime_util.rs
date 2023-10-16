@@ -5,7 +5,5 @@ pub fn stylesheet_into_static<'i, 'o>(ss: &StyleSheet) -> StyleSheet<'i, 'o> {
 
     let rules = ss.rules.clone().into_owned();
 
-    let options = ss.options.clone();
-
-    StyleSheet::new(sources, rules, options)
+    StyleSheet::new(sources, rules, Default::default())
 }
