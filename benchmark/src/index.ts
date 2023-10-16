@@ -8,16 +8,18 @@ import {
   getCommitDetails,
   REPO_PATH,
   setup,
+  TURBO_BIN,
 } from "./helpers";
 
 const REPETITIONS = 5;
-const TURBO_BIN = path.resolve(path.join("..", "target", "release", "turbo"));
+
 const DEFAULT_CACHE_PATH = path.join(
   REPO_PATH,
   "node_modules",
   ".cache",
   "turbo"
 );
+
 const ALT_CACHE_PATH = path.join(
   REPO_PATH,
   "node_modules",

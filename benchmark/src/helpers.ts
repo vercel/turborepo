@@ -6,6 +6,9 @@ export const REPO_ROOT = "large-monorepo";
 export const REPO_ORIGIN = "https://github.com/gsoltis/large-monorepo.git";
 export const REPO_PATH = path.join(process.cwd(), REPO_ROOT);
 export const DEFAULT_EXEC_OPTS = { stdio: "ignore" as const, cwd: REPO_PATH };
+export const TURBO_BIN = path.resolve(
+  path.join("..", "target", "release", "turbo")
+);
 
 export function setup(): void {
   // Clone repo if it doesn't exist, run clean
@@ -22,6 +25,7 @@ export function setup(): void {
   }
 
   // Run install so we aren't benchmarking node_modules
+  console.log("running yarn install");
   cp.execSync("yarn install", DEFAULT_EXEC_OPTS);
 }
 

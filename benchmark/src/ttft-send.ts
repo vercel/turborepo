@@ -13,7 +13,7 @@ if (!token) {
 const DATA_SOURCE_URL =
   "https://api.us-east.tinybird.co/v0/events?name=turborepo_perf_ttft";
 
-(async function () {
+async function foo() {
   const contents = fs.readFileSync(filePath);
   const data = JSON.parse(contents.toString());
 
@@ -40,4 +40,8 @@ const DATA_SOURCE_URL =
     const text = await res.text();
     console.log(text);
   }
+}
+
+(async function () {
+  await foo();
 })();
