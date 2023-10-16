@@ -90,9 +90,6 @@ jobs:
       - name: Build Turborepo from source
         run: cd cli && make turbo-prod
 
-      - name: Clone Fixture
-        run: cd benchmark && node -r esbuild-register src/setup-ttft.ts
-
       - name: Run benchmarks
         run: pnpm -F benchmark ttft
 
