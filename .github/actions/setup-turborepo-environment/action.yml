@@ -10,13 +10,11 @@ inputs:
   setup-rust:
     description: "Install Rust toolchain to build Turborepo"
     required: false
-    type: boolean
-    default: true
+    default: "true"
   setup-go:
     description: "Install Go toolchain to build Turborepo"
     required: false
-    type: boolean
-    default: true
+    default: "true"
 
 runs:
   using: "composite"
