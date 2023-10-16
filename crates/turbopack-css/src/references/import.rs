@@ -5,7 +5,7 @@ use lightningcss::{
     properties::custom::TokenList,
     rules::{
         import::ImportRule,
-        layer::{LayerBlockRule, LayerName, LayerStatementRule},
+        layer::{LayerBlockRule, LayerName},
         media::MediaRule,
         supports::{SupportsCondition, SupportsRule},
         unknown::UnknownAtRule,
