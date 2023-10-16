@@ -40,6 +40,7 @@ pub struct Visitor<'a> {
     ui: UI,
     manager: ProcessManager,
     repo_root: &'a AbsoluteSystemPath,
+    global_env: EnvironmentVariableMap,
     dry: bool,
 }
 
@@ -79,6 +80,7 @@ impl<'a> Visitor<'a> {
         silent: bool,
         manager: ProcessManager,
         repo_root: &'a AbsoluteSystemPath,
+        global_env: EnvironmentVariableMap,
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,
@@ -101,6 +103,7 @@ impl<'a> Visitor<'a> {
             manager,
             repo_root,
             dry: false,
+            global_env,
         }
     }
 
@@ -190,6 +193,13 @@ impl<'a> Visitor<'a> {
                 continue;
             }
 
+            // We do this calculation earlier than we do in Go due to the `task_hasher`
+            // being !Send In the future we can look at doing this right before
+            // task execution instead.
+            let execution_env =
+                self.task_hasher
+                    .env(&info, task_env_mode, task_definition, &self.global_env)?;
+
             let task_cache =
                 self.run_cache
                     .task_cache(task_definition, workspace_dir, info.clone(), &task_hash);
@@ -245,6 +255,12 @@ impl<'a> Visitor<'a> {
                 cmd.current_dir(workspace_directory.as_path());
                 cmd.stdout(Stdio::piped());
                 cmd.stderr(Stdio::piped());
+
+                // We clear the env before populating it with variables we expect
+                cmd.env_clear();
+                cmd.envs(execution_env.iter());
+                // Always last to make sure it clobbers.
+                cmd.env("TURBO_HASH", &task_hash);
 
                 let mut stdout_writer =
                     match task_cache.output_writer(pretty_prefix.clone(), output_client.stdout()) {
