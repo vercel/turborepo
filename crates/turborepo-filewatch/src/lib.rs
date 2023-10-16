@@ -10,6 +10,8 @@ use std::{
     time::Duration,
 };
 
+// windows -> no recursive watch, watch ancestors
+// linux -> recursive watch, watch ancestors
 // macos -> custom watcher impl in fsevents, no recursive watch, no watching ancestors
 #[cfg(target_os = "macos")]
 use fsevent::FsEventWatcher;
@@ -21,10 +23,6 @@ use notify::{Event, EventHandler, RecursiveMode, Watcher};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, warn};
-// windows -> no recursive watch, watch ancestors
-// linux -> recursive watch, watch ancestors
-#[cfg(feature = "watch_ancestors")]
-use turbopath::PathRelation;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
 #[cfg(feature = "manual_recursive_watch")]
 use {
