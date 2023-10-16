@@ -82,6 +82,8 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
     }
 
     fn visit_rule(&mut self, rule: &mut CssRule) -> std::result::Result<(), Self::Error> {
+        dbg!(&*rule);
+
         match rule {
             CssRule::Import(i) => {
                 let src = &*i.url;
@@ -104,6 +106,22 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                         },
                     ),
                 )));
+                let vc = UrlAssetReference::new(
+                    self.origin,
+                    Request::parse(Value::new(src.to_string().into())),
+                    IssueSource::new(
+                        Vc::upcast(self.source),
+                        SourcePos {
+                            line: issue_span.line as _,
+                            column: issue_span.column as _,
+                        },
+                        SourcePos {
+                            line: issue_span.line as _,
+                            column: issue_span.column as _,
+                        },
+                    ),
+                );
+                self.urls.push((src.to_string(), vc));
 
                 let res = i.visit_children(self);
                 res
