@@ -168,6 +168,7 @@ pub async fn finalize_css(
                     }
                 }
 
+                dbg!(&url_map);
                 replace_url_references(&mut stylesheet, &url_map);
             }
 
@@ -272,6 +273,7 @@ async fn process_content(
     let mut stylesheet = stylesheet_into_static(&stylesheet);
 
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
+    dbg!(&references, &url_references);
 
     Ok(ParseCssResult::Ok {
         stylesheet,
