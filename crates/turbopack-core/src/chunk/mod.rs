@@ -20,7 +20,7 @@ use anyhow::Result;
 use auto_hash_map::AutoSet;
 use indexmap::{IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
-use tracing::{info_span, Span};
+use tracing::{info_span, Instrument, Span};
 use turbo_tasks::{
     debug::ValueDebugFormat,
     graph::{AdjacencyMap, GraphTraversal, GraphTraversalResult, Visit, VisitControlFlow},
@@ -478,65 +478,71 @@ async fn chunk_content_internal_parallel(
     };
 
     let GraphTraversalResult::Completed(traversal_result) =
-        AdjacencyMap::new().visit(root_edges, visit).await
+        async { AdjacencyMap::new().visit(root_edges, visit).await }
+            .instrument(tracing::trace_span!("visit"))
+            .await
     else {
         unreachable!();
     };
 
-    let graph_nodes: Vec<_> = traversal_result?.into_reverse_topological().collect();
+    async {
+        let graph_nodes = traversal_result?.into_reverse_topological();
 
-    let mut chunk_items = IndexSet::new();
-    let mut async_modules = IndexSet::new();
-    let mut external_module_references = IndexSet::new();
-    let mut forward_edges_inherit_async = IndexMap::new();
-    let mut local_back_edges_inherit_async = IndexMap::new();
-    let mut available_async_modules_back_edges_inherit_async = IndexMap::new();
+        let mut chunk_items = IndexSet::new();
+        let mut async_modules = IndexSet::new();
+        let mut external_module_references = IndexSet::new();
+        let mut forward_edges_inherit_async = IndexMap::new();
+        let mut local_back_edges_inherit_async = IndexMap::new();
+        let mut available_async_modules_back_edges_inherit_async = IndexMap::new();
 
-    for graph_node in graph_nodes {
-        match graph_node {
-            ChunkContentGraphNode::PassthroughModule { .. } => {}
-            ChunkContentGraphNode::ChunkItem { item, .. } => {
-                chunk_items.insert(item);
-            }
-            ChunkContentGraphNode::AsyncModule { module } => {
-                let module = module.resolve().await?;
-                async_modules.insert(module);
-            }
-            ChunkContentGraphNode::ExternalModuleReference(reference) => {
-                let reference = reference.resolve().await?;
-                external_module_references.insert(reference);
-            }
-            ChunkContentGraphNode::InheritAsyncInfo { item, references } => {
-                for &(reference, ty) in &references {
-                    match ty {
-                        InheritAsyncEdge::LocalModule => local_back_edges_inherit_async
-                            .entry(reference)
-                            .or_insert_with(Vec::new)
-                            .push(item),
-                        InheritAsyncEdge::AvailableAsyncModule => {
-                            available_async_modules_back_edges_inherit_async
+        for graph_node in graph_nodes {
+            match graph_node {
+                ChunkContentGraphNode::PassthroughModule { .. } => {}
+                ChunkContentGraphNode::ChunkItem { item, .. } => {
+                    chunk_items.insert(item);
+                }
+                ChunkContentGraphNode::AsyncModule { module } => {
+                    let module = module.resolve().await?;
+                    async_modules.insert(module);
+                }
+                ChunkContentGraphNode::ExternalModuleReference(reference) => {
+                    let reference = reference.resolve().await?;
+                    external_module_references.insert(reference);
+                }
+                ChunkContentGraphNode::InheritAsyncInfo { item, references } => {
+                    for &(reference, ty) in &references {
+                        match ty {
+                            InheritAsyncEdge::LocalModule => local_back_edges_inherit_async
                                 .entry(reference)
                                 .or_insert_with(Vec::new)
-                                .push(item)
+                                .push(item),
+                            InheritAsyncEdge::AvailableAsyncModule => {
+                                available_async_modules_back_edges_inherit_async
+                                    .entry(reference)
+                                    .or_insert_with(Vec::new)
+                                    .push(item)
+                            }
                         }
                     }
+                    forward_edges_inherit_async
+                        .entry(item)
+                        .or_insert_with(Vec::new)
+                        .extend(references.into_iter().map(|(r, _)| r));
                 }
-                forward_edges_inherit_async
-                    .entry(item)
-                    .or_insert_with(Vec::new)
-                    .extend(references.into_iter().map(|(r, _)| r));
             }
         }
-    }
 
-    Ok(ChunkContentResult {
-        chunk_items,
-        async_modules,
-        external_module_references,
-        forward_edges_inherit_async,
-        local_back_edges_inherit_async,
-        available_async_modules_back_edges_inherit_async,
-    })
+        Ok(ChunkContentResult {
+            chunk_items,
+            async_modules,
+            external_module_references,
+            forward_edges_inherit_async,
+            local_back_edges_inherit_async,
+            available_async_modules_back_edges_inherit_async,
+        })
+    }
+    .instrument(tracing::trace_span!("process_graph_nodes"))
+    .await
 }
 
 #[turbo_tasks::value_trait]

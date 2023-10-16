@@ -4,6 +4,7 @@ use anyhow::Result;
 use auto_hash_map::AutoSet;
 use indexmap::{IndexMap, IndexSet};
 use once_cell::unsync::Lazy;
+use tracing::{Instrument, Level};
 use turbo_tasks::{TryFlatJoinIterExt, TryJoinIterExt, Value, Vc};
 
 use super::{
@@ -17,6 +18,7 @@ pub struct MakeChunkGroupResult {
     pub chunks: Vec<Vc<Box<dyn Chunk>>>,
 }
 
+#[tracing::instrument(level = Level::TRACE, skip_all)]
 /// Creates a chunk group from a set of entries.
 pub async fn make_chunk_group(
     chunking_context: Vc<Box<dyn ChunkingContext>>,
@@ -33,15 +35,19 @@ pub async fn make_chunk_group(
     } = chunk_content(chunking_context, entries, Value::new(availability_info)).await?;
 
     // Find all local chunk items that are self async
-    let self_async_children = chunk_items
-        .iter()
-        .copied()
-        .map(|chunk_item| async move {
-            let is_self_async = *chunk_item.is_self_async().await?;
-            Ok(is_self_async.then_some(chunk_item))
-        })
-        .try_flat_join()
-        .await?;
+    let self_async_children = async {
+        chunk_items
+            .iter()
+            .copied()
+            .map(|chunk_item| async move {
+                let is_self_async = *chunk_item.is_self_async().await?;
+                Ok(is_self_async.then_some(chunk_item))
+            })
+            .try_flat_join()
+            .await
+    }
+    .instrument(tracing::trace_span!("self_async_children"))
+    .await?;
 
     // Get all available async modules and concatenate with local async modules
     let mut async_chunk_items = available_async_modules_back_edges_inherit_async
@@ -52,54 +58,66 @@ pub async fn make_chunk_group(
         .collect::<IndexMap<_, _>>();
 
     // Propagate async inheritance
-    let mut i = 0;
-    loop {
-        let Some((&chunk_item, _)) = async_chunk_items.get_index(i) else {
-            break;
-        };
-        // The first few entries are from
-        // available_async_modules_back_edges_inherit_async and need to use that map,
-        // all other entries are local
-        let map = if i < available_async_modules_back_edges_inherit_async.len() {
-            &available_async_modules_back_edges_inherit_async
-        } else {
-            &local_back_edges_inherit_async
-        };
-        if let Some(parents) = map.get(&chunk_item) {
-            for &parent in parents.iter() {
-                // Add item, it will be iterated by this loop too
-                async_chunk_items
-                    .entry(parent)
-                    .or_default()
-                    .insert(chunk_item);
+    async {
+        let mut i = 0;
+        loop {
+            let Some((&chunk_item, _)) = async_chunk_items.get_index(i) else {
+                break;
+            };
+            // The first few entries are from
+            // available_async_modules_back_edges_inherit_async and need to use that map,
+            // all other entries are local
+            let map = if i < available_async_modules_back_edges_inherit_async.len() {
+                &available_async_modules_back_edges_inherit_async
+            } else {
+                &local_back_edges_inherit_async
+            };
+            if let Some(parents) = map.get(&chunk_item) {
+                for &parent in parents.iter() {
+                    // Add item, it will be iterated by this loop too
+                    async_chunk_items
+                        .entry(parent)
+                        .or_default()
+                        .insert(chunk_item);
+                }
             }
+            i += 1;
         }
-        i += 1;
+        Ok::<_, anyhow::Error>(())
     }
+    .instrument(tracing::trace_span!("propagate_async_modules"))
+    .await?;
 
     // Create map for chunk items with empty [Option<Vc<AsyncModuleInfo>>]
-    let mut chunk_items = chunk_items
-        .into_iter()
-        .map(|chunk_item| (chunk_item, None))
-        .collect::<IndexMap<_, Option<Vc<AsyncModuleInfo>>>>();
+    let chunk_items = async {
+        let mut chunk_items = chunk_items
+            .into_iter()
+            .map(|chunk_item| (chunk_item, None))
+            .collect::<IndexMap<_, Option<Vc<AsyncModuleInfo>>>>();
 
-    // Insert AsyncModuleInfo for every async module
-    for (async_item, referenced_async_modules) in async_chunk_items {
-        let referenced_async_modules =
-            if let Some(references) = forward_edges_inherit_async.get(&async_item) {
-                references
-                    .iter()
-                    .copied()
-                    .filter(|item| referenced_async_modules.contains(item))
-                    .collect()
-            } else {
-                Default::default()
-            };
-        chunk_items.insert(
-            async_item,
-            Some(AsyncModuleInfo::new(referenced_async_modules)),
-        );
+        // Insert AsyncModuleInfo for every async module
+        for (async_item, referenced_async_modules) in async_chunk_items {
+            let referenced_async_modules =
+                if let Some(references) = forward_edges_inherit_async.get(&async_item) {
+                    references
+                        .iter()
+                        .copied()
+                        .filter(|item| referenced_async_modules.contains(item))
+                        .collect()
+                } else {
+                    Default::default()
+                };
+            chunk_items.insert(
+                async_item,
+                Some(AsyncModuleInfo::new(referenced_async_modules)),
+            );
+        }
+        Ok::<_, anyhow::Error>(chunk_items)
     }
+    .instrument(tracing::trace_span!(
+        "get_chunk_items_with_async_module_info"
+    ))
+    .await?;
 
     // Insert async chunk loaders for every referenced async module
     let async_loaders = {

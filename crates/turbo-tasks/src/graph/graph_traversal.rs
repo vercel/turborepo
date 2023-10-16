@@ -2,6 +2,7 @@ use std::{future::Future, pin::Pin};
 
 use anyhow::Result;
 use futures::{stream::FuturesUnordered, Stream};
+use tracing::Level;
 
 use super::{
     graph_store::{GraphNode, GraphStore},
@@ -141,6 +142,7 @@ where
 {
     type Output = GraphTraversalResult<Result<Store>, Abort>;
 
+    #[tracing::instrument(level = Level::TRACE, skip_all)]
     fn poll(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,

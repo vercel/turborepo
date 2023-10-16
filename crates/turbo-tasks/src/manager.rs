@@ -476,6 +476,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
                         )
                     });
                     if let Some((result, duration, instant)) = execution_future.await {
+                        let _span = tracing::trace_span!("post task execution").entered();
                         if cfg!(feature = "log_function_stats") && duration.as_millis() > 1000 {
                             println!(
                                 "{} took {}",
@@ -542,6 +543,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
             .fetch_add(1, Ordering::AcqRel);
     }
 
+    #[tracing::instrument(level = Level::TRACE, skip_all)]
     fn finish_primary_job(&self) {
         if self
             .currently_scheduled_tasks
