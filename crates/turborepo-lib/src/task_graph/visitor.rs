@@ -10,7 +10,7 @@ use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::{process::Command, sync::mpsc};
-use tracing::{debug, error};
+use tracing::{debug, error, Span};
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
@@ -104,6 +104,7 @@ impl<'a> Visitor<'a> {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn visit(&self, engine: Arc<Engine>) -> Result<Vec<TaskError>, Error> {
         let concurrency = self.opts.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
@@ -114,7 +115,11 @@ impl<'a> Visitor<'a> {
         let mut tasks = FuturesUnordered::new();
         let errors = Arc::new(Mutex::new(Vec::new()));
 
+        let span = Span::current();
+
         while let Some(message) = node_stream.recv().await {
+            let span = tracing::debug_span!(parent: &span, "queue_task", task = %message.info);
+            let _enter = span.enter();
             let crate::engine::Message { info, callback } = message;
             let is_github_actions = self.opts.run_opts.is_github_actions;
             let package_name = WorkspaceName::from(info.package());
@@ -208,7 +213,12 @@ impl<'a> Visitor<'a> {
             let task_id_for_display = self.display_task_id(&info);
             let hash_tracker = self.task_hasher.task_hash_tracker();
 
+            let parent_span = Span::current();
             tasks.push(tokio::spawn(async move {
+                let span = tracing::debug_span!("execute_task", task = %info.task());
+                span.follows_from(parent_span.id());
+                let _enter = span.enter();
+
                 let task_id = info;
                 let mut task_cache = task_cache;
                 let mut prefixed_ui =

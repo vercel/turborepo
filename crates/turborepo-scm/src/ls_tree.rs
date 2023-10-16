@@ -9,6 +9,7 @@ use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use crate::{package_deps::GitHashes, wait_for_success, Error, Git};
 
 impl Git {
+    #[tracing::instrument(skip(self))]
     pub fn git_ls_tree(&self, root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error> {
         let mut hashes = GitHashes::new();
         let mut git = Command::new(self.bin.as_std_path())

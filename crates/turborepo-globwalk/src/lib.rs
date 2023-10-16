@@ -15,6 +15,7 @@ use empty_glob::InclusiveEmptyAny;
 use itertools::Itertools;
 use path_slash::PathExt;
 use regex::Regex;
+use tracing::{info_span, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 use wax::{Any, BuildError, Glob, Pattern};
 
@@ -164,6 +165,7 @@ fn join_unix_like_paths(a: &str, b: &str) -> String {
     [a.trim_end_matches('/'), "/", b.trim_start_matches('/')].concat()
 }
 
+#[tracing::instrument]
 fn preprocess_paths_and_globs(
     base_path: &AbsoluteSystemPath,
     include: &[String],
@@ -333,7 +335,10 @@ fn collapse_path(path: &str) -> Option<(Cow<str>, usize)> {
     }
 }
 
-fn glob_with_contextual_error<S: AsRef<str>>(raw: S) -> Result<Glob<'static>, WalkError> {
+#[tracing::instrument]
+fn glob_with_contextual_error<S: AsRef<str> + std::fmt::Debug>(
+    raw: S,
+) -> Result<Glob<'static>, WalkError> {
     let raw = raw.as_ref();
     Glob::new(raw)
         .map(|g| g.into_owned())
@@ -350,6 +355,7 @@ pub(crate) fn any_with_contextual_error(
     })
 }
 
+#[tracing::instrument]
 pub fn globwalk(
     base_path: &AbsoluteSystemPath,
     include: &[String],
@@ -367,9 +373,13 @@ pub fn globwalk(
         .map(glob_with_contextual_error)
         .collect::<Result<Vec<_>, _>>()?;
 
+    let span = Span::current();
     let result = inc_patterns
         .into_iter()
         .flat_map(|glob| {
+            let span =
+                tracing::info_span!(parent: &span, &"walk_glob", glob = glob.to_string().as_str());
+            let _enter = span.enter();
             // Check if the glob specifies an exact filename with no meta characters.
             if let Some(prefix) = glob.variance().path() {
                 // We expect all of our globs to be absolute paths (asserted above)
@@ -393,7 +403,7 @@ pub fn globwalk(
                 }
             } else {
                 glob.walk(&base_path_new)
-                    .not(ex_patterns.iter().cloned())
+                    .not(ex_patterns.clone())
                     // Per docs, only fails if exclusion list is too large, since we're using
                     // pre-compiled globs
                     .unwrap_or_else(|e| {
@@ -402,19 +412,25 @@ pub fn globwalk(
                             ex_patterns, e,
                         )
                     })
-                    .filter_map(|entry| match entry {
-                        Ok(entry) if walk_type == WalkType::Files && entry.file_type().is_dir() => {
-                            None
-                        }
-                        Ok(entry) => Some(
-                            AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into()),
-                        ),
-                        Err(e) => {
-                            let io_err = std::io::Error::from(e);
-                            if io_err.kind() == std::io::ErrorKind::NotFound {
+                    .filter_map(|entry| {
+                        let span = info_span!(parent: &span, "visit_file", entry = ?entry);
+                        let _enter = span.enter();
+                        match entry {
+                            Ok(entry)
+                                if walk_type == WalkType::Files && entry.file_type().is_dir() =>
+                            {
                                 None
-                            } else {
-                                Some(Err(io_err.into()))
+                            }
+                            Ok(entry) => Some(
+                                AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into()),
+                            ),
+                            Err(e) => {
+                                let io_err = std::io::Error::from(e);
+                                if io_err.kind() == std::io::ErrorKind::NotFound {
+                                    None
+                                } else {
+                                    Some(Err(io_err.into()))
+                                }
                             }
                         }
                     })

@@ -6,7 +6,7 @@ use std::{
 use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
-use tracing::debug;
+use tracing::{debug, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_scm::SCM;
@@ -60,6 +60,7 @@ pub struct PackageInputsHashes {
 }
 
 impl PackageInputsHashes {
+    #[tracing::instrument(skip(all_tasks, workspaces, task_definitions, repo_root, scm))]
     pub fn calculate_file_hashes<'a>(
         scm: &SCM,
         all_tasks: impl ParallelIterator<Item = &'a TaskNode>,
@@ -69,8 +70,12 @@ impl PackageInputsHashes {
     ) -> Result<PackageInputsHashes, Error> {
         tracing::trace!(scm_manual=%scm.is_manual(), "scm running in {} mode", if scm.is_manual() { "manual" } else { "git" });
 
+        let span = Span::current();
+
         let (hashes, expanded_hashes): (HashMap<_, _>, HashMap<_, _>) = all_tasks
             .filter_map(|task| {
+                let span = tracing::info_span!(parent: &span, "calculate_file_hash", ?task);
+                let _enter = span.enter();
                 let TaskNode::Task(task_id) = task else {
                     return None;
                 };
@@ -183,6 +188,7 @@ impl<'a> TaskHasher<'a> {
         }
     }
 
+    #[tracing::instrument(skip(self, task_definition, task_env_mode, workspace, dependency_set))]
     pub fn calculate_task_hash(
         &self,
         task_id: &TaskId<'static>,
