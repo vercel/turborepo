@@ -5,7 +5,7 @@ use lightningcss::{
     properties::custom::TokenList,
     rules::{
         import::ImportRule,
-        layer::{LayerName, LayerStatementRule},
+        layer::{LayerBlockRule, LayerName, LayerStatementRule},
         media::MediaRule,
         supports::{SupportsCondition, SupportsRule},
         unknown::UnknownAtRule,
@@ -101,9 +101,10 @@ impl ImportAttributes {
             })
         }
         if let Some(layer_name) = &self.layer_name {
-            rule = CssRule::LayerStatement(LayerStatementRule {
-                names: vec![layer_name.clone()],
+            rule = CssRule::LayerBlock(LayerBlockRule {
                 loc: default_loc,
+                name: Some(layer_name.clone()),
+                rules: CssRuleList(vec![rule]),
             });
         }
 
