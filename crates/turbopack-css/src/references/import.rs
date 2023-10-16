@@ -79,7 +79,7 @@ impl ImportAttributes {
         };
 
         let mut rule: CssRule = CssRule::Unknown(UnknownAtRule {
-            name: "".into(),
+            name: r#""""__turbopack_placeholder__""""#.into(),
             prelude: TokenList(vec![]),
             block: None,
             loc: default_loc,
