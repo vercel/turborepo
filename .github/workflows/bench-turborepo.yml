@@ -74,8 +74,7 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      # - uses: actions-rs/toolchain@v1 (do we need this?)
-
+      # setup Rust on windows, because apparently setup-turborepo-environment doesn't do this
       - name: Add rustup for windows
         if: ${{ matrix.os.runner == 'windows-latest'}}
         run: |
@@ -87,7 +86,6 @@ jobs:
         with:
           target: ${{ matrix.os.runner }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          # setup-rust: true
 
       - name: Build Turborepo from source
         run: cd cli && make turbo-prod
