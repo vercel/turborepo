@@ -78,6 +78,7 @@ jobs:
         with:
           target: ${{ matrix.os.runner }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          setup-rust: true
 
       - name: Build Turborepo from source
         run: cd cli && make turbo-prod
