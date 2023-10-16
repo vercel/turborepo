@@ -1,5 +1,5 @@
 use anyhow::Result;
-use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
+use turbo_tasks::{TryJoinIterExt, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::{Asset, AssetContent},
