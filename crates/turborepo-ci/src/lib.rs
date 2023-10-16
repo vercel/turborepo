@@ -42,13 +42,16 @@ impl Vendor {
     }
 
     /// Gets user from CI environment variables
-    pub fn get_user() -> Option<String> {
+    /// We return an empty String instead of None because
+    /// the API expects some sort of string here.
+    pub fn get_user() -> String {
         let vendor = Vendor::infer();
 
         vendor
             .map(|v| v.username_env_var)
             .flatten()
             .and_then(|v| env::var(v).ok())
+            .unwrap_or_default()
     }
 
     pub fn infer_inner() -> Option<&'static Vendor> {

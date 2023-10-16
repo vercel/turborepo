@@ -78,7 +78,7 @@ impl SpacesClientHandle {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(tag = "status", rename_all = "lowercase")]
 pub enum SpaceRequest {
     FinishedRun { end_time: i64, exit_code: u32 },
@@ -127,6 +127,9 @@ impl SpacesClient {
                     });
                 }
             };
+
+            debug!("created run: {:?}", run);
+
             while let Some(req) = rx.recv().await {
                 let resp = match req {
                     SpaceRequest::FinishedRun {
@@ -156,7 +159,7 @@ impl SpacesClient {
         Ok(tokio::time::timeout(
             self.request_timeout,
             self.api_client
-                .create_space_run(&self.space_id, &self.api_auth.token, payload),
+                .create_space_run(&self.space_id, &self.api_auth, payload),
         )
         .await??)
     }
@@ -168,8 +171,12 @@ impl SpacesClient {
     ) -> Result<(), Error> {
         Ok(tokio::time::timeout(
             self.request_timeout,
-            self.api_client
-                .create_task_summary(&self.space_id, &run.id, task_summary),
+            self.api_client.create_task_summary(
+                &self.space_id,
+                &run.id,
+                &self.api_auth,
+                task_summary,
+            ),
         )
         .await??)
     }
@@ -183,8 +190,13 @@ impl SpacesClient {
     ) -> Result<(), Error> {
         Ok(tokio::time::timeout(
             self.request_timeout,
-            self.api_client
-                .finish_space_run(&self.space_id, &run.id, end_time, exit_code),
+            self.api_client.finish_space_run(
+                &self.space_id,
+                &run.id,
+                &self.api_auth,
+                end_time,
+                exit_code,
+            ),
         )
         .await??)
     }

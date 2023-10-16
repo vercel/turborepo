@@ -1,11 +1,12 @@
 use chrono::{DateTime, Local};
+use reqwest::{Method, RequestBuilder};
 use serde::Serialize;
 use turbopath::AnchoredSystemPath;
 use turborepo_vercel_api::SpaceRun;
 
-use crate::{retry, APIClient, Error};
+use crate::{retry, APIAuth, APIClient, Client, Error};
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RunStatus {
     Running,
@@ -19,14 +20,14 @@ pub struct SpaceClientSummary {
     pub version: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct SpacesCacheStatus {
     status: String,
     source: Option<String>,
     time_saved: u32,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct SpaceTaskSummary {
     key: String,
     name: String,
@@ -56,7 +57,7 @@ pub struct CreateSpaceRunPayload {
     pub git_branch: Option<String>,
     pub git_sha: Option<String>,
     #[serde(rename = "originationUser")]
-    pub user: Option<String>,
+    pub user: String,
     pub client: SpaceClientSummary,
 }
 
@@ -68,7 +69,7 @@ impl CreateSpaceRunPayload {
         git_branch: Option<String>,
         git_sha: Option<String>,
         version: String,
-        user: Option<String>,
+        user: String,
     ) -> Self {
         let start_time = start_time.timestamp_millis();
         let vendor = turborepo_ci::Vendor::infer();
@@ -95,7 +96,8 @@ impl CreateSpaceRunPayload {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct FinishSpaceRunPayload {
     status: RunStatus,
     end_time: i64,
@@ -113,33 +115,61 @@ impl FinishSpaceRunPayload {
 }
 
 impl APIClient {
-    pub async fn create_space_run(
+    /// Create a new request builder with the preflight check done,
+    /// team parameters added, and CI header. In the future this should
+    /// be extended to all of the APIClient methods.
+    async fn create_request_builder(
         &self,
-        space_id: &str,
-        token: &str,
-        payload: CreateSpaceRunPayload,
-    ) -> Result<SpaceRun, Error> {
-        let mut url = self.make_url(&format!("/v0/spaces/{}/runs", space_id));
+        url: &str,
+        api_auth: &APIAuth,
+        method: Method,
+    ) -> Result<RequestBuilder, Error> {
+        let mut url = self.make_url(url);
         let mut allow_auth = true;
+
+        let APIAuth {
+            token,
+            team_id,
+            team_slug,
+        } = api_auth;
 
         if self.use_preflight {
             let preflight_response = self
-                .do_preflight(token, &url, "POST", "Authorization, User-Agent")
+                .do_preflight(token, &url, method.as_str(), "Authorization, User-Agent")
                 .await?;
 
             allow_auth = preflight_response.allow_authorization_header;
             url = preflight_response.location.to_string();
         }
 
-        let mut request_builder = self.client.post(&url).json(&payload);
+        let mut request_builder = self
+            .client
+            .request(method, &url)
+            .header("Content-Type", "application/json");
 
         if allow_auth {
             request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
         }
 
+        request_builder = Self::add_team_params(request_builder, team_id, team_slug.as_deref());
+
         if let Some(constant) = turborepo_ci::Vendor::get_constant() {
             request_builder = request_builder.header("x-artifact-client-ci", constant);
         }
+
+        Ok(request_builder)
+    }
+    pub async fn create_space_run(
+        &self,
+        space_id: &str,
+        api_auth: &APIAuth,
+        payload: CreateSpaceRunPayload,
+    ) -> Result<SpaceRun, Error> {
+        let url = format!("/v0/spaces/{}/runs", space_id);
+        let request_builder = self
+            .create_request_builder(&url, api_auth, Method::POST)
+            .await?
+            .json(&payload);
 
         let response = retry::make_retryable_request(request_builder)
             .await?
@@ -152,10 +182,17 @@ impl APIClient {
         &self,
         space_id: &str,
         run_id: &str,
+        api_auth: &APIAuth,
         task: SpaceTaskSummary,
     ) -> Result<(), Error> {
-        let url = self.make_url(&format!("/v0/spaces/{}/runs/{}/tasks", space_id, run_id));
-        let request_builder = self.client.post(url).json(&task);
+        let request_builder = self
+            .create_request_builder(
+                &format!("/v0/spaces/{}/runs/{}/tasks", space_id, run_id),
+                api_auth,
+                Method::POST,
+            )
+            .await?
+            .json(&task);
 
         retry::make_retryable_request(request_builder)
             .await?
@@ -168,12 +205,18 @@ impl APIClient {
         &self,
         space_id: &str,
         run_id: &str,
+        api_auth: &APIAuth,
         end_time: i64,
         exit_code: u32,
     ) -> Result<(), Error> {
+        let url = format!("/v0/spaces/{}/runs/{}", space_id, run_id);
+
         let payload = FinishSpaceRunPayload::new(end_time, exit_code);
-        let url = self.make_url(&format!("/v0/spaces/{}/runs/{}", space_id, run_id));
-        let request_builder = self.client.patch(url).json(&payload);
+
+        let request_builder = self
+            .create_request_builder(&url, &api_auth, Method::PATCH)
+            .await?
+            .json(&payload);
 
         retry::make_retryable_request(request_builder)
             .await?

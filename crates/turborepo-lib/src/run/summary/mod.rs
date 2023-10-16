@@ -82,7 +82,7 @@ pub struct RunSummary<'a> {
     env_mode: EnvMode,
     framework_inference: bool,
     tasks: Vec<TaskSummary<'a>>,
-    user: Option<String>,
+    user: String,
     pub scm: SCMState,
     #[serde(skip)]
     repo_root: &'a AbsoluteSystemPath,
@@ -95,10 +95,12 @@ pub struct RunSummary<'a> {
 }
 
 /// We use this to track the run, so it's constructed before the run.
+#[derive(Debug)]
 pub struct RunTracker {
     scm: SCMState,
     execution_tracker: ExecutionTracker,
     spaces_client_handle: Option<SpacesClientHandle>,
+    user: String,
 }
 
 impl RunTracker {
@@ -112,7 +114,7 @@ impl RunTracker {
         spaces_id: Option<String>,
         spaces_api_client: Arc<APIClient>,
         api_auth: Option<Arc<APIAuth>>,
-        user: Option<String>,
+        user: String,
     ) -> Self {
         let scm = SCMState::get(env_at_execution_start, repo_root);
 
@@ -120,6 +122,7 @@ impl RunTracker {
             scm: scm.clone(),
             execution_tracker: ExecutionTracker::new(),
             spaces_client_handle: None,
+            user: user.clone(),
         };
 
         if let Some(spaces_client) =
@@ -146,9 +149,7 @@ impl RunTracker {
         package_inference_root,
         run_opts,
         packages,
-        env_at_execution_start,
-        global_hash_summary,
-        synthesized_command
+        global_hash_summary
     ))]
     pub async fn to_summary<'a>(
         self,
@@ -158,7 +159,6 @@ impl RunTracker {
         start_time: DateTime<Local>,
         end_time: DateTime<Local>,
         turbo_version: &str,
-        user: Option<String>,
         run_opts: &RunOpts<'a>,
         packages: HashSet<WorkspaceName>,
         global_hash_summary: GlobalHashSummary<'a>,
@@ -192,7 +192,7 @@ impl RunTracker {
             tasks: vec![],
             global_hash_summary,
             scm: self.scm,
-            user,
+            user: self.user,
             monorepo: !single_package,
             repo_root,
             should_save,
@@ -211,7 +211,6 @@ impl RunTracker {
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&AnchoredSystemPath>,
         version: &str,
-        user: Option<String>,
         run_opts: &RunOpts<'a>,
         packages: HashSet<WorkspaceName>,
         global_hash_summary: GlobalHashSummary<'a>,
@@ -226,7 +225,6 @@ impl RunTracker {
                 start_time,
                 end_time,
                 version,
-                user,
                 run_opts,
                 packages,
                 global_hash_summary,
@@ -256,7 +254,7 @@ struct SinglePackageRunSummary<'a, 'b> {
     env_mode: EnvMode,
     framework_inference: bool,
     tasks: &'b [TaskSummary<'a>],
-    user: Option<&'b str>,
+    user: &'b str,
     pub scm: &'b SCMState,
 }
 
@@ -271,7 +269,7 @@ impl<'a, 'b> From<&'b RunSummary<'a>> for SinglePackageRunSummary<'a, 'b> {
             env_mode: run_summary.env_mode,
             framework_inference: run_summary.framework_inference,
             tasks: &run_summary.tasks,
-            user: run_summary.user.as_deref(),
+            user: &run_summary.user,
             scm: &run_summary.scm,
         }
     }

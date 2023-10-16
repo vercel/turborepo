@@ -415,7 +415,7 @@ impl<'a> Visitor<'a> {
 
     /// Finishes visiting the tasks, creates the run summary, and either
     /// prints, saves, or sends it to spaces.
-    pub(crate) async fn finish(self, user: Option<String>) -> Result<(), Error> {
+    pub(crate) async fn finish(self) -> Result<(), Error> {
         let started_at = self.started_at;
         let pkg_dep_graph = self.package_graph;
         let ui = self.ui;
@@ -435,7 +435,6 @@ impl<'a> Visitor<'a> {
                 repo_root,
                 opts.scope_opts.pkg_inference_root.as_deref(),
                 version,
-                user,
                 &opts.run_opts,
                 packages,
                 global_hash_summary,

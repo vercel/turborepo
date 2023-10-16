@@ -16,7 +16,7 @@ pub use cache::{RunCache, TaskCache};
 use chrono::Local;
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
-use tracing::{debug, info, trace};
+use tracing::{debug, info};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
@@ -360,8 +360,6 @@ impl<'a> Run<'a> {
             resolved_pass_through_env_vars,
         );
 
-        let user = Vendor::get_user();
-
         let run_tracker = RunTracker::new(
             start_at,
             "todo",
@@ -372,7 +370,7 @@ impl<'a> Run<'a> {
             opts.run_opts.experimental_space_id.clone(),
             api_client,
             api_auth,
-            user.clone(),
+            Vendor::get_user(),
         );
 
         let mut visitor = Visitor::new(
@@ -416,7 +414,7 @@ impl<'a> Run<'a> {
             writeln!(std::io::stderr(), "{err}").ok();
         }
 
-        visitor.finish(user).await?;
+        visitor.finish().await?;
 
         Ok(exit_code)
     }
@@ -573,7 +571,7 @@ impl<'a> Run<'a> {
             opts.run_opts.experimental_space_id.clone(),
             api_client,
             api_auth,
-            None,
+            Vendor::get_user(),
         );
 
         let mut visitor = Visitor::new(

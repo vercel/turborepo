@@ -4,6 +4,7 @@
 
 use std::{backtrace::Backtrace, env};
 
+use async_trait::async_trait;
 use lazy_static::lazy_static;
 use regex::Regex;
 pub use reqwest::Response;
@@ -24,6 +25,66 @@ pub mod spaces;
 lazy_static! {
     static ref AUTHORIZATION_REGEX: Regex =
         Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap();
+}
+
+#[async_trait]
+pub trait Client {
+    async fn get_user(&self, token: &str) -> Result<UserResponse>;
+    async fn get_teams(&self, token: &str) -> Result<TeamsResponse>;
+    async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>>;
+    fn add_ci_header(request_builder: RequestBuilder) -> RequestBuilder;
+    fn add_team_params(
+        request_builder: RequestBuilder,
+        team_id: &str,
+        team_slug: Option<&str>,
+    ) -> RequestBuilder;
+    async fn get_caching_status(
+        &self,
+        token: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+    ) -> Result<CachingStatusResponse>;
+    async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse>;
+    async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
+    async fn put_artifact(
+        &self,
+        hash: &str,
+        artifact_body: &[u8],
+        duration: u64,
+        tag: Option<&str>,
+        token: &str,
+    ) -> Result<()>;
+    async fn handle_403(response: Response) -> Error;
+    async fn fetch_artifact(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+    ) -> Result<Response>;
+    async fn artifact_exists(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+    ) -> Result<Response>;
+    async fn get_artifact(
+        &self,
+        hash: &str,
+        token: &str,
+        team_id: &str,
+        team_slug: Option<&str>,
+        method: Method,
+    ) -> Result<Response>;
+    async fn do_preflight(
+        &self,
+        token: &str,
+        request_url: &str,
+        request_method: &str,
+        request_headers: &str,
+    ) -> Result<PreflightResponse>;
+    fn make_url(&self, endpoint: &str) -> String;
 }
 
 pub struct APIClient {
@@ -56,7 +117,7 @@ impl Client for APIClient {
         Ok(response.json().await?)
     }
 
-    pub async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
+    async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
         let request_builder = self
             .client
             .get(self.make_url("/v2/teams?limit=100"))
@@ -71,7 +132,7 @@ impl Client for APIClient {
         Ok(response.json().await?)
     }
 
-    pub async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
+    async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
         let response = self
             .client
             .get(self.make_url("/v2/team"))
@@ -110,7 +171,7 @@ impl Client for APIClient {
         request_builder
     }
 
-    pub async fn get_caching_status(
+    async fn get_caching_status(
         &self,
         token: &str,
         team_id: &str,
@@ -132,7 +193,7 @@ impl Client for APIClient {
         Ok(response.json().await?)
     }
 
-    pub async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse> {
+    async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse> {
         // create url with teamId if provided
         let endpoint = match team_id {
             Some(team_id) => format!("/v0/spaces?limit=100&teamId={}", team_id),
@@ -153,7 +214,7 @@ impl Client for APIClient {
         Ok(response.json().await?)
     }
 
-    pub async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
+    async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
         let request_builder = self
             .client
             .get(self.make_url("/registration/verify"))
@@ -172,7 +233,7 @@ impl Client for APIClient {
         })
     }
 
-    pub async fn put_artifact(
+    async fn put_artifact(
         &self,
         hash: &str,
         artifact_body: &[u8],
@@ -258,7 +319,7 @@ impl Client for APIClient {
         }
     }
 
-    pub async fn fetch_artifact(
+    async fn fetch_artifact(
         &self,
         hash: &str,
         token: &str,
@@ -269,7 +330,7 @@ impl Client for APIClient {
             .await
     }
 
-    pub async fn artifact_exists(
+    async fn artifact_exists(
         &self,
         hash: &str,
         token: &str,
@@ -320,7 +381,7 @@ impl Client for APIClient {
         }
     }
 
-    pub async fn do_preflight(
+    async fn do_preflight(
         &self,
         token: &str,
         request_url: &str,
@@ -361,36 +422,6 @@ impl Client for APIClient {
         Ok(PreflightResponse {
             location,
             allow_authorization_header: allow_auth,
-        })
-    }
-
-    pub fn new(
-        base_url: impl AsRef<str>,
-        timeout: u64,
-        version: &str,
-        use_preflight: bool,
-    ) -> Result<Self> {
-        let builder_result = if timeout != 0 {
-            reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(timeout))
-                .build()
-        } else {
-            reqwest::Client::builder().build()
-        };
-        let client = builder_result.map_err(Error::TlsError)?;
-
-        let user_agent = format!(
-            "turbo {} {} {} {}",
-            version,
-            rustc_version_runtime::version(),
-            env::consts::OS,
-            env::consts::ARCH
-        );
-        Ok(APIClient {
-            client,
-            base_url: base_url.as_ref().to_string(),
-            user_agent,
-            use_preflight,
         })
     }
 

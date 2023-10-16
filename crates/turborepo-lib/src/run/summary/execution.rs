@@ -15,6 +15,7 @@ type Message = Event;
 
 // Should *not* be exposed outside of run summary module
 /// Spawns task trackers and records the final state of all tasks
+#[derive(Debug)]
 pub struct ExecutionTracker {
     // this thread handles the state management
     state_thread: tokio::task::JoinHandle<SummaryState>,

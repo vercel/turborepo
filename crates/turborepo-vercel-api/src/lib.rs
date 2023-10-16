@@ -113,6 +113,7 @@ pub struct UserResponse {
     pub user: User,
 }
 
+#[derive(Debug)]
 pub struct PreflightResponse {
     pub location: Url,
     pub allow_authorization_header: bool,
