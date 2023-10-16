@@ -28,7 +28,7 @@ where
 {
     // Check if token exists first.
     if let Some(token) = existing_token {
-        if let Ok(response) = api_client.get_user(&token).await {
+        if let Ok(response) = api_client.get_user(token).await {
             println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
             ui::print_cli_authorized(&response.user.email, ui);
             return Ok(());

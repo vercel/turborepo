@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 mod auth;
 mod error;
 mod server;

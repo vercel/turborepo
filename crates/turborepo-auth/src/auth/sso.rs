@@ -40,7 +40,7 @@ where
     // sso_team passed into this function.
     if let Some(token) = existing_token {
         let (result_user, result_teams) =
-            tokio::join!(api_client.get_user(&token), api_client.get_teams(&token));
+            tokio::join!(api_client.get_user(token), api_client.get_teams(token));
 
         if let (Ok(response_user), Ok(response_teams)) = (result_user, result_teams) {
             if response_teams
