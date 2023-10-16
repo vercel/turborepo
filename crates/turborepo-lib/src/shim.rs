@@ -221,7 +221,7 @@ impl Default for TurboState {
 }
 
 impl TurboState {
-    pub fn platform_package_name() -> &'static str {
+    pub const fn platform_name() -> &'static str {
         const ARCH: &str = {
             #[cfg(target_arch = "x86_64")]
             {
@@ -256,10 +256,14 @@ impl TurboState {
             }
         };
 
-        formatcp!("turbo-{}-{}", OS, ARCH)
+        formatcp!("{}-{}", OS, ARCH)
     }
 
-    pub fn binary_name() -> &'static str {
+    pub const fn platform_package_name() -> &'static str {
+        formatcp!("turbo-{}", TurboState::platform_name())
+    }
+
+    pub const fn binary_name() -> &'static str {
         {
             #[cfg(windows)]
             {

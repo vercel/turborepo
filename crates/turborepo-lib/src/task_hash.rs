@@ -67,6 +67,8 @@ impl PackageInputsHashes {
         task_definitions: &HashMap<TaskId<'static>, TaskDefinition>,
         repo_root: &AbsoluteSystemPath,
     ) -> Result<PackageInputsHashes, Error> {
+        tracing::trace!(scm_manual=%scm.is_manual(), "scm running in {} mode", if scm.is_manual() { "manual" } else { "git" });
+
         let (hashes, expanded_hashes): (HashMap<_, _>, HashMap<_, _>) = all_tasks
             .filter_map(|task| {
                 let TaskNode::Task(task_id) = task else {
