@@ -336,7 +336,16 @@ async fn wait_for_cookie(
     root: &AbsoluteSystemPath,
     recv: &mut mpsc::Receiver<EventResult>,
 ) -> Result<(), WatchError> {
-    let cookie_path = root.join_component(".turbo-cookie");
+    // TODO: should this be passed in? Currently the caller guarantees that the
+    // directory is empty, but it could be the responsibility of the
+    // filewatcher...
+    let cookie_path = root.join_components(&[".turbo", "cookies", ".turbo-cookie"]);
+    cookie_path.ensure_dir().map_err(|e| {
+        WatchError::Setup(format!(
+            "failed to create filesystem cookie dir for {}: {}",
+            cookie_path, e
+        ))
+    })?;
     cookie_path.create_with_contents("cookie").map_err(|e| {
         WatchError::Setup(format!("failed to write cookie to {}: {}", cookie_path, e))
     })?;
