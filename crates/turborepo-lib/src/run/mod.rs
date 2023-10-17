@@ -283,13 +283,20 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
         )?;
 
-        debug!("package inputs hashes: {:?}", package_inputs_hashes);
-
         // remove dead code warnings
         let _proc_manager = ProcessManager::new();
 
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
+
+        let global_env = {
+            let mut env = env_at_execution_start
+                .from_wildcards(global_hash_inputs.pass_through_env.unwrap_or_default())?;
+            if let Some(resolved_global) = &global_hash_inputs.resolved_env_vars {
+                env.union(&resolved_global.all);
+            }
+            env
+        };
 
         let visitor = Visitor::new(
             pkg_dep_graph.clone(),
@@ -303,6 +310,7 @@ impl<'a> Run<'a> {
             false,
             self.processes.clone(),
             &self.base.repo_root,
+            global_env,
         );
 
         // we look for this log line to mark the start of the run
@@ -514,6 +522,9 @@ impl<'a> Run<'a> {
             true,
             self.processes.clone(),
             &self.base.repo_root,
+            // TODO: this is only needed for full execution, figure out better way to model this
+            // not affecting a dry run
+            EnvironmentVariableMap::default(),
         )
         .dry_run();
 

@@ -22,7 +22,9 @@ pub trait LoginServer {
 }
 
 /// TODO: Document this.
+#[derive(Default)]
 pub struct DefaultLoginServer;
+
 impl DefaultLoginServer {
     pub fn new() -> Self {
         DefaultLoginServer {}

@@ -122,6 +122,10 @@ impl AbsoluteSystemPath {
         self.0.as_str().as_bytes()
     }
 
+    pub fn exists(&self) -> bool {
+        self.0.exists()
+    }
+
     pub fn ancestors(&self) -> impl Iterator<Item = &AbsoluteSystemPath> {
         self.0.ancestors().map(Self::new_unchecked)
     }

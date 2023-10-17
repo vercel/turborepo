@@ -24,7 +24,9 @@ pub trait SSOLoginServer {
 }
 
 /// TODO: Document this.
+#[derive(Default)]
 pub struct DefaultSSOLoginServer;
+
 impl DefaultSSOLoginServer {
     pub fn new() -> Self {
         DefaultSSOLoginServer {}
