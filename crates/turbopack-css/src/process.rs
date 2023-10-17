@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, mem::transmute};
 
 use anyhow::Result;
 use lightningcss::{
@@ -42,6 +42,9 @@ pub enum ParseCssResult {
         references: Vc<ModuleReferences>,
 
         url_references: Vc<UnresolvedUrlReferences>,
+
+        #[turbo_tasks(trace_ignore)]
+        options: ParserOptions<'static, 'static>,
     },
     Unparseable,
     NotFound,
@@ -71,6 +74,9 @@ pub enum CssWithPlaceholderResult {
 
         #[turbo_tasks(trace_ignore)]
         placeholders: HashMap<String, Url<'static>>,
+
+        #[turbo_tasks(trace_ignore)]
+        options: ParserOptions<'static, 'static>,
     },
     Unparseable,
     NotFound,
@@ -117,8 +123,9 @@ pub async fn process_css_with_placeholder(
             stylesheet,
             references,
             url_references,
+            options,
         } => {
-            let stylesheet = stylesheet_into_static(stylesheet);
+            let stylesheet = stylesheet_into_static(stylesheet, options.clone());
 
             let result = stylesheet.to_css(PrinterOptions {
                 analyze_dependencies: Some(DependencyOptions {
@@ -134,6 +141,7 @@ pub async fn process_css_with_placeholder(
                 url_references: url_references.clone(),
                 placeholders: HashMap::new(),
                 stylesheet: stylesheet,
+                options: options.clone(),
             }
             .into())
         }
@@ -152,9 +160,10 @@ pub async fn finalize_css(
         CssWithPlaceholderResult::Ok {
             stylesheet,
             url_references,
+            options,
             ..
         } => {
-            let mut stylesheet = stylesheet_into_static(stylesheet);
+            let mut stylesheet = stylesheet_into_static(stylesheet, options.clone());
 
             let url_references = *url_references;
 
@@ -261,7 +270,7 @@ async fn process_content(
         ..Default::default()
     };
 
-    let stylesheet = match StyleSheet::parse(&code, config) {
+    let stylesheet = match StyleSheet::parse(&code, config.clone()) {
         Ok(stylesheet) => stylesheet,
         Err(_e) => {
             // TODO(kdy1): Report errors
@@ -269,7 +278,12 @@ async fn process_content(
             return Ok(ParseCssResult::Unparseable.into());
         }
     };
-    let mut stylesheet = stylesheet_into_static(&stylesheet);
+
+    let config = unsafe {
+        // Safety: Actual lifetime of the config is 'static
+        transmute::<ParserOptions, ParserOptions<'static, 'static>>(config)
+    };
+    let mut stylesheet = stylesheet_into_static(&stylesheet, config.clone());
 
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
     dbg!(&references, &url_references);
@@ -278,6 +292,7 @@ async fn process_content(
         stylesheet,
         references: Vc::cell(references),
         url_references: Vc::cell(url_references),
+        options: config,
     }
     .into())
 }
