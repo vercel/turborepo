@@ -18,21 +18,16 @@ import { setup, TURBO_BIN, DEFAULT_EXEC_OPTS, REPO_PATH } from "./helpers";
     bin: TURBO_BIN,
   });
 
+  console.log(
+    "Executing turbo build in child process with opts",
+    DEFAULT_EXEC_OPTS
+  );
+
   // Path to profile.json is ../profile.json because we are in
   // benchmark/large-monorepo (i.e. REPO_PATH) when this runs
-  const opts = {
-    ...DEFAULT_EXEC_OPTS,
-    stdio: "inherit" as StdioOptions,
-    env: {
-      TURBO_LOG_VERBOSITY: "trace",
-      EXPERIMENTAL_RUST_CODEPATH: "true",
-    },
-  };
-  console.log("Executing turbo build in child process with opts", opts);
-
   cp.execSync(
-    `${TURBO_BIN} run build --skip-infer --force --dry --profile ../profile.json`,
-    opts
+    `${TURBO_BIN} run build -vvv --experimental-rust-codepath --dry --skip-infer --profile=../profile.json`,
+    DEFAULT_EXEC_OPTS
   );
 
   // TODO: just do this in JS and send to TB here instead of child process?
