@@ -82,8 +82,6 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
     }
 
     fn visit_rule(&mut self, rule: &mut CssRule) -> std::result::Result<(), Self::Error> {
-        dbg!(&*rule);
-
         match rule {
             CssRule::Import(i) => {
                 let src = &*i.url;
