@@ -124,13 +124,13 @@ const config: DocsThemeConfig = {
         />
         <meta name="msapplication-TileColor" content="#000000" />
         <meta name="theme-color" content="#000" />
-        <meta name="x:card" content="summary_large_image" />
-        <meta name="x:site" content="@turborepo" />
-        <meta name="x:creator" content="@turborepo" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:site" content="@turborepo" />
+        <meta name="twitter:creator" content="@turborepo" />
         <meta property="og:type" content="website" />
         <meta property="og:url" content={fullUrl} />
         <link rel="canonical" href={fullUrl} />
-        <meta property="x:image" content={ogUrl} />
+        <meta property="twitter:image" content={ogUrl} />
         <meta property="og:image" content={ogUrl} />
         <meta property="og:locale" content="en_IE" />
         <meta property="og:site_name" content="Turbo" />
