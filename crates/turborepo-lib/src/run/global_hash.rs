@@ -22,7 +22,7 @@ const GLOBAL_CACHE_KEY: &str = "HEY STELLLLLLLAAAAAAAAAAAAA";
 #[derive(Debug, Error)]
 enum GlobalHashError {}
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct GlobalHashableInputs<'a> {
     pub global_cache_key: &'static str,
     pub global_file_hash_map: BTreeMap<RelativeUnixPathBuf, String>,
@@ -35,6 +35,7 @@ pub struct GlobalHashableInputs<'a> {
     pub env_mode: EnvMode,
     pub framework_inference: bool,
     pub dot_env: Option<&'a [RelativeUnixPathBuf]>,
+    pub env_at_execution_start: &'a EnvironmentVariableMap,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -44,7 +45,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     package_manager: &PackageManager,
     lockfile: Option<&L>,
     global_file_dependencies: &'a [String],
-    env_at_execution_start: &EnvironmentVariableMap,
+    env_at_execution_start: &'a EnvironmentVariableMap,
     global_env: &'a [String],
     global_pass_through_env: Option<&'a [String]>,
     env_mode: EnvMode,
@@ -129,6 +130,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         env_mode,
         framework_inference,
         dot_env,
+        env_at_execution_start,
     })
 }
 

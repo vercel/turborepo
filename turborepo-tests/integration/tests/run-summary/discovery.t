@@ -18,5 +18,4 @@ Setup
    Cached:    0 cached, 1 total
      Time:\s*[\.0-9]+m?s  (re)
   Summary:    .+\.turbo\/runs\/[a-zA-Z0-9]+.json (re)
-
-
+  

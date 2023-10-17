@@ -24,6 +24,7 @@ use crate::{
     package_graph::{PackageGraph, WorkspaceName},
     process::{ChildExit, ProcessManager},
     run::{
+        global_hash::GlobalHashableInputs,
         summary,
         summary::{GlobalHashSummary, RunTracker},
         task_id::{self, TaskId},
@@ -37,7 +38,7 @@ pub struct Visitor<'a> {
     color_cache: ColorSelector,
     dry: bool,
     global_env_mode: EnvMode,
-    global_hash_summary: GlobalHashSummary<'a>,
+    global_hash_inputs: GlobalHashableInputs<'a>,
     manager: ProcessManager,
     opts: &'a Opts<'a>,
     package_graph: Arc<PackageGraph>,
@@ -96,7 +97,7 @@ impl<'a> Visitor<'a> {
         global_env: EnvironmentVariableMap,
         packages: HashSet<WorkspaceName>,
         started_at: DateTime<Local>,
-        global_hash_summary: GlobalHashSummary<'a>,
+        global_hash_inputs: GlobalHashableInputs<'a>,
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,
@@ -111,7 +112,7 @@ impl<'a> Visitor<'a> {
             color_cache,
             dry: false,
             global_env_mode,
-            global_hash_summary,
+            global_hash_inputs,
             manager,
             opts,
             package_graph,
@@ -423,7 +424,7 @@ impl<'a> Visitor<'a> {
         let repo_root = self.repo_root;
         let version = self.version;
         let packages = self.packages;
-        let global_hash_summary = self.global_hash_summary;
+        let global_hash_summary = GlobalHashSummary::try_from(self.global_hash_inputs)?;
 
         Ok(self
             .run_tracker

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 mod cache;
-mod global_hash;
+pub(crate) mod global_hash;
 mod scope;
 pub(crate) mod summary;
 pub mod task_id;
@@ -35,10 +35,7 @@ use crate::{
     opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
     process::ProcessManager,
-    run::{
-        global_hash::get_global_hash_inputs,
-        summary::{GlobalHashSummary, RunTracker},
-    },
+    run::{global_hash::get_global_hash_inputs, summary::RunTracker},
     shim::TurboState,
     task_graph::Visitor,
     task_hash::{PackageInputsHashes, TaskHashTrackerState},
@@ -347,22 +344,6 @@ impl<'a> Run<'a> {
             env
         };
 
-        let resolved_pass_through_env_vars = global_hash_inputs
-            .pass_through_env
-            .map(|pass_through_env| env_at_execution_start.from_wildcards(pass_through_env))
-            .transpose()?;
-
-        let global_hash_summary = GlobalHashSummary::new(
-            global_hash_inputs.global_cache_key,
-            global_hash_inputs.global_file_hash_map,
-            root_external_dependencies_hash.as_deref(),
-            global_hash_inputs.env,
-            global_hash_inputs.pass_through_env,
-            global_hash_inputs.dot_env,
-            global_hash_inputs.resolved_env_vars.unwrap_or_default(),
-            resolved_pass_through_env_vars,
-        );
-
         let run_tracker = RunTracker::new(
             start_at,
             "todo",
@@ -393,7 +374,7 @@ impl<'a> Run<'a> {
             global_env,
             filtered_pkgs,
             start_at,
-            global_hash_summary,
+            global_hash_inputs,
         );
 
         if opts.run_opts.dry_run {
@@ -520,22 +501,6 @@ impl<'a> Run<'a> {
             global_env_mode = EnvMode::Strict;
         }
 
-        let resolved_pass_through_env_vars = global_hash_inputs
-            .pass_through_env
-            .map(|pass_through_env| env_at_execution_start.from_wildcards(pass_through_env))
-            .transpose()?;
-
-        let global_hash_summary = GlobalHashSummary::new(
-            global_hash_inputs.global_cache_key,
-            global_hash_inputs.global_file_hash_map,
-            root_external_dependencies_hash.as_deref(),
-            global_hash_inputs.env,
-            global_hash_inputs.pass_through_env,
-            global_hash_inputs.dot_env,
-            global_hash_inputs.resolved_env_vars.unwrap_or_default(),
-            resolved_pass_through_env_vars,
-        );
-
         let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
             &scm,
             engine.tasks().par_bridge(),
@@ -598,7 +563,7 @@ impl<'a> Run<'a> {
             EnvironmentVariableMap::default(),
             filtered_pkgs,
             started_at,
-            global_hash_summary,
+            global_hash_inputs,
         );
 
         visitor.dry_run();

@@ -53,6 +53,8 @@ pub enum Error {
     SpacesClientClose(#[from] tokio::task::JoinError),
     #[error("failed to contact spaces client")]
     SpacesClientSend(#[from] tokio::sync::mpsc::error::SendError<SpaceRequest>),
+    #[error("failed to parse environment variables")]
+    EnvironmentVars(regex::Error),
 }
 
 // NOTE: When changing this, please ensure that the server side is updated to
@@ -444,6 +446,8 @@ impl<'a> RunSummary<'a> {
             self.global_hash_summary
                 .environment_variables
                 .configured
+                .as_deref()
+                .unwrap_or_default()
                 .join(", ")
         )?;
         cwriteln!(
@@ -454,6 +458,8 @@ impl<'a> RunSummary<'a> {
             self.global_hash_summary
                 .environment_variables
                 .inferred
+                .as_deref()
+                .unwrap_or_default()
                 .join(", ")
         )?;
 
