@@ -283,8 +283,6 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
         )?;
 
-        debug!("package inputs hashes: {:?}", package_inputs_hashes);
-
         // remove dead code warnings
         let _proc_manager = ProcessManager::new();
 
