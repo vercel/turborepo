@@ -194,7 +194,7 @@ impl<'a> Visitor<'a> {
             }
 
             // We do this calculation earlier than we do in Go due to the `task_hasher`
-            // being !Send In the future we can look at doing this right before
+            // being !Send. In the future we can look at doing this right before
             // task execution instead.
             let execution_env =
                 self.task_hasher
@@ -259,7 +259,7 @@ impl<'a> Visitor<'a> {
                 // We clear the env before populating it with variables we expect
                 cmd.env_clear();
                 cmd.envs(execution_env.iter());
-                // Always last to make sure it clobbers.
+                // Always last to make sure it overwrites any user configured env var.
                 cmd.env("TURBO_HASH", &task_hash);
 
                 let mut stdout_writer =
