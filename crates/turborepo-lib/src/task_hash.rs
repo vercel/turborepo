@@ -33,6 +33,8 @@ pub enum Error {
     MissingDependencyTaskHash(String),
     #[error("cannot acquire lock for task hash tracker")]
     Mutex,
+    #[error("missing environment variables for {0}")]
+    MissingEnvVars(TaskId<'static>),
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),
     #[error(transparent)]
@@ -363,6 +365,41 @@ impl<'a> TaskHasher<'a> {
 
     pub fn task_hash_tracker(&self) -> TaskHashTracker {
         self.task_hash_tracker.clone()
+    }
+
+    pub fn env(
+        &self,
+        task_id: &TaskId,
+        task_env_mode: ResolvedEnvMode,
+        task_definition: &TaskDefinition,
+        global_env: &EnvironmentVariableMap,
+    ) -> Result<EnvironmentVariableMap, Error> {
+        match task_env_mode {
+            ResolvedEnvMode::Strict => {
+                let mut pass_through_env = EnvironmentVariableMap::default();
+                let default_env_var_pass_through_map = self
+                    .env_at_execution_start
+                    .from_wildcards(&["PATH", "SHELL", "SYSTEMROOT"])?;
+                let tracker_env = self
+                    .task_hash_tracker
+                    .env_vars(task_id)
+                    .ok_or_else(|| Error::MissingEnvVars(task_id.clone().into_owned()))?;
+
+                pass_through_env.union(&default_env_var_pass_through_map);
+                pass_through_env.union(global_env);
+                pass_through_env.union(&tracker_env.all);
+
+                if let Some(definition_pass_through) = &task_definition.pass_through_env {
+                    let env_var_pass_through_map = self
+                        .env_at_execution_start
+                        .from_wildcards(definition_pass_through)?;
+                    pass_through_env.union(&env_var_pass_through_map);
+                }
+
+                Ok(pass_through_env)
+            }
+            ResolvedEnvMode::Loose => Ok(self.env_at_execution_start.clone()),
+        }
     }
 }
 
