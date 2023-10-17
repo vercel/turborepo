@@ -74,20 +74,9 @@ async function loadChunkAsync(
   source: SourceInfo,
   chunkData: ChunkData
 ): Promise<any> {
-  if (typeof chunkData === "string") {
-    return loadChunkPathAsync(source, chunkData);
-  } else {
-    return loadChunkPathAsync(source, chunkData.path);
-  }
-}
-
-function loadChunkPathAsync(
-  source: SourceInfo,
-  chunkPath: string
-): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     try {
-      loadChunkPath(chunkPath);
+      loadChunk(chunkData);
     } catch (err) {
       reject(err);
       return;
