@@ -188,6 +188,7 @@ pub async fn finalize_css(
                 }),
                 ..Default::default()
             })?;
+            srcmap.add_sources(stylesheet.sources.clone());
 
             Ok(FinalCssResult::Ok {
                 output_code: result.code,
