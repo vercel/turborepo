@@ -1,4 +1,4 @@
-import cp, { StdioOptions } from "child_process";
+import cp from "child_process";
 import fs from "fs";
 
 import { setup, TURBO_BIN, DEFAULT_EXEC_OPTS, REPO_PATH } from "./helpers";
