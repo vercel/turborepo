@@ -1,4 +1,4 @@
-## Repository Analysis JS Package
+# `@turbo/repository`
 
 This package builds `@turbo/repository`, which in turn packages up some of Turborepo's repository analysis functionality
 for use in a javascript context.
