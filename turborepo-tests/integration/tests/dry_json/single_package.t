@@ -107,15 +107,15 @@ Setup
         "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
       },
       "hashOfExternalDependencies": "",
-      "globalDotEnv": [],
+      "globalDotEnv": null,
       "environmentVariables": {
         "specified": {
           "env": [],
-          "passThroughEnv": []
+          "passThroughEnv": null
         },
         "configured": [],
         "inferred": [],
-        "passthrough": []
+        "passthrough": null
       }
     },
     "envMode": "infer",

@@ -140,7 +140,7 @@ impl RunTracker {
 
         let mut run_tracker = RunTracker {
             scm: scm.clone(),
-            execution_tracker: ExecutionTracker::new(),
+            execution_tracker: ExecutionTracker::new(synthesized_command),
             spaces_client_handle: None,
             user: user.clone(),
         };
@@ -269,6 +269,8 @@ struct SinglePackageRunSummary<'a, 'b> {
     version: &'b str,
     turbo_version: &'b str,
     monorepo: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    execution: Option<&'b ExecutionSummary<'a>>,
     #[serde(rename = "globalCacheInputs")]
     global_hash_summary: &'b GlobalHashSummary<'a>,
     env_mode: EnvMode,
@@ -285,6 +287,7 @@ impl<'a, 'b> From<&'b RunSummary<'a>> for SinglePackageRunSummary<'a, 'b> {
             version: &run_summary.version,
             turbo_version: &run_summary.turbo_version,
             monorepo: run_summary.monorepo,
+            execution: run_summary.execution.as_ref(),
             global_hash_summary: &run_summary.global_hash_summary,
             env_mode: run_summary.env_mode,
             framework_inference: run_summary.framework_inference,
@@ -417,7 +420,10 @@ impl<'a> RunSummary<'a> {
             ui,
             GREY,
             "  Global .env Files considered\t=\t{}",
-            self.global_hash_summary.global_dot_env.len()
+            self.global_hash_summary
+                .global_dot_env
+                .unwrap_or_default()
+                .len()
         )?;
         cwriteln!(
             tab_writer,

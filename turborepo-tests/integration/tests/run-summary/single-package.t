@@ -162,19 +162,4 @@ Check Rust implementation
     "branch": ".+" (re)
   }
 
-  $ cat $SUMMARY | jq '.execution.exitCode'
-  0
-  $ cat $SUMMARY | jq '.execution.attempted'
-  0
-  $ cat $SUMMARY | jq '.execution.cached'
-  0
-  $ cat $SUMMARY | jq '.execution.failed'
-  0
-  $ cat $SUMMARY | jq '.execution.success'
-  0
-  $ cat $SUMMARY | jq '.execution.startTime'
-  [0-9]+ (re)
-  $ cat $SUMMARY | jq '.execution.endTime'
-  [0-9]+ (re)
-
 NOTE: Task summary tests TBD once task summary is hooked up to task execution

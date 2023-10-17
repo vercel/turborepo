@@ -20,15 +20,23 @@ pub struct ExecutionTracker {
     // this thread handles the state management
     state_thread: tokio::task::JoinHandle<SummaryState>,
     sender: mpsc::Sender<Message>,
+    pub command: String,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionSummary<'a> {
+    // a synthesized turbo command to produce this invocation
+    command: String,
+    // number of tasks that exited successfully (does not include cache hits)
     success: usize,
+    // number of tasks that exited with failure
     failed: usize,
+    // number of tasks that had a cache hit
     cached: usize,
+    // number of tasks that started
     attempted: usize,
+    // the (possibly empty) path from the turborepo root to where the command was run
     #[serde(rename = "repoPath", skip_serializing_if = "Option::is_none")]
     package_inference_root: Option<&'a AnchoredSystemPath>,
     pub(crate) start_time: i64,
@@ -234,7 +242,7 @@ impl TaskExecutionSummary {
 }
 
 impl ExecutionTracker {
-    pub fn new() -> Self {
+    pub fn new(command: &str) -> Self {
         // This buffer size is probably overkill, but since messages are only a byte
         // it's worth the extra memory to avoid the channel filling up.
         let (sender, mut receiver) = mpsc::channel(128);
@@ -247,6 +255,7 @@ impl ExecutionTracker {
         });
 
         Self {
+            command: command.to_string(),
             state_thread,
             sender,
         }
@@ -283,6 +292,7 @@ impl ExecutionTracker {
         let duration = TurboDuration::new(&start_time, &end_time);
 
         Ok(ExecutionSummary {
+            command: self.command,
             success: summary_state.success,
             failed: summary_state.failed,
             cached: summary_state.cached,
@@ -405,7 +415,7 @@ mod test {
     #[tokio::test]
     async fn test_multiple_tasks() {
         let started_at = Local::now();
-        let summary = ExecutionTracker::new();
+        let summary = ExecutionTracker::new("turbo build");
         let mut tasks = Vec::new();
         {
             let tracker = summary.task_tracker(TaskId::new("foo", "build"));
@@ -453,7 +463,7 @@ mod test {
 
     #[tokio::test]
     async fn test_timing() {
-        let summary = ExecutionTracker::new();
+        let summary = ExecutionTracker::new("turbo build");
         let tracker = summary.task_tracker(TaskId::new("foo", "build"));
         let post_construction_time = Local::now().timestamp_millis();
         let sleep_duration = Duration::milliseconds(5);

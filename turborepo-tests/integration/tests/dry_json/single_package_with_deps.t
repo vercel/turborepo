@@ -159,15 +159,15 @@ Setup
         "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0"
       },
       "hashOfExternalDependencies": "",
-      "globalDotEnv": [],
+      "globalDotEnv": null,
       "environmentVariables": {
         "specified": {
           "env": [],
-          "passThroughEnv": []
+          "passThroughEnv": null
         },
         "configured": [],
         "inferred": [],
-        "passthrough": []
+        "passthrough": null
       }
     },
     "envMode": "infer",
@@ -179,4 +179,5 @@ Setup
       "sha": "[a-z0-9]+", (re)
       "branch": ".+" (re)
     }
+  }
  }

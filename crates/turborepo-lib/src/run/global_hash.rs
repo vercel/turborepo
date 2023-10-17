@@ -34,7 +34,7 @@ pub struct GlobalHashableInputs<'a> {
     pub pass_through_env: Option<&'a [String]>,
     pub env_mode: EnvMode,
     pub framework_inference: bool,
-    pub dot_env: &'a [RelativeUnixPathBuf],
+    pub dot_env: Option<&'a [RelativeUnixPathBuf]>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -49,7 +49,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     global_pass_through_env: Option<&'a [String]>,
     env_mode: EnvMode,
     framework_inference: bool,
-    dot_env: &'a [RelativeUnixPathBuf],
+    dot_env: Option<&'a [RelativeUnixPathBuf]>,
 ) -> Result<GlobalHashableInputs<'a>> {
     let global_hashable_env_vars =
         get_global_hashable_env_vars(env_at_execution_start, global_env)?;
@@ -103,8 +103,11 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     let mut global_file_hash_map =
         hasher.get_hashes_for_files(root_path, &global_deps_paths, false)?;
 
-    if !dot_env.is_empty() {
-        let system_dot_env = dot_env.iter().map(|p| p.to_anchored_system_path_buf());
+    if !dot_env.unwrap_or_default().is_empty() {
+        let system_dot_env = dot_env
+            .into_iter()
+            .flatten()
+            .map(|p| p.to_anchored_system_path_buf());
 
         let dot_env_object = hasher.hash_existing_of(root_path, system_dot_env)?;
 
@@ -162,7 +165,7 @@ impl<'a> GlobalHashableInputs<'a> {
             pass_through_env: self.pass_through_env.unwrap_or_default(),
             env_mode: self.env_mode,
             framework_inference: self.framework_inference,
-            dot_env: self.dot_env,
+            dot_env: self.dot_env.unwrap_or_default(),
         };
 
         global_hashable.hash()

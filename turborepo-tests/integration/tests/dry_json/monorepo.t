@@ -198,17 +198,17 @@ Tasks that don't exist throw an error
       "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
     },
     "hashOfExternalDependencies": "459c029558afe716",
-    "globalDotEnv": [],
+    "globalDotEnv": null,
     "environmentVariables": {
       "specified": {
         "env": [
           "SOME_ENV_VAR"
         ],
-        "passThroughEnv": []
+        "passThroughEnv": null
       },
       "configured": [],
       "inferred": [],
-      "passthrough": []
+      "passthrough": null
     }
   }
 

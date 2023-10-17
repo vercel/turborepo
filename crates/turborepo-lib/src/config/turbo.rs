@@ -28,7 +28,7 @@ pub struct SpacesJson {
 pub struct TurboJson {
     pub(crate) extends: Vec<String>,
     pub(crate) global_deps: Vec<String>,
-    pub(crate) global_dot_env: Vec<RelativeUnixPathBuf>,
+    pub(crate) global_dot_env: Option<Vec<RelativeUnixPathBuf>>,
     pub(crate) global_env: Vec<String>,
     pub(crate) global_pass_through_env: Option<Vec<String>>,
     pub(crate) pipeline: Pipeline,
@@ -375,8 +375,7 @@ impl TryFrom<RawTurboJSON> for TurboJson {
 
                     Ok(global_dot_env)
                 })
-                .transpose()?
-                .unwrap_or_default(),
+                .transpose()?,
             pipeline: raw_turbo
                 .pipeline
                 .into_iter()

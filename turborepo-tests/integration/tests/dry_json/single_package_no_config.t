@@ -102,15 +102,15 @@ Setup
         "package.json": "185771929d92c3865ce06c863c07d357500d3364"
       },
       "hashOfExternalDependencies": "",
-      "globalDotEnv": [],
+      "globalDotEnv": null,
       "environmentVariables": {
         "specified": {
           "env": [],
-          "passThroughEnv": []
+          "passThroughEnv": null
         },
         "configured": [],
         "inferred": [],
-        "passthrough": []
+        "passthrough": null
       }
     },
     "envMode": "infer",

@@ -286,7 +286,7 @@ impl<'a> Run<'a> {
             root_turbo_json.global_pass_through_env.as_deref(),
             opts.run_opts.env_mode,
             opts.run_opts.framework_inference,
-            &root_turbo_json.global_dot_env,
+            root_turbo_json.global_dot_env.as_deref(),
         )?;
 
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
@@ -347,16 +347,17 @@ impl<'a> Run<'a> {
             env
         };
 
-        let pass_through_env = global_hash_inputs.pass_through_env.unwrap_or_default();
-        let resolved_pass_through_env_vars =
-            env_at_execution_start.from_wildcards(pass_through_env)?;
+        let resolved_pass_through_env_vars = global_hash_inputs
+            .pass_through_env
+            .map(|pass_through_env| env_at_execution_start.from_wildcards(pass_through_env))
+            .transpose()?;
 
         let global_hash_summary = GlobalHashSummary::new(
             global_hash_inputs.global_cache_key,
             global_hash_inputs.global_file_hash_map,
             root_external_dependencies_hash.as_deref(),
             global_hash_inputs.env,
-            pass_through_env,
+            global_hash_inputs.pass_through_env,
             global_hash_inputs.dot_env,
             global_hash_inputs.resolved_env_vars.unwrap_or_default(),
             resolved_pass_through_env_vars,
@@ -461,7 +462,7 @@ impl<'a> Run<'a> {
             root_turbo_json.global_pass_through_env.as_deref(),
             opts.run_opts.env_mode,
             opts.run_opts.framework_inference,
-            &root_turbo_json.global_dot_env,
+            root_turbo_json.global_dot_env.as_deref(),
         )?;
 
         let scm = SCM::new(&self.base.repo_root);
@@ -519,16 +520,17 @@ impl<'a> Run<'a> {
             global_env_mode = EnvMode::Strict;
         }
 
-        let pass_through_env = global_hash_inputs.pass_through_env.unwrap_or_default();
-        let resolved_pass_through_env_vars =
-            env_at_execution_start.from_wildcards(pass_through_env)?;
+        let resolved_pass_through_env_vars = global_hash_inputs
+            .pass_through_env
+            .map(|pass_through_env| env_at_execution_start.from_wildcards(pass_through_env))
+            .transpose()?;
 
         let global_hash_summary = GlobalHashSummary::new(
             global_hash_inputs.global_cache_key,
             global_hash_inputs.global_file_hash_map,
             root_external_dependencies_hash.as_deref(),
             global_hash_inputs.env,
-            pass_through_env,
+            global_hash_inputs.pass_through_env,
             global_hash_inputs.dot_env,
             global_hash_inputs.resolved_env_vars.unwrap_or_default(),
             resolved_pass_through_env_vars,
