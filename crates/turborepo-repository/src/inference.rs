@@ -3,7 +3,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use crate::{
     package_json::PackageJson,
-    package_manager::{PackageManager, WorkspaceGlobs},
+    package_manager::{self, PackageManager, WorkspaceGlobs},
 };
 
 #[derive(Debug, PartialEq)]
@@ -12,10 +12,11 @@ pub enum RepoMode {
     MultiPackage,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct RepoState {
     pub root: AbsoluteSystemPathBuf,
     pub mode: RepoMode,
+    pub package_manager: Result<PackageManager, package_manager::Error>,
 }
 
 #[derive(Debug, Error)]
@@ -28,6 +29,7 @@ pub enum Error {
 struct InferInfo {
     path: AbsoluteSystemPathBuf,
     workspace_globs: Option<WorkspaceGlobs>,
+    package_manager: Result<PackageManager, package_manager::Error>,
 }
 
 impl InferInfo {
@@ -53,6 +55,7 @@ impl From<InferInfo> for RepoState {
     fn from(root: InferInfo) -> Self {
         Self {
             mode: root.repo_mode(),
+            package_manager: root.package_manager,
             root: root.path,
         }
     }
@@ -74,14 +77,17 @@ impl RepoState {
                     .ok()
                     .map(|package_json| {
                         // FIXME: We should save this package manager that we detected
-                        let workspace_globs =
-                            PackageManager::get_package_manager(path, Some(&package_json))
-                                .and_then(|mgr| mgr.get_workspace_globs(path))
-                                .ok();
+                        let package_manager =
+                            PackageManager::get_package_manager(path, Some(&package_json));
+                        let workspace_globs = package_manager
+                            .as_ref()
+                            .ok()
+                            .and_then(|mgr| mgr.get_workspace_globs(path).ok());
 
                         InferInfo {
                             path: path.to_owned(),
                             workspace_globs,
+                            package_manager,
                         }
                     })
             })
@@ -108,6 +114,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::{RepoMode, RepoState};
+    use crate::package_manager::PackageManager;
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -200,6 +207,7 @@ mod test {
             .create_with_contents("")
             .unwrap();
 
+        let pnpm = PackageManager::Pnpm;
         let tests = [
             (&irrelevant, None),
             (
@@ -207,6 +215,7 @@ mod test {
                 Some(RepoState {
                     root: monorepo_root.clone(),
                     mode: RepoMode::MultiPackage,
+                    package_manager: Ok(pnpm.clone()),
                 }),
             ),
             (
@@ -214,6 +223,7 @@ mod test {
                 Some(RepoState {
                     root: monorepo_root.clone(),
                     mode: RepoMode::MultiPackage,
+                    package_manager: Ok(pnpm.clone()),
                 }),
             ),
             (
@@ -221,6 +231,7 @@ mod test {
                 Some(RepoState {
                     root: monorepo_root.clone(),
                     mode: RepoMode::MultiPackage,
+                    package_manager: Ok(pnpm.clone()),
                 }),
             ),
             (
@@ -228,6 +239,7 @@ mod test {
                 Some(RepoState {
                     root: single_root.clone(),
                     mode: RepoMode::SinglePackage,
+                    package_manager: Ok(pnpm.clone()),
                 }),
             ),
             (
@@ -235,6 +247,7 @@ mod test {
                 Some(RepoState {
                     root: single_root.clone(),
                     mode: RepoMode::SinglePackage,
+                    package_manager: Ok(pnpm.clone()),
                 }),
             ),
             // Nested, technically not supported
@@ -243,6 +256,7 @@ mod test {
                 Some(RepoState {
                     root: standalone.clone(),
                     mode: RepoMode::SinglePackage,
+                    package_manager: Ok(pnpm.clone()),
                 }),
             ),
             (
@@ -250,6 +264,7 @@ mod test {
                 Some(RepoState {
                     root: standalone_monorepo.clone(),
                     mode: RepoMode::MultiPackage,
+                    package_manager: Ok(pnpm.clone()),
                 }),
             ),
             (
@@ -257,11 +272,19 @@ mod test {
                 Some(RepoState {
                     root: standalone_monorepo.clone(),
                     mode: RepoMode::MultiPackage,
+                    package_manager: Ok(pnpm),
                 }),
             ),
         ];
         for (reference_path, expected) in tests {
-            assert_eq!(RepoState::infer(reference_path).ok(), expected);
+            let repo_state = RepoState::infer(reference_path);
+            if let Some(expected) = expected {
+                let repo_state = repo_state.expect("infer a repo");
+                assert_eq!(repo_state.root, expected.root);
+                assert_eq!(repo_state.mode, expected.mode);
+            } else {
+                assert!(repo_state.is_err(), "Expected to fail inference");
+            }
         }
     }
 }
