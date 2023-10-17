@@ -10,7 +10,7 @@ mod scm;
 mod spaces;
 mod task;
 
-use std::{collections::HashSet, io, io::Write, sync::Arc};
+use std::{collections::HashSet, io, io::Write};
 
 use chrono::{DateTime, Local};
 pub use global_hash::GlobalHashSummary;
@@ -94,7 +94,7 @@ impl From<cli::EnvMode> for EnvMode {
 pub struct RunSummary<'a> {
     id: Ksuid,
     version: String,
-    turbo_version: String,
+    turbo_version: &'static str,
     monorepo: bool,
     #[serde(rename = "globalCacheInputs")]
     global_hash_summary: GlobalHashSummary<'a>,
@@ -105,7 +105,7 @@ pub struct RunSummary<'a> {
     framework_inference: bool,
     tasks: Vec<TaskSummary<'a>>,
     user: String,
-    pub scm: SCMState,
+    scm: SCMState,
     #[serde(skip)]
     repo_root: &'a AbsoluteSystemPath,
     #[serde(skip)]
@@ -120,28 +120,33 @@ pub struct RunSummary<'a> {
 #[derive(Debug)]
 pub struct RunTracker {
     scm: SCMState,
+    version: &'static str,
+    started_at: DateTime<Local>,
     execution_tracker: ExecutionTracker,
     spaces_client_handle: Option<SpacesClientHandle>,
     user: String,
 }
 
 impl RunTracker {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        start_time: DateTime<Local>,
+        started_at: DateTime<Local>,
         synthesized_command: &str,
         package_inference_root: Option<&AnchoredSystemPath>,
         env_at_execution_start: &EnvironmentVariableMap,
         repo_root: &AbsoluteSystemPath,
-        turbo_version: &str,
+        version: &'static str,
         spaces_id: Option<String>,
-        spaces_api_client: Arc<APIClient>,
-        api_auth: Option<Arc<APIAuth>>,
+        spaces_api_client: APIClient,
+        api_auth: Option<APIAuth>,
         user: String,
     ) -> Self {
         let scm = SCMState::get(env_at_execution_start, repo_root);
 
         let mut run_tracker = RunTracker {
             scm: scm.clone(),
+            version,
+            started_at,
             execution_tracker: ExecutionTracker::new(synthesized_command),
             spaces_client_handle: None,
             user: user.clone(),
@@ -151,12 +156,12 @@ impl RunTracker {
             SpacesClient::new(spaces_id.clone(), spaces_api_client, api_auth)
         {
             let payload = CreateSpaceRunPayload::new(
-                start_time,
+                started_at,
                 synthesized_command,
                 package_inference_root,
                 scm.branch,
                 scm.sha,
-                turbo_version.to_string(),
+                version.to_string(),
                 user,
             );
             run_tracker.spaces_client_handle = spaces_client.start(payload).ok();
@@ -177,10 +182,8 @@ impl RunTracker {
         self,
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&'a AnchoredSystemPath>,
-        exit_code: u32,
-        start_time: DateTime<Local>,
+        exit_code: i32,
         end_time: DateTime<Local>,
-        turbo_version: &str,
         run_opts: &RunOpts<'a>,
         packages: HashSet<WorkspaceName>,
         global_hash_summary: GlobalHashSummary<'a>,
@@ -200,13 +203,13 @@ impl RunTracker {
 
         let execution_summary = self
             .execution_tracker
-            .finish(package_inference_root, exit_code, start_time, end_time)
+            .finish(package_inference_root, exit_code, self.started_at, end_time)
             .await?;
 
         Ok(RunSummary {
             id: Ksuid::new(None, None),
             version: RUN_SUMMARY_SCHEMA_VERSION.to_string(),
-            turbo_version: turbo_version.to_string(),
+            turbo_version: self.version,
             packages,
             execution: Some(execution_summary),
             env_mode: run_opts.env_mode.into(),
@@ -224,15 +227,14 @@ impl RunTracker {
     }
 
     #[tracing::instrument(skip(pkg_dep_graph, ui))]
+    #[allow(clippy::too_many_arguments)]
     pub async fn finish<'a>(
         self,
-        start_time: DateTime<Local>,
-        exit_code: u32,
+        exit_code: i32,
         pkg_dep_graph: &PackageGraph,
         ui: UI,
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&AnchoredSystemPath>,
-        version: &str,
         run_opts: &RunOpts<'a>,
         packages: HashSet<WorkspaceName>,
         global_hash_summary: GlobalHashSummary<'a>,
@@ -244,9 +246,7 @@ impl RunTracker {
                 repo_root,
                 package_inference_root,
                 exit_code,
-                start_time,
                 end_time,
-                version,
                 run_opts,
                 packages,
                 global_hash_summary,
@@ -287,7 +287,7 @@ impl<'a, 'b> From<&'b RunSummary<'a>> for SinglePackageRunSummary<'a, 'b> {
         SinglePackageRunSummary {
             id: run_summary.id,
             version: &run_summary.version,
-            turbo_version: &run_summary.turbo_version,
+            turbo_version: run_summary.turbo_version,
             monorepo: run_summary.monorepo,
             execution: run_summary.execution.as_ref(),
             global_hash_summary: &run_summary.global_hash_summary,
@@ -304,7 +304,7 @@ impl<'a> RunSummary<'a> {
     async fn finish(
         mut self,
         end_time: DateTime<Local>,
-        exit_code: u32,
+        exit_code: i32,
         pkg_dep_graph: &PackageGraph,
         ui: UI,
     ) -> Result<(), Error> {
@@ -336,8 +336,8 @@ impl<'a> RunSummary<'a> {
     async fn send_to_space(
         &self,
         spaces_client_handle: SpacesClientHandle,
-        ended_at: chrono::DateTime<Local>,
-        exit_code: u32,
+        ended_at: DateTime<Local>,
+        exit_code: i32,
     ) -> Result<(), Error> {
         let spinner = turborepo_ui::start_spinner("...sending run summary...");
 

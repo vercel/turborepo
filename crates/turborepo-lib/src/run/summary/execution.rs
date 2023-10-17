@@ -43,7 +43,7 @@ pub struct ExecutionSummary<'a> {
     pub(crate) end_time: i64,
     #[serde(skip)]
     duration: TurboDuration,
-    pub(crate) exit_code: u32,
+    pub(crate) exit_code: i32,
 }
 
 #[derive(Debug)]
@@ -270,13 +270,13 @@ impl ExecutionTracker {
         }
     }
 
-    pub async fn finish<'a>(
+    pub async fn finish(
         self,
-        package_inference_root: Option<&'a AnchoredSystemPath>,
-        exit_code: u32,
+        package_inference_root: Option<&AnchoredSystemPath>,
+        exit_code: i32,
         start_time: DateTime<Local>,
         end_time: DateTime<Local>,
-    ) -> Result<ExecutionSummary<'a>, tokio::task::JoinError> {
+    ) -> Result<ExecutionSummary<'_>, tokio::task::JoinError> {
         let Self {
             state_thread,
             sender,

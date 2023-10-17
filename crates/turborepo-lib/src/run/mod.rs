@@ -292,8 +292,8 @@ impl<'a> Run<'a> {
 
         let color_selector = ColorSelector::default();
 
-        let api_auth = self.base.api_auth()?.map(Arc::new);
-        let api_client = Arc::new(self.base.api_client()?);
+        let api_auth = self.base.api_auth()?;
+        let api_client = self.base.api_client()?;
 
         let async_cache = AsyncCache::new(
             &opts.cache_opts,
@@ -368,13 +368,9 @@ impl<'a> Run<'a> {
             global_env_mode,
             self.base.ui,
             false,
-            self.base.version(),
             self.processes.clone(),
             &self.base.repo_root,
             global_env,
-            filtered_pkgs,
-            start_at,
-            global_hash_inputs,
         );
 
         if opts.run_opts.dry_run {
@@ -398,7 +394,9 @@ impl<'a> Run<'a> {
             writeln!(std::io::stderr(), "{err}").ok();
         }
 
-        visitor.finish().await?;
+        visitor
+            .finish(exit_code, filtered_pkgs, global_hash_inputs)
+            .await?;
 
         Ok(exit_code)
     }
@@ -471,7 +469,7 @@ impl<'a> Run<'a> {
         };
 
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
-        let api_auth = self.base.api_auth()?.map(Arc::new);
+        let api_auth = self.base.api_auth()?;
 
         let engine = EngineBuilder::new(
             &self.base.repo_root,
@@ -511,7 +509,7 @@ impl<'a> Run<'a> {
 
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
-        let api_client = Arc::new(self.base.api_client()?);
+        let api_client = self.base.api_client()?;
 
         let async_cache = AsyncCache::new(
             &opts.cache_opts,
@@ -532,7 +530,7 @@ impl<'a> Run<'a> {
         ));
 
         let run_tracker = RunTracker::new(
-            Local::now(),
+            started_at,
             "todo",
             opts.scope_opts.pkg_inference_root.as_deref(),
             &env_at_execution_start,
@@ -555,15 +553,11 @@ impl<'a> Run<'a> {
             global_env_mode,
             self.base.ui,
             true,
-            self.base.version(),
             self.processes.clone(),
             &self.base.repo_root,
             // TODO: this is only needed for full execution, figure out better way to model this
             // not affecting a dry run
             EnvironmentVariableMap::default(),
-            filtered_pkgs,
-            started_at,
-            global_hash_inputs,
         );
 
         visitor.dry_run();

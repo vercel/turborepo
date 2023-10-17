@@ -7,7 +7,6 @@ use std::{
     time::Duration,
 };
 
-use chrono::{DateTime, Local};
 use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
@@ -37,21 +36,17 @@ use crate::{
 pub struct Visitor<'a> {
     color_cache: ColorSelector,
     dry: bool,
+    global_env: EnvironmentVariableMap,
     global_env_mode: EnvMode,
-    global_hash_inputs: GlobalHashableInputs<'a>,
     manager: ProcessManager,
     opts: &'a Opts<'a>,
     package_graph: Arc<PackageGraph>,
-    packages: HashSet<WorkspaceName>,
     repo_root: &'a AbsoluteSystemPath,
     run_cache: Arc<RunCache>,
     run_tracker: RunTracker,
     sink: OutputSink<StdWriter>,
-    started_at: DateTime<Local>,
     task_hasher: TaskHasher<'a>,
     ui: UI,
-    global_env: EnvironmentVariableMap,
-    pub version: &'static str,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -91,13 +86,9 @@ impl<'a> Visitor<'a> {
         global_env_mode: EnvMode,
         ui: UI,
         silent: bool,
-        version: &'static str,
         manager: ProcessManager,
         repo_root: &'a AbsoluteSystemPath,
         global_env: EnvironmentVariableMap,
-        packages: HashSet<WorkspaceName>,
-        started_at: DateTime<Local>,
-        global_hash_inputs: GlobalHashableInputs<'a>,
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,
@@ -112,20 +103,16 @@ impl<'a> Visitor<'a> {
             color_cache,
             dry: false,
             global_env_mode,
-            global_hash_inputs,
             manager,
             opts,
             package_graph,
-            packages,
             repo_root,
             run_cache,
             run_tracker,
             sink,
-            started_at,
             task_hasher,
             ui,
             global_env,
-            version,
         }
     }
 
@@ -416,26 +403,30 @@ impl<'a> Visitor<'a> {
 
     /// Finishes visiting the tasks, creates the run summary, and either
     /// prints, saves, or sends it to spaces.
-    pub(crate) async fn finish(self) -> Result<(), Error> {
-        let started_at = self.started_at;
-        let pkg_dep_graph = self.package_graph;
-        let ui = self.ui;
-        let opts = self.opts;
-        let repo_root = self.repo_root;
-        let version = self.version;
-        let packages = self.packages;
-        let global_hash_summary = GlobalHashSummary::try_from(self.global_hash_inputs)?;
+    pub(crate) async fn finish(
+        self,
+        exit_code: i32,
+        packages: HashSet<WorkspaceName>,
+        global_hash_inputs: GlobalHashableInputs<'_>,
+    ) -> Result<(), Error> {
+        let Self {
+            package_graph,
+            ui,
+            opts,
+            repo_root,
+            ..
+        } = self;
+
+        let global_hash_summary = GlobalHashSummary::try_from(global_hash_inputs)?;
 
         Ok(self
             .run_tracker
             .finish(
-                started_at,
-                0,
-                &*pkg_dep_graph,
+                exit_code,
+                &package_graph,
                 ui,
                 repo_root,
                 opts.scope_opts.pkg_inference_root.as_deref(),
-                version,
                 &opts.run_opts,
                 packages,
                 global_hash_summary,

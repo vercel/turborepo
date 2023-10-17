@@ -21,25 +21,25 @@ pub struct SpaceClientSummary {
 }
 
 #[derive(Default, Debug, Serialize)]
-struct SpacesCacheStatus {
-    status: String,
-    source: Option<String>,
-    time_saved: u32,
+pub struct SpacesCacheStatus {
+    pub status: String,
+    pub source: Option<String>,
+    pub time_saved: u32,
 }
 
 #[derive(Default, Debug, Serialize)]
 pub struct SpaceTaskSummary {
-    key: String,
-    name: String,
-    workspace: String,
-    hash: String,
-    start_time: i64,
-    end_time: i64,
-    cache: SpacesCacheStatus,
-    exit_code: u32,
-    dependencies: Vec<String>,
-    dependents: Vec<String>,
-    logs: String,
+    pub key: String,
+    pub name: String,
+    pub workspace: String,
+    pub hash: String,
+    pub start_time: i64,
+    pub end_time: i64,
+    pub cache: SpacesCacheStatus,
+    pub exit_code: u32,
+    pub dependencies: Vec<String>,
+    pub dependents: Vec<String>,
+    pub logs: String,
 }
 
 #[derive(Serialize)]
@@ -107,11 +107,11 @@ impl CreateSpaceRunPayload {
 pub struct FinishSpaceRunPayload {
     status: RunStatus,
     end_time: i64,
-    exit_code: u32,
+    exit_code: i32,
 }
 
 impl FinishSpaceRunPayload {
-    pub fn new(end_time: i64, exit_code: u32) -> Self {
+    pub fn new(end_time: i64, exit_code: i32) -> Self {
         Self {
             status: RunStatus::Completed,
             end_time,
@@ -213,14 +213,14 @@ impl APIClient {
         run_id: &str,
         api_auth: &APIAuth,
         end_time: i64,
-        exit_code: u32,
+        exit_code: i32,
     ) -> Result<(), Error> {
         let url = format!("/v0/spaces/{}/runs/{}", space_id, run_id);
 
         let payload = FinishSpaceRunPayload::new(end_time, exit_code);
 
         let request_builder = self
-            .create_request_builder(&url, &api_auth, Method::PATCH)
+            .create_request_builder(&url, api_auth, Method::PATCH)
             .await?
             .json(&payload);
 

@@ -38,23 +38,22 @@ pub fn is_ci() -> bool {
 impl Vendor {
     // Returns info about a CI vendor
     pub fn infer() -> Option<&'static Vendor> {
-        *VENDOR.get_or_init(|| Self::infer_inner())
+        *VENDOR.get_or_init(Self::infer_inner)
     }
 
     /// Gets user from CI environment variables
     /// We return an empty String instead of None because
-    /// the API expects some sort of string here.
+    /// the Spaces API expects some sort of string in the user field.
     pub fn get_user() -> String {
         let vendor = Vendor::infer();
 
         vendor
-            .map(|v| v.username_env_var)
-            .flatten()
+            .and_then(|v| v.username_env_var)
             .and_then(|v| env::var(v).ok())
             .unwrap_or_default()
     }
 
-    pub fn infer_inner() -> Option<&'static Vendor> {
+    fn infer_inner() -> Option<&'static Vendor> {
         for env in get_vendors() {
             if let Some(eval_env) = &env.eval_env {
                 for (name, expected_value) in eval_env {
@@ -188,7 +187,7 @@ mod tests {
                 env::set_var(key, val);
             }
 
-            assert_eq!(Vendor::infer(), want.as_ref());
+            assert_eq!(Vendor::infer_inner(), want.as_ref());
 
             if Vendor::get_name() == Some("GitHub Actions") {
                 if let Some(live_ci) = live_ci {

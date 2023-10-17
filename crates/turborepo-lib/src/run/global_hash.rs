@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
 use globwalk::WalkType;
@@ -25,7 +25,7 @@ enum GlobalHashError {}
 #[derive(Debug)]
 pub struct GlobalHashableInputs<'a> {
     pub global_cache_key: &'static str,
-    pub global_file_hash_map: BTreeMap<RelativeUnixPathBuf, String>,
+    pub global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
     // This is `None` in single package mode
     pub root_external_dependencies_hash: Option<&'a str>,
     pub env: &'a [String],

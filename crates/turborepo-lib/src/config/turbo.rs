@@ -581,7 +581,7 @@ mod tests {
     ; "global dependencies (sorted)")]
     #[test_case(r#"{ "globalDotEnv": [".env.local", ".env"] }"#,
         TurboJson {
-            global_dot_env: vec![RelativeUnixPathBuf::new(".env.local").unwrap(), RelativeUnixPathBuf::new(".env").unwrap()],
+            global_dot_env: Some(vec![RelativeUnixPathBuf::new(".env.local").unwrap(), RelativeUnixPathBuf::new(".env").unwrap()]),
             ..TurboJson::default()
         }
     ; "global dot env (unsorted)")]

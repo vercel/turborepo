@@ -1,4 +1,4 @@
-use std::{backtrace::Backtrace, io::Write, sync::Arc};
+use std::{backtrace::Backtrace, io::Write};
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient, Client, Response};
@@ -10,18 +10,18 @@ use crate::{
 };
 
 pub struct HTTPCache {
-    client: Arc<APIClient>,
+    client: APIClient,
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
     repo_root: AbsoluteSystemPathBuf,
-    api_auth: Arc<APIAuth>,
+    api_auth: APIAuth,
 }
 
 impl HTTPCache {
     pub fn new(
-        client: Arc<APIClient>,
+        client: APIClient,
         opts: &CacheOpts,
         repo_root: AbsoluteSystemPathBuf,
-        api_auth: Arc<APIAuth>,
+        api_auth: APIAuth,
     ) -> HTTPCache {
         let signer_verifier = if opts
             .remote_cache_opts
@@ -191,8 +191,6 @@ impl HTTPCache {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
-
     use anyhow::Result;
     use futures::future::try_join_all;
     use tempfile::tempdir;
@@ -235,13 +233,13 @@ mod test {
 
         let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
         let opts = CacheOpts::default();
-        let api_auth = Arc::new(APIAuth {
+        let api_auth = APIAuth {
             team_id: "my-team".to_string(),
             token: "my-token".to_string(),
             team_slug: None,
-        });
+        };
 
-        let cache = HTTPCache::new(&*api_client, &opts, repo_root_path.to_owned(), api_auth);
+        let cache = HTTPCache::new(api_client, &opts, repo_root_path.to_owned(), api_auth);
 
         let anchored_files: Vec<_> = files.iter().map(|f| f.path().to_owned()).collect();
         cache

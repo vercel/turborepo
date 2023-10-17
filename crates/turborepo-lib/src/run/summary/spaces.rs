@@ -1,7 +1,6 @@
 use std::{
     fmt,
     fmt::{Debug, Formatter},
-    sync::Arc,
     time::Duration,
 };
 
@@ -19,8 +18,8 @@ use crate::run::summary::Error;
 
 pub struct SpacesClient {
     space_id: String,
-    api_client: Arc<APIClient>,
-    api_auth: Arc<APIAuth>,
+    api_client: APIClient,
+    api_auth: APIAuth,
     request_timeout: Duration,
     errors: Vec<Error>,
 }
@@ -50,7 +49,7 @@ impl Debug for SpacesClientHandle {
 }
 
 impl SpacesClientHandle {
-    pub async fn finish_run(&self, exit_code: u32, end_time: DateTime<Local>) -> Result<(), Error> {
+    pub async fn finish_run(&self, exit_code: i32, end_time: DateTime<Local>) -> Result<(), Error> {
         Ok(self
             .tx
             .send(SpaceRequest::FinishedRun {
@@ -91,15 +90,15 @@ impl SpacesClientHandle {
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", rename_all = "lowercase")]
 pub enum SpaceRequest {
-    FinishedRun { end_time: i64, exit_code: u32 },
+    FinishedRun { end_time: i64, exit_code: i32 },
     FinishedTask { summary: Box<SpaceTaskSummary> },
 }
 
 impl SpacesClient {
     pub fn new(
         space_id: Option<String>,
-        api_client: Arc<APIClient>,
-        api_auth: Option<Arc<APIAuth>>,
+        api_client: APIClient,
+        api_auth: Option<APIAuth>,
     ) -> Option<Self> {
         // If space_id is empty, we don't build a client
         let space_id = space_id?;
@@ -196,7 +195,7 @@ impl SpacesClient {
         &self,
         run: &SpaceRun,
         end_time: i64,
-        exit_code: u32,
+        exit_code: i32,
     ) -> Result<(), Error> {
         Ok(tokio::time::timeout(
             self.request_timeout,
@@ -214,8 +213,6 @@ impl SpacesClient {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use anyhow::Result;
     use chrono::Local;
     use test_case::test_case;
@@ -238,18 +235,14 @@ mod tests {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
 
-        let api_client = Arc::new(APIClient::new(
-            format!("http://localhost:{}", port),
-            2,
-            "",
-            true,
-        )?);
+        let api_client = APIClient::new(format!("http://localhost:{}", port), 2, "", true)?;
 
-        let api_auth = Some(Arc::new(APIAuth {
+        let api_auth = Some(APIAuth {
             token: EXPECTED_TOKEN.to_string(),
             team_id: EXPECTED_TEAM_ID.to_string(),
             team_slug: Some(EXPECTED_TEAM_SLUG.to_string()),
-        }));
+        });
+
         let spaces_client =
             SpacesClient::new(Some(EXPECTED_SPACE_ID.to_string()), api_client, api_auth).unwrap();
 

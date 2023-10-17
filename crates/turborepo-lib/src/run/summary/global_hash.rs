@@ -64,7 +64,7 @@ impl<'a> TryFrom<GlobalHashableInputs<'a>> for GlobalHashSummary<'a> {
 
         Ok(Self {
             root_key: global_cache_key,
-            files: global_file_hash_map,
+            files: global_file_hash_map.into_iter().collect(),
             // This can be empty in single package mode
             hash_of_external_dependencies: root_external_dependencies_hash.unwrap_or_default(),
             environment_variables: GlobalEnvVarSummary {
@@ -72,8 +72,6 @@ impl<'a> TryFrom<GlobalHashableInputs<'a>> for GlobalHashSummary<'a> {
                     env,
                     pass_through_env,
                 },
-                // These can be flattened to just a `Vec<T>` instead of an `Option<Vec<T>` because
-                // the Go code
                 configured: resolved_env_vars
                     .as_ref()
                     .map(|vars| vars.by_source.explicit.to_secret_hashable()),
