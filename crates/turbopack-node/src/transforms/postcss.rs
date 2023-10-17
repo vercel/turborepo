@@ -217,7 +217,7 @@ impl PostCssTransformedAsset {
                 else {
                     PostCssTransformIssue {
                         source: this.source.ident().path(),
-                        title: "PostCss transform skipped".to_string(),
+                        title: "PostCSS transform skipped".to_string(),
                         description: "Unable to find PostCSS config".to_string(),
                         severity: IssueSeverity::Warning.cell(),
                     }
