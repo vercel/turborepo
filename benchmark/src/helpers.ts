@@ -1,6 +1,6 @@
-import cp from "child_process";
-import fs from "fs";
-import path from "path";
+import cp from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 
 export const REPO_ROOT = "large-monorepo";
 export const REPO_ORIGIN = "https://github.com/gsoltis/large-monorepo.git";
@@ -10,7 +10,7 @@ export const DEFAULT_EXEC_OPTS = { stdio: "ignore" as const, cwd: REPO_PATH };
 const isWin = process.platform === "win32";
 
 export const TURBO_BIN = path.resolve(
-  path.join("..", "target", "release", "turbo" + (isWin ? ".exe" : ""))
+  path.join("..", "target", "release", `turbo${isWin ? ".exe" : ""}`)
 );
 
 export function setup(): void {
@@ -36,7 +36,7 @@ export function getCommitDetails(): {
   commitSha: string;
   commitTimestamp: Date;
 } {
-  const envSha = process.env["GITHUB_SHA"];
+  const envSha = process.env.GITHUB_SHA;
   if (envSha === undefined) {
     return {
       commitSha: "unknown sha",

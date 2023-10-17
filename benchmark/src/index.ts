@@ -1,7 +1,7 @@
-import cp from "child_process";
-import fs from "fs";
+import cp from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import fse from "fs-extra";
-import path from "path";
 import ndjson from "ndjson";
 import {
   DEFAULT_EXEC_OPTS,
@@ -29,21 +29,21 @@ const ALT_CACHE_PATH = path.join(
 
 type Timing = number;
 
-type Benchmark = {
+interface Benchmark {
   name: string;
   unit: string;
   value: number;
   range?: string;
   extra?: string;
-};
+}
 
-type TBirdEvent = {
+interface TBirdEvent {
   commitSha: string;
   commitTimestamp: Date;
   platform: string;
   benchmark: string;
   durationMs: number;
-};
+}
 
 function cleanTurboCache(): void {
   if (fs.existsSync(DEFAULT_CACHE_PATH)) {
@@ -52,9 +52,9 @@ function cleanTurboCache(): void {
   }
 }
 
-function cleanBuild(): Timing[] {
-  const timings: Timing[] = [];
-  const isLocal = process.argv[process.argv.length - 1] == "--local";
+function cleanBuild(): Array<Timing> {
+  const timings: Array<Timing> = [];
+  const isLocal = process.argv[process.argv.length - 1] === "--local";
   // We aren't really benchmarking this one, it OOMs if run in full parallel
   // on GH actions
   const repetitions = isLocal ? REPETITIONS : 1;
@@ -71,8 +71,8 @@ function cleanBuild(): Timing[] {
   return timings;
 }
 
-function cachedBuild(): Timing[] {
-  const timings: Timing[] = [];
+function cachedBuild(): Array<Timing> {
+  const timings: Array<Timing> = [];
   for (let i = 0; i < REPETITIONS; i++) {
     const start = new Date().getTime();
     cp.execSync(`${TURBO_BIN} run build`, DEFAULT_EXEC_OPTS);
@@ -106,7 +106,7 @@ function restoreSavedCache() {
   fse.copySync(ALT_CACHE_PATH, DEFAULT_CACHE_PATH, { recursive: true });
 }
 
-function cachedBuildWithDelta(): Timing[] {
+function cachedBuildWithDelta(): Array<Timing> {
   // Save existing cache just once, we'll restore from it each time
   saveCache();
 
@@ -126,7 +126,7 @@ function cachedBuildWithDelta(): Timing[] {
   const updated = contents.replace("-0!", "-0!!");
   fs.writeFileSync(file, updated);
 
-  const timings: Timing[] = [];
+  const timings: Array<Timing> = [];
   for (let i = 0; i < REPETITIONS; i++) {
     // Make sure we're starting with the cache from before we make the source code edit
     restoreSavedCache();
@@ -139,7 +139,7 @@ function cachedBuildWithDelta(): Timing[] {
   return timings;
 }
 
-function cachedBuildWithDependencyChange(): Timing[] {
+function cachedBuildWithDependencyChange(): Array<Timing> {
   // Save existing cache just once, we'll restore from it each time
   saveCache();
 
@@ -149,7 +149,7 @@ function cachedBuildWithDependencyChange(): Timing[] {
   contents.dependencies["crew-important-feature-0"] = "*";
   fs.writeFileSync(file, JSON.stringify(contents, null, 2));
 
-  const timings: Timing[] = [];
+  const timings: Array<Timing> = [];
   for (let i = 0; i < REPETITIONS; i++) {
     // Make sure we're starting with the cache from before we made the dependency edit
     restoreSavedCache();
@@ -163,8 +163,8 @@ function cachedBuildWithDependencyChange(): Timing[] {
 }
 
 class Benchmarks {
-  private readonly benchmarks: Benchmark[] = [];
-  private readonly tbirdEvents: TBirdEvent[] = [];
+  private readonly benchmarks: Array<Benchmark> = [];
+  private readonly tbirdEvents: Array<TBirdEvent> = [];
 
   constructor(
     private readonly benchmarkFile: string,
@@ -174,12 +174,12 @@ class Benchmarks {
     private readonly platform: string
   ) {}
 
-  run(name: string, b: () => Timing[]) {
+  run(name: string, b: () => Array<Timing>) {
     console.log(name);
     const timings = b();
     const max = Math.max(...timings);
     const min = Math.min(...timings);
-    const avg = timings.reduce((a, b) => a + b, 0) / timings.length;
+    const avg = timings.reduce((memo, t) => memo + t, 0) / timings.length;
     this.benchmarks.push({
       name,
       value: avg,
@@ -206,7 +206,7 @@ class Benchmarks {
     const stream = ndjson.stringify();
     const fd = fs.openSync(this.tinybirdFile, "w");
     stream.on("data", (line) => {
-      fs.writeSync(fd, line);
+      fs.writeSync(fd, line as string);
     });
     this.tbirdEvents.forEach((t) => {
       stream.write(t);
@@ -219,7 +219,7 @@ class Benchmarks {
 cp.execSync(`${TURBO_BIN} --version`, { stdio: "inherit" });
 
 const { commitSha, commitTimestamp } = getCommitDetails();
-const platform = process.env["RUNNER_OS"] ?? "unknown";
+const platform = process.env.RUNNER_OS ?? "unknown";
 
 console.log("setup");
 setup();

@@ -129,6 +129,9 @@ importers:
         specifier: ^2.6.8
         version: 2.6.11
     devDependencies:
+      '@turbo/eslint-config':
+        specifier: workspace:*
+        version: link:../packages/eslint-config
       '@turbo/tsconfig':
         specifier: workspace:*
         version: link:../packages/tsconfig

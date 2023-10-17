@@ -11,11 +11,13 @@
   "scripts": {
     "benchmark": "node -r esbuild-register src/index.ts",
     "ttft": "node -r esbuild-register src/ttft.ts",
+    "lint": "eslint src",
     "lint:prettier": "prettier -c . --cache --ignore-path=../.prettierignore",
     "check-types": "tsc --noEmit"
   },
   "devDependencies": {
     "@turbo/tsconfig": "workspace:*",
+    "@turbo/eslint-config": "workspace:*",
     "@types/fs-extra": "^9.0.13",
     "@types/ndjson": "^2.0.2",
     "@types/node": "^18.17.4",

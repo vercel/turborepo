@@ -1,4 +1,4 @@
-import fs from "fs";
+import fs from "node:fs";
 import fetch from "node-fetch";
 import { getCommitDetails } from "./helpers";
 
@@ -13,7 +13,7 @@ if (!token) {
 const DATA_SOURCE_URL =
   "https://api.us-east.tinybird.co/v0/events?name=turborepo_perf_ttft";
 
-(async function () {
+async function main() {
   const contents = fs.readFileSync(filePath);
   const data = JSON.parse(contents.toString());
 
@@ -40,4 +40,10 @@ const DATA_SOURCE_URL =
     const text = await res.text();
     console.log(text);
   }
-})();
+}
+
+main()
+  .then(() => {
+    console.log("done");
+  })
+  .catch(console.error);
