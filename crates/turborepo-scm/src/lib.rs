@@ -1,4 +1,5 @@
 #![feature(error_generic_member_access)]
+#![feature(io_error_more)]
 #![feature(assert_matches)]
 #![deny(clippy::all)]
 
