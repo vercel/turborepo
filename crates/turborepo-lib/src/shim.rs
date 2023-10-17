@@ -577,7 +577,7 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
         let footer = format!(
             "Follow {username} for updates: {url}",
             username = "@turborepo".gradient([RGB::new(0, 153, 247), RGB::new(241, 23, 18)]),
-            url = "https://twitter.com/turborepo"
+            url = "https://x.com/turborepo"
         );
 
         let interval = if args.force_update_check {

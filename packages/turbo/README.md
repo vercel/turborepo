@@ -41,11 +41,11 @@ Turbo is used by the world's leading companies. Check out the [Turbo Showcase](h
 
 ## Updates
 
-Follow [@turborepo](https://twitter.com/turborepo) on Twitter and for project updates
+Follow [@turborepo](https://x.com/turborepo) on X and for project updates
 
 ## Author
 
-- Jared Palmer ([@jaredpalmer](https://twitter.com/jaredpalmer))
+- Jared Palmer ([@jaredpalmer](https://x.com/jaredpalmer))
 
 ## Security
 
