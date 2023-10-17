@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use anyhow::Result;
 use globwalk::WalkType;
@@ -25,7 +25,7 @@ enum GlobalHashError {}
 #[derive(Debug, Default)]
 pub struct GlobalHashableInputs<'a> {
     pub global_cache_key: &'static str,
-    pub global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
+    pub global_file_hash_map: BTreeMap<RelativeUnixPathBuf, String>,
     // This is `None` in single package mode
     pub root_external_dependencies_hash: Option<&'a str>,
     pub env: &'a [String],
@@ -39,8 +39,7 @@ pub struct GlobalHashableInputs<'a> {
 
 #[allow(clippy::too_many_arguments)]
 pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
-    is_monorepo: bool,
-    root_external_dependencies_hash: &'a str,
+    root_external_dependencies_hash: Option<&'a str>,
     root_path: &AbsoluteSystemPath,
     package_manager: &PackageManager,
     lockfile: Option<&L>,
@@ -111,8 +110,6 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
 
         global_file_hash_map.extend(dot_env_object);
     }
-
-    let root_external_dependencies_hash = is_monorepo.then_some(root_external_dependencies_hash);
 
     debug!(
         "external deps hash: {}",

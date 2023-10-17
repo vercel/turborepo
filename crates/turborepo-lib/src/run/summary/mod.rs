@@ -26,7 +26,7 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
 use crate::{
-    cli::EnvMode,
+    cli,
     opts::RunOpts,
     package_graph::{PackageGraph, WorkspaceName},
     run::summary::{
@@ -65,6 +65,26 @@ enum RunType {
     Real,
     DryText,
     DryJson,
+}
+
+// Can't reuse `cli::EnvMode` because the serialization
+// is different (lowercase vs uppercase)
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EnvMode {
+    Infer,
+    Loose,
+    Strict,
+}
+
+impl From<cli::EnvMode> for EnvMode {
+    fn from(env_mode: cli::EnvMode) -> Self {
+        match env_mode {
+            cli::EnvMode::Infer => EnvMode::Infer,
+            cli::EnvMode::Loose => EnvMode::Loose,
+            cli::EnvMode::Strict => EnvMode::Strict,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -187,7 +207,7 @@ impl RunTracker {
             turbo_version: turbo_version.to_string(),
             packages,
             execution: Some(execution_summary),
-            env_mode: run_opts.env_mode,
+            env_mode: run_opts.env_mode.into(),
             framework_inference: run_opts.framework_inference,
             tasks: vec![],
             global_hash_summary,

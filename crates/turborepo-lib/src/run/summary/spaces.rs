@@ -27,6 +27,7 @@ pub struct SpacesClient {
 
 /// Once the client is done, we return any errors
 /// and the SpaceRun struct
+#[derive(Debug)]
 pub struct SpacesClientResult {
     pub errors: Vec<Error>,
     // Can be None because SpacesClient could error on join
@@ -55,6 +56,15 @@ impl SpacesClientHandle {
             .send(SpaceRequest::FinishedRun {
                 exit_code,
                 end_time: end_time.timestamp_millis(),
+            })
+            .await?)
+    }
+
+    pub async fn finish_task(&self, summary: SpaceTaskSummary) -> Result<(), Error> {
+        Ok(self
+            .tx
+            .send(SpaceRequest::FinishedTask {
+                summary: Box::new(summary),
             })
             .await?)
     }
@@ -199,5 +209,75 @@ impl SpacesClient {
             ),
         )
         .await??)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use anyhow::Result;
+    use chrono::Local;
+    use test_case::test_case;
+    use turborepo_api_client::{
+        spaces::{CreateSpaceRunPayload, SpaceTaskSummary},
+        APIAuth, APIClient,
+    };
+    use turborepo_vercel_api_mock::{
+        start_test_server, EXPECTED_SPACE_ID, EXPECTED_SPACE_RUN_ID, EXPECTED_TEAM_ID,
+        EXPECTED_TEAM_SLUG, EXPECTED_TOKEN,
+    };
+
+    use crate::run::summary::spaces::SpacesClient;
+
+    #[test_case(vec![] ; "empty")]
+    #[test_case(vec![SpaceTaskSummary::default()] ; "one task summary")]
+    #[test_case(vec![SpaceTaskSummary::default(), SpaceTaskSummary::default()] ; "two task summaries")]
+    #[tokio::test]
+    async fn test_spaces_client(tasks: Vec<SpaceTaskSummary>) -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let handle = tokio::spawn(start_test_server(port));
+
+        let api_client = Arc::new(APIClient::new(
+            format!("http://localhost:{}", port),
+            2,
+            "",
+            true,
+        )?);
+
+        let api_auth = Some(Arc::new(APIAuth {
+            token: EXPECTED_TOKEN.to_string(),
+            team_id: EXPECTED_TEAM_ID.to_string(),
+            team_slug: Some(EXPECTED_TEAM_SLUG.to_string()),
+        }));
+        let spaces_client =
+            SpacesClient::new(Some(EXPECTED_SPACE_ID.to_string()), api_client, api_auth).unwrap();
+
+        let start_time = Local::now();
+        let spaces_client_handle = spaces_client.start(CreateSpaceRunPayload::new(
+            start_time,
+            "turbo run build",
+            None,
+            None,
+            None,
+            "".to_string(),
+            "rauchg".to_string(),
+        ))?;
+
+        for task_summary in tasks {
+            spaces_client_handle.finish_task(task_summary).await?;
+        }
+
+        spaces_client_handle.finish_run(0, Local::now()).await?;
+
+        let spaces_client_result = spaces_client_handle.close().await;
+
+        assert!(spaces_client_result.errors.is_empty());
+        let run = spaces_client_result.run.expect("run should exist");
+
+        assert_eq!(run.id, EXPECTED_SPACE_RUN_ID);
+
+        handle.abort();
+        Ok(())
     }
 }

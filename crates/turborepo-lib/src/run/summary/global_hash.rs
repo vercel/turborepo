@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
@@ -19,6 +19,7 @@ pub struct GlobalEnvVarSummary<'a> {
 
     pub configured: EnvironmentVariablePairs,
     pub inferred: EnvironmentVariablePairs,
+    #[serde(rename = "passthrough")]
     pub pass_through: EnvironmentVariablePairs,
 }
 
@@ -26,7 +27,7 @@ pub struct GlobalEnvVarSummary<'a> {
 #[serde(rename_all = "camelCase")]
 pub struct GlobalHashSummary<'a> {
     pub root_key: &'static str,
-    pub files: HashMap<RelativeUnixPathBuf, String>,
+    pub files: BTreeMap<RelativeUnixPathBuf, String>,
     pub hash_of_external_dependencies: &'a str,
     pub global_dot_env: &'a [RelativeUnixPathBuf],
     pub environment_variables: GlobalEnvVarSummary<'a>,
@@ -36,8 +37,8 @@ impl<'a> GlobalHashSummary<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         global_cache_key: &'static str,
-        global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
-        root_external_deps_hash: &'a str,
+        global_file_hash_map: BTreeMap<RelativeUnixPathBuf, String>,
+        root_external_deps_hash: Option<&'a str>,
         global_env: &'a [String],
         global_pass_through_env: &'a [String],
         global_dot_env: &'a [RelativeUnixPathBuf],
@@ -47,7 +48,8 @@ impl<'a> GlobalHashSummary<'a> {
         Self {
             root_key: global_cache_key,
             files: global_file_hash_map,
-            hash_of_external_dependencies: root_external_deps_hash,
+            // This can be empty in single package mode
+            hash_of_external_dependencies: root_external_deps_hash.unwrap_or_default(),
 
             environment_variables: GlobalEnvVarSummary {
                 specified: GlobalEnvConfiguration {

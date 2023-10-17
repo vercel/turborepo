@@ -6,7 +6,7 @@ use anyhow::Result;
 use axum::{
     extract::{BodyStream, Path},
     http::{HeaderMap, HeaderValue, StatusCode},
-    routing::{get, head, options, put},
+    routing::{get, head, options, patch, post, put},
     Json, Router,
 };
 use futures_util::StreamExt;
@@ -85,7 +85,7 @@ pub async fn start_test_server(port: u16) -> Result<()> {
         )
         .route(
             "/v0/spaces/:space_id/runs",
-            get(|Path(space_id): Path<String>| async move {
+            post(|Path(space_id): Path<String>| async move {
                 if space_id != EXPECTED_SPACE_ID {
                     return (StatusCode::NOT_FOUND, Json(None));
                 }
@@ -98,6 +98,30 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                     })),
                 )
             }),
+        )
+        .route(
+            "/v0/spaces/:space_id/runs/:run_id",
+            patch(
+                |Path((space_id, run_id)): Path<(String, String)>| async move {
+                    if space_id != EXPECTED_SPACE_ID || run_id != EXPECTED_SPACE_RUN_ID {
+                        return StatusCode::NOT_FOUND;
+                    }
+
+                    StatusCode::OK
+                },
+            ),
+        )
+        .route(
+            "/v0/spaces/:space_id/runs/:run_id/tasks",
+            post(
+                |Path((space_id, run_id)): Path<(String, String)>| async move {
+                    if space_id != EXPECTED_SPACE_ID || run_id != EXPECTED_SPACE_RUN_ID {
+                        return StatusCode::NOT_FOUND;
+                    }
+
+                    StatusCode::OK
+                },
+            ),
         )
         .route(
             "/v8/artifacts/status",

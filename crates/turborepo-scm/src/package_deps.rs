@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use itertools::{Either, Itertools};
 use tracing::debug;
@@ -6,7 +6,7 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError, RelativeUnixP
 
 use crate::{hash_object::hash_objects, Error, Git, SCM};
 
-pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
+pub type GitHashes = BTreeMap<RelativeUnixPathBuf, String>;
 
 impl SCM {
     pub fn get_hashes_for_files(

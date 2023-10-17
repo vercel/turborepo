@@ -6,7 +6,7 @@
 
 mod traits;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use capnp::message::{Builder, HeapAllocator};
 pub use traits::TurboHash;
@@ -66,7 +66,7 @@ pub struct TaskHashable<'a> {
 #[derive(Debug, Clone)]
 pub struct GlobalHashable<'a> {
     pub global_cache_key: &'static str,
-    pub global_file_hash_map: &'a HashMap<turbopath::RelativeUnixPathBuf, String>,
+    pub global_file_hash_map: &'a BTreeMap<turbopath::RelativeUnixPathBuf, String>,
     // This is None in single package mode
     pub root_external_dependencies_hash: Option<&'a str>,
     pub env: &'a [String],
@@ -80,7 +80,7 @@ pub struct GlobalHashable<'a> {
 pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
 
 #[derive(Debug, Clone)]
-pub struct FileHashes(pub HashMap<turbopath::RelativeUnixPathBuf, String>);
+pub struct FileHashes(pub BTreeMap<turbopath::RelativeUnixPathBuf, String>);
 
 impl From<TaskOutputs> for Builder<HeapAllocator> {
     fn from(value: TaskOutputs) -> Self {

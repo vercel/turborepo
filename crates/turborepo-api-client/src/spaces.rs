@@ -20,14 +20,14 @@ pub struct SpaceClientSummary {
     pub version: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Default, Debug, Serialize)]
 struct SpacesCacheStatus {
     status: String,
     source: Option<String>,
     time_saved: u32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Default, Debug, Serialize)]
 pub struct SpaceTaskSummary {
     key: String,
     name: String,
@@ -43,12 +43,18 @@ pub struct SpaceTaskSummary {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum SpaceRunType {
+    Turbo,
+}
+
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSpaceRunPayload {
     pub start_time: i64,
     pub status: RunStatus,
     #[serde(rename = "type")]
-    pub ty: &'static str, // Hardcoded to "TURBO"
+    pub ty: SpaceRunType, // Hardcoded to "TURBO"
     pub command: String,
     #[serde(rename = "repositoryPath")]
     pub package_inference_root: String,
@@ -82,7 +88,7 @@ impl CreateSpaceRunPayload {
             package_inference_root: package_inference_root
                 .map(|p| p.to_string())
                 .unwrap_or_default(),
-            ty: "TURBO",
+            ty: SpaceRunType::Turbo,
             run_context,
             git_branch,
             git_sha,
@@ -98,7 +104,7 @@ impl CreateSpaceRunPayload {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct FinishSpaceRunPayload {
+pub struct FinishSpaceRunPayload {
     status: RunStatus,
     end_time: i64,
     exit_code: u32,

@@ -270,11 +270,13 @@ impl<'a> Run<'a> {
             .workspace_info(&WorkspaceName::Root)
             .expect("must have root workspace");
 
-        let root_external_dependencies_hash = root_workspace.get_external_deps_hash();
+        let is_monorepo = !opts.run_opts.single_package;
+
+        let root_external_dependencies_hash =
+            is_monorepo.then(|| root_workspace.get_external_deps_hash());
 
         let mut global_hash_inputs = get_global_hash_inputs(
-            !opts.run_opts.single_package,
-            &root_external_dependencies_hash,
+            root_external_dependencies_hash.as_deref(),
             &self.base.repo_root,
             pkg_dep_graph.package_manager(),
             pkg_dep_graph.lockfile(),
@@ -352,7 +354,7 @@ impl<'a> Run<'a> {
         let global_hash_summary = GlobalHashSummary::new(
             global_hash_inputs.global_cache_key,
             global_hash_inputs.global_file_hash_map,
-            &root_external_dependencies_hash,
+            root_external_dependencies_hash.as_deref(),
             global_hash_inputs.env,
             pass_through_env,
             global_hash_inputs.dot_env,
@@ -444,11 +446,12 @@ impl<'a> Run<'a> {
             .workspace_info(&WorkspaceName::Root)
             .expect("must have root workspace");
 
-        let root_external_dependencies_hash = root_workspace.get_external_deps_hash();
+        let is_monorepo = !opts.run_opts.single_package;
+        let root_external_dependencies_hash =
+            is_monorepo.then(|| root_workspace.get_external_deps_hash());
 
         let mut global_hash_inputs = get_global_hash_inputs(
-            !opts.run_opts.single_package,
-            &root_external_dependencies_hash,
+            root_external_dependencies_hash.as_deref(),
             &self.base.repo_root,
             pkg_dep_graph.package_manager(),
             pkg_dep_graph.lockfile(),
@@ -523,7 +526,7 @@ impl<'a> Run<'a> {
         let global_hash_summary = GlobalHashSummary::new(
             global_hash_inputs.global_cache_key,
             global_hash_inputs.global_file_hash_map,
-            &root_external_dependencies_hash,
+            root_external_dependencies_hash.as_deref(),
             global_hash_inputs.env,
             pass_through_env,
             global_hash_inputs.dot_env,
