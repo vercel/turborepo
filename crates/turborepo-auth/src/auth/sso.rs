@@ -74,8 +74,12 @@ where
     println!(">>> Opening browser to {login_url}");
     let spinner = start_spinner("Waiting for your authorization...");
     let url = login_url.as_str();
-    if webbrowser::open(url).is_err() {
-        warn!("Failed to open browser. Please visit {url} in your browser.");
+
+    // Don't open the browser in tests.
+    if !cfg!(test) {
+        if webbrowser::open(url).is_err() {
+            warn!("Failed to open browser. Please visit {url} in your browser.");
+        }
     }
 
     let token_cell = Arc::new(OnceCell::new());
