@@ -5,6 +5,7 @@ use lightningcss::{
     css_modules::{CssModuleExports, Pattern, Segment},
     dependencies::{Dependency, DependencyOptions},
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet},
+    targets::{Features, Targets},
     values::url::Url,
 };
 use smallvec::smallvec;
@@ -186,6 +187,10 @@ pub async fn finalize_css(
                 analyze_dependencies: Some(DependencyOptions {
                     remove_imports: true,
                 }),
+                targets: Targets {
+                    include: Features::Nesting,
+                    ..Default::default()
+                },
                 ..Default::default()
             })?;
             srcmap.add_sources(stylesheet.sources.clone());
