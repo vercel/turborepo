@@ -76,10 +76,8 @@ where
     let url = login_url.as_str();
 
     // Don't open the browser in tests.
-    if !cfg!(test) {
-        if webbrowser::open(url).is_err() {
-            warn!("Failed to open browser. Please visit {url} in your browser.");
-        }
+    if !cfg!(test) && webbrowser::open(url).is_err() {
+        warn!("Failed to open browser. Please visit {url} in your browser.");
     }
 
     let token_cell = Arc::new(OnceCell::new());
