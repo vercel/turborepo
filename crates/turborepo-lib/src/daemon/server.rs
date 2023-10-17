@@ -94,7 +94,7 @@ async fn start_filewatching(
 ) -> Result<(), WatchError> {
     let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).await?;
     let cookie_jar = CookieJar::new(
-        &watcher.cookie_dir,
+        watcher.cookie_dir(),
         Duration::from_millis(100),
         watcher.subscribe(),
     );

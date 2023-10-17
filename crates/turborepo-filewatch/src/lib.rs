@@ -84,7 +84,7 @@ pub struct FileSystemWatcher {
     // dropping the other sender for the broadcast channel, causing all receivers
     // to be notified of a close.
     _exit_ch: tokio::sync::oneshot::Sender<()>,
-    pub cookie_dir: AbsoluteSystemPathBuf,
+    cookie_dir: AbsoluteSystemPathBuf,
 }
 
 impl FileSystemWatcher {
@@ -135,6 +135,10 @@ impl FileSystemWatcher {
 
     pub fn subscribe(&self) -> broadcast::Receiver<Result<Event, NotifyError>> {
         self.sender.subscribe()
+    }
+
+    pub fn cookie_dir(&self) -> &AbsoluteSystemPath {
+        &self.cookie_dir
     }
 }
 
