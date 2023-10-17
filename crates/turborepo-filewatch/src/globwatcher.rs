@@ -422,7 +422,9 @@ mod test {
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
 
-        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+            .await
+            .unwrap();
         let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
@@ -500,7 +502,9 @@ mod test {
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
 
-        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+            .await
+            .unwrap();
         let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
@@ -588,7 +592,9 @@ mod test {
         setup(&repo_root);
         let cookie_dir = repo_root.join_component(".git");
 
-        let watcher = FileSystemWatcher::new(&repo_root).await.unwrap();
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
+            .await
+            .unwrap();
         let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
