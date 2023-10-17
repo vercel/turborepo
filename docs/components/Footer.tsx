@@ -66,7 +66,7 @@ const navigation = {
         site === "repo" ? "solutions/turborepo" : "contact/sales"
       }?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-enterpriseLink`,
     },
-    { name: "Twitter", href: "https://twitter.com/vercel" },
+    { name: "X", href: "https://x.com/vercel" },
   ],
   legal: [
     { name: "Privacy Policy", href: "/privacy" },

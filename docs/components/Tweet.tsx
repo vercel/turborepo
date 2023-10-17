@@ -15,7 +15,7 @@ function TweetLink({ href, children }) {
 
 export function Mention({ children }) {
   return (
-    <TweetLink href={`https://twitter.com/${children.replace("@", "")}`}>
+    <TweetLink href={`https://x.com/${children.replace("@", "")}`}>
       {children}
     </TweetLink>
   );
@@ -30,7 +30,7 @@ export default function Tweet({ url, username, name, avatar, date, children }) {
           width={42}
           height={42}
           src={avatar}
-          alt={`${name} twitter avatar`}
+          alt={`${name} X avatar`}
         />
       </div>
       <div>

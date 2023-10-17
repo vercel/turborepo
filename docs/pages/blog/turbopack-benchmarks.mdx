@@ -3,7 +3,7 @@ title: "Turbopack Performance Benchmarks"
 date: 2022/10/31
 description: "Benchmarking Turbopack performance against Vite and webpack."
 tag: "web development"
-ogImage: "/images/blog/turbopack-benchmarks/twitter-card.png"
+ogImage: "/images/blog/turbopack-benchmarks/x-card.png"
 ---
 
 import { DEFAULT_BARS, HMR_BARS } from '../../components/pages/pack-home/PackBenchmarks'
@@ -26,7 +26,7 @@ import Date from "../../components/blog/Date";
 
 - We are thankful for the work of the entire OSS ecosystem and the incredible interest and reception from the [Turbopack release](https://vercel.com/blog/turbopack). We look forward to continuing our collaboration with and integration into the broader Web ecosystem of tooling and frameworks.
 - In this article, you will find our methodology and documentation supporting the benchmarks that show **Turbopack is [much faster](#bench) than existing non-incremental approaches.**
-- **Turbopack** and [**Next.js 13.0.1**](https://github.com/vercel/next.js/releases/tag/v13.0.1) are out addressing a regression that snuck in prior to public release and after the initial benchmarks were taken. We also fixed an incorrect rounding bug on our website (`0.01s` → `15ms`). We appreciate [Evan You](https://twitter.com/youyuxi)'s work that helped us identify and [correct this](https://github.com/vercel/turbo/pull/2516).
+- **Turbopack** and [**Next.js 13.0.1**](https://github.com/vercel/next.js/releases/tag/v13.0.1) are out addressing a regression that snuck in prior to public release and after the initial benchmarks were taken. We also fixed an incorrect rounding bug on our website (`0.01s` → `15ms`). We appreciate [Evan You](https://x.com/youyuxi)'s work that helped us identify and [correct this](https://github.com/vercel/turbo/pull/2516).
 - We are excited to continue to evolve the incremental build architecture of Turbopack. We believe that there are still significant performance wins on the table.
 
 <hr className="mt-8 w-full border-gray-400 authors border-opacity-20"/>
@@ -210,7 +210,7 @@ Our team has taken the lessons from 10 years of webpack, combined with the innov
 
 Our goal is to create a system of open source tooling that helps to build the future of the Web—powered by Turbopack. We are creating a reusable piece of architecture that will make both development and warm production builds faster for everyone.
 
-For Turbopack’s alpha, we are including it in Next.js 13. But, in time, [we hope that Turbopack will power other frameworks and builders](https://twitter.com/youyuxi/status/1585040276447690752?s=20&t=YV0ASkHl5twCWQvJF5jpwg) as a seamless, low-level, incremental engine to build great developer experiences with.
+For Turbopack’s alpha, we are including it in Next.js 13. But, in time, [we hope that Turbopack will power other frameworks and builders](https://x.com/youyuxi/status/1585040276447690752?s=20&t=YV0ASkHl5twCWQvJF5jpwg) as a seamless, low-level, incremental engine to build great developer experiences with.
 
 We look forward to being a part of the community bringing developers better tooling so that they can continue to deliver better experiences to end users. If you would like to learn more about Turbopack benchmarks, visit [turbo.build](https://turbo.build/). To try out Turbopack in Next.js 13, visit [nextjs.org](https://nextjs.org/docs/advanced-features/turbopack).
 
@@ -250,7 +250,7 @@ We have updated our benchmarks to run Vite with the official SWC plugin.
 
 ### File Watcher Differences
 
-Every OS provide its own APIs for watching files. On macOS, Turbopack uses [FSEvents](https://developer.apple.com/documentation/coreservices/file_system_events), which have shown to have [~12ms latency](https://twitter.com/devongovett/status/1586599130494746625) for reporting updates. We have considered using [kqueue](https://www.freebsd.org/cgi/man.cgi?query=kqueue&sektion=2) instead, which has much lower latency. However, since it is not a drop-in replacement, and brings its lot of drawbacks, this is still in the exploratory stage and not a priority.
+Every OS provide its own APIs for watching files. On macOS, Turbopack uses [FSEvents](https://developer.apple.com/documentation/coreservices/file_system_events), which have shown to have [~12ms latency](https://x.com/devongovett/status/1586599130494746625) for reporting updates. We have considered using [kqueue](https://www.freebsd.org/cgi/man.cgi?query=kqueue&sektion=2) instead, which has much lower latency. However, since it is not a drop-in replacement, and brings its lot of drawbacks, this is still in the exploratory stage and not a priority.
 
 Expect to see different numbers on Linux, where [inotify](https://man7.org/linux/man-pages/man7/inotify.7.html) is the standard monitoring mechanism.
 
