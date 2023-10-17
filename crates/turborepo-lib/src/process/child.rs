@@ -25,7 +25,7 @@ use command_group::AsyncCommandGroup;
 use itertools::Itertools;
 pub use tokio::process::Command;
 use tokio::{
-    io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, BufReader},
+    io::{AsyncBufRead, AsyncBufReadExt, BufReader},
     join,
     sync::{mpsc, watch, RwLock},
 };
@@ -362,11 +362,27 @@ impl Child {
 
     /// Wait for the `Child` to exit and pipe any stdout and stderr to the
     /// provided writers.
+    /// If `None` is passed for stderr then all output produced will be piped
+    /// to stdout
     pub async fn wait_with_piped_outputs<W: Write>(
         &mut self,
         mut stdout_pipe: W,
-        mut stderr_pipe: W,
+        mut stderr_pipe: Option<W>,
     ) -> Result<Option<ChildExit>, std::io::Error> {
+        async fn next_line<R: AsyncBufRead + Unpin>(
+            stream: &mut Option<R>,
+            buffer: &mut Vec<u8>,
+        ) -> Option<Result<(), io::Error>> {
+            match stream {
+                Some(stream) => match stream.read_until(b'\n', buffer).await {
+                    Ok(0) => None,
+                    Ok(_) => Some(Ok(())),
+                    Err(e) => Some(Err(e)),
+                },
+                None => None,
+            }
+        }
+
         let mut stdout_lines = self.stdout().map(BufReader::new);
         let mut stderr_lines = self.stderr().map(BufReader::new);
 
@@ -382,37 +398,7 @@ impl Child {
                 }
                 Some(result) = next_line(&mut stderr_lines, &mut stderr_buffer) => {
                     result?;
-                    stderr_pipe.write_all(&stderr_buffer)?;
-                    stderr_buffer.clear();
-                }
-                else => { break }
-            }
-        }
-
-        Ok(self.wait().await)
-    }
-
-    /// Wait for the `Child` to exit and pipe any stdout and stderr to a
-    /// single writers.
-    pub async fn wait_with_single_piped_output<W: Write>(
-        &mut self,
-        mut pipe: W,
-    ) -> Result<Option<ChildExit>, std::io::Error> {
-        let mut stdout_lines = self.stdout().map(BufReader::new);
-        let mut stderr_lines = self.stderr().map(BufReader::new);
-
-        let mut stdout_buffer = Vec::new();
-        let mut stderr_buffer = Vec::new();
-        loop {
-            tokio::select! {
-                Some(result) = next_line(&mut stdout_lines, &mut stdout_buffer) => {
-                    result?;
-                    pipe.write_all(&stdout_buffer)?;
-                    stdout_buffer.clear();
-                }
-                Some(result) = next_line(&mut stderr_lines, &mut stderr_buffer) => {
-                    result?;
-                    pipe.write_all(&stderr_buffer)?;
+                    stderr_pipe.as_mut().unwrap_or(&mut stdout_pipe).write_all(&stderr_buffer)?;
                     stderr_buffer.clear();
                 }
                 else => { break }
@@ -427,19 +413,6 @@ impl Child {
     }
 }
 
-async fn next_line<R: AsyncBufRead + Unpin>(
-    stream: &mut Option<R>,
-    buffer: &mut Vec<u8>,
-) -> Option<Result<(), io::Error>> {
-    match stream {
-        Some(stream) => match stream.read_until(b'\n', buffer).await {
-            Ok(0) => None,
-            Ok(_) => Some(Ok(())),
-            Err(e) => Some(Err(e)),
-        },
-        None => None,
-    }
-}
 #[cfg(test)]
 mod test {
     use std::{assert_matches::assert_matches, process::Stdio, time::Duration};
@@ -687,7 +660,7 @@ mod test {
         let mut err = Vec::new();
 
         let exit = child
-            .wait_with_piped_outputs(&mut out, &mut err)
+            .wait_with_piped_outputs(&mut out, Some(&mut err))
             .await
             .unwrap();
 
@@ -708,7 +681,7 @@ mod test {
         let mut buffer = Vec::new();
 
         let exit = child
-            .wait_with_single_piped_output(&mut buffer)
+            .wait_with_piped_outputs(&mut buffer, None)
             .await
             .unwrap();
 
@@ -730,7 +703,7 @@ mod test {
         let mut err = Vec::new();
 
         let exit = child
-            .wait_with_piped_outputs(&mut out, &mut err)
+            .wait_with_piped_outputs(&mut out, Some(&mut err))
             .await
             .unwrap();
 
@@ -751,7 +724,7 @@ mod test {
         let mut buffer = Vec::new();
 
         let exit = child
-            .wait_with_single_piped_output(&mut buffer)
+            .wait_with_piped_outputs(&mut buffer, None)
             .await
             .unwrap();
 
