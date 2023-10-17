@@ -106,6 +106,7 @@ pub async fn resolve_url_reference(
         ".css".to_string(),
     );
     let context_path = chunk_path.parent().await?;
+    dbg!(context_path.clone().to_string());
 
     if let ReferencedAsset::Some(asset) = &*url.get_referenced_asset(chunking_context).await? {
         // TODO(WEB-662) This is not the correct way to get the path of the asset.
