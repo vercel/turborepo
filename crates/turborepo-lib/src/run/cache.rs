@@ -276,7 +276,7 @@ impl TaskCache {
             OutputLogsMode::Full => {
                 debug!("log file path: {}", self.log_file_path);
                 prefixed_ui.output(format!(
-                    "cache hit{}, suppressing logs {}",
+                    "cache hit{}, replaying logs {}",
                     more_context,
                     GREY.apply_to(&self.hash)
                 ));
