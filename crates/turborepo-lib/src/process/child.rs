@@ -23,11 +23,11 @@ use std::{
 
 use bytelines::AsyncByteLines;
 use command_group::AsyncCommandGroup;
-use futures::future::{try_join3, try_join4};
+use futures::future::try_join3;
 use itertools::Itertools;
 pub use tokio::process::Command;
 use tokio::{
-    io::{AsyncRead, BufReader},
+    io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, BufReader},
     join,
     sync::{mpsc, watch, RwLock},
 };
@@ -399,60 +399,44 @@ impl Child {
     /// single writers.
     pub async fn wait_with_single_piped_output<W: Write>(
         &mut self,
-        pipe: W,
+        mut pipe: W,
     ) -> Result<Option<ChildExit>, std::io::Error> {
-        // Note this is similar to tokio::process::Command::wait_with_outputs
-        // but allows us to provide our own sinks instead of just writing to a buffers.
-        async fn pipe_lines<R: AsyncRead + Unpin>(
-            stream: Option<R>,
-            tx: mpsc::Sender<Vec<u8>>,
-        ) -> std::io::Result<()> {
-            let Some(stream) = stream else { return Ok(()) };
-            let stream = BufReader::new(stream);
-            let mut lines = AsyncByteLines::new(stream);
-            while let Some(line) = lines.next().await? {
-                let line = {
-                    // Allocate vector with enough capacity for trailing newline
-                    let mut buffer = Vec::with_capacity(line.len() + 1);
-                    buffer.extend_from_slice(line);
-                    // Line iterator doesn't return newline delimiter so we must add it here
-                    buffer.push(b'\n');
-                    buffer
-                };
+        async fn next_line<R: AsyncBufRead + Unpin>(
+            stream: &mut Option<R>,
+            buffer: &mut Vec<u8>,
+        ) -> Option<Result<(), io::Error>> {
+            match stream {
+                Some(stream) => match stream.read_until(b'\n', buffer).await {
+                    Ok(0) => None,
+                    Ok(_) => Some(Ok(())),
+                    Err(e) => Some(Err(e)),
+                },
+                None => None,
+            }
+        }
 
-                if tx.send(line).await.is_err() {
-                    // If the receiver is dropped then we have nothing to do with these bytes
-                    break;
+        let mut stdout_lines = self.stdout().map(BufReader::new);
+        let mut stderr_lines = self.stderr().map(BufReader::new);
+
+        let mut stdout_buffer = Vec::new();
+        let mut stderr_buffer = Vec::new();
+        loop {
+            tokio::select! {
+                Some(result) = next_line(&mut stdout_lines, &mut stdout_buffer) => {
+                    result?;
+                    pipe.write_all(&stdout_buffer)?;
+                    stdout_buffer.clear();
                 }
+                Some(result) = next_line(&mut stderr_lines, &mut stderr_buffer) => {
+                    result?;
+                    pipe.write_all(&stderr_buffer)?;
+                    stderr_buffer.clear();
+                }
+                else => { break }
             }
-            Ok(())
         }
 
-        async fn write_lines<W: Write>(
-            mut rx: mpsc::Receiver<Vec<u8>>,
-            mut writer: W,
-        ) -> std::io::Result<()> {
-            while let Some(buffer) = rx.recv().await {
-                writer.write_all(&buffer)?;
-            }
-            Ok(())
-        }
-
-        let (tx, rx) = mpsc::channel(16);
-
-        let stdout_fut = pipe_lines(self.stdout(), tx.clone());
-        let stderr_fut = pipe_lines(self.stderr(), tx);
-        let write_fut = write_lines(rx, pipe);
-
-        let (exit, _stdout, _stderr, _write) = try_join4(
-            async { Ok(self.wait().await) },
-            stdout_fut,
-            stderr_fut,
-            write_fut,
-        )
-        .await?;
-
-        Ok(exit)
+        Ok(self.wait().await)
     }
 
     pub fn label(&self) -> &str {
