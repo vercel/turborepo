@@ -154,24 +154,22 @@ pub async fn finalize_css(
             url_references,
             ..
         } => {
-            {
-                let mut stylesheet = stylesheet_into_static(stylesheet);
+            let mut stylesheet = stylesheet_into_static(stylesheet);
 
-                let url_references = *url_references;
+            let url_references = *url_references;
 
-                let mut url_map = HashMap::new();
+            let mut url_map = HashMap::new();
 
-                for (src, reference) in (*url_references.await?).iter() {
-                    let resolved = resolve_url_reference(*reference, chunking_context).await?;
-                    dbg!(&*resolved);
-                    if let Some(v) = resolved.as_ref().cloned() {
-                        url_map.insert(src.to_string(), v);
-                    }
+            for (src, reference) in (*url_references.await?).iter() {
+                let resolved = resolve_url_reference(*reference, chunking_context).await?;
+                dbg!(&*resolved);
+                if let Some(v) = resolved.as_ref().cloned() {
+                    url_map.insert(src.to_string(), v);
                 }
-
-                dbg!(&url_map);
-                replace_url_references(&mut stylesheet, &url_map);
             }
+
+            dbg!(&url_map);
+            replace_url_references(&mut stylesheet, &url_map);
 
             let mut srcmap = parcel_sourcemap::SourceMap::new("");
             let result = stylesheet.to_css(PrinterOptions {
