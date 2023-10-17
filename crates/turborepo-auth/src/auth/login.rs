@@ -53,12 +53,12 @@ where
     let spinner = start_spinner("Waiting for your authorization...");
 
     // Try to open browser for auth confirmation.
-    {
+    if !cfg!(test) {
         let url = login_url.as_str();
         if webbrowser::open(url).is_err() {
             warn!("Failed to open browser. Please visit {url} in your browser.");
         }
-    };
+    }
 
     let token_cell = Arc::new(OnceCell::new());
     login_server
