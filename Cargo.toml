@@ -77,17 +77,17 @@ async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.12.2" }
 
-mdxjs = "0.1.17"
-modularize_imports = { version = "0.48.0" }
-styled_components = { version = "0.75.0" }
-styled_jsx = { version = "0.52.0" }
-swc_core = { version = "0.83.28", features = [
+mdxjs = "0.1.19"
+modularize_imports = { version = "0.50.0" }
+styled_components = { version = "0.77.0" }
+styled_jsx = { version = "0.54.0" }
+swc_core = { version = "0.86.1", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
-swc_emotion = { version = "0.51.0" }
-swc_relay = { version = "0.23.0" }
-testing = { version = "0.34.1" }
+swc_emotion = { version = "0.53.0" }
+swc_relay = { version = "0.25.0" }
+testing = { version = "0.35.0" }
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
