@@ -21,9 +21,7 @@ use std::{
     time::Duration,
 };
 
-use bytelines::AsyncByteLines;
 use command_group::AsyncCommandGroup;
-use futures::future::try_join3;
 use itertools::Itertools;
 pub use tokio::process::Command;
 use tokio::{
@@ -366,33 +364,32 @@ impl Child {
     /// provided writers.
     pub async fn wait_with_piped_outputs<W: Write>(
         &mut self,
-        stdout_pipe: W,
-        stderr_pipe: W,
+        mut stdout_pipe: W,
+        mut stderr_pipe: W,
     ) -> Result<Option<ChildExit>, std::io::Error> {
-        // Note this is similar to tokio::process::Command::wait_with_outputs
-        // but allows us to provide our own sinks instead of just writing to a buffers.
-        async fn pipe_lines<R: AsyncRead + Unpin, W: Write>(
-            stream: Option<R>,
-            mut sink: W,
-        ) -> std::io::Result<()> {
-            let Some(stream) = stream else { return Ok(()) };
-            let stream = BufReader::new(stream);
-            let mut lines = AsyncByteLines::new(stream);
-            while let Some(line) = lines.next().await? {
-                sink.write_all(line)?;
-                // Line iterator doesn't return newline delimiter so we must add it here
-                sink.write_all(b"\n")?;
+        let mut stdout_lines = self.stdout().map(BufReader::new);
+        let mut stderr_lines = self.stderr().map(BufReader::new);
+
+        let mut stdout_buffer = Vec::new();
+        let mut stderr_buffer = Vec::new();
+
+        loop {
+            tokio::select! {
+                Some(result) = next_line(&mut stdout_lines, &mut stdout_buffer) => {
+                    result?;
+                    stdout_pipe.write_all(&stdout_buffer)?;
+                    stdout_buffer.clear();
+                }
+                Some(result) = next_line(&mut stderr_lines, &mut stderr_buffer) => {
+                    result?;
+                    stderr_pipe.write_all(&stderr_buffer)?;
+                    stderr_buffer.clear();
+                }
+                else => { break }
             }
-            Ok(())
         }
 
-        let stdout_fut = pipe_lines(self.stdout(), stdout_pipe);
-        let stderr_fut = pipe_lines(self.stderr(), stderr_pipe);
-
-        let (exit, _stdout, _stderr) =
-            try_join3(async { Ok(self.wait().await) }, stdout_fut, stderr_fut).await?;
-
-        Ok(exit)
+        Ok(self.wait().await)
     }
 
     /// Wait for the `Child` to exit and pipe any stdout and stderr to a
@@ -401,20 +398,6 @@ impl Child {
         &mut self,
         mut pipe: W,
     ) -> Result<Option<ChildExit>, std::io::Error> {
-        async fn next_line<R: AsyncBufRead + Unpin>(
-            stream: &mut Option<R>,
-            buffer: &mut Vec<u8>,
-        ) -> Option<Result<(), io::Error>> {
-            match stream {
-                Some(stream) => match stream.read_until(b'\n', buffer).await {
-                    Ok(0) => None,
-                    Ok(_) => Some(Ok(())),
-                    Err(e) => Some(Err(e)),
-                },
-                None => None,
-            }
-        }
-
         let mut stdout_lines = self.stdout().map(BufReader::new);
         let mut stderr_lines = self.stderr().map(BufReader::new);
 
@@ -444,6 +427,19 @@ impl Child {
     }
 }
 
+async fn next_line<R: AsyncBufRead + Unpin>(
+    stream: &mut Option<R>,
+    buffer: &mut Vec<u8>,
+) -> Option<Result<(), io::Error>> {
+    match stream {
+        Some(stream) => match stream.read_until(b'\n', buffer).await {
+            Ok(0) => None,
+            Ok(_) => Some(Ok(())),
+            Err(e) => Some(Err(e)),
+        },
+        None => None,
+    }
+}
 #[cfg(test)]
 mod test {
     use std::{assert_matches::assert_matches, process::Stdio, time::Duration};
