@@ -185,6 +185,6 @@ async fn references_to_output_assets(
     Ok(if output_assets.is_empty() {
         OutputAssets::empty()
     } else {
-        Vc::cell(output_assets)
+        OutputAssets::new(output_assets)
     })
 }
