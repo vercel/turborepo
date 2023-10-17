@@ -681,6 +681,9 @@ pub async fn run(
         }
     }
 
+    // TODO: make better use of RepoState, here and below. We've already inferred
+    // the repo root, we don't need to calculate it again, along with package
+    // manager inference.
     let cwd = repo_state
         .as_ref()
         .map(|state| state.root.as_path())
