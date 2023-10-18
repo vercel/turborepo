@@ -100,18 +100,6 @@ pub struct APIAuth {
     pub team_slug: Option<String>,
 }
 
-impl APIAuth {
-    pub fn is_linked(&self) -> bool {
-        !self.token.is_empty()
-            && (!self.team_id.is_empty()
-                || !self
-                    .team_slug
-                    .as_ref()
-                    .map(|slug| slug.is_empty())
-                    .unwrap_or(true))
-    }
-}
-
 #[async_trait]
 impl Client for APIClient {
     async fn get_user(&self, token: &str) -> Result<UserResponse> {

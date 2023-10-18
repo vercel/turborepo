@@ -92,10 +92,7 @@ impl<'a> Run<'a> {
         let api_client = self.base.api_client()?;
 
         // Pulled from initAnalyticsClient in run.go
-        let is_linked = api_auth
-            .as_ref()
-            .map(|auth| auth.is_linked())
-            .unwrap_or(false);
+        let is_linked = api_auth.is_some();
         if !is_linked {
             opts.cache_opts.skip_remote = true;
         } else if let Some(enabled) = config.enabled {
