@@ -401,9 +401,25 @@ impl Child {
                     stderr_pipe.as_mut().unwrap_or(&mut stdout_pipe).write_all(&stderr_buffer)?;
                     stderr_buffer.clear();
                 }
-                else => { break }
+                else => {
+                    // In the case that both futures read a complete line
+                    // the future not chosen in the select will return None if it's at EOF
+                    // as the number of bytes read will be 0.
+                    // We check and flush the buffers to avoid missing the last line of output.
+                    if !stdout_buffer.is_empty() {
+                        stdout_pipe.write_all(&stdout_buffer)?;
+                        stdout_buffer.clear();
+                    }
+                    if !stderr_buffer.is_empty() {
+                        stderr_pipe.as_mut().unwrap_or(&mut stdout_pipe).write_all(&stderr_buffer)?;
+                        stderr_buffer.clear();
+                    }
+                    break;
+                }
             }
         }
+        debug_assert!(stdout_buffer.is_empty(), "buffer should be empty");
+        debug_assert!(stderr_buffer.is_empty(), "buffer should be empty");
 
         Ok(self.wait().await)
     }
