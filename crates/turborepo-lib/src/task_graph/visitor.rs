@@ -299,7 +299,7 @@ impl<'a> Visitor<'a> {
                 };
 
                 let exit_status = match process
-                    .wait_with_single_piped_output(&mut stdout_writer)
+                    .wait_with_piped_outputs(&mut stdout_writer, None)
                     .await
                 {
                     Ok(Some(exit_status)) => exit_status,
