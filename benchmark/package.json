@@ -12,7 +12,7 @@
     "benchmark": "node -r esbuild-register src/index.ts",
     "ttft": "node -r esbuild-register src/ttft.ts",
     "lint": "eslint src",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../.prettierignore",
+    "lint:prettier": "prettier -c src --cache --ignore-path=../.prettierignore",
     "check-types": "tsc --noEmit"
   },
   "devDependencies": {
