@@ -576,9 +576,11 @@ mod test {
             vercel_artifacts_owner.into(),
         );
 
-        let mut override_config: ConfigurationOptions = Default::default();
-        override_config.token = Some("unseen".into());
-        override_config.team_id = Some("unseen".into());
+        let override_config = ConfigurationOptions {
+            token: Some("unseen".into()),
+            team_id: Some("unseen".into()),
+            ..Default::default()
+        };
 
         let builder = TurborepoConfigBuilder {
             repo_root,
@@ -595,8 +597,10 @@ mod test {
     #[test]
     fn test_shared_no_token() {
         let mut test_shared_config: RawTurboJSON = Default::default();
-        let mut configuration_options: ConfigurationOptions = Default::default();
-        configuration_options.token = Some("IF YOU CAN SEE THIS WE HAVE PROBLEMS".to_string());
+        let configuration_options = ConfigurationOptions {
+            token: Some("IF YOU CAN SEE THIS WE HAVE PROBLEMS".to_string()),
+            ..Default::default()
+        };
         test_shared_config.remote_cache = Some(configuration_options);
 
         assert_eq!(
