@@ -23,7 +23,7 @@ use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_json::PackageJson;
 use turborepo_scm::SCM;
-use turborepo_ui::ColorSelector;
+use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY};
 
 use self::task_id::TaskName;
 use crate::{
@@ -73,12 +73,36 @@ impl<'a> Run<'a> {
             "performing run on {:?}",
             TurboState::platform_name(),
         );
-
         let start_at = Local::now();
         let package_json_path = self.base.repo_root.join_component("package.json");
         let root_package_json =
             PackageJson::load(&package_json_path).context("failed to read package.json")?;
         let mut opts = self.opts()?;
+
+        let config = self.base.config()?;
+        let team_id = config.team_id();
+        let team_slug = config.team_slug();
+        let token = config.token();
+
+        let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
+            team_id: team_id.to_string(),
+            token: token.to_string(),
+            team_slug: team_slug.map(|s| s.to_string()),
+        });
+        let api_client = self.base.api_client()?;
+
+        // Pulled from initAnalyticsClient in run.go
+        let is_linked = api_auth
+            .as_ref()
+            .map(|auth| auth.is_linked())
+            .unwrap_or(false);
+        if !is_linked {
+            opts.cache_opts.skip_remote = true;
+        } else if let Some(enabled) = config.enabled {
+            // We're linked, but if the user has explicitly enabled or disabled, use that
+            // value
+            opts.cache_opts.skip_remote = !enabled;
+        }
 
         let _is_structured_output = opts.run_opts.graph.is_some() || opts.run_opts.dry_run_json;
 
@@ -160,25 +184,38 @@ impl<'a> Run<'a> {
             filtered_pkgs
         };
 
+        let targets_list = opts.run_opts.tasks.join(", ");
+        if opts.run_opts.single_package {
+            cprint!(self.base.ui, GREY, "{}", "• Running");
+            cprint!(self.base.ui, BOLD_GREY, " {}\n", targets_list);
+        } else {
+            let mut packages = filtered_pkgs
+                .iter()
+                .map(|workspace_name| workspace_name.to_string())
+                .collect::<Vec<String>>();
+            packages.sort();
+            cprintln!(
+                self.base.ui,
+                GREY,
+                "• Packages in scope: {}",
+                packages.join(", ")
+            );
+            cprint!(self.base.ui, GREY, "{} ", "• Running");
+            cprint!(self.base.ui, BOLD_GREY, "{}", targets_list);
+            cprint!(self.base.ui, GREY, " in {} packages\n", filtered_pkgs.len());
+        }
+
+        let use_http_cache = !opts.cache_opts.skip_remote;
+        if use_http_cache {
+            cprintln!(self.base.ui, GREY, "• Remote caching enabled");
+        } else {
+            cprintln!(self.base.ui, GREY, "• Remote caching disabled");
+        }
+
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
-        let config = self.base.config()?;
-        let team_id = config.team_id();
-        let team_slug = config.team_slug();
-        let token = config.token();
-
-        let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
-            team_id: team_id.to_string(),
-            token: token.to_string(),
-            team_slug: team_slug.map(|s| s.to_string()),
-        });
-
-        let async_cache = AsyncCache::new(
-            &opts.cache_opts,
-            &self.base.repo_root,
-            self.base.api_client()?,
-            api_auth,
-        )?;
+        let async_cache =
+            AsyncCache::new(&opts.cache_opts, &self.base.repo_root, api_client, api_auth)?;
 
         info!("created cache");
         let engine = EngineBuilder::new(
