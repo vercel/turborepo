@@ -6,10 +6,12 @@
   background-color: green;
 }
 
+
 /* [project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/other.css (css) */
 .foo {
   background-color: red;
 }
+
 
 /* import([project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/other.css (css)) */
 
@@ -18,6 +20,7 @@
   background-color: red;
 }
 
+;
 /* import([project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/withduplicateurl.css (css)) */
 
 /* [project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/withduplicateurl.css (css) */
@@ -25,10 +28,12 @@
   background-color: green;
 }
 
+;
 /* [project]/crates/turbopack-tests/tests/snapshot/css/absolute-uri-import/input/index.css (css) */
 body {
-  background-color: blue;
+  background-color: #00f;
 }
+
 
 
 /*# sourceMappingURL=crates_turbopack-tests_tests_snapshot_css_absolute-uri-import_input_bbd590._.css.map*/

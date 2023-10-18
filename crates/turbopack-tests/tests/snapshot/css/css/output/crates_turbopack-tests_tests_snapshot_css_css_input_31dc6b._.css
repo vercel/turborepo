@@ -1,53 +1,63 @@
 /* [project]/crates/turbopack-tests/tests/snapshot/css/css/input/style.module.css (css) */
-.module-style__style__9bcf751c {
-  color: magenta;
+.module-style__style-module__YW1Vbq {
+  color: #f0f;
 }
-.module-style__style__9bcf751c > h1, 
-.module-style__style__9bcf751c + .inner__style__9bcf751c {
+
+.module-style__style-module__YW1Vbq > h1, .module-style__style-module__YW1Vbq + .inner__style-module__YW1Vbq {
   background: purple;
 }
-.composed-module-style__style__9bcf751c {
+
+.composed-module-style__style-module__YW1Vbq {
   color: green;
 }
-.another-composed-module-style__style__9bcf751c {
-  color: yellow;
+
+.another-composed-module-style__style-module__YW1Vbq {
+  color: #ff0;
 }
+
 
 /* [project]/crates/turbopack-tests/tests/snapshot/css/css/input/imported.css (css) */
 .imported {
-  color: cyan;
+  color: #0ff;
 }
+
 
 /* import([project]/crates/turbopack-tests/tests/snapshot/css/css/input/imported.css (css)) */
 
 /* [project]/crates/turbopack-tests/tests/snapshot/css/css/input/imported.css (css) */
 .imported {
-  color: cyan;
+  color: #0ff;
 }
 
+;
 /* import([project]/crates/turbopack-tests/tests/snapshot/css/css/input/imported.css (css)) */
 @layer layer {
-@media print {
+  @media print {
 /* [project]/crates/turbopack-tests/tests/snapshot/css/css/input/imported.css (css) */
 .imported {
-  color: cyan;
+  color: #0ff;
 }
-}
+
+;
+  }
 }
 /* [project]/crates/turbopack-tests/tests/snapshot/css/css/input/style.css (css) */
 .style {
-  color: yellow;
+  color: #ff0;
 }
 
+
 /* [project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.module.css (css) */
-.foo-module-style__style__abf9e738 {
-  color: blue;
+.foo-module-style__style-module__6THCLW {
+  color: #00f;
 }
+
 
 /* [project]/crates/turbopack-tests/tests/snapshot/css/css/input/node_modules/foo/style.css (css) */
 .foo-style {
   color: green;
 }
+
 
 
 /*# sourceMappingURL=crates_turbopack-tests_tests_snapshot_css_css_input_31dc6b._.css.map*/
