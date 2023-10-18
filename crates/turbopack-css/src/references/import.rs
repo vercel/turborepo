@@ -112,7 +112,9 @@ impl ImportAttributes {
         let mut printer = Printer::new(&mut output, PrinterOptions::default());
         rule.to_css(&mut printer)?;
 
-        let (open, close) = output.unwrap();
+        let (open, close) = output
+            .split_once(r#"@"""__turbopack_placeholder__""""#)
+            .unwrap();
 
         Ok((open.trim().into(), close.trim().into()))
     }
