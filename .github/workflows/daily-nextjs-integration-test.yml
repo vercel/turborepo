@@ -36,6 +36,7 @@ jobs:
     needs: [next_js_integration]
     if: ${{ github.event_name == 'schedule' }} && always()
     uses: ./.github/workflows/upload-nextjs-integration-test-results.yml
+    secrets: inherit
     with:
       is_main_branch: true
 
