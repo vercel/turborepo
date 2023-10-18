@@ -167,6 +167,10 @@ impl ModuleCssAsset {
             for (class_name, export_class_names) in exports {
                 let mut export = Vec::default();
 
+                export.push(ModuleCssClass::Local {
+                    name: export_class_names.name.clone(),
+                });
+
                 for export_class_name in &export_class_names.composes {
                     export.push(match export_class_name {
                         CssModuleReference::Dependency { specifier, name } => {
