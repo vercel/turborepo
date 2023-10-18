@@ -1,3 +1,4 @@
+#![feature(trait_upcasting)]
 #![deny(clippy::all)]
 
 mod berry;
@@ -7,7 +8,10 @@ mod npm;
 mod pnpm;
 mod yarn1;
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    any::Any,
+    collections::{HashMap, HashSet},
+};
 
 pub use berry::{Error as BerryError, *};
 pub use bun::BunLockfile;
@@ -27,7 +31,7 @@ pub struct Package {
 // This trait will only be used when migrating the Go lockfile implementations
 // to Rust. Once the migration is complete we will leverage petgraph for doing
 // our graph calculations.
-pub trait Lockfile: Send + Sync {
+pub trait Lockfile: Send + Sync + Any {
     // Given a workspace, a package it imports and version returns the key, resolved
     // version, and if it was found
     fn resolve_package(
@@ -53,13 +57,8 @@ pub trait Lockfile: Send + Sync {
         Ok(Vec::new())
     }
 
-    /// Present a global change key which is compared against two lockfiles
-    ///
-    /// Impl notes: please prefix this key with some magic identifier
-    /// to prevent clashes. we are not worried about inter-version
-    /// compatibility so these keys don't need to be stable. They are
-    /// ephemeral.
-    fn global_change_key(&self) -> Vec<u8>;
+    /// Determine if there's a global change between two lockfiles
+    fn global_change(&self, other: &dyn Lockfile) -> bool;
 }
 
 /// Takes a lockfile, and a map of workspace directory paths -> (package name,
