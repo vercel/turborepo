@@ -126,6 +126,10 @@ impl Engine {
                     {
                         debug!("Unable to cancel graph walk");
                     }
+                    // We proactively yield to make sure that any tasks waiting on the cancellation
+                    // and the callback will have the chance to poll the cancel future before
+                    // the dependency is marked as finished.
+                    tokio::task::yield_now().await;
                 }
                 if done.send(()).is_err() {
                     debug!("Graph walk done receiver closed before node was finished processing");
