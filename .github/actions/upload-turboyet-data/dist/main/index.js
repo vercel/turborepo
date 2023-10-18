@@ -7214,9 +7214,6 @@ async function main() {
       token: process.env.TURBOYET_KV_REST_API_TOKEN,
     });
 
-    console.log("TYPEOF URL", typeof process.env.TURBOYET_KV_REST_API_URL);
-    console.log("TYPEOF TOKEN", typeof process.env.TURBOYET_KV_REST_API_TOKEN);
-
     const testRun = `${ref}\t${timestamp}\t${passCount}/${
       passCount + failCount
     }`;
@@ -7224,17 +7221,17 @@ async function main() {
     console.log("TEST RESULT");
     console.log(testRun);
 
-    await kv.rpush("test-runs-practice", testRun);
-    let savedRuns = await kv.lrange("test-runs-practice", 0, -1);
-    console.log("SAVED RUNS");
+    await kv.rpush("test-runs", testRun);
+    let savedRuns = await kv.lrange("test-runs", 0, -1);
+    console.log("SUCCESSFULLY SAVED RUNS");
 
-    await kv.set("passing-tests-practice", passingTests);
-    let savedPassing = await kv.get("passing-tests-practice");
-    console.log("SAVED PASSING");
+    await kv.set("passing-tests", passingTests);
+    let savedPassing = await kv.get("passing-tests");
+    console.log("SUCCESSFULLY SAVED PASSING");
 
-    await kv.set("failing-tests-practice", failingTests);
-    let savedFailing = await kv.get("failing-tests-practice");
-    console.log("SAVED FAILING");
+    await kv.set("failing-tests", failingTests);
+    let savedFailing = await kv.get("failing-tests");
+    console.log("SUCCESSFULLY SAVED FAILING");
   } catch (error) {
     console.log(error);
   }
