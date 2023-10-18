@@ -68,6 +68,9 @@ pub struct TurboSubscriber {
 
     chrome_update: Handle<Option<ChromeLog>, DaemonLogLayered>,
     chrome_guard: Mutex<Option<tracing_chrome::FlushGuard>>,
+
+    #[cfg(feature = "pprof")]
+    pprof_guard: pprof::ProfilerGuard<'static>,
 }
 
 impl TurboSubscriber {
@@ -130,6 +133,13 @@ impl TurboSubscriber {
             .with(logrotate)
             .with(chrome);
 
+        #[cfg(feature = "pprof")]
+        let pprof_guard = pprof::ProfilerGuardBuilder::default()
+            .frequency(1000)
+            .blocklist(&["libc", "libgcc", "pthread", "vdso"])
+            .build()
+            .unwrap();
+
         registry.init();
 
         Self {
@@ -137,6 +147,8 @@ impl TurboSubscriber {
             daemon_guard: Mutex::new(None),
             chrome_update,
             chrome_guard: Mutex::new(None),
+            #[cfg(feature = "pprof")]
+            pprof_guard,
         }
     }
 
@@ -177,6 +189,34 @@ impl TurboSubscriber {
             .replace(guard);
 
         Ok(())
+    }
+}
+
+impl Drop for TurboSubscriber {
+    fn drop(&mut self) {
+        // drop the guard so that the non-blocking file writer stops
+        #[cfg(feature = "pprof")]
+        if let Ok(report) = self.pprof_guard.report().build() {
+            use std::io::Write; // only import trait if we need it
+
+            use prost::Message;
+
+            let mut file = std::fs::File::create("pprof.pb").unwrap();
+            let mut content = Vec::new();
+
+            let Ok(profile) = report.pprof() else {
+                tracing::error!("failed to generate pprof report");
+                return;
+            };
+            if let Err(e) = profile.encode(&mut content) {
+                tracing::error!("failed to encode pprof profile: {}", e);
+            };
+            if let Err(e) = file.write_all(&content) {
+                tracing::error!("failed to write pprof profile: {}", e)
+            };
+        } else {
+            tracing::error!("failed to generate pprof report")
+        }
     }
 }
 
