@@ -75,12 +75,10 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       # setup Rust on windows, because apparently setup-turborepo-environment doesn't do this
+      # TODO: put this logic in ./github/actions/setup-rust and use that instead
       - name: Add rustup for windows
         if: ${{ matrix.os.runner == 'windows-latest'}}
-        run: |
-          rustup target add aarch64-unknown-linux-musl
-          rustup target add x86_64-pc-windows-gnu
-          rustup target add x86_64-unknown-linux-musl
+        run: rustup target add x86_64-pc-windows-gnu
 
       - uses: ./.github/actions/setup-turborepo-environment
         with:
