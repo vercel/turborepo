@@ -15,6 +15,8 @@ Graph
   
 Graph in Rust
   $ ${TURBO} run build --graph --experimental-rust-codepath
+  \xe2\x80\xa2 Running build (esc)
+  \xe2\x80\xa2 Remote caching disabled (esc)
   digraph {
   \tcompound = "true" (esc)
   \tnewrank = "true" (esc)
