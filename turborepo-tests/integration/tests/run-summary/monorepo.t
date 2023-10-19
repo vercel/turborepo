@@ -181,9 +181,10 @@ Setup
   $ cat $FIRST | jq '.execution.exitCode'
   0
   $ cat $FIRST | jq '.execution.attempted'
-  0
+  2
+Note this differs from the Go codepath because we don't clear the cache so it is a cache hit
   $ cat $FIRST | jq '.execution.cached'
-  0
+  2
   $ cat $FIRST | jq '.execution.failed'
   0
   $ cat $FIRST | jq '.execution.success'

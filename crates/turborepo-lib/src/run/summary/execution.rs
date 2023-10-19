@@ -105,7 +105,7 @@ impl ExecutionSummary<'_> {
                 "Tasks",
                 format!(
                     "{}, {} total",
-                    color!(ui, BOLD_GREEN, "{} successful", self.success),
+                    color!(ui, BOLD_GREEN, "{} successful", self.successful()),
                     self.attempted
                 ),
             ),
@@ -173,6 +173,10 @@ impl ExecutionSummary<'_> {
 
         println!();
     }
+
+    fn successful(&self) -> usize {
+        self.success + self.attempted
+    }
 }
 
 /// The final states of all task executions
@@ -216,9 +220,10 @@ enum Event {
 #[derive(Debug, Serialize)]
 pub enum ExecutionState {
     Canceled,
-    Built { exit_code: u32 },
+    Built { exit_code: i32 },
     Cached,
-    BuildFailed { exit_code: u32, err: String },
+    BuildFailed { exit_code: i32, err: String },
+    SpawnFailed { err: String },
 }
 
 #[derive(Debug, Serialize)]
@@ -231,7 +236,7 @@ pub struct TaskExecutionSummary {
 }
 
 impl TaskExecutionSummary {
-    pub fn exit_code(&self) -> Option<u32> {
+    pub fn exit_code(&self) -> Option<i32> {
         match self.state {
             ExecutionState::BuildFailed { exit_code, .. } | ExecutionState::Built { exit_code } => {
                 Some(exit_code)
@@ -359,7 +364,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
         }
     }
 
-    pub async fn build_succeeded(self, exit_code: u32) -> TaskExecutionSummary {
+    pub async fn build_succeeded(self, exit_code: i32) -> TaskExecutionSummary {
         let Self {
             sender, started_at, ..
         } = self;
@@ -382,7 +387,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
 
     pub async fn build_failed(
         self,
-        exit_code: u32,
+        exit_code: i32,
         error: impl fmt::Display,
     ) -> TaskExecutionSummary {
         let Self {
@@ -402,6 +407,28 @@ impl TaskTracker<chrono::DateTime<Local>> {
             duration,
             state: ExecutionState::BuildFailed {
                 exit_code,
+                err: error.to_string(),
+            },
+        }
+    }
+
+    pub async fn spawn_failed(self, error: impl fmt::Display) -> TaskExecutionSummary {
+        let Self {
+            sender, started_at, ..
+        } = self;
+
+        let ended_at = Local::now();
+        let duration = TurboDuration::new(&started_at, &Local::now());
+
+        sender
+            .send(Event::BuildFailed)
+            .await
+            .expect("summary state thread finished");
+        TaskExecutionSummary {
+            started_at: started_at.timestamp_millis(),
+            ended_at: ended_at.timestamp_millis(),
+            duration,
+            state: ExecutionState::SpawnFailed {
                 err: error.to_string(),
             },
         }

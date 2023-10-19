@@ -231,12 +231,14 @@ impl<'a> Visitor<'a> {
             let errors = errors.clone();
             let task_id_for_display = self.display_task_id(&info);
             let hash_tracker = self.task_hasher.task_hash_tracker();
+            let tracker = self.run_tracker.track_task(info.clone().into_owned());
 
             let parent_span = Span::current();
             tasks.push(tokio::spawn(async move {
                 let span = tracing::debug_span!("execute_task", task = %info.task());
                 span.follows_from(parent_span.id());
                 let _enter = span.enter();
+                let tracker = tracker.start().await;
 
                 let task_id = info;
                 let mut task_cache = task_cache;
@@ -250,6 +252,7 @@ impl<'a> Visitor<'a> {
                             task_id,
                             task_cache.expanded_outputs().to_vec(),
                         );
+                        let _summary = tracker.cached().await;
                         callback.send(Ok(())).ok();
                         return;
                     }
@@ -277,6 +280,9 @@ impl<'a> Visitor<'a> {
                         Err(e) => {
                             error!("failed to capture outputs for \"{task_id}\": {e}");
                             manager.stop().await;
+                            // If we have an internal failure of being unable setup log capture we
+                            // mark it as cancelled.
+                            let _summary = tracker.cancel();
                             callback.send(Err(StopExecution)).ok();
                             return;
                         }
@@ -288,10 +294,12 @@ impl<'a> Visitor<'a> {
                     Some(Err(e)) => {
                         // Note: we actually failed to spawn, but this matches the Go output
                         prefixed_ui.error(format!("command finished with error: {e}"));
+                        let error_string = e.to_string();
                         errors
                             .lock()
                             .expect("lock poisoned")
                             .push(TaskError::from_spawn(task_id_for_display.clone(), e));
+                        let _summary = tracker.spawn_failed(error_string).await;
                         callback
                             .send(if continue_on_error {
                                 Ok(())
@@ -305,6 +313,7 @@ impl<'a> Visitor<'a> {
                     // Turbo is shutting down
                     None => {
                         callback.send(Ok(())).ok();
+                        let _summary = tracker.cancel();
                         return;
                     }
                 };
@@ -316,6 +325,7 @@ impl<'a> Visitor<'a> {
                     Ok(Some(exit_status)) => exit_status,
                     Err(e) => {
                         error!("unable to pipe outputs from command: {e}");
+                        let _summary = tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         manager.stop().await;
                         return;
@@ -326,6 +336,7 @@ impl<'a> Visitor<'a> {
                         // None. Is it still running?
                         error!("unable to determine why child exited");
                         manager.stop().await;
+                        let _summary = tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         return;
                     }
@@ -333,7 +344,9 @@ impl<'a> Visitor<'a> {
 
                 match exit_status {
                     // The task was successful, nothing special needs to happen.
-                    ChildExit::Finished(Some(0)) => (),
+                    ChildExit::Finished(Some(0)) => {
+                        let _summary = tracker.build_succeeded(0);
+                    }
                     ChildExit::Finished(Some(code)) => {
                         // If there was an error, flush the buffered output
                         if let Err(e) = task_cache.on_error(&mut prefixed_ui) {
@@ -341,6 +354,8 @@ impl<'a> Visitor<'a> {
                         }
                         let error =
                             TaskErrorCause::from_execution(process.label().to_string(), code);
+                        // TODO pass actual code
+                        let _summary = tracker.build_failed(0, error.to_string()).await;
                         if continue_on_error {
                             prefixed_ui.warn("command finished with error, but continuing...");
                             callback.send(Ok(())).ok();
@@ -361,6 +376,7 @@ impl<'a> Visitor<'a> {
                     | ChildExit::KilledExternal
                     | ChildExit::Failed => {
                         manager.stop().await;
+                        let _summary = tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         return;
                     }
