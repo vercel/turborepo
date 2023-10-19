@@ -110,6 +110,12 @@ jobs:
           npm pack packages/turbo-repository/js
           mv *.tgz tarballs/
 
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Upload Tarballs
+          path: tarballs
+
       - name: Publish Artifacts
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -117,17 +123,13 @@ jobs:
           npm config set --location=project "//registry.npmjs.org/:_authToken" ${NPM_TOKEN}
           VERSION=$(jq -r .version packages/turbo-repository/js/package.json)
           TARBALLS="tarballs"
-          TAG="canary"
-          npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-darwin-arm64-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-darwin-x64-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-linux-arm64-gnu-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-linux-x64-gnu-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-win32-arm64-msvc-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-win32-x64-msvc-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-${VERSION}.tgz
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: Upload Tarballs
-          path: tarballs
+          ls ${TARBALLS}
+          ls ${TARBALLS}/turbo-repository-darwin-arm64-${VERSION}.tgz
+          #TAG="canary"
+          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-darwin-arm64-${VERSION}.tgz
+          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-darwin-x64-${VERSION}.tgz
+          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-linux-arm64-gnu-${VERSION}.tgz
+          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-linux-x64-gnu-${VERSION}.tgz
+          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-win32-arm64-msvc-${VERSION}.tgz
+          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-win32-x64-msvc-${VERSION}.tgz
+          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-${VERSION}.tgz
