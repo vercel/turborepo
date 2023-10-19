@@ -5,6 +5,7 @@ mod resolution;
 mod ser;
 
 use std::{
+    any::Any,
     collections::{HashMap, HashSet},
     iter,
 };
@@ -13,7 +14,6 @@ use de::SemverString;
 use identifiers::{Descriptor, Locator};
 use protocol_resolver::DescriptorResolver;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use thiserror::Error;
 use turbopath::RelativeUnixPathBuf;
 
@@ -548,19 +548,14 @@ impl Lockfile for BerryLockfile {
         Ok(patches)
     }
 
-    fn global_change_key(&self) -> Vec<u8> {
-        let mut buf = vec![b'b', b'e', b'r', b'r', b'y', 0];
-
-        serde_json::to_writer(
-            &mut buf,
-            &json!({
-                "version": &self.data.metadata.version,
-                "cache_key": &self.data.metadata.cache_key,
-            }),
-        )
-        .expect("writing to Vec cannot fail");
-
-        buf
+    fn global_change(&self, other: &dyn Lockfile) -> bool {
+        let any_other = other as &dyn Any;
+        if let Some(other) = any_other.downcast_ref::<Self>() {
+            self.data.metadata.version != other.data.metadata.version
+                || self.data.metadata.cache_key != other.data.metadata.cache_key
+        } else {
+            true
+        }
     }
 }
 

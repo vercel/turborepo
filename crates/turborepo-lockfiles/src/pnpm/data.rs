@@ -1,7 +1,6 @@
-use std::borrow::Cow;
+use std::{any::Any, borrow::Cow, collections::BTreeMap};
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use turbopath::RelativeUnixPathBuf;
 
 use super::{dep_path::DepPath, Error, LockfileVersion};
@@ -252,6 +251,27 @@ impl PnpmLockfile {
         }
         Ok(pruned_patches)
     }
+
+    // Create a projection of all fields in the lockfile that could affect all
+    // workspaces
+    fn global_fields(&self) -> GlobalFields {
+        GlobalFields {
+            version: &self.lockfile_version.version,
+            checksum: self.package_extensions_checksum.as_deref(),
+            overrides: self.overrides.as_ref(),
+            patched_dependencies: self.patched_dependencies.as_ref(),
+            settings: self.settings.as_ref(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct GlobalFields<'a> {
+    version: &'a str,
+    checksum: Option<&'a str>,
+    overrides: Option<&'a BTreeMap<String, String>>,
+    patched_dependencies: Option<&'a BTreeMap<String, PatchFile>>,
+    settings: Option<&'a LockfileSettings>,
 }
 
 impl crate::Lockfile for PnpmLockfile {
@@ -401,22 +421,13 @@ impl crate::Lockfile for PnpmLockfile {
         Ok(patches)
     }
 
-    fn global_change_key(&self) -> Vec<u8> {
-        let mut buf = vec![b'p', b'n', b'p', b'm', 0];
-
-        serde_json::to_writer(
-            &mut buf,
-            &json!({
-                "version": self.lockfile_version.version,
-                "checksum": self.package_extensions_checksum,
-                "overrides": self.overrides,
-                "patched_deps": self.patched_dependencies,
-                "settings": self.settings,
-            }),
-        )
-        .expect("writing to Vec cannot fail");
-
-        buf
+    fn global_change(&self, other: &dyn crate::Lockfile) -> bool {
+        let any_other = other as &dyn Any;
+        if let Some(other) = any_other.downcast_ref::<Self>() {
+            self.global_fields() != other.global_fields()
+        } else {
+            true
+        }
     }
 }
 

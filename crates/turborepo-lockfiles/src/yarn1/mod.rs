@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{any::Any, str::FromStr};
 
 use serde::Deserialize;
 
@@ -108,8 +108,11 @@ impl Lockfile for Yarn1Lockfile {
         Ok(self.to_string().into_bytes())
     }
 
-    fn global_change_key(&self) -> Vec<u8> {
-        vec![b'y', b'a', b'r', b'n', 0]
+    fn global_change(&self, other: &dyn Lockfile) -> bool {
+        let any_other = other as &dyn Any;
+        // Downcast returns none if the concrete type doesn't match
+        // if the types don't match then we changed package managers
+        any_other.downcast_ref::<Self>().is_none()
     }
 }
 

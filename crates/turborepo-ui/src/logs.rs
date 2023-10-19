@@ -1,9 +1,8 @@
 use std::{
     fs::File,
-    io::{BufReader, BufWriter, Write},
+    io::{BufRead, BufReader, BufWriter, Write},
 };
 
-use bytelines::ByteLines;
 use tracing::{debug, warn};
 use turbopath::AbsoluteSystemPath;
 
@@ -92,15 +91,27 @@ pub fn replay_logs<W: Write>(
     // Construct a PrefixedWriter which allows for non UTF-8 bytes to be written to
     // it.
     let mut prefixed_writer = output.output_prefixed_writer();
-    let log_reader = BufReader::new(log_file);
-    let lines = ByteLines::new(log_reader);
+    let mut log_reader = BufReader::new(log_file);
 
-    for line in lines.into_iter() {
-        let mut line = line.map_err(Error::CannotReadLogs)?;
-        line.push(b'\n');
-        prefixed_writer
-            .write_all(&line)
+    let mut buffer = Vec::new();
+    loop {
+        let num_bytes = log_reader
+            .read_until(b'\n', &mut buffer)
             .map_err(Error::CannotReadLogs)?;
+        if num_bytes == 0 {
+            break;
+        }
+
+        // If the log file doesn't end with a newline, then we add one to ensure the
+        // underlying writer receives a full line.
+        if !buffer.ends_with(b"\n") {
+            buffer.push(b'\n');
+        }
+        prefixed_writer
+            .write_all(&buffer)
+            .map_err(Error::CannotReadLogs)?;
+
+        buffer.clear();
     }
 
     debug!("finish replaying logs");

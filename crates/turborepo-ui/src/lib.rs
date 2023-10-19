@@ -72,13 +72,24 @@ macro_rules! cprintln {
 }
 
 #[macro_export]
-macro_rules! cwrite {
+macro_rules! cprint {
     ($ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
         let formatted_str = format!($format_string $(, $arg)*);
 
         let colored_str = $color.apply_to(formatted_str);
 
-        write!("{}", $ui.apply(colored_str))
+        print!("{}", $ui.apply(colored_str))
+    }};
+}
+
+#[macro_export]
+macro_rules! cwrite {
+    ($dst:expr, $ui:expr, $color:expr, $format_string:expr $(, $arg:expr)*) => {{
+        let formatted_str = format!($format_string $(, $arg)*);
+
+        let colored_str = $color.apply_to(formatted_str);
+
+        write!($dst, "{}", $ui.apply(colored_str))
     }};
 }
 
@@ -172,6 +183,9 @@ lazy_static! {
     pub static ref MAGENTA: Style = Style::new().magenta();
     pub static ref UNDERLINE: Style = Style::new().underlined();
     pub static ref BOLD_CYAN: Style = Style::new().cyan().bold();
+    pub static ref BOLD_GREY: Style = Style::new().dim().bold();
+    pub static ref BOLD_GREEN: Style = Style::new().green().bold();
+    pub static ref BOLD_RED: Style = Style::new().red().bold();
 }
 
 pub const RESET: &str = "\x1b[0m";

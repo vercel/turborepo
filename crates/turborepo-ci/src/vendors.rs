@@ -10,7 +10,7 @@ pub struct VendorEnvs {
 #[allow(dead_code)]
 pub struct Vendor {
     pub(crate) name: &'static str,
-    pub(crate) constant: &'static str,
+    pub constant: &'static str,
     pub(crate) env: VendorEnvs,
     pub(crate) eval_env: Option<HashMap<&'static str, &'static str>>,
     pub sha_env_var: Option<&'static str>,

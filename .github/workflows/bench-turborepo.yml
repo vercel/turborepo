@@ -7,9 +7,16 @@ on:
     workflows: [Turborepo Release]
     types:
       - completed
+  push:
+    branches:
+      - main
+    paths:
+      - "cli/**"
+      - crates/turborepo*/**
+      # - "benchmark/**" (we don't need to run benchmarks when the benchmark changes, next push will capture it)
 
 jobs:
-  build:
+  benchmark:
     name: Run Benchmarks
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -40,3 +47,59 @@ jobs:
             -X POST \
             -H 'Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}' \
             'https://api.us-east.tinybird.co/v0/datasources?format=ndjson&name=turbo_benchmarks&mode=append'
+
+  time-to-first-task:
+    name: Time to First Task
+    timeout-minutes: 60
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
+
+    # Set the secret as an env var so we can use it in the script
+    env:
+      TINYBIRD_TOKEN: ${{secrets.TINYBIRD_TOKEN}}
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      # setup Rust on windows, because apparently setup-turborepo-environment doesn't do this
+      # TODO: put this logic in ./github/actions/setup-rust and use that instead
+      - name: Add rustup for windows
+        if: ${{ matrix.os.runner == 'windows-latest'}}
+        run: rustup target add x86_64-pc-windows-gnu
+
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          target: ${{ matrix.os.runner }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Build Turborepo from source
+        run: cd cli && make turbo-prod
+
+      - name: Run benchmarks
+        run: pnpm -F benchmark ttft
+
+      - name: Augment Data and Send to TinyBird
+        run: cd benchmark && node -r esbuild-register ./src/ttft-send.ts "$PWD/ttft.json" ${{github.run_id}}
+
+      # The benchmark always produces profile.json, but we can change the name for the purpose of saving it
+      - name: Prep artifact
+        run: mv ./benchmark/profile.json ./benchmark/profile-${{matrix.os.runner}}.json
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: profile-${{matrix.os.runner}}.json
+          path: ./benchmark/profile-${{matrix.os.runner}}.json

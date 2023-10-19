@@ -13,9 +13,7 @@ pub struct HTTPCache {
     client: APIClient,
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
     repo_root: AbsoluteSystemPathBuf,
-    token: String,
-    team_id: String,
-    team_slug: Option<String>,
+    api_auth: APIAuth,
 }
 
 impl HTTPCache {
@@ -37,19 +35,12 @@ impl HTTPCache {
         } else {
             None
         };
-        let APIAuth {
-            team_id,
-            token,
-            team_slug,
-        } = api_auth;
 
         HTTPCache {
             client,
             signer_verifier,
             repo_root,
-            token,
-            team_id,
-            team_slug,
+            api_auth,
         }
     }
 
@@ -70,7 +61,13 @@ impl HTTPCache {
             .transpose()?;
 
         self.client
-            .put_artifact(hash, &artifact_body, duration, tag.as_deref(), &self.token)
+            .put_artifact(
+                hash,
+                &artifact_body,
+                duration,
+                tag.as_deref(),
+                &self.api_auth.token,
+            )
             .await?;
 
         Ok(())
@@ -93,7 +90,12 @@ impl HTTPCache {
     pub async fn exists(&self, hash: &str) -> Result<CacheResponse, CacheError> {
         let response = self
             .client
-            .artifact_exists(hash, &self.token, &self.team_id, self.team_slug.as_deref())
+            .artifact_exists(
+                hash,
+                &self.api_auth.token,
+                &self.api_auth.team_id,
+                self.api_auth.team_slug.as_deref(),
+            )
             .await?;
 
         let duration = Self::get_duration_from_response(&response)?;
@@ -124,7 +126,12 @@ impl HTTPCache {
     ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
         let response = self
             .client
-            .fetch_artifact(hash, &self.token, &self.team_id, self.team_slug.as_deref())
+            .fetch_artifact(
+                hash,
+                &self.api_auth.token,
+                &self.api_auth.team_id,
+                self.api_auth.team_slug.as_deref(),
+            )
             .await?;
 
         let duration = Self::get_duration_from_response(&response)?;

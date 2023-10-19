@@ -37,7 +37,6 @@ anyhow = { workspace = true, features = ["backtrace"] }
 atty = { workspace = true }
 axum = { workspace = true }
 axum-server = { workspace = true }
-bytelines = "2.4.0"
 chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "env"] }
 clap_complete = { workspace = true }
@@ -98,6 +97,10 @@ lazy-regex = "2.5.0"
 node-semver = "2.1.0"
 num_cpus = "1.15.0"
 owo-colors.workspace = true
+pprof = { version = "0.12.1", features = [
+  "prost-codec",
+  "frame-pointer",
+], optional = true }
 rayon = "1.7.0"
 regex.workspace = true
 svix-ksuid = { version = "0.7.0", features = ["serde"] }

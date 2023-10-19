@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::{any::Any, collections::HashMap};
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use super::{Error, Lockfile, Package};
 
@@ -136,19 +136,14 @@ impl Lockfile for NpmLockfile {
         Ok(serde_json::to_vec_pretty(&self)?)
     }
 
-    fn global_change_key(&self) -> Vec<u8> {
-        let mut buf = vec![b'n', b'p', b'm', 0];
-
-        serde_json::to_writer(
-            &mut buf,
-            &json!({
-                "requires": &self.other.get("requires"),
-                "version": &self.lockfile_version,
-            }),
-        )
-        .expect("writing to Vec cannot fail");
-
-        buf
+    fn global_change(&self, other: &dyn Lockfile) -> bool {
+        let any_other = other as &dyn Any;
+        if let Some(other) = any_other.downcast_ref::<Self>() {
+            self.lockfile_version != other.lockfile_version
+                || self.other.get("requires") != other.other.get("requires")
+        } else {
+            true
+        }
     }
 }
 
