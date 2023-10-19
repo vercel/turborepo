@@ -7,6 +7,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Result};
 use serde_json::Value as JsonValue;
+use tracing::Level;
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{
     util::{normalize_path, normalize_request},
@@ -1099,6 +1100,7 @@ fn resolve_internal_boxed(
     Box::pin(resolve_internal_inline(lookup_path, request, options))
 }
 
+#[tracing::instrument(level = Level::TRACE, skip_all)]
 async fn resolve_internal_inline(
     lookup_path: Vc<FileSystemPath>,
     request: Vc<Request>,
@@ -1180,29 +1182,15 @@ async fn resolve_internal_inline(
             query,
             force_in_lookup_dir,
         } => {
-            let mut requests = vec![Request::raw(
-                Value::new(path.clone()),
+            resolve_relative_request(
+                lookup_path,
+                options,
+                options_value,
+                path,
                 *query,
                 *force_in_lookup_dir,
-            )];
-            for ext in options_value.extensions.iter() {
-                let mut path = path.clone();
-                path.push(ext.clone().into());
-                requests.push(Request::raw(Value::new(path), *query, *force_in_lookup_dir));
-            }
-
-            // This ensures the order of the requests (extensions) is
-            // preserved, `Pattern::Alternatives` inside a `Request::Raw` does not preserve
-            // the order
-            let results = requests
-                .into_iter()
-                .map(|request| async move {
-                    resolve_internal_boxed(lookup_path, request.resolve().await?, options).await
-                })
-                .try_join()
-                .await?;
-
-            merge_results(results)
+            )
+            .await?
         }
         Request::Module {
             module,
@@ -1398,6 +1386,41 @@ async fn resolve_into_folder(
     Ok(ResolveResult::unresolveable().into())
 }
 
+#[tracing::instrument(level = Level::TRACE, skip_all)]
+async fn resolve_relative_request(
+    lookup_path: Vc<FileSystemPath>,
+    options: Vc<ResolveOptions>,
+    options_value: &ResolveOptions,
+    path: &Pattern,
+    query: Vc<String>,
+    force_in_lookup_dir: bool,
+) -> Result<Vc<ResolveResult>> {
+    let mut requests = vec![Request::raw(
+        Value::new(path.clone()),
+        query,
+        force_in_lookup_dir,
+    )];
+    for ext in options_value.extensions.iter() {
+        let mut path = path.clone();
+        path.push(ext.clone().into());
+        requests.push(Request::raw(Value::new(path), query, force_in_lookup_dir));
+    }
+
+    // This ensures the order of the requests (extensions) is
+    // preserved, `Pattern::Alternatives` inside a `Request::Raw` does not preserve
+    // the order
+    let results = requests
+        .into_iter()
+        .map(|request| async move {
+            resolve_internal_boxed(lookup_path, request.resolve().await?, options).await
+        })
+        .try_join()
+        .await?;
+
+    Ok(merge_results(results))
+}
+
+#[tracing::instrument(level = Level::TRACE, skip_all)]
 async fn resolve_module_request(
     lookup_path: Vc<FileSystemPath>,
     options: Vc<ResolveOptions>,
@@ -1561,6 +1584,7 @@ async fn resolve_into_package(
     Ok(merge_results(results))
 }
 
+#[tracing::instrument(level = Level::TRACE, skip_all)]
 async fn resolve_import_map_result(
     result: &ImportMapResult,
     lookup_path: Vc<FileSystemPath>,
@@ -1627,6 +1651,7 @@ fn resolve_import_map_result_boxed<'a>(
     ))
 }
 
+#[tracing::instrument(level = Level::TRACE, skip_all)]
 async fn resolve_alias_field_result(
     result: &JsonValue,
     refs: Vec<Vc<Box<dyn Source>>>,
@@ -1667,6 +1692,7 @@ async fn resolve_alias_field_result(
     Ok(ResolveResult::unresolveable_with_affecting_sources(refs).cell())
 }
 
+#[tracing::instrument(level = Level::TRACE, skip_all)]
 async fn resolved(
     fs_path: Vc<FileSystemPath>,
     original_context: Vc<FileSystemPath>,
