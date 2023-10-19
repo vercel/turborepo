@@ -216,9 +216,9 @@ enum Event {
 #[derive(Debug, Serialize)]
 pub enum ExecutionState {
     Canceled,
-    Built { exit_code: u32 },
+    Built { exit_code: i32 },
     Cached,
-    BuildFailed { exit_code: u32, err: String },
+    BuildFailed { exit_code: i32, err: String },
     SpawnFailed { err: String },
 }
 
@@ -232,7 +232,7 @@ pub struct TaskExecutionSummary {
 }
 
 impl TaskExecutionSummary {
-    pub fn exit_code(&self) -> Option<u32> {
+    pub fn exit_code(&self) -> Option<i32> {
         match self.state {
             ExecutionState::BuildFailed { exit_code, .. } | ExecutionState::Built { exit_code } => {
                 Some(exit_code)
@@ -360,7 +360,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
         }
     }
 
-    pub async fn build_succeeded(self, exit_code: u32) -> TaskExecutionSummary {
+    pub async fn build_succeeded(self, exit_code: i32) -> TaskExecutionSummary {
         let Self {
             sender, started_at, ..
         } = self;
@@ -383,7 +383,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
 
     pub async fn build_failed(
         self,
-        exit_code: u32,
+        exit_code: i32,
         error: impl fmt::Display,
     ) -> TaskExecutionSummary {
         let Self {
