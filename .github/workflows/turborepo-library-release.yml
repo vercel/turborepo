@@ -125,10 +125,10 @@ jobs:
           cd tarballs
           ls
           TAG="canary"
-          npm publish -ddd --tag ${TAG} turbo-repository-darwin-arm64-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} turbo-repository-darwin-x64-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} turbo-repository-linux-arm64-gnu-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} turbo-repository-linux-x64-gnu-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} turbo-repository-win32-arm64-msvc-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} turbo-repository-win32-x64-msvc-${VERSION}.tgz
-          npm publish -ddd --tag ${TAG} turbo-repository-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} --access public turbo-repository-darwin-arm64-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} --access public turbo-repository-darwin-x64-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-arm64-gnu-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-x64-gnu-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} --access public turbo-repository-win32-arm64-msvc-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} --access public turbo-repository-win32-x64-msvc-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} --access public turbo-repository-${VERSION}.tgz
