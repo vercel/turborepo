@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use dirs_next::config_dir;
 use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_api_client::APIClient;
+use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ui::UI;
 
 use crate::{
@@ -94,6 +94,20 @@ impl CommandBase {
         self.repo_root.join_component("turbo.json")
     }
 
+    pub fn api_auth(&self) -> Result<Option<APIAuth>, ConfigError> {
+        let config = self.config()?;
+        let team_id = config.team_id();
+        let team_slug = config.team_slug();
+
+        let token = config.token();
+
+        Ok(team_id.zip(token).map(|(team_id, token)| APIAuth {
+            team_id: team_id.to_string(),
+            token: token.to_string(),
+            team_slug: team_slug.map(|s| s.to_string()),
+        }))
+    }
+
     pub fn args(&self) -> &Args {
         &self.args
     }
@@ -104,6 +118,7 @@ impl CommandBase {
 
         let api_url = config.api_url();
         let timeout = config.timeout();
+
         APIClient::new(api_url, timeout, self.version, args.preflight).map_err(|e| {
             // This error can only be turborepo_api_client::Error::TlsError()
             match e {

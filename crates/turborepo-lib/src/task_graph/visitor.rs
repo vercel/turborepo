@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    collections::HashSet,
     io::Write,
     process::Stdio,
     sync::{Arc, Mutex, OnceLock},
@@ -22,6 +23,9 @@ use crate::{
     package_graph::{PackageGraph, WorkspaceName},
     process::{ChildExit, ProcessManager},
     run::{
+        global_hash::GlobalHashableInputs,
+        summary,
+        summary::{GlobalHashSummary, RunTracker},
         task_id::{self, TaskId},
         RunCache,
     },
@@ -30,18 +34,19 @@ use crate::{
 
 // This holds the whole world
 pub struct Visitor<'a> {
-    run_cache: Arc<RunCache>,
-    package_graph: Arc<PackageGraph>,
-    opts: &'a Opts<'a>,
-    task_hasher: TaskHasher<'a>,
-    global_env_mode: EnvMode,
-    sink: OutputSink<StdWriter>,
     color_cache: ColorSelector,
-    ui: UI,
-    manager: ProcessManager,
-    repo_root: &'a AbsoluteSystemPath,
-    global_env: EnvironmentVariableMap,
     dry: bool,
+    global_env: EnvironmentVariableMap,
+    global_env_mode: EnvMode,
+    manager: ProcessManager,
+    opts: &'a Opts<'a>,
+    package_graph: Arc<PackageGraph>,
+    repo_root: &'a AbsoluteSystemPath,
+    run_cache: Arc<RunCache>,
+    run_tracker: RunTracker,
+    sink: OutputSink<StdWriter>,
+    task_hasher: TaskHasher<'a>,
+    ui: UI,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -61,6 +66,8 @@ pub enum Error {
     Engine(#[from] crate::engine::ExecuteError),
     #[error(transparent)]
     TaskHash(#[from] task_hash::Error),
+    #[error(transparent)]
+    RunSummary(#[from] summary::Error),
 }
 
 impl<'a> Visitor<'a> {
@@ -71,6 +78,7 @@ impl<'a> Visitor<'a> {
     pub fn new(
         package_graph: Arc<PackageGraph>,
         run_cache: Arc<RunCache>,
+        run_tracker: RunTracker,
         opts: &'a Opts,
         package_inputs_hashes: PackageInputsHashes,
         env_at_execution_start: &'a EnvironmentVariableMap,
@@ -92,17 +100,18 @@ impl<'a> Visitor<'a> {
         let color_cache = ColorSelector::default();
 
         Self {
-            run_cache,
-            package_graph,
-            opts,
-            task_hasher,
-            global_env_mode,
-            sink,
             color_cache,
-            ui,
-            manager,
-            repo_root,
             dry: false,
+            global_env_mode,
+            manager,
+            opts,
+            package_graph,
+            repo_root,
+            run_cache,
+            run_tracker,
+            sink,
+            task_hasher,
+            ui,
             global_env,
         }
     }
@@ -392,6 +401,39 @@ impl<'a> Visitor<'a> {
         Ok(errors)
     }
 
+    /// Finishes visiting the tasks, creates the run summary, and either
+    /// prints, saves, or sends it to spaces.
+    pub(crate) async fn finish(
+        self,
+        exit_code: i32,
+        packages: HashSet<WorkspaceName>,
+        global_hash_inputs: GlobalHashableInputs<'_>,
+    ) -> Result<(), Error> {
+        let Self {
+            package_graph,
+            ui,
+            opts,
+            repo_root,
+            ..
+        } = self;
+
+        let global_hash_summary = GlobalHashSummary::try_from(global_hash_inputs)?;
+
+        Ok(self
+            .run_tracker
+            .finish(
+                exit_code,
+                &package_graph,
+                ui,
+                repo_root,
+                opts.scope_opts.pkg_inference_root.as_deref(),
+                &opts.run_opts,
+                packages,
+                global_hash_summary,
+            )
+            .await?)
+    }
+
     fn sink(opts: &Opts, silent: bool) -> OutputSink<StdWriter> {
         let (out, err) = if silent {
             (std::io::sink().into(), std::io::sink().into())
@@ -456,13 +498,14 @@ impl<'a> Visitor<'a> {
         prefixed_ui
     }
 
+    /// Only used for the hashing comparison between Rust and Go. After port,
+    /// should delete
     pub fn into_task_hash_tracker(self) -> TaskHashTrackerState {
         self.task_hasher.into_task_hash_tracker_state()
     }
 
-    pub fn dry_run(mut self) -> Self {
+    pub fn dry_run(&mut self) {
         self.dry = true;
-        self
     }
 }
 
