@@ -1,7 +1,6 @@
 import React from "react";
 import cn from "classnames";
-import type { ImageProps } from "next/image";
-import Image from "next/image";
+import Image, { ImageProps } from "next/image";
 
 interface Image {
   src: string;
@@ -25,15 +24,15 @@ export default function ThemeAwareImage({
   const Images = (
     <>
       <Image
-        alt={dark.alt}
         className={cn("hidden dark:block", dark.className)}
+        alt={dark.alt}
         src={dark.src}
         {...dark.props}
         {...other}
       />
       <Image
-        alt={light.alt}
         className={cn("dark:hidden block", light.className)}
+        alt={light.alt}
         src={light.src}
         {...light.props}
         {...other}

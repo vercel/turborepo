@@ -38,9 +38,7 @@ export function ExampleCard({
       setCopiedStartBuildingCmd(false);
     }, 2000);
 
-    return () => {
-      clearTimeout(timeout);
-    };
+    return () => clearTimeout(timeout);
   }, [copiedStartBuildingCmd]);
 
   useEffect(() => {
@@ -72,8 +70,8 @@ export function ExampleCard({
       <a
         className="flex flex-col group px-8 pt-8 gap-4 h-full cursor-pointer"
         href={`https://github.com/vercel/turbo/tree/main/examples/${slug}`}
-        rel="noreferrer"
         target="_blank"
+        rel="noreferrer"
       >
         <h3 className="text-lg text-black dark:text-white font-semibold leading-6 tracking-tight">
           {name}
@@ -103,31 +101,23 @@ export function ExampleCard({
         <button
           className="rounded-none flex-1 p-4 hover:text-gray-900 dark:hover:text-gray-100"
           onClick={onCopyStartBuildingCmd}
-          onMouseEnter={() => {
-            setIsHoveringStartBuilding(true);
-          }}
-          onMouseLeave={() => {
-            setIsHoveringStartBuilding(false);
-          }}
+          onMouseEnter={() => setIsHoveringStartBuilding(true)}
+          onMouseLeave={() => setIsHoveringStartBuilding(false)}
         >
           Start Building
         </button>
-        {template ? (
+        {template && (
           <a
+            target="_blank"
+            rel="noreferrer"
             className="rounded-none flex-1 p-4 hover:text-gray-900 dark:hover:text-gray-100"
             href={copiedStartBuildingCmd ? undefined : template}
-            onMouseEnter={() => {
-              setIsHoveringDeployNow(true);
-            }}
-            onMouseLeave={() => {
-              setIsHoveringDeployNow(false);
-            }}
-            rel="noreferrer"
-            target="_blank"
+            onMouseEnter={() => setIsHoveringDeployNow(true)}
+            onMouseLeave={() => setIsHoveringDeployNow(false)}
           >
             Deploy Now
           </a>
-        ) : null}
+        )}
       </div>
     </li>
   );

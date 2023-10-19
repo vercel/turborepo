@@ -14,11 +14,11 @@ class MyDocument extends Document {
     return (
       <Html lang="en">
         <Head>
-          <link href="https://fonts.googleapis.com" rel="preconnect" />
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
           <link
-            crossOrigin="anonymous"
-            href="https://fonts.gstatic.com"
             rel="preconnect"
+            href="https://fonts.gstatic.com"
+            crossOrigin="anonymous"
           />
           <link
             href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=optional"
@@ -29,19 +29,19 @@ class MyDocument extends Document {
 
           {/* eslint-disable-next-line @next/next/google-font-preconnect */}
           <link
-            as="font"
-            crossOrigin="anonymous"
-            href="https://fonts.gstatic.com/s/spacegrotesk/v13/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7aUXskPMBBSSJLm2E.woff2"
             rel="preload"
+            as="font"
+            href="https://fonts.gstatic.com/s/spacegrotesk/v13/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7aUXskPMBBSSJLm2E.woff2"
             type="font/woff2"
+            crossOrigin="anonymous"
           />
           {/* eslint-disable-next-line @next/next/google-font-preconnect */}
           <link
-            as="font"
-            crossOrigin="anonymous"
-            href="https://fonts.gstatic.com/s/spacegrotesk/v13/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7oUXskPMBBSSJLm2E.woff2"
             rel="preload"
+            as="font"
+            href="https://fonts.gstatic.com/s/spacegrotesk/v13/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7oUXskPMBBSSJLm2E.woff2"
             type="font/woff2"
+            crossOrigin="anonymous"
           />
         </Head>
         <body>

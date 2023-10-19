@@ -1,5 +1,4 @@
-import type { ReactElement, ReactNode } from "react";
-import React from "react";
+import React, { ReactElement, ReactNode } from "react";
 import {
   LightBulbIcon,
   ExclamationIcon,

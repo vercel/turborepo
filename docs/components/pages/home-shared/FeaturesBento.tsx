@@ -25,10 +25,10 @@ export function FeaturesBento({
             key={feature.name.replace(/\s+/g, "-").toLowerCase()}
           >
             <FeatureBox
+              name={feature.name}
               description={feature.description}
               iconDark={feature.iconDark}
               iconLight={feature.iconLight}
-              name={feature.name}
             />
           </FadeIn>
         ))}

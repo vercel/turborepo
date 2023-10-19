@@ -2,24 +2,24 @@ import classNames from "classnames";
 import Link from "next/link";
 import type { Feature } from "../content/legacy-features";
 
-interface FeatureProps {
+type FeatureProps = {
   feature: Omit<Feature, "page">;
   // include feature description
   detailed?: boolean;
-}
+};
 
-function DetailedFeatureInner(props: { feature: FeatureProps["feature"] }) {
+const DetailedFeatureInner = (props: { feature: FeatureProps["feature"] }) => {
   const { Icon, name, description } = props.feature;
   return (
     <>
       <div className="inline-flex items-center space-x-3">
         <div className="flex items-center justify-center bg-black rounded-full bg-opacity-5 w-9 h-9 icon-circle">
           <Icon
-            aria-hidden="true"
             className={classNames(
               "h-8 w-8 dark:text-white flex-shrink-0 p-1.5 text-black block dark:stroke-[url(#pink-gradient)]",
               Icon.requiresFill && "dark:fill-[url(#pink-gradient)]"
             )}
+            aria-hidden="true"
           />
         </div>
         <h3 className="m-0 text-lg font-semibold leading-6 tracking-tight text-gray-900 dark:text-white">
@@ -31,7 +31,7 @@ function DetailedFeatureInner(props: { feature: FeatureProps["feature"] }) {
           {description}
         </p>
       </div>
-      <style global jsx>{`
+      <style jsx global>{`
         html.dark .icon-circle {
           background: linear-gradient(
             180deg,
@@ -42,22 +42,22 @@ function DetailedFeatureInner(props: { feature: FeatureProps["feature"] }) {
       `}</style>
     </>
   );
-}
+};
 
 const featureWrapperClasses = `relative block overflow-hidden p-10 bg-white shadow-lg rounded-xl dark:bg-opacity-5 no-underline text-black dark:text-white`;
 
-export function DetailedFeatureLink(props: {
+export const DetailedFeatureLink = (props: {
   href: string;
   feature: FeatureProps["feature"];
   target?: string;
-}) {
+}) => {
   const { href, feature, ...rest } = props;
   return (
-    <Link className={featureWrapperClasses} href={href} {...rest}>
-      <DetailedFeatureInner feature={feature} />
+    <Link href={href} className={featureWrapperClasses} {...rest}>
+      <DetailedFeatureInner feature={feature}></DetailedFeatureInner>
     </Link>
   );
-}
+};
 
 export default function Feature(props: FeatureProps) {
   const { feature, detailed = false } = props;
@@ -75,9 +75,9 @@ export default function Feature(props: FeatureProps) {
     <div className="flex items-center space-x-4">
       <div>
         <Icon
-          aria-hidden="true"
           className="block w-8 h-8 text-black dark:text-white"
           style={{ height: 24, width: 24 }}
+          aria-hidden="true"
         />
       </div>
       <div>

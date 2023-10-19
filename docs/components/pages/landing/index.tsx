@@ -5,14 +5,14 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Clients } from "../../clients/Clients";
 import { Marquee } from "../../clients/Marquee";
-import { FadeIn } from "../home-shared/FadeIn";
-import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
-import PackLogo from "../../logos/PackLogo";
-import RepoLogo from "../../logos/RepoLogo";
 import { TurboheroBackground } from "./TurboHeroBackground";
 import { Turborepo } from "./Turborepo";
 import { Turbopack } from "./Turbopack";
+import { FadeIn } from "../home-shared/FadeIn";
+import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
 import styles from "./index.module.css";
+import PackLogo from "../../logos/PackLogo";
+import RepoLogo from "../../logos/RepoLogo";
 
 function Background() {
   return (
@@ -68,24 +68,20 @@ function Card({
   const [hovering, setHovering] = React.useState(false);
   return (
     <Link
+      href={href}
       className={cn(
         styles["counter-border"],
         "w-[calc(100%_-_0px)] h-[304]px sm:!w-[488px] sm:h-[352px]"
       )}
-      href={href}
-      onMouseEnter={() => {
-        setHovering(true);
-      }}
-      onMouseLeave={() => {
-        setHovering(false);
-      }}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
     >
       <motion.i
-        animate={hovering ? "active" : "hidden"}
-        aria-hidden="true"
         initial="hidden"
+        animate={hovering ? "active" : "hidden"}
         variants={variants}
-      />
+        aria-hidden="true"
+      ></motion.i>
       <div
         className={cn(
           "relative w-full h-full max-w-full !pb-12 pt-8 md:!pb-4 md:!pt-4 p-3 rounded-xl overflow-hidden flex flex-col items-center justify-center border border-[rgba(255,255,255,0.05)]",
@@ -120,11 +116,11 @@ function SiteCards() {
     <div className="flex w-full container items-center justify-center gap-6 px-6 sm:mx-0 mt-8 md:!mt-14 lg:!mt-15 md:mb-0 flex-col lg:!flex-row z-10 lg:!translate-y-0">
       <FadeIn delay={0.1}>
         <Card
-          alt="Turborepo"
-          className="turborepoCardBg"
-          href="/repo"
-          icon={Turborepo}
           title="repo"
+          alt="Turborepo"
+          icon={Turborepo}
+          href="/repo"
+          className="turborepoCardBg"
         >
           <p className="text-lg !w-[280px] md:!w-[340px] font-space-grotesk text-center opacity-50 dark:opacity-70">
             High-performance build system for JavaScript and TypeScript
@@ -134,11 +130,11 @@ function SiteCards() {
       </FadeIn>
       <FadeIn delay={0.2}>
         <Card
-          alt="Turbopack"
-          className="turbopackCardBg"
-          href="/pack"
-          icon={Turbopack}
           title="pack"
+          alt="Turbopack"
+          icon={Turbopack}
+          href="/pack"
+          className="turbopackCardBg"
         >
           <div className="absolute top-3 left-3">
             <CardBadge>beta</CardBadge>
@@ -192,7 +188,7 @@ function LandingPage() {
           </p>
         </FadeIn>
         <SiteCards />
-        <FadeIn className="z-10 py-16" delay={0.3}>
+        <FadeIn delay={0.3} className="z-10 py-16">
           <Teams />
         </FadeIn>
       </main>

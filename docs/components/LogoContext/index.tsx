@@ -1,12 +1,12 @@
-import type { MouseEvent } from "react";
 import { useEffect, useCallback, useState, useRef } from "react";
 import { useTheme } from "nextra-theme-docs";
 import Link from "next/link";
 import classNames from "classnames";
-import { useTurboSite } from "../SiteSwitcher";
 import { VercelLogo } from "./icons";
 import { PRODUCT_MENU_ITEMS, PLATFORM_MENU_ITEMS } from "./items";
 import type { MenuItemProps } from "./types";
+import { MouseEvent } from "react";
+import { useTurboSite } from "../SiteSwitcher";
 
 function MenuDivider({ children, ...other }: { children: string }) {
   return (
@@ -51,9 +51,7 @@ function MenuItem({
         setCopied(false);
         closeMenu();
       }, 2000);
-      return () => {
-        clearTimeout(timeout);
-      };
+      return () => clearTimeout(timeout);
     }
   }, [copied, closeMenu]);
 
@@ -72,11 +70,11 @@ function MenuItem({
   if (type === "external") {
     return (
       <a
-        className={classes}
         href={href}
         onClick={handleClick}
-        rel="noopener noreferrer"
         target="_blank"
+        rel="noopener noreferrer"
+        className={classes}
         {...other}
       >
         {prefix}
@@ -88,9 +86,9 @@ function MenuItem({
   if (type === "copy") {
     return (
       <button
+        onClick={handleClick}
         className={classes}
         disabled={disabled}
-        onClick={handleClick}
         {...other}
       >
         {prefix}
@@ -134,22 +132,20 @@ export function LogoContext() {
 
   return (
     <div className="block relative">
-      <button className="flex" onClick={toggleMenu} onContextMenu={toggleMenu}>
+      <button onClick={toggleMenu} onContextMenu={toggleMenu} className="flex">
         <VercelLogo />
       </button>
-      {open ? (
+      {open && (
         <div
-          className="absolute border dark:border-gray-700 left-6 z-10 mt-2 w-60 origin-top-right divide-y divide-gray-100 rounded-md bg-white dark:bg-black shadow-sm focus:outline-none"
           ref={menu}
+          className="absolute border dark:border-gray-700 left-6 z-10 mt-2 w-60 origin-top-right divide-y divide-gray-100 rounded-md bg-white dark:bg-black shadow-sm focus:outline-none"
         >
           <div className="p-2">
             <MenuDivider>Platform</MenuDivider>
             {PLATFORM_MENU_ITEMS({ theme, site }).map((item) => (
               <MenuItem
-                closeMenu={() => {
-                  setOpen(false);
-                }}
                 key={item.name}
+                closeMenu={() => setOpen(false)}
                 {...item}
               >
                 {item.children}
@@ -158,10 +154,8 @@ export function LogoContext() {
             <MenuDivider>Products</MenuDivider>
             {PRODUCT_MENU_ITEMS({ theme, site }).map((item) => (
               <MenuItem
-                closeMenu={() => {
-                  setOpen(false);
-                }}
                 key={item.name}
+                closeMenu={() => setOpen(false)}
                 {...item}
               >
                 {item.children}
@@ -169,7 +163,7 @@ export function LogoContext() {
             ))}
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

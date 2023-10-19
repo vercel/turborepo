@@ -1,8 +1,8 @@
 import cn from "classnames";
 import { useState, useEffect } from "react";
 import { animated, useSpring, config } from "@react-spring/web";
-import Link from "next/link";
 import useTurborepoMinutesSaved from "../lib/useTurborepoMinutesSaved";
+import Link from "next/link";
 
 const counterFormatter = Intl.NumberFormat(undefined, {
   minimumIntegerDigits: 7,
@@ -29,8 +29,8 @@ export default function RemoteCacheCounter() {
 
   return (
     <Link
-      className="group mt-4 rounded-lg border border-transparent overflow-hidden bg-origin-border bg-gradient-to-r from-red-500 to-blue-500 dark:text-[#9ca3af] text-[#6b7280]"
       href="/repo/docs/core-concepts/remote-caching"
+      className="group mt-4 rounded-lg border border-transparent overflow-hidden bg-origin-border bg-gradient-to-r from-red-500 to-blue-500 dark:text-[#9ca3af] text-[#6b7280]"
     >
       <div className="p-4 dark:bg-[#111111] bg-white">
         <animated.p className="inline-block text-xl bg-gradient-to-r from-red-500 to-blue-500 bg-clip-text text-transparent tabular-nums">

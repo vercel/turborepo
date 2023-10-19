@@ -6,7 +6,7 @@ export default function BenchmarksCallout() {
     <Callout type="info">
       Want to know more about Turbopack&apos;s benchmarking process and
       philosophy?{" "}
-      <Link className="nx-underline" href="../benchmarks">
+      <Link href="../benchmarks" className="nx-underline">
         Learn more about Turbopack&apos;s benchmarking suite.
       </Link>
     </Callout>

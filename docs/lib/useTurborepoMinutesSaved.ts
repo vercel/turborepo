@@ -34,5 +34,5 @@ export default function useTurborepoMinutesSaved():
     refreshInterval: REFRESH_INTERVAL_IN_MS,
   });
 
-  return swr.data.data[0];
+  return swr.data?.data[0];
 }

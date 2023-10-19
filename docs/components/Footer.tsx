@@ -1,25 +1,23 @@
 import { useRouter } from "next/router";
 import Link from "next/link";
-import type { ReactNode, ReactElement } from "react";
-import { useState } from "react";
+import { useState, ReactNode, ReactElement } from "react";
 import cn from "classnames";
 import { ThemeSwitch } from "nextra-theme-docs";
 import VercelLogo from "./logos/Vercel";
-import type { TurboSite } from "./SiteSwitcher";
-import { useTurboSite } from "./SiteSwitcher";
+import { useTurboSite, TurboSite } from "./SiteSwitcher";
 
 function FooterLink({ href, children }: { href: string; children: ReactNode }) {
   const classes =
     "text-sm text-[#666666] dark:text-[#888888] no-underline betterhover:hover:text-gray-700 betterhover:hover:dark:text-white transition";
   if (href.startsWith("http")) {
     return (
-      <a className={classes} href={href}>
+      <a href={href} className={classes}>
         {children}
       </a>
     );
   }
   return (
-    <Link className={classes} href={href}>
+    <Link href={href} className={classes}>
       {children}
     </Link>
   );
@@ -79,8 +77,8 @@ const navigation = {
 export function FooterContent() {
   const site = useTurboSite();
   return (
-    <div aria-labelledby="footer-heading" className="w-full">
-      <h2 className="sr-only" id="footer-heading">
+    <div className="w-full" aria-labelledby="footer-heading">
+      <h2 id="footer-heading" className="sr-only">
         Footer
       </h2>
       <div className="w-full py-8 mx-auto">
@@ -89,7 +87,7 @@ export function FooterContent() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 md:gap-8">
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Resources</FooterHeader>
-                <ul className="mt-4 space-y-1.5 list-none ml-0" role="list">
+                <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.general.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -99,7 +97,7 @@ export function FooterContent() {
               </div>
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Turborepo</FooterHeader>
-                <ul className="mt-4 space-y-1.5 list-none ml-0" role="list">
+                <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.repo.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -109,7 +107,7 @@ export function FooterContent() {
               </div>
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Turbopack</FooterHeader>
-                <ul className="mt-4 space-y-1.5 list-none ml-0" role="list">
+                <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.pack.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -119,7 +117,7 @@ export function FooterContent() {
               </div>
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Company</FooterHeader>
-                <ul className="mt-4 space-y-1.5 list-none ml-0" role="list">
+                <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.company(site).map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -129,7 +127,7 @@ export function FooterContent() {
               </div>
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Legal</FooterHeader>
-                <ul className="mt-4 space-y-1.5 list-none ml-0" role="list">
+                <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.legal.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -139,7 +137,7 @@ export function FooterContent() {
               </div>
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Support</FooterHeader>
-                <ul className="mt-4 space-y-1.5 list-none ml-0" role="list">
+                <ul role="list" className="mt-4 space-y-1.5 list-none ml-0">
                   {navigation.support.map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
@@ -163,10 +161,10 @@ export function FooterContent() {
           <div>
             <a
               className="text-current"
-              href="https://vercel.com?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-logoLink"
-              rel="noopener noreferrer"
               target="_blank"
+              rel="noopener noreferrer"
               title="vercel.com homepage"
+              href="https://vercel.com?utm_source=turbo.build&utm_medium=referral&utm_campaign=footer-logoLink"
             >
               <VercelLogo />
             </a>
@@ -202,26 +200,24 @@ function SubmitForm() {
         e.preventDefault();
       }}
     >
-      <label className="sr-only" htmlFor="email-address">
+      <label htmlFor="email-address" className="sr-only">
         Email address
       </label>
       <input
-        autoComplete="email"
-        className="border-[#666666] dark:border-[#888888] w-full min-w-0 px-4 py-2 text-base text-gray-900 placeholder-gray-500 bg-white border rounded-md appearance-none dark:text-white sm:text-sm dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-gray-800 dark:focus:border-white focus:placeholder-gray-400"
-        id="email-address"
-        name="email-address"
-        onChange={(e) => {
-          setEmail(e.target.value);
-        }}
-        placeholder="you@example.com"
-        required
         type="email"
+        name="email-address"
+        id="email-address"
+        autoComplete="email"
+        required
         value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="border-[#666666] dark:border-[#888888] w-full min-w-0 px-4 py-2 text-base text-gray-900 placeholder-gray-500 bg-white border rounded-md appearance-none dark:text-white sm:text-sm dark:bg-transparent focus:outline-none focus:ring-2 focus:ring-gray-800 dark:focus:border-white focus:placeholder-gray-400"
+        placeholder="you@example.com"
       />
       <div className="mt-3 rounded-md sm:mt-0 sm:ml-3 sm:flex-shrink-0">
         <button
-          className="flex items-center justify-center w-full px-4 py-2 text-base font-medium text-white bg-black border border-transparent rounded-md dark:bg-white dark:text-black sm:text-sm betterhover:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-800 dark:focus:ring-white dark:betterhover:hover:bg-gray-300"
           type="submit"
+          className="flex items-center justify-center w-full px-4 py-2 text-base font-medium text-white bg-black border border-transparent rounded-md dark:bg-white dark:text-black sm:text-sm betterhover:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-800 dark:focus:ring-white dark:betterhover:hover:bg-gray-300"
         >
           Subscribe
         </button>

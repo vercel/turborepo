@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type {
+import {
   BenchmarkBar,
   BenchmarkCategory,
   BenchmarkNumberOfModules,
@@ -22,7 +22,9 @@ export function DocsBenchmarksGraph(props: {
         pinTime
       />
       <div className="flex justify-center mt-6">
-        <PackBenchmarksPicker setNumberOfModules={setNumberOfModules} />
+        <PackBenchmarksPicker
+          setNumberOfModules={setNumberOfModules}
+        ></PackBenchmarksPicker>
       </div>
     </div>
   );

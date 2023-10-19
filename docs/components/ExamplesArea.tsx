@@ -10,28 +10,28 @@ interface Example {
   boost?: boolean;
 }
 
-function ExamplesGroup({ examples }: { examples: Example[] }) {
+const ExamplesGroup = ({ examples }: { examples: Array<Example> }) => {
   return (
     <>
       {examples.map(({ name, description, slug, template }) => (
         <ExampleCard
-          description={description}
           key={name}
           name={name}
+          description={description}
           slug={slug}
           template={template}
         />
       ))}
     </>
   );
-}
+};
 
-export function ExamplesArea({
+export const ExamplesArea = ({
   filter = "featured",
 }: {
   filter: "featured" | "all";
-}) {
-  const { examples }: { examples: Example[] } = useSSG();
+}) => {
+  const { examples }: { examples: Array<Example> } = useSSG();
 
   const sortedExamples = examples
     .filter(({ featured }) => (filter === "featured" ? featured : true))
@@ -62,4 +62,4 @@ export function ExamplesArea({
       <ExamplesGroup examples={withoutTemplate} />
     </div>
   );
-}
+};

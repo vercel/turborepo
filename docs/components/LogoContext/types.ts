@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { TurboSite } from "../SiteSwitcher";
+import { TurboSite } from "../SiteSwitcher";
 
 type MenuItemType = "internal" | "external" | "copy";
 

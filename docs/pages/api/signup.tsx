@@ -1,4 +1,4 @@
-import type { NextApiRequest, NextApiResponse } from "next";
+import { NextApiRequest, NextApiResponse } from "next";
 import { withSentry } from "@sentry/nextjs";
 
 const CAMPAIGN_ID = process.env.TURBOREPO_SFDC_CAMPAIGN_ID;
@@ -18,15 +18,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({ user }),
+        body: JSON.stringify({ user: user }),
       });
 
-      res.status(201).json(user);
+      return res.status(201).json(user);
     } catch (error) {
-      res.status(500).json(error);
+      return res.status(500).json(error);
     }
   } else {
-    res.status(404).send(null);
+    return res.status(404).send(null);
   }
 }
 
