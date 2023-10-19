@@ -108,7 +108,7 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
+          npm config set --location=project "//registry.npmjs.org/:_authToken" ${NPM_TOKEN}
           VERSION=$(jq -r .version packages/turbo-repository/js/package.json)
           TARBALLS="tarballs"
           TAG="canary"
