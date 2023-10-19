@@ -172,13 +172,11 @@ pub async fn finalize_css(
 
             for (src, reference) in (*url_references.await?).iter() {
                 let resolved = resolve_url_reference(*reference, chunking_context).await?;
-                dbg!(&*resolved);
                 if let Some(v) = resolved.as_ref().cloned() {
                     url_map.insert(src.to_string(), v);
                 }
             }
 
-            dbg!(&url_map);
             replace_url_references(&mut stylesheet, &url_map);
 
             let mut srcmap = parcel_sourcemap::SourceMap::new("");
@@ -292,7 +290,6 @@ async fn process_content(
     let mut stylesheet = stylesheet_into_static(&stylesheet, config.clone());
 
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
-    dbg!(&references, &url_references);
 
     Ok(ParseCssResult::Ok {
         stylesheet,
