@@ -1015,11 +1015,10 @@ pub async fn resolve(
         .await?
         .resolve()
         .await?;
-    let result = handle_resolve_plugins(lookup_path, request, options, raw_result);
+    let result = handle_resolve_plugins(lookup_path, request, options, raw_result).await?;
     Ok(result)
 }
 
-#[turbo_tasks::function]
 async fn handle_resolve_plugins(
     lookup_path: Vc<FileSystemPath>,
     request: Vc<Request>,
@@ -1033,7 +1032,8 @@ async fn handle_resolve_plugins(
         options: Vc<ResolveOptions>,
     ) -> Result<Option<Vc<ResolveResult>>> {
         for plugin in &options.await?.plugins {
-            if *plugin.after_resolve_condition().matches(path).await? {
+            let after_resolve_condition = plugin.after_resolve_condition().resolve().await?;
+            if *after_resolve_condition.matches(path).await? {
                 if let Some(result) = *plugin.after_resolve(path, lookup_path, request).await? {
                     return Ok(Some(result));
                 }
@@ -1050,13 +1050,9 @@ async fn handle_resolve_plugins(
 
     for primary in result_value.primary.iter() {
         if let &ResolveResultItem::Source(source) = primary {
-            if let Some(new_result) = apply_plugins_to_path(
-                source.ident().path().resolve().await?,
-                lookup_path,
-                request,
-                options,
-            )
-            .await?
+            let path = source.ident().path().resolve().await?;
+            if let Some(new_result) =
+                apply_plugins_to_path(path, lookup_path, request, options).await?
             {
                 let new_result = new_result.await?;
                 changed = true;
