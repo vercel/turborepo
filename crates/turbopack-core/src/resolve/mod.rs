@@ -1355,7 +1355,9 @@ async fn resolve_into_folder(
                         let request =
                             Request::parse(Value::new(normalize_request(field_value).into()));
 
-                        let result = &*resolve_internal(package_path, request, options).await?;
+                        let result = &*resolve_internal_inline(package_path, request, options)
+                            .await?
+                            .await?;
                         // we are not that strict when a main field fails to resolve
                         // we continue to try other alternatives
                         if !result.is_unresolveable_ref() {
@@ -1551,11 +1553,8 @@ async fn resolve_into_package(
         new_pat.push_front(".".to_string().into());
 
         let relative = Request::relative(Value::new(new_pat), query, true);
-        results.push(resolve_internal(
-            package_path,
-            relative.resolve().await?,
-            options,
-        ));
+        results
+            .push(resolve_internal_inline(package_path, relative.resolve().await?, options).await?);
     }
     Ok(merge_results(results))
 }
