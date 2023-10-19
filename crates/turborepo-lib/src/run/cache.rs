@@ -323,8 +323,8 @@ impl TaskCache {
             )
             .await?;
 
-        let notify_result = match self.daemon_client.as_mut() {
-            Some(daemon_client) => daemon_client
+        if let Some(daemon_client) = self.daemon_client.as_mut() {
+            let notify_result = daemon_client
                 .notify_outputs_written(
                     self.hash.to_string(),
                     self.repo_relative_globs.inclusions.clone(),
@@ -332,16 +332,15 @@ impl TaskCache {
                     duration.as_millis() as u64,
                 )
                 .await
-                .map_err(Error::from),
-            None => Err(Error::NoDaemon),
-        };
+                .map_err(Error::from);
 
-        if let Err(err) = notify_result {
-            let task_id = &self.task_id;
-            warn!("Failed to mark outputs as cached for {task_id}: {err}");
-            prefixed_ui.warn(format!(
-                "Failed to mark outputs as cached for {task_id}: {err}",
-            ));
+            if let Err(err) = notify_result {
+                let task_id = &self.task_id;
+                warn!("Failed to mark outputs as cached for {task_id}: {err}");
+                prefixed_ui.warn(format!(
+                    "Failed to mark outputs as cached for {task_id}: {err}",
+                ));
+            }
         }
 
         self.expanded_outputs = relative_paths;

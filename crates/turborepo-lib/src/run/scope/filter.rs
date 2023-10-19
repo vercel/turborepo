@@ -144,7 +144,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         // inference is None only if we are in the root
         let is_all_packages = patterns.is_empty() && self.inference.is_none();
 
-        let mut filter_patterns = if is_all_packages {
+        let filter_patterns = if is_all_packages {
             // return all packages in the workspace
             self.pkg_graph
                 .workspaces()
@@ -153,9 +153,6 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         } else {
             self.get_packages_from_patterns(patterns)?
         };
-
-        // if the root package is in the filtered packages, remove it
-        filter_patterns.remove(&WorkspaceName::Root);
 
         Ok(filter_patterns)
     }

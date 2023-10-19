@@ -63,3 +63,9 @@ jobs:
         with:
           file_pattern: test-results/**
           commit_message: "test(integration): Integration test results for ${{ env.NEXTJS_VERSION }} (${{ env.SHA_SHORT }})"
+
+      - name: "Upload Are We Turbo Yet data"
+        env:
+          TURBOYET_KV_REST_API_URL: ${{ secrets.TURBOYET_KV_REST_API_URL }}
+          TURBOYET_KV_REST_API_TOKEN: ${{ secrets.TURBOYET_KV_REST_API_TOKEN }}
+        uses: ./.github/actions/upload-turboyet-data
