@@ -76,17 +76,9 @@ impl<'a> Run<'a> {
             PackageJson::load(&package_json_path).context("failed to read package.json")?;
         let mut opts = self.opts()?;
 
-        let config = self.base.config()?;
-        let team_id = config.team_id();
-        let team_slug = config.team_slug();
-        let token = config.token();
-
-        let api_auth = team_id.zip(token).map(|(team_id, token)| APIAuth {
-            team_id: team_id.to_string(),
-            token: token.to_string(),
-            team_slug: team_slug.map(|s| s.to_string()),
-        });
+        let api_auth = self.base.api_auth()?;
         let api_client = self.base.api_client()?;
+        let config = self.base.config()?;
 
         // Pulled from initAnalyticsClient in run.go
         let is_linked = api_auth.is_some();
@@ -208,8 +200,12 @@ impl<'a> Run<'a> {
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
-        let async_cache =
-            AsyncCache::new(&opts.cache_opts, &self.base.repo_root, api_client, api_auth)?;
+        let async_cache = AsyncCache::new(
+            &opts.cache_opts,
+            &self.base.repo_root,
+            api_client.clone(),
+            api_auth.clone(),
+        )?;
 
         info!("created cache");
 
@@ -291,16 +287,6 @@ impl<'a> Run<'a> {
         debug!("global hash: {}", global_hash);
 
         let color_selector = ColorSelector::default();
-
-        let api_auth = self.base.api_auth()?;
-        let api_client = self.base.api_client()?;
-
-        let async_cache = AsyncCache::new(
-            &opts.cache_opts,
-            &self.base.repo_root,
-            api_client.clone(),
-            api_auth.clone(),
-        )?;
 
         let runcache = Arc::new(RunCache::new(
             async_cache,
