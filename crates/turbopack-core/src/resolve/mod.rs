@@ -2,6 +2,7 @@ use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
     future::Future,
+    iter::once,
     pin::Pin,
 };
 
@@ -1184,6 +1185,7 @@ async fn resolve_internal_inline(
         } => {
             resolve_relative_request(
                 lookup_path,
+                request,
                 options,
                 options_value,
                 path,
@@ -1389,33 +1391,49 @@ async fn resolve_into_folder(
 #[tracing::instrument(level = Level::TRACE, skip_all)]
 async fn resolve_relative_request(
     lookup_path: Vc<FileSystemPath>,
+    request: Vc<Request>,
     options: Vc<ResolveOptions>,
     options_value: &ResolveOptions,
     path: &Pattern,
     query: Vc<String>,
     force_in_lookup_dir: bool,
 ) -> Result<Vc<ResolveResult>> {
-    let mut requests = vec![Request::raw(
-        Value::new(path.clone()),
-        query,
-        force_in_lookup_dir,
-    )];
-    for ext in options_value.extensions.iter() {
-        let mut path = path.clone();
-        path.push(ext.clone().into());
-        requests.push(Request::raw(Value::new(path), query, force_in_lookup_dir));
-    }
+    let mut new_path = path.clone();
+    // Add the extensions as alternatives to the path
+    // read_matches keeps the order of alternatives intact
+    new_path.push(Pattern::Alternatives(
+        once(Pattern::Constant("".to_string()))
+            .chain(
+                options_value
+                    .extensions
+                    .iter()
+                    .map(|ext| Pattern::Constant(ext.clone())),
+            )
+            .collect(),
+    ));
+    new_path.normalize();
 
-    // This ensures the order of the requests (extensions) is
-    // preserved, `Pattern::Alternatives` inside a `Request::Raw` does not preserve
-    // the order
-    let results = requests
-        .into_iter()
-        .map(|request| async move {
-            resolve_internal_boxed(lookup_path, request.resolve().await?, options).await
-        })
-        .try_join()
-        .await?;
+    let mut results = Vec::new();
+    let matches = read_matches(
+        lookup_path,
+        "".to_string(),
+        force_in_lookup_dir,
+        Pattern::new(new_path).resolve().await?,
+    )
+    .await?;
+
+    for m in matches.iter() {
+        match m {
+            PatternMatch::File(_, path) => {
+                results.push(
+                    resolved(*path, lookup_path, request, options_value, options, query).await?,
+                );
+            }
+            PatternMatch::Directory(_, path) => {
+                results.push(resolve_into_folder(*path, options, query));
+            }
+        }
+    }
 
     Ok(merge_results(results))
 }
