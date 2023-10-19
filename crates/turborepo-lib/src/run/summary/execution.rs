@@ -219,6 +219,7 @@ pub enum ExecutionState {
     Built { exit_code: u32 },
     Cached,
     BuildFailed { exit_code: u32, err: String },
+    SpawnFailed { err: String },
 }
 
 #[derive(Debug, Serialize)]
@@ -402,6 +403,28 @@ impl TaskTracker<chrono::DateTime<Local>> {
             duration,
             state: ExecutionState::BuildFailed {
                 exit_code,
+                err: error.to_string(),
+            },
+        }
+    }
+
+    pub async fn spawn_failed(self, error: impl fmt::Display) -> TaskExecutionSummary {
+        let Self {
+            sender, started_at, ..
+        } = self;
+
+        let ended_at = Local::now();
+        let duration = TurboDuration::new(&started_at, &Local::now());
+
+        sender
+            .send(Event::BuildFailed)
+            .await
+            .expect("summary state thread finished");
+        TaskExecutionSummary {
+            started_at: started_at.timestamp_millis(),
+            ended_at: ended_at.timestamp_millis(),
+            duration,
+            state: ExecutionState::SpawnFailed {
                 err: error.to_string(),
             },
         }
