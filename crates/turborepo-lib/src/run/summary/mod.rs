@@ -25,6 +25,8 @@ use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
+use self::execution::TaskTracker;
+use super::task_id::TaskId;
 use crate::{
     cli,
     opts::RunOpts,
@@ -256,6 +258,10 @@ impl RunTracker {
         run_summary
             .finish(end_time, exit_code, pkg_dep_graph, ui)
             .await
+    }
+
+    pub fn track_task(&self, task_id: TaskId<'static>) -> TaskTracker<()> {
+        self.execution_tracker.task_tracker(task_id)
     }
 }
 
