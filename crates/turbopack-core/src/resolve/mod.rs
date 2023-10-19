@@ -1793,7 +1793,7 @@ async fn handle_exports_imports_field(
     for path in results {
         if let Some(path) = normalize_path(path) {
             let request = Request::parse(Value::new(format!("./{}", path).into()));
-            resolved_results.push(resolve_internal(package_path, request, options));
+            resolved_results.push(resolve_internal_boxed(package_path, request, options).await?);
         }
     }
 
