@@ -33,15 +33,17 @@ pub(crate) mod import;
 pub(crate) mod internal;
 pub(crate) mod url;
 
+pub type AnalyzedRefs = (
+    Vec<Vc<Box<dyn ModuleReference>>>,
+    Vec<(String, Vc<UrlAssetReference>)>,
+);
+
 /// Returns `(all_references, urls)`.
 pub fn analyze_references(
     stylesheet: &mut StyleSheet<'static, 'static>,
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
-) -> Result<(
-    Vec<Vc<Box<dyn ModuleReference>>>,
-    Vec<(String, Vc<UrlAssetReference>)>,
-)> {
+) -> Result<AnalyzedRefs> {
     let mut references = Vec::new();
     let mut urls = Vec::new();
 
