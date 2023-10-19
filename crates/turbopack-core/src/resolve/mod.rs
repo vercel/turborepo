@@ -1139,8 +1139,9 @@ async fn resolve_internal_inline(
         Request::Alternatives { requests } => {
             let results = requests
                 .iter()
-                .map(|req| resolve_internal(lookup_path, *req, options))
-                .collect();
+                .map(|req| resolve_internal_boxed(lookup_path, *req, options))
+                .try_join()
+                .await?;
 
             merge_results(results)
         }
