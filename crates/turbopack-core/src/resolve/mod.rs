@@ -1462,28 +1462,50 @@ async fn resolve_module_request(
     }
 
     let mut results = vec![];
-    let is_match = path.is_match("");
-    let could_match_others = path.could_match_others("");
 
     // There may be more than one package with the same name. For instance, in a
     // TypeScript project, `compilerOptions.baseUrl` can declare a path where to
     // resolve packages. A request to "foo/bar" might resolve to either
     // "[baseUrl]/foo/bar" or "[baseUrl]/node_modules/foo/bar", and we'll need to
     // try both.
-    for package_path in &result.packages {
-        if is_match {
-            results.push(resolve_into_folder(*package_path, options, query));
-        }
-        if !could_match_others {
-            continue;
-        }
+    for &package_path in &result.packages {
+        results.push(resolve_into_package(
+            Value::new(path.clone()),
+            package_path,
+            query,
+            options,
+        ));
+    }
 
+    Ok(merge_results_with_affecting_sources(
+        results,
+        result.affecting_sources.clone(),
+    ))
+}
+
+#[turbo_tasks::function]
+async fn resolve_into_package(
+    path: Value<Pattern>,
+    package_path: Vc<FileSystemPath>,
+    query: Vc<String>,
+    options: Vc<ResolveOptions>,
+) -> Result<Vc<ResolveResult>> {
+    let path = path.into_value();
+    let options_value = options.await?;
+    let mut results = Vec::new();
+
+    let is_match = path.is_match("");
+    let could_match_others = path.could_match_others("");
+    if is_match {
+        results.push(resolve_into_folder(package_path, options, query));
+    }
+    if could_match_others {
         for resolve_into_package in options_value.into_package.iter() {
             match resolve_into_package {
                 ResolveIntoPackage::Default(_) | ResolveIntoPackage::MainField(_) => {
                     // doesn't affect packages with subpath
                     if path.is_match("/") {
-                        results.push(resolve_into_folder(*package_path, options, query));
+                        results.push(resolve_into_folder(package_path, options, query));
                     }
                 }
                 ResolveIntoPackage::ExportsField {
@@ -1503,7 +1525,7 @@ async fn resolve_module_request(
 
                     results.push(
                         handle_exports_imports_field(
-                            *package_path,
+                            package_path,
                             package_json_path,
                             options,
                             exports_field,
@@ -1527,16 +1549,12 @@ async fn resolve_module_request(
 
         let relative = Request::relative(Value::new(new_pat), query, true);
         results.push(resolve_internal(
-            *package_path,
+            package_path,
             relative.resolve().await?,
             options,
         ));
     }
-
-    Ok(merge_results_with_affecting_sources(
-        results,
-        result.affecting_sources.clone(),
-    ))
+    Ok(merge_results(results))
 }
 
 async fn resolve_import_map_result(
