@@ -104,7 +104,7 @@ impl Module for CssModuleAsset {
         // TODO: include CSS source map
 
         match &*result {
-            ParseCssResult::Ok { references, .. } => Ok(references.clone()),
+            ParseCssResult::Ok { references, .. } => Ok(*references),
             ParseCssResult::Unparseable => Ok(ModuleReferences::empty()),
             ParseCssResult::NotFound => Ok(ModuleReferences::empty()),
         }
@@ -264,7 +264,7 @@ impl CssChunkItem for CssModuleChunkItem {
             Ok(CssChunkItemContent {
                 inner_code: output_code.to_owned().into(),
                 imports,
-                source_map: Some(source_map.clone()),
+                source_map: Some(*source_map),
             }
             .into())
         } else {
