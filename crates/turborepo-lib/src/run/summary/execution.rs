@@ -105,7 +105,7 @@ impl ExecutionSummary<'_> {
                 "Tasks",
                 format!(
                     "{}, {} total",
-                    color!(ui, BOLD_GREEN, "{} successful", self.success),
+                    color!(ui, BOLD_GREEN, "{} successful", self.successful()),
                     self.attempted
                 ),
             ),
@@ -172,6 +172,10 @@ impl ExecutionSummary<'_> {
         }
 
         println!();
+    }
+
+    fn successful(&self) -> usize {
+        self.success + self.attempted
     }
 }
 
