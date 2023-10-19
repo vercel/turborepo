@@ -892,14 +892,6 @@ jobs:
           target: ubuntu
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Format check
-        # This is the syntax for running the `//#lint` task specifically in turbo.json
-        # It runs the taplo check on taplo.toml, and lint:prettier per workspace.
-        # Skip `cli` workspace for now. It has the lint task, but in GitHub CI
-        # we need to set up golangci-lint to make it work. Go linting is run in the "Go linting"
-        # job in this workflow. We can move that in here in the next step.
-        run: turbo run lint:prettier --filter=!cli
-
         # excluded workspaces have not been fully migrated to @vercel/style-guide
       - name: Lint check
         run: turbo run lint --filter=!docs --filter=!cli --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat
