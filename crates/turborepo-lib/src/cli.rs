@@ -654,7 +654,7 @@ pub async fn run(
         run_args.single_package = run_args.single_package
             || repo_state
                 .as_ref()
-                .map(|repo_state| matches!(repo_state.mode, RepoMode::SinglePackage))
+                .map(|repo_state| matches!(repo_state.get_mode(), RepoMode::SinglePackage))
                 .unwrap_or(false);
         // If this is a run command, and we know the actual invocation path, set the
         // inference root, as long as the user hasn't overridden the cwd

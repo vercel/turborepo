@@ -499,7 +499,7 @@ fn spawn_local_turbo(
     let already_has_single_package_flag = shim_args
         .remaining_turbo_args
         .contains(&"--single-package".to_string());
-    let should_add_single_package_flag = repo_state.mode == RepoMode::SinglePackage
+    let should_add_single_package_flag = repo_state.get_mode() == RepoMode::SinglePackage
         && !already_has_single_package_flag
         && supports_skip_infer_and_single_package;
 

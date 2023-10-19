@@ -6,7 +6,7 @@ use crate::{
     package_manager::{self, PackageManager, WorkspaceGlobs},
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum RepoMode {
     SinglePackage,
     MultiPackage,
@@ -15,7 +15,7 @@ pub enum RepoMode {
 #[derive(Debug)]
 pub struct RepoState {
     pub root: AbsoluteSystemPathBuf,
-    pub mode: RepoMode,
+    mode: RepoMode,
     pub package_manager: Result<PackageManager, package_manager::Error>,
 }
 
@@ -106,6 +106,23 @@ impl RepoState {
             })
             .map(|root| root.into())
             .ok_or_else(|| Error::NotFound(reference_dir.to_owned()))
+    }
+
+    pub fn get_mode(&self) -> RepoMode {
+        static WARN_INFERENCE: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+
+        if let Err(e) = &self.package_manager {
+            WARN_INFERENCE.get_or_init(|| {
+                tracing::warn!(
+                    "error while inferring repo state for package.json at {}. inference may be \
+                     affected: {}",
+                    self.root,
+                    e
+                );
+            });
+        }
+
+        self.mode
     }
 }
 
