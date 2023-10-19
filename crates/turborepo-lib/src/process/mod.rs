@@ -126,6 +126,7 @@ impl ProcessManager {
 
 #[cfg(test)]
 mod test {
+    use std::process::Stdio;
 
     use futures::{stream::FuturesUnordered, StreamExt};
     use test_case::test_case;
@@ -136,38 +137,83 @@ mod test {
     use super::*;
 
     fn get_command() -> Command {
+        get_script_command("sleep_5_interruptable.js")
+    }
+
+    fn get_script_command(script_name: &str) -> Command {
         let mut cmd = Command::new("node");
-        cmd.arg("./test/scripts/sleep_5_interruptable.js");
+        cmd.arg(format!("./test/scripts/{script_name}"));
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
         cmd
     }
+
+    // windows doesn't support graceful stop
+    const STOPPED_EXIT: Option<ChildExit> = Some(if cfg!(windows) {
+        ChildExit::Killed
+    } else {
+        ChildExit::Finished(None)
+    });
 
     #[tokio::test]
     async fn test_basic() {
         let manager = ProcessManager::new();
-        manager.spawn(get_command(), Duration::from_secs(2));
-        manager.stop().await;
+        let mut child = manager
+            .spawn(get_script_command("hello_world.js"), Duration::from_secs(2))
+            .unwrap()
+            .unwrap();
+        let mut out = Vec::new();
+        let exit = child.wait_with_piped_outputs(&mut out, None).await.unwrap();
+        assert_eq!(exit, Some(ChildExit::Finished(Some(0))));
+        assert_eq!(out, b"hello world\n");
     }
 
     #[tokio::test]
     async fn test_multiple() {
         let manager = ProcessManager::new();
 
-        manager.spawn(get_command(), Duration::from_secs(2));
-        manager.spawn(get_command(), Duration::from_secs(2));
-        manager.spawn(get_command(), Duration::from_secs(2));
+        let children = (0..2)
+            .map(|_| {
+                manager
+                    .spawn(get_command(), Duration::from_secs(2))
+                    .unwrap()
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
 
         sleep(Duration::from_millis(100)).await;
 
         manager.stop().await;
+
+        for mut child in children {
+            let exit = child.wait().await;
+            assert_eq!(exit, STOPPED_EXIT,);
+        }
     }
 
     #[tokio::test]
     async fn test_closed() {
         let manager = ProcessManager::new();
-        manager.spawn(get_command(), Duration::from_secs(2));
-        manager.stop().await;
+        let mut child = manager
+            .spawn(get_command(), Duration::from_secs(2))
+            .unwrap()
+            .unwrap();
+        let mut out = Vec::new();
+        let (exit, _) = join! {
+            child.wait_with_piped_outputs(&mut out, None),
+            manager.stop(),
+        };
+        let exit = exit.unwrap();
+        assert_eq!(exit, STOPPED_EXIT,);
+        assert_eq!(
+            out, b"",
+            "child process should exit before output is printed"
+        );
 
-        manager.spawn(get_command(), Duration::from_secs(2));
+        // We will want to change this so you can't spawn a child after closing
+        assert!(manager
+            .spawn(get_command(), Duration::from_secs(2))
+            .is_some());
 
         sleep(Duration::from_millis(100)).await;
 
@@ -178,15 +224,15 @@ mod test {
     async fn test_exit_code() {
         let manager = ProcessManager::new();
         let mut child = manager
-            .spawn(get_command(), Duration::from_secs(2))
+            .spawn(get_script_command("hello_world.js"), Duration::from_secs(2))
             .unwrap()
             .unwrap();
-
-        sleep(Duration::from_millis(100)).await;
 
         let code = child.wait().await;
         assert_eq!(code, Some(ChildExit::Finished(Some(0))));
 
+        // TODO: maybe we should do some assertion that there was nothing to shut down
+        // and this is a noop?
         manager.stop().await;
     }
 
@@ -195,7 +241,7 @@ mod test {
     async fn test_message_after_stop() {
         let manager = ProcessManager::new();
         let mut child = manager
-            .spawn(get_command(), Duration::from_secs(2))
+            .spawn(get_script_command("hello_world.js"), Duration::from_secs(2))
             .unwrap()
             .unwrap();
 
@@ -207,7 +253,8 @@ mod test {
         manager.stop().await;
 
         // this is idempotent, so calling it after the manager is stopped is ok
-        child.kill().await;
+        let kill_code = child.kill().await;
+        assert_eq!(kill_code, Some(ChildExit::Finished(Some(0))));
 
         let code = child.wait().await;
         assert_eq!(code, None);
@@ -224,22 +271,28 @@ mod test {
 
         assert!(manager.0.lock().unwrap().children.is_empty());
 
+        // TODO: actually do some check that this is idempotent
         // idempotent
         manager.stop().await;
     }
 
-    #[test_case("stop", if cfg!(windows) {ChildExit::Killed} else {ChildExit::Finished(None)})] // windows doesn't support graceful stop
-    #[test_case("wait", ChildExit::Finished(Some(0)))]
+    #[test_case("stop", "sleep_5_interruptable.js", STOPPED_EXIT)]
+    #[test_case("wait", "hello_world.js", Some(ChildExit::Finished(Some(0))))]
     #[tokio::test]
-    async fn test_stop_multiple_tasks_shared(strat: &str, expected: ChildExit) {
+    async fn test_stop_multiple_tasks_shared(
+        strategy: &str,
+        script: &str,
+        expected: Option<ChildExit>,
+    ) {
         let manager = ProcessManager::new();
         let tasks = FuturesUnordered::new();
 
         for _ in 0..10 {
             let manager = manager.clone();
+            let command = get_script_command(script);
             tasks.push(tokio::spawn(async move {
                 manager
-                    .spawn(get_command(), Duration::from_secs(1))
+                    .spawn(command, Duration::from_secs(1))
                     .unwrap()
                     .unwrap()
                     .wait()
@@ -250,7 +303,7 @@ mod test {
         // wait for tasks to start
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        match strat {
+        match strategy {
             "stop" => manager.stop().await,
             "wait" => manager.wait().await,
             _ => panic!("unknown strat"),
@@ -258,7 +311,7 @@ mod test {
 
         // tasks return proper exit code
         assert!(
-            tasks.all(|v| async { v.unwrap() == Some(expected) }).await,
+            tasks.all(|v| async { v.unwrap() == expected }).await,
             "not all tasks returned the correct code: {:?}",
             expected
         );
@@ -268,7 +321,11 @@ mod test {
     async fn test_wait_multiple_tasks() {
         let manager = ProcessManager::new();
 
-        manager.spawn(get_command(), Duration::from_secs(1));
+        let mut out = Vec::new();
+        let mut child = manager
+            .spawn(get_command(), Duration::from_secs(1))
+            .unwrap()
+            .unwrap();
 
         // let the task start
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -277,11 +334,17 @@ mod test {
 
         // we support 'close escalation'; someone can call
         // stop even if others are waiting
-        let _ = join! {
-            manager.wait(),
+        let (exit, _, _) = join! {
+            child.wait_with_piped_outputs(&mut out, None),
             manager.wait(),
             manager.stop(),
         };
+
+        assert_eq!(exit.unwrap(), STOPPED_EXIT);
+        assert_eq!(
+            out, b"",
+            "child process was stopped before any output was written"
+        );
 
         let finish_time = Instant::now();
 
