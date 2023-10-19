@@ -892,9 +892,6 @@ jobs:
           target: ubuntu
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Format check
-        run: turbo run lint:prettier
-
         # excluded workspaces have not been fully migrated to @vercel/style-guide
       - name: Lint check
         run: turbo run lint --filter=!docs --filter=!cli --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat
