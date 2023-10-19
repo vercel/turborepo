@@ -890,10 +890,11 @@ jobs:
       - uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-        # excluded workspaces have not been fully migrated to @vercel/style-guide
-      - name: Lint check
-        run: turbo run lint --filter=!docs --filter=!cli --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat
+      - name: Lint
+        # Filters some workspaces out:
+        # - `cli` because it runs golangci-lint and this Job doesn't have all the dependencies for that.
+        # - Other `@vercel/*` packages because ??
+        run: turbo run lint --filter=!cli --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat
 
   final:
     name: Ok
