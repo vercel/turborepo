@@ -147,10 +147,10 @@ pub async fn process_css_with_placeholder(
             Ok(CssWithPlaceholderResult::Ok {
                 dependencies: result.dependencies,
                 exports,
-                references: references.clone(),
-                url_references: url_references.clone(),
+                references: *references,
+                url_references: *url_references,
                 placeholders: HashMap::new(),
-                stylesheet: stylesheet,
+                stylesheet,
                 options: options.clone(),
             }
             .into())
@@ -338,7 +338,7 @@ impl GenerateSourceMap for ParseCssResultSourceMap {
         }
 
         for (idx, content) in self.source_map.get_sources_content().iter().enumerate() {
-            builder.set_source_contents(idx as _, Some(&content));
+            builder.set_source_contents(idx as _, Some(content));
         }
 
         for m in self.source_map.get_mappings() {
