@@ -318,27 +318,38 @@ impl Pattern {
     pub fn is_match(&self, value: &str) -> bool {
         if let Pattern::Alternatives(list) = self {
             list.iter()
-                .any(|alt| alt.match_internal(value, None).is_match())
+                .any(|alt| alt.match_internal(value, None, false).is_match())
         } else {
-            self.match_internal(value, None).is_match()
+            self.match_internal(value, None, false).is_match()
+        }
+    }
+
+    /// Like [`Pattern::is_match`], but does not consider any dynamic
+    /// pattern matching
+    pub fn is_match_ignore_dynamic(&self, value: &str) -> bool {
+        if let Pattern::Alternatives(list) = self {
+            list.iter()
+                .any(|alt| alt.match_internal(value, None, true).is_match())
+        } else {
+            self.match_internal(value, None, true).is_match()
         }
     }
 
     pub fn could_match_others(&self, value: &str) -> bool {
         if let Pattern::Alternatives(list) = self {
             list.iter()
-                .any(|alt| alt.match_internal(value, None).could_match_others())
+                .any(|alt| alt.match_internal(value, None, false).could_match_others())
         } else {
-            self.match_internal(value, None).could_match_others()
+            self.match_internal(value, None, false).could_match_others()
         }
     }
 
     pub fn could_match(&self, value: &str) -> bool {
         if let Pattern::Alternatives(list) = self {
             list.iter()
-                .any(|alt| alt.match_internal(value, None).could_match())
+                .any(|alt| alt.match_internal(value, None, false).could_match())
         } else {
-            self.match_internal(value, None).could_match()
+            self.match_internal(value, None, false).could_match()
         }
     }
 
@@ -346,6 +357,7 @@ impl Pattern {
         &self,
         mut value: &'a str,
         mut any_offset: Option<usize>,
+        ignore_dynamic: bool,
     ) -> MatchResult<'a> {
         match self {
             Pattern::Constant(c) => {
@@ -379,6 +391,8 @@ impl Pattern {
                     MatchResult::Consumed(value, Some(m.start()))
                 } else if FORBIDDEN_MATCH.find(value).is_some() {
                     MatchResult::Partial
+                } else if ignore_dynamic {
+                    MatchResult::None
                 } else {
                     MatchResult::Consumed(value, Some(value.len()))
                 }
@@ -388,7 +402,7 @@ impl Pattern {
             }
             Pattern::Concatenation(list) => {
                 for part in list {
-                    match part.match_internal(value, any_offset) {
+                    match part.match_internal(value, any_offset, ignore_dynamic) {
                         MatchResult::None => return MatchResult::None,
                         MatchResult::Partial => return MatchResult::Partial,
                         MatchResult::Consumed(new_value, new_any_offset) => {
