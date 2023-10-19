@@ -1,9 +1,10 @@
 name: "Setup Turborepo Environment"
 description: "Sets up development environment for turborepo"
 inputs:
-  target:
-    description: "Compilation target"
-    required: true
+  windows:
+    description: 'Set to "true" if setting up for Windows'
+    required: false
+    default: "false"
   github-token:
     description: "GitHub token. You can pass secrets.GITHUB_TOKEN"
     required: true
@@ -22,7 +23,7 @@ runs:
     - name: "Setup Rust"
       uses: ./.github/actions/setup-rust
       with:
-        target: ${{ inputs.target }}
+        windows: ${{ inputs.windows }}
         shared-cache-key: turborepo-debug-build
         cache-key: ${{ inputs.target }}
         save-cache: true
