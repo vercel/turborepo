@@ -122,14 +122,13 @@ jobs:
         run: |
           npm config set --location=project "//registry.npmjs.org/:_authToken" ${NPM_TOKEN}
           VERSION=$(jq -r .version packages/turbo-repository/js/package.json)
-          TARBALLS="tarballs"
-          ls ${TARBALLS}
-          ls ${TARBALLS}/turbo-repository-darwin-arm64-${VERSION}.tgz
-          #TAG="canary"
-          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-darwin-arm64-${VERSION}.tgz
-          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-darwin-x64-${VERSION}.tgz
-          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-linux-arm64-gnu-${VERSION}.tgz
-          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-linux-x64-gnu-${VERSION}.tgz
-          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-win32-arm64-msvc-${VERSION}.tgz
-          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-win32-x64-msvc-${VERSION}.tgz
-          #npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-${VERSION}.tgz
+          cd tarballs
+          ls
+          TAG="canary"
+          npm publish -ddd --tag ${TAG} turbo-repository-darwin-arm64-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} turbo-repository-darwin-x64-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} turbo-repository-linux-arm64-gnu-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} turbo-repository-linux-x64-gnu-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} turbo-repository-win32-arm64-msvc-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} turbo-repository-win32-x64-msvc-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} turbo-repository-${VERSION}.tgz
