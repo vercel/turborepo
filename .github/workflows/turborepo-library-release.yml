@@ -105,10 +105,12 @@ jobs:
           mv *.tgz tarballs/
 
       - name: Publish Artifacts
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
           VERSION=$(jq -r .version packages/turbo-repository/js/package.json)
-          TARBALLS="packages/turbo-repository/tarballs"
+          TARBALLS="tarballs"
           TAG="canary"
           npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-darwin-arm64-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} ${TARBALLS}/turbo-repository-darwin-x64-${VERSION}.tgz
