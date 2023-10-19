@@ -1164,7 +1164,7 @@ async fn resolve_internal_inline(
                         );
                     }
                     PatternMatch::Directory(_, path) => {
-                        results.push(resolve_into_folder(*path, options, *query).await?);
+                        results.push(resolve_into_folder(*path, options, *query));
                     }
                 }
             }
@@ -1320,6 +1320,7 @@ async fn resolve_internal_inline(
     Ok(result)
 }
 
+#[turbo_tasks::function]
 async fn resolve_into_folder(
     package_path: Vc<FileSystemPath>,
     options: Vc<ResolveOptions>,
@@ -1470,7 +1471,7 @@ async fn resolve_module_request(
     // try both.
     for package_path in &result.packages {
         if is_match {
-            results.push(resolve_into_folder(*package_path, options, query).await?);
+            results.push(resolve_into_folder(*package_path, options, query));
         }
         if !could_match_others {
             continue;
@@ -1481,7 +1482,7 @@ async fn resolve_module_request(
                 ResolveIntoPackage::Default(_) | ResolveIntoPackage::MainField(_) => {
                     // doesn't affect packages with subpath
                     if path.is_match("/") {
-                        results.push(resolve_into_folder(*package_path, options, query).await?);
+                        results.push(resolve_into_folder(*package_path, options, query));
                     }
                 }
                 ResolveIntoPackage::ExportsField {
