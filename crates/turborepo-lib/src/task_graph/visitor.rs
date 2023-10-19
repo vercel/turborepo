@@ -279,6 +279,7 @@ impl<'a> Visitor<'a> {
                         Ok(w) => w,
                         Err(e) => {
                             error!("failed to capture outputs for \"{task_id}\": {e}");
+                            manager.stop().await;
                             // If we have an internal failure of being unable setup log capture we
                             // mark it as cancelled.
                             let _summary = tracker.cancel();
@@ -303,6 +304,7 @@ impl<'a> Visitor<'a> {
                             .send(if continue_on_error {
                                 Ok(())
                             } else {
+                                manager.stop().await;
                                 Err(StopExecution)
                             })
                             .ok();
@@ -333,6 +335,7 @@ impl<'a> Visitor<'a> {
                         // exit status with Some and it is only initialized with
                         // None. Is it still running?
                         error!("unable to determine why child exited");
+                        manager.stop().await;
                         let _summary = tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         return;
@@ -358,8 +361,8 @@ impl<'a> Visitor<'a> {
                             callback.send(Ok(())).ok();
                         } else {
                             prefixed_ui.error(format!("command finished with error: {error}"));
-                            callback.send(Err(StopExecution)).ok();
                             manager.stop().await;
+                            callback.send(Err(StopExecution)).ok();
                         }
                         errors.lock().expect("lock poisoned").push(TaskError {
                             task_id: task_id_for_display.clone(),
@@ -372,6 +375,7 @@ impl<'a> Visitor<'a> {
                     | ChildExit::Killed
                     | ChildExit::KilledExternal
                     | ChildExit::Failed => {
+                        manager.stop().await;
                         let _summary = tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         return;
