@@ -6,6 +6,7 @@ mod scope;
 pub(crate) mod summary;
 pub mod task_id;
 use std::{
+    collections::HashSet,
     io::{BufWriter, IsTerminal, Write},
     sync::Arc,
     time::SystemTime,
@@ -59,6 +60,36 @@ impl<'a> Run<'a> {
 
     fn opts(&self) -> Result<Opts> {
         self.base.args().try_into()
+    }
+
+    fn print_run_prelude(&self, opts: &Opts<'_>, filtered_pkgs: &HashSet<WorkspaceName>) {
+        let targets_list = opts.run_opts.tasks.join(", ");
+        if opts.run_opts.single_package {
+            cprint!(self.base.ui, GREY, "{}", "• Running");
+            cprint!(self.base.ui, BOLD_GREY, " {}\n", targets_list);
+        } else {
+            let mut packages = filtered_pkgs
+                .iter()
+                .map(|workspace_name| workspace_name.to_string())
+                .collect::<Vec<String>>();
+            packages.sort();
+            cprintln!(
+                self.base.ui,
+                GREY,
+                "• Packages in scope: {}",
+                packages.join(", ")
+            );
+            cprint!(self.base.ui, GREY, "{} ", "• Running");
+            cprint!(self.base.ui, BOLD_GREY, "{}", targets_list);
+            cprint!(self.base.ui, GREY, " in {} packages\n", filtered_pkgs.len());
+        }
+
+        let use_http_cache = !opts.cache_opts.skip_remote;
+        if use_http_cache {
+            cprintln!(self.base.ui, GREY, "• Remote caching enabled");
+        } else {
+            cprintln!(self.base.ui, GREY, "• Remote caching disabled");
+        }
     }
 
     #[tracing::instrument(skip(self))]
@@ -170,34 +201,6 @@ impl<'a> Run<'a> {
             filtered_pkgs
         };
 
-        let targets_list = opts.run_opts.tasks.join(", ");
-        if opts.run_opts.single_package {
-            cprint!(self.base.ui, GREY, "{}", "• Running");
-            cprint!(self.base.ui, BOLD_GREY, " {}\n", targets_list);
-        } else {
-            let mut packages = filtered_pkgs
-                .iter()
-                .map(|workspace_name| workspace_name.to_string())
-                .collect::<Vec<String>>();
-            packages.sort();
-            cprintln!(
-                self.base.ui,
-                GREY,
-                "• Packages in scope: {}",
-                packages.join(", ")
-            );
-            cprint!(self.base.ui, GREY, "{} ", "• Running");
-            cprint!(self.base.ui, BOLD_GREY, "{}", targets_list);
-            cprint!(self.base.ui, GREY, " in {} packages\n", filtered_pkgs.len());
-        }
-
-        let use_http_cache = !opts.cache_opts.skip_remote;
-        if use_http_cache {
-            cprintln!(self.base.ui, GREY, "• Remote caching enabled");
-        } else {
-            cprintln!(self.base.ui, GREY, "• Remote caching disabled");
-        }
-
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
         let async_cache = AsyncCache::new(
@@ -257,6 +260,10 @@ impl<'a> Run<'a> {
                 }
             }
             return Ok(0);
+        }
+
+        if !opts.run_opts.dry_run {
+            self.print_run_prelude(&opts, &filtered_pkgs);
         }
 
         let root_workspace = pkg_dep_graph
