@@ -15,15 +15,15 @@ import React from "react";
 import { DetailedFeatureLink } from "./Feature";
 import { DockerIcon } from "./Icons";
 
-const Wrapper = ({ children }: { children: React.ReactNode }) => {
+function Wrapper({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid grid-cols-1 mt-12 gap-x-6 gap-y-12 sm:grid-cols-2 lg:mt-16 lg:gap-x-8 lg:gap-y-12">
       {children}
     </div>
   );
-};
+}
 
-export const FundamentalsArea = () => {
+export function FundamentalsArea() {
   return (
     <Wrapper>
       <DetailedFeatureLink
@@ -33,7 +33,7 @@ export const FundamentalsArea = () => {
           name: "What is a Monorepo?",
         }}
         href="/docs/handbook/what-is-a-monorepo"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: CloudDownloadIcon,
@@ -41,7 +41,7 @@ export const FundamentalsArea = () => {
           name: "Package Installation",
         }}
         href="/docs/handbook/package-installation"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: ChatAlt2Icon,
@@ -50,7 +50,7 @@ export const FundamentalsArea = () => {
           name: "Workspaces",
         }}
         href="/docs/handbook/workspaces"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: LibraryIcon,
@@ -59,7 +59,7 @@ export const FundamentalsArea = () => {
           name: "Migrating to a Monorepo",
         }}
         href="/docs/handbook/migrating-to-a-monorepo"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: ShareIcon,
@@ -68,7 +68,7 @@ export const FundamentalsArea = () => {
           name: "Sharing Code",
         }}
         href="/docs/handbook/sharing-code"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: BanIcon,
@@ -77,12 +77,12 @@ export const FundamentalsArea = () => {
           name: "Troubleshooting",
         }}
         href="/docs/handbook/troubleshooting"
-      ></DetailedFeatureLink>
+      />
     </Wrapper>
   );
-};
+}
 
-export const TasksArea = () => {
+export function TasksArea() {
   return (
     <Wrapper>
       <DetailedFeatureLink
@@ -92,7 +92,7 @@ export const TasksArea = () => {
           name: "Development Tasks",
         }}
         href="/docs/handbook/dev"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: CodeIcon,
@@ -101,7 +101,7 @@ export const TasksArea = () => {
           name: "Building your App",
         }}
         href="/docs/handbook/building-your-app"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: ShieldExclamationIcon,
@@ -110,7 +110,7 @@ export const TasksArea = () => {
           name: "Linting",
         }}
         href="/docs/handbook/linting"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: StarIcon,
@@ -118,7 +118,7 @@ export const TasksArea = () => {
           name: "Testing",
         }}
         href="/docs/handbook/testing"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: DockerIcon,
@@ -127,7 +127,7 @@ export const TasksArea = () => {
           name: "Deploying with Docker",
         }}
         href="/docs/handbook/deploying-with-docker"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: CloudUploadIcon,
@@ -136,7 +136,7 @@ export const TasksArea = () => {
           name: "Publishing Packages",
         }}
         href="/docs/handbook/publishing-packages"
-      ></DetailedFeatureLink>
+      />
     </Wrapper>
   );
-};
+}

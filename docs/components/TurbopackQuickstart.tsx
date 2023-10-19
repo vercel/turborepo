@@ -4,7 +4,7 @@ import {
 } from "@heroicons/react/outline";
 import { DetailedFeatureLink } from "./Feature";
 
-export const TurbopackQuickstartArea = () => {
+export function TurbopackQuickstartArea() {
   return (
     <div className="grid grid-cols-1 mt-12 gap-x-6 gap-y-12 sm:grid-cols-2 lg:mt-16 lg:gap-x-8 lg:gap-y-12">
       <DetailedFeatureLink
@@ -14,7 +14,7 @@ export const TurbopackQuickstartArea = () => {
           name: "Why Turbopack?",
         }}
         href="/pack/docs/why-turbopack"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: LightBulbIcon,
@@ -22,7 +22,7 @@ export const TurbopackQuickstartArea = () => {
           name: "Core Concepts",
         }}
         href="/pack/docs/core-concepts"
-      ></DetailedFeatureLink>
+      />
     </div>
   );
-};
+}
