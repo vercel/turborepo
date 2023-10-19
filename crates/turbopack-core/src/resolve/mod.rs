@@ -1009,7 +1009,10 @@ pub async fn resolve(
     request: Vc<Request>,
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
-    let raw_result = resolve_internal(lookup_path, request, options);
+    let raw_result = resolve_internal_inline(lookup_path, request, options)
+        .await?
+        .resolve()
+        .await?;
     let result = handle_resolve_plugins(lookup_path, request, options, raw_result);
     Ok(result)
 }
