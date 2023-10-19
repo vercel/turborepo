@@ -352,7 +352,10 @@ impl Pattern {
                 if let Some(offset) = any_offset {
                     if let Some(index) = value.find(c) {
                         if index <= offset {
-                            MatchResult::Consumed(&value[index + c.len()..], None)
+                            MatchResult::Consumed {
+                                remaining: &value[index + c.len()..],
+                                any_offset: None,
+                            }
                         } else {
                             MatchResult::None
                         }
@@ -362,7 +365,10 @@ impl Pattern {
                         MatchResult::None
                     }
                 } else if value.starts_with(c) {
-                    MatchResult::Consumed(&value[c.len()..], None)
+                    MatchResult::Consumed {
+                        remaining: &value[c.len()..],
+                        any_offset: None,
+                    }
                 } else if c.starts_with(value) {
                     MatchResult::Partial
                 } else {
@@ -376,11 +382,17 @@ impl Pattern {
                     static ref FORBIDDEN_MATCH: Regex = Regex::new(r"\.d\.ts$|\.map$").unwrap();
                 };
                 if let Some(m) = FORBIDDEN.find(value) {
-                    MatchResult::Consumed(value, Some(m.start()))
+                    MatchResult::Consumed {
+                        remaining: value,
+                        any_offset: Some(m.start()),
+                    }
                 } else if FORBIDDEN_MATCH.find(value).is_some() {
                     MatchResult::Partial
                 } else {
-                    MatchResult::Consumed(value, Some(value.len()))
+                    MatchResult::Consumed {
+                        remaining: value,
+                        any_offset: Some(value.len()),
+                    }
                 }
             }
             Pattern::Alternatives(_) => {
@@ -391,13 +403,19 @@ impl Pattern {
                     match part.match_internal(value, any_offset) {
                         MatchResult::None => return MatchResult::None,
                         MatchResult::Partial => return MatchResult::Partial,
-                        MatchResult::Consumed(new_value, new_any_offset) => {
+                        MatchResult::Consumed {
+                            remaining: new_value,
+                            any_offset: new_any_offset,
+                        } => {
                             value = new_value;
                             any_offset = new_any_offset;
                         }
                     }
                 }
-                MatchResult::Consumed(value, any_offset)
+                MatchResult::Consumed {
+                    remaining: value,
+                    any_offset,
+                }
             }
         }
     }
@@ -529,7 +547,10 @@ impl Pattern {
 enum MatchResult<'a> {
     None,
     Partial,
-    Consumed(&'a str, Option<usize>),
+    Consumed {
+        remaining: &'a str,
+        any_offset: Option<usize>,
+    },
 }
 
 impl<'a> MatchResult<'a> {
@@ -537,8 +558,11 @@ impl<'a> MatchResult<'a> {
         match self {
             MatchResult::None => false,
             MatchResult::Partial => false,
-            MatchResult::Consumed(rem, any) => {
-                if let Some(offset) = any {
+            MatchResult::Consumed {
+                remaining: rem,
+                any_offset,
+            } => {
+                if let Some(offset) = any_offset {
                     *offset == rem.len()
                 } else {
                     rem.is_empty()
@@ -550,8 +574,11 @@ impl<'a> MatchResult<'a> {
         match self {
             MatchResult::None => false,
             MatchResult::Partial => true,
-            MatchResult::Consumed(rem, any) => {
-                if let Some(offset) = any {
+            MatchResult::Consumed {
+                remaining: rem,
+                any_offset,
+            } => {
+                if let Some(offset) = any_offset {
                     *offset == rem.len()
                 } else {
                     false
@@ -563,8 +590,11 @@ impl<'a> MatchResult<'a> {
         match self {
             MatchResult::None => false,
             MatchResult::Partial => true,
-            MatchResult::Consumed(rem, any) => {
-                if let Some(offset) = any {
+            MatchResult::Consumed {
+                remaining: rem,
+                any_offset,
+            } => {
+                if let Some(offset) = any_offset {
                     *offset == rem.len()
                 } else {
                     rem.is_empty()
