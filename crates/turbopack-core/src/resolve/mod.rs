@@ -1233,11 +1233,12 @@ async fn resolve_internal_inline(
             .cell()
             .emit();
 
-            resolve_internal(
+            resolve_internal_boxed(
                 lookup_path.root().resolve().await?,
                 relative.resolve().await?,
                 options,
             )
+            .await?
         }
         Request::Windows { path: _, query: _ } => {
             ResolvingIssue {
