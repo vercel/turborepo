@@ -1085,6 +1085,22 @@ async fn resolve_internal(
     request: Vc<Request>,
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
+    resolve_internal_inline(lookup_path, request, options).await
+}
+
+fn resolve_internal_boxed(
+    lookup_path: Vc<FileSystemPath>,
+    request: Vc<Request>,
+    options: Vc<ResolveOptions>,
+) -> Pin<Box<dyn Future<Output = Result<Vc<ResolveResult>>> + Send>> {
+    Box::pin(resolve_internal_inline(lookup_path, request, options))
+}
+
+async fn resolve_internal_inline(
+    lookup_path: Vc<FileSystemPath>,
+    request: Vc<Request>,
+    options: Vc<ResolveOptions>,
+) -> Result<Vc<ResolveResult>> {
     // This explicit deref of `options` is necessary
     #[allow(clippy::explicit_auto_deref)]
     let options_value: &ResolveOptions = &*options.await?;
@@ -1174,14 +1190,13 @@ async fn resolve_internal(
             // This ensures the order of the requests (extensions) is
             // preserved, `Pattern::Alternatives` inside a `Request::Raw` does not preserve
             // the order
-            let mut results = Vec::new();
-            for request in requests {
-                results.push(resolve_internal(
-                    lookup_path,
-                    request.resolve().await?,
-                    options,
-                ));
-            }
+            let results = requests
+                .into_iter()
+                .map(|request| async move {
+                    resolve_internal_boxed(lookup_path, request.resolve().await?, options).await
+                })
+                .try_join()
+                .await?;
 
             merge_results(results)
         }
