@@ -1,8 +1,9 @@
 use std::{collections::HashMap, mem::transmute};
 
 use anyhow::Result;
+use indexmap::IndexMap;
 use lightningcss::{
-    css_modules::{CssModuleExports, Pattern, Segment},
+    css_modules::{CssModuleExport, CssModuleExports, Pattern, Segment},
     dependencies::{Dependency, DependencyOptions},
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet},
     targets::{Features, Targets},
@@ -68,7 +69,7 @@ pub enum CssWithPlaceholderResult {
         url_references: Vc<UnresolvedUrlReferences>,
 
         #[turbo_tasks(trace_ignore)]
-        exports: Option<CssModuleExports>,
+        exports: Option<IndexMap<String, CssModuleExport>>,
 
         #[turbo_tasks(trace_ignore)]
         dependencies: Option<Vec<Dependency>>,
@@ -135,9 +136,17 @@ pub async fn process_css_with_placeholder(
                 ..Default::default()
             })?;
 
+            let exports = result.exports.map(|exports| {
+                let mut exports = exports.into_iter().collect::<IndexMap<_, _>>();
+
+                exports.sort_keys();
+
+                exports
+            });
+
             Ok(CssWithPlaceholderResult::Ok {
                 dependencies: result.dependencies,
-                exports: result.exports,
+                exports,
                 references: references.clone(),
                 url_references: url_references.clone(),
                 placeholders: HashMap::new(),
