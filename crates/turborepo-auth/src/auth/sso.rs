@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use reqwest::Url;
@@ -24,18 +24,14 @@ fn make_token_name() -> Result<String> {
 
 /// present, and the token has access to the provided `sso_team`, we do not
 /// overwrite it and instead log that we found an existing token.
-pub async fn sso_login<F>(
+pub async fn sso_login<'a>(
     api_client: &impl Client,
     ui: &UI,
-    existing_token: Option<&str>,
-    mut set_token: F,
+    existing_token: Option<&'a str>,
     login_url_configuration: &str,
     sso_team: &str,
     login_server: &impl server::SSOLoginServer,
-) -> Result<()>
-where
-    F: FnMut(&str) -> Result<()>,
-{
+) -> Result<Cow<'a, str>> {
     // Check if token exists first. Must be there for the user and contain the
     // sso_team passed into this function.
     if let Some(token) = existing_token {
@@ -50,7 +46,7 @@ where
             {
                 println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
                 ui::print_cli_authorized(&response_user.user.email, ui);
-                return Ok(());
+                return Ok(token.into());
             }
         }
     }
@@ -93,11 +89,9 @@ where
     let verified_user = api_client.verify_sso_token(token, &token_name).await?;
     let user_response = api_client.get_user(&verified_user.token).await?;
 
-    set_token(&verified_user.token)?;
-
     ui::print_cli_authorized(&user_response.user.email, ui);
 
-    Ok(())
+    Ok(verified_user.token.into())
 }
 
 #[cfg(test)]
@@ -303,45 +297,34 @@ mod tests {
         let mut api_client = MockApiClient::new();
         api_client.set_base_url(&url);
 
-        let mut got_token: Option<String> = None;
-
-        // closure that will check that the token is sent correctly
-        let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
-            // Force the got token to be incorrect if this is called a second time.
-            got_token = Some(t.to_owned());
-            Ok(())
-        };
-
         let login_server = MockSSOLoginServer {
             hits: Arc::new(0.into()),
         };
 
-        sso_login(&api_client, &ui, None, set_token, &url, team, &login_server)
+        let token = sso_login(&api_client, &ui, None, &url, team, &login_server)
             .await
             .unwrap();
 
-        assert_eq!(got_token, Some(EXPECTED_VERIFICATION_TOKEN.to_owned()));
+        let got_token = Some(token.to_string());
 
-        // Re-assign set_token due to ownership rules. This shouldn't be called.
-        let mut second_token: Option<&str> = None;
-        let set_token = |_: &str| -> anyhow::Result<(), anyhow::Error> {
-            second_token = Some("not expected");
-            Ok(())
-        };
+        assert_eq!(got_token, Some(EXPECTED_VERIFICATION_TOKEN.to_owned()));
 
         // Call the login function twice to test that we check for existing tokens.
         // Total server hits should be 1.
-        sso_login(
+        let second_token = sso_login(
             &api_client,
             &ui,
             got_token.as_deref(),
-            set_token,
             &url,
             team,
             &login_server,
         )
         .await
         .unwrap();
+
+        // We can confirm that we didn't fetch a new token because we're borrowing the
+        // existing token and not getting a new allocation.
+        assert!(second_token.is_borrowed());
 
         handle.abort();
 
@@ -350,7 +333,5 @@ mod tests {
             login_server.hits.load(std::sync::atomic::Ordering::SeqCst),
             1
         );
-        // If our set_token was called a second time, it'll set second_token as Some.
-        assert_eq!(second_token, None);
     }
 }

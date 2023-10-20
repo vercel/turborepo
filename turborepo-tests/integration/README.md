@@ -1,6 +1,6 @@
 ## Integration Tests
 
-The `cli/integration_tests` directory contains tests for Turborepo, exercising builds of
+The `turborepo-tests/integration` directory contains tests for Turborepo, exercising builds of
 Turborepo against custom monorepos and turbo.json setups. Tests are written using [`prysk`][1],
 which executes the CLI and can execute arbitrary other commands to assert the result. Some tests
 assert the log output, some assert the created artifacts, some assert configuration, etc etc.

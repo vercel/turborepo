@@ -259,7 +259,7 @@ async function createSlackPostSummary(payload: {
     2
   );
   console.log(
-    "Storing slack payload to ./slack-paylod.json to report into Slack channel.",
+    "Storing slack payload to ./slack-payload.json to report into Slack channel.",
     slackPayloadJson
   );
   fs.writeFileSync("./slack-payload.json", slackPayloadJson);
