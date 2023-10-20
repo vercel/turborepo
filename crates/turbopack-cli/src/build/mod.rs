@@ -14,7 +14,9 @@ use turbopack_build::{BuildChunkingContext, MinifyType};
 use turbopack_cli_utils::issue::{ConsoleUi, LogOptions};
 use turbopack_core::{
     asset::Asset,
-    chunk::{ChunkableModule, ChunkingContextExt, EvaluatableAssets},
+    chunk::{
+        availability_info::AvailabilityInfo, ChunkableModule, ChunkingContextExt, EvaluatableAssets,
+    },
     environment::{BrowserEnvironment, Environment, ExecutionEnvironment},
     issue::{handle_issues, IssueReporter, IssueSeverity},
     module::Module,
@@ -265,6 +267,7 @@ async fn build_internal(
                             .with_extension("entry.js".to_string()),
                         Vc::upcast(ecmascript),
                         EvaluatableAssets::one(Vc::upcast(ecmascript)),
+                        Value::new(AvailabilityInfo::Root),
                     )])
                 } else if let Some(chunkable) =
                     Vc::try_resolve_sidecast::<Box<dyn ChunkableModule>>(entry_module).await?

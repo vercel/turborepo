@@ -360,6 +360,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
                     runtime_entries
                         .unwrap_or_else(EvaluatableAssets::empty)
                         .with_entry(Vc::upcast(ecmascript)),
+                    Value::new(AvailabilityInfo::Root),
                 )])
             }
         }

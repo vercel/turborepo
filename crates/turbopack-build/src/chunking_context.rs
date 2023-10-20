@@ -163,8 +163,9 @@ impl BuildChunkingContext {
         path: Vc<FileSystemPath>,
         module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
         evaluatable_assets: Vc<EvaluatableAssets>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<Box<dyn OutputAsset>>> {
-        let availability_info = AvailabilityInfo::Root;
+        let availability_info = availability_info.into_value();
 
         let MakeChunkGroupResult { chunks } = make_chunk_group(
             Vc::upcast(self),
