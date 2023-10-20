@@ -13,6 +13,7 @@ module.exports = {
     "@typescript-eslint/no-unsafe-call": "warn",
     "@typescript-eslint/no-unsafe-member-access": "warn",
     "@typescript-eslint/no-unsafe-return": "warn",
+    "@typescript-eslint/no-unused-vars": "warn",
     "@typescript-eslint/require-await": "warn",
     "eslint-comments/require-description": "warn",
     "import/no-default-export": "warn",
