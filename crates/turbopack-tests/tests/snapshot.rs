@@ -329,7 +329,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
     {
         // TODO: Load runtime entries from snapshots
         match options.runtime {
-            Runtime::Dev => chunking_context.evaluated_chunk_group(
+            Runtime::Dev => chunking_context.evaluated_chunk_group_assets(
                 ecmascript.ident(),
                 runtime_entries
                     .unwrap_or_else(EvaluatableAssets::empty)
@@ -337,37 +337,39 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
                 Value::new(AvailabilityInfo::Root),
             ),
             Runtime::Build => {
-                Vc::cell(vec![Vc::try_resolve_downcast_type::<BuildChunkingContext>(
-                    chunking_context,
-                )
-                .await?
-                .unwrap()
-                .entry_chunk_group(
-                    // `expected` expects a completely flat output directory.
-                    chunk_root_path
-                        .join(
-                            entry_module
-                                .ident()
-                                .path()
-                                .file_stem()
-                                .await?
-                                .as_deref()
-                                .unwrap()
-                                .to_string(),
+                Vc::cell(vec![
+                    Vc::try_resolve_downcast_type::<BuildChunkingContext>(chunking_context)
+                        .await?
+                        .unwrap()
+                        .entry_chunk_group(
+                            // `expected` expects a completely flat output directory.
+                            chunk_root_path
+                                .join(
+                                    entry_module
+                                        .ident()
+                                        .path()
+                                        .file_stem()
+                                        .await?
+                                        .as_deref()
+                                        .unwrap()
+                                        .to_string(),
+                                )
+                                .with_extension("entry.js".to_string()),
+                            Vc::upcast(ecmascript),
+                            runtime_entries
+                                .unwrap_or_else(EvaluatableAssets::empty)
+                                .with_entry(Vc::upcast(ecmascript)),
+                            Value::new(AvailabilityInfo::Root),
                         )
-                        .with_extension("entry.js".to_string()),
-                    Vc::upcast(ecmascript),
-                    runtime_entries
-                        .unwrap_or_else(EvaluatableAssets::empty)
-                        .with_entry(Vc::upcast(ecmascript)),
-                    Value::new(AvailabilityInfo::Root),
-                )])
+                        .await?
+                        .asset,
+                ])
             }
         }
     } else if let Some(chunkable) =
         Vc::try_resolve_downcast::<Box<dyn ChunkableModule>>(entry_module).await?
     {
-        chunking_context.root_chunk_group(chunkable)
+        chunking_context.root_chunk_group_assets(chunkable)
     } else {
         // TODO convert into a serve-able asset
         bail!("Entry module is not chunkable, so it can't be used to bootstrap the application")

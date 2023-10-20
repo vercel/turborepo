@@ -143,13 +143,13 @@ impl DevHtmlAsset {
                     } else {
                         runtime_entries
                     };
-                    chunking_context.evaluated_chunk_group(
+                    chunking_context.evaluated_chunk_group_assets(
                         chunkable_module.ident(),
                         runtime_entries,
                         Value::new(AvailabilityInfo::Root),
                     )
                 } else {
-                    chunking_context.root_chunk_group(Vc::upcast(chunkable_module))
+                    chunking_context.root_chunk_group_assets(Vc::upcast(chunkable_module))
                 };
 
                 assets.await

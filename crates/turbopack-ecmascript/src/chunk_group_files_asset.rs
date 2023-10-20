@@ -138,7 +138,7 @@ impl ChunkGroupFilesChunkItem {
         let chunks = if let Some(ecma) =
             Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(inner.module).await?
         {
-            inner.chunking_context.evaluated_chunk_group(
+            inner.chunking_context.evaluated_chunk_group_assets(
                 inner.module.ident(),
                 inner
                     .runtime_entries
@@ -149,7 +149,7 @@ impl ChunkGroupFilesChunkItem {
         } else {
             inner
                 .chunking_context
-                .root_chunk_group(Vc::upcast(inner.module))
+                .root_chunk_group_assets(Vc::upcast(inner.module))
         };
         Ok(chunks)
     }

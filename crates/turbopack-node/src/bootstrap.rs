@@ -5,7 +5,9 @@ use turbo_tasks::{Value, Vc};
 use turbo_tasks_fs::{File, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{availability_info::AvailabilityInfo, ChunkingContext, EvaluatableAssets},
+    chunk::{
+        availability_info::AvailabilityInfo, ChunkingContext, ChunkingContextExt, EvaluatableAssets,
+    },
     ident::AssetIdent,
     output::{OutputAsset, OutputAssets},
 };
@@ -25,7 +27,7 @@ fn node_js_bootstrap_chunk_reference_description() -> Vc<String> {
 
 impl NodeJsBootstrapAsset {
     fn chunks(&self) -> Vc<OutputAssets> {
-        self.chunking_context.evaluated_chunk_group(
+        self.chunking_context.evaluated_chunk_group_assets(
             AssetIdent::from_path(self.path),
             self.evaluatable_assets,
             Value::new(AvailabilityInfo::Root),
