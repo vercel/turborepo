@@ -104,12 +104,23 @@ impl Default for Engine<Building> {
 }
 
 impl Engine<Built> {
-    #[allow(dead_code)]
     pub fn dependencies(&self, task_id: &TaskId) -> Option<HashSet<&TaskNode>> {
+        self.neighbors(task_id, petgraph::Direction::Outgoing)
+    }
+
+    pub fn dependents(&self, task_id: &TaskId) -> Option<HashSet<&TaskNode>> {
+        self.neighbors(task_id, petgraph::Direction::Incoming)
+    }
+
+    fn neighbors(
+        &self,
+        task_id: &TaskId,
+        direction: petgraph::Direction,
+    ) -> Option<HashSet<&TaskNode>> {
         let index = self.task_lookup.get(task_id)?;
         Some(
             self.task_graph
-                .neighbors_directed(*index, petgraph::Direction::Outgoing)
+                .neighbors_directed(*index, direction)
                 .map(|index| {
                     self.task_graph
                         .node_weight(index)
