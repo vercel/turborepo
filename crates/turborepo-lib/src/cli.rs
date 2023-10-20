@@ -804,7 +804,7 @@ pub async fn run(
 
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Run(args) if args.experimental_rust_codepath => {
+        Command::Run(args) => {
             // in the case of enabling the run stub, we want to be able to opt-in
             // to the rust codepath for running turbo
             if args.tasks.is_empty() {
