@@ -402,7 +402,7 @@ impl TurborepoConfigBuilder {
         // - global configuration (~/.turbo/config.json)
         // - local configuration (<REPO_ROOT>/.turbo/config.json)
         // - environment variables
-        // - CLI arguments (deprecated, and to be removed)
+        // - CLI arguments
         // - builder pattern overrides.
 
         let root_package_json = PackageJson::load(&self.repo_root.join_component("package.json"))
