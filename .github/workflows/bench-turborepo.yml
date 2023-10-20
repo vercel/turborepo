@@ -70,7 +70,7 @@ jobs:
         run: |
           echo 'filename=${{ matrix.os.runner }}.json' >> "$GITHUB_OUTPUT"
 
-      - name: Debug filename
+      - name: Display filename
         shell: bash
         run: echo "${{ steps.filename.outputs.filename }}"
 
@@ -132,7 +132,7 @@ jobs:
           jq -f benchmark/src/fold.jq < benchmark/profiles/macos-latest.json > benchmark/profiles/macos-ttft.json
           jq -f benchmark/src/fold.jq < benchmark/profiles/windows-latest.json > benchmark/profiles/windows-ttft.json
 
-      - name: Debug TTFT Data
+      - name: Display TTFT Data
         shell: bash
         run: |
           cat benchmark/profiles/ubuntu-ttft.json
@@ -174,7 +174,7 @@ jobs:
           jq -f benchmark/src/fold.jq < benchmark/profiles/macos-latest.json > benchmark/profiles/macos-ttft.json
           jq -f benchmark/src/fold.jq < benchmark/profiles/windows-latest.json > benchmark/profiles/windows-ttft.json
 
-      - name: Debug TTFT data
+      - name: Display TTFT data
         shell: bash
         run: |
           cat benchmark/profiles/ubuntu-ttft.json
