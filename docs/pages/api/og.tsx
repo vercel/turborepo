@@ -1,18 +1,16 @@
 import React, { createElement } from "react";
 import { ImageResponse } from "@vercel/og";
-
+import type { NextApiRequest } from "next/index";
 import PackLogo from "../../components/logos/og/PackLogo";
 import RepoLogo from "../../components/logos/og/RepoLogo";
 import TurboLogo from "../../components/logos/og/TurboLogo";
 import VercelLogo from "../../components/logos/og/VercelLogo";
 
-import type { NextApiRequest } from "next/index";
-
 function _arrayBufferToBase64(buffer) {
-  var binary = "";
-  var bytes = new Uint8Array(buffer);
-  var len = bytes.byteLength;
-  for (var i = 0; i < len; i++) {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
@@ -71,7 +69,7 @@ export default async function openGraphImage(
     // ?title=<title>
     const hasTitle = searchParams.has("title");
     const title = hasTitle
-      ? searchParams.get("title")?.slice(0, 100)
+      ? searchParams.get("title").slice(0, 100)
       : type === "pack"
       ? "The successor to Webpack"
       : type === "repo"
@@ -119,7 +117,7 @@ export function OGImage({
         color: "#fff",
       }}
     >
-      {/* eslint-disable-next-line  @next/next/no-img-element, jsx-a11y/alt-text */}
+      {}
       <div style={{ display: "flex", height: 97 * 1.1, alignItems: "center" }}>
         {type === "pack" ? (
           <PackLogo height={103 * 1.1} width={697 * 1.1} />

@@ -1,6 +1,6 @@
+import type { SVGProps } from "react";
 import { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { SVGProps } from "react";
 
 type SVGPaths = Record<string, SVGProps<SVGPathElement>>;
 
@@ -43,28 +43,30 @@ export function AnimatedIcon({
       setShowCheckInternal(false);
     }, 1500);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+    };
   }, [showCheck]);
 
   if (icon === "vercel" || icon === "github") {
     return (
       <motion.svg
-        key={icon}
-        width="18"
-        height="18"
-        viewBox="0 0 621 621"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="fill-black dark:fill-white"
-        initial={{
-          opacity: 0,
-        }}
         animate={{
           opacity: 1,
         }}
+        className="fill-black dark:fill-white"
+        fill="none"
+        height="18"
+        initial={{
+          opacity: 0,
+        }}
+        key={icon}
         transition={{
           duration: 0.2,
         }}
+        viewBox="0 0 621 621"
+        width="18"
+        xmlns="http://www.w3.org/2000/svg"
       >
         <path {...StaticPaths[icon]} />
       </motion.svg>
@@ -74,45 +76,45 @@ export function AnimatedIcon({
   return (
     <AnimatePresence>
       <motion.svg
-        key={icon}
-        initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.2 }}
-        width="18"
-        height="18"
-        viewBox="0 0 621 621"
-        fill="none"
         className="stroke-black dark:stroke-white"
+        exit={{ opacity: 0 }}
+        fill="none"
+        height="18"
+        initial={{ opacity: 0 }}
+        key={icon}
+        transition={{ duration: 0.2 }}
+        viewBox="0 0 621 621"
+        width="18"
         xmlns="http://www.w3.org/2000/svg"
       >
         {/* prompt > or check */}
         <motion.path
-          d={AnimatedPaths[showCheckInternal ? "check" : "prompt"].d}
           animate={{
             d: showCheckInternal
               ? AnimatedPaths.check.d
               : AnimatedPaths.prompt.d,
           }}
+          d={AnimatedPaths[showCheckInternal ? "check" : "prompt"].d}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="50"
           transition={{
             duration: 0.15,
           }}
-          strokeWidth="50"
-          strokeLinecap="round"
-          strokeLinejoin="round"
         />
         {/* prompt: bottom line */}
         <motion.path
-          d="M310.5 491.625H517.5"
           animate={{
             opacity: showCheckInternal ? 0 : 1,
           }}
+          d="M310.5 491.625H517.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="50"
           transition={{
             duration: 0.15,
           }}
-          strokeWidth="50"
-          strokeLinecap="round"
-          strokeLinejoin="round"
         />
       </motion.svg>
     </AnimatePresence>

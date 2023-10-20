@@ -93,14 +93,12 @@ export function PackBenchmarks() {
       <div className="flex flex-col items-center w-full">
         <PackBenchmarkTabs onTabChange={setCategory} />
         <BenchmarksGraph
+          bars={DEFAULT_BARS}
           category={category}
           numberOfModules={numberOfModules}
-          bars={DEFAULT_BARS}
         />
       </div>
-      <PackBenchmarksPicker
-        setNumberOfModules={setNumberOfModules}
-      ></PackBenchmarksPicker>
+      <PackBenchmarksPicker setNumberOfModules={setNumberOfModules} />
     </FadeIn>
   );
 }
