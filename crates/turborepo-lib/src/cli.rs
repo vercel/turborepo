@@ -804,7 +804,6 @@ pub async fn run(
 
             Ok(Payload::Rust(Ok(0)))
         }
-        #[cfg(feature = "run-stub")]
         Command::Run(args) => {
             // in the case of enabling the run stub, we want to be able to opt-in
             // to the rust codepath for running turbo
@@ -824,20 +823,6 @@ pub async fn run(
             } else {
                 Ok(Payload::Go(Box::new(base)))
             }
-        }
-        #[cfg(not(feature = "run-stub"))]
-        Command::Run(args) => {
-            if args.experimental_rust_codepath {
-                tracing::warn!("rust codepath enabled, but not compiled with support");
-            }
-            if let Some(file_path) = &args.profile {
-                logger.enable_chrome_tracing(file_path)?;
-            }
-            if args.tasks.is_empty() {
-                return Err(anyhow!("at least one task must be specified"));
-            }
-            let base = CommandBase::new(cli_args, repo_root, version, ui);
-            Ok(Payload::Go(Box::new(base)))
         }
         Command::Prune {
             scope,
