@@ -1,3 +1,5 @@
+use std::iter::once;
+
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, TaskInput, Value, Vc};
@@ -170,7 +172,7 @@ impl BuildChunkingContext {
                 evaluatable_assets
                     .await?
                     .iter()
-                    .map(|&asset| Vc::upcase(asset)),
+                    .map(|&asset| Vc::upcast(asset)),
             ),
             availability_info,
         )
