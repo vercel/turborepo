@@ -30,8 +30,8 @@ use turbopack_build::{BuildChunkingContext, MinifyType};
 use turbopack_core::{
     asset::Asset,
     chunk::{
-        ChunkableModule, ChunkingContext, ChunkingContextExt, EvaluatableAssetExt,
-        EvaluatableAssets,
+        availability_info::AvailabilityInfo, ChunkableModule, ChunkingContext, ChunkingContextExt,
+        EvaluatableAssetExt, EvaluatableAssets,
     },
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
@@ -334,6 +334,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
                 runtime_entries
                     .unwrap_or_else(EvaluatableAssets::empty)
                     .with_entry(Vc::upcast(ecmascript)),
+                Value::new(AvailabilityInfo::Root),
             ),
             Runtime::Build => {
                 Vc::cell(vec![Vc::try_resolve_downcast_type::<BuildChunkingContext>(

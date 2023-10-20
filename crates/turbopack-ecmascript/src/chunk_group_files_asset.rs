@@ -1,12 +1,12 @@
 use anyhow::{Context, Result};
 use indexmap::IndexSet;
-use turbo_tasks::{TryJoinIterExt, ValueToString, Vc};
+use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{File, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
-        ChunkItem, ChunkType, ChunkableModule, ChunkingContext, ChunkingContextExt,
-        EvaluatableAssets,
+        availability_info::AvailabilityInfo, ChunkItem, ChunkType, ChunkableModule,
+        ChunkingContext, ChunkingContextExt, EvaluatableAssets,
     },
     ident::AssetIdent,
     introspect::{
@@ -144,6 +144,7 @@ impl ChunkGroupFilesChunkItem {
                     .runtime_entries
                     .unwrap_or_else(EvaluatableAssets::empty)
                     .with_entry(Vc::upcast(ecma)),
+                Value::new(AvailabilityInfo::Root),
             )
         } else {
             inner

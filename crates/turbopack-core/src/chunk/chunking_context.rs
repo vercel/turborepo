@@ -68,6 +68,7 @@ pub trait ChunkingContext {
         self: Vc<Self>,
         ident: Vc<AssetIdent>,
         evaluatable_assets: Vc<EvaluatableAssets>,
+        availability_info: Value<AvailabilityInfo>,
     ) -> Vc<OutputAssets>;
 
     async fn chunk_item_id_from_ident(

@@ -343,6 +343,7 @@ impl ChunkingContext for BuildChunkingContext {
         self: Vc<Self>,
         _ident: Vc<AssetIdent>,
         _evaluatable_assets: Vc<EvaluatableAssets>,
+        _availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<OutputAssets>> {
         // TODO(alexkirsz) This method should be part of a separate trait that is
         // only implemented for client/edge runtimes.
