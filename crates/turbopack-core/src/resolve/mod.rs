@@ -726,7 +726,7 @@ async fn type_exists(
     for path in result.symlinks.iter() {
         refs.push(Vc::upcast(FileSource::new(*path)));
     }
-    let path = result.path;
+    let path = result.path.resolve().await?;
     Ok(if *path.get_type().await? == ty {
         Some(path)
     } else {
@@ -1453,7 +1453,7 @@ async fn resolve_module_request(
         };
 
         let FindContextFileResult::Found(package_json_path, refs) =
-            &*find_context_file(lookup_path, package_json()).await?
+            &*find_context_file(lookup_path, package_json().resolve().await?).await?
         else {
             continue;
         };
@@ -1515,7 +1515,7 @@ async fn resolve_module_request(
     for &package_path in &result.packages {
         results.push(resolve_into_package(
             Value::new(path.clone()),
-            package_path,
+            package_path.resolve().await?,
             query,
             options,
         ));
