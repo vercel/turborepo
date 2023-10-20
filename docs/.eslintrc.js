@@ -26,6 +26,5 @@ module.exports = {
     "no-undef": "warn",
     "react/no-unknown-property": "warn",
     "react/no-unstable-nested-components": "warn",
-    eqeqeq: "warn",
   },
 };
