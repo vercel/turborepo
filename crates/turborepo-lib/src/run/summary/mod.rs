@@ -32,7 +32,7 @@ use crate::{
     opts::RunOpts,
     package_graph::{PackageGraph, WorkspaceName},
     run::summary::{
-        execution::{ExecutionState, ExecutionSummary, ExecutionTracker},
+        execution::{ExecutionSummary, ExecutionTracker},
         scm::SCMState,
         spaces::{SpaceRequest, SpacesClient, SpacesClientHandle},
         task::TaskSummary,
@@ -623,7 +623,7 @@ impl<'a> RunSummary<'a> {
     fn get_failed_tasks(&self) -> Vec<&TaskSummary<'a>> {
         self.tasks
             .iter()
-            .filter(|task| matches!(task.execution.state, ExecutionState::BuildFailed { .. }))
+            .filter(|task| task.execution.is_failure())
             .collect()
     }
 
