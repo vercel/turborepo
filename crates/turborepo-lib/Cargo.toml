@@ -10,7 +10,6 @@ license = "MPL-2.0"
 default = ["rustls-tls"]
 native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
 rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
-run-stub = []
 
 # serve the daemon over a port (useful for testing)
 http = ["tonic-reflection"]
