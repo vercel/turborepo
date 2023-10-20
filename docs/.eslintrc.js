@@ -37,6 +37,5 @@ module.exports = {
     "no-var": "warn",
     "react/no-unknown-property": "warn",
     "react/no-unstable-nested-components": "warn",
-    eqeqeq: "warn",
   },
 };

@@ -91,7 +91,7 @@ function Card({
         </div>
 
         <div className="flex flex-col items-center flex-1">
-          {title == "pack" ? (
+          {title === "pack" ? (
             <PackLogo
               alt={alt}
               className="w-[160px] md:w-[220px] mb-3 fill-black dark:fill-white"
