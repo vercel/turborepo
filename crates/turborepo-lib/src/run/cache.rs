@@ -6,7 +6,9 @@ use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
 use turborepo_cache::{AsyncCache, CacheError, CacheResponse, CacheSource};
-use turborepo_ui::{replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI};
+use turborepo_ui::{
+    color, replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI,
+};
 
 use crate::{
     cli::OutputLogsMode,
@@ -130,7 +132,7 @@ impl TaskCache {
         if self.task_output_mode == OutputLogsMode::ErrorsOnly {
             prefixed_ui.output(format!(
                 "cache miss, executing {}",
-                GREY.apply_to(&self.hash)
+                color!(self.ui, GREY, "{}", self.hash)
             ));
             self.replay_log_file(prefixed_ui)?;
         }
@@ -174,7 +176,7 @@ impl TaskCache {
             ) {
                 prefixed_ui.output(format!(
                     "cache bypass, force executing {}",
-                    GREY.apply_to(&self.hash)
+                    color!(self.ui, GREY, "{}", self.hash)
                 ));
             }
 
@@ -223,7 +225,7 @@ impl TaskCache {
                     if matches!(err, CacheError::CacheMiss) {
                         prefixed_ui.output(format!(
                             "cache miss, executing {}",
-                            GREY.apply_to(&self.hash)
+                            color!(self.ui, GREY, "{}", self.hash)
                         ));
                     }
 
@@ -244,10 +246,13 @@ impl TaskCache {
                 {
                     // Don't fail the whole operation just because we failed to
                     // watch the outputs
-                    prefixed_ui.warn(GREY.apply_to(format!(
+                    prefixed_ui.warn(color!(
+                        self.ui,
+                        GREY,
                         "Failed to mark outputs as cached for {}: {:?}",
-                        self.task_id, err
-                    )))
+                        self.task_id,
+                        err
+                    ))
                 }
             }
 
@@ -270,7 +275,7 @@ impl TaskCache {
                 prefixed_ui.output(format!(
                     "cache hit{}, suppressing logs {}",
                     more_context,
-                    GREY.apply_to(&self.hash)
+                    color!(self.ui, GREY, "{}", self.hash)
                 ));
             }
             OutputLogsMode::Full => {
@@ -278,7 +283,7 @@ impl TaskCache {
                 prefixed_ui.output(format!(
                     "cache hit{}, replaying logs {}",
                     more_context,
-                    GREY.apply_to(&self.hash)
+                    color!(self.ui, GREY, "{}", self.hash)
                 ));
                 self.replay_log_file(prefixed_ui)?;
             }
