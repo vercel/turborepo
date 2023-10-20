@@ -272,24 +272,24 @@ impl RunTracker {
 // not be used anywhere else.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SinglePackageRunSummary<'a, 'b> {
+struct SinglePackageRunSummary<'a> {
     id: Ksuid,
-    version: &'b str,
-    turbo_version: &'b str,
+    version: &'a str,
+    turbo_version: &'a str,
     monorepo: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    execution: Option<&'b ExecutionSummary<'a>>,
+    execution: Option<&'a ExecutionSummary<'a>>,
     #[serde(rename = "globalCacheInputs")]
-    global_hash_summary: &'b GlobalHashSummary<'a>,
+    global_hash_summary: &'a GlobalHashSummary<'a>,
     env_mode: EnvMode,
     framework_inference: bool,
-    tasks: &'b [TaskSummary<'a>],
-    user: &'b str,
-    pub scm: &'b SCMState,
+    tasks: &'a [TaskSummary<'a>],
+    user: &'a str,
+    pub scm: &'a SCMState,
 }
 
-impl<'a, 'b> From<&'b RunSummary<'a>> for SinglePackageRunSummary<'a, 'b> {
-    fn from(run_summary: &'b RunSummary<'a>) -> Self {
+impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
+    fn from(run_summary: &'a RunSummary<'a>) -> Self {
         SinglePackageRunSummary {
             id: run_summary.id,
             version: &run_summary.version,
@@ -589,7 +589,7 @@ impl<'a> RunSummary<'a> {
         if self.monorepo {
             Ok(serde_json::to_string_pretty(&self)?)
         } else {
-            let monorepo_rsm: SinglePackageRunSummary<'a, '_> = (&*self).into();
+            let monorepo_rsm = SinglePackageRunSummary::from(&*self);
             Ok(serde_json::to_string_pretty(&monorepo_rsm)?)
         }
     }
