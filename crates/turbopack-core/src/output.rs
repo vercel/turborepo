@@ -28,9 +28,8 @@ impl OutputAssets {
         Vc::cell(assets)
     }
 
-    #[turbo_tasks::function]
     pub fn empty() -> Vc<Self> {
-        Vc::cell(vec![])
+        Self::new(vec![])
     }
 }
 
