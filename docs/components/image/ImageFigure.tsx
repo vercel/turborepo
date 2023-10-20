@@ -7,19 +7,10 @@ export type ImageFigureProps = ImageProps & {
   caption?: string;
   margin?: number;
   captionSpacing?: number;
-  shadow?: boolean;
-  borderRadius?: boolean;
 };
 
 export function ImageFigure(props: ImageFigureProps): React.ReactNode {
-  const {
-    caption,
-    margin = 40,
-    captionSpacing = null,
-    shadow = false,
-    borderRadius = false,
-    ...rest
-  } = props;
+  const { caption, margin = 40, captionSpacing = null, ...rest } = props;
 
   return (
     <figure className="block text-center" style={{ margin: `${margin}px 0` }}>

@@ -194,7 +194,7 @@ function SubmitForm() {
           body: JSON.stringify({ email }),
         })
           .then((res) => res.json())
-          .then((res) => {
+          .then(() => {
             return router.push("/confirm");
           });
         e.preventDefault();

@@ -34,7 +34,6 @@ module.exports = {
     "no-nested-ternary": "warn",
     "no-redeclare": "warn",
     "no-undef": "warn",
-    "no-unused-vars": "warn",
     "no-var": "warn",
     "react/no-unknown-property": "warn",
     "react/no-unstable-nested-components": "warn",

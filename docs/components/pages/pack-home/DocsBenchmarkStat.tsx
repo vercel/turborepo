@@ -1,6 +1,6 @@
 import benchmarkData from "./benchmark-data/data.json";
 
-type StatFunc = (data: typeof benchmarkData) => string;
+type StatFunc = (_: typeof benchmarkData) => string;
 
 /**
  * Replace with satisfies keyword when TS 4.9 drops

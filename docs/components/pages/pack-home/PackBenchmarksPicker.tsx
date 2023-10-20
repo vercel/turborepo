@@ -1,8 +1,7 @@
-import { BenchmarkNumberOfModules } from "./PackBenchmarks";
 import { PackDropdown } from "./PackDropdown";
 
 export function PackBenchmarksPicker(props: {
-  setNumberOfModules: (num: BenchmarkNumberOfModules) => void;
+  setNumberOfModules: () => void;
 }) {
   return (
     <div className="flex items-center gap-3">

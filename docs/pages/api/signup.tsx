@@ -12,7 +12,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     };
 
     try {
-      const trayRes = await fetch(TRAY_URL, {
+      await fetch(TRAY_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

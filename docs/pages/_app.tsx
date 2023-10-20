@@ -8,7 +8,7 @@ import { Analytics } from "@vercel/analytics/react";
 
 type NextraAppProps = AppProps & {
   Component: AppProps["Component"] & {
-    getLayout: (page: ReactNode) => ReactNode;
+    getLayout: (_: ReactNode) => ReactNode;
   };
 };
 

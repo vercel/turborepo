@@ -1,9 +1,7 @@
-import cn from "classnames";
 import Image from "next/image";
 import Link from "next/link";
 // import { Marquee } from "../../clients/Marquee";
 // import { Clients } from "../../clients/Clients";
-import gradients from "../home-shared/gradients.module.css";
 import { HeroText, SectionSubtext } from "../home-shared/Headings";
 import { Gradient } from "../home-shared/Gradient";
 import { FadeIn } from "../home-shared/FadeIn";

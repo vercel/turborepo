@@ -52,7 +52,7 @@ function SoonBadge() {
 export function PackBenchmarkTabs({
   onTabChange,
 }: {
-  onTabChange: (tab: BenchmarkCategory) => void;
+  onTabChange: (_: BenchmarkCategory) => void;
 }) {
   const [activeTab, setActiveTab] = useState(0);
 
