@@ -1,20 +1,19 @@
 use std::{borrow::Cow, sync::Arc};
 
-use anyhow::{anyhow, Context, Result};
 use reqwest::Url;
 use tokio::sync::OnceCell;
 use tracing::warn;
 use turborepo_api_client::Client;
 use turborepo_ui::{start_spinner, BOLD, UI};
 
-use crate::{error, server, ui};
+use crate::{error, server, ui, Error, Error::FailedToMakeSSOTokenName};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 const DEFAULT_SSO_PROVIDER: &str = "SAML/OIDC Single Sign-On";
 
-fn make_token_name() -> Result<String> {
-    let host = hostname::get()?;
+fn make_token_name() -> Result<String, Error> {
+    let host = hostname::get().map_err(FailedToMakeSSOTokenName)?;
 
     Ok(format!(
         "Turbo CLI on {} via {DEFAULT_SSO_PROVIDER}",
@@ -30,8 +29,8 @@ pub async fn sso_login<'a>(
     existing_token: Option<&'a str>,
     login_url_configuration: &str,
     sso_team: &str,
-    login_server: &impl server::SSOLoginServer,
-) -> Result<Cow<'a, str>> {
+    login_server: impl server::SSOLoginServer,
+) -> Result<Cow<'a, str>, Error> {
     // Check if token exists first. Must be there for the user and contain the
     // sso_team passed into this function.
     if let Some(token) = existing_token {
@@ -80,14 +79,19 @@ pub async fn sso_login<'a>(
     login_server.run(DEFAULT_PORT, token_cell.clone()).await?;
     spinner.finish_and_clear();
 
-    let token = token_cell
-        .get()
-        .ok_or_else(|| anyhow!("no token auth token found"))?;
+    let token = token_cell.get().ok_or(Error::FailedToGetToken)?;
 
-    let token_name = make_token_name().context("failed to make sso token name")?;
+    let token_name = make_token_name()?;
 
-    let verified_user = api_client.verify_sso_token(token, &token_name).await?;
-    let user_response = api_client.get_user(&verified_user.token).await?;
+    let verified_user = api_client
+        .verify_sso_token(token, &token_name)
+        .await
+        .map_err(Error::FailedToValidateSSOToken)?;
+
+    let user_response = api_client
+        .get_user(&verified_user.token)
+        .await
+        .map_err(Error::FailedToFetchUser)?;
 
     ui::print_cli_authorized(&user_response.user.email, ui);
 

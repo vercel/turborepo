@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use itertools::{Either, Itertools};
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPathBuf};
 
 use crate::{hash_object::hash_objects, Error, Git, SCM};
 
@@ -117,7 +117,7 @@ impl Git {
                     .anchor(process_relative_to.resolve(f.as_ref()))?
                     .to_unix())
             })
-            .collect::<Result<Vec<_>, PathError>>()?;
+            .collect::<Result<Vec<_>, Error>>()?;
         // Note: to_hash is *git repo relative*
         hash_objects(&self.root, process_relative_to, to_hash, &mut hashes)?;
         Ok(hashes)

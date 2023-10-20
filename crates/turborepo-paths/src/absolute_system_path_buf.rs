@@ -97,6 +97,7 @@ impl AbsoluteSystemPathBuf {
     }
 
     pub fn cwd() -> Result<Self, PathError> {
+        // TODO(errors): Unwrap current_dir()
         Ok(Self(Utf8PathBuf::try_from(std::env::current_dir()?)?))
     }
 

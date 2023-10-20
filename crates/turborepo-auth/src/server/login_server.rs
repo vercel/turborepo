@@ -6,6 +6,8 @@ use axum::{extract::Query, response::Redirect, routing::get, Router};
 use serde::Deserialize;
 use tokio::sync::OnceCell;
 
+use crate::Error;
+
 #[derive(Debug, Clone, Deserialize)]
 struct LoginPayload {
     token: String,
@@ -18,18 +20,11 @@ pub trait LoginServer {
         port: u16,
         login_url_base: String,
         login_token: Arc<OnceCell<String>>,
-    ) -> Result<()>;
+    ) -> Result<(), Error>;
 }
 
 /// TODO: Document this.
-#[derive(Default)]
 pub struct DefaultLoginServer;
-
-impl DefaultLoginServer {
-    pub fn new() -> Self {
-        DefaultLoginServer {}
-    }
-}
 
 #[async_trait]
 impl LoginServer for DefaultLoginServer {
@@ -38,7 +33,7 @@ impl LoginServer for DefaultLoginServer {
         port: u16,
         login_url_base: String,
         login_token: Arc<OnceCell<String>>,
-    ) -> Result<()> {
+    ) -> Result<(), Error> {
         let handle = axum_server::Handle::new();
         let route_handle = handle.clone();
         let app = Router::new()
@@ -56,6 +51,7 @@ impl LoginServer for DefaultLoginServer {
         Ok(axum_server::bind(addr)
             .handle(handle)
             .serve(app.into_make_service())
-            .await?)
+            .await
+            .expect("failed to start one-shot server"))
     }
 }

@@ -238,7 +238,7 @@ mod tests {
     use super::previous_content;
     use crate::{git::changed_files, Error};
 
-    fn setup_repository() -> Result<(TempDir, Repository), Error> {
+    fn setup_repository() -> Result<(TempDir, Repository), PathError> {
         let repo_root = tempfile::tempdir()?;
         let repo = Repository::init(repo_root.path()).unwrap();
         let mut config = repo.config().unwrap();
@@ -294,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn test_shallow_clone() -> Result<(), Error> {
+    fn test_shallow_clone() -> Result<(), PathError> {
         let tmp_dir = tempfile::tempdir()?;
 
         let git_binary = which("git")?;
@@ -329,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn test_deleted_files() -> Result<(), Error> {
+    fn test_deleted_files() -> Result<(), PathError> {
         let (repo_root, repo) = setup_repository()?;
 
         let file = repo_root.path().join("foo.js");
@@ -351,7 +351,7 @@ mod tests {
     }
 
     #[test]
-    fn test_merge_base() -> Result<(), Error> {
+    fn test_merge_base() -> Result<(), PathError> {
         let (repo_root, repo) = setup_repository()?;
         let first_file = repo_root.path().join("foo.js");
         fs::write(first_file, "let z = 0;")?;
@@ -398,7 +398,7 @@ mod tests {
     }
 
     #[test]
-    fn test_changed_files() -> Result<(), Error> {
+    fn test_changed_files() -> Result<(), PathError> {
         let (repo_root, repo) = setup_repository()?;
         let mut index = repo.index().unwrap();
         let turbo_root = repo_root.path();
@@ -464,7 +464,7 @@ mod tests {
     }
 
     #[test]
-    fn test_changed_files_with_root_as_relative() -> Result<(), Error> {
+    fn test_changed_files_with_root_as_relative() -> Result<(), PathError> {
         let (repo_root, repo) = setup_repository()?;
         let file = repo_root.path().join("foo.js");
         fs::write(file, "let z = 0;")?;
@@ -492,7 +492,7 @@ mod tests {
     // Tests that we can use a subdir as the turbo_root path
     // (occurs when the monorepo is nested inside a subdirectory of git repository)
     #[test]
-    fn test_changed_files_with_subdir_as_turbo_root() -> Result<(), Error> {
+    fn test_changed_files_with_subdir_as_turbo_root() -> Result<(), PathError> {
         let (repo_root, repo) = setup_repository()?;
 
         fs::create_dir(repo_root.path().join("subdir"))?;
@@ -553,7 +553,7 @@ mod tests {
     }
 
     #[test]
-    fn test_previous_content() -> Result<(), Error> {
+    fn test_previous_content() -> Result<(), PathError> {
         let (repo_root, repo) = setup_repository()?;
 
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
@@ -590,7 +590,7 @@ mod tests {
     }
 
     #[test]
-    fn test_revparse() -> Result<(), Error> {
+    fn test_revparse() -> Result<(), PathError> {
         let (repo_root, repo) = setup_repository()?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
@@ -635,7 +635,7 @@ mod tests {
     }
 
     #[test]
-    fn test_error_cases() -> Result<(), Error> {
+    fn test_error_cases() -> Result<(), PathError> {
         let repo_dir = tempfile::tempdir()?;
         let repo_does_not_exist = changed_files(
             repo_dir.path().to_path_buf(),
@@ -644,7 +644,7 @@ mod tests {
             "HEAD",
         );
 
-        assert_matches!(repo_does_not_exist, Err(Error::GitRequired(_)));
+        assert_matches!(repo_does_not_exist, Err(PathError::GitRequired(_)));
 
         let (repo_root, _repo) = setup_repository()?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
@@ -656,14 +656,14 @@ mod tests {
             "does-not-exist",
         );
 
-        assert_matches!(commit_does_not_exist, Err(Error::Git(_, _)));
+        assert_matches!(commit_does_not_exist, Err(PathError::Git(_, _)));
 
         let file_does_not_exist = previous_content(
             repo_root.path().to_path_buf(),
             "HEAD",
             root.join_component("does-not-exist").to_string(),
         );
-        assert_matches!(file_does_not_exist, Err(Error::Git(_, _)));
+        assert_matches!(file_does_not_exist, Err(PathError::Git(_, _)));
 
         let turbo_root = tempfile::tempdir()?;
         let turbo_root_is_not_subdir_of_git_root = changed_files(
@@ -675,7 +675,7 @@ mod tests {
 
         assert_matches!(
             turbo_root_is_not_subdir_of_git_root,
-            Err(Error::Path(PathError::NotParent(_, _), _))
+            Err(PathError::Path(PathError::NotParent(_, _), _))
         );
 
         Ok(())

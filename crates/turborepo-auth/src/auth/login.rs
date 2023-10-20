@@ -1,6 +1,5 @@
 use std::{borrow::Cow, sync::Arc};
 
-use anyhow::{anyhow, Result};
 pub use error::Error;
 use reqwest::Url;
 use tokio::sync::OnceCell;
@@ -20,8 +19,8 @@ pub async fn login<'a>(
     ui: &UI,
     existing_token: Option<&'a str>,
     login_url_configuration: &str,
-    login_server: &impl LoginServer,
-) -> Result<Cow<'a, str>> {
+    login_server: impl LoginServer,
+) -> Result<Cow<'a, str>, Error> {
     // Check if token exists first.
     if let Some(token) = existing_token {
         if let Ok(response) = api_client.get_user(token).await {
@@ -65,12 +64,13 @@ pub async fn login<'a>(
 
     spinner.finish_and_clear();
 
-    let token = token_cell
-        .get()
-        .ok_or_else(|| anyhow!("Failed to get token"))?;
+    let token = token_cell.get().ok_or(Error::FailedToGetToken)?;
 
     // TODO: make this a request to /teams endpoint instead?
-    let user_response = api_client.get_user(token.as_str()).await?;
+    let user_response = api_client
+        .get_user(token.as_str())
+        .await
+        .map_err(Error::FailedToFetchUser)?;
 
     ui::print_cli_authorized(&user_response.user.email, ui);
 
