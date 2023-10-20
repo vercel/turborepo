@@ -51,3 +51,26 @@ export function getCommitDetails(): {
     commitTimestamp,
   };
 }
+
+interface TTFTData {
+  name: string;
+  scm: string;
+  platform: string;
+  startTimeUnixMicroseconds: number;
+  turboVersion: string;
+  durationMicroseconds: number;
+  commitSha: string;
+  commitTimestamp: Date;
+  url: string;
+}
+
+export function getTTFTData(filePath: string, runID: string): TTFTData {
+  const contents = fs.readFileSync(filePath);
+  const data = JSON.parse(contents.toString()) as TTFTData;
+
+  const commitDetails = getCommitDetails();
+  data.commitSha = commitDetails.commitSha;
+  data.commitTimestamp = commitDetails.commitTimestamp;
+  data.url = `https://github.com/vercel/turbo/actions/runs/${runID}`;
+  return data;
+}
