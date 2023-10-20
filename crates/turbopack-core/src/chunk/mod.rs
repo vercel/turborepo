@@ -419,14 +419,14 @@ impl Visit<ChunkContentGraphNode, ()> for ChunkContentVisit {
     fn visit(&mut self, edge: ChunkGraphEdge) -> VisitControlFlow<ChunkContentGraphNode, ()> {
         let ChunkGraphEdge { key, node } = edge;
         let Some(module) = key else {
-            return VisitControlFlow::Skip(node.clone());
+            return VisitControlFlow::Skip(node);
         };
 
         if !self.processed_modules.insert(module) {
-            return VisitControlFlow::Skip(node.clone());
+            return VisitControlFlow::Skip(node);
         }
 
-        VisitControlFlow::Continue(node.clone())
+        VisitControlFlow::Continue(node)
     }
 
     fn edges(&mut self, node: &ChunkContentGraphNode) -> Self::EdgesFuture {
