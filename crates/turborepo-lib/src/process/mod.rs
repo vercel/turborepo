@@ -12,6 +12,7 @@
 mod child;
 
 use std::{
+    collections::HashMap,
     io,
     sync::{Arc, Mutex},
     time::Duration,
@@ -31,18 +32,40 @@ pub use self::child::{Child, ChildExit};
 #[derive(Debug, Clone)]
 pub struct ProcessManager(Arc<Mutex<ProcessManagerInner>>);
 
-#[derive(Debug)]
+type ChildIndex = usize;
+
+#[derive(Debug, Default)]
 struct ProcessManagerInner {
     is_closing: bool,
-    children: Vec<child::Child>,
+    children: HashMap<ChildIndex, child::Child>,
+    next_index: ChildIndex,
+}
+
+impl ProcessManagerInner {
+    /// Attempt to run 'f' to spawn a child, and on success assign it an
+    /// id and save a reference to it.
+    fn track_child<F>(&mut self, f: F) -> io::Result<Child>
+    where
+        F: FnOnce(ChildIndex) -> io::Result<Child>,
+    {
+        let this_index = self.next_index;
+        self.next_index += 1;
+        let child = f(this_index);
+        if let Ok(child) = &child {
+            self.children.insert(this_index, child.clone());
+        }
+        child
+    }
+
+    /// Given a reference to a child, remove it from tracking
+    fn clear_child(&mut self, idx: ChildIndex) {
+        self.children.remove(&idx);
+    }
 }
 
 impl ProcessManager {
     pub fn new() -> Self {
-        Self(Arc::new(Mutex::new(ProcessManagerInner {
-            is_closing: false,
-            children: Vec::new(),
-        })))
+        Self(Arc::new(Mutex::new(ProcessManagerInner::default())))
     }
 }
 
@@ -64,10 +87,20 @@ impl ProcessManager {
         if lock.is_closing {
             return None;
         }
-        let child = child::Child::spawn(command, child::ShutdownStyle::Graceful(stop_timeout));
-        if let Ok(child) = &child {
-            lock.children.push(child.clone());
-        }
+        let inner = Arc::clone(&self.0);
+        let child = lock.track_child(move |idx| {
+            let inner = inner;
+            let child = child::Child::spawn(
+                command,
+                child::ShutdownStyle::Graceful(stop_timeout),
+                move || {
+                    let mut inner = inner.lock().expect("lock not poisoned");
+                    inner.clear_child(idx);
+                },
+            );
+            child
+        });
+
         Some(child)
     }
 
@@ -102,7 +135,8 @@ impl ProcessManager {
         {
             let mut lock = self.0.lock().expect("not poisoned");
             lock.is_closing = true;
-            for child in lock.children.iter() {
+
+            for (_, child) in lock.children.iter() {
                 let child = child.clone();
                 set.spawn(async move { callback(child).await });
             }
@@ -112,14 +146,6 @@ impl ProcessManager {
 
         while let Some(out) = set.join_next().await {
             trace!("process exited: {:?}", out);
-        }
-
-        {
-            let mut lock = self.0.lock().expect("not poisoned");
-
-            // just allocate a new vec rather than clearing the old one
-            lock.children = vec![];
-            lock.is_closing = false;
         }
     }
 }
@@ -210,14 +236,10 @@ mod test {
             "child process should exit before output is printed"
         );
 
-        // We will want to change this so you can't spawn a child after closing
+        // Since the manager is closed, we should be unable to spawn new tasks
         assert!(manager
             .spawn(get_command(), Duration::from_secs(2))
-            .is_some());
-
-        sleep(Duration::from_millis(100)).await;
-
-        manager.stop().await;
+            .is_none());
     }
 
     #[tokio::test]
@@ -271,9 +293,15 @@ mod test {
 
         assert!(manager.0.lock().unwrap().children.is_empty());
 
-        // TODO: actually do some check that this is idempotent
-        // idempotent
+        assert!(manager
+            .spawn(get_command(), Duration::from_secs(2))
+            .is_none());
+
         manager.stop().await;
+
+        assert!(manager
+            .spawn(get_command(), Duration::from_secs(2))
+            .is_none());
     }
 
     #[test_case("stop", "sleep_5_interruptable.js", STOPPED_EXIT)]

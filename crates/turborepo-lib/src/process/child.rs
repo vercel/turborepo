@@ -22,6 +22,7 @@ use std::{
 };
 
 use command_group::AsyncCommandGroup;
+use futures::Future;
 use itertools::Itertools;
 pub use tokio::process::Command;
 use tokio::{
@@ -177,7 +178,15 @@ pub enum ChildCommand {
 impl Child {
     /// Start a child process, returning a handle that can be used to interact
     /// with it. The command will be started immediately.
-    pub fn spawn(mut command: Command, shutdown_style: ShutdownStyle) -> io::Result<Self> {
+    /// 'on_exit' is run when this command exits for any reason.
+    pub fn spawn<T>(
+        mut command: Command,
+        shutdown_style: ShutdownStyle,
+        on_exit: T,
+    ) -> io::Result<Self>
+    where
+        T: FnOnce() + Send + 'static,
+    {
         let label = {
             let cmd = command.as_std();
             format!(
@@ -267,7 +276,7 @@ impl Child {
 
                 }
             }
-
+            on_exit();
             debug!("child process stopped");
         });
 
@@ -459,7 +468,7 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, || {}).unwrap();
 
         assert_matches!(child.pid(), Some(_));
         child.stop().await;
@@ -479,7 +488,7 @@ mod test {
             cmd
         };
 
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, || {}).unwrap();
 
         {
             let state = child.state.read().await;
@@ -502,7 +511,7 @@ mod test {
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
         cmd.stdout(Stdio::piped());
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, || {}).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -534,7 +543,7 @@ mod test {
         cmd.args([script.as_std_path()]);
         cmd.stdout(Stdio::piped());
         cmd.stdin(Stdio::piped());
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, || {}).unwrap();
 
         let mut stdout = child.stdout().unwrap();
 
@@ -571,8 +580,12 @@ mod test {
             cmd
         };
 
-        let mut child =
-            Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500))).unwrap();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            || {},
+        )
+        .unwrap();
 
         let mut stdout = child.stdout().unwrap();
         let mut buf = vec![0; 4];
@@ -596,8 +609,12 @@ mod test {
             cmd
         };
 
-        let mut child =
-            Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500))).unwrap();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            || {},
+        )
+        .unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -624,8 +641,12 @@ mod test {
             cmd
         };
 
-        let mut child =
-            Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500))).unwrap();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            || {},
+        )
+        .unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -670,7 +691,7 @@ mod test {
         cmd.args([script.as_std_path()]);
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, || {}).unwrap();
 
         let mut out = Vec::new();
         let mut err = Vec::new();
@@ -692,7 +713,7 @@ mod test {
         cmd.args([script.as_std_path()]);
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, || {}).unwrap();
 
         let mut buffer = Vec::new();
 
@@ -713,7 +734,7 @@ mod test {
         cmd.args([script.as_std_path()]);
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, || {}).unwrap();
 
         let mut out = Vec::new();
         let mut err = Vec::new();
@@ -735,7 +756,7 @@ mod test {
         cmd.args([script.as_std_path()]);
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, || {}).unwrap();
 
         let mut buffer = Vec::new();
 
