@@ -27,7 +27,9 @@ impl OutputAssets {
     pub fn new(assets: Vec<Vc<Box<dyn OutputAsset>>>) -> Vc<Self> {
         Vc::cell(assets)
     }
+}
 
+impl OutputAssets {
     pub fn empty() -> Vc<Self> {
         Self::new(vec![])
     }
