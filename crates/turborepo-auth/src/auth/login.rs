@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use anyhow::{anyhow, Result};
 pub use error::Error;
@@ -15,23 +15,19 @@ const DEFAULT_PORT: u16 = 9789;
 
 /// Login writes a token to disk at token_path. If a token is already present,
 /// we do not overwrite it and instead log that we found an existing token.
-pub async fn login<F>(
+pub async fn login<'a>(
     api_client: &impl Client,
     ui: &UI,
-    existing_token: Option<&str>,
-    mut set_token: F,
+    existing_token: Option<&'a str>,
     login_url_configuration: &str,
     login_server: &impl LoginServer,
-) -> Result<()>
-where
-    F: FnMut(&str) -> Result<()>,
-{
+) -> Result<Cow<'a, str>> {
     // Check if token exists first.
     if let Some(token) = existing_token {
         if let Ok(response) = api_client.get_user(token).await {
             println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
             ui::print_cli_authorized(&response.user.email, ui);
-            return Ok(());
+            return Ok(token.into());
         }
     }
 
@@ -73,17 +69,12 @@ where
         .get()
         .ok_or_else(|| anyhow!("Failed to get token"))?;
 
-    // This function is passed in from turborepo-lib
-    // TODO: inline this here and only pass in the location to write the token as an
-    // optional arg.
-    set_token(token)?;
-
     // TODO: make this a request to /teams endpoint instead?
     let user_response = api_client.get_user(token.as_str()).await?;
 
     ui::print_cli_authorized(&user_response.user.email, ui);
 
-    Ok(())
+    Ok(token.to_string().into())
 }
 
 #[cfg(test)]
@@ -278,24 +269,15 @@ mod tests {
 
         let api_client = MockApiClient::new();
 
-        // Because of the borrow checker, we wrap the option in a ref cell since we have
-        // multiple types of borrows happening in this test.
-        let mut got_token: Option<String> = None;
-
-        // set_token is called by login. Ignore the string given since that escapes
-        let set_token = |t: &str| -> anyhow::Result<(), anyhow::Error> {
-            // Make the fetched token the expectation
-            got_token = Some(t.to_owned());
-            Ok(())
-        };
-
         let login_server = MockLoginServer {
             hits: Arc::new(0.into()),
         };
 
-        login(&api_client, &ui, None, set_token, &url, &login_server)
+        let token = login(&api_client, &ui, None, &url, &login_server)
             .await
             .unwrap();
+
+        let got_token = Some(token.to_string());
 
         // Token should be set now
         assert_eq!(
@@ -303,32 +285,20 @@ mod tests {
             Some(turborepo_vercel_api_mock::EXPECTED_TOKEN)
         );
 
-        // Re-assign set_token due to ownership rules. This shouldn't be called.
-        let mut second_token: Option<&str> = None;
-        let set_token = |_: &str| -> anyhow::Result<(), anyhow::Error> {
-            // Set it to literally anything but the expected token.
-            second_token = Some("not expected");
-            Ok(())
-        };
-
         // Call the login function a second time to test that we check for existing
         // tokens. Total server hits should be 1.
-        login(
-            &api_client,
-            &ui,
-            got_token.as_deref(),
-            set_token,
-            &url,
-            &login_server,
-        )
-        .await
-        .unwrap();
+        let second_token = login(&api_client, &ui, got_token.as_deref(), &url, &login_server)
+            .await
+            .unwrap();
+
+        // We can confirm that we didn't fetch a new token because we're borrowing the
+        // existing token and not getting a new allocation.
+        assert!(second_token.is_borrowed());
 
         api_server.abort();
         assert_eq!(
             login_server.hits.load(std::sync::atomic::Ordering::SeqCst),
             1
         );
-        assert_eq!(second_token, None);
     }
 }

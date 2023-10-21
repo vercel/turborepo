@@ -1,3 +1,4 @@
+#![feature(cow_is_borrowed)]
 #![deny(clippy::all)]
 
 mod auth;
