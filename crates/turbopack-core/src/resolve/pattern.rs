@@ -898,6 +898,41 @@ pub async fn read_matches(
                             prefix.truncate(len)
                         }
                         DirectoryEntry::Symlink(fs_path) => {
+                            prefix.push_str(key);
+                            // {prefix}{key}
+                            if prefix.ends_with('/') {
+                                prefix.pop();
+                            }
+                            if let Some(pos) = pat.match_position(&prefix) {
+                                if let LinkContent::Link { link_type, .. } =
+                                    &*fs_path.read_link().await?
+                                {
+                                    if link_type.contains(LinkType::DIRECTORY) {
+                                        results.push((
+                                            pos,
+                                            PatternMatch::Directory(prefix.clone(), *fs_path),
+                                        ));
+                                    } else {
+                                        results.push((
+                                            pos,
+                                            PatternMatch::File(prefix.clone(), *fs_path),
+                                        ));
+                                    }
+                                }
+                            }
+                            prefix.push('/');
+                            if let Some(pos) = pat.match_position(&prefix) {
+                                if let LinkContent::Link { link_type, .. } =
+                                    &*fs_path.read_link().await?
+                                {
+                                    if link_type.contains(LinkType::DIRECTORY) {
+                                        results.push((
+                                            pos,
+                                            PatternMatch::Directory(prefix.clone(), *fs_path),
+                                        ));
+                                    }
+                                }
+                            }
                             if let Some(pos) = pat.match_position(&prefix) {
                                 if let LinkContent::Link { link_type, .. } =
                                     &*fs_path.read_link().await?
