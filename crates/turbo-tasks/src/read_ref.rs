@@ -165,6 +165,8 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         let r = &*self;
+        // # Safety
+        // The reference will we valid as long as the ReadRef is valid.
         let r: &'static <T::Read as VcRead<T>>::Target = unsafe { transmute_copy(r) };
         ReadRefIter {
             read_ref: self,
