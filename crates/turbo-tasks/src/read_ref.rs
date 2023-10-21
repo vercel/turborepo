@@ -3,6 +3,7 @@ use std::{
     fmt::{Debug, Display},
     hash::Hash,
     marker::PhantomData,
+    mem::transmute_copy,
     sync::Arc,
 };
 
@@ -150,6 +151,45 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         (&**self).into_iter()
+    }
+}
+
+impl<T, I: 'static, J: Iterator<Item = I>> IntoIterator for ReadRef<T>
+where
+    T: VcValueType,
+    &'static <T::Read as VcRead<T>>::Target: IntoIterator<Item = I, IntoIter = J>,
+{
+    type Item = I;
+
+    type IntoIter = ReadRefIter<T, I, J>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let r = &*self;
+        let r: &'static <T::Read as VcRead<T>>::Target = unsafe { transmute_copy(r) };
+        ReadRefIter {
+            read_ref: self,
+            iter: r.into_iter(),
+        }
+    }
+}
+
+pub struct ReadRefIter<T, I: 'static, J: Iterator<Item = I>>
+where
+    T: VcValueType,
+{
+    iter: J,
+    #[allow(dead_code)]
+    read_ref: ReadRef<T>,
+}
+
+impl<T, I: 'static, J: Iterator<Item = I>> Iterator for ReadRefIter<T, I, J>
+where
+    T: VcValueType,
+{
+    type Item = I;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
     }
 }
 
