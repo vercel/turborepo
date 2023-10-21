@@ -443,13 +443,12 @@ impl Visit<ChunkContentGraphNode, ()> for ChunkContentVisit {
                     ChunkGraphNodeToReferences::ChunkItem(item)
                 }
                 _ => {
-                    static EMPTY: ReadRef<Vec<ChunkGraphEdge>> = ReadRef::new(Arc::new(vec![]));
-                    return Ok(EMPTY.into_iter());
+                    return Ok(None.into_iter().flatten());
                 }
             };
 
             let nodes = graph_node_to_referenced_nodes(node, chunk_content_context).await?;
-            Ok(nodes.into_iter())
+            Ok(Some(nodes.into_iter().cloned()).into_iter().flatten())
         }
     }
 
