@@ -933,23 +933,6 @@ pub async fn read_matches(
                                     }
                                 }
                             }
-                            if let Some(pos) = pat.match_position(&prefix) {
-                                if let LinkContent::Link { link_type, .. } =
-                                    &*fs_path.read_link().await?
-                                {
-                                    if link_type.contains(LinkType::DIRECTORY) {
-                                        results.push((
-                                            pos,
-                                            PatternMatch::Directory(prefix.clone(), *fs_path),
-                                        ));
-                                    } else {
-                                        results.push((
-                                            pos,
-                                            PatternMatch::File(prefix.clone(), *fs_path),
-                                        ));
-                                    }
-                                }
-                            }
                             if let Some(pos) = pat.could_match_position(&prefix) {
                                 if let LinkContent::Link { link_type, .. } =
                                     &*fs_path.read_link().await?
