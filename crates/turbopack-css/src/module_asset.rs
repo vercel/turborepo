@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use indoc::formatdoc;
 use lightningcss::css_modules::CssModuleReference;
 use swc_core::common::{BytePos, FileName, LineCol, SourceMap};
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{vdbg, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -31,6 +31,7 @@ use turbopack_ecmascript::{
 use crate::{
     process::{CssWithPlaceholderResult, ProcessCss},
     references::{compose::CssModuleComposeReference, internal::InternalCssAssetReference},
+    ParseCss,
 };
 
 #[turbo_tasks::function]
@@ -152,7 +153,7 @@ impl ModuleCssAsset {
         let inner = self.inner();
 
         let Some(inner) = Vc::try_resolve_sidecast::<Box<dyn ProcessCss>>(inner).await? else {
-            bail!("inner asset should be CSS parseable");
+            bail!("inner asset should be CSS processable");
         };
 
         let result = inner.get_css_with_placeholder().await?;
