@@ -11,7 +11,7 @@ use lightningcss::{
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
     issue::{IssueSeverity, IssueSource},
-    reference::{ModuleReference, ModuleReferences},
+    reference::ModuleReference,
     reference_type::{CssReferenceSubType, ReferenceType},
     resolve::{
         handle_resolve_error,
