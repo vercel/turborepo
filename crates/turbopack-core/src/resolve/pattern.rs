@@ -898,6 +898,7 @@ pub async fn read_matches(
                             prefix.truncate(len)
                         }
                         DirectoryEntry::Symlink(fs_path) => {
+                            let len = prefix.len();
                             prefix.push_str(key);
                             // {prefix}{key}
                             if prefix.ends_with('/') {
@@ -945,6 +946,7 @@ pub async fn read_matches(
                                     }
                                 }
                             }
+                            prefix.truncate(len)
                         }
                         DirectoryEntry::Other(_) => {}
                         DirectoryEntry::Error => {}
