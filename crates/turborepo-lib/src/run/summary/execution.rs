@@ -226,23 +226,32 @@ pub enum ExecutionState {
     SpawnFailed { err: String },
 }
 
-#[derive(Debug, Serialize)]
-pub struct TaskExecutionSummary {
-    started_at: i64,
-    ended_at: i64,
-    #[serde(skip)]
-    duration: TurboDuration,
-    pub(crate) state: ExecutionState,
-}
-
-impl TaskExecutionSummary {
+impl ExecutionState {
     pub fn exit_code(&self) -> Option<i32> {
-        match self.state {
+        match self {
             ExecutionState::BuildFailed { exit_code, .. } | ExecutionState::Built { exit_code } => {
-                Some(exit_code)
+                Some(*exit_code)
             }
             _ => None,
         }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskExecutionSummary {
+    start_time: i64,
+    end_time: i64,
+    #[serde(skip)]
+    duration: TurboDuration,
+    #[serde(skip)]
+    state: ExecutionState,
+    exit_code: Option<i32>,
+}
+
+impl TaskExecutionSummary {
+    pub fn is_failure(&self) -> bool {
+        matches!(self.state, ExecutionState::BuildFailed { .. })
     }
 }
 
@@ -336,10 +345,11 @@ impl TaskTracker<chrono::DateTime<Local>> {
         let ended_at = Local::now();
         let duration = TurboDuration::new(&started_at, &Local::now());
         TaskExecutionSummary {
-            started_at: started_at.timestamp_millis(),
-            ended_at: ended_at.timestamp_millis(),
+            start_time: started_at.timestamp_millis(),
+            end_time: ended_at.timestamp_millis(),
             duration,
             state: ExecutionState::Canceled,
+            exit_code: None,
         }
     }
 
@@ -357,10 +367,11 @@ impl TaskTracker<chrono::DateTime<Local>> {
             .expect("summary state thread finished");
 
         TaskExecutionSummary {
-            started_at: started_at.timestamp_millis(),
-            ended_at: ended_at.timestamp_millis(),
+            start_time: started_at.timestamp_millis(),
+            end_time: ended_at.timestamp_millis(),
             duration,
             state: ExecutionState::Cached,
+            exit_code: None,
         }
     }
 
@@ -378,10 +389,11 @@ impl TaskTracker<chrono::DateTime<Local>> {
             .expect("summary state thread finished");
 
         TaskExecutionSummary {
-            started_at: started_at.timestamp_millis(),
-            ended_at: ended_at.timestamp_millis(),
+            start_time: started_at.timestamp_millis(),
+            end_time: ended_at.timestamp_millis(),
             duration,
             state: ExecutionState::Built { exit_code },
+            exit_code: Some(exit_code),
         }
     }
 
@@ -402,13 +414,14 @@ impl TaskTracker<chrono::DateTime<Local>> {
             .await
             .expect("summary state thread finished");
         TaskExecutionSummary {
-            started_at: started_at.timestamp_millis(),
-            ended_at: ended_at.timestamp_millis(),
+            start_time: started_at.timestamp_millis(),
+            end_time: ended_at.timestamp_millis(),
             duration,
             state: ExecutionState::BuildFailed {
                 exit_code,
                 err: error.to_string(),
             },
+            exit_code: Some(exit_code),
         }
     }
 
@@ -425,18 +438,22 @@ impl TaskTracker<chrono::DateTime<Local>> {
             .await
             .expect("summary state thread finished");
         TaskExecutionSummary {
-            started_at: started_at.timestamp_millis(),
-            ended_at: ended_at.timestamp_millis(),
+            start_time: started_at.timestamp_millis(),
+            end_time: ended_at.timestamp_millis(),
             duration,
             state: ExecutionState::SpawnFailed {
                 err: error.to_string(),
             },
+            exit_code: None,
         }
     }
 }
 
 #[cfg(test)]
 mod test {
+    use serde_json::json;
+    use test_case::test_case;
+
     use super::*;
 
     #[tokio::test]
@@ -449,7 +466,7 @@ mod test {
             tasks.push(tokio::spawn(async move {
                 let tracker = tracker.start().await;
                 let summary = tracker.build_succeeded(0).await;
-                assert_eq!(summary.exit_code(), Some(0));
+                assert_eq!(summary.exit_code, Some(0));
             }));
         }
         {
@@ -457,7 +474,7 @@ mod test {
             tasks.push(tokio::spawn(async move {
                 let tracker = tracker.start().await;
                 let summary = tracker.cached().await;
-                assert_eq!(summary.exit_code(), None);
+                assert_eq!(summary.exit_code, None);
             }));
         }
         {
@@ -465,7 +482,7 @@ mod test {
             tasks.push(tokio::spawn(async move {
                 let tracker = tracker.start().await;
                 let summary = tracker.build_failed(1, "big bad error").await;
-                assert_eq!(summary.exit_code(), Some(1));
+                assert_eq!(summary.exit_code, Some(1));
             }));
         }
         {
@@ -473,7 +490,7 @@ mod test {
             tasks.push(tokio::spawn(async move {
                 let tracker = tracker.start().await;
                 let summary = tracker.cancel();
-                assert_eq!(summary.exit_code(), None);
+                assert_eq!(summary.exit_code, None);
             }));
         }
         for task in tasks {
@@ -501,12 +518,27 @@ mod test {
         tokio::time::sleep(sleep_duration.to_std().unwrap()).await;
         let summary = tracker.build_succeeded(0).await;
         assert!(
-            post_construction_time < summary.started_at,
+            post_construction_time < summary.start_time,
             "tracker start time should start when start is called"
         );
         assert!(
             sleep_duration <= summary.duration.0,
             "tracker duration should be at least as long as the time between calls"
         );
+    }
+
+    #[test_case(
+        TaskExecutionSummary {
+            start_time: 123,
+            end_time: 234,
+            duration: TurboDuration::from(Duration::zero()),
+            state: ExecutionState::Built { exit_code: 0 },
+            exit_code: Some(0),
+        },
+        json!({ "startTime": 123, "endTime": 234, "exitCode": 0 })
+        ; "success"
+    )]
+    fn test_serialization(value: impl serde::Serialize, expected: serde_json::Value) {
+        assert_eq!(serde_json::to_value(value).unwrap(), expected);
     }
 }

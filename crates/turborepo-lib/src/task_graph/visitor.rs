@@ -136,13 +136,6 @@ impl<'a> Visitor<'a> {
             let is_github_actions = self.opts.run_opts.is_github_actions;
             let package_name = WorkspaceName::from(info.package());
 
-            let workspace_dir =
-                self.package_graph
-                    .workspace_dir(&package_name)
-                    .ok_or_else(|| Error::MissingPackage {
-                        package_name: package_name.clone(),
-                        task_id: info.clone(),
-                    })?;
             let workspace_info = self
                 .package_graph
                 .workspace_info(&package_name)
@@ -209,9 +202,12 @@ impl<'a> Visitor<'a> {
                 self.task_hasher
                     .env(&info, task_env_mode, task_definition, &self.global_env)?;
 
-            let task_cache =
-                self.run_cache
-                    .task_cache(task_definition, workspace_dir, info.clone(), &task_hash);
+            let task_cache = self.run_cache.task_cache(
+                task_definition,
+                workspace_info,
+                info.clone(),
+                &task_hash,
+            );
 
             // TODO(gsoltis): if/when we fix https://github.com/vercel/turbo/issues/937
             // the following block should never get hit. In the meantime, keep it after
@@ -227,7 +223,7 @@ impl<'a> Visitor<'a> {
             let ui = self.ui;
             let manager = self.manager.clone();
             let package_manager = self.package_graph.package_manager().clone();
-            let workspace_directory = self.repo_root.resolve(workspace_dir);
+            let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
             let errors = errors.clone();
             let task_id_for_display = self.display_task_id(&info);
             let hash_tracker = self.task_hasher.task_hash_tracker();
