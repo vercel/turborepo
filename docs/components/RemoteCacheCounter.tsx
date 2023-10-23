@@ -1,4 +1,3 @@
-import cn from "classnames";
 import { useState, useEffect } from "react";
 import { animated, useSpring, config } from "@react-spring/web";
 import Link from "next/link";
@@ -33,12 +32,12 @@ export default function RemoteCacheCounter() {
       href="/repo/docs/core-concepts/remote-caching"
     >
       <div className="p-4 dark:bg-[#111111] bg-white">
-        <animated.p className="inline-block text-xl bg-gradient-to-r from-red-500 to-blue-500 bg-clip-text text-transparent tabular-nums">
+        <animated.p className="inline-block text-xl text-transparent bg-gradient-to-r from-red-500 to-blue-500 bg-clip-text tabular-nums">
           {spring.minutesSaved.to((t) => counterFormatter.format(t))}
         </animated.p>
         <div className="text-xs">Total Compute Minutes Saved</div>
 
-        <div className="text-xs mt-4 group-hover:underline">
+        <div className="mt-4 text-xs group-hover:underline">
           Get Started With Remote Caching →
         </div>
       </div>

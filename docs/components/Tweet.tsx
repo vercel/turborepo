@@ -21,7 +21,7 @@ export function Mention({ children }) {
   );
 }
 
-export default function Tweet({ url, username, name, avatar, date, children }) {
+export default function Tweet({ username, name, avatar, date, children }) {
   return (
     <div className="flex p-4 bg-white rounded-md shadow-xl dark:bg-opacity-10">
       <div className="flex-shrink-0 mr-4">

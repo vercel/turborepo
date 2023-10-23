@@ -1,6 +1,6 @@
 import React from "react";
 
-export function Marquee({ children, ...props }) {
+export function Marquee({ children }) {
   return (
     <div className="overflow-x-hidden">
       <div className="sr-only">
