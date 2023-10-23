@@ -16,7 +16,7 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Err
         base.config()?.token(),
         &login_url_config,
         sso_team,
-        DefaultSSOLoginServer,
+        &DefaultSSOLoginServer,
     )
     .await?;
 
@@ -57,7 +57,7 @@ pub async fn login(base: &mut CommandBase) -> Result<(), Error> {
         &ui,
         base.config()?.token(),
         &login_url_config,
-        DefaultLoginServer,
+        &DefaultLoginServer,
     )
     .await?;
 

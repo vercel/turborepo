@@ -4,7 +4,7 @@
 #![deny(clippy::all)]
 
 use std::{
-    backtrace,
+    backtrace::{self, Backtrace},
     io::Read,
     process::{Child, Command},
 };
@@ -12,7 +12,7 @@ use std::{
 use bstr::io::BufReadExt;
 use thiserror::Error;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
 pub mod git;
 mod hash_object;
@@ -39,10 +39,7 @@ pub enum Error {
     #[error("io error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
     #[error("path error: {0}")]
-    Path(
-        #[from] turbopath::PathError,
-        #[backtrace] backtrace::Backtrace,
-    ),
+    Path(#[from] PathError, #[backtrace] backtrace::Backtrace),
     #[error("could not find git binary")]
     GitBinaryNotFound(#[from] which::Error),
     #[error("encoding error: {0}")]
@@ -60,17 +57,17 @@ pub enum Error {
 
 impl From<wax::BuildError> for Error {
     fn from(value: wax::BuildError) -> Self {
-        Error::Glob(Box::new(value), backtrace::Backtrace::capture())
+        Error::Glob(Box::new(value), Backtrace::capture())
     }
 }
 
 impl Error {
     pub(crate) fn git_error(s: impl Into<String>) -> Self {
-        Error::Git(s.into(), backtrace::Backtrace::capture())
+        Error::Git(s.into(), Backtrace::capture())
     }
 
     pub(crate) fn git2_error_context(error: git2::Error, error_context: String) -> Self {
-        Error::Git2(error, error_context, backtrace::Backtrace::capture())
+        Error::Git2(error, error_context, Backtrace::capture())
     }
 }
 
@@ -122,7 +119,7 @@ pub(crate) fn wait_for_success<R: Read, T>(
         "'{}' in {}{}{}{}",
         command, path_text, parse_error_text, exit_text, stderr_text
     );
-    Err(Error::Git(err_text, backtrace::Backtrace::capture()))
+    Err(Error::Git(err_text, Backtrace::capture()))
 }
 
 #[derive(Debug)]
