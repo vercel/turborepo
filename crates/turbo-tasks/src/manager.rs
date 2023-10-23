@@ -1129,16 +1129,16 @@ impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
     /// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `dependent_cell_updated()` on all tasks.
     fn schedule_notify_tasks_set(&self, tasks: &TaskIdSet) {
-        // let result = CURRENT_TASK_STATE.try_with(|cell| {
-        //     let CurrentTaskState {
-        //         tasks_to_notify, ..
-        //     } = &mut *cell.borrow_mut();
-        //     tasks_to_notify.extend(tasks.iter());
-        // });
-        // if result.is_err() {
-        let _guard = trace_span!("schedule_notify_tasks_set", count = tasks.len()).entered();
-        self.backend.invalidate_tasks_set(tasks, self);
-        // };
+        let result = CURRENT_TASK_STATE.try_with(|cell| {
+            let CurrentTaskState {
+                tasks_to_notify, ..
+            } = &mut *cell.borrow_mut();
+            tasks_to_notify.extend(tasks.iter());
+        });
+        if result.is_err() {
+            let _guard = trace_span!("schedule_notify_tasks_set", count = tasks.len()).entered();
+            self.backend.invalidate_tasks_set(tasks, self);
+        };
     }
 
     #[track_caller]
