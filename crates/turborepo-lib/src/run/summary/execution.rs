@@ -240,10 +240,8 @@ impl ExecutionState {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskExecutionSummary {
-    #[serde(rename = "startTime")]
-    started_at: i64,
-    #[serde(rename = "endTime")]
-    ended_at: i64,
+    start_time: i64,
+    end_time: i64,
     #[serde(skip)]
     duration: TurboDuration,
     #[serde(skip)]
@@ -347,8 +345,8 @@ impl TaskTracker<chrono::DateTime<Local>> {
         let ended_at = Local::now();
         let duration = TurboDuration::new(&started_at, &Local::now());
         TaskExecutionSummary {
-            started_at: started_at.timestamp_millis(),
-            ended_at: ended_at.timestamp_millis(),
+            start_time: started_at.timestamp_millis(),
+            end_time: ended_at.timestamp_millis(),
             duration,
             state: ExecutionState::Canceled,
             exit_code: None,
@@ -369,8 +367,8 @@ impl TaskTracker<chrono::DateTime<Local>> {
             .expect("summary state thread finished");
 
         TaskExecutionSummary {
-            started_at: started_at.timestamp_millis(),
-            ended_at: ended_at.timestamp_millis(),
+            start_time: started_at.timestamp_millis(),
+            end_time: ended_at.timestamp_millis(),
             duration,
             state: ExecutionState::Cached,
             exit_code: None,
@@ -391,8 +389,8 @@ impl TaskTracker<chrono::DateTime<Local>> {
             .expect("summary state thread finished");
 
         TaskExecutionSummary {
-            started_at: started_at.timestamp_millis(),
-            ended_at: ended_at.timestamp_millis(),
+            start_time: started_at.timestamp_millis(),
+            end_time: ended_at.timestamp_millis(),
             duration,
             state: ExecutionState::Built { exit_code },
             exit_code: Some(exit_code),
@@ -416,8 +414,8 @@ impl TaskTracker<chrono::DateTime<Local>> {
             .await
             .expect("summary state thread finished");
         TaskExecutionSummary {
-            started_at: started_at.timestamp_millis(),
-            ended_at: ended_at.timestamp_millis(),
+            start_time: started_at.timestamp_millis(),
+            end_time: ended_at.timestamp_millis(),
             duration,
             state: ExecutionState::BuildFailed {
                 exit_code,
@@ -440,8 +438,8 @@ impl TaskTracker<chrono::DateTime<Local>> {
             .await
             .expect("summary state thread finished");
         TaskExecutionSummary {
-            started_at: started_at.timestamp_millis(),
-            ended_at: ended_at.timestamp_millis(),
+            start_time: started_at.timestamp_millis(),
+            end_time: ended_at.timestamp_millis(),
             duration,
             state: ExecutionState::SpawnFailed {
                 err: error.to_string(),
@@ -520,7 +518,7 @@ mod test {
         tokio::time::sleep(sleep_duration.to_std().unwrap()).await;
         let summary = tracker.build_succeeded(0).await;
         assert!(
-            post_construction_time < summary.started_at,
+            post_construction_time < summary.start_time,
             "tracker start time should start when start is called"
         );
         assert!(
@@ -531,8 +529,8 @@ mod test {
 
     #[test_case(
         TaskExecutionSummary {
-            started_at: 123,
-            ended_at: 234,
+            start_time: 123,
+            end_time: 234,
             duration: TurboDuration::from(Duration::zero()),
             state: ExecutionState::Built { exit_code: 0 },
             exit_code: Some(0),
