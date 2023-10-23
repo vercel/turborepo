@@ -62,6 +62,15 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
                 let deps_fut = join_all(deps_rx.iter_mut().map(|rx| rx.recv()));
 
                 tokio::select! {
+                    // If both the cancel and dependencies are ready, we want to
+                    // execute the cancel instead of sending an additional node.
+                    biased;
+                    _ = cancel_rx.changed() => {
+                        // If this future resolves this means that either:
+                        // - cancel was updated, this can only happen through
+                        //   the cancel method which only sets it to true
+                        // - the cancel sender was dropped which is also a sign that we should exit
+                    }
                     results = deps_fut => {
                         for res in results {
                             match res {
@@ -101,12 +110,6 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
                         // Send errors indicate that there are no receivers which
                         // happens when this node has no dependents
                         tx.send(()).ok();
-                    }
-                    _ = cancel_rx.changed() => {
-                        // If this future resolves this means that either:
-                        // - cancel was updated, this can only happen through
-                        //   the cancel method which only sets it to true
-                        // - the cancel sender was dropped which is also a sign that we should exit
                     }
                 }
             }));

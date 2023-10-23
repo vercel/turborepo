@@ -28,3 +28,43 @@ Verify turbo can read the produced turbo.json
     "shared",
     "util"
   ]
+
+Modify turbo.json to add a remoteCache.enabled field set to true
+  $ rm -rf out
+  $ cat turbo.json | jq '.remoteCache.enabled = true' > turbo.json.tmp
+  $ mv turbo.json.tmp turbo.json
+  $ ${TURBO} prune docs > /dev/null
+  $ cat out/turbo.json | jq '.remoteCache | keys'
+  [
+    "apiUrl",
+    "enabled",
+    "loginUrl",
+    "preflight",
+    "signature",
+    "teamId",
+    "teamSlug",
+    "timeout",
+    "token"
+  ]
+  $ cat out/turbo.json | jq '.remoteCache.enabled'
+  true
+
+Modify turbo.json to add a remoteCache.enabled field set to false
+  $ rm -rf out
+  $ cat turbo.json | jq '.remoteCache.enabled = false' > turbo.json.tmp
+  $ mv turbo.json.tmp turbo.json
+  $ ${TURBO} prune docs > /dev/null
+  $ cat out/turbo.json | jq '.remoteCache | keys'
+  [
+    "apiUrl",
+    "enabled",
+    "loginUrl",
+    "preflight",
+    "signature",
+    "teamId",
+    "teamSlug",
+    "timeout",
+    "token"
+  ]
+  $ cat out/turbo.json | jq '.remoteCache.enabled'
+  false

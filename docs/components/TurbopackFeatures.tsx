@@ -8,7 +8,7 @@ import {
 import { DetailedFeatureLink } from "./Feature";
 import { CSSIcon, JSIcon, TSIcon } from "./Icons";
 
-export const TurbopackFeatures = () => {
+export function TurbopackFeatures() {
   return (
     <div className="grid grid-cols-1 mt-12 gap-x-6 gap-y-12 sm:grid-cols-2 lg:mt-16 lg:gap-x-8 lg:gap-y-12">
       <DetailedFeatureLink
@@ -18,7 +18,7 @@ export const TurbopackFeatures = () => {
           name: "JavaScript",
         }}
         href="/pack/docs/features/javascript"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: TSIcon,
@@ -31,7 +31,7 @@ export const TurbopackFeatures = () => {
           name: "TypeScript",
         }}
         href="/pack/docs/features/typescript"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: DownloadIcon,
@@ -44,7 +44,7 @@ export const TurbopackFeatures = () => {
           name: "Imports",
         }}
         href="/pack/docs/features/imports"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: DesktopComputerIcon,
@@ -52,7 +52,7 @@ export const TurbopackFeatures = () => {
           name: "Dev Server",
         }}
         href="/pack/docs/features/dev-server"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: CSSIcon,
@@ -65,7 +65,7 @@ export const TurbopackFeatures = () => {
           name: "CSS",
         }}
         href="/pack/docs/features/css"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: ArchiveIcon,
@@ -74,7 +74,7 @@ export const TurbopackFeatures = () => {
           name: "Frameworks",
         }}
         href="/pack/docs/features/frameworks"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: ServerIcon,
@@ -87,7 +87,7 @@ export const TurbopackFeatures = () => {
           name: "Static Assets",
         }}
         href="/pack/docs/features/static-assets"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: AdjustmentsIcon,
@@ -100,7 +100,7 @@ export const TurbopackFeatures = () => {
           name: "Environment Variables",
         }}
         href="/pack/docs/features/environment-variables"
-      ></DetailedFeatureLink>
+      />
     </div>
   );
-};
+}

@@ -338,7 +338,9 @@ impl EcmascriptModuleAsset {
     ) -> Result<Vc<EcmascriptModuleContent>> {
         let this = self.await?;
 
-        let parsed = parse(this.source, Value::new(this.ty), this.transforms);
+        let parsed = parse(this.source, Value::new(this.ty), this.transforms)
+            .resolve()
+            .await?;
 
         Ok(EcmascriptModuleContent::new(
             parsed,
@@ -362,7 +364,11 @@ impl Module for EcmascriptModuleAsset {
             ident.add_modifier(modifier());
             Ok(AssetIdent::new(Value::new(ident)))
         } else {
-            Ok(self.source.ident().with_modifier(modifier()))
+            Ok(self
+                .source
+                .ident()
+                .with_modifier(modifier())
+                .with_layer(self.asset_context.layer()))
         }
     }
 

@@ -2,16 +2,17 @@ use std::{io::Write, sync::Arc, time::Duration};
 
 use console::StyledObject;
 use tracing::{debug, log::warn};
-use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
-};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_cache::{AsyncCache, CacheError, CacheResponse, CacheSource};
-use turborepo_ui::{replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI};
+use turborepo_ui::{
+    color, replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI,
+};
 
 use crate::{
     cli::OutputLogsMode,
     daemon::{DaemonClient, DaemonConnector},
     opts::RunCacheOpts,
+    package_graph::WorkspaceInfo,
     run::task_id::TaskId,
     task_graph::{TaskDefinition, TaskOutputs},
 };
@@ -72,15 +73,15 @@ impl RunCache {
         self: &Arc<Self>,
         // TODO: Group these in a struct
         task_definition: &TaskDefinition,
-        workspace_dir: &AnchoredSystemPath,
+        workspace_info: &WorkspaceInfo,
         task_id: TaskId<'static>,
         hash: &str,
     ) -> TaskCache {
-        let task_dir = self.repo_root.resolve(workspace_dir);
-        let log_file_path =
-            task_dir.join_components(&[".turbo", &format!("turbo-{}.log", task_id.task())]);
+        let log_file_path = self
+            .repo_root
+            .resolve(&workspace_info.task_log_path(&task_id));
         let repo_relative_globs =
-            task_definition.repo_relative_hashable_outputs(&task_id, workspace_dir);
+            task_definition.repo_relative_hashable_outputs(&task_id, workspace_info.package_path());
 
         let mut task_output_mode = task_definition.output_mode;
         if let Some(task_output_mode_override) = self.task_output_mode {
@@ -130,7 +131,7 @@ impl TaskCache {
         if self.task_output_mode == OutputLogsMode::ErrorsOnly {
             prefixed_ui.output(format!(
                 "cache miss, executing {}",
-                GREY.apply_to(&self.hash)
+                color!(self.ui, GREY, "{}", self.hash)
             ));
             self.replay_log_file(prefixed_ui)?;
         }
@@ -174,7 +175,7 @@ impl TaskCache {
             ) {
                 prefixed_ui.output(format!(
                     "cache bypass, force executing {}",
-                    GREY.apply_to(&self.hash)
+                    color!(self.ui, GREY, "{}", self.hash)
                 ));
             }
 
@@ -223,7 +224,7 @@ impl TaskCache {
                     if matches!(err, CacheError::CacheMiss) {
                         prefixed_ui.output(format!(
                             "cache miss, executing {}",
-                            GREY.apply_to(&self.hash)
+                            color!(self.ui, GREY, "{}", self.hash)
                         ));
                     }
 
@@ -244,10 +245,13 @@ impl TaskCache {
                 {
                     // Don't fail the whole operation just because we failed to
                     // watch the outputs
-                    prefixed_ui.warn(GREY.apply_to(format!(
+                    prefixed_ui.warn(color!(
+                        self.ui,
+                        GREY,
                         "Failed to mark outputs as cached for {}: {:?}",
-                        self.task_id, err
-                    )))
+                        self.task_id,
+                        err
+                    ))
                 }
             }
 
@@ -270,7 +274,7 @@ impl TaskCache {
                 prefixed_ui.output(format!(
                     "cache hit{}, suppressing logs {}",
                     more_context,
-                    GREY.apply_to(&self.hash)
+                    color!(self.ui, GREY, "{}", self.hash)
                 ));
             }
             OutputLogsMode::Full => {
@@ -278,7 +282,7 @@ impl TaskCache {
                 prefixed_ui.output(format!(
                     "cache hit{}, replaying logs {}",
                     more_context,
-                    GREY.apply_to(&self.hash)
+                    color!(self.ui, GREY, "{}", self.hash)
                 ));
                 self.replay_log_file(prefixed_ui)?;
             }

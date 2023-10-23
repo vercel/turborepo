@@ -229,7 +229,7 @@ jobs:
 
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          target: ${{ matrix.os.name }}
+          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
@@ -298,13 +298,42 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          target: ${{ matrix.os.name }}
+          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: turbo run test --filter=cli --color
 
   turborepo_integration:
     name: Turborepo Integration Tests
+    needs: [determine_jobs, build_turborepo]
+    if: needs.determine_jobs.outputs.turborepo_integration == 'true'
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Cache Prysk
+        id: cache-prysk
+        uses: actions/cache@v3
+        with:
+          path: cli/.cram_env
+          key: prysk-venv-${{ matrix.os.name }}
+
+      - name: Integration Tests
+        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+
+  turborepo_integration_rust:
+    name: Turborepo Integration Tests (Rust Codepath)
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
     timeout-minutes: 30
@@ -330,7 +359,7 @@ jobs:
           key: prysk-venv-${{ matrix.os.name }}
 
       - name: Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        run: turbo run test:rust-codepath --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
 
   turborepo_e2e:
     name: Turborepo E2E Tests
@@ -352,7 +381,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          target: ${{ matrix.os.name }}
+          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: E2E Tests
@@ -381,7 +410,7 @@ jobs:
       # the node setup below this step. Not sure why.
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          target: ${{ matrix.os.name }}
+          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       # TODO: .github/actions/setup-node is pretty similar to the following
@@ -458,8 +487,8 @@ jobs:
       - name: Build turborepo CLI from source
         uses: ./.github/actions/setup-turborepo-environment
         with:
+          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          target: ${{ matrix.os.name }}
 
       - name: Run tests
         run: |
@@ -889,20 +918,12 @@ jobs:
         uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          target: ubuntu
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Format check
-        # This is the syntax for running the `//#lint` task specifically in turbo.json
-        # It runs the taplo check on taplo.toml, and lint:prettier per workspace.
-        # Skip `cli` workspace for now. It has the lint task, but in GitHub CI
-        # we need to set up golangci-lint to make it work. Go linting is run in the "Go linting"
-        # job in this workflow. We can move that in here in the next step.
-        run: turbo run lint:prettier --filter=!cli
-
-        # excluded workspaces have not been fully migrated to @vercel/style-guide
-      - name: Lint check
-        run: turbo run lint --filter=!docs --filter=!cli --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat
+      - name: Lint
+        # Filters some workspaces out:
+        # - `cli` because it runs golangci-lint and this Job doesn't have all the dependencies for that.
+        # - Other `@vercel/*` packages because ??
+        run: turbo run lint --filter=!cli --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat
 
   final:
     name: Ok

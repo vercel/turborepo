@@ -1,3 +1,5 @@
+use std::iter::once;
+
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, TaskInput, Value, Vc};
@@ -65,11 +67,6 @@ impl BuildChunkingContextBuilder {
         self
     }
 
-    pub fn layer(mut self, layer: impl Into<String>) -> Self {
-        self.chunking_context.layer = Some(layer.into());
-        self
-    }
-
     /// Builds the chunking context.
     pub fn build(self) -> Vc<BuildChunkingContext> {
         BuildChunkingContext::new(Value::new(self.chunking_context))
@@ -93,8 +90,6 @@ pub struct BuildChunkingContext {
     asset_root_path: Vc<FileSystemPath>,
     /// Static assets requested from this url base
     asset_prefix: Vc<Option<String>>,
-    /// Layer name within this context
-    layer: Option<String>,
     /// The environment chunks will be evaluated in.
     environment: Vc<Environment>,
     /// The kind of runtime to include in the output.
@@ -121,7 +116,6 @@ impl BuildChunkingContext {
                 chunk_root_path,
                 asset_root_path,
                 asset_prefix: Default::default(),
-                layer: None,
                 environment,
                 runtime_type: Default::default(),
                 minify_type: MinifyType::Minify,
@@ -164,8 +158,17 @@ impl BuildChunkingContext {
     ) -> Result<Vc<Box<dyn OutputAsset>>> {
         let availability_info = AvailabilityInfo::Root;
 
-        let MakeChunkGroupResult { chunks } =
-            make_chunk_group(Vc::upcast(self), [Vc::upcast(module)], availability_info).await?;
+        let MakeChunkGroupResult { chunks } = make_chunk_group(
+            Vc::upcast(self),
+            once(Vc::upcast(module)).chain(
+                evaluatable_assets
+                    .await?
+                    .iter()
+                    .map(|&asset| Vc::upcast(asset)),
+            ),
+            availability_info,
+        )
+        .await?;
 
         let other_chunks: Vec<_> = chunks
             .iter()
@@ -247,11 +250,6 @@ impl ChunkingContext for BuildChunkingContext {
         extension: String,
     ) -> Result<Vc<FileSystemPath>> {
         let root_path = self.chunk_root_path;
-        let root_path = if let Some(layer) = self.layer.as_deref() {
-            root_path.join(layer.to_string())
-        } else {
-            root_path
-        };
         let name = ident.output_name(self.context_path, extension).await?;
         Ok(root_path.join(name.clone_value()))
     }
@@ -299,18 +297,6 @@ impl ChunkingContext for BuildChunkingContext {
             ),
         };
         Ok(self.asset_root_path.join(asset_path))
-    }
-
-    #[turbo_tasks::function]
-    fn layer(&self) -> Vc<String> {
-        Vc::cell(self.layer.clone().unwrap_or_default())
-    }
-
-    #[turbo_tasks::function]
-    async fn with_layer(self: Vc<Self>, layer: String) -> Result<Vc<Self>> {
-        let mut chunking_context = self.await?.clone_value();
-        chunking_context.layer = (!layer.is_empty()).then(|| layer.to_string());
-        Ok(BuildChunkingContext::new(Value::new(chunking_context)))
     }
 
     #[turbo_tasks::function]

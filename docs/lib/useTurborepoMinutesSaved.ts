@@ -33,6 +33,6 @@ export default function useTurborepoMinutesSaved():
   const swr = useSWR<QueryResponse, unknown>(path, fetcher, {
     refreshInterval: REFRESH_INTERVAL_IN_MS,
   });
-
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- swr type doesn't seemed to be typed correctly
   return swr.data?.data[0];
 }

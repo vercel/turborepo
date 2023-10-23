@@ -1,9 +1,10 @@
 name: "Turbo Rust Setup"
 description: "Sets up the Rust toolchain for CI"
 inputs:
-  target:
-    description: "Compilation target"
-    required: true
+  windows:
+    description: 'Set to "true" if setting up for Windows'
+    required: false
+    default: "false"
   targets:
     description: "Comma-separated list of target triples to install for this toolchain"
     required: false
@@ -48,7 +49,7 @@ runs:
         components: ${{ inputs.components }}
 
     - name: "Set Windows default host to MinGW"
-      if: ${{ inputs.target == 'windows' }}
+      if: ${{ inputs.windows == 'true' }}
       shell: bash
       run: rustup set default-host x86_64-pc-windows-gnu && rustup show
 

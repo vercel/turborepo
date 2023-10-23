@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    collections::HashSet,
     io::Write,
     process::Stdio,
     sync::{Arc, Mutex, OnceLock},
@@ -22,6 +23,9 @@ use crate::{
     package_graph::{PackageGraph, WorkspaceName},
     process::{ChildExit, ProcessManager},
     run::{
+        global_hash::GlobalHashableInputs,
+        summary,
+        summary::{GlobalHashSummary, RunTracker},
         task_id::{self, TaskId},
         RunCache,
     },
@@ -30,18 +34,19 @@ use crate::{
 
 // This holds the whole world
 pub struct Visitor<'a> {
-    run_cache: Arc<RunCache>,
-    package_graph: Arc<PackageGraph>,
-    opts: &'a Opts<'a>,
-    task_hasher: TaskHasher<'a>,
-    global_env_mode: EnvMode,
-    sink: OutputSink<StdWriter>,
     color_cache: ColorSelector,
-    ui: UI,
-    manager: ProcessManager,
-    repo_root: &'a AbsoluteSystemPath,
-    global_env: EnvironmentVariableMap,
     dry: bool,
+    global_env: EnvironmentVariableMap,
+    global_env_mode: EnvMode,
+    manager: ProcessManager,
+    opts: &'a Opts<'a>,
+    package_graph: Arc<PackageGraph>,
+    repo_root: &'a AbsoluteSystemPath,
+    run_cache: Arc<RunCache>,
+    run_tracker: RunTracker,
+    sink: OutputSink<StdWriter>,
+    task_hasher: TaskHasher<'a>,
+    ui: UI,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -61,6 +66,8 @@ pub enum Error {
     Engine(#[from] crate::engine::ExecuteError),
     #[error(transparent)]
     TaskHash(#[from] task_hash::Error),
+    #[error(transparent)]
+    RunSummary(#[from] summary::Error),
 }
 
 impl<'a> Visitor<'a> {
@@ -71,6 +78,7 @@ impl<'a> Visitor<'a> {
     pub fn new(
         package_graph: Arc<PackageGraph>,
         run_cache: Arc<RunCache>,
+        run_tracker: RunTracker,
         opts: &'a Opts,
         package_inputs_hashes: PackageInputsHashes,
         env_at_execution_start: &'a EnvironmentVariableMap,
@@ -92,17 +100,18 @@ impl<'a> Visitor<'a> {
         let color_cache = ColorSelector::default();
 
         Self {
-            run_cache,
-            package_graph,
-            opts,
-            task_hasher,
-            global_env_mode,
-            sink,
             color_cache,
-            ui,
-            manager,
-            repo_root,
             dry: false,
+            global_env_mode,
+            manager,
+            opts,
+            package_graph,
+            repo_root,
+            run_cache,
+            run_tracker,
+            sink,
+            task_hasher,
+            ui,
             global_env,
         }
     }
@@ -127,13 +136,6 @@ impl<'a> Visitor<'a> {
             let is_github_actions = self.opts.run_opts.is_github_actions;
             let package_name = WorkspaceName::from(info.package());
 
-            let workspace_dir =
-                self.package_graph
-                    .workspace_dir(&package_name)
-                    .ok_or_else(|| Error::MissingPackage {
-                        package_name: package_name.clone(),
-                        task_id: info.clone(),
-                    })?;
             let workspace_info = self
                 .package_graph
                 .workspace_info(&package_name)
@@ -200,9 +202,12 @@ impl<'a> Visitor<'a> {
                 self.task_hasher
                     .env(&info, task_env_mode, task_definition, &self.global_env)?;
 
-            let task_cache =
-                self.run_cache
-                    .task_cache(task_definition, workspace_dir, info.clone(), &task_hash);
+            let task_cache = self.run_cache.task_cache(
+                task_definition,
+                workspace_info,
+                info.clone(),
+                &task_hash,
+            );
 
             // TODO(gsoltis): if/when we fix https://github.com/vercel/turbo/issues/937
             // the following block should never get hit. In the meantime, keep it after
@@ -218,16 +223,18 @@ impl<'a> Visitor<'a> {
             let ui = self.ui;
             let manager = self.manager.clone();
             let package_manager = self.package_graph.package_manager().clone();
-            let workspace_directory = self.repo_root.resolve(workspace_dir);
+            let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
             let errors = errors.clone();
             let task_id_for_display = self.display_task_id(&info);
             let hash_tracker = self.task_hasher.task_hash_tracker();
+            let tracker = self.run_tracker.track_task(info.clone().into_owned());
 
             let parent_span = Span::current();
             tasks.push(tokio::spawn(async move {
                 let span = tracing::debug_span!("execute_task", task = %info.task());
                 span.follows_from(parent_span.id());
                 let _enter = span.enter();
+                let tracker = tracker.start().await;
 
                 let task_id = info;
                 let mut task_cache = task_cache;
@@ -241,6 +248,7 @@ impl<'a> Visitor<'a> {
                             task_id,
                             task_cache.expanded_outputs().to_vec(),
                         );
+                        let _summary = tracker.cached().await;
                         callback.send(Ok(())).ok();
                         return;
                     }
@@ -267,6 +275,10 @@ impl<'a> Visitor<'a> {
                         Ok(w) => w,
                         Err(e) => {
                             error!("failed to capture outputs for \"{task_id}\": {e}");
+                            manager.stop().await;
+                            // If we have an internal failure of being unable setup log capture we
+                            // mark it as cancelled.
+                            let _summary = tracker.cancel();
                             callback.send(Err(StopExecution)).ok();
                             return;
                         }
@@ -278,14 +290,17 @@ impl<'a> Visitor<'a> {
                     Some(Err(e)) => {
                         // Note: we actually failed to spawn, but this matches the Go output
                         prefixed_ui.error(format!("command finished with error: {e}"));
+                        let error_string = e.to_string();
                         errors
                             .lock()
                             .expect("lock poisoned")
                             .push(TaskError::from_spawn(task_id_for_display.clone(), e));
+                        let _summary = tracker.spawn_failed(error_string).await;
                         callback
                             .send(if continue_on_error {
                                 Ok(())
                             } else {
+                                manager.stop().await;
                                 Err(StopExecution)
                             })
                             .ok();
@@ -294,6 +309,7 @@ impl<'a> Visitor<'a> {
                     // Turbo is shutting down
                     None => {
                         callback.send(Ok(())).ok();
+                        let _summary = tracker.cancel();
                         return;
                     }
                 };
@@ -305,6 +321,7 @@ impl<'a> Visitor<'a> {
                     Ok(Some(exit_status)) => exit_status,
                     Err(e) => {
                         error!("unable to pipe outputs from command: {e}");
+                        let _summary = tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         manager.stop().await;
                         return;
@@ -314,6 +331,8 @@ impl<'a> Visitor<'a> {
                         // exit status with Some and it is only initialized with
                         // None. Is it still running?
                         error!("unable to determine why child exited");
+                        manager.stop().await;
+                        let _summary = tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         return;
                     }
@@ -321,7 +340,9 @@ impl<'a> Visitor<'a> {
 
                 match exit_status {
                     // The task was successful, nothing special needs to happen.
-                    ChildExit::Finished(Some(0)) => (),
+                    ChildExit::Finished(Some(0)) => {
+                        let _summary = tracker.build_succeeded(0);
+                    }
                     ChildExit::Finished(Some(code)) => {
                         // If there was an error, flush the buffered output
                         if let Err(e) = task_cache.on_error(&mut prefixed_ui) {
@@ -329,13 +350,15 @@ impl<'a> Visitor<'a> {
                         }
                         let error =
                             TaskErrorCause::from_execution(process.label().to_string(), code);
+                        // TODO pass actual code
+                        let _summary = tracker.build_failed(0, error.to_string()).await;
                         if continue_on_error {
                             prefixed_ui.warn("command finished with error, but continuing...");
                             callback.send(Ok(())).ok();
                         } else {
                             prefixed_ui.error(format!("command finished with error: {error}"));
-                            callback.send(Err(StopExecution)).ok();
                             manager.stop().await;
+                            callback.send(Err(StopExecution)).ok();
                         }
                         errors.lock().expect("lock poisoned").push(TaskError {
                             task_id: task_id_for_display.clone(),
@@ -348,6 +371,8 @@ impl<'a> Visitor<'a> {
                     | ChildExit::Killed
                     | ChildExit::KilledExternal
                     | ChildExit::Failed => {
+                        manager.stop().await;
+                        let _summary = tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         return;
                     }
@@ -390,6 +415,39 @@ impl<'a> Visitor<'a> {
             .expect("mutex poisoned");
 
         Ok(errors)
+    }
+
+    /// Finishes visiting the tasks, creates the run summary, and either
+    /// prints, saves, or sends it to spaces.
+    pub(crate) async fn finish(
+        self,
+        exit_code: i32,
+        packages: HashSet<WorkspaceName>,
+        global_hash_inputs: GlobalHashableInputs<'_>,
+    ) -> Result<(), Error> {
+        let Self {
+            package_graph,
+            ui,
+            opts,
+            repo_root,
+            ..
+        } = self;
+
+        let global_hash_summary = GlobalHashSummary::try_from(global_hash_inputs)?;
+
+        Ok(self
+            .run_tracker
+            .finish(
+                exit_code,
+                &package_graph,
+                ui,
+                repo_root,
+                opts.scope_opts.pkg_inference_root.as_deref(),
+                &opts.run_opts,
+                packages,
+                global_hash_summary,
+            )
+            .await?)
     }
 
     fn sink(opts: &Opts, silent: bool) -> OutputSink<StdWriter> {
@@ -456,13 +514,14 @@ impl<'a> Visitor<'a> {
         prefixed_ui
     }
 
+    /// Only used for the hashing comparison between Rust and Go. After port,
+    /// should delete
     pub fn into_task_hash_tracker(self) -> TaskHashTrackerState {
         self.task_hasher.into_task_hash_tracker_state()
     }
 
-    pub fn dry_run(mut self) -> Self {
+    pub fn dry_run(&mut self) {
         self.dry = true;
-        self
     }
 }
 

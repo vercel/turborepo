@@ -93,6 +93,12 @@ pub struct SpacesResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpaceRun {
+    pub id: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: String,
     pub username: String,
@@ -107,6 +113,7 @@ pub struct UserResponse {
     pub user: User,
 }
 
+#[derive(Debug)]
 pub struct PreflightResponse {
     pub location: Url,
     pub allow_authorization_header: bool,

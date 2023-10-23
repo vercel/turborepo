@@ -1,33 +1,48 @@
 import cp from "node:child_process";
 import fs from "node:fs";
+import path from "node:path";
 import { setup, TURBO_BIN, DEFAULT_EXEC_OPTS } from "./helpers";
+
+const profileName = process.argv[2];
+
+if (!profileName) {
+  console.error("Error: Missing profile name");
+  printUsageMessage();
+  process.exit(1);
+}
+
+const fullProfilePath = path.join(process.cwd(), profileName);
+
+if (fs.existsSync(fullProfilePath)) {
+  console.error(`Error: ${fullProfilePath} already exists`);
+  printUsageMessage();
+  process.exit(1);
+}
+
+console.log(`Saving profile to ${fullProfilePath}`);
 
 cp.execSync(`${TURBO_BIN} --version`, { stdio: "inherit" });
 
-console.log("setup");
+// Sets up the monorepo
 setup();
 
 if (!fs.existsSync(TURBO_BIN)) {
   throw new Error("No turbo binary found");
 }
 
-console.log("running ttft", {
+const turboFlags = `-vvv --experimental-rust-codepath --dry --skip-infer --profile=${fullProfilePath}`;
+
+console.log("Executing turbo build in child process", {
   cwd: process.cwd(),
   bin: TURBO_BIN,
+  execOpts: DEFAULT_EXEC_OPTS,
+  turboFlags,
 });
 
-console.log(
-  "Executing turbo build in child process with opts",
-  DEFAULT_EXEC_OPTS
-);
-
-// Path to profile.json is ../profile.json because we are in
-// benchmark/large-monorepo (i.e. REPO_PATH) when this runs
+// When this script runs, cwd is benchmark/large-monorepo (i.e. REPO_PATH)
+const cmd = `${TURBO_BIN} run build ${turboFlags}`;
 try {
-  cp.execSync(
-    `${TURBO_BIN} run build -vvv --experimental-rust-codepath --dry --skip-infer --profile=../profile.json`,
-    DEFAULT_EXEC_OPTS
-  );
+  cp.execSync(cmd, DEFAULT_EXEC_OPTS);
 } catch (e) {
   // catch errors and exit. the build command seems to be erroring out due to very large output?
   // need to chase it down, but the benchmark seems to still be working, and when the same turbo run build
@@ -35,7 +50,10 @@ try {
   console.error("Error running turbo build", e);
 }
 
-// TODO: just do this in JS and send to TB here instead of child process?
-cp.execSync("jq -f src/fold.jq < profile.json > ttft.json", {
-  stdio: "inherit",
-});
+// -----------------------
+// Helpers
+// -----------------------
+
+function printUsageMessage() {
+  console.log("Usage:\n\npnpm -F benchmark ttft <path>");
+}
