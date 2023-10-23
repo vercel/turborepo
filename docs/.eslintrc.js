@@ -21,7 +21,6 @@ module.exports = {
     "jsx-a11y/no-redundant-roles": "warn",
     "jsx-a11y/no-static-element-interactions": "warn",
     "no-console": "warn",
-    "no-redeclare": "warn",
     "no-undef": "warn",
     "react/no-unknown-property": "warn",
     "react/no-unstable-nested-components": "warn",
