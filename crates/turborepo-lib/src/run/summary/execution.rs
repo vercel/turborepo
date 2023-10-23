@@ -243,8 +243,6 @@ pub struct TaskExecutionSummary {
     start_time: i64,
     end_time: i64,
     #[serde(skip)]
-    duration: TurboDuration,
-    #[serde(skip)]
     state: ExecutionState,
     exit_code: Option<i32>,
 }
@@ -343,11 +341,9 @@ impl TaskTracker<chrono::DateTime<Local>> {
     pub fn cancel(self) -> TaskExecutionSummary {
         let Self { started_at, .. } = self;
         let ended_at = Local::now();
-        let duration = TurboDuration::new(&started_at, &Local::now());
         TaskExecutionSummary {
             start_time: started_at.timestamp_millis(),
             end_time: ended_at.timestamp_millis(),
-            duration,
             state: ExecutionState::Canceled,
             exit_code: None,
         }
@@ -359,7 +355,6 @@ impl TaskTracker<chrono::DateTime<Local>> {
         } = self;
 
         let ended_at = Local::now();
-        let duration = TurboDuration::new(&started_at, &Local::now());
 
         sender
             .send(Event::Cached)
@@ -369,7 +364,6 @@ impl TaskTracker<chrono::DateTime<Local>> {
         TaskExecutionSummary {
             start_time: started_at.timestamp_millis(),
             end_time: ended_at.timestamp_millis(),
-            duration,
             state: ExecutionState::Cached,
             exit_code: None,
         }
@@ -381,7 +375,6 @@ impl TaskTracker<chrono::DateTime<Local>> {
         } = self;
 
         let ended_at = Local::now();
-        let duration = TurboDuration::new(&started_at, &Local::now());
 
         sender
             .send(Event::Built)
@@ -391,7 +384,6 @@ impl TaskTracker<chrono::DateTime<Local>> {
         TaskExecutionSummary {
             start_time: started_at.timestamp_millis(),
             end_time: ended_at.timestamp_millis(),
-            duration,
             state: ExecutionState::Built { exit_code },
             exit_code: Some(exit_code),
         }
@@ -407,7 +399,6 @@ impl TaskTracker<chrono::DateTime<Local>> {
         } = self;
 
         let ended_at = Local::now();
-        let duration = TurboDuration::new(&started_at, &Local::now());
 
         sender
             .send(Event::BuildFailed)
@@ -416,7 +407,6 @@ impl TaskTracker<chrono::DateTime<Local>> {
         TaskExecutionSummary {
             start_time: started_at.timestamp_millis(),
             end_time: ended_at.timestamp_millis(),
-            duration,
             state: ExecutionState::BuildFailed {
                 exit_code,
                 err: error.to_string(),
@@ -431,7 +421,6 @@ impl TaskTracker<chrono::DateTime<Local>> {
         } = self;
 
         let ended_at = Local::now();
-        let duration = TurboDuration::new(&started_at, &Local::now());
 
         sender
             .send(Event::BuildFailed)
@@ -440,7 +429,6 @@ impl TaskTracker<chrono::DateTime<Local>> {
         TaskExecutionSummary {
             start_time: started_at.timestamp_millis(),
             end_time: ended_at.timestamp_millis(),
-            duration,
             state: ExecutionState::SpawnFailed {
                 err: error.to_string(),
             },
@@ -522,8 +510,8 @@ mod test {
             "tracker start time should start when start is called"
         );
         assert!(
-            sleep_duration <= summary.duration.0,
-            "tracker duration should be at least as long as the time between calls"
+            summary.start_time + sleep_duration.num_milliseconds() <= summary.end_time,
+            "tracker end should be at least as long as the time between calls"
         );
     }
 
@@ -531,7 +519,6 @@ mod test {
         TaskExecutionSummary {
             start_time: 123,
             end_time: 234,
-            duration: TurboDuration::from(Duration::zero()),
             state: ExecutionState::Built { exit_code: 0 },
             exit_code: Some(0),
         },
