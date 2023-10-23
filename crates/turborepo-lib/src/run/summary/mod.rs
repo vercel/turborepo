@@ -127,6 +127,7 @@ pub struct RunTracker {
     execution_tracker: ExecutionTracker,
     spaces_client_handle: Option<SpacesClientHandle>,
     user: String,
+    synthesized_command: String,
 }
 
 impl RunTracker {
@@ -152,6 +153,7 @@ impl RunTracker {
             execution_tracker: ExecutionTracker::new(),
             spaces_client_handle: None,
             user: user.clone(),
+            synthesized_command: synthesized_command.to_string(),
         };
 
         if let Some(spaces_client) =
@@ -205,7 +207,7 @@ impl RunTracker {
 
         let summary_state = self.execution_tracker.finish().await?;
         let execution_summary = ExecutionSummary::new(
-            "todo".to_string(),
+            self.synthesized_command.clone(),
             summary_state,
             package_inference_root,
             exit_code,
