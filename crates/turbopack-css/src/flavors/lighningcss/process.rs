@@ -22,13 +22,12 @@ use turbopack_core::{
     source_map::{GenerateSourceMap, OptionSourceMap},
 };
 
-use crate::{
+use super::{
     lifetime_util::stylesheet_into_static,
     references::{
         analyze_references,
         url::{replace_url_references, resolve_url_reference, UrlAssetReference},
     },
-    CssModuleAssetType,
 };
 
 /// Multiple [ModuleReference]s
