@@ -191,6 +191,10 @@ impl<'a> Visitor<'a> {
 
             debug!("task {} hash is {}", info, task_hash);
             if self.dry {
+                self.run_tracker
+                    .track_task(info.clone().into_owned())
+                    .dry_run()
+                    .await;
                 callback.send(Ok(())).ok();
                 continue;
             }
@@ -248,7 +252,7 @@ impl<'a> Visitor<'a> {
                             task_id,
                             task_cache.expanded_outputs().to_vec(),
                         );
-                        let _summary = tracker.cached().await;
+                        tracker.cached().await;
                         callback.send(Ok(())).ok();
                         return;
                     }
@@ -278,7 +282,7 @@ impl<'a> Visitor<'a> {
                             manager.stop().await;
                             // If we have an internal failure of being unable setup log capture we
                             // mark it as cancelled.
-                            let _summary = tracker.cancel();
+                            tracker.cancel();
                             callback.send(Err(StopExecution)).ok();
                             return;
                         }
@@ -309,7 +313,7 @@ impl<'a> Visitor<'a> {
                     // Turbo is shutting down
                     None => {
                         callback.send(Ok(())).ok();
-                        let _summary = tracker.cancel();
+                        tracker.cancel();
                         return;
                     }
                 };
@@ -321,7 +325,7 @@ impl<'a> Visitor<'a> {
                     Ok(Some(exit_status)) => exit_status,
                     Err(e) => {
                         error!("unable to pipe outputs from command: {e}");
-                        let _summary = tracker.cancel();
+                        tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         manager.stop().await;
                         return;
@@ -332,7 +336,7 @@ impl<'a> Visitor<'a> {
                         // None. Is it still running?
                         error!("unable to determine why child exited");
                         manager.stop().await;
-                        let _summary = tracker.cancel();
+                        tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         return;
                     }
@@ -350,8 +354,7 @@ impl<'a> Visitor<'a> {
                         }
                         let error =
                             TaskErrorCause::from_execution(process.label().to_string(), code);
-                        // TODO pass actual code
-                        let _summary = tracker.build_failed(0, error.to_string()).await;
+                        tracker.build_failed(code, error.to_string()).await;
                         if continue_on_error {
                             prefixed_ui.warn("command finished with error, but continuing...");
                             callback.send(Ok(())).ok();
@@ -372,7 +375,7 @@ impl<'a> Visitor<'a> {
                     | ChildExit::KilledExternal
                     | ChildExit::Failed => {
                         manager.stop().await;
-                        let _summary = tracker.cancel();
+                        tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         return;
                     }

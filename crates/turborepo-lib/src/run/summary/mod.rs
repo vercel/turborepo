@@ -149,7 +149,7 @@ impl RunTracker {
             scm: scm.clone(),
             version,
             started_at,
-            execution_tracker: ExecutionTracker::new(synthesized_command),
+            execution_tracker: ExecutionTracker::new(),
             spaces_client_handle: None,
             user: user.clone(),
         };
@@ -203,10 +203,15 @@ impl RunTracker {
             RunType::Real
         };
 
-        let execution_summary = self
-            .execution_tracker
-            .finish(package_inference_root, exit_code, self.started_at, end_time)
-            .await?;
+        let summary_state = self.execution_tracker.finish().await?;
+        let execution_summary = ExecutionSummary::new(
+            "todo".to_string(),
+            summary_state,
+            package_inference_root,
+            exit_code,
+            self.started_at,
+            end_time,
+        );
 
         Ok(RunSummary {
             id: Ksuid::new(None, None),
