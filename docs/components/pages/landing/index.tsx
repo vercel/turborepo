@@ -1,10 +1,8 @@
 import React from "react";
-import Head from "next/head";
 import cn from "classnames";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Clients } from "../../clients/Clients";
-import { Marquee } from "../../clients/Marquee";
 import { FadeIn } from "../home-shared/FadeIn";
 import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
 import PackLogo from "../../logos/PackLogo";

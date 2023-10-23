@@ -24,7 +24,7 @@ export const TailwindIcon: IconType = (props) => {
   );
 };
 
-export const GitHubIcon: IconType = ({ height = 28, ...props }) => {
+export const GitHubIcon: IconType = ({ height = 28 }) => {
   return (
     <svg
       aria-hidden="true"
@@ -42,7 +42,7 @@ export const GitHubIcon: IconType = ({ height = 28, ...props }) => {
   );
 };
 
-export const DockerIcon: IconType = ({ height = 28, ...props }) => {
+export const DockerIcon: IconType = ({ height: _ = 28, ...props }) => {
   return (
     <svg viewBox="0 0 122.88 88.17" {...props}>
       <g>

@@ -1,6 +1,4 @@
 import Link from "next/link";
-import { Container } from "./Container";
-import Callout from "./Callout";
 
 function FullTurboCTA() {
   return (
