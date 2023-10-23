@@ -6,6 +6,7 @@
 #![feature(async_fn_in_trait)]
 
 pub mod chunk;
+pub mod code_gen;
 pub mod embed;
 pub mod flavors;
 mod global_asset;
