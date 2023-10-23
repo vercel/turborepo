@@ -316,21 +316,17 @@ async fn graph_node_to_referenced_nodes(
                         ));
                     }
 
-                    let chunkable_module =
-                        match Vc::try_resolve_sidecast::<Box<dyn ChunkableModule>>(module).await? {
-                            Some(chunkable_module) => chunkable_module,
-                            _ => {
-                                return Ok((
-                                    Some(ChunkGraphEdge {
-                                        key: None,
-                                        node: ChunkContentGraphNode::ExternalModuleReference(
-                                            reference,
-                                        ),
-                                    }),
-                                    None,
-                                ));
-                            }
-                        };
+                    let Some(chunkable_module) =
+                        Vc::try_resolve_sidecast::<Box<dyn ChunkableModule>>(module).await?
+                    else {
+                        return Ok((
+                            Some(ChunkGraphEdge {
+                                key: None,
+                                node: ChunkContentGraphNode::ExternalModuleReference(reference),
+                            }),
+                            None,
+                        ));
+                    };
 
                     match chunking_type {
                         ChunkingType::Parallel => {
@@ -347,7 +343,7 @@ async fn graph_node_to_referenced_nodes(
                                 }
                             }
 
-                            return Ok((
+                            Ok((
                                 Some(ChunkGraphEdge {
                                     key: Some(module),
                                     node: ChunkContentGraphNode::ChunkItem {
@@ -356,7 +352,7 @@ async fn graph_node_to_referenced_nodes(
                                     },
                                 }),
                                 None,
-                            ));
+                            ))
                         }
                         ChunkingType::ParallelInheritAsync => {
                             let chunk_item = chunkable_module
@@ -380,7 +376,7 @@ async fn graph_node_to_referenced_nodes(
                                     return Ok((None, None));
                                 }
                             }
-                            return Ok((
+                            Ok((
                                 Some(ChunkGraphEdge {
                                     key: Some(module),
                                     node: ChunkContentGraphNode::ChunkItem {
@@ -389,19 +385,17 @@ async fn graph_node_to_referenced_nodes(
                                     },
                                 }),
                                 Some((chunk_item, InheritAsyncEdge::LocalModule)),
-                            ));
+                            ))
                         }
-                        ChunkingType::Async => {
-                            return Ok((
-                                Some(ChunkGraphEdge {
-                                    key: None,
-                                    node: ChunkContentGraphNode::AsyncModule {
-                                        module: chunkable_module,
-                                    },
-                                }),
-                                None,
-                            ));
-                        }
+                        ChunkingType::Async => Ok((
+                            Some(ChunkGraphEdge {
+                                key: None,
+                                node: ChunkContentGraphNode::AsyncModule {
+                                    module: chunkable_module,
+                                },
+                            }),
+                            None,
+                        )),
                     }
                 })
                 .try_join()
