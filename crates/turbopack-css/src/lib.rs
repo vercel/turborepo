@@ -9,6 +9,7 @@ mod asset;
 pub mod chunk;
 mod code_gen;
 pub mod embed;
+pub mod flavors;
 mod global_asset;
 mod module_asset;
 pub(crate) mod parse;
