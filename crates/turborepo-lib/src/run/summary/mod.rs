@@ -589,6 +589,7 @@ impl<'a> RunSummary<'a> {
         if self.monorepo {
             Ok(serde_json::to_string_pretty(&self)?)
         } else {
+            // Deref coercion used to get an immutable reference from the mutable reference.
             let monorepo_rsm = SinglePackageRunSummary::from(&*self);
             Ok(serde_json::to_string_pretty(&monorepo_rsm)?)
         }
