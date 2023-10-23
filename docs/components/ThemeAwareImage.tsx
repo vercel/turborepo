@@ -3,7 +3,7 @@ import cn from "classnames";
 import type { ImageProps } from "next/image";
 import Image from "next/image";
 
-interface Image {
+interface ImageAttrs {
   src: string;
   alt: string;
   className?: string;
@@ -12,8 +12,8 @@ interface Image {
 
 interface Props {
   className?: string;
-  light: Image;
-  dark: Image;
+  light: ImageAttrs;
+  dark: ImageAttrs;
 }
 
 export default function ThemeAwareImage({
