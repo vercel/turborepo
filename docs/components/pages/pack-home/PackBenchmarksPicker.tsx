@@ -1,4 +1,4 @@
-import { BenchmarkNumberOfModules } from "./PackBenchmarks";
+import type { BenchmarkNumberOfModules } from "./PackBenchmarks";
 import { PackDropdown } from "./PackDropdown";
 
 export function PackBenchmarksPicker(props: {
@@ -13,7 +13,9 @@ export function PackBenchmarksPicker(props: {
         React Components
       </a>
       <PackDropdown
-        onOptionSelected={(value) => props.setNumberOfModules(value)}
+        onOptionSelected={(value) => {
+          props.setNumberOfModules(value);
+        }}
       />
     </div>
   );

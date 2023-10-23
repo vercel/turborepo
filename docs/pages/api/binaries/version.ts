@@ -80,7 +80,7 @@ export default async function handler(req: NextRequest) {
     }
 
     const versions = await fetchDistTags({ name });
-    if (!versions || !versions[tag]) {
+    if (!versions?.[tag]) {
       return errorResponse({
         status: 404,
         message: `unsupported tag - ${tag}`,

@@ -1,7 +1,9 @@
 import React from "react";
-import { ImageFigureProps } from "./ImageFigure";
-import { ThemedImage, ThemedImageProps } from "./ThemedImage";
 import cn from "classnames";
+import type { ImageFigureProps } from "./ImageFigure";
+import type { ThemedImageProps } from "./ThemedImage";
+import { ThemedImage } from "./ThemedImage";
+
 export type ThemedImageFigureProps = Omit<ImageFigureProps, "src"> &
   ThemedImageProps;
 
@@ -31,17 +33,17 @@ export function ThemedImageFigure(
           }
         )}
       >
-        {/* eslint-disable-next-line jsx-a11y/alt-text */}
+        {}
         <ThemedImage {...rest} />
       </div>
-      {caption && (
+      {caption ? (
         <figcaption
           className="m-0 text-xs text-center text-gray-500"
           style={captionSpacing ? { marginTop: captionSpacing } : {}}
         >
           {caption}
         </figcaption>
-      )}
+      ) : null}
     </figure>
   );
 }

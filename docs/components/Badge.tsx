@@ -1,5 +1,4 @@
 import cn from "classnames";
-
 import type { ReactNode } from "react";
 
 export type BadgeProps = React.ComponentProps<"span"> & {

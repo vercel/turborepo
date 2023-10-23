@@ -15,7 +15,7 @@ export function Clients({
   const showcaseDark = [];
   const showcaseLight = [];
 
-  const LogoWrapper = ({ className, children }) => {
+  function LogoWrapper({ className, children }) {
     if (!staticWidth) return children;
     return (
       <div
@@ -27,7 +27,7 @@ export function Clients({
         {children}
       </div>
     );
-  };
+  }
 
   users
     .filter((i) => (companyList ? companyList.includes(i.caption) : true))
@@ -35,18 +35,18 @@ export function Clients({
       if (user.pinned) {
         showcaseDark.push(
           <LogoWrapper
-            key={`${user.caption}-dark`}
             className="flex dark:hidden"
+            key={`${user.caption}-dark`}
           >
-            <Logo user={user} theme={"dark"} isLink={linked} />
+            <Logo isLink={linked} theme="dark" user={user} />
           </LogoWrapper>
         );
         showcaseLight.push(
           <LogoWrapper
-            key={`${user.caption}-light`}
             className="hidden dark:flex"
+            key={`${user.caption}-light`}
           >
-            <Logo user={user} theme={"light"} isLink={linked} />
+            <Logo isLink={linked} theme="light" user={user} />
           </LogoWrapper>
         );
       }
