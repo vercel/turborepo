@@ -17,7 +17,7 @@ use crate::{
     code_gen::CodeGenerateable,
     process::{
         finalize_css, parse_css, process_css_with_placeholder, CssWithPlaceholderResult,
-        FinalCssResult, ParseCss, ParseCssResult, ProcessCss,
+        FinalCssResult, ParseCssWithLightning, ParseCssWithLightningResult, ProcessCss,
     },
     references::{compose::CssModuleComposeReference, import::ImportAssetReference},
     CssModuleAssetType,
@@ -60,9 +60,9 @@ impl CssModuleAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl ParseCss for CssModuleAsset {
+impl ParseCssWithLightning for CssModuleAsset {
     #[turbo_tasks::function]
-    async fn parse_css(self: Vc<Self>) -> Result<Vc<ParseCssResult>> {
+    async fn parse_css(self: Vc<Self>) -> Result<Vc<ParseCssWithLightningResult>> {
         let this = self.await?;
         Ok(parse_css(this.source, Vc::upcast(self), this.ty))
     }
@@ -104,9 +104,9 @@ impl Module for CssModuleAsset {
         // TODO: include CSS source map
 
         match &*result {
-            ParseCssResult::Ok { references, .. } => Ok(*references),
-            ParseCssResult::Unparseable => Ok(ModuleReferences::empty()),
-            ParseCssResult::NotFound => Ok(ModuleReferences::empty()),
+            ParseCssWithLightningResult::Ok { references, .. } => Ok(*references),
+            ParseCssWithLightningResult::Unparseable => Ok(ModuleReferences::empty()),
+            ParseCssWithLightningResult::NotFound => Ok(ModuleReferences::empty()),
         }
     }
 }

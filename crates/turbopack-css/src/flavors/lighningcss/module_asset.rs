@@ -31,7 +31,7 @@ use turbopack_ecmascript::{
 use crate::{
     process::{CssWithPlaceholderResult, ProcessCss},
     references::{compose::CssModuleComposeReference, internal::InternalCssAssetReference},
-    ParseCss,
+    ParseCssWithLightning,
 };
 
 #[turbo_tasks::function]

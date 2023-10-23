@@ -36,7 +36,7 @@ use crate::{
 pub struct UnresolvedUrlReferences(pub Vec<(String, Vc<UrlAssetReference>)>);
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
-pub enum ParseCssResult {
+pub enum ParseCssWithLightningResult {
     Ok {
         #[turbo_tasks(trace_ignore)]
         stylesheet: StyleSheet<'static, 'static>,
@@ -52,7 +52,7 @@ pub enum ParseCssResult {
     NotFound,
 }
 
-impl PartialEq for ParseCssResult {
+impl PartialEq for ParseCssWithLightningResult {
     fn eq(&self, _: &Self) -> bool {
         false
     }
@@ -102,7 +102,7 @@ pub enum FinalCssResult {
         #[turbo_tasks(trace_ignore)]
         dependencies: Option<Vec<Dependency>>,
 
-        source_map: Vc<ParseCssResultSourceMap>,
+        source_map: Vc<ParseCssWithLightningResultSourceMap>,
     },
     Unparseable,
     NotFound,
@@ -116,12 +116,12 @@ impl PartialEq for FinalCssResult {
 
 #[turbo_tasks::function]
 pub async fn process_css_with_placeholder(
-    result: Vc<ParseCssResult>,
+    result: Vc<ParseCssWithLightningResult>,
 ) -> Result<Vc<CssWithPlaceholderResult>> {
     let result = result.await?;
 
     match &*result {
-        ParseCssResult::Ok {
+        ParseCssWithLightningResult::Ok {
             stylesheet,
             references,
             url_references,
@@ -155,8 +155,10 @@ pub async fn process_css_with_placeholder(
             }
             .into())
         }
-        ParseCssResult::Unparseable => Ok(CssWithPlaceholderResult::Unparseable.into()),
-        ParseCssResult::NotFound => Ok(CssWithPlaceholderResult::NotFound.into()),
+        ParseCssWithLightningResult::Unparseable => {
+            Ok(CssWithPlaceholderResult::Unparseable.into())
+        }
+        ParseCssWithLightningResult::NotFound => Ok(CssWithPlaceholderResult::NotFound.into()),
     }
 }
 
@@ -206,7 +208,7 @@ pub async fn finalize_css(
                 output_code: result.code,
                 dependencies: result.dependencies,
                 exports: result.exports,
-                source_map: ParseCssResultSourceMap::new(srcmap).cell(),
+                source_map: ParseCssWithLightningResultSourceMap::new(srcmap).cell(),
             }
             .into())
         }
@@ -216,12 +218,12 @@ pub async fn finalize_css(
 }
 
 #[turbo_tasks::value_trait]
-pub trait ParseCss {
-    async fn parse_css(self: Vc<Self>) -> Result<Vc<ParseCssResult>>;
+pub trait ParseCssWithLightning {
+    async fn parse_css(self: Vc<Self>) -> Result<Vc<ParseCssWithLightningResult>>;
 }
 
 #[turbo_tasks::value_trait]
-pub trait ProcessCss: ParseCss {
+pub trait ProcessCss: ParseCssWithLightning {
     async fn get_css_with_placeholder(self: Vc<Self>) -> Result<Vc<CssWithPlaceholderResult>>;
 
     async fn finalize_css(
@@ -235,16 +237,16 @@ pub async fn parse_css(
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
     ty: CssModuleAssetType,
-) -> Result<Vc<ParseCssResult>> {
+) -> Result<Vc<ParseCssWithLightningResult>> {
     let content = source.content();
     let fs_path = &*source.ident().path().await?;
     let ident_str = &*source.ident().to_string().await?;
     Ok(match &*content.await? {
-        AssetContent::Redirect { .. } => ParseCssResult::Unparseable.cell(),
+        AssetContent::Redirect { .. } => ParseCssWithLightningResult::Unparseable.cell(),
         AssetContent::File(file) => match &*file.await? {
-            FileContent::NotFound => ParseCssResult::NotFound.cell(),
+            FileContent::NotFound => ParseCssWithLightningResult::NotFound.cell(),
             FileContent::Content(file) => match file.content().to_str() {
-                Err(_err) => ParseCssResult::Unparseable.cell(),
+                Err(_err) => ParseCssWithLightningResult::Unparseable.cell(),
                 Ok(string) => {
                     process_content(string.into_owned(), fs_path, ident_str, source, origin, ty)
                         .await?
@@ -261,7 +263,7 @@ async fn process_content(
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
     ty: CssModuleAssetType,
-) -> Result<Vc<ParseCssResult>> {
+) -> Result<Vc<ParseCssWithLightningResult>> {
     let config = ParserOptions {
         css_modules: match ty {
             CssModuleAssetType::Module => Some(lightningcss::css_modules::Config {
@@ -288,7 +290,7 @@ async fn process_content(
         Err(_e) => {
             // TODO(kdy1): Report errors
             // e.to_diagnostics(&handler).emit();
-            return Ok(ParseCssResult::Unparseable.into());
+            return Ok(ParseCssWithLightningResult::Unparseable.into());
         }
     };
 
@@ -300,7 +302,7 @@ async fn process_content(
 
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
 
-    Ok(ParseCssResult::Ok {
+    Ok(ParseCssWithLightningResult::Ok {
         stylesheet,
         references: Vc::cell(references),
         url_references: Vc::cell(url_references),
@@ -310,25 +312,25 @@ async fn process_content(
 }
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
-pub struct ParseCssResultSourceMap {
+pub struct ParseCssWithLightningResultSourceMap {
     #[turbo_tasks(debug_ignore, trace_ignore)]
     source_map: parcel_sourcemap::SourceMap,
 }
 
-impl PartialEq for ParseCssResultSourceMap {
+impl PartialEq for ParseCssWithLightningResultSourceMap {
     fn eq(&self, _: &Self) -> bool {
         false
     }
 }
 
-impl ParseCssResultSourceMap {
+impl ParseCssWithLightningResultSourceMap {
     pub fn new(source_map: parcel_sourcemap::SourceMap) -> Self {
-        ParseCssResultSourceMap { source_map }
+        ParseCssWithLightningResultSourceMap { source_map }
     }
 }
 
 #[turbo_tasks::value_impl]
-impl GenerateSourceMap for ParseCssResultSourceMap {
+impl GenerateSourceMap for ParseCssWithLightningResultSourceMap {
     #[turbo_tasks::function]
     fn generate_source_map(&self) -> Vc<OptionSourceMap> {
         let mut builder = SourceMapBuilder::new(None);
