@@ -25,7 +25,7 @@ use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
-use self::execution::TaskTracker;
+use self::{execution::TaskTracker, task::SingleTaskSummary};
 use super::task_id::TaskId;
 use crate::{
     cli,
@@ -105,7 +105,7 @@ pub struct RunSummary<'a> {
     packages: HashSet<WorkspaceName>,
     env_mode: EnvMode,
     framework_inference: bool,
-    tasks: Vec<TaskSummary<'a>>,
+    tasks: Vec<TaskSummary>,
     user: String,
     scm: SCMState,
     #[serde(skip)]
@@ -290,7 +290,7 @@ struct SinglePackageRunSummary<'a> {
     global_hash_summary: &'a GlobalHashSummary<'a>,
     env_mode: EnvMode,
     framework_inference: bool,
-    tasks: &'a [TaskSummary<'a>],
+    tasks: &'a [SingleTaskSummary],
     user: &'a str,
     pub scm: &'a SCMState,
 }
@@ -306,7 +306,8 @@ impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
             global_hash_summary: &run_summary.global_hash_summary,
             env_mode: run_summary.env_mode,
             framework_inference: run_summary.framework_inference,
-            tasks: &run_summary.tasks,
+            // TODO
+            tasks: &[],
             user: &run_summary.user,
             scm: &run_summary.scm,
         }
@@ -488,24 +489,28 @@ impl<'a> RunSummary<'a> {
             let mut tab_writer = TabWriter::new(io::stdout());
             cwriteln!(tab_writer, ui, GREY, "  Task\t=\t{}", task.task_id)?;
 
-            if let Some(package) = &task.package {
-                cwriteln!(tab_writer, ui, GREY, "  Package\t=\t{}", package)?;
-            }
+            cwriteln!(tab_writer, ui, GREY, "  Package\t=\t{}", &task.package)?;
 
-            cwriteln!(tab_writer, ui, GREY, "  Command\t=\t{}", task.command)?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Command\t=\t{}",
+                task.shared.command
+            )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Outputs\t=\t{}",
-                task.outputs.join(", ")
+                task.shared.outputs.join(", ")
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Log File\t=\t{}",
-                task.log_file_relative_path
+                task.shared.log_file_relative_path
             )?;
             cwriteln!(
                 tab_writer,
@@ -526,14 +531,14 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  Inputs Files Considered\t=\t{}",
-                task.expanded_inputs.len()
+                task.shared.expanded_inputs.len()
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  .env Files Considered\t=\t{}",
-                task.dot_env.len()
+                task.shared.dot_env.len()
             )?;
 
             cwriteln!(
@@ -541,21 +546,21 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  Env Vars\t=\t{}",
-                task.env_vars.specified.env.join(", ")
+                task.shared.env_vars.specified.env.join(", ")
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Env Vars Values\t=\t{}",
-                task.env_vars.configured.join(", ")
+                task.shared.env_vars.configured.join(", ")
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Inferred Env Vars Values\t=\t{}",
-                task.env_vars.inferred.join(", ")
+                task.shared.env_vars.inferred.join(", ")
             )?;
 
             cwriteln!(
@@ -563,19 +568,20 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  Passed Through Env Vars\t=\t{}",
-                task.env_vars.specified.pass_through_env.join(", ")
+                task.shared.env_vars.specified.pass_through_env.join(", ")
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Passed Through Env Vars Values\t=\t{}",
-                task.env_vars.pass_through.join(", ")
+                task.shared.env_vars.pass_through.join(", ")
             )?;
 
             // If there's an error, we can silently ignore it, we don't need to block the
             // entire print.
-            if let Ok(task_definition_json) = serde_json::to_string(&task.resolved_task_definition)
+            if let Ok(task_definition_json) =
+                serde_json::to_string(&task.shared.resolved_task_definition)
             {
                 cwriteln!(
                     tab_writer,
@@ -612,10 +618,6 @@ impl<'a> RunSummary<'a> {
         // and each task summary needs some cleaning
         if !self.monorepo {
             self.packages.drain();
-
-            for task_summary in &mut self.tasks {
-                task_summary.clean_for_single_package();
-            }
         }
 
         self.tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
@@ -628,10 +630,15 @@ impl<'a> RunSummary<'a> {
             .join_components(&[".turbo", "runs", &filename])
     }
 
-    fn get_failed_tasks(&self) -> Vec<&TaskSummary<'a>> {
+    fn get_failed_tasks(&self) -> Vec<&TaskSummary> {
         self.tasks
             .iter()
-            .filter(|task| task.execution.is_failure())
+            .filter(|task| {
+                task.shared
+                    .execution
+                    .as_ref()
+                    .map_or(false, |e| e.is_failure())
+            })
             .collect()
     }
 

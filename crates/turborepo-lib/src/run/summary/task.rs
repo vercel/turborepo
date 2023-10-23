@@ -4,11 +4,8 @@ use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_cache::CacheResponse;
 
-use crate::{
-    cli::EnvMode,
-    run::{summary::execution::TaskExecutionSummary, task_id::TaskId},
-    task_graph::TaskDefinition,
-};
+use super::execution::TaskExecutionSummary;
+use crate::{cli::EnvMode, run::task_id::TaskId, task_graph::TaskDefinition};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,9 +37,27 @@ enum CacheSource {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct TaskSummary<'a> {
-    pub(crate) task_id: TaskId<'a>,
-    pub package: Option<String>,
+pub(crate) struct TaskSummary {
+    pub task_id: TaskId<'static>,
+    pub dir: String,
+    pub package: String,
+    pub dependencies: Vec<TaskId<'static>>,
+    pub dependents: Vec<TaskId<'static>>,
+    #[serde(flatten)]
+    pub shared: SharedTaskSummary,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct SingleTaskSummary {
+    pub task_id: String,
+    pub dependencies: Vec<String>,
+    pub dependents: Vec<String>,
+    #[serde(flatten)]
+    pub shared: SharedTaskSummary,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct SharedTaskSummary {
     pub hash: String,
     pub expanded_inputs: HashMap<RelativeUnixPathBuf, String>,
     pub external_deps_hash: String,
@@ -52,16 +67,13 @@ pub(crate) struct TaskSummary<'a> {
     pub outputs: Vec<String>,
     pub excluded_outputs: Vec<String>,
     pub log_file_relative_path: String,
-    pub dir: Option<String>,
-    pub dependencies: Vec<TaskId<'a>>,
-    pub dependents: Vec<TaskId<'a>>,
     pub resolved_task_definition: TaskDefinition,
     pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
     pub framework: String,
     pub env_mode: EnvMode,
     pub env_vars: TaskEnvVarSummary,
     pub dot_env: Vec<RelativeUnixPathBuf>,
-    pub execution: TaskExecutionSummary,
+    pub execution: Option<TaskExecutionSummary>,
 }
 
 #[derive(Debug, Serialize)]
@@ -77,22 +89,6 @@ pub struct TaskEnvVarSummary {
     pub configured: Vec<String>,
     pub inferred: Vec<String>,
     pub pass_through: Vec<String>,
-}
-
-impl<'a> TaskSummary<'a> {
-    pub fn clean_for_single_package(&mut self) {
-        for dependency in &mut self.dependencies {
-            dependency.strip_package();
-        }
-
-        for dependent in &mut self.dependents {
-            dependent.strip_package()
-        }
-
-        self.task_id.strip_package();
-        self.dir = None;
-        self.package = None;
-    }
 }
 
 impl TaskCacheSummary {
