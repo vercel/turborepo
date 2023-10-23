@@ -23,7 +23,7 @@ use turbopack_core::{
 use crate::{
     chunk::{CssChunkItem, CssChunkItemContent, CssChunkPlaceable, CssChunkType, CssImport},
     code_gen::CodeGenerateable,
-    parse::{parse_css, ParseCss, ParseCssResult, ParseCssResultSourceMap},
+    parse::{parse_css, ParseCssWithSwc, ParseCssWithSwcResult, ParseCssWithSwcResultSourceMap},
     path_visitor::ApplyVisitors,
     references::{
         analyze_css_stylesheet, compose::CssModuleComposeReference, import::ImportAssetReference,
@@ -72,9 +72,9 @@ impl CssModuleAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl ParseCss for CssModuleAsset {
+impl ParseCssWithSwc for CssModuleAsset {
     #[turbo_tasks::function]
-    fn parse_css(&self) -> Vc<ParseCssResult> {
+    fn parse_css(&self) -> Vc<ParseCssWithSwcResult> {
         parse_css(self.source, self.ty, self.transforms)
     }
 }
@@ -256,7 +256,7 @@ impl CssChunkItem for CssModuleChunkItem {
 
         let parsed = self.module.parse_css().await?;
 
-        if let ParseCssResult::Ok {
+        if let ParseCssWithSwcResult::Ok {
             stylesheet,
             source_map,
             ..
@@ -298,7 +298,7 @@ impl CssChunkItem for CssModuleChunkItem {
 
             code_gen.emit(&stylesheet)?;
 
-            let srcmap = ParseCssResultSourceMap::new(source_map.clone(), srcmap).cell();
+            let srcmap = ParseCssWithSwcResultSourceMap::new(source_map.clone(), srcmap).cell();
 
             Ok(CssChunkItemContent {
                 inner_code: code_string.into(),

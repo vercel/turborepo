@@ -34,7 +34,7 @@ use crate::{
 static BASENAME_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[^.]*").unwrap());
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
-pub enum ParseCssResult {
+pub enum ParseCssWithSwcResult {
     Ok {
         #[turbo_tasks(trace_ignore)]
         stylesheet: Stylesheet,
@@ -49,7 +49,7 @@ pub enum ParseCssResult {
     NotFound,
 }
 
-impl PartialEq for ParseCssResult {
+impl PartialEq for ParseCssWithSwcResult {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Ok { .. }, Self::Ok { .. }) => false,
@@ -59,7 +59,7 @@ impl PartialEq for ParseCssResult {
 }
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
-pub struct ParseCssResultSourceMap {
+pub struct ParseCssWithSwcResultSourceMap {
     #[turbo_tasks(debug_ignore, trace_ignore)]
     source_map: Arc<SourceMap>,
 
@@ -69,15 +69,15 @@ pub struct ParseCssResultSourceMap {
     mappings: Vec<(BytePos, LineCol)>,
 }
 
-impl PartialEq for ParseCssResultSourceMap {
+impl PartialEq for ParseCssWithSwcResultSourceMap {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.source_map, &other.source_map) && self.mappings == other.mappings
     }
 }
 
-impl ParseCssResultSourceMap {
+impl ParseCssWithSwcResultSourceMap {
     pub fn new(source_map: Arc<SourceMap>, mappings: Vec<(BytePos, LineCol)>) -> Self {
-        ParseCssResultSourceMap {
+        ParseCssWithSwcResultSourceMap {
             source_map,
             mappings,
         }
@@ -85,7 +85,7 @@ impl ParseCssResultSourceMap {
 }
 
 #[turbo_tasks::value_impl]
-impl GenerateSourceMap for ParseCssResultSourceMap {
+impl GenerateSourceMap for ParseCssWithSwcResultSourceMap {
     #[turbo_tasks::function]
     fn generate_source_map(&self) -> Vc<OptionSourceMap> {
         let map = self.source_map.build_source_map_with_config(
@@ -122,16 +122,16 @@ pub async fn parse_css(
     source: Vc<Box<dyn Source>>,
     ty: CssModuleAssetType,
     transforms: Vc<CssInputTransforms>,
-) -> Result<Vc<ParseCssResult>> {
+) -> Result<Vc<ParseCssWithSwcResult>> {
     let content = source.content();
     let fs_path = &*source.ident().path().await?;
     let ident_str = &*source.ident().to_string().await?;
     Ok(match &*content.await? {
-        AssetContent::Redirect { .. } => ParseCssResult::Unparseable.cell(),
+        AssetContent::Redirect { .. } => ParseCssWithSwcResult::Unparseable.cell(),
         AssetContent::File(file) => match &*file.await? {
-            FileContent::NotFound => ParseCssResult::NotFound.cell(),
+            FileContent::NotFound => ParseCssWithSwcResult::NotFound.cell(),
             FileContent::Content(file) => match file.content().to_str() {
-                Err(_err) => ParseCssResult::Unparseable.cell(),
+                Err(_err) => ParseCssWithSwcResult::Unparseable.cell(),
                 Ok(string) => {
                     let transforms = &*transforms.await?;
                     parse_content(
@@ -156,7 +156,7 @@ async fn parse_content(
     source: Vc<Box<dyn Source>>,
     ty: CssModuleAssetType,
     transforms: &[CssInputTransform],
-) -> Result<Vc<ParseCssResult>> {
+) -> Result<Vc<ParseCssWithSwcResult>> {
     let source_map: Arc<SourceMap> = Default::default();
     let handler = Handler::with_emitter(
         true,
@@ -183,7 +183,7 @@ async fn parse_content(
         Err(e) => {
             // TODO report in in a stream
             e.to_diagnostics(&handler).emit();
-            return Ok(ParseCssResult::Unparseable.into());
+            return Ok(ParseCssWithSwcResult::Unparseable.into());
         }
     };
 
@@ -194,7 +194,7 @@ async fn parse_content(
     }
 
     if has_errors {
-        return Ok(ParseCssResult::Unparseable.into());
+        return Ok(ParseCssWithSwcResult::Unparseable.into());
     }
 
     let transform_context = TransformContext {
@@ -234,7 +234,7 @@ async fn parse_content(
         }
     };
 
-    Ok(ParseCssResult::Ok {
+    Ok(ParseCssWithSwcResult::Ok {
         stylesheet: parsed_stylesheet,
         source_map,
         imports,
@@ -255,7 +255,7 @@ impl TransformConfig for ModuleTransformConfig {
 
 /// Trait to be implemented by assets which can be parsed as CSS.
 #[turbo_tasks::value_trait]
-pub trait ParseCss {
+pub trait ParseCssWithSwc {
     /// Returns the parsed css.
-    fn parse_css(self: Vc<Self>) -> Vc<ParseCssResult>;
+    fn parse_css(self: Vc<Self>) -> Vc<ParseCssWithSwcResult>;
 }

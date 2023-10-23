@@ -31,7 +31,7 @@ use turbopack_ecmascript::{
 };
 
 use crate::{
-    parse::{ParseCss, ParseCssResult},
+    parse::{ParseCssWithSwc, ParseCssWithSwcResult},
     references::{compose::CssModuleComposeReference, internal::InternalCssAssetReference},
 };
 
@@ -153,7 +153,7 @@ impl ModuleCssAsset {
     async fn classes(self: Vc<Self>) -> Result<Vc<ModuleCssClasses>> {
         let inner = self.inner();
 
-        let Some(inner) = Vc::try_resolve_sidecast::<Box<dyn ParseCss>>(inner).await? else {
+        let Some(inner) = Vc::try_resolve_sidecast::<Box<dyn ParseCssWithSwc>>(inner).await? else {
             bail!("inner asset should be CSS parseable");
         };
 
@@ -161,7 +161,7 @@ impl ModuleCssAsset {
         let mut classes = IndexMap::default();
 
         // TODO(alexkirsz) Should we report an error on parse error here?
-        if let ParseCssResult::Ok { exports, .. } = &*parse_result {
+        if let ParseCssWithSwcResult::Ok { exports, .. } = &*parse_result {
             for (class_name, export_class_names) in exports {
                 let mut export = Vec::default();
 
