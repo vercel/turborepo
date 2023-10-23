@@ -6,14 +6,14 @@ use tracing::warn;
 use turborepo_api_client::Client;
 use turborepo_ui::{start_spinner, BOLD, UI};
 
-use crate::{error, server, ui, Error, Error::FailedToMakeSSOTokenName};
+use crate::{error, server, ui, Error};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 const DEFAULT_SSO_PROVIDER: &str = "SAML/OIDC Single Sign-On";
 
 fn make_token_name() -> Result<String, Error> {
-    let host = hostname::get().map_err(FailedToMakeSSOTokenName)?;
+    let host = hostname::get().map_err(Error::FailedToMakeSSOTokenName)?;
 
     Ok(format!(
         "Turbo CLI on {} via {DEFAULT_SSO_PROVIDER}",
