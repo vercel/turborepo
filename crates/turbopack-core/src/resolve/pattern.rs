@@ -338,9 +338,11 @@ impl Pattern {
     pub fn match_position(&self, value: &str) -> Option<usize> {
         if let Pattern::Alternatives(list) = self {
             list.iter()
-                .position(|alt| alt.match_internal(value, None).is_match())
+                .position(|alt| alt.match_internal(value, None, false).is_match())
         } else {
-            self.match_internal(value, None).is_match().then_some(0)
+            self.match_internal(value, None, false)
+                .is_match()
+                .then_some(0)
         }
     }
 
@@ -365,9 +367,11 @@ impl Pattern {
     pub fn could_match_position(&self, value: &str) -> Option<usize> {
         if let Pattern::Alternatives(list) = self {
             list.iter()
-                .position(|alt| alt.match_internal(value, None).could_match())
+                .position(|alt| alt.match_internal(value, None, false).could_match())
         } else {
-            self.match_internal(value, None).could_match().then_some(0)
+            self.match_internal(value, None, false)
+                .could_match()
+                .then_some(0)
         }
     }
 
