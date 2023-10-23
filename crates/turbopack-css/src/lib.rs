@@ -5,15 +5,10 @@
 #![feature(arbitrary_self_types)]
 #![feature(async_fn_in_trait)]
 
-mod asset;
 pub mod chunk;
-mod code_gen;
 pub mod embed;
 pub mod flavors;
 mod global_asset;
-mod module_asset;
-pub(crate) mod parse;
-mod path_visitor;
 pub(crate) mod references;
 pub(crate) mod transform;
 pub(crate) mod util;
