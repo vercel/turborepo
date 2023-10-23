@@ -658,7 +658,7 @@ impl Task {
     ) -> Option<TaskExecutionSpec> {
         let aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         let future;
-        let mut remove_job = None;
+        let remove_job;
         let mut state = self.full_state_mut();
         match state.state_type {
             Done { .. } | InProgress { .. } | InProgressDirty { .. } => {
