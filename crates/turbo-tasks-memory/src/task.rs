@@ -657,14 +657,17 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Option<TaskExecutionSpec> {
+        println!("execute({})", self.get_description());
         let future;
         let mut state = self.full_state_mut();
         match state.state_type {
             Done { .. } | InProgress { .. } | InProgressDirty { .. } => {
+                println!("execute({}) not starting", self.get_description());
                 // should not start in this state
                 return None;
             }
             Scheduled { ref mut event } => {
+                println!("execute({})", self.get_description());
                 let event = event.take();
                 let outdated_children = take(&mut state.children);
                 let outdated_collectibles = take(&mut state.collectibles);
@@ -853,6 +856,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> bool {
+        println!("execution_completed({})", self.get_description());
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut schedule_task = false;
         {
@@ -966,17 +970,21 @@ impl Task {
             return;
         }
 
+        println!("make_dirty({})", self.get_description());
+
         let state = if force_schedule {
             TaskMetaStateWriteGuard::Full(self.full_state_mut())
         } else {
             self.state_mut()
         };
+
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         if let TaskMetaStateWriteGuard::Full(mut state) = state {
             let mut clear_dependencies = AutoSet::default();
 
             match state.state_type {
                 Scheduled { .. } | InProgressDirty { .. } => {
+                    println!("make_dirty2({}) already scheduled", self.get_description());
                     // already dirty
                     drop(state);
                 }
@@ -996,8 +1004,13 @@ impl Task {
                             },
                         );
                         drop(state);
+                        println!(
+                            "make_dirty2({}) already dirty -> schedule",
+                            self.get_description()
+                        );
                         turbo_tasks.schedule(self.id);
                     } else {
+                        println!("make_dirty2({}) already dirty", self.get_description());
                         // already dirty
                         drop(state);
                     }
@@ -1005,6 +1018,7 @@ impl Task {
                 Done {
                     ref mut dependencies,
                 } => {
+                    println!("make_dirty2({}) done", self.get_description());
                     let mut has_set_unfinished = false;
                     clear_dependencies = take(dependencies);
                     // add to dirty lists and potentially schedule
@@ -1049,6 +1063,7 @@ impl Task {
                             },
                         );
                     }
+                    println!("make_dirty2({}) {should_schedule}", self.get_description());
                     if should_schedule {
                         state.state_type = Scheduled {
                             event: Event::new(move || {
@@ -1060,8 +1075,10 @@ impl Task {
                         if cfg!(feature = "print_task_invalidation") {
                             println!("invalidated Task {{ id: {}, name: {} }}", *self.id, self.ty);
                         }
+                        println!("make_dirty2({}) schedule", self.get_description());
                         turbo_tasks.schedule(self.id);
                     } else {
+                        println!("make_dirty2({}) dirty", self.get_description());
                         state.state_type = Dirty {
                             event: Event::new(move || {
                                 format!("TaskState({})::event", description())
@@ -1076,6 +1093,7 @@ impl Task {
                     ref mut outdated_children,
                     ref mut outdated_collectibles,
                 } => {
+                    println!("make_dirty2({}) in prgress", self.get_description());
                     let event = event.take();
                     let outdated_children = take(outdated_children);
                     let outdated_collectibles = outdated_collectibles.take_collectibles();

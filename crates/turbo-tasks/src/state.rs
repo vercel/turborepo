@@ -144,6 +144,7 @@ impl<T: PartialEq> State<T> {
             return;
         }
         inner.value = value;
+        let _span = tracing::trace_span!("set state").entered();
         for invalidator in take(&mut inner.invalidators) {
             invalidator.invalidate();
         }

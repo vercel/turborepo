@@ -452,6 +452,8 @@ impl<B: Backend + 'static> TurboTasks<B> {
 
     #[track_caller]
     pub(crate) fn schedule(&self, task_id: TaskId) {
+        println!("in schedule 0 {task_id}");
+
         self.begin_primary_job();
         self.scheduled_tasks.fetch_add(1, Ordering::AcqRel);
 
@@ -463,6 +465,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
             #[allow(clippy::blocks_in_if_conditions)]
             while CURRENT_TASK_STATE
                 .scope(Default::default(), async {
+                    println!("in schedule 1 {task_id}");
                     if this.stopped.load(Ordering::Acquire) {
                         return false;
                     }
@@ -490,6 +493,8 @@ impl<B: Backend + 'static> TurboTasks<B> {
                                 Err(_) => None,
                             },
                         });
+                        println!("in schedule 2 {task_id}");
+
                         this.backend.task_execution_result(task_id, result, &*this);
                         let stateful = this.finish_current_task_state();
                         let reexecute = this
@@ -501,10 +506,12 @@ impl<B: Backend + 'static> TurboTasks<B> {
                     } else {
                         return false;
                     }
+                    println!("in schedule reexec {task_id}");
                     true
                 })
                 .await
             {}
+            println!("in schedule done {task_id}");
             this.finish_primary_job();
             anyhow::Ok(())
         };
@@ -516,13 +523,23 @@ impl<B: Backend + 'static> TurboTasks<B> {
             )
             .in_current_span();
 
-        #[cfg(feature = "tokio_tracing")]
-        tokio::task::Builder::new()
-            .name(&description)
-            .spawn(future)
-            .unwrap();
-        #[cfg(not(feature = "tokio_tracing"))]
-        tokio::task::spawn(future);
+        println!("in schedule 0.1 {task_id}");
+        tokio::task::spawn(async move {
+            println!("in schedule 0.2 {task_id}");
+        });
+
+        let future = Box::pin(future);
+
+        println!("in schedule 0.3 {task_id}");
+        tokio::task::spawn(async move {
+            println!("in schedule 0.5 {task_id}");
+            future.await
+        });
+
+        println!("in schedule 0.1 {task_id}");
+        tokio::task::spawn(async move {
+            println!("in schedule 0.2 {task_id}");
+        });
     }
 
     fn begin_primary_job(&self) {
@@ -1112,16 +1129,16 @@ impl<B: Backend + 'static> TurboTasksBackendApi<B> for TurboTasks<B> {
     /// Enqueues tasks for notification of changed dependencies. This will
     /// eventually call `dependent_cell_updated()` on all tasks.
     fn schedule_notify_tasks_set(&self, tasks: &TaskIdSet) {
-        let result = CURRENT_TASK_STATE.try_with(|cell| {
-            let CurrentTaskState {
-                tasks_to_notify, ..
-            } = &mut *cell.borrow_mut();
-            tasks_to_notify.extend(tasks.iter());
-        });
-        if result.is_err() {
-            let _guard = trace_span!("schedule_notify_tasks_set", count = tasks.len()).entered();
-            self.backend.invalidate_tasks_set(tasks, self);
-        };
+        // let result = CURRENT_TASK_STATE.try_with(|cell| {
+        //     let CurrentTaskState {
+        //         tasks_to_notify, ..
+        //     } = &mut *cell.borrow_mut();
+        //     tasks_to_notify.extend(tasks.iter());
+        // });
+        // if result.is_err() {
+        let _guard = trace_span!("schedule_notify_tasks_set", count = tasks.len()).entered();
+        self.backend.invalidate_tasks_set(tasks, self);
+        // };
     }
 
     #[track_caller]

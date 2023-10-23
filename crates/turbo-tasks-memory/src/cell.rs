@@ -7,7 +7,7 @@ use auto_hash_map::AutoSet;
 use turbo_tasks::{
     backend::CellContent,
     event::{Event, EventListener},
-    TaskId, TaskIdSet, TurboTasksBackendApi,
+    registry, TaskId, TaskIdSet, TurboTasksBackendApi,
 };
 
 use crate::MemoryBackend;
@@ -243,6 +243,21 @@ impl Cell {
                 dependent_tasks,
             } => {
                 if content != *cell_content {
+                    let span = if let Some(content) = content.0.as_ref() {
+                        if let Some(ty) = content.0 {
+                            Some(
+                                tracing::trace_span!(
+                                    "cell",
+                                    ty = registry::get_value_type(ty).name
+                                )
+                                .entered(),
+                            )
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
                     if !dependent_tasks.is_empty() {
                         turbo_tasks.schedule_notify_tasks_set(dependent_tasks);
                         dependent_tasks.clear();
