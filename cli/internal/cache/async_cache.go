@@ -6,6 +6,8 @@ package cache
 import (
 	"sync"
 
+	"github.com/mitchellh/cli"
+
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
@@ -40,7 +42,12 @@ func newAsyncCache(realCache Cache, opts Opts) Cache {
 	return c
 }
 
-func (c *asyncCache) Put(anchor turbopath.AbsoluteSystemPath, key string, duration int, files []turbopath.AnchoredSystemPath) error {
+func (c *asyncCache) Put(
+	anchor turbopath.AbsoluteSystemPath,
+	key string,
+	duration int,
+	files []turbopath.AnchoredSystemPath,
+) error {
 	c.requests <- cacheRequest{
 		anchor:   anchor,
 		key:      key,
@@ -50,8 +57,13 @@ func (c *asyncCache) Put(anchor turbopath.AbsoluteSystemPath, key string, durati
 	return nil
 }
 
-func (c *asyncCache) Fetch(anchor turbopath.AbsoluteSystemPath, key string, files []string) (ItemStatus, []turbopath.AnchoredSystemPath, error) {
-	return c.realCache.Fetch(anchor, key, files)
+func (c *asyncCache) Fetch(
+	anchor turbopath.AbsoluteSystemPath,
+	key string,
+	files []string,
+	prefixedUI *cli.PrefixedUi,
+) (ItemStatus, []turbopath.AnchoredSystemPath, error) {
+	return c.realCache.Fetch(anchor, key, files, prefixedUI)
 }
 
 func (c *asyncCache) Exists(key string) ItemStatus {

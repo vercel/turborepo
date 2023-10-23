@@ -9,21 +9,33 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/mitchellh/cli"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/vercel/turbo/cli/internal/analytics"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
-	"golang.org/x/sync/errgroup"
 )
 
 // Cache is abstracted way to cache/fetch previously run tasks
 type Cache interface {
 	// Fetch returns true if there is a cache it. It is expected to move files
 	// into their correct position as a side effect
-	Fetch(anchor turbopath.AbsoluteSystemPath, hash string, files []string) (ItemStatus, []turbopath.AnchoredSystemPath, error)
+	Fetch(
+		anchor turbopath.AbsoluteSystemPath,
+		hash string,
+		files []string,
+		prefixedUI *cli.PrefixedUi,
+	) (ItemStatus, []turbopath.AnchoredSystemPath, error)
 	Exists(hash string) ItemStatus
 	// Put caches files for a given hash
-	Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error
+	Put(
+		anchor turbopath.AbsoluteSystemPath,
+		hash string,
+		duration int,
+		files []turbopath.AnchoredSystemPath,
+	) error
 	Clean(anchor turbopath.AbsoluteSystemPath)
 	CleanAll()
 	Shutdown()
@@ -116,7 +128,13 @@ func (o *Opts) resolveCacheDir(repoRoot turbopath.AbsoluteSystemPath) turbopath.
 }
 
 // New creates a new cache
-func New(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+func New(
+	opts Opts,
+	repoRoot turbopath.AbsoluteSystemPath,
+	client client,
+	recorder analytics.Recorder,
+	onCacheRemoved OnCacheRemoved,
+) (Cache, error) {
 	c, err := newSyncCache(opts, repoRoot, client, recorder, onCacheRemoved)
 	if err != nil && !errors.Is(err, ErrNoCachesEnabled) {
 		return nil, err
@@ -128,7 +146,13 @@ func New(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client client, record
 }
 
 // newSyncCache can return an error with a usable noopCache.
-func newSyncCache(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client client, recorder analytics.Recorder, onCacheRemoved OnCacheRemoved) (Cache, error) {
+func newSyncCache(
+	opts Opts,
+	repoRoot turbopath.AbsoluteSystemPath,
+	client client,
+	recorder analytics.Recorder,
+	onCacheRemoved OnCacheRemoved,
+) (Cache, error) {
 	// Check to see if the user has turned off particular cache implementations.
 	useFsCache := !opts.SkipFilesystem
 	useHTTPCache := !opts.SkipRemote
@@ -197,7 +221,12 @@ type cacheMultiplexer struct {
 	onCacheRemoved OnCacheRemoved
 }
 
-func (mplex *cacheMultiplexer) Put(anchor turbopath.AbsoluteSystemPath, key string, duration int, files []turbopath.AnchoredSystemPath) error {
+func (mplex *cacheMultiplexer) Put(
+	anchor turbopath.AbsoluteSystemPath,
+	key string,
+	duration int,
+	files []turbopath.AnchoredSystemPath,
+) error {
 	return mplex.storeUntil(anchor, key, duration, files, len(mplex.caches))
 }
 
@@ -209,7 +238,13 @@ type cacheRemoval struct {
 // storeUntil stores artifacts into higher priority caches than the given one.
 // Used after artifact retrieval to ensure we have them in eg. the directory cache after
 // downloading from the RPC cache.
-func (mplex *cacheMultiplexer) storeUntil(anchor turbopath.AbsoluteSystemPath, key string, duration int, files []turbopath.AnchoredSystemPath, stopAt int) error {
+func (mplex *cacheMultiplexer) storeUntil(
+	anchor turbopath.AbsoluteSystemPath,
+	key string,
+	duration int,
+	files []turbopath.AnchoredSystemPath,
+	stopAt int,
+) error {
 	// Attempt to store on all caches simultaneously.
 	toRemove := make([]*cacheRemoval, stopAt)
 	g := &errgroup.Group{}
@@ -266,7 +301,12 @@ func (mplex *cacheMultiplexer) removeCache(removal *cacheRemoval) {
 	}
 }
 
-func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key string, files []string) (ItemStatus, []turbopath.AnchoredSystemPath, error) {
+func (mplex *cacheMultiplexer) Fetch(
+	anchor turbopath.AbsoluteSystemPath,
+	key string,
+	files []string,
+	prefixedUI *cli.PrefixedUi,
+) (ItemStatus, []turbopath.AnchoredSystemPath, error) {
 	// Make a shallow copy of the caches, since storeUntil can call removeCache
 	mplex.mu.RLock()
 	caches := make([]Cache, len(mplex.caches))
@@ -276,7 +316,7 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 	// Retrieve from caches sequentially; if we did them simultaneously we could
 	// easily write the same file from two goroutines at once.
 	for i, cache := range caches {
-		itemStatus, actualFiles, err := cache.Fetch(anchor, key, files)
+		itemStatus, actualFiles, err := cache.Fetch(anchor, key, files, prefixedUI)
 		if err != nil {
 			cd := &util.CacheDisabledError{}
 			if errors.As(err, &cd) {

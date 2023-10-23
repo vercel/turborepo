@@ -12,6 +12,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/hashicorp/go-hclog"
 	"github.com/mitchellh/cli"
+
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/colorcache"
 	"github.com/vercel/turbo/cli/internal/fs"
@@ -74,7 +75,12 @@ type RunCache struct {
 }
 
 // New returns a new instance of RunCache, wrapping the given cache
-func New(cache cache.Cache, repoRoot turbopath.AbsoluteSystemPath, opts Opts, colorCache *colorcache.ColorCache) *RunCache {
+func New(
+	cache cache.Cache,
+	repoRoot turbopath.AbsoluteSystemPath,
+	opts Opts,
+	colorCache *colorcache.ColorCache,
+) *RunCache {
 	rc := &RunCache{
 		taskOutputModeOverride: opts.TaskOutputModeOverride,
 		cache:                  cache,
@@ -111,7 +117,11 @@ type TaskCache struct {
 // RestoreOutputs attempts to restore output for the corresponding task from the cache.
 // Returns the cacheStatus, the timeSaved, and error values, so the consumer can understand
 // what happened in here.
-func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.PrefixedUi, progressLogger hclog.Logger) (cache.ItemStatus, error) {
+func (tc *TaskCache) RestoreOutputs(
+	ctx context.Context,
+	prefixedUI *cli.PrefixedUi,
+	progressLogger hclog.Logger,
+) (cache.ItemStatus, error) {
 	if tc.cachingDisabled || tc.rc.readsDisabled {
 		if tc.taskOutputMode != util.NoTaskOutput && tc.taskOutputMode != util.ErrorTaskOutput {
 			prefixedUI.Output(fmt.Sprintf("cache bypass, force executing %s", ui.Dim(tc.hash)))
@@ -119,10 +129,19 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 		return cache.NewCacheMiss(), nil
 	}
 
-	changedOutputGlobs, timeSavedFromDaemon, err := tc.rc.outputWatcher.GetChangedOutputs(ctx, tc.hash, tc.repoRelativeGlobs.Inclusions)
-
+	changedOutputGlobs, timeSavedFromDaemon, err := tc.rc.outputWatcher.GetChangedOutputs(
+		ctx,
+		tc.hash,
+		tc.repoRelativeGlobs.Inclusions,
+	)
 	if err != nil {
-		progressLogger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
+		progressLogger.Warn(
+			fmt.Sprintf(
+				"Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache",
+				tc.pt.TaskID,
+				err,
+			),
+		)
 		changedOutputGlobs = tc.repoRelativeGlobs.Inclusions
 	}
 
@@ -132,7 +151,12 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 		// Note that we currently don't use the output globs when restoring, but we could in the
 		// future to avoid doing unnecessary file I/O. We also need to pass along the exclusion
 		// globs as well.
-		itemStatus, restoredFiles, err := tc.rc.cache.Fetch(tc.rc.repoRoot, tc.hash, nil)
+		itemStatus, restoredFiles, err := tc.rc.cache.Fetch(
+			tc.rc.repoRoot,
+			tc.hash,
+			nil,
+			prefixedUI,
+		)
 		// Assign to this variable outside this closure so we can return at the end of the function
 		cacheStatus = itemStatus
 		tc.ExpandedOutputs = restoredFiles
@@ -149,7 +173,11 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 
 		if err := tc.rc.outputWatcher.NotifyOutputsWritten(ctx, tc.hash, tc.repoRelativeGlobs, cacheStatus.TimeSaved); err != nil {
 			// Don't fail the whole operation just because we failed to watch the outputs
-			prefixedUI.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
+			prefixedUI.Warn(
+				ui.Dim(
+					fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err),
+				),
+			)
 		}
 	} else {
 		// If no outputs have changed, that means we have a local cache hit.
@@ -172,7 +200,9 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 	case util.NewTaskOutput:
 		fallthrough
 	case util.HashTaskOutput:
-		prefixedUI.Info(fmt.Sprintf("cache hit%s, suppressing logs %s", moreContext, ui.Dim(tc.hash)))
+		prefixedUI.Info(
+			fmt.Sprintf("cache hit%s, suppressing logs %s", moreContext, ui.Dim(tc.hash)),
+		)
 	case util.FullTaskOutput:
 		progressLogger.Debug("log file", "path", tc.LogFileName)
 		prefixedUI.Info(fmt.Sprintf("cache hit%s, replaying logs %s", moreContext, ui.Dim(tc.hash)))
@@ -246,7 +276,8 @@ func (tc TaskCache) OutputWriter(prefix string, ioWriter io.Writer) (io.WriteClo
 		file:  output,
 		bufio: bufWriter,
 	}
-	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput || tc.taskOutputMode == util.ErrorTaskOutput {
+	if tc.taskOutputMode == util.NoTaskOutput || tc.taskOutputMode == util.HashTaskOutput ||
+		tc.taskOutputMode == util.ErrorTaskOutput {
 		// only write to log file, not to stdout
 		fwc.Writer = bufWriter
 	} else {
@@ -259,14 +290,23 @@ func (tc TaskCache) OutputWriter(prefix string, ioWriter io.Writer) (io.WriteClo
 var _emptyIgnore []string
 
 // SaveOutputs is responsible for saving the outputs of task to the cache, after the task has completed
-func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, terminal cli.Ui, duration int) error {
+func (tc *TaskCache) SaveOutputs(
+	ctx context.Context,
+	logger hclog.Logger,
+	terminal cli.Ui,
+	duration int,
+) error {
 	if tc.cachingDisabled || tc.rc.writesDisabled {
 		return nil
 	}
 
 	logger.Debug("caching output", "outputs", tc.repoRelativeGlobs)
 
-	filesToBeCached, err := globby.GlobAll(tc.rc.repoRoot.ToStringDuringMigration(), tc.repoRelativeGlobs.Inclusions, tc.repoRelativeGlobs.Exclusions)
+	filesToBeCached, err := globby.GlobAll(
+		tc.rc.repoRoot.ToStringDuringMigration(),
+		tc.repoRelativeGlobs.Inclusions,
+		tc.repoRelativeGlobs.Exclusions,
+	)
 	if err != nil {
 		return err
 	}
@@ -277,7 +317,16 @@ func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termi
 		relativePath, err := tc.rc.repoRoot.RelativePathString(value)
 		if err != nil {
 			logger.Error(fmt.Sprintf("error: %v", err))
-			terminal.Error(fmt.Sprintf("%s%s", ui.ERROR_PREFIX, color.RedString(" %v", fmt.Errorf("File path cannot be made relative: %w", err))))
+			terminal.Error(
+				fmt.Sprintf(
+					"%s%s",
+					ui.ERROR_PREFIX,
+					color.RedString(
+						" %v",
+						fmt.Errorf("File path cannot be made relative: %w", err),
+					),
+				),
+			)
 			continue
 		}
 		relativePaths[index] = fs.UnsafeToAnchoredSystemPath(relativePath)
@@ -291,7 +340,9 @@ func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termi
 		// Don't fail the cache write because we also failed to record it, we will just do
 		// extra I/O in the future restoring files that haven't changed from cache
 		logger.Warn(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err))
-		terminal.Warn(ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)))
+		terminal.Warn(
+			ui.Dim(fmt.Sprintf("Failed to mark outputs as cached for %v: %v", tc.pt.TaskID, err)),
+		)
 	}
 
 	tc.ExpandedOutputs = relativePaths
@@ -310,10 +361,16 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, packageTaskHash string) Tas
 	}
 
 	for index, output := range hashableOutputs.Inclusions {
-		repoRelativeGlobs.Inclusions[index] = filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), output)
+		repoRelativeGlobs.Inclusions[index] = filepath.Join(
+			pt.Pkg.Dir.ToStringDuringMigration(),
+			output,
+		)
 	}
 	for index, output := range hashableOutputs.Exclusions {
-		repoRelativeGlobs.Exclusions[index] = filepath.Join(pt.Pkg.Dir.ToStringDuringMigration(), output)
+		repoRelativeGlobs.Exclusions[index] = filepath.Join(
+			pt.Pkg.Dir.ToStringDuringMigration(),
+			output,
+		)
 	}
 
 	taskOutputMode := pt.TaskDefinition.OutputMode
@@ -334,7 +391,11 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, packageTaskHash string) Tas
 }
 
 // defaultLogReplayer will try to replay logs back to the given Ui instance
-func defaultLogReplayer(logger hclog.Logger, output *cli.PrefixedUi, logFileName turbopath.AbsoluteSystemPath) {
+func defaultLogReplayer(
+	logger hclog.Logger,
+	output *cli.PrefixedUi,
+	logFileName turbopath.AbsoluteSystemPath,
+) {
 	logger.Debug("start replaying logs")
 	f, err := logFileName.Open()
 	if err != nil {

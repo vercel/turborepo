@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/mitchellh/cli"
+
 	"github.com/vercel/turbo/cli/internal/analytics"
 	"github.com/vercel/turbo/cli/internal/cacheitem"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -21,7 +23,11 @@ type fsCache struct {
 }
 
 // newFsCache creates a new filesystem cache
-func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.AbsoluteSystemPath) (*fsCache, error) {
+func newFsCache(
+	opts Opts,
+	recorder analytics.Recorder,
+	repoRoot turbopath.AbsoluteSystemPath,
+) (*fsCache, error) {
 	cacheDir := opts.resolveCacheDir(repoRoot)
 	if err := cacheDir.MkdirAll(0775); err != nil {
 		return nil, err
@@ -33,7 +39,12 @@ func newFsCache(opts Opts, recorder analytics.Recorder, repoRoot turbopath.Absol
 }
 
 // Fetch returns true if items are cached. It moves them into position as a side effect.
-func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _ []string) (ItemStatus, []turbopath.AnchoredSystemPath, error) {
+func (f *fsCache) Fetch(
+	anchor turbopath.AbsoluteSystemPath,
+	hash string,
+	_ []string,
+	_ *cli.PrefixedUi,
+) (ItemStatus, []turbopath.AnchoredSystemPath, error) {
 	uncompressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar")
 	compressedCachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.zst")
 
@@ -62,7 +73,13 @@ func (f *fsCache) Fetch(anchor turbopath.AbsoluteSystemPath, hash string, _ []st
 	meta, err := ReadCacheMetaFile(f.cacheDirectory.UntypedJoin(hash + "-meta.json"))
 	if err != nil {
 		_ = cacheItem.Close()
-		return newFSTaskCacheStatus(false, 0), nil, fmt.Errorf("error reading cache metadata: %w", err)
+		return newFSTaskCacheStatus(
+				false,
+				0,
+			), nil, fmt.Errorf(
+				"error reading cache metadata: %w",
+				err,
+			)
 	}
 	f.logFetch(true, hash, meta.Duration)
 
@@ -92,7 +109,6 @@ func (f *fsCache) Exists(hash string) ItemStatus {
 	}
 
 	return status
-
 }
 
 func (f *fsCache) logFetch(hit bool, hash string, duration int) {
@@ -111,7 +127,12 @@ func (f *fsCache) logFetch(hit bool, hash string, duration int) {
 	f.recorder.LogEvent(payload)
 }
 
-func (f *fsCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
+func (f *fsCache) Put(
+	anchor turbopath.AbsoluteSystemPath,
+	hash string,
+	duration int,
+	files []turbopath.AnchoredSystemPath,
+) error {
 	cachePath := f.cacheDirectory.UntypedJoin(hash + ".tar.zst")
 	cacheItem, err := cacheitem.Create(cachePath)
 	if err != nil {

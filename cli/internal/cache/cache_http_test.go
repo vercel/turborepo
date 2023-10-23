@@ -9,11 +9,12 @@ import (
 	"testing"
 
 	"github.com/DataDog/zstd"
+	"gotest.tools/v3/assert"
+
 	"github.com/vercel/turbo/cli/internal/cacheitem"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
-	"gotest.tools/v3/assert"
 )
 
 type errorResp struct {
@@ -59,7 +60,7 @@ func TestRemoteCachingDisabled(t *testing.T) {
 		requestLimiter: make(limiter, 20),
 	}
 	cd := &util.CacheDisabledError{}
-	_, _, err := cache.Fetch("unused-target", "some-hash", []string{"unused", "outputs"})
+	_, _, err := cache.Fetch("unused-target", "some-hash", []string{"unused", "outputs"}, nil)
 	if !errors.As(err, &cd) {
 		t.Errorf("cache.Fetch err got %v, want a CacheDisabled error", err)
 	}
