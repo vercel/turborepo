@@ -15,19 +15,19 @@ pub fn logout(base: &mut CommandBase) -> Result<(), Error> {
 }
 
 fn remove_token(base: &mut CommandBase) -> Result<(), Error> {
-    let global_config_path = base.global_config_path()?;
-    let before = global_config_path
+    let global_auth_path = base.global_auth_path()?;
+    let before = global_auth_path
         .read_existing_to_string_or(Ok("{}"))
-        .map_err(|e| Error::FailedToReadConfig {
-            config_path: global_config_path.clone(),
+        .map_err(|e| Error::FailedToReadAuth {
+            auth_path: global_auth_path.clone(),
             error: e,
         })?;
 
     if let Some(after) = unset_path(&before, &["token"], true)? {
-        global_config_path
+        global_auth_path
             .create_with_contents(after)
-            .map_err(|e| cli::Error::FailedToSetConfig {
-                config_path: global_config_path.clone(),
+            .map_err(|e| cli::Error::FailedToSetAuth {
+                auth_path: global_auth_path.clone(),
                 error: e,
             })
     } else {
