@@ -93,8 +93,8 @@ impl CommandBase {
         }
 
         let config_dir = config_dir().ok_or(ConfigError::NoGlobalAuthFilePath)?;
-        let global_config_path = config_dir.join("turborepo").join("auth.json");
-        AbsoluteSystemPathBuf::try_from(global_config_path).map_err(ConfigError::PathError)
+        let global_auth_path = config_dir.join("turborepo").join("auth.json");
+        AbsoluteSystemPathBuf::try_from(global_auth_path).map_err(ConfigError::PathError)
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
