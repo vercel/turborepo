@@ -33,7 +33,7 @@ use turbo_tasks::{
 };
 
 use crate::{
-    aggregation_tree::{aggregation_info, ensure_thresholds, AggregationContext},
+    aggregation_tree::{aggregation_info, ensure_thresholds},
     cell::Cell,
     gc::{to_exp_u8, GcPriority, GcStats, GcTaskState},
     output::{Output, OutputContent},
