@@ -166,11 +166,13 @@ pub struct TaskHashTrackerState {
     package_task_outputs: HashMap<TaskId<'static>, Vec<AnchoredSystemPathBuf>>,
     #[serde(skip)]
     package_task_cache: HashMap<TaskId<'static>, CacheResponse>,
+    #[serde(skip)]
+    package_task_inputs_expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
 }
 
 /// Caches package-inputs hashes, and package-task hashes.
 pub struct TaskHasher<'a> {
-    package_inputs_hashes: PackageInputsHashes,
+    hashes: HashMap<TaskId<'static>, String>,
     opts: &'a Opts<'a>,
     env_at_execution_start: &'a EnvironmentVariableMap,
     global_hash: &'a str,
@@ -184,12 +186,16 @@ impl<'a> TaskHasher<'a> {
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
     ) -> Self {
+        let PackageInputsHashes {
+            hashes,
+            expanded_hashes,
+        } = package_inputs_hashes;
         Self {
-            package_inputs_hashes,
+            hashes,
             opts,
             env_at_execution_start,
             global_hash,
-            task_hash_tracker: Default::default(),
+            task_hash_tracker: TaskHashTracker::new(expanded_hashes),
         }
     }
 
@@ -206,7 +212,6 @@ impl<'a> TaskHasher<'a> {
         let is_monorepo = !self.opts.run_opts.single_package;
 
         let hash_of_files = self
-            .package_inputs_hashes
             .hashes
             .get(task_id)
             .ok_or_else(|| Error::MissingPackageFileHash(task_id.to_string()))?;
@@ -407,6 +412,15 @@ impl<'a> TaskHasher<'a> {
 }
 
 impl TaskHashTracker {
+    pub fn new(input_expanded_hashes: HashMap<TaskId<'static>, FileHashes>) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(TaskHashTrackerState {
+                package_task_inputs_expanded_hashes: input_expanded_hashes,
+                ..Default::default()
+            })),
+        }
+    }
+
     pub fn hash(&self, task_id: &TaskId) -> Option<String> {
         let state = self.state.lock().expect("hash tracker mutex poisoned");
         state.package_task_hashes.get(task_id).cloned()
@@ -452,6 +466,14 @@ impl TaskHashTracker {
     pub fn insert_cache_status(&self, task_id: TaskId<'static>, cache_status: CacheResponse) {
         let mut state = self.state.lock().expect("hash tracker mutex poisoned");
         state.package_task_cache.insert(task_id, cache_status);
+    }
+
+    pub fn get_expanded_inputs(&self, task_id: &TaskId) -> Option<FileHashes> {
+        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        state
+            .package_task_inputs_expanded_hashes
+            .get(task_id)
+            .cloned()
     }
 }
 
