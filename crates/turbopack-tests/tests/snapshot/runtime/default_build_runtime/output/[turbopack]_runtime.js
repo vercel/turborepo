@@ -410,6 +410,7 @@ function instantiateModule(id, source) {
             a: asyncModule.bind(null, module1),
             e: module1.exports,
             r: commonJsRequire.bind(null, module1),
+            t: runtimeRequire,
             x: externalRequire,
             y: externalImport,
             f: requireContext.bind(null, module1),
