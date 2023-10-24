@@ -181,7 +181,7 @@ func (cache *httpCache) retrieve(
 ) (bool, []turbopath.AnchoredSystemPath, int, error) {
 	resp, err := cache.client.FetchArtifact(hash)
 	if err != nil {
-		prefixedUI.Output(err.Error())
+		prefixedUI.Error(fmt.Sprintf("error fetching from remote cache: %s", err))
 		return false, nil, 0, err
 	}
 	defer resp.Body.Close()
