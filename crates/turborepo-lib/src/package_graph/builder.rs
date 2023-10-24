@@ -50,8 +50,8 @@ pub enum Error {
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error("package.json must have a name field:\n{0}")]
     PackageJsonMissingName(AbsoluteSystemPathBuf),
-    #[error(transparent)]
-    Graph(#[from] graph::Error),
+    #[error("Invalid package dependency graph: {0}")]
+    InvalidPackageGraph(graph::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
 }
