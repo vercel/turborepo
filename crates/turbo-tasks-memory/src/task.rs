@@ -1091,6 +1091,16 @@ impl Task {
                                 .aggregation_leaf
                                 .change_job(&aggregation_context, change),
                         );
+                    } else if let Some(collectibles) = outdated_collectibles {
+                        let mut change = TaskChange::default();
+                        for ((trait_type, value), count) in collectibles.into_iter() {
+                            change.collectibles.push((trait_type, value, -count));
+                        }
+                        change_job = Some(
+                            state
+                                .aggregation_leaf
+                                .change_job(&aggregation_context, change),
+                        );
                     }
                     state.state_type = InProgressDirty { event };
                     drop(state);
