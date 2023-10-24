@@ -246,12 +246,13 @@ impl<'a> Visitor<'a> {
                     Self::prefixed_ui(ui, is_github_actions, &output_client, pretty_prefix.clone());
 
                 match task_cache.restore_outputs(&mut prefixed_ui).await {
-                    Ok(_hit) => {
+                    Ok(hit) => {
                         // we need to set expanded outputs
                         hash_tracker.insert_expanded_outputs(
-                            task_id,
+                            task_id.clone(),
                             task_cache.expanded_outputs().to_vec(),
                         );
+                        hash_tracker.insert_cache_status(task_id, hit);
                         tracker.cached().await;
                         callback.send(Ok(())).ok();
                         return;

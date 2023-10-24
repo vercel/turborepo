@@ -8,6 +8,7 @@ use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turborepo_cache::CacheResponse;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_scm::SCM;
 
@@ -163,6 +164,8 @@ pub struct TaskHashTrackerState {
     package_task_framework: HashMap<TaskId<'static>, String>,
     #[serde(skip)]
     package_task_outputs: HashMap<TaskId<'static>, Vec<AnchoredSystemPathBuf>>,
+    #[serde(skip)]
+    package_task_cache: HashMap<TaskId<'static>, CacheResponse>,
 }
 
 /// Caches package-inputs hashes, and package-task hashes.
@@ -404,8 +407,7 @@ impl<'a> TaskHasher<'a> {
 }
 
 impl TaskHashTracker {
-    // We only want hash to be queried and set from the TaskHasher
-    fn hash(&self, task_id: &TaskId) -> Option<String> {
+    pub fn hash(&self, task_id: &TaskId) -> Option<String> {
         let state = self.state.lock().expect("hash tracker mutex poisoned");
         state.package_task_hashes.get(task_id).cloned()
     }
@@ -440,6 +442,16 @@ impl TaskHashTracker {
     ) {
         let mut state = self.state.lock().expect("hash tracker mutex poisoned");
         state.package_task_outputs.insert(task_id, outputs);
+    }
+
+    pub fn cache_status(&self, task_id: &TaskId) -> Option<CacheResponse> {
+        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        state.package_task_cache.get(task_id).copied()
+    }
+
+    pub fn insert_cache_status(&self, task_id: TaskId<'static>, cache_status: CacheResponse) {
+        let mut state = self.state.lock().expect("hash tracker mutex poisoned");
+        state.package_task_cache.insert(task_id, cache_status);
     }
 }
 
