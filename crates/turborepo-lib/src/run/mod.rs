@@ -345,18 +345,6 @@ impl<'a> Run<'a> {
             resolved_pass_through_env_vars,
         );
 
-        let workspaces = pkg_dep_graph.workspaces().collect();
-
-        let package_file_hashes = PackageInputsHashes::calculate_file_hashes(
-            &scm,
-            engine.tasks().par_bridge(),
-            workspaces,
-            engine.task_definitions(),
-            &self.base.repo_root,
-        )?;
-
-        trace!("package file hashes: {:?}", package_file_hashes);
-
         let mut run_summary = RunSummary::new(
             start_at,
             &self.base.repo_root,
