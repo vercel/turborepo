@@ -29,6 +29,7 @@ pub struct CommandBase {
     pub ui: UI,
     #[cfg(test)]
     pub global_config_path: Option<AbsoluteSystemPathBuf>,
+    pub global_auth_path: Option<AbsoluteSystemPathBuf>,
     config: OnceCell<ConfigurationOptions>,
     args: Args,
     version: &'static str,
@@ -47,6 +48,7 @@ impl CommandBase {
             args,
             #[cfg(test)]
             global_config_path: None,
+            global_auth_path: None,
             config: OnceCell::new(),
             version,
         }
@@ -60,7 +62,6 @@ impl CommandBase {
 
     fn config_init(&self) -> Result<ConfigurationOptions, ConfigError> {
         TurborepoConfigBuilder::new(self)
-            // The below should be deprecated and removed.
             .with_api_url(self.args.api.clone())
             .with_login_url(self.args.login.clone())
             .with_team_slug(self.args.team.clone())
@@ -82,6 +83,17 @@ impl CommandBase {
 
         let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
         let global_config_path = config_dir.join("turborepo").join("config.json");
+        AbsoluteSystemPathBuf::try_from(global_config_path).map_err(ConfigError::PathError)
+    }
+    /// Returns the path to the global auth file (auth.json).
+    fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
+        #[cfg(test)]
+        if let Some(global_auth_path) = self.global_auth_path.clone() {
+            return Ok(global_auth_path);
+        }
+
+        let config_dir = config_dir().ok_or(ConfigError::NoGlobalAuthFilePath)?;
+        let global_config_path = config_dir.join("turborepo").join("auth.json");
         AbsoluteSystemPathBuf::try_from(global_config_path).map_err(ConfigError::PathError)
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {

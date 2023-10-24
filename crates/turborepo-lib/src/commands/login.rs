@@ -21,19 +21,19 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<()> {
     )
     .await?;
 
-    let global_config_path = base.global_config_path()?;
-    let before = global_config_path
+    let global_auth_path = base.global_auth_path()?;
+    let before = global_auth_path
         .read_existing_to_string_or(Ok("{}"))
         .map_err(|e| {
             anyhow!(
                 "Encountered an IO error while attempting to read {}: {}",
-                global_config_path,
+                global_auth_path,
                 e
             )
         })?;
     let after = set_path(&before, &["token"], &format!("\"{}\"", token))?;
-    global_config_path.ensure_dir()?;
-    global_config_path.create_with_contents(after)?;
+    global_auth_path.ensure_dir()?;
+    global_auth_path.create_with_contents(after)?;
 
     Ok(())
 }
@@ -52,19 +52,19 @@ pub async fn login(base: &mut CommandBase) -> Result<()> {
     )
     .await?;
 
-    let global_config_path = base.global_config_path()?;
-    let before = global_config_path
+    let global_auth_path = base.global_auth_path()?;
+    let before = global_auth_path
         .read_existing_to_string_or(Ok("{}"))
         .map_err(|e| {
             anyhow!(
                 "Encountered an IO error while attempting to read {}: {}",
-                global_config_path,
+                global_auth_path,
                 e
             )
         })?;
     let after = set_path(&before, &["token"], &format!("\"{}\"", token))?;
-    global_config_path.ensure_dir()?;
-    global_config_path.create_with_contents(after)?;
+    global_auth_path.ensure_dir()?;
+    global_auth_path.create_with_contents(after)?;
 
     Ok(())
 }

@@ -11,6 +11,8 @@ pub use turbo_config::{ConfigurationOptions, TurborepoConfigBuilder};
 pub enum Error {
     #[error("Global config path not found")]
     NoGlobalConfigPath,
+    #[error("Global auth file path not found")]
+    NoGlobalAuthFilePath,
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
