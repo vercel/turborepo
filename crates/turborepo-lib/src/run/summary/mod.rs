@@ -9,6 +9,7 @@ mod global_hash;
 mod scm;
 mod spaces;
 mod task;
+mod task_factory;
 
 use std::{collections::HashSet, io, io::Write};
 

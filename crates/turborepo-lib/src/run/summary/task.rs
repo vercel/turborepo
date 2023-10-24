@@ -3,9 +3,12 @@ use std::collections::HashMap;
 use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_cache::CacheResponse;
+use turborepo_env::{DetailedMap, EnvironmentVariableMap};
 
 use super::execution::TaskExecutionSummary;
-use crate::{cli::EnvMode, run::task_id::TaskId, task_graph::TaskDefinition};
+use crate::{
+    cli::EnvMode, run::task_id::TaskId, task_graph::TaskDefinition, task_hash::TaskHashTracker,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -70,6 +73,7 @@ pub(crate) struct SharedTaskSummary {
     pub resolved_task_definition: TaskDefinition,
     pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
     pub framework: String,
+    // TODO: Do we really want this to be cli enum instead of the one defined in the parent module?
     pub env_mode: EnvMode,
     pub env_vars: TaskEnvVarSummary,
     pub dot_env: Vec<RelativeUnixPathBuf>,
@@ -79,6 +83,7 @@ pub(crate) struct SharedTaskSummary {
 #[derive(Debug, Serialize)]
 pub struct TaskEnvConfiguration {
     pub env: Vec<String>,
+    // TODO: we most likely want this to be optional
     pub pass_through_env: Vec<String>,
 }
 
@@ -136,6 +141,34 @@ impl From<turborepo_cache::CacheSource> for CacheSource {
             turborepo_cache::CacheSource::Local => Self::Local,
             turborepo_cache::CacheSource::Remote => Self::Remote,
         }
+    }
+}
+
+impl TaskEnvVarSummary {
+    pub fn new(
+        task_definition: &TaskDefinition,
+        env_vars: DetailedMap,
+        env_at_execution_start: &EnvironmentVariableMap,
+    ) -> Result<Self, regex::Error> {
+        Ok(Self {
+            specified: TaskEnvConfiguration {
+                env: task_definition.env.clone(),
+                pass_through_env: task_definition.pass_through_env.clone().unwrap_or_default(),
+            },
+            configured: env_vars.by_source.explicit.to_secret_hashable(),
+            inferred: env_vars.by_source.matching.to_secret_hashable(),
+            // TODO: this operation differs from the actual env that gets passed in during task
+            // execution it should be unified, but first we should copy Go's behavior as
+            // we try to match the implementations
+            pass_through: env_at_execution_start
+                .from_wildcards(
+                    task_definition
+                        .pass_through_env
+                        .as_deref()
+                        .unwrap_or_default(),
+                )?
+                .to_secret_hashable(),
+        })
     }
 }
 
