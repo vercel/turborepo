@@ -3,7 +3,7 @@ mod visitor;
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
-use turbopath::{AnchoredSystemPath, RelativeUnixPathBuf};
+use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 pub use visitor::{Error, Visitor};
 
 use crate::{
@@ -169,9 +169,25 @@ macro_rules! set_field {
     }};
 }
 
+const LOG_DIR: &str = ".turbo";
+
 impl TaskDefinition {
+    pub fn workspace_relative_log_file(&self, task_name: &str) -> AnchoredSystemPathBuf {
+        let log_dir = AnchoredSystemPathBuf::from_raw(LOG_DIR)
+            .expect("LOG_DIR should be a valid AnchoredSystemPathBuf");
+        log_dir.join_component(&task_log_filename(task_name))
+    }
+
+    fn sharable_workspace_relative_log_file(&self, task_name: &str) -> RelativeUnixPathBuf {
+        let log_dir = RelativeUnixPathBuf::new(LOG_DIR)
+            .expect("LOG_DIR should be a valid relative unix path");
+        log_dir.join_component(&task_log_filename(task_name))
+    }
+
     pub fn hashable_outputs(&self, task_name: &TaskId) -> TaskOutputs {
-        let mut inclusion_outputs = vec![format!(".turbo/turbo-{}.log", task_name.task())];
+        let mut inclusion_outputs = vec![self
+            .sharable_workspace_relative_log_file(task_name.task())
+            .to_string()];
         inclusion_outputs.extend_from_slice(&self.outputs.inclusions[..]);
 
         let mut hashable = TaskOutputs {
@@ -251,6 +267,10 @@ impl TaskDefinition {
     }
 }
 
+fn task_log_filename(task_name: &str) -> String {
+    format!("turbo-{}.log", task_name.replace(':', "$colon$"))
+}
+
 impl FromIterator<BookkeepingTaskDefinition> for TaskDefinition {
     fn from_iter<T: IntoIterator<Item = BookkeepingTaskDefinition>>(iter: T) -> Self {
         iter.into_iter()
@@ -263,6 +283,8 @@ impl FromIterator<BookkeepingTaskDefinition> for TaskDefinition {
 
 #[cfg(test)]
 mod test {
+    use std::path::MAIN_SEPARATOR_STR;
+
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -294,10 +316,35 @@ mod test {
             TaskOutputs {
                 inclusions: vec![
                     format!("{relative_prefix}.next/**/*"),
-                    format!("{relative_prefix}.turbo/turbo-build.log"),
+                    format!("{relative_prefix}.turbo{MAIN_SEPARATOR_STR}turbo-build.log"),
                 ],
                 exclusions: vec![format!("{relative_prefix}.next/bad-file")],
             }
         );
+    }
+
+    #[test]
+    fn test_escape_log_file() {
+        let task_defn = TaskDefinition::default();
+        let build_log = task_defn.workspace_relative_log_file("build");
+        let build_expected = AnchoredSystemPathBuf::from_raw(
+            &[".turbo", "turbo-build.log"].join(MAIN_SEPARATOR_STR),
+        )
+        .unwrap();
+        assert_eq!(build_log, build_expected);
+
+        let build_log = task_defn.workspace_relative_log_file("build:prod");
+        let build_expected = AnchoredSystemPathBuf::from_raw(
+            &[".turbo", "turbo-build$colon$prod.log"].join(MAIN_SEPARATOR_STR),
+        )
+        .unwrap();
+        assert_eq!(build_log, build_expected);
+
+        let build_log = task_defn.workspace_relative_log_file("build:prod:extra");
+        let build_expected = AnchoredSystemPathBuf::from_raw(
+            &[".turbo", "turbo-build$colon$prod$colon$extra.log"].join(MAIN_SEPARATOR_STR),
+        )
+        .unwrap();
+        assert_eq!(build_log, build_expected);
     }
 }

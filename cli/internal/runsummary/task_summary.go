@@ -54,28 +54,30 @@ func NewTaskCacheSummary(itemStatus cache.ItemStatus) TaskCacheSummary {
 // as the information is also available in ResolvedTaskDefinition. We could remove them
 // and favor a version of Outputs that is the fully expanded list of files.
 type TaskSummary struct {
-	TaskID                 string                                `json:"taskId,omitempty"`
-	Task                   string                                `json:"task"`
-	Package                string                                `json:"package,omitempty"`
-	Hash                   string                                `json:"hash"`
-	ExpandedInputs         map[turbopath.AnchoredUnixPath]string `json:"inputs"`
-	ExternalDepsHash       string                                `json:"hashOfExternalDependencies"`
-	CacheSummary           TaskCacheSummary                      `json:"cache"`
-	Command                string                                `json:"command"`
-	CommandArguments       []string                              `json:"cliArguments"`
-	Outputs                []string                              `json:"outputs"`
-	ExcludedOutputs        []string                              `json:"excludedOutputs"`
-	LogFileRelativePath    string                                `json:"logFile"`
-	Dir                    string                                `json:"directory,omitempty"`
-	Dependencies           []string                              `json:"dependencies"`
-	Dependents             []string                              `json:"dependents"`
-	ResolvedTaskDefinition *fs.TaskDefinition                    `json:"resolvedTaskDefinition"`
-	ExpandedOutputs        []turbopath.AnchoredSystemPath        `json:"expandedOutputs"`
-	Framework              string                                `json:"framework"`
-	EnvMode                util.EnvMode                          `json:"envMode"`
-	EnvVars                TaskEnvVarSummary                     `json:"environmentVariables"`
-	DotEnv                 turbopath.AnchoredUnixPathArray       `json:"dotEnv"`
-	Execution              *TaskExecutionSummary                 `json:"execution,omitempty"` // omit when it's not set
+	TaskID           string                                `json:"taskId,omitempty"`
+	Task             string                                `json:"task"`
+	Package          string                                `json:"package,omitempty"`
+	Hash             string                                `json:"hash"`
+	ExpandedInputs   map[turbopath.AnchoredUnixPath]string `json:"inputs"`
+	ExternalDepsHash string                                `json:"hashOfExternalDependencies"`
+	CacheSummary     TaskCacheSummary                      `json:"cache"`
+	Command          string                                `json:"command"`
+	CommandArguments []string                              `json:"cliArguments"`
+	Outputs          []string                              `json:"outputs"`
+	ExcludedOutputs  []string                              `json:"excludedOutputs"`
+	// Repo-relative, relative system path
+	LogFileRelativePath string `json:"logFile"`
+	// Repo-relative, relative system path
+	Dir                    string                          `json:"directory,omitempty"`
+	Dependencies           []string                        `json:"dependencies"`
+	Dependents             []string                        `json:"dependents"`
+	ResolvedTaskDefinition *fs.TaskDefinition              `json:"resolvedTaskDefinition"`
+	ExpandedOutputs        []turbopath.AnchoredSystemPath  `json:"expandedOutputs"`
+	Framework              string                          `json:"framework"`
+	EnvMode                util.EnvMode                    `json:"envMode"`
+	EnvVars                TaskEnvVarSummary               `json:"environmentVariables"`
+	DotEnv                 turbopath.AnchoredUnixPathArray `json:"dotEnv"`
+	Execution              *TaskExecutionSummary           `json:"execution,omitempty"` // omit when it's not set
 }
 
 // TaskEnvConfiguration contains the environment variable inputs for a task
