@@ -42,6 +42,4 @@ Please open an issue at \
 {}",
         report_message
     );
-
-    process::exit(1);
 }
