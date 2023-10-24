@@ -8,6 +8,7 @@ use owo_colors::{
 use tracing::{field::Visit, metadata::LevelFilter, trace, Event, Level, Subscriber};
 use tracing_appender::{non_blocking::NonBlocking, rolling::RollingFileAppender};
 use tracing_chrome::ChromeLayer;
+pub use tracing_subscriber::reload::Error;
 use tracing_subscriber::{
     filter::{Filtered, Targets},
     fmt::{
@@ -18,7 +19,7 @@ use tracing_subscriber::{
     layer,
     prelude::*,
     registry::LookupSpan,
-    reload::{self, Error, Handle},
+    reload::{self, Handle},
     EnvFilter, Layer, Registry,
 };
 use turborepo_ui::UI;
