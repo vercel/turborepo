@@ -31,15 +31,15 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Err
     let after = set_path(&before, &["token"], &format!("\"{}\"", token))?;
     global_auth_path
         .ensure_dir()
-        .map_err(|e| Error::FailedToSetConfig {
-            config_path: global_auth_path.clone(),
+        .map_err(|e| Error::FailedToSetAuth {
+            auth_path: global_auth_path.clone(),
             error: e,
         })?;
 
     global_auth_path
         .create_with_contents(after)
-        .map_err(|e| Error::FailedToSetConfig {
-            config_path: global_auth_path.clone(),
+        .map_err(|e| Error::FailedToSetAuth {
+            auth_path: global_auth_path.clone(),
             error: e,
         })?;
 
@@ -63,23 +63,23 @@ pub async fn login(base: &mut CommandBase) -> Result<(), Error> {
     let global_auth_path = base.global_auth_path()?;
     let before = global_auth_path
         .read_existing_to_string_or(Ok("{}"))
-        .map_err(|e| Error::FailedToReadConfig {
-            config_path: global_auth_path.clone(),
+        .map_err(|e| Error::FailedToReadAuth {
+            auth_path: global_auth_path.clone(),
             error: e,
         })?;
     let after = set_path(&before, &["token"], &format!("\"{}\"", token))?;
 
     global_auth_path
         .ensure_dir()
-        .map_err(|e| Error::FailedToSetConfig {
-            config_path: global_auth_path.clone(),
+        .map_err(|e| Error::FailedToSetAuth {
+            auth_path: global_auth_path.clone(),
             error: e,
         })?;
 
     global_auth_path
         .create_with_contents(after)
-        .map_err(|e| Error::FailedToSetConfig {
-            config_path: global_auth_path.clone(),
+        .map_err(|e| Error::FailedToSetAuth {
+            auth_path: global_auth_path.clone(),
             error: e,
         })?;
 

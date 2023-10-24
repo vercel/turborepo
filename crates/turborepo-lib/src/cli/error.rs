@@ -28,9 +28,19 @@ pub enum Error {
         config_path: AbsoluteSystemPathBuf,
         error: io::Error,
     },
+    #[error("Encountered an IO error while attempting to read {auth_path}: {error}")]
+    FailedToReadAuth {
+        auth_path: AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
     #[error("Encountered an IO error while attempting to set {config_path}: {error}")]
     FailedToSetConfig {
         config_path: AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
+    #[error("Encountered an IO error while attempting to set {auth_path}: {error}")]
+    FailedToSetAuth {
+        auth_path: AbsoluteSystemPathBuf,
         error: io::Error,
     },
     #[error(transparent)]
