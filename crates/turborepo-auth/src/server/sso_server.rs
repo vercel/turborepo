@@ -48,11 +48,13 @@ impl SSOLoginServer for DefaultSSOLoginServer {
             );
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
 
-        Ok(axum_server::bind(addr)
+        axum_server::bind(addr)
             .handle(handle)
             .serve(app.into_make_service())
             .await
-            .expect("failed to start one-shot server"))
+            .expect("failed to start one-shot server");
+
+        Ok(())
     }
 }
 
