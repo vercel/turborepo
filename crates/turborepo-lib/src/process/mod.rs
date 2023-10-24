@@ -119,7 +119,6 @@ impl ProcessManager {
 
             // just allocate a new vec rather than clearing the old one
             lock.children = vec![];
-            lock.is_closing = false;
         }
     }
 }
@@ -210,12 +209,10 @@ mod test {
             "child process should exit before output is printed"
         );
 
-        // We will want to change this so you can't spawn a child after closing
+        // Verify that we can't start new child processes
         assert!(manager
             .spawn(get_command(), Duration::from_secs(2))
-            .is_some());
-
-        sleep(Duration::from_millis(100)).await;
+            .is_none());
 
         manager.stop().await;
     }
