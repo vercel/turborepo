@@ -24,6 +24,8 @@ Our team has taken the lessons from 10 years of webpack, combined with the innov
 
 As of today, Turbopack can be used in Next.js v13. In the future we will be releasing a standalone CLI, plugin API, and support for other frameworks such as Svelte and Vue. For now, please follow these instructions to get started:
 
+### New Projects
+
 1. Create a Next.js v13 project with Turbopack:
 
 ```bash
@@ -51,6 +53,18 @@ npx create-next-app --example with-turbopack
   </Tabs>
 
 The Next.js v13 development server is now powered by Turbopack! Startup and updates should both be near-instant. The larger the application, the larger the improvement will be.
+
+### Existing Projects
+
+Add `--turbo` to your `next dev` command:
+
+```json
+{
+  "scripts": {
+    "dev": "next dev --turbo"
+  }
+}
+```
 
 ## Next Steps
 

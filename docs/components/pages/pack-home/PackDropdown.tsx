@@ -77,27 +77,6 @@ export function PackDropdown({
   );
 }
 
-function BenchmarkOption({
-  value,
-  onSelect,
-}: {
-  value: BenchmarkNumberOfModules;
-  onSelect: (value: string) => void;
-}) {
-  return (
-    <div
-      className="flex pl-3 py-2 items-center justify-between cursor-pointer transition-all dark:text-[#888888] dark:hover:text-white text-[#666666] hover:text-[#000]"
-      onClick={() => {
-        onSelect(value);
-      }}
-    >
-      <p className="text-sm leading-none font-medium m-0">
-        {Number(value).toLocaleString()}
-      </p>
-    </div>
-  );
-}
-
 function Arrow() {
   return (
     <svg

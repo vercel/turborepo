@@ -1,5 +1,4 @@
 /* eslint-disable react/no-unescaped-entities */
-import { Container } from "../Container";
 import { Clients } from "../clients/Clients";
 
 export default function Showcase() {
