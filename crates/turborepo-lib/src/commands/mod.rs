@@ -88,8 +88,8 @@ impl CommandBase {
     /// Returns the path to the global auth file (auth.json).
     fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
         #[cfg(test)]
-        if let Some(global_auth_path) = self.global_auth_path.clone() {
-            return Ok(global_auth_path);
+        if let Some(global_auth_path) = &self.global_auth_path {
+            return Ok(global_auth_path.clone());
         }
 
         let config_dir = config_dir().ok_or(ConfigError::NoGlobalAuthFilePath)?;
