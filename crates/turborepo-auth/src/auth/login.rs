@@ -1,6 +1,5 @@
 use std::{borrow::Cow, sync::Arc};
 
-use anyhow::{anyhow, Result};
 pub use error::Error;
 use reqwest::Url;
 use tokio::sync::OnceCell;
@@ -21,7 +20,7 @@ pub async fn login<'a>(
     existing_token: Option<&'a str>,
     login_url_configuration: &str,
     login_server: &impl LoginServer,
-) -> Result<Cow<'a, str>> {
+) -> Result<Cow<'a, str>, Error> {
     // Check if token exists first.
     if let Some(token) = existing_token {
         if let Ok(response) = api_client.get_user(token).await {
@@ -65,12 +64,13 @@ pub async fn login<'a>(
 
     spinner.finish_and_clear();
 
-    let token = token_cell
-        .get()
-        .ok_or_else(|| anyhow!("Failed to get token"))?;
+    let token = token_cell.get().ok_or(Error::FailedToGetToken)?;
 
     // TODO: make this a request to /teams endpoint instead?
-    let user_response = api_client.get_user(token.as_str()).await?;
+    let user_response = api_client
+        .get_user(token.as_str())
+        .await
+        .map_err(Error::FailedToFetchUser)?;
 
     ui::print_cli_authorized(&user_response.user.email, ui);
 
@@ -83,7 +83,7 @@ mod tests {
 
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
-    use turborepo_api_client::{Client, Error, Result};
+    use turborepo_api_client::Client;
     use turborepo_vercel_api::{
         CachingStatusResponse, Membership, PreflightResponse, Role, SpacesResponse, Team,
         TeamsResponse, User, UserResponse, VerifiedSsoUser,
@@ -103,7 +103,7 @@ mod tests {
             _: u16,
             _: String,
             login_token: Arc<OnceCell<String>>,
-        ) -> anyhow::Result<()> {
+        ) -> Result<(), Error> {
             self.hits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             login_token
                 .set(turborepo_vercel_api_mock::EXPECTED_TOKEN.to_string())
@@ -144,7 +144,7 @@ mod tests {
 
     #[async_trait]
     impl Client for MockApiClient {
-        async fn get_user(&self, token: &str) -> Result<UserResponse> {
+        async fn get_user(&self, token: &str) -> turborepo_api_client::Result<UserResponse> {
             if token.is_empty() {
                 return Err(MockApiError::EmptyToken.into());
             }
@@ -159,7 +159,7 @@ mod tests {
                 },
             })
         }
-        async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
+        async fn get_teams(&self, token: &str) -> turborepo_api_client::Result<TeamsResponse> {
             if token.is_empty() {
                 return Err(MockApiError::EmptyToken.into());
             }
@@ -175,7 +175,11 @@ mod tests {
                 }],
             })
         }
-        async fn get_team(&self, _token: &str, _team_id: &str) -> Result<Option<Team>> {
+        async fn get_team(
+            &self,
+            _token: &str,
+            _team_id: &str,
+        ) -> turborepo_api_client::Result<Option<Team>> {
             unimplemented!("get_team")
         }
         fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
@@ -193,13 +197,21 @@ mod tests {
             _token: &str,
             _team_id: &str,
             _team_slug: Option<&str>,
-        ) -> Result<CachingStatusResponse> {
+        ) -> turborepo_api_client::Result<CachingStatusResponse> {
             unimplemented!("get_caching_status")
         }
-        async fn get_spaces(&self, _token: &str, _team_id: Option<&str>) -> Result<SpacesResponse> {
+        async fn get_spaces(
+            &self,
+            _token: &str,
+            _team_id: Option<&str>,
+        ) -> turborepo_api_client::Result<SpacesResponse> {
             unimplemented!("get_spaces")
         }
-        async fn verify_sso_token(&self, token: &str, _: &str) -> Result<VerifiedSsoUser> {
+        async fn verify_sso_token(
+            &self,
+            token: &str,
+            _: &str,
+        ) -> turborepo_api_client::Result<VerifiedSsoUser> {
             Ok(VerifiedSsoUser {
                 token: token.to_string(),
                 team_id: Some("team_id".to_string()),
@@ -212,10 +224,10 @@ mod tests {
             _duration: u64,
             _tag: Option<&str>,
             _token: &str,
-        ) -> Result<()> {
+        ) -> turborepo_api_client::Result<()> {
             unimplemented!("put_artifact")
         }
-        async fn handle_403(_response: Response) -> Error {
+        async fn handle_403(_response: Response) -> turborepo_api_client::Error {
             unimplemented!("handle_403")
         }
         async fn fetch_artifact(
@@ -224,7 +236,7 @@ mod tests {
             _token: &str,
             _team_id: &str,
             _team_slug: Option<&str>,
-        ) -> Result<Response> {
+        ) -> turborepo_api_client::Result<Response> {
             unimplemented!("fetch_artifact")
         }
         async fn artifact_exists(
@@ -233,7 +245,7 @@ mod tests {
             _token: &str,
             _team_id: &str,
             _team_slug: Option<&str>,
-        ) -> Result<Response> {
+        ) -> turborepo_api_client::Result<Response> {
             unimplemented!("artifact_exists")
         }
         async fn get_artifact(
@@ -243,7 +255,7 @@ mod tests {
             _team_id: &str,
             _team_slug: Option<&str>,
             _method: Method,
-        ) -> Result<Response> {
+        ) -> turborepo_api_client::Result<Response> {
             unimplemented!("get_artifact")
         }
         async fn do_preflight(
@@ -252,7 +264,7 @@ mod tests {
             _request_url: &str,
             _request_method: &str,
             _request_headers: &str,
-        ) -> Result<PreflightResponse> {
+        ) -> turborepo_api_client::Result<PreflightResponse> {
             unimplemented!("do_preflight")
         }
         fn make_url(&self, endpoint: &str) -> String {

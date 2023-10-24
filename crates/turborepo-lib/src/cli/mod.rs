@@ -1,9 +1,9 @@
-use std::{env, io, mem, path::Path, process};
+use std::{backtrace, backtrace::Backtrace, env, io, mem, process};
 
-use anyhow::{anyhow, Result};
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
+pub use error::Error;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
@@ -16,6 +16,8 @@ use crate::{
     tracing::TurboSubscriber,
     Payload,
 };
+
+mod error;
 
 // Global turbo sets this environment variable to its cwd so that local
 // turbo can use it for package inference.
@@ -201,14 +203,13 @@ pub enum LinkTarget {
 }
 
 impl Args {
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Self {
         // We always pass --single-package in from the shim.
         // We need to omit it, and then add it in for run.
-        let arg_separator_position =
-            std::env::args_os().position(|input_token| input_token == "--");
+        let arg_separator_position = env::args_os().position(|input_token| input_token == "--");
 
         let single_package_position =
-            std::env::args_os().position(|input_token| input_token == "--single-package");
+            env::args_os().position(|input_token| input_token == "--single-package");
 
         let is_single_package = match (arg_separator_position, single_package_position) {
             (_, None) => false,
@@ -282,7 +283,7 @@ impl Args {
             clap_args.test_run = true;
         }
 
-        Ok(clap_args)
+        clap_args
     }
 
     pub fn get_tasks(&self) -> &[String] {
@@ -631,14 +632,15 @@ pub async fn run(
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,
     ui: UI,
-) -> Result<Payload> {
-    let mut cli_args = Args::new()?;
+) -> Result<Payload, Error> {
+    let mut cli_args = Args::new();
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
     let mut command = if let Some(command) = mem::take(&mut cli_args.command) {
         command
     } else {
-        let run_args = mem::take(&mut cli_args.run_args).ok_or(anyhow!("No command specified"))?;
+        let run_args = mem::take(&mut cli_args.run_args)
+            .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
         if run_args.tasks.is_empty() {
             let mut cmd = <Args as CommandFactory>::command();
             let _ = cmd.print_help();
@@ -660,7 +662,7 @@ pub async fn run(
         // inference root, as long as the user hasn't overridden the cwd
         if cli_args.cwd.is_none() {
             if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
-                let invocation_path = Path::new(&invocation_dir);
+                let invocation_path = Utf8Path::new(&invocation_dir);
 
                 // If repo state doesn't exist, we're either local turbo running at the root
                 // (cwd), or inference failed.
@@ -669,11 +671,8 @@ pub async fn run(
                 let this_dir = AbsoluteSystemPathBuf::cwd()?;
                 let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
                 if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
-                    debug!("pkg_inference_root set to \"{}\"", relative_path.display());
-                    let utf8_path = relative_path
-                        .to_str()
-                        .ok_or_else(|| anyhow!("invalid utf8 path: {:?}", relative_path))?;
-                    run_args.pkg_inference_root = Some(utf8_path.to_owned());
+                    debug!("pkg_inference_root set to \"{}\"", relative_path);
+                    run_args.pkg_inference_root = Some(relative_path.to_string());
                 }
             } else {
                 debug!("{} not set", INVOCATION_DIR_ENV_VAR);
@@ -808,7 +807,7 @@ pub async fn run(
             // in the case of enabling the run stub, we want to be able to opt-in
             // to the rust codepath for running turbo
             if args.tasks.is_empty() {
-                return Err(anyhow!("at least one task must be specified"));
+                return Err(Error::NoTasks(backtrace::Backtrace::capture()));
             }
             if let Some(file_path) = &args.profile {
                 // TODO: Do we want to handle the result / error?
