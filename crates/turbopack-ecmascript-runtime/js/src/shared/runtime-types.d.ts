@@ -53,7 +53,7 @@ interface TurbopackBaseContext {
   a: AsyncModule;
   e: Module["exports"];
   r: CommonJsRequire;
-  rr: CommonJsRequire;
+  t: CommonJsRequire;
   f: RequireContextFactory;
   i: EsmImport;
   s: EsmExport;

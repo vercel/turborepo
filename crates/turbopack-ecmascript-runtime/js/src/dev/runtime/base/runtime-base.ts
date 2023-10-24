@@ -325,7 +325,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
           a: asyncModule.bind(null, module),
           e: module.exports,
           r: commonJsRequire.bind(null, module),
-          rr: runtimeRequire,
+          t: runtimeRequire,
           f: requireContext.bind(null, module),
           i: esmImport.bind(null, module),
           s: esmExport.bind(null, module, module.exports),

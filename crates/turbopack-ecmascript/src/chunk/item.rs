@@ -102,7 +102,7 @@ impl EcmascriptChunkItemContent {
             args.push("e: exports");
         }
         if this.options.require {
-            args.push("rr: require");
+            args.push("t: require");
         }
         if this.options.wasm {
             args.push("w: __turbopack_wasm__");
