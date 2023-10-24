@@ -45,7 +45,7 @@ use swc_core::{
 };
 pub use transform::{
     CustomTransformer, EcmascriptInputTransform, EcmascriptInputTransforms, OptionTransformPlugin,
-    TransformContext, TransformPlugin, UnsupportedServerActionIssue,
+    TransformContext, TransformPlugin,
 };
 use turbo_tasks::{trace::TraceRawVcs, ReadRef, TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{rope::Rope, FileSystemPath};

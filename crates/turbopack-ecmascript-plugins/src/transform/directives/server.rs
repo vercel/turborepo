@@ -1,14 +1,10 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use swc_core::{
-    ecma::ast::{ModuleItem, Program},
-    quote,
-};
+use swc_core::ecma::{ast::Program, transforms::base::resolver, visit::VisitMutWith};
 use turbo_tasks::Vc;
-use turbopack_core::issue::IssueExt;
-use turbopack_ecmascript::{CustomTransformer, TransformContext, UnsupportedServerActionIssue};
+use turbopack_ecmascript::{CustomTransformer, TransformContext};
 
-use super::is_server_module;
+use super::{is_server_module, server_to_client_proxy::create_proxy_module};
 
 #[derive(Debug)]
 pub struct ServerDirectiveTransformer {
@@ -19,10 +15,8 @@ pub struct ServerDirectiveTransformer {
 }
 
 impl ServerDirectiveTransformer {
-    pub fn new(transition_name: &Vc<String>) -> Self {
-        Self {
-            transition_name: *transition_name,
-        }
+    pub fn new(transition_name: Vc<String>) -> Self {
+        Self { transition_name }
     }
 }
 
@@ -30,19 +24,13 @@ impl ServerDirectiveTransformer {
 impl CustomTransformer for ServerDirectiveTransformer {
     async fn transform(&self, program: &mut Program, ctx: &TransformContext<'_>) -> Result<()> {
         if is_server_module(program) {
-            let stmt = quote!(
-                "throw new Error('Server actions (\"use server\") are not yet supported in \
-                 Turbopack');" as Stmt
-            );
-            match program {
-                Program::Module(m) => m.body = vec![ModuleItem::Stmt(stmt)],
-                Program::Script(s) => s.body = vec![stmt],
-            }
-            UnsupportedServerActionIssue {
-                file_path: ctx.file_path,
-            }
-            .cell()
-            .emit();
+            let transition_name = &*self.transition_name.await?;
+            // *program = create_proxy_module(transition_name, &format!("./{}",
+            // ctx.file_name_str)); program.visit_mut_with(&mut
+            // resolver( ctx.unresolved_mark,
+            // ctx.top_level_mark,
+            // false,
+            // ));
         }
 
         Ok(())

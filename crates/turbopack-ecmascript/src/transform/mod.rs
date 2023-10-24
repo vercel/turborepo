@@ -19,10 +19,7 @@ use swc_core::{
 };
 use turbo_tasks::{ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
-use turbopack_core::{
-    environment::Environment,
-    issue::{Issue, IssueSeverity},
-};
+use turbopack_core::environment::Environment;
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Clone, PartialOrd, Ord, Hash)]
@@ -283,38 +280,5 @@ pub fn remove_shebang(program: &mut Program) {
         Program::Script(s) => {
             s.shebang = None;
         }
-    }
-}
-
-#[turbo_tasks::value(shared)]
-pub struct UnsupportedServerActionIssue {
-    pub file_path: Vc<FileSystemPath>,
-}
-
-#[turbo_tasks::value_impl]
-impl Issue for UnsupportedServerActionIssue {
-    #[turbo_tasks::function]
-    fn severity(&self) -> Vc<IssueSeverity> {
-        IssueSeverity::Error.into()
-    }
-
-    #[turbo_tasks::function]
-    fn category(&self) -> Vc<String> {
-        Vc::cell("unsupported".to_string())
-    }
-
-    #[turbo_tasks::function]
-    fn title(&self) -> Vc<String> {
-        Vc::cell("Server actions (\"use server\") are not yet supported in Turbopack".into())
-    }
-
-    #[turbo_tasks::function]
-    fn file_path(&self) -> Vc<FileSystemPath> {
-        self.file_path
-    }
-
-    #[turbo_tasks::function]
-    async fn description(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell("".to_string()))
     }
 }
