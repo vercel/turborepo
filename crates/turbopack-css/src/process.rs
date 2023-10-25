@@ -131,6 +131,8 @@ pub async fn process_css_with_placeholder(
 
             let stylesheet = stylesheet_into_static(stylesheet, options.clone());
 
+            dbg!("process_css_with_placeholder::afte stylesheet_into_static");
+
             let result = stylesheet.to_css(PrinterOptions {
                 analyze_dependencies: Some(DependencyOptions {
                     ..Default::default()
@@ -138,7 +140,7 @@ pub async fn process_css_with_placeholder(
                 ..Default::default()
             })?;
 
-            dbg!("process_css_with_placeholder::to_css", &result.code);
+            dbg!("process_css_with_placeholder::after to_css", &result.code);
 
             let exports = result.exports.map(|exports| {
                 let mut exports = exports.into_iter().collect::<IndexMap<_, _>>();
