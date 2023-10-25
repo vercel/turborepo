@@ -1,0 +1,26 @@
+name: "Setup Global Turborepo"
+description: "Install turbo globally with npm"
+inputs:
+  setup-node:
+    description: "If Node.js should get setup first. Set false to avoid double setup."
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node
+      if: ${{ inputs.setup-node == 'true' }}
+      uses: ./.github/actions/setup-node
+      # Skip package installation and corepack. For this action, we only need
+      # node/npm available so we can install turbo globally.
+      with:
+        package-install: "false"
+        enable-corepack: "false"
+
+    - name: Install
+      shell: bash
+      run: |
+        VERSION=$(npm view turbo --json | jq -r '.versions | last')
+        echo "Latest published version: $VERSION"
+        npm i -g turbo@$VERSION

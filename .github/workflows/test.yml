@@ -232,6 +232,11 @@ jobs:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Install Turbo globally
+        uses: ./.github/actions/setup-global-turbo
+        with:
+          setup-node: "false" # Already setup with setup-turborepo-environment above
+
       - run: turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
         env:
           SCCACHE_BUCKET: turborepo-sccache
@@ -296,10 +301,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+
       - uses: ./.github/actions/setup-turborepo-environment
         with:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Install Turbo globally
+        uses: ./.github/actions/setup-global-turbo
+        with:
+          setup-node: "false" # Already setup with setup-turborepo-environment above
 
       - run: turbo run test --filter=cli --color
 
@@ -317,6 +328,7 @@ jobs:
             runner: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - uses: ./.github/actions/setup-turborepo-environment
         with:
           windows: ${{ matrix.os.name == 'windows' }}
@@ -328,6 +340,11 @@ jobs:
         with:
           path: cli/.cram_env
           key: prysk-venv-${{ matrix.os.name }}
+
+      - name: Install Turbo globally
+        uses: ./.github/actions/setup-global-turbo
+        with:
+          setup-node: "false" # Already setup with setup-turborepo-environment above
 
       - name: Integration Tests
         run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
@@ -358,6 +375,11 @@ jobs:
           path: cli/.cram_env
           key: prysk-venv-${{ matrix.os.name }}
 
+      - name: Install Turbo globally
+        uses: ./.github/actions/setup-global-turbo
+        with:
+          setup-node: "false" # Already setup with setup-turborepo-environment above
+
       - name: Integration Tests
         run: turbo run test:rust-codepath --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
 
@@ -384,6 +406,10 @@ jobs:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Install Turbo globally
+        uses: ./.github/actions/setup-global-turbo
+        with:
+          setup-node: "false" # Already setup with setup-turborepo-environment above
       - name: E2E Tests
         run: turbo run test --filter=turborepo-tests-e2e --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --color --env-mode=strict
 
@@ -437,6 +463,11 @@ jobs:
           cache: ${{ matrix.manager }}
           cache-dependency-path: package.json
 
+      - name: Install Turbo globally
+        uses: ./.github/actions/setup-global-turbo
+        with:
+          setup-node: "false" # Already setup with setup-turborepo-environment above
+
       - name: Check examples
         shell: bash
         # Note: using CLI flags instead of env vars because
@@ -484,12 +515,15 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
 
-      - name: Build turborepo CLI from source
-        uses: ./.github/actions/setup-turborepo-environment
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Install Turbo globally
+        uses: ./.github/actions/setup-global-turbo
+        with:
+          setup-node: "false" # Already setup with setup-turborepo-environment above
       - name: Run tests
         run: |
           turbo run check-types test --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color
@@ -919,6 +953,12 @@ jobs:
       - uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Install Turbo globally
+        uses: ./.github/actions/setup-global-turbo
+        with:
+          setup-node: "false" # Already setup with setup-turborepo-environment above
+
       - name: Lint
         # Filters some workspaces out:
         # - `cli` because it runs golangci-lint and this Job doesn't have all the dependencies for that.
