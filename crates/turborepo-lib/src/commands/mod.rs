@@ -49,6 +49,7 @@ impl CommandBase {
             args,
             #[cfg(test)]
             global_config_path: None,
+            #[cfg(test)]
             global_auth_path: None,
             config: OnceCell::new(),
             version,
