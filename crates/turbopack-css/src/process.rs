@@ -314,18 +314,10 @@ async fn process_content(
                 .clone()
                 .map(|v| lightningcss::css_modules::Config {
                     pattern: Pattern {
-                        segments: v
-                            .pattern
-                            .segments
-                            .clone()
-                            .into_iter()
-                            .map(|v| match v {
-                                Segment::Literal(v) => Segment::Literal(String::from(v).leak()),
-                                Segment::Name => Segment::Name,
-                                Segment::Local => Segment::Local,
-                                Segment::Hash => Segment::Hash,
-                            })
-                            .collect(),
+                        segments: unsafe {
+                            // Safety: It's actually static (two `__``)
+                            transmute(v.pattern.segments.clone())
+                        },
                     },
                     dashed_idents: v.dashed_idents,
                 }),
