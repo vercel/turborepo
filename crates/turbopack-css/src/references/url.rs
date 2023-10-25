@@ -3,7 +3,7 @@ use swc_core::{
     common::DUMMY_SP,
     css::ast::{Str, UrlValue},
 };
-use turbo_tasks::{debug::ValueDebug, Value, ValueToString, Vc};
+use turbo_tasks::{debug::ValueDebug, vdbg, Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
         ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,

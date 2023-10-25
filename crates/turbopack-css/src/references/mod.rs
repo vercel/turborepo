@@ -5,7 +5,7 @@ use lightningcss::{
     rules::CssRule,
     stylesheet::StyleSheet,
     traits::IntoOwned,
-    values::url::Url,
+    values::{image::Image, url::Url},
     visitor::{Visit, Visitor},
 };
 use turbo_tasks::{Value, Vc};
@@ -128,7 +128,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                 Ok(())
             }
 
-            _ => Ok(()),
+            _ => rule.visit_children(self),
         }
     }
 
