@@ -123,11 +123,12 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                 );
                 self.urls.push((src.to_string(), vc));
 
-                let res = i.visit_children(self);
-                res
+                // let res = i.visit_children(self);
+                // res
+                Ok(())
             }
 
-            _ => rule.visit_children(self),
+            _ => Ok(()),
         }
     }
 
@@ -159,7 +160,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
             self.urls.push((u.url.to_string(), vc));
         }
 
-        u.visit_children(self)?;
+        // u.visit_children(self)?;
 
         Ok(())
     }
