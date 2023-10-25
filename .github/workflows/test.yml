@@ -346,6 +346,8 @@ jobs:
         os:
           - name: ubuntu
             runner: ubuntu-latest
+          # - name: macos
+          #   runner: macos-latest
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
