@@ -112,9 +112,9 @@ impl EcmascriptChunkItemContent {
         let mut code = CodeBuilder::default();
         let args = FormatIter(|| args.iter().copied().intersperse(", "));
         if this.options.this {
-            write!(code, "(function({{ {} }}) {{ !function() {{\n", args,)?;
+            writeln!(code, "(function({{ {} }}) {{ !function() {{", args,)?;
         } else {
-            write!(code, "(({{ {} }}) => (() => {{\n", args,)?;
+            writeln!(code, "(({{ {} }}) => (() => {{", args,)?;
         }
         if this.options.strict {
             code += "\"use strict\";\n\n";
