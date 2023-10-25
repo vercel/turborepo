@@ -21,10 +21,10 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
+          # - name: ubuntu
+          #   runner: ubuntu-latest
+          # - name: macos
+          #   runner: macos-latest
           - name: windows
             runner: windows-latest
     steps:
