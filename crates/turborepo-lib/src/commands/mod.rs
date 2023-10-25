@@ -29,6 +29,7 @@ pub struct CommandBase {
     pub ui: UI,
     #[cfg(test)]
     pub global_config_path: Option<AbsoluteSystemPathBuf>,
+    #[cfg(test)]
     pub global_auth_path: Option<AbsoluteSystemPathBuf>,
     config: OnceCell<ConfigurationOptions>,
     args: Args,
