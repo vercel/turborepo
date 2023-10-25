@@ -306,11 +306,38 @@ async fn process_content(
         }
     };
 
+    fn clone_options(config: ParserOptions) -> ParserOptions<'static, 'static> {
+        ParserOptions {
+            filename: config.filename,
+            css_modules: config
+                .css_modules
+                .clone()
+                .map(|v| lightningcss::css_modules::Config {
+                    pattern: Pattern {
+                        segments: v
+                            .pattern
+                            .segments
+                            .clone()
+                            .into_iter()
+                            .map(|v| match v {
+                                Segment::Literal(v) => Segment::Literal(String::from(v).leak()),
+                                Segment::Name => Segment::Name,
+                                Segment::Local => Segment::Local,
+                                Segment::Hash => Segment::Hash,
+                            })
+                            .collect(),
+                    },
+                    dashed_idents: v.dashed_idents,
+                }),
+            source_index: config.source_index,
+            error_recovery: config.error_recovery,
+            warnings: None,
+            flags: config.flags,
+        }
+    }
+
     dbg!("transmute::<ParserOptions>");
-    let config = unsafe {
-        // Safety: Actual lifetime of the config is 'static
-        transmute::<ParserOptions, ParserOptions<'static, 'static>>(config)
-    };
+    let config = clone_options(config);
     let mut stylesheet = stylesheet_into_static(&stylesheet, config.clone());
 
     dbg!("analyze_references");
