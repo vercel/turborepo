@@ -145,39 +145,3 @@ Setup
       "branch": ".+" (re)
     }
   }
-
-  $ ${TURBO} run test --dry=json --experimental-rust-codepath
-  {
-    "id": "[a-zA-Z0-9]+", (re)
-    "version": "1",
-    "turboVersion": "[a-z0-9\.-]+", (re)
-    "monorepo": false,
-    "globalCacheInputs": {
-      "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
-      "files": {
-        "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-        "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0"
-      },
-      "hashOfExternalDependencies": "",
-      "globalDotEnv": null,
-      "environmentVariables": {
-        "specified": {
-          "env": [],
-          "passThroughEnv": null
-        },
-        "configured": [],
-        "inferred": [],
-        "passthrough": null
-      }
-    },
-    "envMode": "infer",
-    "frameworkInference": true,
-    "tasks": [],
-    "user": ".*", (re)
-    "scm": {
-      "type": "git",
-      "sha": "[a-z0-9]+", (re)
-      "branch": ".+" (re)
-    }
-  }
- }
