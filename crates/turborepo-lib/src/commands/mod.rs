@@ -61,6 +61,11 @@ impl CommandBase {
         self.global_config_path = Some(path);
         self
     }
+    #[cfg(test)]
+    pub fn with_global_auth_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
+        self.global_auth_path = Some(path);
+        self
+    }
 
     fn config_init(&self) -> Result<ConfigurationOptions, ConfigError> {
         TurborepoConfigBuilder::new(self)
