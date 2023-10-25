@@ -127,6 +127,8 @@ pub async fn process_css_with_placeholder(
             url_references,
             options,
         } => {
+            dbg!("process_css_with_placeholder::start");
+
             let stylesheet = stylesheet_into_static(stylesheet, options.clone());
 
             let result = stylesheet.to_css(PrinterOptions {
@@ -135,6 +137,8 @@ pub async fn process_css_with_placeholder(
                 }),
                 ..Default::default()
             })?;
+
+            dbg!("process_css_with_placeholder::to_css", &result.code);
 
             let exports = result.exports.map(|exports| {
                 let mut exports = exports.into_iter().collect::<IndexMap<_, _>>();
@@ -173,6 +177,8 @@ pub async fn finalize_css(
             options,
             ..
         } => {
+            dbg!("finalize_css::start");
+
             let mut stylesheet = stylesheet_into_static(stylesheet, options.clone());
 
             let url_references = *url_references;
@@ -188,6 +194,8 @@ pub async fn finalize_css(
 
             replace_url_references(&mut stylesheet, &url_map);
 
+            dbg!("finalize_css::after replace_url_references");
+
             let mut srcmap = parcel_sourcemap::SourceMap::new("");
             let result = stylesheet.to_css(PrinterOptions {
                 source_map: Some(&mut srcmap),
@@ -200,6 +208,9 @@ pub async fn finalize_css(
                 },
                 ..Default::default()
             })?;
+
+            dbg!("finalize_css::after to_css", &result.code);
+
             srcmap.add_sources(stylesheet.sources.clone());
 
             Ok(FinalCssResult::Ok {
