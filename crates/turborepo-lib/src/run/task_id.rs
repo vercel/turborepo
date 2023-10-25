@@ -84,11 +84,6 @@ impl<'a> TaskId<'a> {
         &self.task
     }
 
-    // Remove package for single package task summaries
-    pub fn strip_package(&mut self) {
-        self.package = "".into();
-    }
-
     pub fn as_non_workspace_task_name(&self) -> TaskName {
         let task: &str = &self.task;
         TaskName {
