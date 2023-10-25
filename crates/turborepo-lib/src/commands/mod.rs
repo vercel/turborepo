@@ -24,17 +24,13 @@ pub(crate) mod run;
 pub(crate) mod unlink;
 
 #[derive(Debug)]
-struct ConfigTestOverrides {
-    pub global_config_path: Option<AbsoluteSystemPathBuf>,
-    pub global_auth_path: Option<AbsoluteSystemPathBuf>,
-}
-
-#[derive(Debug)]
 pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,
     pub ui: UI,
     #[cfg(test)]
-    pub overrides: Option<ConfigTestOverrides>,
+    pub global_config_path: Option<AbsoluteSystemPathBuf>,
+    #[cfg(test)]
+    pub global_auth_path: Option<AbsoluteSystemPathBuf>,
     config: OnceCell<ConfigurationOptions>,
     args: Args,
     version: &'static str,
@@ -52,10 +48,8 @@ impl CommandBase {
             ui,
             args,
             #[cfg(test)]
-            overrides: Some(ConfigTestOverrides {
-                global_config_path: None,
-                global_auth_path: None,
-            }),
+            global_config_path: None,
+            global_auth_path: None,
             config: OnceCell::new(),
             version,
         }
@@ -63,9 +57,7 @@ impl CommandBase {
 
     #[cfg(test)]
     pub fn with_global_config_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
-        if let Some(overrides) = self.overrides.as_mut() {
-            overrides.global_config_path = Some(path);
-        }
+        self.global_config_path = Some(path);
         self
     }
 
@@ -86,8 +78,8 @@ impl CommandBase {
     // Getting all of the paths.
     fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
         #[cfg(test)]
-        if let Some(overrides) = self.overrides {
-            return Ok(overrides.global_config_path.unwrap());
+        if let Some(global_config_path) = self.global_config_path.clone() {
+            return Ok(global_config_path);
         }
 
         let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
@@ -97,8 +89,8 @@ impl CommandBase {
     /// Returns the path to the global auth file (auth.json).
     fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
         #[cfg(test)]
-        if let Some(overrides) = self.overrides {
-            return Ok(overrides.global_auth_path.unwrap());
+        if let Some(global_auth_path) = &self.global_auth_path {
+            return Ok(global_auth_path.clone());
         }
 
         let config_dir = config_dir().ok_or(ConfigError::NoGlobalAuthFilePath)?;

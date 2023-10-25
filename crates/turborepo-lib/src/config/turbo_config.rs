@@ -310,7 +310,7 @@ impl TurborepoConfigBuilder {
             repo_root: base.repo_root.to_owned(),
             override_config: Default::default(),
             #[cfg(test)]
-            global_config_path: base.overrides.as_ref().unwrap().global_config_path.clone(),
+            global_config_path: base.global_config_path.clone(),
             #[cfg(test)]
             environment: Default::default(),
         }
