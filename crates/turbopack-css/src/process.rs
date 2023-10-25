@@ -313,6 +313,7 @@ async fn process_content(
 
     dbg!("analyze_references");
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
+    dbg!("analyze_references::done");
 
     Ok(ParseCssResult::Ok {
         stylesheet,
