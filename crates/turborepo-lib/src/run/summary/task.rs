@@ -1,16 +1,15 @@
 use std::collections::HashMap;
 
+use itertools::Itertools;
 use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_cache::CacheResponse;
 use turborepo_env::{DetailedMap, EnvironmentVariableMap};
 
 use super::execution::TaskExecutionSummary;
-use crate::{
-    cli::EnvMode, run::task_id::TaskId, task_graph::TaskDefinition, task_hash::TaskHashTracker,
-};
+use crate::{cli::EnvMode, run::task_id::TaskId, task_graph::TaskDefinition};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskCacheSummary {
     // Deprecated, but keeping around for --dry=json
@@ -39,7 +38,7 @@ enum CacheSource {
     Remote,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub(crate) struct TaskSummary {
     pub task_id: TaskId<'static>,
     pub dir: String,
@@ -50,7 +49,7 @@ pub(crate) struct TaskSummary {
     pub shared: SharedTaskSummary,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub(crate) struct SingleTaskSummary {
     pub task_id: String,
     pub dependencies: Vec<String>,
@@ -59,7 +58,7 @@ pub(crate) struct SingleTaskSummary {
     pub shared: SharedTaskSummary,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub(crate) struct SharedTaskSummary {
     pub hash: String,
     pub expanded_inputs: HashMap<RelativeUnixPathBuf, String>,
@@ -80,14 +79,14 @@ pub(crate) struct SharedTaskSummary {
     pub execution: Option<TaskExecutionSummary>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct TaskEnvConfiguration {
     pub env: Vec<String>,
     // TODO: we most likely want this to be optional
     pub pass_through_env: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct TaskEnvVarSummary {
     pub specified: TaskEnvConfiguration,
 
@@ -169,6 +168,32 @@ impl TaskEnvVarSummary {
                 )?
                 .to_secret_hashable(),
         })
+    }
+}
+
+impl From<TaskSummary> for SingleTaskSummary {
+    fn from(value: TaskSummary) -> Self {
+        let TaskSummary {
+            task_id,
+            dependencies,
+            dependents,
+            shared,
+            ..
+        } = value;
+        Self {
+            task_id: task_id.task().to_string(),
+            dependencies: dependencies
+                .into_iter()
+                .map(|task_id| task_id.task().to_string())
+                .sorted()
+                .collect(),
+            dependents: dependents
+                .into_iter()
+                .map(|task_id| task_id.task().to_string())
+                .sorted()
+                .collect(),
+            shared,
+        }
     }
 }
 

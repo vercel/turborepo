@@ -428,12 +428,16 @@ impl<'a> Visitor<'a> {
         exit_code: i32,
         packages: HashSet<WorkspaceName>,
         global_hash_inputs: GlobalHashableInputs<'_>,
+        engine: &Engine,
+        env_at_execution_start: &EnvironmentVariableMap,
     ) -> Result<(), Error> {
         let Self {
             package_graph,
             ui,
             opts,
             repo_root,
+            global_env_mode,
+            task_hasher,
             ..
         } = self;
 
@@ -450,6 +454,10 @@ impl<'a> Visitor<'a> {
                 &opts.run_opts,
                 packages,
                 global_hash_summary,
+                global_env_mode,
+                engine,
+                task_hasher.task_hash_tracker(),
+                env_at_execution_start,
             )
             .await?)
     }

@@ -26,10 +26,15 @@ use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
-use self::{execution::TaskTracker, task::SingleTaskSummary};
+use self::{
+    execution::{TaskState, TaskTracker},
+    task::SingleTaskSummary,
+    task_factory::TaskSummaryFactory,
+};
 use super::task_id::TaskId;
 use crate::{
     cli,
+    engine::Engine,
     opts::RunOpts,
     package_graph::{PackageGraph, WorkspaceName},
     run::summary::{
@@ -38,6 +43,7 @@ use crate::{
         spaces::{SpaceRequest, SpacesClient, SpacesClientHandle},
         task::TaskSummary,
     },
+    task_hash::TaskHashTracker,
 };
 
 #[derive(Debug, Error)]
@@ -58,6 +64,8 @@ pub enum Error {
     SpacesClientSend(#[from] tokio::sync::mpsc::error::SendError<SpaceRequest>),
     #[error("failed to parse environment variables")]
     EnvironmentVars(regex::Error),
+    #[error("failed to construct task summary: {0}")]
+    TaskSummary(#[from] task_factory::Error),
 }
 
 // NOTE: When changing this, please ensure that the server side is updated to
@@ -181,7 +189,8 @@ impl RunTracker {
         package_inference_root,
         run_opts,
         packages,
-        global_hash_summary
+        global_hash_summary,
+        task_factory,
     ))]
     pub async fn to_summary<'a>(
         self,
@@ -192,6 +201,7 @@ impl RunTracker {
         run_opts: &RunOpts<'a>,
         packages: HashSet<WorkspaceName>,
         global_hash_summary: GlobalHashSummary<'a>,
+        task_factory: TaskSummaryFactory<'a>,
     ) -> Result<RunSummary<'a>, Error> {
         let single_package = run_opts.single_package;
         let should_save = run_opts.summarize.flatten().is_some_and(|s| s);
@@ -207,6 +217,12 @@ impl RunTracker {
         };
 
         let summary_state = self.execution_tracker.finish().await?;
+        let tasks = summary_state
+            .tasks
+            .iter()
+            .cloned()
+            .map(|TaskState { task_id, execution }| task_factory.task_summary(task_id, execution))
+            .collect::<Result<Vec<_>, task_factory::Error>>()?;
         let execution_summary = ExecutionSummary::new(
             self.synthesized_command.clone(),
             summary_state,
@@ -224,7 +240,7 @@ impl RunTracker {
             execution: Some(execution_summary),
             env_mode: run_opts.env_mode.into(),
             framework_inference: run_opts.framework_inference,
-            tasks: vec![],
+            tasks,
             global_hash_summary,
             scm: self.scm,
             user: self.user,
@@ -236,7 +252,7 @@ impl RunTracker {
         })
     }
 
-    #[tracing::instrument(skip(pkg_dep_graph, ui))]
+    #[tracing::instrument(skip(pkg_dep_graph, ui, engine, hash_tracker))]
     #[allow(clippy::too_many_arguments)]
     pub async fn finish<'a>(
         self,
@@ -248,8 +264,21 @@ impl RunTracker {
         run_opts: &RunOpts<'a>,
         packages: HashSet<WorkspaceName>,
         global_hash_summary: GlobalHashSummary<'a>,
+        global_env_mode: cli::EnvMode,
+        engine: &'a Engine,
+        hash_tracker: TaskHashTracker,
+        env_at_execution_start: &'a EnvironmentVariableMap,
     ) -> Result<(), Error> {
         let end_time = Local::now();
+
+        let task_factory = TaskSummaryFactory::new(
+            pkg_dep_graph,
+            engine,
+            hash_tracker,
+            env_at_execution_start,
+            run_opts,
+            global_env_mode,
+        );
 
         let run_summary: RunSummary = self
             .to_summary(
@@ -260,6 +289,7 @@ impl RunTracker {
                 run_opts,
                 packages,
                 global_hash_summary,
+                task_factory,
             )
             .await?;
 
@@ -291,13 +321,20 @@ struct SinglePackageRunSummary<'a> {
     global_hash_summary: &'a GlobalHashSummary<'a>,
     env_mode: EnvMode,
     framework_inference: bool,
-    tasks: &'a [SingleTaskSummary],
+    tasks: Vec<SingleTaskSummary>,
     user: &'a str,
     pub scm: &'a SCMState,
 }
 
 impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
     fn from(run_summary: &'a RunSummary<'a>) -> Self {
+        let mut tasks = run_summary
+            .tasks
+            .iter()
+            .cloned()
+            .map(SingleTaskSummary::from)
+            .collect::<Vec<_>>();
+        tasks.sort_by(|t1, t2| t1.task_id.cmp(&t2.task_id));
         SinglePackageRunSummary {
             id: run_summary.id,
             version: &run_summary.version,
@@ -307,8 +344,7 @@ impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
             global_hash_summary: &run_summary.global_hash_summary,
             env_mode: run_summary.env_mode,
             framework_inference: run_summary.framework_inference,
-            // TODO
-            tasks: &[],
+            tasks,
             user: &run_summary.user,
             scm: &run_summary.scm,
         }

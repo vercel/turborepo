@@ -213,8 +213,8 @@ pub struct SummaryState {
 
 #[derive(Debug, Clone)]
 pub struct TaskState {
-    task_id: TaskId<'static>,
-    execution: Option<TaskExecutionSummary>,
+    pub task_id: TaskId<'static>,
+    pub execution: Option<TaskExecutionSummary>,
 }
 
 impl SummaryState {
