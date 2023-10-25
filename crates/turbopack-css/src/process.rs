@@ -127,11 +127,7 @@ pub async fn process_css_with_placeholder(
             url_references,
             options,
         } => {
-            dbg!("process_css_with_placeholder::start");
-
             let stylesheet = stylesheet_into_static(stylesheet, options.clone());
-
-            dbg!("process_css_with_placeholder::afte stylesheet_into_static");
 
             let result = stylesheet.to_css(PrinterOptions {
                 analyze_dependencies: Some(DependencyOptions {
@@ -139,8 +135,6 @@ pub async fn process_css_with_placeholder(
                 }),
                 ..Default::default()
             })?;
-
-            dbg!("process_css_with_placeholder::after to_css", &result.code);
 
             let exports = result.exports.map(|exports| {
                 let mut exports = exports.into_iter().collect::<IndexMap<_, _>>();
@@ -179,8 +173,6 @@ pub async fn finalize_css(
             options,
             ..
         } => {
-            dbg!("finalize_css::start");
-
             let mut stylesheet = stylesheet_into_static(stylesheet, options.clone());
 
             let url_references = *url_references;
@@ -196,8 +188,6 @@ pub async fn finalize_css(
 
             replace_url_references(&mut stylesheet, &url_map);
 
-            dbg!("finalize_css::after replace_url_references");
-
             let mut srcmap = parcel_sourcemap::SourceMap::new("");
             let result = stylesheet.to_css(PrinterOptions {
                 source_map: Some(&mut srcmap),
@@ -210,8 +200,6 @@ pub async fn finalize_css(
                 },
                 ..Default::default()
             })?;
-
-            dbg!("finalize_css::after to_css", &result.code);
 
             srcmap.add_sources(stylesheet.sources.clone());
 
@@ -296,7 +284,6 @@ async fn process_content(
         ..Default::default()
     };
 
-    dbg!("StyleSheet::parse");
     let stylesheet = match StyleSheet::parse(&code, config.clone()) {
         Ok(stylesheet) => stylesheet,
         Err(_e) => {
@@ -328,13 +315,10 @@ async fn process_content(
         }
     }
 
-    dbg!("transmute::<ParserOptions>");
     let config = clone_options(config);
     let mut stylesheet = stylesheet_into_static(&stylesheet, config.clone());
 
-    dbg!("analyze_references");
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
-    dbg!("analyze_references::done");
 
     Ok(ParseCssResult::Ok {
         stylesheet,
