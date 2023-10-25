@@ -264,7 +264,7 @@ pub enum Error {
     #[error(transparent)]
     WalkError(#[from] globwalk::WalkError),
     #[error("invalid workspace glob {0}: {1}")]
-    Glob(String, Box<wax::BuildError>),
+    Glob(String, #[source] Box<wax::BuildError>),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
 }

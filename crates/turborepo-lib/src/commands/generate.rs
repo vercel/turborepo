@@ -15,9 +15,9 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Unable to run generate - missing requirements (npx): {0}")]
-    NpxNotFound(which::Error),
+    NpxNotFound(#[source] which::Error),
     #[error("Failed to run npx: {0}")]
-    NpxFailed(io::Error),
+    NpxFailed(#[source] io::Error),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
 }

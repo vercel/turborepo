@@ -10,9 +10,9 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("failed to open graph file {0}")]
-    OpenGraphFile(std::io::Error, AbsoluteSystemPathBuf),
+    OpenGraphFile(#[source] std::io::Error, AbsoluteSystemPathBuf),
     #[error("failed to produce graph output")]
-    GraphOutput(std::io::Error),
+    GraphOutput(#[source] std::io::Error),
     #[error("error preparing engine: Invalid persistent task configuration:\n{0}")]
     EngineValidation(String),
     #[error(transparent)]
@@ -43,7 +43,4 @@ pub enum Error {
     TaskHash(#[from] task_hash::Error),
     #[error(transparent)]
     Visitor(#[from] task_graph::VisitorError),
-    // Temporary variant for transition to thiserror
-    // #[error(transparent)]
-    // Anyhow(#[from] anyhow::Error),
 }

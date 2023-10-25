@@ -41,5 +41,5 @@ pub enum Error {
     #[error(transparent)]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
     #[error(transparent)]
-    Run(run::Error),
+    Run(#[from] run::Error),
 }

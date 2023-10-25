@@ -1,5 +1,4 @@
 mod change_detector;
-mod error;
 mod filter;
 mod simple_glob;
 mod target_selector;

@@ -823,7 +823,7 @@ pub async fn run(
 
             if env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("true") {
                 use crate::commands::run;
-                let exit_code = run::run(base).await.map_err(Error::Run)?;
+                let exit_code = run::run(base).await?;
                 Ok(Payload::Rust(Ok(exit_code)))
             } else {
                 Ok(Payload::Go(Box::new(base)))
