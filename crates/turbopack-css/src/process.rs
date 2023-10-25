@@ -283,6 +283,7 @@ async fn process_content(
         ..Default::default()
     };
 
+    dbg!("StyleSheet::parse");
     let stylesheet = match StyleSheet::parse(&code, config.clone()) {
         Ok(stylesheet) => stylesheet,
         Err(_e) => {
@@ -292,12 +293,14 @@ async fn process_content(
         }
     };
 
+    dbg!("transmute::<ParserOptions>");
     let config = unsafe {
         // Safety: Actual lifetime of the config is 'static
         transmute::<ParserOptions, ParserOptions<'static, 'static>>(config)
     };
     let mut stylesheet = stylesheet_into_static(&stylesheet, config.clone());
 
+    dbg!("analyze_references");
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
 
     Ok(ParseCssResult::Ok {
