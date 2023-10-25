@@ -1,0 +1,66 @@
+---
+description: Our Support Policy for Turborepo and its ecosystem
+headeronly: true
+container: true
+searchable: false
+---
+
+## Support Policy
+
+`turbo` is generally supported on Ubuntu, macOS, and Windows on both x86_64 and ARM 64 architectures.
+Specificaly, we build and ship the following binaries via `npm`:
+
+- turbo-darwin-64
+- turbo-darwin-arm64
+- turbo-linux-64
+- turbo-linux-arm64
+- turbo-windows-64
+- turbo-windows-arm64
+
+The darwin builds are intended for macOS on Intel and Apple Silicon. The linux
+builds are intended to run on Ubuntu, but we do not exercise them on other
+distros. The windows builds are tested on the [`windows-latest` runner][2] in
+Github Actions.
+
+## Node.js Compatibility
+
+Most core `turbo` functionality (especially `turbo run`) does not depend on the
+active Node.js version on your system, but som features of Turborepo and its ecosystem
+such as `create-turbo`, `turbo-ignore`, and `eslint-plugin-turbo` do. For these features,
+we intend to support the [Active and Maintenance LTS versions of Node.js][1].
+
+## Package Managers
+
+Core `turbo` functionality depends on the package managers in the JS ecosystem
+and their implementations of workspace configuration (in monorepos) and
+lockfiles formats. We intend to support:
+
+- `npm` (v6+)
+- `yarn` (v1+)
+- `pnpm` (v6+)
+- `bun` (v1+)
+
+It should be noted that Package Managers themselves have their own release
+schedules, bugs, and features. While we intend to keep up with new major
+versions, we may not release support immediately.
+
+## Releases
+
+Turborepo "loosely" follows SemVer policy. This means that we generally do not
+expect to make intentional "breaking" changes in patch or minor versions.
+
+Some exceptions to this may be:
+
+- Configuration changes in `turbo.json`.
+
+  These should usually be accompanied by a codemod that you can run with
+  `npx @turbo/codemd update` and with at least one minor release that includes a
+  deprecation message.
+
+- Intentional behavioral changes to of `turbo`'s CLI commands.
+
+  These should land in minor releases. If the change is large or disruptive enough, we may
+  include flags to opt into the previous behavior.
+
+[1]: https://nodejs.org/en/about/previous-releases
+[2]: https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job#choosing-github-hosted-runners
