@@ -346,6 +346,7 @@ jobs:
         os:
           - name: ubuntu
             runner: ubuntu-latest
+          # TODO: enable macos when --experimental-rust-codepath is passing all tests on ubuntu
           # - name: macos
           #   runner: macos-latest
     steps:
