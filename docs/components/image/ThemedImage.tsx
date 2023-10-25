@@ -1,7 +1,7 @@
 import React from "react";
 import Image from "next/image";
 
-export interface Image {
+interface ImageAttrs {
   height: number;
   width: number;
   source: string;
@@ -9,8 +9,8 @@ export interface Image {
 
 export interface ThemedImageProps {
   title?: string;
-  dark?: Image;
-  light?: Image;
+  dark?: ImageAttrs;
+  light?: ImageAttrs;
   priority?: boolean;
 }
 
