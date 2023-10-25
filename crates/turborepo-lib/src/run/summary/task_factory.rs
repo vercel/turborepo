@@ -59,20 +59,21 @@ impl<'a> TaskSummaryFactory<'a> {
         execution: Option<TaskExecutionSummary>,
     ) -> Result<TaskSummary, Error> {
         let workspace_info = self.workspace_info(&task_id)?;
-        let shared = self.shared(&task_id, execution, workspace_info)?;
-        let package = task_id.package().to_string();
-        let (dependencies, dependents) =
-            self.dependencies_and_dependents(&task_id, |task_node| match task_node {
+        let shared = self.shared(
+            &task_id,
+            execution,
+            workspace_info,
+            |task_node| match task_node {
                 crate::engine::TaskNode::Task(task) => Some(task.clone()),
                 crate::engine::TaskNode::Root => None,
-            });
+            },
+        )?;
+        let package = task_id.package().to_string();
 
         Ok(TaskSummary {
             task_id,
             dir: workspace_info.package_path().to_string(),
             package,
-            dependencies,
-            dependents,
             shared,
         })
     }
@@ -83,28 +84,30 @@ impl<'a> TaskSummaryFactory<'a> {
         execution: Option<TaskExecutionSummary>,
     ) -> Result<SingleTaskSummary, Error> {
         let workspace_info = self.workspace_info(&task_id)?;
-        let shared = self.shared(&task_id, execution, workspace_info)?;
-
-        let (dependencies, dependents) =
-            self.dependencies_and_dependents(&task_id, |task_node| match task_node {
+        let shared = self.shared(
+            &task_id,
+            execution,
+            workspace_info,
+            |task_node| match task_node {
                 crate::engine::TaskNode::Task(task) => Some(task.task().to_string()),
                 crate::engine::TaskNode::Root => None,
-            });
+            },
+        )?;
 
         Ok(SingleTaskSummary {
             task_id: task_id.task().to_string(),
-            dependencies,
-            dependents,
+            task: task_id.task().to_string(),
             shared,
         })
     }
 
-    fn shared(
+    fn shared<T>(
         &self,
         task_id: &TaskId<'static>,
         execution: Option<TaskExecutionSummary>,
         workspace_info: &WorkspaceInfo,
-    ) -> Result<SharedTaskSummary, Error> {
+        f: impl Fn(&TaskNode) -> Option<T> + Copy,
+    ) -> Result<SharedTaskSummary<T>, Error> {
         // TODO: command should be optional
         let command = workspace_info
             .package_json
@@ -139,19 +142,23 @@ impl<'a> TaskSummaryFactory<'a> {
 
         let cache_summary = self.hash_tracker.cache_status(task_id).into();
 
+        let (dependencies, dependents) = self.dependencies_and_dependents(task_id, f);
+
         Ok(SharedTaskSummary {
             hash,
-            expanded_inputs,
-            external_deps_hash: workspace_info.get_external_deps_hash(),
-            cache_summary,
+            inputs: expanded_inputs.into_iter().collect(),
+            hash_of_external_dependencies: workspace_info.get_external_deps_hash(),
+            cache: cache_summary,
             command,
-            command_arguments: self.run_opts.pass_through_args.to_vec(),
+            cli_arguments: self.run_opts.pass_through_args.to_vec(),
             outputs: task_definition.outputs.inclusions.clone(),
             excluded_outputs: task_definition.outputs.exclusions.clone(),
-            log_file_relative_path: workspace_info.task_log_path(task_id).to_string(),
+            log_file: workspace_info.task_log_path(task_id).to_string(),
             resolved_task_definition: task_definition.clone(),
             expanded_outputs,
             framework,
+            dependencies,
+            dependents,
             // TODO: this is some very messy code that appears in a few places
             // we should attempt to calculate this once and reuse it
             env_mode: match self.global_env_mode {
@@ -168,8 +175,12 @@ impl<'a> TaskSummaryFactory<'a> {
                 EnvMode::Strict => EnvMode::Strict,
                 EnvMode::Loose => EnvMode::Loose,
             },
-            env_vars: TaskEnvVarSummary::new(task_definition, env_vars, self.env_at_start)
-                .expect("invalid glob in task definition should have been caught earlier"),
+            environment_variables: TaskEnvVarSummary::new(
+                task_definition,
+                env_vars,
+                self.env_at_start,
+            )
+            .expect("invalid glob in task definition should have been caught earlier"),
             dot_env: task_definition.dot_env.clone(),
             execution,
         })

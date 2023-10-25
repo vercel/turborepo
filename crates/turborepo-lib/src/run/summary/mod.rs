@@ -547,28 +547,28 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  Log File\t=\t{}",
-                task.shared.log_file_relative_path
+                task.shared.log_file
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Dependencies\t=\t{}",
-                task.dependencies.iter().join(", ")
+                task.shared.dependencies.iter().join(", ")
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Dependents\t=\t{}",
-                task.dependents.iter().join(", ")
+                task.shared.dependents.iter().join(", ")
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Inputs Files Considered\t=\t{}",
-                task.shared.expanded_inputs.len()
+                task.shared.inputs.len()
             )?;
             cwriteln!(
                 tab_writer,
@@ -583,21 +583,21 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  Env Vars\t=\t{}",
-                task.shared.env_vars.specified.env.join(", ")
+                task.shared.environment_variables.specified.env.join(", ")
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Env Vars Values\t=\t{}",
-                task.shared.env_vars.configured.join(", ")
+                task.shared.environment_variables.configured.join(", ")
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Inferred Env Vars Values\t=\t{}",
-                task.shared.env_vars.inferred.join(", ")
+                task.shared.environment_variables.inferred.join(", ")
             )?;
 
             cwriteln!(
@@ -605,14 +605,18 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  Passed Through Env Vars\t=\t{}",
-                task.shared.env_vars.specified.pass_through_env.join(", ")
+                task.shared
+                    .environment_variables
+                    .specified
+                    .pass_through_env
+                    .join(", ")
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Passed Through Env Vars Values\t=\t{}",
-                task.shared.env_vars.pass_through.join(", ")
+                task.shared.environment_variables.pass_through.join(", ")
             )?;
 
             // If there's an error, we can silently ignore it, we don't need to block the

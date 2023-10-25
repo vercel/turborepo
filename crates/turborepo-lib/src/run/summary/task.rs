@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use itertools::Itertools;
 use serde::Serialize;
@@ -39,47 +39,51 @@ enum CacheSource {
 }
 
 #[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct TaskSummary {
     pub task_id: TaskId<'static>,
     pub dir: String,
     pub package: String,
-    pub dependencies: Vec<TaskId<'static>>,
-    pub dependents: Vec<TaskId<'static>>,
     #[serde(flatten)]
-    pub shared: SharedTaskSummary,
+    pub shared: SharedTaskSummary<TaskId<'static>>,
 }
 
 #[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct SingleTaskSummary {
     pub task_id: String,
-    pub dependencies: Vec<String>,
-    pub dependents: Vec<String>,
+    pub task: String,
     #[serde(flatten)]
-    pub shared: SharedTaskSummary,
+    pub shared: SharedTaskSummary<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
-pub(crate) struct SharedTaskSummary {
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SharedTaskSummary<T> {
     pub hash: String,
-    pub expanded_inputs: HashMap<RelativeUnixPathBuf, String>,
-    pub external_deps_hash: String,
-    pub cache_summary: TaskCacheSummary,
+    pub inputs: BTreeMap<RelativeUnixPathBuf, String>,
+    pub hash_of_external_dependencies: String,
+    pub cache: TaskCacheSummary,
     pub command: String,
-    pub command_arguments: Vec<String>,
+    pub cli_arguments: Vec<String>,
     pub outputs: Vec<String>,
     pub excluded_outputs: Vec<String>,
-    pub log_file_relative_path: String,
-    pub resolved_task_definition: TaskDefinition,
+    pub log_file: String,
     pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
+    pub dependencies: Vec<T>,
+    pub dependents: Vec<T>,
+    pub resolved_task_definition: TaskDefinition,
     pub framework: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution: Option<TaskExecutionSummary>,
     // TODO: Do we really want this to be cli enum instead of the one defined in the parent module?
     pub env_mode: EnvMode,
-    pub env_vars: TaskEnvVarSummary,
+    pub environment_variables: TaskEnvVarSummary,
     pub dot_env: Vec<RelativeUnixPathBuf>,
-    pub execution: Option<TaskExecutionSummary>,
 }
 
 #[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskEnvConfiguration {
     pub env: Vec<String>,
     // TODO: we most likely want this to be optional
@@ -87,6 +91,7 @@ pub struct TaskEnvConfiguration {
 }
 
 #[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskEnvVarSummary {
     pub specified: TaskEnvConfiguration,
 
@@ -174,14 +179,49 @@ impl TaskEnvVarSummary {
 impl From<TaskSummary> for SingleTaskSummary {
     fn from(value: TaskSummary) -> Self {
         let TaskSummary {
-            task_id,
-            dependencies,
-            dependents,
-            shared,
-            ..
+            task_id, shared, ..
         } = value;
         Self {
             task_id: task_id.task().to_string(),
+            task: task_id.task().to_string(),
+            shared: shared.into(),
+        }
+    }
+}
+
+impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
+    fn from(value: SharedTaskSummary<TaskId<'static>>) -> Self {
+        let SharedTaskSummary {
+            hash,
+            inputs,
+            hash_of_external_dependencies,
+            cache,
+            command,
+            cli_arguments,
+            outputs,
+            excluded_outputs,
+            log_file,
+            expanded_outputs,
+            dependencies,
+            dependents,
+            resolved_task_definition,
+            framework,
+            execution,
+            env_mode,
+            environment_variables,
+            dot_env,
+        } = value;
+        Self {
+            hash,
+            inputs,
+            hash_of_external_dependencies,
+            cache,
+            command,
+            cli_arguments,
+            outputs,
+            excluded_outputs,
+            log_file,
+            expanded_outputs,
             dependencies: dependencies
                 .into_iter()
                 .map(|task_id| task_id.task().to_string())
@@ -192,7 +232,12 @@ impl From<TaskSummary> for SingleTaskSummary {
                 .map(|task_id| task_id.task().to_string())
                 .sorted()
                 .collect(),
-            shared,
+            resolved_task_definition,
+            framework,
+            execution,
+            env_mode,
+            environment_variables,
+            dot_env,
         }
     }
 }
