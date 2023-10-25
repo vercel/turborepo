@@ -64,6 +64,9 @@ impl ParseCss for CssModuleAsset {
     #[turbo_tasks::function]
     async fn parse_css(self: Vc<Self>) -> Result<Vc<ParseCssResult>> {
         let this = self.await?;
+
+        dbg!("CssModuleAsset.parse_css");
+
         Ok(parse_css(this.source, Vc::upcast(self), this.ty))
     }
 }
