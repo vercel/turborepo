@@ -316,7 +316,7 @@ mod test {
             TaskOutputs {
                 inclusions: vec![
                     format!("{relative_prefix}.next/**/*"),
-                    format!("{relative_prefix}.turbo{MAIN_SEPARATOR_STR}turbo-build.log"),
+                    format!("{relative_prefix}.turbo/turbo-build.log"),
                 ],
                 exclusions: vec![format!("{relative_prefix}.next/bad-file")],
             }
