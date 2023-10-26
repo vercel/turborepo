@@ -155,6 +155,9 @@ mod tests {
 
     #[async_trait]
     impl Client for MockApiClient {
+        fn base_url(&self) -> &str {
+            &self.base_url
+        }
         async fn get_user(&self, token: &str) -> turborepo_api_client::Result<UserResponse> {
             if token.is_empty() {
                 return Err(MockApiError::EmptyToken.into());
