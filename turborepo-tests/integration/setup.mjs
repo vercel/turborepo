@@ -1,11 +1,7 @@
 import { execSync } from "child_process";
+import { getVenvBin, makeVenv } from "./util.mjs";
 
-const venvName = ".cram_env";
-const venvPath = path.join(__dirname, venvName);
-const venvBin = path.join(venvPath, "bin");
-const venvPython = path.join(venvBin, "python3");
-const venvPip = path.join(venvBin, "pip");
+makeVenv();
 
-execSync("python3 -m venv .cram_env");
-execSync(`${venvPython} -m pip install --quiet --upgrade pip`);
-execSync(`${venvPip} install "prysk==0.15.0"`);
+execSync(`${getVenvBin("python3")} -m pip install --quiet --upgrade pip`);
+execSync(`${getVenvBin("pip")} install "prysk==0.15.0"`);
