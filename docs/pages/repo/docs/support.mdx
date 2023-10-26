@@ -1,8 +1,6 @@
 ---
+title: Turborepo
 description: Our Support Policy for Turborepo and its ecosystem
-headeronly: true
-container: true
-searchable: false
 ---
 
 ## Support Policy
@@ -11,17 +9,17 @@ searchable: false
 Windows on both x86_64 and ARM 64 architectures. Specifically, we build and ship
 the following binaries via `npm`:
 
-- turbo-darwin-64
-- turbo-darwin-arm64
+- turbo-darwin-64 (macOS with Intel chips)
+- turbo-darwin-arm64 (macOS with Apple Silicon)
 - turbo-linux-64
 - turbo-linux-arm64
 - turbo-windows-64
 - turbo-windows-arm64
 
-The darwin builds are intended for macOS on Intel (`turbo-darwin-64`) and Apple
-Silicon (`turbo-darwn-arm64`). The linux builds are tested on Ubuntu, but we
-expect them to work on most [Debian-based][3]. distros. The windows builds are
-tested on the [`windows-latest` runner][2] in GitHub Actions.
+darwin builds are intended for macOS on Intel and Apple Silicon. The linux
+builds are tested on Ubuntu, but we expect them to work on most
+[Debian-based][3] distros. Windows builds are tested on the
+[`windows-latest` runner][2] in GitHub Actions.
 
 ## Node.js Compatibility
 
