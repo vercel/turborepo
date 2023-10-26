@@ -159,7 +159,7 @@ function networkIdle(
   page: Page,
   delayMs = 300,
   timeoutMs = 180000
-): Promise<number | undefined> {
+): Promise<number> {
   return new Promise((resolve) => {
     const cleanup = () => {
       page.off("request", requestHandler);
