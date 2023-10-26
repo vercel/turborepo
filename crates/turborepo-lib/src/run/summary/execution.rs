@@ -3,9 +3,8 @@ use std::{fmt, fmt::Formatter};
 use chrono::{DateTime, Duration, Local, SubsecRound};
 use serde::Serialize;
 use tokio::sync::mpsc;
-use tracing::log::warn;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
-use turborepo_ui::{color, BOLD, BOLD_GREEN, BOLD_RED, MAGENTA, UI};
+use turborepo_ui::{color, cprintln, BOLD, BOLD_GREEN, BOLD_RED, MAGENTA, UI, YELLOW};
 
 use crate::run::{summary::task::TaskSummary, task_id::TaskId};
 
@@ -163,7 +162,7 @@ impl ExecutionSummary<'_> {
 
         if self.attempted == 0 {
             println!();
-            warn!("No tasks were executed as a part of this run.");
+            cprintln!(ui, YELLOW, "No tasks were executed as part of this run.");
         }
 
         println!();

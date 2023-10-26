@@ -181,6 +181,7 @@ lazy_static! {
     pub static ref CYAN: Style = Style::new().cyan();
     pub static ref BOLD: Style = Style::new().bold();
     pub static ref MAGENTA: Style = Style::new().magenta();
+    pub static ref YELLOW: Style = Style::new().yellow();
     pub static ref UNDERLINE: Style = Style::new().underlined();
     pub static ref BOLD_CYAN: Style = Style::new().cyan().bold();
     pub static ref BOLD_GREY: Style = Style::new().dim().bold();
