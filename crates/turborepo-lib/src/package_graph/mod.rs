@@ -53,7 +53,6 @@ impl WorkspaceInfo {
             .expect("at least one segment")
     }
 
-
     pub fn get_external_deps_hash(&self) -> String {
         let mut transitive_deps = Vec::with_capacity(
             self.transitive_dependencies
