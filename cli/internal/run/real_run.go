@@ -158,7 +158,7 @@ func RealRun(
 	}
 
 	defer func() {
-		_ = spinner.WaitFor(ctx, turboCache.Shutdown, base.UI, "...Finishing Remote Cache upload...", 1500*time.Millisecond)
+		_ = spinner.WaitFor(ctx, turboCache.Shutdown, base.UI, "...Finishing writing to cache...", 1500*time.Millisecond)
 	}()
 	colorCache := colorcache.New()
 
