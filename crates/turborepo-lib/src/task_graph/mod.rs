@@ -173,7 +173,7 @@ const LOG_DIR: &str = ".turbo";
 
 impl TaskDefinition {
     pub fn workspace_relative_log_file(task_name: &str) -> AnchoredSystemPathBuf {
-        let log_dir = AnchoredSystemPathBuf::from_raw(LOG_DIR)
+        let log_dir = AnchoredSystemPath::from_raw(LOG_DIR)
             .expect("LOG_DIR should be a valid AnchoredSystemPathBuf");
         log_dir.join_component(&task_log_filename(task_name))
     }
