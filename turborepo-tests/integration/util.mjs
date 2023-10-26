@@ -13,9 +13,9 @@ const allowedTools = ["python3", "pip", "prysk"];
 
 export function debugVenv() {
   console.log(`venvPath: ${venvPath}`);
-  consoe.log("venvPath contents");
+  console.log("venvPath contents");
   execSync(`ls -la ${venvPath}`, { stdio: "inherit" });
-  consoe.log("venvBin contents");
+  console.log("venvBin contents");
   execSync(`ls -la ${venvBin}`, { stdio: "inherit" });
 }
 
