@@ -184,7 +184,7 @@ function networkIdle(
           requests
         ).join(", ")}} time is ${lastRequest - start}`
       );
-      resolve(lastRequest - start);
+      resolve(Date.now() - lastRequest);
     }, timeoutMs);
 
     const requestFilter = (request: Request) => {
@@ -230,7 +230,7 @@ function networkIdle(
       if (requests.size === 0) {
         timeout = setTimeout(() => {
           cleanup();
-          resolve(lastRequest - start);
+          resolve(Date.now() - lastRequest);
         }, delayMs);
       }
     };
