@@ -459,7 +459,7 @@ pub enum GenerateCommand {
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
 pub struct RunArgs {
     /// Override the filesystem cache directory.
-    #[clap(long)]
+    #[clap(long, env = "TURBO_CACHE_DIR")]
     pub cache_dir: Option<Utf8PathBuf>,
     /// Set the number of concurrent cache operations (default 10)
     #[clap(long, default_value_t = 10)]
