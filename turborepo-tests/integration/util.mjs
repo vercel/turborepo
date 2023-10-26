@@ -7,7 +7,12 @@ const __dirname = __filename.replace(/[^/\\]*$/, "");
 
 const venvName = ".cram_env";
 const venvPath = path.join(__dirname, venvName);
-const venvBin = path.join(venvPath, "bin");
+
+const isWindows = process.platform === "win32";
+
+const venvBin = isWindows
+  ? path.join(venvPath, "Scripts")
+  : path.join(venvPath, "bin");
 
 const allowedTools = ["python3", "pip", "prysk"];
 
