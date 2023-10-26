@@ -115,6 +115,7 @@ impl PackageGraph {
         PackageGraphBuilder::new(repo_root, root_package_json)
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn validate(&self) -> Result<(), Error> {
         Ok(graph::validate_graph(&self.workspace_graph)?)
     }
@@ -326,10 +327,7 @@ impl PackageGraph {
 
         let closures = turborepo_lockfiles::all_transitive_closures(previous, external_deps)?;
 
-        let current_key = current.global_change_key();
-        let previous_key = previous.global_change_key();
-
-        let global_change = current_key != previous_key;
+        let global_change = current.global_change(previous);
 
         let changed = if global_change {
             None
@@ -548,8 +546,8 @@ mod test {
             unreachable!("lockfile encoding not necessary for package graph construction")
         }
 
-        fn global_change_key(&self) -> Vec<u8> {
-            unreachable!()
+        fn global_change(&self, _other: &dyn Lockfile) -> bool {
+            unreachable!("global change detection not necessary for package graph construction")
         }
     }
 

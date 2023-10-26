@@ -1,8 +1,8 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{availability_info::AvailabilityInfo, Chunk, ChunkableModule, ChunkingContext},
+    chunk::{availability_info::AvailabilityInfo, ChunkableModule, ChunkingContext},
     ident::AssetIdent,
     module::Module,
     output::OutputAssets,
@@ -10,17 +10,14 @@ use turbopack_core::{
 };
 
 use super::chunk_item::ManifestChunkItem;
-use crate::chunk::{
-    EcmascriptChunk, EcmascriptChunkItem, EcmascriptChunkPlaceable, EcmascriptChunkingContext,
-    EcmascriptExports,
-};
+use crate::chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports};
 
 #[turbo_tasks::function]
 fn modifier() -> Vc<String> {
     Vc::cell("manifest chunk".to_string())
 }
 
-/// The manifest chunk is deferred until requested by the manifest loader
+/// The manifest module is deferred until requested by the manifest loader
 /// item when the dynamic `import()` expression is reached. Its responsibility
 /// is to generate a Promise that will resolve only after all the necessary
 /// chunks needed by the dynamic import are loaded by the client.
@@ -31,49 +28,55 @@ fn modifier() -> Vc<String> {
 /// actually reached, instead of eagerly as part of the chunk that the dynamic
 /// import appears in.
 #[turbo_tasks::value(shared)]
-pub struct ManifestChunkAsset {
-    pub asset: Vc<Box<dyn ChunkableModule>>,
+pub struct ManifestAsyncModule {
+    pub inner: Vc<Box<dyn ChunkableModule>>,
     pub chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
     pub availability_info: AvailabilityInfo,
 }
 
 #[turbo_tasks::value_impl]
-impl ManifestChunkAsset {
+impl ManifestAsyncModule {
     #[turbo_tasks::function]
     pub fn new(
-        asset: Vc<Box<dyn ChunkableModule>>,
+        module: Vc<Box<dyn ChunkableModule>>,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         availability_info: Value<AvailabilityInfo>,
     ) -> Vc<Self> {
-        Self::cell(ManifestChunkAsset {
-            asset,
+        Self::cell(ManifestAsyncModule {
+            inner: module,
             chunking_context,
             availability_info: availability_info.into_value(),
         })
     }
 
     #[turbo_tasks::function]
-    pub(super) async fn entry_chunk(self: Vc<Self>) -> Result<Vc<Box<dyn Chunk>>> {
-        let this = self.await?;
-        Ok(this.asset.as_chunk(
-            Vc::upcast(this.chunking_context),
-            Value::new(this.availability_info),
-        ))
-    }
-
-    #[turbo_tasks::function]
     pub(super) async fn chunks(self: Vc<Self>) -> Result<Vc<OutputAssets>> {
         let this = self.await?;
-        Ok(this.chunking_context.chunk_group(self.entry_chunk()))
+        Ok(this
+            .chunking_context
+            .chunk_group(Vc::upcast(this.inner), Value::new(this.availability_info)))
     }
 
     #[turbo_tasks::function]
     pub async fn manifest_chunks(self: Vc<Self>) -> Result<Vc<OutputAssets>> {
         let this = self.await?;
-        Ok(this.chunking_context.chunk_group(self.as_chunk(
-            Vc::upcast(this.chunking_context),
-            Value::new(this.availability_info),
-        )))
+        Ok(this
+            .chunking_context
+            .chunk_group(Vc::upcast(self), Value::new(this.availability_info)))
+    }
+
+    #[turbo_tasks::function]
+    pub fn module_ident(&self) -> Vc<AssetIdent> {
+        self.inner.ident()
+    }
+
+    #[turbo_tasks::function]
+    pub async fn content_ident(&self) -> Result<Vc<AssetIdent>> {
+        let mut ident = self.inner.ident();
+        if let Some(available_modules) = self.availability_info.available_chunk_items() {
+            ident = ident.with_modifier(Vc::cell(available_modules.hash().await?.to_string()));
+        }
+        Ok(ident)
     }
 }
 
@@ -83,10 +86,10 @@ fn manifest_chunk_reference_description() -> Vc<String> {
 }
 
 #[turbo_tasks::value_impl]
-impl Module for ManifestChunkAsset {
+impl Module for ManifestAsyncModule {
     #[turbo_tasks::function]
     fn ident(&self) -> Vc<AssetIdent> {
-        self.asset.ident().with_modifier(modifier())
+        self.inner.ident().with_modifier(modifier())
     }
 
     #[turbo_tasks::function]
@@ -110,7 +113,7 @@ impl Module for ManifestChunkAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl Asset for ManifestChunkAsset {
+impl Asset for ManifestAsyncModule {
     #[turbo_tasks::function]
     fn content(&self) -> Vc<AssetContent> {
         todo!()
@@ -118,28 +121,19 @@ impl Asset for ManifestChunkAsset {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableModule for ManifestChunkAsset {
-    #[turbo_tasks::function]
-    fn as_chunk(
-        self: Vc<Self>,
-        chunking_context: Vc<Box<dyn ChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Vc<Box<dyn Chunk>> {
-        Vc::upcast(EcmascriptChunk::new(
-            chunking_context,
-            Vc::upcast(self),
-            availability_info,
-        ))
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl EcmascriptChunkPlaceable for ManifestChunkAsset {
+impl ChunkableModule for ManifestAsyncModule {
     #[turbo_tasks::function]
     async fn as_chunk_item(
         self: Vc<Self>,
-        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    ) -> Result<Vc<Box<dyn EcmascriptChunkItem>>> {
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Result<Vc<Box<dyn turbopack_core::chunk::ChunkItem>>> {
+        let chunking_context =
+            Vc::try_resolve_downcast::<Box<dyn EcmascriptChunkingContext>>(chunking_context)
+                .await?
+                .context(
+                    "chunking context must impl EcmascriptChunkingContext to use \
+                     ManifestChunkAsset",
+                )?;
         Ok(Vc::upcast(
             ManifestChunkItem {
                 chunking_context,
@@ -148,7 +142,10 @@ impl EcmascriptChunkPlaceable for ManifestChunkAsset {
             .cell(),
         ))
     }
+}
 
+#[turbo_tasks::value_impl]
+impl EcmascriptChunkPlaceable for ManifestAsyncModule {
     #[turbo_tasks::function]
     fn get_exports(&self) -> Vc<EcmascriptExports> {
         EcmascriptExports::Value.cell()

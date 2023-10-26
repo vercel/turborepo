@@ -17,14 +17,12 @@ use crate::{
 
 static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 
-const GLOBAL_CACHE_KEY: &str = "You don't understand! I coulda had class. I coulda been a \
-                                contender. I could've been somebody, instead of a bum, which is \
-                                what I am.";
+const GLOBAL_CACHE_KEY: &str = "HEY STELLLLLLLAAAAAAAAAAAAA";
 
 #[derive(Debug, Error)]
 enum GlobalHashError {}
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct GlobalHashableInputs<'a> {
     pub global_cache_key: &'static str,
     pub global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
@@ -36,23 +34,23 @@ pub struct GlobalHashableInputs<'a> {
     pub pass_through_env: Option<&'a [String]>,
     pub env_mode: EnvMode,
     pub framework_inference: bool,
-    pub dot_env: &'a [RelativeUnixPathBuf],
+    pub dot_env: Option<&'a [RelativeUnixPathBuf]>,
+    pub env_at_execution_start: &'a EnvironmentVariableMap,
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
-    is_monorepo: bool,
-    root_external_dependencies_hash: &'a str,
+    root_external_dependencies_hash: Option<&'a str>,
     root_path: &AbsoluteSystemPath,
     package_manager: &PackageManager,
     lockfile: Option<&L>,
     global_file_dependencies: &'a [String],
-    env_at_execution_start: &EnvironmentVariableMap,
+    env_at_execution_start: &'a EnvironmentVariableMap,
     global_env: &'a [String],
     global_pass_through_env: Option<&'a [String]>,
     env_mode: EnvMode,
     framework_inference: bool,
-    dot_env: &'a [RelativeUnixPathBuf],
+    dot_env: Option<&'a [RelativeUnixPathBuf]>,
 ) -> Result<GlobalHashableInputs<'a>> {
     let global_hashable_env_vars =
         get_global_hashable_env_vars(env_at_execution_start, global_env)?;
@@ -106,15 +104,16 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     let mut global_file_hash_map =
         hasher.get_hashes_for_files(root_path, &global_deps_paths, false)?;
 
-    if !dot_env.is_empty() {
-        let system_dot_env = dot_env.iter().map(|p| p.to_anchored_system_path_buf());
+    if !dot_env.unwrap_or_default().is_empty() {
+        let system_dot_env = dot_env
+            .into_iter()
+            .flatten()
+            .map(|p| p.to_anchored_system_path_buf());
 
         let dot_env_object = hasher.hash_existing_of(root_path, system_dot_env)?;
 
         global_file_hash_map.extend(dot_env_object);
     }
-
-    let root_external_dependencies_hash = is_monorepo.then_some(root_external_dependencies_hash);
 
     debug!(
         "external deps hash: {}",
@@ -131,6 +130,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         env_mode,
         framework_inference,
         dot_env,
+        env_at_execution_start,
     })
 }
 
@@ -167,7 +167,7 @@ impl<'a> GlobalHashableInputs<'a> {
             pass_through_env: self.pass_through_env.unwrap_or_default(),
             env_mode: self.env_mode,
             framework_inference: self.framework_inference,
-            dot_env: self.dot_env,
+            dot_env: self.dot_env.unwrap_or_default(),
         };
 
         global_hashable.hash()

@@ -7,7 +7,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache miss, executing 0d1e6ee2c143211c
+  my-app:build: cache miss, executing b42768856d16033a
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo 'building'

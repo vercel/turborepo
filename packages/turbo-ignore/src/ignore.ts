@@ -93,7 +93,7 @@ export function turboIgnore(
   }
 
   // Build, and execute the command
-  const command = `npx turbo run ${task} --filter=${workspace}...[${comparison.ref}] --dry=json`;
+  const command = `npx turbo run ${task} --filter="${workspace}...[${comparison.ref}]" --dry=json`;
   info(`Analyzing results of \`${command}\``);
 
   const execOptions: { cwd: string; maxBuffer?: number } = {

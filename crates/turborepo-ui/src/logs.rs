@@ -88,11 +88,30 @@ pub fn replay_logs<W: Write>(
         Error::CannotReadLogs(err)
     })?;
 
-    let log_reader = BufReader::new(log_file);
+    // Construct a PrefixedWriter which allows for non UTF-8 bytes to be written to
+    // it.
+    let mut prefixed_writer = output.output_prefixed_writer();
+    let mut log_reader = BufReader::new(log_file);
 
-    for line in log_reader.lines() {
-        let line = line.map_err(Error::CannotReadLogs)?;
-        output.output(line);
+    let mut buffer = Vec::new();
+    loop {
+        let num_bytes = log_reader
+            .read_until(b'\n', &mut buffer)
+            .map_err(Error::CannotReadLogs)?;
+        if num_bytes == 0 {
+            break;
+        }
+
+        // If the log file doesn't end with a newline, then we add one to ensure the
+        // underlying writer receives a full line.
+        if !buffer.ends_with(b"\n") {
+            buffer.push(b'\n');
+        }
+        prefixed_writer
+            .write_all(&buffer)
+            .map_err(Error::CannotReadLogs)?;
+
+        buffer.clear();
     }
 
     debug!("finish replaying logs");
@@ -170,6 +189,23 @@ mod tests {
              fish\n\u{1b}[36m>\u{1b}[0mred fish\n\u{1b}[36m>\u{1b}[0mblue fish\n"
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_replay_logs_invalid_utf8() -> Result<()> {
+        let ui = UI::new(true);
+        let mut output = Vec::new();
+        let mut err = Vec::new();
+        let mut prefixed_ui = PrefixedUI::new(ui, &mut output, &mut err)
+            .with_output_prefix(CYAN.apply_to(">".to_string()))
+            .with_warn_prefix(BOLD.apply_to(">!".to_string()));
+        let dir = tempdir()?;
+        let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
+        fs::write(&log_file_path, [0, 159, 146, 150, b'\n'])?;
+        replay_logs(&mut prefixed_ui, &log_file_path)?;
+
+        assert_eq!(output, [b'>', 0, 159, 146, 150, b'\n']);
         Ok(())
     }
 }

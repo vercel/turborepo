@@ -133,12 +133,6 @@ impl Display for ConstantString {
     }
 }
 
-impl From<JsWord> for ConstantString {
-    fn from(v: JsWord) -> Self {
-        ConstantString::Word(v)
-    }
-}
-
 impl From<Atom> for ConstantString {
     fn from(v: Atom) -> Self {
         ConstantString::Atom(v)
@@ -452,12 +446,6 @@ pub enum JsValue {
 impl From<&'_ str> for JsValue {
     fn from(v: &str) -> Self {
         ConstantValue::Str(ConstantString::Word(v.into())).into()
-    }
-}
-
-impl From<JsWord> for JsValue {
-    fn from(v: JsWord) -> Self {
-        ConstantValue::Str(ConstantString::Word(v)).into()
     }
 }
 
@@ -1369,6 +1357,10 @@ impl JsValue {
                     WellKnownObjectKind::NodeProcess => (
                         "process",
                         "The Node.js process module: https://nodejs.org/api/process.html",
+                    ),
+                    WellKnownObjectKind::NodeProcessArgv => (
+                        "process.argv",
+                        "The Node.js process.argv property: https://nodejs.org/api/process.html#processargv",
                     ),
                     WellKnownObjectKind::NodeProcessEnv => (
                         "process.env",
@@ -2960,6 +2952,7 @@ pub enum WellKnownObjectKind {
     OsModule,
     OsModuleDefault,
     NodeProcess,
+    NodeProcessArgv,
     NodeProcessEnv,
     NodePreGyp,
     NodeExpressApp,
@@ -2978,6 +2971,7 @@ impl WellKnownObjectKind {
             Self::ChildProcess => Some(&["child_process"]),
             Self::OsModule => Some(&["os"]),
             Self::NodeProcess => Some(&["process"]),
+            Self::NodeProcessArgv => Some(&["process", "argv"]),
             Self::NodeProcessEnv => Some(&["process", "env"]),
             Self::NodeBuffer => Some(&["Buffer"]),
             Self::RequireCache => Some(&["require", "cache"]),

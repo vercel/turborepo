@@ -1,9 +1,10 @@
 use anyhow::Result;
-use turbo_tasks::Vc;
+use turbo_tasks::{Upcast, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 
-use super::{Chunk, EvaluatableAssets};
+use super::{availability_info::AvailabilityInfo, ChunkableModule, EvaluatableAssets};
 use crate::{
+    chunk::{ChunkItem, ModuleId},
     environment::Environment,
     ident::AssetIdent,
     module::Module,
@@ -50,17 +51,45 @@ pub trait ChunkingContext {
         Vc::cell(false)
     }
 
-    fn layer(self: Vc<Self>) -> Vc<String> {
-        Vc::cell("".to_string())
-    }
+    fn async_loader_chunk_item(
+        &self,
+        module: Vc<Box<dyn ChunkableModule>>,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Vc<Box<dyn ChunkItem>>;
+    fn async_loader_chunk_item_id(&self, module: Vc<Box<dyn ChunkableModule>>) -> Vc<ModuleId>;
 
-    fn with_layer(self: Vc<Self>, layer: String) -> Vc<Self>;
-
-    fn chunk_group(self: Vc<Self>, entry: Vc<Box<dyn Chunk>>) -> Vc<OutputAssets>;
+    fn chunk_group(
+        self: Vc<Self>,
+        module: Vc<Box<dyn ChunkableModule>>,
+        availability_info: Value<AvailabilityInfo>,
+    ) -> Vc<OutputAssets>;
 
     fn evaluated_chunk_group(
         self: Vc<Self>,
-        entry: Vc<Box<dyn Chunk>>,
+        ident: Vc<AssetIdent>,
         evaluatable_assets: Vc<EvaluatableAssets>,
     ) -> Vc<OutputAssets>;
+
+    async fn chunk_item_id_from_ident(
+        self: Vc<Self>,
+        ident: Vc<AssetIdent>,
+    ) -> Result<Vc<ModuleId>> {
+        Ok(ModuleId::String(ident.to_string().await?.clone_value()).cell())
+    }
+
+    fn chunk_item_id(self: Vc<Self>, chunk_item: Vc<Box<dyn ChunkItem>>) -> Vc<ModuleId> {
+        self.chunk_item_id_from_ident(chunk_item.asset_ident())
+    }
+}
+
+pub trait ChunkingContextExt {
+    fn root_chunk_group(self: Vc<Self>, module: Vc<Box<dyn ChunkableModule>>) -> Vc<OutputAssets>
+    where
+        Self: Send;
+}
+
+impl<T: ChunkingContext + Send + Upcast<Box<dyn ChunkingContext>>> ChunkingContextExt for T {
+    fn root_chunk_group(self: Vc<Self>, module: Vc<Box<dyn ChunkableModule>>) -> Vc<OutputAssets> {
+        self.chunk_group(module, Value::new(AvailabilityInfo::Root))
+    }
 }

@@ -1,7 +1,7 @@
 use anyhow::Result;
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::Vc;
 use turbopack_core::{
-    chunk::{availability_info::AvailabilityInfo, ChunkItem},
+    chunk::{AsyncModuleInfo, ChunkItem, ChunkType, ChunkingContext},
     ident::AssetIdent,
     module::Module,
     reference::ModuleReferences,
@@ -11,7 +11,7 @@ use super::{asset::EcmascriptModulePartAsset, part_of_module, split_module};
 use crate::{
     chunk::{
         placeable::EcmascriptChunkPlaceable, EcmascriptChunkItem, EcmascriptChunkItemContent,
-        EcmascriptChunkingContext,
+        EcmascriptChunkType, EcmascriptChunkingContext,
     },
     EcmascriptModuleContent,
 };
@@ -30,22 +30,21 @@ pub struct EcmascriptModulePartChunkItem {
 impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
     fn content(self: Vc<Self>) -> Vc<EcmascriptChunkItemContent> {
-        self.content_with_availability_info(Value::new(AvailabilityInfo::Untracked))
+        panic!("content() should never be called");
     }
 
     #[turbo_tasks::function]
-    async fn content_with_availability_info(
+    async fn content_with_async_module_info(
         self: Vc<Self>,
-        availability_info: Value<AvailabilityInfo>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let this = self.await?;
-        let availability_info = if *this.module.analyze().needs_availability_info().await? {
-            availability_info
-        } else {
-            Value::new(AvailabilityInfo::Untracked)
-        };
-
         let module = this.module.await?;
+        let async_module_options = module
+            .full_module
+            .get_async_module()
+            .module_options(async_module_info);
+
         let split_data = split_module(module.full_module);
         let parsed = part_of_module(split_data, module.part);
 
@@ -54,13 +53,8 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             module.full_module.ident(),
             this.chunking_context,
             this.module.analyze(),
-            availability_info,
+            async_module_info,
         );
-
-        let async_module_options = module
-            .full_module
-            .get_async_module()
-            .module_options(availability_info);
 
         Ok(EcmascriptChunkItemContent::new(
             content,
@@ -85,5 +79,22 @@ impl ChunkItem for EcmascriptModulePartChunkItem {
     #[turbo_tasks::function]
     async fn asset_ident(&self) -> Result<Vc<AssetIdent>> {
         Ok(self.module.ident())
+    }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
+    }
+
+    #[turbo_tasks::function]
+    async fn ty(&self) -> Result<Vc<Box<dyn ChunkType>>> {
+        Ok(Vc::upcast(
+            Vc::<EcmascriptChunkType>::default().resolve().await?,
+        ))
+    }
+
+    #[turbo_tasks::function]
+    fn module(&self) -> Vc<Box<dyn Module>> {
+        Vc::upcast(self.module)
     }
 }

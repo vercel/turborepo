@@ -410,7 +410,7 @@ impl<B: Backend + 'static> TurboTasks<B> {
     /// Calls a native function with arguments. Resolves arguments when needed
     /// with a wrapper [Task].
     pub fn dynamic_call(&self, func: FunctionId, inputs: Vec<ConcreteTaskInput>) -> RawVc {
-        if inputs.iter().all(|i| i.is_resolved() && !i.is_nothing()) {
+        if inputs.iter().all(|i| i.is_resolved()) {
             self.native_call(func, inputs)
         } else {
             RawVc::TaskOutput(self.backend.get_or_create_persistent_task(
@@ -1159,7 +1159,7 @@ impl<B: Backend + 'static> TaskIdProvider for TurboTasks<B> {
     }
 }
 
-fn current_task(from: &str) -> TaskId {
+pub(crate) fn current_task(from: &str) -> TaskId {
     match CURRENT_TASK_ID.try_with(|id| *id) {
         Ok(id) => id,
         Err(_) => panic!(
@@ -1478,7 +1478,7 @@ pub(crate) async fn read_task_cell(
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CurrentCellRef {
     current_task: TaskId,
     index: CellId,

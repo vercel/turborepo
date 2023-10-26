@@ -90,11 +90,14 @@ impl From<RpcError> for tonic::Status {
 
 async fn start_filewatching(
     repo_root: AbsoluteSystemPathBuf,
-    cookie_dir: AbsoluteSystemPathBuf,
     watcher_tx: watch::Sender<Option<Arc<FileWatching>>>,
 ) -> Result<(), WatchError> {
-    let watcher = FileSystemWatcher::new(&repo_root).await?;
-    let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_millis(100), watcher.subscribe());
+    let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).await?;
+    let cookie_jar = CookieJar::new(
+        watcher.cookie_dir(),
+        Duration::from_millis(100),
+        watcher.subscribe(),
+    );
     let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
     // We can ignore failures here, it means the server is shutting down and
     // receivers have gone out of scope.
@@ -113,7 +116,6 @@ const REQUEST_TIMEOUT: Duration = Duration::from_millis(100);
 /// to be wired to signal handling.
 pub async fn serve<S>(
     repo_root: &AbsoluteSystemPath,
-    cookie_dir: AbsoluteSystemPathBuf,
     daemon_root: &AbsoluteSystemPath,
     log_file: AbsoluteSystemPathBuf,
     timeout: Duration,
@@ -143,7 +145,7 @@ where
     // all references are dropped.
     let fw_shutdown = trigger_shutdown.clone();
     let fw_handle = tokio::task::spawn(async move {
-        if let Err(e) = start_filewatching(watcher_repo_root, cookie_dir, watcher_tx).await {
+        if let Err(e) = start_filewatching(watcher_repo_root, watcher_tx).await {
             error!("filewatching failed to start: {}", e);
             let _ = fw_shutdown.send(()).await;
         }
@@ -436,8 +438,6 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
-        let cookie_dir = repo_root.join_component(".git");
-        cookie_dir.create_dir_all().unwrap();
         let daemon_root = path.join_component("daemon");
         let log_file = daemon_root.join_component("log");
         tracing::info!("start");
@@ -447,11 +447,8 @@ mod test {
         let (tx, rx) = oneshot::channel::<CloseReason>();
         let exit_signal = rx.map(|_result| CloseReason::Interrupt);
         let handle = tokio::task::spawn(async move {
-            let repo_root = repo_root;
-            let daemon_root = daemon_root;
             serve(
                 &repo_root,
-                cookie_dir,
                 &daemon_root,
                 log_file,
                 Duration::from_secs(60 * 60),
@@ -486,8 +483,6 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
-        let cookie_dir = repo_root.join_component(".git");
-        cookie_dir.create_dir_all().unwrap();
         let daemon_root = path.join_component("daemon");
         let log_file = daemon_root.join_component("log");
 
@@ -498,7 +493,6 @@ mod test {
         let exit_signal = rx.map(|_result| CloseReason::Interrupt);
         let close_reason = serve(
             &repo_root,
-            cookie_dir,
             &daemon_root,
             log_file,
             Duration::from_millis(5),
@@ -528,8 +522,6 @@ mod test {
             .unwrap();
 
         let repo_root = path.join_component("repo");
-        let cookie_dir = repo_root.join_component(".git");
-        cookie_dir.create_dir_all().unwrap();
         let daemon_root = path.join_component("daemon");
         daemon_root.create_dir_all().unwrap();
         let log_file = daemon_root.join_component("log");
@@ -540,10 +532,8 @@ mod test {
         let server_repo_root = repo_root.clone();
         let handle = tokio::task::spawn(async move {
             let repo_root = server_repo_root;
-            let daemon_root = daemon_root;
             serve(
                 &repo_root,
-                cookie_dir,
                 &daemon_root,
                 log_file,
                 Duration::from_secs(60 * 60),

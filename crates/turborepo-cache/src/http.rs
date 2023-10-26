@@ -1,7 +1,7 @@
 use std::{backtrace::Backtrace, io::Write};
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-use turborepo_api_client::{APIAuth, APIClient, Response};
+use turborepo_api_client::{APIAuth, APIClient, Client, Response};
 
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
@@ -13,9 +13,7 @@ pub struct HTTPCache {
     client: APIClient,
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
     repo_root: AbsoluteSystemPathBuf,
-    token: String,
-    team_id: String,
-    team_slug: Option<String>,
+    api_auth: APIAuth,
 }
 
 impl HTTPCache {
@@ -37,19 +35,12 @@ impl HTTPCache {
         } else {
             None
         };
-        let APIAuth {
-            team_id,
-            token,
-            team_slug,
-        } = api_auth;
 
         HTTPCache {
             client,
             signer_verifier,
             repo_root,
-            token,
-            team_id,
-            team_slug,
+            api_auth,
         }
     }
 
@@ -70,7 +61,13 @@ impl HTTPCache {
             .transpose()?;
 
         self.client
-            .put_artifact(hash, &artifact_body, duration, tag.as_deref(), &self.token)
+            .put_artifact(
+                hash,
+                &artifact_body,
+                duration,
+                tag.as_deref(),
+                &self.api_auth.token,
+            )
             .await?;
 
         Ok(())
@@ -93,7 +90,12 @@ impl HTTPCache {
     pub async fn exists(&self, hash: &str) -> Result<CacheResponse, CacheError> {
         let response = self
             .client
-            .artifact_exists(hash, &self.token, &self.team_id, self.team_slug.as_deref())
+            .artifact_exists(
+                hash,
+                &self.api_auth.token,
+                &self.api_auth.team_id,
+                self.api_auth.team_slug.as_deref(),
+            )
             .await?;
 
         let duration = Self::get_duration_from_response(&response)?;
@@ -124,7 +126,12 @@ impl HTTPCache {
     ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
         let response = self
             .client
-            .fetch_artifact(hash, &self.token, &self.team_id, self.team_slug.as_deref())
+            .fetch_artifact(
+                hash,
+                &self.api_auth.token,
+                &self.api_auth.team_id,
+                self.api_auth.team_slug.as_deref(),
+            )
             .await?;
 
         let duration = Self::get_duration_from_response(&response)?;
@@ -224,7 +231,7 @@ mod test {
             duration,
         } = test_case;
 
-        let api_client = APIClient::new(&format!("http://localhost:{}", port), 200, "2.0.0", true)?;
+        let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
         let opts = CacheOpts::default();
         let api_auth = APIAuth {
             team_id: "my-team".to_string(),
@@ -234,7 +241,7 @@ mod test {
 
         let cache = HTTPCache::new(api_client, &opts, repo_root_path.to_owned(), api_auth);
 
-        let anchored_files: Vec<_> = files.iter().map(|f| f.path.clone()).collect();
+        let anchored_files: Vec<_> = files.iter().map(|f| f.path().to_owned()).collect();
         cache
             .put(&repo_root_path, hash, &anchored_files, duration)
             .await?;
@@ -248,9 +255,13 @@ mod test {
         assert_eq!(cache_response.time_saved, duration);
 
         for (test_file, received_file) in files.iter().zip(received_files) {
-            assert_eq!(received_file, test_file.path);
+            assert_eq!(&*received_file, test_file.path());
             let file_path = repo_root_path.resolve(&received_file);
-            assert_eq!(std::fs::read_to_string(file_path)?, test_file.contents);
+            if let Some(contents) = test_file.contents() {
+                assert_eq!(std::fs::read_to_string(file_path)?, contents);
+            } else {
+                assert!(file_path.exists());
+            }
         }
 
         Ok(())

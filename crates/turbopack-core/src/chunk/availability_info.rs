@@ -1,42 +1,43 @@
 use turbo_tasks::Vc;
 
-use super::available_modules::AvailableAssets;
-use crate::module::Module;
+use super::available_chunk_items::{AvailableChunkItemInfoMap, AvailableChunkItems};
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Clone, Copy, Debug)]
 pub enum AvailabilityInfo {
+    /// Availability of modules is not tracked
     Untracked,
-    Root {
-        current_availability_root: Vc<Box<dyn Module>>,
-    },
-    Inner {
-        available_modules: Vc<AvailableAssets>,
-        current_availability_root: Vc<Box<dyn Module>>,
+    /// Availablility of modules is tracked, but no modules are available
+    Root,
+    /// There are modules already available.
+    Complete {
+        available_chunk_items: Vc<AvailableChunkItems>,
     },
 }
 
 impl AvailabilityInfo {
-    pub fn current_availability_root(&self) -> Option<Vc<Box<dyn Module>>> {
+    pub fn available_chunk_items(&self) -> Option<Vc<AvailableChunkItems>> {
         match self {
             Self::Untracked => None,
-            Self::Root {
-                current_availability_root,
-            } => Some(*current_availability_root),
-            Self::Inner {
-                current_availability_root,
+            Self::Root => None,
+            Self::Complete {
+                available_chunk_items,
                 ..
-            } => Some(*current_availability_root),
+            } => Some(*available_chunk_items),
         }
     }
 
-    pub fn available_modules(&self) -> Option<Vc<AvailableAssets>> {
+    pub fn with_chunk_items(self, chunk_items: Vc<AvailableChunkItemInfoMap>) -> Self {
         match self {
-            Self::Untracked => None,
-            Self::Root { .. } => None,
-            Self::Inner {
-                available_modules, ..
-            } => Some(*available_modules),
+            AvailabilityInfo::Untracked => AvailabilityInfo::Untracked,
+            AvailabilityInfo::Root => AvailabilityInfo::Complete {
+                available_chunk_items: AvailableChunkItems::new(chunk_items),
+            },
+            AvailabilityInfo::Complete {
+                available_chunk_items,
+            } => AvailabilityInfo::Complete {
+                available_chunk_items: available_chunk_items.with_chunk_items(chunk_items),
+            },
         }
     }
 }

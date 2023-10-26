@@ -5,11 +5,8 @@ use swc_core::{
 };
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
-    chunk::{
-        availability_info::AvailabilityInfo, ChunkableModuleReference, ChunkingType,
-        ChunkingTypeOption,
-    },
-    issue::{IssueSource, OptionIssueSource},
+    chunk::{ChunkableModuleReference, ChunkingType, ChunkingTypeOption},
+    issue::IssueSource,
     reference::ModuleReference,
     reference_type::EcmaScriptModulesReferenceSubType,
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
@@ -18,7 +15,7 @@ use turbopack_core::{
 use super::super::pattern_mapping::{PatternMapping, ResolveType::EsmAsync};
 use crate::{
     chunk::EcmascriptChunkingContext,
-    code_gen::{CodeGenerateableWithAvailabilityInfo, CodeGeneration},
+    code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
     references::AstPath,
     resolve::{esm_resolve, try_to_severity},
@@ -62,7 +59,7 @@ impl ModuleReference for EsmAsyncAssetReference {
             self.origin,
             self.request,
             Default::default(),
-            OptionIssueSource::some(self.issue_source),
+            Some(self.issue_source),
             try_to_severity(self.in_try),
         )
     }
@@ -88,12 +85,11 @@ impl ChunkableModuleReference for EsmAsyncAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl CodeGenerateableWithAvailabilityInfo for EsmAsyncAssetReference {
+impl CodeGenerateable for EsmAsyncAssetReference {
     #[turbo_tasks::function]
     async fn code_generation(
         &self,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
     ) -> Result<Vc<CodeGeneration>> {
         let pm = PatternMapping::resolve_request(
             self.request,
@@ -103,10 +99,10 @@ impl CodeGenerateableWithAvailabilityInfo for EsmAsyncAssetReference {
                 self.origin,
                 self.request,
                 Value::new(EcmaScriptModulesReferenceSubType::Undefined),
-                OptionIssueSource::some(self.issue_source).resolve().await?,
+                Some(self.issue_source),
                 try_to_severity(self.in_try),
             ),
-            Value::new(EsmAsync(availability_info.into_value())),
+            Value::new(EsmAsync),
         )
         .await?;
 

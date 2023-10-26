@@ -29,7 +29,10 @@ use turbopack::{
 use turbopack_build::{BuildChunkingContext, MinifyType};
 use turbopack_core::{
     asset::Asset,
-    chunk::{ChunkableModule, ChunkingContext, EvaluatableAssetExt, EvaluatableAssets},
+    chunk::{
+        ChunkableModule, ChunkingContext, ChunkingContextExt, EvaluatableAssetExt,
+        EvaluatableAssets,
+    },
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
     context::AssetContext,
@@ -211,6 +214,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
 
     let defines = compile_time_defines!(
         process.turbopack = true,
+        process.env.TURBOPACK = true,
         process.env.NODE_ENV = "development",
         DEFINED_VALUE = "value",
         DEFINED_TRUE = true,
@@ -276,6 +280,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
             ..Default::default()
         }
         .cell(),
+        Vc::cell("test".to_string()),
     ));
 
     let runtime_entries = maybe_load_env(asset_context, project_path)
@@ -323,7 +328,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
         // TODO: Load runtime entries from snapshots
         match options.runtime {
             Runtime::Dev => chunking_context.evaluated_chunk_group(
-                ecmascript.as_root_chunk(chunking_context),
+                ecmascript.ident(),
                 runtime_entries
                     .unwrap_or_else(EvaluatableAssets::empty)
                     .with_entry(Vc::upcast(ecmascript)),
@@ -334,7 +339,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
                 )
                 .await?
                 .unwrap()
-                .entry_chunk(
+                .entry_chunk_group(
                     // `expected` expects a completely flat output directory.
                     chunk_root_path
                         .join(
@@ -356,9 +361,9 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
             }
         }
     } else if let Some(chunkable) =
-        Vc::try_resolve_sidecast::<Box<dyn ChunkableModule>>(entry_module).await?
+        Vc::try_resolve_downcast::<Box<dyn ChunkableModule>>(entry_module).await?
     {
-        chunking_context.chunk_group(chunkable.as_root_chunk(chunking_context))
+        chunking_context.root_chunk_group(chunkable)
     } else {
         // TODO convert into a serve-able asset
         bail!("Entry module is not chunkable, so it can't be used to bootstrap the application")

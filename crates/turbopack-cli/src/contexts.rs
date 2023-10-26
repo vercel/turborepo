@@ -169,6 +169,7 @@ pub fn get_client_asset_context(
         compile_time_info,
         module_options_context,
         resolve_options_context,
+        Vc::cell("client".to_string()),
     ));
 
     asset_context
@@ -177,6 +178,7 @@ pub fn get_client_asset_context(
 fn client_defines(node_env: &NodeEnv) -> Vc<CompileTimeDefines> {
     compile_time_defines!(
         process.turbopack = true,
+        process.env.TURBOPACK = true,
         process.env.NODE_ENV = node_env.to_string()
     )
     .cell()

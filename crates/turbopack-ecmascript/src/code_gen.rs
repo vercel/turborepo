@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use swc_core::ecma::visit::{AstParentKind, VisitMut};
-use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, Value, Vc};
-use turbopack_core::chunk::availability_info::AvailabilityInfo;
+use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, Vc};
+use turbopack_core::chunk::AsyncModuleInfo;
 
 use crate::chunk::EcmascriptChunkingContext;
 
@@ -33,18 +33,18 @@ pub trait CodeGenerateable {
 }
 
 #[turbo_tasks::value_trait]
-pub trait CodeGenerateableWithAvailabilityInfo {
+pub trait CodeGenerateableWithAsyncModuleInfo {
     fn code_generation(
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Vc<CodeGeneration>;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs, ValueDebugFormat)]
 pub enum CodeGen {
     CodeGenerateable(Vc<Box<dyn CodeGenerateable>>),
-    CodeGenerateableWithAvailabilityInfo(Vc<Box<dyn CodeGenerateableWithAvailabilityInfo>>),
+    CodeGenerateableWithAsyncModuleInfo(Vc<Box<dyn CodeGenerateableWithAsyncModuleInfo>>),
 }
 
 #[turbo_tasks::value(transparent)]

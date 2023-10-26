@@ -1,15 +1,36 @@
-use anyhow::Result;
+use tracing::error;
 use turborepo_auth::logout as auth_logout;
 
-use crate::commands::CommandBase;
+use crate::{cli, cli::Error, commands::CommandBase, rewrite_json::unset_path};
 
-pub fn logout(base: &mut CommandBase) -> Result<()> {
-    let ui = base.ui;
+pub fn logout(base: &mut CommandBase) -> Result<(), Error> {
+    if let Err(err) = remove_token(base) {
+        error!("could not logout. Something went wrong: {}", err);
+        return Err(err);
+    }
 
-    // Passing a closure here while we figure out how to make turborepo-auth
-    // crate manage its own configuration for the path to the token.
-    let set_token =
-        || -> Result<(), anyhow::Error> { Ok(base.user_config_mut()?.set_token(None)?) };
+    auth_logout(&base.ui);
 
-    auth_logout(&ui, set_token)
+    Ok(())
+}
+
+fn remove_token(base: &mut CommandBase) -> Result<(), Error> {
+    let global_config_path = base.global_config_path()?;
+    let before = global_config_path
+        .read_existing_to_string_or(Ok("{}"))
+        .map_err(|e| Error::FailedToReadConfig {
+            config_path: global_config_path.clone(),
+            error: e,
+        })?;
+
+    if let Some(after) = unset_path(&before, &["token"], true)? {
+        global_config_path
+            .create_with_contents(after)
+            .map_err(|e| cli::Error::FailedToSetConfig {
+                config_path: global_config_path.clone(),
+                error: e,
+            })
+    } else {
+        Ok(())
+    }
 }

@@ -261,6 +261,16 @@ export interface RemoteCache {
    * @defaultValue false
    */
   signature?: boolean;
+
+  /**
+   * Indicates if the remote cache is enabled. When `false`, Turborepo will disable
+   * all remote cache operations, even if the repo has a valid token. If true, remote caching
+   * is enabled, but still requires the user to login and link their repo to a remote cache.
+   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
+   *
+   * @defaultValue true
+   */
+  enabled?: boolean;
 }
 
 export type OutputMode =

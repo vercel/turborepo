@@ -29,6 +29,7 @@ pub async fn node_evaluate_asset_context(
     execution_context: Vc<ExecutionContext>,
     import_map: Option<Vc<ImportMap>>,
     transitions: Option<Vc<TransitionsByName>>,
+    layer: String,
 ) -> Result<Vc<Box<dyn AssetContext>>> {
     let mut import_map = if let Some(import_map) = import_map {
         import_map.await?.clone_value()
@@ -76,8 +77,12 @@ pub async fn node_evaluate_asset_context(
         transitions.unwrap_or_else(|| Vc::cell(Default::default())),
         CompileTimeInfo::builder(node_build_environment())
             .defines(
-                compile_time_defines!(process.turbopack = true, process.env.NODE_ENV = node_env,)
-                    .cell(),
+                compile_time_defines!(
+                    process.turbopack = true,
+                    process.env.NODE_ENV = node_env,
+                    process.env.TURBOPACK = true
+                )
+                .cell(),
             )
             .cell(),
         ModuleOptionsContext {
@@ -86,5 +91,6 @@ pub async fn node_evaluate_asset_context(
         }
         .cell(),
         resolve_options_context,
+        Vc::cell(layer),
     )))
 }

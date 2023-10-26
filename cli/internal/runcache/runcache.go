@@ -15,6 +15,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/cache"
 	"github.com/vercel/turbo/cli/internal/colorcache"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/globby"
 	"github.com/vercel/turbo/cli/internal/logstreamer"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -99,7 +100,7 @@ func New(cache cache.Cache, repoRoot turbopath.AbsoluteSystemPath, opts Opts, co
 type TaskCache struct {
 	ExpandedOutputs   []turbopath.AnchoredSystemPath
 	rc                *RunCache
-	repoRelativeGlobs fs.TaskOutputs
+	repoRelativeGlobs hash.TaskOutputs
 	hash              string
 	pt                *nodes.PackageTask
 	taskOutputMode    util.TaskOutputMode
@@ -122,7 +123,6 @@ func (tc *TaskCache) RestoreOutputs(ctx context.Context, prefixedUI *cli.Prefixe
 
 	if err != nil {
 		progressLogger.Warn(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err))
-		prefixedUI.Warn(ui.Dim(fmt.Sprintf("Failed to check if we can skip restoring outputs for %v: %v. Proceeding to check cache", tc.pt.TaskID, err)))
 		changedOutputGlobs = tc.repoRelativeGlobs.Inclusions
 	}
 
@@ -301,10 +301,10 @@ func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termi
 
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific
 // to this run and the given PackageTask
-func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
-	logFileName := rc.repoRoot.UntypedJoin(pt.LogFile)
+func (rc *RunCache) TaskCache(pt *nodes.PackageTask, packageTaskHash string) TaskCache {
+	logFileName := rc.repoRoot.UntypedJoin(pt.RepoRelativeSystemLogFile())
 	hashableOutputs := pt.HashableOutputs()
-	repoRelativeGlobs := fs.TaskOutputs{
+	repoRelativeGlobs := hash.TaskOutputs{
 		Inclusions: make([]string, len(hashableOutputs.Inclusions)),
 		Exclusions: make([]string, len(hashableOutputs.Exclusions)),
 	}
@@ -325,7 +325,7 @@ func (rc *RunCache) TaskCache(pt *nodes.PackageTask, hash string) TaskCache {
 		ExpandedOutputs:   []turbopath.AnchoredSystemPath{},
 		rc:                rc,
 		repoRelativeGlobs: repoRelativeGlobs,
-		hash:              hash,
+		hash:              packageTaskHash,
 		pt:                pt,
 		taskOutputMode:    taskOutputMode,
 		cachingDisabled:   !pt.TaskDefinition.Cache,

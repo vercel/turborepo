@@ -71,7 +71,7 @@ In a large monorepo, this can result in a huge amount of lost time, as any chang
 The solution is to prune the inputs to the Dockerfile to only what is strictly necessary. Turborepo provides a simple solution - `turbo prune`.
 
 ```bash
-turbo prune --scope="docs" --docker
+turbo prune docs --docker
 ```
 
 Running this command creates a **pruned version of your monorepo** inside an `./out` directory. It only includes workspaces which `docs` depends on.
@@ -123,7 +123,7 @@ RUN apk update
 WORKDIR /app
 RUN yarn global add turbo
 COPY . .
-RUN turbo prune --scope=web --docker
+RUN turbo prune web --docker
 
 # Add lockfile and package.json's of isolated subworkspace
 FROM base AS installer

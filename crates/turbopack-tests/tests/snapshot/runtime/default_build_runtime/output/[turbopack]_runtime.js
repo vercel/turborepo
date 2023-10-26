@@ -114,6 +114,11 @@ function esmImport(sourceModule, id) {
     const raw = module.exports;
     return module.namespaceObject = interopEsm(raw, {}, raw.__esModule);
 }
+// Add a simple runtime require so that environments without one can still pass
+// `typeof require` CommonJS checks so that exports are correctly registered.
+const runtimeRequire = typeof require === "function" ? require : function require1() {
+    throw new Error("Unexpected use of runtime require");
+};
 function commonJsRequire(sourceModule, id) {
     const module = getOrInstantiateModuleFromParent(id, sourceModule);
     if (module.error) throw module.error;
@@ -319,7 +324,14 @@ const relativePathToRuntimeRoot = path.relative(RUNTIME_PUBLIC_PATH, ".");
 const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
 const moduleFactories = Object.create(null);
 const moduleCache = Object.create(null);
-function loadChunk(chunkPath) {
+function loadChunk(chunkData) {
+    if (typeof chunkData === "string") {
+        return loadChunkPath(chunkData);
+    } else {
+        return loadChunkPath(chunkData.path);
+    }
+}
+function loadChunkPath(chunkPath) {
     if (!chunkPath.endsWith(".js")) {
         // We only support loading JS chunks in Node.js.
         // This branch can be hit when trying to load a CSS chunk.
@@ -333,10 +345,10 @@ function loadChunk(chunkPath) {
         }
     }
 }
-function loadChunkAsync(source, chunkPath) {
+async function loadChunkAsync(source, chunkData) {
     return new Promise((resolve, reject)=>{
         try {
-            loadChunk(chunkPath);
+            loadChunk(chunkData);
         } catch (err) {
             reject(err);
             return;
@@ -398,6 +410,7 @@ function instantiateModule(id, source) {
             a: asyncModule.bind(null, module1),
             e: module1.exports,
             r: commonJsRequire.bind(null, module1),
+            t: runtimeRequire,
             x: externalRequire,
             y: externalImport,
             f: requireContext.bind(null, module1),

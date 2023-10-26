@@ -1,4 +1,5 @@
 #![feature(error_generic_member_access)]
+#![feature(io_error_more)]
 #![feature(assert_matches)]
 #![deny(clippy::all)]
 
@@ -187,11 +188,16 @@ pub enum SCM {
 }
 
 impl SCM {
+    #[tracing::instrument]
     pub fn new(path_in_repo: &AbsoluteSystemPath) -> SCM {
         Git::find(path_in_repo).map(SCM::Git).unwrap_or_else(|e| {
             debug!("{}, continuing with manual hashing", e);
             SCM::Manual
         })
+    }
+
+    pub fn is_manual(&self) -> bool {
+        matches!(self, SCM::Manual)
     }
 }
 

@@ -2,17 +2,17 @@ use anyhow::Result;
 use indoc::formatdoc;
 use turbo_tasks::{TryJoinIterExt, Vc};
 use turbopack_core::{
-    chunk::{ChunkData, ChunkItem, ChunkingContext, ChunksData},
+    chunk::{ChunkData, ChunkItem, ChunkType, ChunkingContext, ChunksData},
     ident::AssetIdent,
     module::Module,
     reference::{ModuleReferences, SingleOutputAssetReference},
 };
 
-use super::chunk_asset::ManifestChunkAsset;
+use super::chunk_asset::ManifestAsyncModule;
 use crate::{
     chunk::{
         data::EcmascriptChunkData, EcmascriptChunkItem, EcmascriptChunkItemContent,
-        EcmascriptChunkingContext,
+        EcmascriptChunkType, EcmascriptChunkingContext,
     },
     utils::StringifyJs,
 };
@@ -23,7 +23,7 @@ use crate::{
 #[turbo_tasks::value(shared)]
 pub(super) struct ManifestChunkItem {
     pub chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
-    pub manifest: Vc<ManifestChunkAsset>,
+    pub manifest: Vc<ManifestAsyncModule>,
 }
 
 #[turbo_tasks::value_impl]
@@ -77,6 +77,11 @@ impl ChunkItem for ManifestChunkItem {
     }
 
     #[turbo_tasks::function]
+    fn content_ident(&self) -> Vc<AssetIdent> {
+        self.manifest.content_ident()
+    }
+
+    #[turbo_tasks::function]
     async fn references(self: Vc<Self>) -> Result<Vc<ModuleReferences>> {
         let this = self.await?;
         let mut references = this.manifest.references().await?.clone_value();
@@ -90,5 +95,22 @@ impl ChunkItem for ManifestChunkItem {
         }
 
         Ok(Vc::cell(references))
+    }
+
+    #[turbo_tasks::function]
+    async fn chunking_context(&self) -> Vc<Box<dyn ChunkingContext>> {
+        Vc::upcast(self.chunking_context)
+    }
+
+    #[turbo_tasks::function]
+    async fn ty(&self) -> Result<Vc<Box<dyn ChunkType>>> {
+        Ok(Vc::upcast(
+            Vc::<EcmascriptChunkType>::default().resolve().await?,
+        ))
+    }
+
+    #[turbo_tasks::function]
+    fn module(&self) -> Vc<Box<dyn Module>> {
+        Vc::upcast(self.manifest)
     }
 }

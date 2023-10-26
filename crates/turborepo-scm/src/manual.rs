@@ -1,4 +1,4 @@
-use std::{fs::Metadata, io::Read};
+use std::io::{ErrorKind, Read};
 
 use globwalk::fix_glob_pattern;
 use hex::ToHex;
@@ -9,13 +9,19 @@ use wax::{any, Glob, Pattern};
 
 use crate::{package_deps::GitHashes, Error};
 
-fn git_like_hash_file(path: &AbsoluteSystemPath, metadata: &Metadata) -> Result<String, Error> {
+fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
     let mut hasher = Sha1::new();
     let mut f = path.open()?;
     let mut buffer = Vec::new();
-    f.read_to_end(&mut buffer)?;
+    // Note that read_to_end reads the target if f is a symlink. Currently, this can
+    // happen when we are hashing a specific set of files, which in turn only
+    // happens for handling dotEnv files. It is likely that in the future we
+    // will want to ensure that the target is better accounted for in the set of
+    // inputs to the task. Manual hashing, as well as global deps and other
+    // places that support globs all ignore symlinks.
+    let size = f.read_to_end(&mut buffer)?;
     hasher.update("blob ".as_bytes());
-    hasher.update(metadata.len().to_string().as_bytes());
+    hasher.update(size.to_string().as_bytes());
     hasher.update([b'\0']);
     hasher.update(buffer.as_slice());
     let result = hasher.finalize();
@@ -30,17 +36,15 @@ pub(crate) fn hash_files(
     let mut hashes = GitHashes::new();
     for file in files.into_iter() {
         let path = root_path.resolve(file.as_ref());
-        let metadata = match path.symlink_metadata() {
-            Ok(metadata) => metadata,
-            Err(e) => {
-                if allow_missing && e.is_io_error(std::io::ErrorKind::NotFound) {
-                    continue;
-                }
-                return Err(e.into());
+        match git_like_hash_file(&path) {
+            Ok(hash) => hashes.insert(file.as_ref().to_unix(), hash),
+            Err(Error::Io(ref io_error, _))
+                if allow_missing && io_error.kind() == ErrorKind::NotFound =>
+            {
+                continue
             }
+            Err(e) => return Err(e),
         };
-        let hash = git_like_hash_file(&path, &metadata)?;
-        hashes.insert(file.as_ref().to_unix(), hash);
     }
     Ok(hashes)
 }
@@ -109,7 +113,7 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
         if metadata.is_symlink() {
             continue;
         }
-        let hash = git_like_hash_file(path, &metadata)?;
+        let hash = git_like_hash_file(path)?;
         hashes.insert(relative_path, hash);
     }
     Ok(hashes)
@@ -117,6 +121,8 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches::assert_matches;
+
     use test_case::test_case;
     use turbopath::{
         AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf,
@@ -165,6 +171,86 @@ mod tests {
     }
 
     #[test]
+    fn test_hash_symlink() {
+        let (_tmp, turbo_root) = tmp_dir();
+        let from_to_file = turbo_root.join_component("symlink-from-to-file");
+        let from_to_dir = turbo_root.join_component("symlink-from-to-dir");
+        let broken = turbo_root.join_component("symlink-broken");
+
+        let to_file = turbo_root.join_component("the-file-target");
+        to_file.create_with_contents("contents").unwrap();
+
+        let to_dir = turbo_root.join_component("the-dir-target");
+        to_dir.create_dir_all().unwrap();
+
+        from_to_file.symlink_to_file(to_file.to_string()).unwrap();
+        from_to_dir.symlink_to_dir(to_dir.to_string()).unwrap();
+        broken.symlink_to_file("does-not-exist").unwrap();
+
+        // Symlink to file.
+        let out = hash_files(
+            &turbo_root,
+            [AnchoredSystemPathBuf::from_raw("symlink-from-to-file").unwrap()].iter(),
+            true,
+        )
+        .unwrap();
+        let from_to_file_hash = out
+            .get(&RelativeUnixPathBuf::new("symlink-from-to-file").unwrap())
+            .unwrap();
+        assert_eq!(
+            from_to_file_hash,
+            "0839b2e9412b314cb8bb9a20f587aa13752ae310"
+        );
+
+        // Symlink to dir, allow_missing = true.
+        #[cfg(not(windows))]
+        {
+            let out = hash_files(
+                &turbo_root,
+                [AnchoredSystemPathBuf::from_raw("symlink-from-to-dir").unwrap()].iter(),
+                true,
+            );
+            match out.err().unwrap() {
+                Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::IsADirectory),
+                _ => panic!("wrong error"),
+            };
+        }
+
+        // Symlink to dir, allow_missing = false.
+        let out = hash_files(
+            &turbo_root,
+            [AnchoredSystemPathBuf::from_raw("symlink-from-to-dir").unwrap()].iter(),
+            false,
+        );
+        #[cfg(windows)]
+        let expected_err_kind = ErrorKind::PermissionDenied;
+        #[cfg(not(windows))]
+        let expected_err_kind = ErrorKind::IsADirectory;
+        assert_matches!(out.unwrap_err(), Error::Io(io_error, _) if io_error.kind() == expected_err_kind);
+
+        // Broken symlink with allow_missing = true.
+        let out = hash_files(
+            &turbo_root,
+            [AnchoredSystemPathBuf::from_raw("symlink-broken").unwrap()].iter(),
+            true,
+        )
+        .unwrap();
+        let broken_hash = out.get(&RelativeUnixPathBuf::new("symlink-broken").unwrap());
+        assert_eq!(broken_hash, None);
+
+        // Broken symlink with allow_missing = false.
+        let out = hash_files(
+            &turbo_root,
+            [AnchoredSystemPathBuf::from_raw("symlink-broken").unwrap()].iter(),
+            false,
+        );
+        match out.err().unwrap() {
+            Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::NotFound),
+            _ => panic!("wrong error"),
+        };
+    }
+
+    #[test]
     fn test_get_package_file_hashes_from_processing_gitignore() {
         let root_ignore_contents = ["ignoreme", "ignorethisdir/"].join("\n");
         let pkg_ignore_contents = ["pkgignoreme", "pkgignorethisdir/"].join("\n");
@@ -205,12 +291,12 @@ mod tests {
 
         let root_ignore_file = turbo_root.join_component(".gitignore");
         root_ignore_file
-            .create_with_contents(&root_ignore_contents)
+            .create_with_contents(root_ignore_contents)
             .unwrap();
         let pkg_ignore_file = turbo_root.resolve(&pkg_path).join_component(".gitignore");
         pkg_ignore_file.ensure_dir().unwrap();
         pkg_ignore_file
-            .create_with_contents(&pkg_ignore_contents)
+            .create_with_contents(pkg_ignore_contents)
             .unwrap();
 
         let mut expected = GitHashes::new();

@@ -3,11 +3,11 @@ import { DiscordIcon, GitHubIcon } from "nextra/icons";
 function Github() {
   return (
     <a
-      href="https://github.com/vercel/turbo"
       className="hidden p-2 text-current sm:flex hover:opacity-75"
-      title="Turbo GitHub repo"
-      target="_blank"
+      href="https://github.com/vercel/turbo"
       rel="noreferrer"
+      target="_blank"
+      title="Turbo GitHub repo"
     >
       {/* Nextra icons have a <title> attribute providing alt text */}
       <GitHubIcon />
@@ -18,11 +18,11 @@ function Github() {
 function Discord() {
   return (
     <a
-      href="https://turbo.build/discord"
       className="hidden p-2 text-current sm:flex hover:opacity-75"
-      title="Turbo Discord server"
-      target="_blank"
+      href="https://turbo.build/discord"
       rel="noreferrer"
+      target="_blank"
+      title="Turbo Discord server"
     >
       <DiscordIcon />
     </a>

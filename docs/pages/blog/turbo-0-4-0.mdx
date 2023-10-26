@@ -3,7 +3,7 @@ title: Turborepo 0.4.0
 date: 2021/04/02
 description: Turborepo 0.4.0 introduces 10x faster hashing, pruned workspaces with sparse installs, a new pipeline configuration API, and improved cache control.
 tag: web development
-ogImage: /images/blog/joining-vercel/twitter-card.png
+ogImage: /images/blog/joining-vercel/x-card.png
 ---
 
 # Turborepo 0.4.0
@@ -91,7 +91,7 @@ RUN npm i -g turbo
 FROM base as pruner
 WORKDIR /app
 COPY . .
-RUN turbo prune --scope=frontend --docker
+RUN turbo prune frontend --docker
 
 # Add pruned lockfile and package.json's of the pruned subworkspace
 FROM base AS installer
@@ -107,7 +107,7 @@ WORKDIR /app
 COPY --from=pruner /app/.git ./.git
 COPY --from=pruner /app/out/full/ .
 COPY --from=installer /app/ .
-RUN turbo run build --scope=frontend
+RUN turbo run build frontend
 
 # Start the app
 FROM builder as runner
@@ -199,13 +199,13 @@ but in later releases these will be overridable on per-package basis._
 I know this was a lot, but there's even more to come. Here's what's up next on the Turborepo roadmap.
 
 - A landing page!
-- [Remote caching w/ `@turborepo/server`](https://twitter.com/jaredpalmer/status/1359627800840462341)
+- [Remote caching w/ `@turborepo/server`](https://x.com/jaredpalmer/status/1359627800840462341)
 - Build scans, telemetry, and metrics and dependency and task graph visualization
-- [Desktop Console UI](https://twitter.com/jaredpalmer/status/1360315387372572672)
+- [Desktop Console UI](https://x.com/jaredpalmer/status/1360315387372572672)
 - Intelligent `watch` mode
 - Official build rules for TypeScript, React, Jest, Node.js, Docker, Kubernetes, and more
 
 ## Credits
 
-- [Iheanyi Ekechukwu](https://twitter.com/kwuchu) for guiding me through the Go ecosystem
-- [Miguel Oller](https://twitter.com/ollermi) and the team from [Makeswift](https://www.makeswift.com/) for iterating on the new `prune` command
+- [Iheanyi Ekechukwu](https://x.com/kwuchu) for guiding me through the Go ecosystem
+- [Miguel Oller](https://x.com/ollermi) and the team from [Makeswift](https://www.makeswift.com/) for iterating on the new `prune` command

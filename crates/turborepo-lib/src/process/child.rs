@@ -22,11 +22,10 @@ use std::{
 };
 
 use command_group::AsyncCommandGroup;
-use futures::future::try_join3;
 use itertools::Itertools;
 pub use tokio::process::Command;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncRead, BufReader},
+    io::{AsyncBufRead, AsyncBufReadExt, BufReader},
     join,
     sync::{mpsc, watch, RwLock},
 };
@@ -363,38 +362,66 @@ impl Child {
 
     /// Wait for the `Child` to exit and pipe any stdout and stderr to the
     /// provided writers.
+    /// If `None` is passed for stderr then all output produced will be piped
+    /// to stdout
     pub async fn wait_with_piped_outputs<W: Write>(
         &mut self,
-        stdout_pipe: W,
-        stderr_pipe: W,
+        mut stdout_pipe: W,
+        mut stderr_pipe: Option<W>,
     ) -> Result<Option<ChildExit>, std::io::Error> {
-        // Note this is similar to tokio::process::Command::wait_with_outputs
-        // but allows us to provide our own sinks instead of just writing to a buffers.
-        async fn pipe_lines<R: AsyncRead + Unpin, W: Write>(
-            stream: Option<R>,
-            mut sink: W,
-        ) -> std::io::Result<()> {
-            let Some(stream) = stream else { return Ok(()) };
-            let mut stream = BufReader::new(stream);
-            let mut buffer = String::new();
-            loop {
-                // If 0 bytes are read that indicates we've hit EOF
-                if stream.read_line(&mut buffer).await? == 0 {
-                    break;
-                }
-                sink.write_all(buffer.as_bytes())?;
-                buffer.clear();
+        async fn next_line<R: AsyncBufRead + Unpin>(
+            stream: &mut Option<R>,
+            buffer: &mut Vec<u8>,
+        ) -> Option<Result<(), io::Error>> {
+            match stream {
+                Some(stream) => match stream.read_until(b'\n', buffer).await {
+                    Ok(0) => None,
+                    Ok(_) => Some(Ok(())),
+                    Err(e) => Some(Err(e)),
+                },
+                None => None,
             }
-            Ok(())
         }
 
-        let stdout_fut = pipe_lines(self.stdout(), stdout_pipe);
-        let stderr_fut = pipe_lines(self.stderr(), stderr_pipe);
+        let mut stdout_lines = self.stdout().map(BufReader::new);
+        let mut stderr_lines = self.stderr().map(BufReader::new);
 
-        let (exit, _stdout, _stderr) =
-            try_join3(async { Ok(self.wait().await) }, stdout_fut, stderr_fut).await?;
+        let mut stdout_buffer = Vec::new();
+        let mut stderr_buffer = Vec::new();
 
-        Ok(exit)
+        loop {
+            tokio::select! {
+                Some(result) = next_line(&mut stdout_lines, &mut stdout_buffer) => {
+                    result?;
+                    stdout_pipe.write_all(&stdout_buffer)?;
+                    stdout_buffer.clear();
+                }
+                Some(result) = next_line(&mut stderr_lines, &mut stderr_buffer) => {
+                    result?;
+                    stderr_pipe.as_mut().unwrap_or(&mut stdout_pipe).write_all(&stderr_buffer)?;
+                    stderr_buffer.clear();
+                }
+                else => {
+                    // In the case that both futures read a complete line
+                    // the future not chosen in the select will return None if it's at EOF
+                    // as the number of bytes read will be 0.
+                    // We check and flush the buffers to avoid missing the last line of output.
+                    if !stdout_buffer.is_empty() {
+                        stdout_pipe.write_all(&stdout_buffer)?;
+                        stdout_buffer.clear();
+                    }
+                    if !stderr_buffer.is_empty() {
+                        stderr_pipe.as_mut().unwrap_or(&mut stdout_pipe).write_all(&stderr_buffer)?;
+                        stderr_buffer.clear();
+                    }
+                    break;
+                }
+            }
+        }
+        debug_assert!(stdout_buffer.is_empty(), "buffer should be empty");
+        debug_assert!(stderr_buffer.is_empty(), "buffer should be empty");
+
+        Ok(self.wait().await)
     }
 
     pub fn label(&self) -> &str {
@@ -649,12 +676,75 @@ mod test {
         let mut err = Vec::new();
 
         let exit = child
-            .wait_with_piped_outputs(&mut out, &mut err)
+            .wait_with_piped_outputs(&mut out, Some(&mut err))
             .await
             .unwrap();
 
         assert_eq!(out, b"hello world\n");
         assert!(err.is_empty());
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    #[tokio::test]
+    async fn test_wait_with_single_output() {
+        let script = find_script_dir().join_component("hello_world_hello_moon.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+
+        let mut buffer = Vec::new();
+
+        let exit = child
+            .wait_with_piped_outputs(&mut buffer, None)
+            .await
+            .unwrap();
+
+        // There are no ordering guarantees so we accept either order of the logs
+        assert!(buffer == b"hello world\nhello moon\n" || buffer == b"hello moon\nhello world\n");
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    #[tokio::test]
+    async fn test_wait_with_with_non_utf8_output() {
+        let script = find_script_dir().join_component("hello_non_utf8.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+
+        let exit = child
+            .wait_with_piped_outputs(&mut out, Some(&mut err))
+            .await
+            .unwrap();
+
+        assert_eq!(out, &[0, 159, 146, 150, b'\n']);
+        assert!(err.is_empty());
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    #[tokio::test]
+    async fn test_wait_with_non_utf8_single_output() {
+        let script = find_script_dir().join_component("hello_non_utf8.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+
+        let mut buffer = Vec::new();
+
+        let exit = child
+            .wait_with_piped_outputs(&mut buffer, None)
+            .await
+            .unwrap();
+
+        assert_eq!(buffer, &[0, 159, 146, 150, b'\n']);
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 }

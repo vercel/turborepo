@@ -351,6 +351,8 @@ impl PackageManager {
         Ok((inclusions, exclusions))
     }
 
+    // TODO: consider if this method should not need an Option, and possibly be a
+    // method on PackageJSON
     pub fn get_package_manager(
         repo_root: &AbsoluteSystemPath,
         pkg: Option<&PackageJson>,
@@ -418,7 +420,6 @@ impl PackageManager {
         }
     }
 
-    #[allow(dead_code)]
     pub fn get_package_jsons(
         &self,
         repo_root: &AbsoluteSystemPath,
@@ -453,6 +454,7 @@ impl PackageManager {
         }
     }
 
+    #[tracing::instrument(skip(self, root_package_json))]
     pub fn read_lockfile(
         &self,
         root_path: &AbsoluteSystemPath,
@@ -472,6 +474,7 @@ impl PackageManager {
         self.parse_lockfile(root_package_json, &contents)
     }
 
+    #[tracing::instrument(skip(self, root_package_json))]
     pub fn parse_lockfile(
         &self,
         root_package_json: &PackageJson,

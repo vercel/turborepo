@@ -6,16 +6,13 @@ use swc_core::{
     ecma::ast::{ArrayLit, ArrayPat, Expr, Ident, Pat, Program},
     quote,
 };
-use turbo_tasks::{trace::TraceRawVcs, TryFlatJoinIterExt, Value, Vc};
-use turbopack_core::chunk::availability_info::AvailabilityInfo;
+use turbo_tasks::{trace::TraceRawVcs, TryFlatJoinIterExt, Vc};
+use turbopack_core::chunk::{AsyncModuleInfo, ChunkableModule};
 
 use super::esm::base::ReferencedAsset;
 use crate::{
-    chunk::{
-        esm_scope::{EsmScope, EsmScopeScc},
-        EcmascriptChunkPlaceable, EcmascriptChunkingContext,
-    },
-    code_gen::{CodeGenerateableWithAvailabilityInfo, CodeGeneration},
+    chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext},
+    code_gen::{CodeGenerateableWithAsyncModuleInfo, CodeGeneration},
     create_visitor,
     references::esm::{base::insert_hoisted_stmt, EsmAssetReference},
 };
@@ -63,73 +60,16 @@ impl OptionAsyncModule {
         Vc::cell(None)
     }
 
-    /// See [AsyncModule::is_async].
-    #[turbo_tasks::function]
-    pub async fn is_async(
-        self: Vc<Self>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Result<Vc<bool>> {
-        Ok(Vc::cell(
-            self.module_options(availability_info).await?.is_some(),
-        ))
-    }
-
     #[turbo_tasks::function]
     pub async fn module_options(
         self: Vc<Self>,
-        availability_info: Value<AvailabilityInfo>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<OptionAsyncModuleOptions>> {
         if let Some(async_module) = &*self.await? {
-            return Ok(async_module.module_options(availability_info));
+            return Ok(async_module.module_options(async_module_info));
         }
 
         Ok(OptionAsyncModuleOptions::none())
-    }
-}
-
-/// We use the acyclic graph in the [EsmScope] to resolve all referenced
-/// [AsyncModule]s.
-///
-/// If we resolved raw references we would run into a deadlock if there are any
-/// circular imports.
-#[turbo_tasks::value]
-struct AsyncModuleScc {
-    scc: Vc<EsmScopeScc>,
-    scope: Vc<EsmScope>,
-}
-
-/// Option<[AsyncModuleScc]>.
-#[turbo_tasks::value(transparent)]
-struct OptionAsyncModuleScc(Option<Vc<AsyncModuleScc>>);
-
-#[turbo_tasks::value_impl]
-impl AsyncModuleScc {
-    #[turbo_tasks::function]
-    fn new(scc: Vc<EsmScopeScc>, scope: Vc<EsmScope>) -> Vc<Self> {
-        AsyncModuleScc { scc, scope }.cell()
-    }
-
-    #[turbo_tasks::function]
-    async fn is_async(self: Vc<Self>) -> Result<Vc<bool>> {
-        let this = self.await?;
-
-        for placeable in &*this.scc.await? {
-            if let Some(async_module) = &*placeable.get_async_module().await? {
-                if *async_module.is_self_async().await? {
-                    return Ok(Vc::cell(true));
-                }
-            }
-        }
-
-        for scc in &*this.scope.get_scc_children(this.scc).await? {
-            // Because we generated SCCs there can be no loops in the children, so calling
-            // recursively is fine.
-            if *AsyncModuleScc::new(*scc, this.scope).is_async().await? {
-                return Ok(Vc::cell(true));
-            }
-        }
-
-        Ok(Vc::cell(false))
     }
 }
 
@@ -141,9 +81,11 @@ impl AsyncModule {
     #[turbo_tasks::function]
     async fn get_async_idents(
         self: Vc<Self>,
-        availability_info: Value<AvailabilityInfo>,
+        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        async_module_info: Vc<AsyncModuleInfo>,
     ) -> Result<Vc<AsyncModuleIdents>> {
         let this = self.await?;
+        let async_module_info = async_module_info.await?;
 
         let reference_idents = this
             .references
@@ -156,10 +98,13 @@ impl AsyncModule {
                         None
                     }
                     ReferencedAsset::Some(placeable) => {
-                        if *placeable
-                            .get_async_module()
-                            .is_async(availability_info)
-                            .await?
+                        let chunk_item = placeable
+                            .as_chunk_item(Vc::upcast(chunking_context))
+                            .resolve()
+                            .await?;
+                        if async_module_info
+                            .referenced_async_modules
+                            .contains(&chunk_item)
                         {
                             referenced_asset.get_ident().await?
                         } else {
@@ -180,47 +125,13 @@ impl AsyncModule {
         Vc::cell(self.has_top_level_await)
     }
 
-    #[turbo_tasks::function]
-    async fn get_scc(
-        self: Vc<Self>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Result<Vc<OptionAsyncModuleScc>> {
-        let this = self.await?;
-
-        let scope = EsmScope::new(availability_info);
-        let Some(scc) = &*scope.get_scc(this.placeable).await? else {
-            // I'm not sure if this should be possible.
-            return Ok(Vc::cell(None));
-        };
-
-        let scc = AsyncModuleScc::new(*scc, scope);
-
-        Ok(Vc::cell(Some(scc)))
-    }
-
-    /// Check if the current module or any of it's ESM children contain a top
-    /// level await statement or is referencing an external ESM module.
-    #[turbo_tasks::function]
-    pub async fn is_async(
-        self: Vc<Self>,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> Result<Vc<bool>> {
-        Ok(
-            if let Some(scc) = &*self.get_scc(availability_info).await? {
-                scc.is_async()
-            } else {
-                self.is_self_async()
-            },
-        )
-    }
-
     /// Returns
     #[turbo_tasks::function]
     pub async fn module_options(
         self: Vc<Self>,
-        availability_info: Value<AvailabilityInfo>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<OptionAsyncModuleOptions>> {
-        if !*self.is_async(availability_info).await? {
+        if async_module_info.is_none() {
             return Ok(Vc::cell(None));
         }
 
@@ -231,21 +142,25 @@ impl AsyncModule {
 }
 
 #[turbo_tasks::value_impl]
-impl CodeGenerateableWithAvailabilityInfo for AsyncModule {
+impl CodeGenerateableWithAsyncModuleInfo for AsyncModule {
     #[turbo_tasks::function]
     async fn code_generation(
         self: Vc<Self>,
-        _context: Vc<Box<dyn EcmascriptChunkingContext>>,
-        availability_info: Value<AvailabilityInfo>,
+        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<CodeGeneration>> {
         let mut visitors = Vec::new();
 
-        let async_idents = self.get_async_idents(availability_info).await?;
+        if let Some(async_module_info) = async_module_info {
+            let async_idents = self
+                .get_async_idents(chunking_context, async_module_info)
+                .await?;
 
-        if !async_idents.is_empty() {
-            visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
-                add_async_dependency_handler(program, &async_idents);
-            }));
+            if !async_idents.is_empty() {
+                visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
+                    add_async_dependency_handler(program, &async_idents);
+                }));
+            }
         }
 
         Ok(CodeGeneration { visitors }.into())

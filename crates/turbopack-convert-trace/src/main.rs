@@ -55,8 +55,10 @@ fn main() {
     let threads = args.remove("--threads");
     let idle = args.remove("--idle");
     let graph = args.remove("--graph");
+    let show_count = args.remove("--count");
     let collapse_names = args.remove("--collapse-names");
-    if !single && !merged && !threads {
+    let collapse_min_count = 1;
+    if !single && !merged && !threads && !show_count {
         merged = true;
     }
     let arg = args
@@ -236,34 +238,73 @@ fn main() {
                     span.end = ts;
                 }
             }
-            TraceRow::Enter {
-                ts,
-                id,
-                thread_id: _,
-            } => {
+            TraceRow::Enter { ts, id, thread_id } => {
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
+                let mut parent_id = spans[internal_id].parent;
+                let mut in_parent = 0;
+                loop {
+                    let parent = &mut spans[parent_id];
+                    if let Some(SelfTimeStarted {
+                        ts: ref mut parent_ts,
+                        thread_id: parent_thread_id,
+                        ..
+                    }) = parent.self_start
+                    {
+                        if parent_thread_id == thread_id {
+                            let ts_start = *parent_ts;
+                            *parent_ts = ts;
+                            add_self_time(
+                                ts_start,
+                                ts,
+                                internal_id,
+                                parent,
+                                &mut all_self_times,
+                                &mut name_self_times,
+                            );
+                            in_parent = parent_id;
+                            break;
+                        }
+                    }
+                    if parent_id == 0 {
+                        break;
+                    }
+                    parent_id = parent.parent;
+                }
                 let span = &mut spans[internal_id];
-                span.self_start = Some(SelfTimeStarted { ts });
+                span.self_start = Some(SelfTimeStarted {
+                    ts,
+                    thread_id,
+                    in_parent,
+                });
             }
             TraceRow::Exit { ts, id } => {
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
                 let span = &mut spans[internal_id];
-                if let Some(SelfTimeStarted { ts: ts_start }) = span.self_start {
-                    let (start, end) = if ts_start > ts {
-                        (ts, ts_start)
-                    } else {
-                        (ts_start, ts)
-                    };
-                    let duration = end.saturating_sub(start);
-                    span.items.push(SpanItem::SelfTime { start, duration });
-                    if duration > 0 {
-                        all_self_times.push(Element {
-                            range: start..end,
-                            value: internal_id,
-                        });
+                if let Some(SelfTimeStarted {
+                    ts: ts_start,
+                    in_parent,
+                    ..
+                }) = span.self_start.take()
+                {
+                    add_self_time(
+                        ts_start,
+                        ts,
+                        internal_id,
+                        span,
+                        &mut all_self_times,
+                        &mut name_self_times,
+                    );
+                    if in_parent > 0 {
+                        let parent_id = span.parent;
+                        let span = &mut spans[parent_id];
+                        if let Some(SelfTimeStarted {
+                            ts: ref mut parent_ts,
+                            ..
+                        }) = span.self_start
+                        {
+                            *parent_ts = max(ts, ts_start);
+                        }
                     }
-                    span.self_time += duration;
-                    *name_self_times.entry(span.name.clone()).or_default() += duration;
                 }
             }
             TraceRow::Event { ts, parent, values } => {
@@ -519,7 +560,7 @@ fn main() {
         eprintln!(" done ({:.3}s)", start.elapsed().as_secs_f32());
     }
 
-    if single || merged {
+    if single || merged || show_count {
         let number_of_spans = spans.len();
         eprint!("Emitting span tree... 0 / {} (0%)", number_of_spans);
         let mut span_counter = 0;
@@ -579,6 +620,7 @@ fn main() {
         let mut tts = 0;
         let mut merged_ts = 0;
         let mut merged_tts = 0;
+        let mut count_ts = 0;
         let mut stack = spans
             .iter()
             .enumerate()
@@ -602,10 +644,10 @@ fn main() {
                     if graph && !items.is_empty() {
                         let parent_name = &*span.name;
                         let mut groups = IndexMap::new();
-                        let mut self_items = Vec::new();
+                        let mut self_items = 0;
                         fn add_items_to_groups<'a>(
-                            groups: &mut IndexMap<Cow<'a, str>, Vec<SpanItem>>,
-                            self_items: &mut Vec<SpanItem>,
+                            groups: &mut IndexMap<(Cow<'a, str>, usize), Vec<SpanItem>>,
+                            self_items: &mut usize,
                             spans: &mut Vec<Span<'a>>,
                             parent_count: &mut u32,
                             parent_name: &str,
@@ -615,7 +657,17 @@ fn main() {
                             for item in items {
                                 match item {
                                     SpanItem::SelfTime { .. } => {
-                                        self_items.push(item);
+                                        if let Some(((key, _), last)) = groups.last_mut() {
+                                            if key == &Cow::Borrowed("SELF_TIME") {
+                                                last.push(item);
+                                                continue;
+                                            }
+                                        }
+                                        groups.insert(
+                                            (Cow::Borrowed("SELF_TIME"), *self_items),
+                                            vec![item],
+                                        );
+                                        *self_items += 1;
                                     }
                                     SpanItem::Child(id) => {
                                         let key = spans[id].name.clone();
@@ -634,7 +686,7 @@ fn main() {
                                             );
                                             add_to_span_counter();
                                         } else {
-                                            let group = groups.entry(key).or_default();
+                                            let group = groups.entry((key, 0)).or_default();
                                             if !group.is_empty() {
                                                 add_to_span_counter();
                                             }
@@ -653,39 +705,37 @@ fn main() {
                             items,
                             &mut add_to_span_counter,
                         );
-                        if !self_items.is_empty() {
-                            groups
-                                .entry(Cow::Borrowed("SELF_TIME"))
-                                .or_default()
-                                .append(&mut self_items);
-                        }
                         let groups = groups.into_values().collect::<Vec<_>>();
                         let mut new_items = Vec::new();
                         for group in groups {
-                            let mut group = group.into_iter();
-                            let new_item = group.next().unwrap();
-                            match new_item {
-                                SpanItem::SelfTime { .. } => {
-                                    new_items.push(new_item);
-                                    new_items.extend(group);
-                                }
-                                SpanItem::Child(new_item_id) => {
-                                    new_items.push(new_item);
-                                    let mut count = 1;
-                                    for item in group {
-                                        let SpanItem::Child(id) = item else {
-                                            unreachable!();
-                                        };
-                                        assert!(spans[id].name == spans[new_item_id].name);
-                                        let old_items = take(&mut spans[id].items);
-                                        spans[new_item_id].items.extend(old_items);
-                                        count += 1;
+                            if group.len() >= collapse_min_count {
+                                let mut group = group.into_iter();
+                                let new_item = group.next().unwrap();
+                                match new_item {
+                                    SpanItem::SelfTime { .. } => {
+                                        new_items.push(new_item);
+                                        new_items.extend(group);
                                     }
-                                    if count != 1 {
-                                        let span = &mut spans[new_item_id];
-                                        span.count = count;
+                                    SpanItem::Child(new_item_id) => {
+                                        new_items.push(new_item);
+                                        let mut count = 1;
+                                        for item in group {
+                                            let SpanItem::Child(id) = item else {
+                                                unreachable!();
+                                            };
+                                            assert!(spans[id].name == spans[new_item_id].name);
+                                            let old_items = take(&mut spans[id].items);
+                                            spans[new_item_id].items.extend(old_items);
+                                            count += 1;
+                                        }
+                                        if count != 1 {
+                                            let span = &mut spans[new_item_id];
+                                            span.count = count;
+                                        }
                                     }
                                 }
+                            } else {
+                                new_items.extend(group);
                             }
                         }
                         items = new_items;
@@ -720,6 +770,12 @@ fn main() {
                         pjson!(
                             r#"{{"ph":"B","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{args_json}}}"#,
                         );
+                    }
+                    if show_count {
+                        pjson!(
+                            r#"{{"ph":"B","pid":3,"ts":{count_ts},"name":{name_json},"cat":{target_json},"tid":0,"args":{args_json}}}"#,
+                        );
+                        count_ts += count;
                     }
                     stack.push(Task::Exit {
                         name_json,
@@ -800,6 +856,11 @@ fn main() {
                             );
                         }
                     }
+                    if show_count {
+                        pjson!(
+                            r#"{{"ph":"E","pid":3,"ts":{count_ts},"name":{name_json},"cat":{target_json},"tid":0}}"#,
+                        );
+                    }
                 }
                 Task::SelfTime {
                     duration,
@@ -858,9 +919,36 @@ fn main() {
     println!("]");
 }
 
+fn add_self_time<'a>(
+    ts_start: u64,
+    ts: u64,
+    internal_id: usize,
+    span: &mut Span<'a>,
+    all_self_times: &mut Vec<Element<u64, usize>>,
+    name_self_times: &mut HashMap<Cow<'a, str>, u64>,
+) {
+    let (start, end) = if ts_start > ts {
+        (ts, ts_start)
+    } else {
+        (ts_start, ts)
+    };
+    let duration = end.saturating_sub(start);
+    span.items.push(SpanItem::SelfTime { start, duration });
+    if duration > 0 {
+        all_self_times.push(Element {
+            range: start..end,
+            value: internal_id,
+        });
+    }
+    span.self_time += duration;
+    *name_self_times.entry(span.name.clone()).or_default() += duration;
+}
+
 #[derive(Debug)]
 struct SelfTimeStarted {
     ts: u64,
+    thread_id: u64,
+    in_parent: usize,
 }
 
 #[derive(Debug, Default)]

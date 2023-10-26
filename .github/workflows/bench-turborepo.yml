@@ -1,14 +1,22 @@
-name: Large Repo Benchmark
+name: Benchmark Turborepo
 
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: [Release]
+    # Make sure this matches the name of the workflow in ./github/workflows/turborepo-release.yml.
+    workflows: [Turborepo Release]
     types:
       - completed
+  push:
+    branches:
+      - main
+    paths:
+      - "cli/**"
+      - crates/turborepo*/**
+      # - "benchmark/**" (we don't need to run benchmarks when the benchmark changes, next push will capture it)
 
 jobs:
-  build:
+  benchmark:
     name: Run Benchmarks
     timeout-minutes: 60
     runs-on: ubuntu-latest
@@ -20,14 +28,17 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Build
         run: cd cli && make turbo-prod
 
       - name: Run benchmarks
-        run: cd benchmark && pnpm benchmark
+        run: pnpm -F benchmark benchmark
 
       - name: Save to Tinybird
-        if: github.ref == 'refs/heads/main'
         run: |
           curl \
             -i \
@@ -35,3 +46,155 @@ jobs:
             -X POST \
             -H 'Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}' \
             'https://api.us-east.tinybird.co/v0/datasources?format=ndjson&name=turbo_benchmarks&mode=append'
+
+  time-to-first-task:
+    name: Benchmark TTFT
+    timeout-minutes: 60
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set filename for profile
+        id: filename
+        shell: bash
+        run: |
+          echo 'filename=${{ matrix.os.runner }}.json' >> "$GITHUB_OUTPUT"
+
+      - name: Display filename
+        shell: bash
+        run: echo "${{ steps.filename.outputs.filename }}"
+
+      # setup Rust on windows, because apparently setup-turborepo-environment doesn't do this
+      # TODO: put this logic in ./github/actions/setup-rust and use that instead
+      - name: Add rustup for windows
+        if: ${{ matrix.os.runner == 'windows-latest'}}
+        run: rustup target add x86_64-pc-windows-gnu
+
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Build Turborepo from source
+        run: cd cli && make turbo-prod
+
+      - name: Run benchmarks
+        shell: bash
+        # ttft script will normalize filepath and place the profile in the benchmark directory.
+        run: pnpm -F benchmark ttft "${{ steps.filename.outputs.filename }}"
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: profiles # This name will be the folder each file gets downloaded to
+          path: "benchmark/${{ steps.filename.outputs.filename }}" # cwd is root of the repository, so we need the benchmark/ prefixed path
+          if-no-files-found: error
+
+  # Send each of the profiles generated from the previous job to TinyBird
+  # We'll wait for all profiles to complete before sending.
+  send-to-tinybird:
+    name: Send to Tinybird
+    needs: [time-to-first-task]
+    runs-on: ubuntu-latest
+    env:
+      TINYBIRD_TOKEN: ${{secrets.TINYBIRD_TOKEN}}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+
+      - name: Download profiles
+        uses: actions/download-artifact@v3
+        with:
+          path: benchmark
+
+      - name: List Downloaded Profiles
+        shell: bash
+        run: ls benchmark/profiles
+
+      # TODO: This is duplicated in the Adjust data step in post-to-slack, consolidate
+      - name: Adjust data
+        shell: bash
+        run: |
+          jq -f benchmark/src/fold.jq < benchmark/profiles/ubuntu-latest.json > benchmark/profiles/ubuntu-ttft.json
+          jq -f benchmark/src/fold.jq < benchmark/profiles/macos-latest.json > benchmark/profiles/macos-ttft.json
+          jq -f benchmark/src/fold.jq < benchmark/profiles/windows-latest.json > benchmark/profiles/windows-ttft.json
+
+      - name: Display TTFT Data
+        shell: bash
+        run: |
+          cat benchmark/profiles/ubuntu-ttft.json
+          cat benchmark/profiles/macos-ttft.json
+          cat benchmark/profiles/windows-ttft.json
+
+      - name: Send data to TinyBird
+        shell: bash
+        run: |
+          cd benchmark
+          node -r esbuild-register ./src/ttft-tinybird.ts profiles/ubuntu-ttft.json ${{github.run_id}}
+          node -r esbuild-register ./src/ttft-tinybird.ts profiles/macos-ttft.json ${{github.run_id}}
+          node -r esbuild-register ./src/ttft-tinybird.ts profiles/windows-ttft.json ${{github.run_id}}
+
+  send-to-slack:
+    name: Send to Slack
+    needs: [time-to-first-task]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+
+      - name: Download profiles
+        uses: actions/download-artifact@v3
+        with:
+          path: benchmark
+
+      - name: List downloaded profiles
+        shell: bash
+        run: ls benchmark/profiles
+
+      # TODO: This is duplicated from the Adjust data step in send-to-tinybird, consolidate
+      - name: Adjust data
+        shell: bash
+        run: |
+          jq -f benchmark/src/fold.jq < benchmark/profiles/ubuntu-latest.json > benchmark/profiles/ubuntu-ttft.json
+          jq -f benchmark/src/fold.jq < benchmark/profiles/macos-latest.json > benchmark/profiles/macos-ttft.json
+          jq -f benchmark/src/fold.jq < benchmark/profiles/windows-latest.json > benchmark/profiles/windows-ttft.json
+
+      - name: Display TTFT data
+        shell: bash
+        run: |
+          cat benchmark/profiles/ubuntu-ttft.json
+          cat benchmark/profiles/macos-ttft.json
+          cat benchmark/profiles/windows-ttft.json
+
+      # TODO: compare results to previous data and only post regressions
+      - name: Create Slack payload
+        shell: bash
+        run: |
+          cd benchmark
+          node -r esbuild-register ./src/ttft-slack.ts ${{github.run_id}}
+
+      - name: Debug Slack payload
+        shell: bash
+        run: cat benchmark/slack-payload.json | jq
+
+      - name: Send payload to slack
+        uses: slackapi/slack-github-action@v1.23.0
+        with:
+          payload-file-path: "benchmark/slack-payload.json"
+        env:
+          SLACK_WEBHOOK_URL: "${{ secrets.TURBOREPO_PERF_BENCHMARK_SLACK_WEBHOOK_URL }}"
