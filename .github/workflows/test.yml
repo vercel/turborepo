@@ -85,6 +85,16 @@ jobs:
           path: cli/.cram_env
           key: prysk-venv-${{ matrix.os.name }}
 
+      - name: From GH Actions
+        shell: bash
+        run: bash ./turborepo-tests/integration/foo.sh
+      - name: Foo with pnpm
+        shell: bash
+        run: pnpm -F turborepo-tests-integration foo
+      - name: Foo with turbo
+        shell: bash
+        run: turbo run foo
+
       - name: Integration Tests
         shell: bash
         run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
