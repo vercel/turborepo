@@ -7,8 +7,9 @@ searchable: false
 
 ## Support Policy
 
-`turbo` is generally supported on Ubuntu, macOS, and Windows on both x86_64 and ARM 64 architectures.
-Specifically, we build and ship the following binaries via `npm`:
+`turbo` is generally supported on Debian-based Linux distributions, macOS, and
+Windows on both x86_64 and ARM 64 architectures. Specifically, we build and ship
+the following binaries via `npm`:
 
 - turbo-darwin-64
 - turbo-darwin-arm64
@@ -17,10 +18,10 @@ Specifically, we build and ship the following binaries via `npm`:
 - turbo-windows-64
 - turbo-windows-arm64
 
-The darwin builds are intended for macOS on Intel and Apple Silicon. The linux
-builds are intended to run on Ubuntu, but we do not exercise them on other
-distros. The windows builds are tested on the [`windows-latest` runner][2] in
-GitHub Actions.
+The darwin builds are intended for macOS on Intel (`turbo-darwin-64`) and Apple
+Silicon (`turbo-darwn-arm64`). The linux builds are tested on Ubuntu, but we
+expect them to work on most [Debian-based][3]. distros. The windows builds are
+tested on the [`windows-latest` runner][2] in GitHub Actions.
 
 ## Node.js Compatibility
 
@@ -64,3 +65,4 @@ Some exceptions to this may be:
 
 [1]: https://nodejs.org/en/about/previous-releases
 [2]: https://docs.github.com/en/actions/using-jobs/choosing-the-runner-for-a-job#choosing-github-hosted-runners
+[3]: https://en.wikipedia.org/wiki/List_of_Linux_distributions#Debian-based
