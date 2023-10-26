@@ -13,7 +13,7 @@ use std::{
 use de::Entry;
 use identifiers::{Descriptor, Locator};
 use protocol_resolver::DescriptorResolver;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use thiserror::Error;
 use turbopath::RelativeUnixPathBuf;
 
@@ -55,23 +55,20 @@ pub struct BerryLockfile {
 
 // This is the direct representation of the lockfile as it appears on disk.
 // More internal tracking is required for effectively altering the lockfile
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(try_from = "Map<String, Entry>")]
 pub struct LockfileData {
-    #[serde(rename = "__metadata")]
     metadata: Metadata,
-    #[serde(flatten)]
     packages: Map<String, BerryPackage>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
 struct Metadata {
     version: String,
     cache_key: Option<String>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Serialize, Default, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 struct BerryPackage {
     version: String,
     language_name: Option<String>,
@@ -87,13 +84,13 @@ struct BerryPackage {
     conditions: Option<String>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Clone, Copy)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
 struct DependencyMeta {
     optional: Option<bool>,
     unplugged: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct BerryManifest {
     resolutions: Option<Map<String, String>>,
 }
