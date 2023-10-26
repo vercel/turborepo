@@ -80,7 +80,7 @@ impl RunCache {
         let log_file_path = self
             .repo_root
             .resolve(workspace_info.package_path())
-            .resolve(&task_definition.workspace_relative_log_file(task_id.task()));
+            .resolve(&TaskDefinition::workspace_relative_log_file(task_id.task()));
         let repo_relative_globs =
             task_definition.repo_relative_hashable_outputs(&task_id, workspace_info.package_path());
 
