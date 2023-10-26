@@ -11,6 +11,11 @@ const venvBin = path.join(venvPath, "bin");
 
 const allowedTools = ["python3", "pip", "prysk"];
 
+export function debugVenv() {
+  console.log(`venvPath: ${venvPath}`);
+  execSync(`ls -la ${venvBin}`, { stdio: "inherit" });
+}
+
 export function getVenvBin(tool) {
   if (!allowedTools.includes(tool)) {
     throw new Error(`Tool not allowed: ${tool}`);

@@ -1,10 +1,11 @@
 import { execSync } from "child_process";
-import { getVenvBin, makeVenv } from "./util.mjs";
+import { debugVenv, getVenvBin, makeVenv } from "./util.mjs";
 
 makeVenv();
 
-execSync(`pwd`);
-execSync(`ls -la ${getVenvBin()}`);
+execSync(`echo "pwd: $(pwd)"`, { stdio: "inherit" });
+
+debugVenv();
 
 const python3 = getVenvBin("python3");
 const pip = getVenvBin("pip");
