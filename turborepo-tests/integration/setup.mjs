@@ -3,5 +3,11 @@ import { getVenvBin, makeVenv } from "./util.mjs";
 
 makeVenv();
 
-execSync(`${getVenvBin("python3")} -m pip install --quiet --upgrade pip`);
-execSync(`${getVenvBin("pip")} install "prysk==0.15.0"`);
+execSync(`pwd`);
+execSync(`ls -la ${getVenvBin()}`);
+
+const python3 = getVenvBin("python3");
+const pip = getVenvBin("pip");
+
+execSync(`${python3} -m pip install --quiet --upgrade pip`);
+execSync(`${pip} install "prysk==0.15.0"`);

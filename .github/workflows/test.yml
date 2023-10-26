@@ -88,9 +88,11 @@ jobs:
       - name: From GH Actions
         shell: bash
         run: bash ./turborepo-tests/integration/foo.sh
+
       - name: Foo with pnpm
         shell: bash
         run: pnpm -F turborepo-tests-integration foo
+
       - name: Foo with turbo
         shell: bash
         run: turbo run foo
