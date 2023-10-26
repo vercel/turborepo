@@ -53,12 +53,6 @@ impl WorkspaceInfo {
             .expect("at least one segment")
     }
 
-    // pub fn task_log_path(&self, task_id: &TaskId) -> AnchoredSystemPathBuf {
-    //     let mut log_path = self.package_path().to_owned();
-    //     log_path.push(".turbo");
-    //     log_path.push(&format!("turbo-{}.log", task_id.task()));
-    //     log_path
-    // }
 
     pub fn get_external_deps_hash(&self) -> String {
         let mut transitive_deps = Vec::with_capacity(
