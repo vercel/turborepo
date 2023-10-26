@@ -234,6 +234,7 @@ impl Pattern {
                             })
                             .collect(),
                     );
+                    self.normalize();
                 } else {
                     let mut new_parts = Vec::new();
                     for part in list.drain(..) {
@@ -1010,8 +1011,8 @@ mod tests {
             assert_eq!(
                 p,
                 Pattern::Alternatives(vec![
-                    Pattern::Concatenation(vec![a.clone(), s.clone(), c.clone()]),
-                    Pattern::Concatenation(vec![b.clone(), s.clone(), c.clone()]),
+                    Pattern::Constant("a/c".to_string()),
+                    Pattern::Constant("b/c".to_string()),
                 ])
             );
         }
@@ -1028,15 +1029,31 @@ mod tests {
             assert_eq!(
                 p,
                 Pattern::Alternatives(vec![
-                    Pattern::Concatenation(vec![a.clone(), s.clone(), b.clone()]),
-                    Pattern::Concatenation(vec![b.clone(), s.clone(), b.clone()]),
-                    Pattern::Concatenation(vec![d.clone(), s.clone(), b.clone()]),
-                    Pattern::Concatenation(vec![a.clone(), s.clone(), c.clone()]),
-                    Pattern::Concatenation(vec![b.clone(), s.clone(), c.clone()]),
-                    Pattern::Concatenation(vec![d.clone(), s.clone(), c.clone()]),
-                    Pattern::Concatenation(vec![a.clone(), s.clone(), d.clone()]),
-                    Pattern::Concatenation(vec![b.clone(), s.clone(), d.clone()]),
-                    Pattern::Concatenation(vec![d.clone(), s.clone(), d.clone()]),
+                    Pattern::Constant("a/b".to_string()),
+                    Pattern::Constant("b/b".to_string()),
+                    Pattern::Concatenation(vec![
+                        Pattern::Dynamic,
+                        Pattern::Constant("/b".to_string())
+                    ]),
+                    Pattern::Constant("a/c".to_string()),
+                    Pattern::Constant("b/c".to_string()),
+                    Pattern::Concatenation(vec![
+                        Pattern::Dynamic,
+                        Pattern::Constant("/c".to_string())
+                    ]),
+                    Pattern::Concatenation(vec![
+                        Pattern::Constant("a/".to_string()),
+                        Pattern::Dynamic
+                    ]),
+                    Pattern::Concatenation(vec![
+                        Pattern::Constant("b/".to_string()),
+                        Pattern::Dynamic
+                    ]),
+                    Pattern::Concatenation(vec![
+                        Pattern::Dynamic,
+                        Pattern::Constant("/".to_string()),
+                        Pattern::Dynamic
+                    ]),
                 ])
             );
         }
@@ -1142,6 +1159,13 @@ mod tests {
             Pattern::Constant("Hello All".to_string()),
             Pattern::Concatenation(vec![Pattern::Constant("Hello more".to_string()), Pattern::Dynamic])
         ]), "Hello ", Some(vec![("World", true), ("All", true), ("more", false)])
+    )]
+    #[case::request_with_extensions(
+        Pattern::Alternatives(vec![
+            Pattern::Constant("./file.js".to_string()),
+            Pattern::Constant("./file.ts".to_string()),
+            Pattern::Constant("./file.cjs".to_string()),
+        ]), "./", Some(vec![("file.js", true), ("file.ts", true), ("file.cjs", true)])
     )]
     fn next_constants(
         #[case] pat: Pattern,
