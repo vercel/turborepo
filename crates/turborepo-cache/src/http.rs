@@ -1,7 +1,10 @@
 use std::{backtrace::Backtrace, io::Write};
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-use turborepo_api_client::{APIAuth, APIClient, Client, Response};
+use turborepo_analytics::AnalyticsSender;
+use turborepo_api_client::{
+    analytics, analytics::AnalyticsEvent, APIAuth, APIClient, Client, Response,
+};
 
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
@@ -14,6 +17,7 @@ pub struct HTTPCache {
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
     repo_root: AbsoluteSystemPathBuf,
     api_auth: APIAuth,
+    analytics_recorder: Option<AnalyticsSender>,
 }
 
 impl HTTPCache {
@@ -22,6 +26,7 @@ impl HTTPCache {
         opts: &CacheOpts,
         repo_root: AbsoluteSystemPathBuf,
         api_auth: APIAuth,
+        analytics_recorder: Option<AnalyticsSender>,
     ) -> HTTPCache {
         let signer_verifier = if opts
             .remote_cache_opts
@@ -41,6 +46,7 @@ impl HTTPCache {
             signer_verifier,
             repo_root,
             api_auth,
+            analytics_recorder,
         }
     }
 
@@ -123,6 +129,20 @@ impl HTTPCache {
         }
     }
 
+    fn log_fetch(&self, event: analytics::CacheEvent, hash: &str, duration: u64) {
+        // If analytics fails to record, it's not worth failing the cache
+        if let Some(analytics_recorder) = &self.analytics_recorder {
+            let analytics_event = AnalyticsEvent {
+                session_id: None,
+                source: analytics::CacheSource::Remote,
+                event,
+                hash: hash.to_string(),
+                duration,
+            };
+            let _ = analytics_recorder.send(analytics_event);
+        }
+    }
+
     pub async fn fetch(
         &self,
         hash: &str,
@@ -137,6 +157,7 @@ impl HTTPCache {
             )
             .await?
         else {
+            self.log_fetch(analytics::CacheEvent::Miss, hash, 0);
             return Ok(None);
         };
 
@@ -177,6 +198,7 @@ impl HTTPCache {
 
         let files = Self::restore_tar(&self.repo_root, &body)?;
 
+        self.log_fetch(analytics::CacheEvent::Hit, hash, duration);
         Ok(Some((
             CacheHitMetadata {
                 source: CacheSource::Remote,
@@ -197,45 +219,48 @@ impl HTTPCache {
 
 #[cfg(test)]
 mod test {
+    use std::assert_matches::assert_matches;
+
     use anyhow::Result;
     use futures::future::try_join_all;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_api_client::APIClient;
+    use turborepo_analytics::start_analytics;
+    use turborepo_api_client::{analytics, APIClient};
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
         http::{APIAuth, HTTPCache},
-        test_cases::{get_test_cases, TestCase},
-        CacheOpts, CacheSource,
+        test_cases::{get_test_cases, validate_analytics, TestCase},
+        CacheError, CacheOpts, CacheSource,
     };
 
     #[tokio::test]
     async fn test_http_cache() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
+        let test_cases = get_test_cases();
 
         try_join_all(
-            get_test_cases()
-                .into_iter()
+            test_cases
+                .iter()
                 .map(|test_case| round_trip_test(test_case, port)),
         )
         .await?;
 
+        validate_analytics(&test_cases, analytics::CacheSource::Remote, port).await?;
         handle.abort();
         Ok(())
     }
 
-    async fn round_trip_test(test_case: TestCase, port: u16) -> Result<()> {
+    async fn round_trip_test(test_case: &TestCase, port: u16) -> Result<()> {
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
         test_case.initialize(&repo_root_path)?;
 
-        let TestCase {
-            hash,
-            files,
-            duration,
-        } = test_case;
+        let hash = test_case.hash;
+        let files = &test_case.files;
+        let duration = test_case.duration;
 
         let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
         let opts = CacheOpts::default();
@@ -244,8 +269,20 @@ mod test {
             token: "my-token".to_string(),
             team_slug: None,
         };
+        let (analytics_recorder, analytics_handle) =
+            start_analytics(api_auth.clone(), api_client.clone());
 
-        let cache = HTTPCache::new(api_client, &opts, repo_root_path.to_owned(), api_auth);
+        let cache = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path.to_owned(),
+            api_auth,
+            Some(analytics_recorder),
+        );
+
+        // Should be a cache miss at first
+        let err = cache.fetch(hash).await.unwrap_err();
+        assert_matches!(err, CacheError::CacheMiss);
 
         let anchored_files: Vec<_> = files.iter().map(|f| f.path().to_owned()).collect();
         cache
@@ -270,6 +307,8 @@ mod test {
                 assert!(file_path.exists());
             }
         }
+
+        analytics_handle.close_with_timeout().await;
 
         Ok(())
     }

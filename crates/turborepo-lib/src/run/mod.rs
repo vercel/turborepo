@@ -15,11 +15,13 @@ use std::{
 };
 
 pub use cache::{RunCache, TaskCache};
-use chrono::Local;
+use chrono::{DateTime, Local};
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tracing::{debug, info};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
+use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
@@ -73,6 +75,16 @@ impl<'a> Run<'a> {
         Ok(self.base.args().try_into()?)
     }
 
+    fn initialize_analytics(
+        api_auth: Option<APIAuth>,
+        api_client: APIClient,
+    ) -> Option<(AnalyticsSender, AnalyticsHandle)> {
+        // If there's no API auth, we don't want to record analytics
+        let api_auth = api_auth?;
+
+        Some(start_analytics(api_auth, api_client))
+    }
+
     fn print_run_prelude(&self, opts: &Opts<'_>, filtered_pkgs: &HashSet<WorkspaceName>) {
         let targets_list = opts.run_opts.tasks.join(", ");
         if opts.run_opts.single_package {
@@ -114,12 +126,36 @@ impl<'a> Run<'a> {
         );
         let start_at = Local::now();
         self.connect_process_manager(signal_subscriber);
+
+        let api_auth = self.base.api_auth()?;
+        let api_client = self.base.api_client()?;
+        let (analytics_sender, analytics_handle) =
+            Self::initialize_analytics(api_auth.clone(), api_client.clone()).unzip();
+
+        let result = self
+            .run_with_analytics(start_at, api_auth, api_client, analytics_sender)
+            .await;
+
+        if let Some(analytics_handle) = analytics_handle {
+            analytics_handle.close_with_timeout().await;
+        }
+
+        result
+    }
+
+    // We split this into a separate function because we need
+    // to close the AnalyticsHandle regardless of whether the run succeeds or not
+    async fn run_with_analytics(
+        &mut self,
+        start_at: DateTime<Local>,
+        api_auth: Option<APIAuth>,
+        api_client: APIClient,
+        analytics_sender: Option<AnalyticsSender>,
+    ) -> Result<i32, Error> {
         let package_json_path = self.base.repo_root.join_component("package.json");
         let root_package_json = PackageJson::load(&package_json_path)?;
         let mut opts = self.opts()?;
 
-        let api_auth = self.base.api_auth()?;
-        let api_client = self.base.api_client()?;
         let config = self.base.config()?;
 
         // Pulled from initAnalyticsClient in run.go
@@ -218,6 +254,7 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
             api_client.clone(),
             api_auth.clone(),
+            analytics_sender,
         )?;
 
         info!("created cache");
@@ -509,6 +546,7 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
             api_client.clone(),
             api_auth.clone(),
+            None,
         )?;
 
         let color_selector = ColorSelector::default();
