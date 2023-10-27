@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use turbopath::AnchoredSystemPathBuf;
 use turborepo_cache::CacheOpts;
+use turborepo_ci::Vendor;
 
 use crate::{
     cli::{Command, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, RunArgs},
@@ -75,6 +76,7 @@ pub struct RunOpts<'a> {
     pub summarize: Option<Option<bool>>,
     pub(crate) experimental_space_id: Option<String>,
     pub is_github_actions: bool,
+    pub(crate) vendor: Option<&'static Vendor>,
 }
 
 #[derive(Debug)]
@@ -83,7 +85,7 @@ pub enum GraphOpts<'a> {
     File(&'a str),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ResolvedLogOrder {
     Stream,
     Grouped,
@@ -130,6 +132,8 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
             LogOrder::Grouped => (false, ResolvedLogOrder::Grouped, args.log_prefix.into()),
         };
 
+        let vendor = Vendor::infer();
+
         Ok(Self {
             tasks: args.tasks.as_slice(),
             log_prefix,
@@ -150,6 +154,7 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
             dry_run_json: matches!(args.dry_run, Some(DryRunMode::Json)),
             dry_run: args.dry_run.is_some(),
             is_github_actions,
+            vendor,
         })
     }
 }

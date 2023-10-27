@@ -7,19 +7,21 @@ use std::{
     time::Duration,
 };
 
+use chrono::Local;
 use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::{process::Command, sync::mpsc};
 use tracing::{debug, error, Span};
 use turbopath::AbsoluteSystemPath;
+use turborepo_ci::VendorBehavior;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
 
 use crate::{
     cli::EnvMode,
     engine::{Engine, ExecutionOptions, StopExecution},
-    opts::Opts,
+    opts::{Opts, ResolvedLogOrder},
     package_graph::{PackageGraph, WorkspaceName},
     process::{ChildExit, ProcessManager},
     run::{
@@ -219,7 +221,7 @@ impl<'a> Visitor<'a> {
 
             let output_client = self.output_client();
             let continue_on_error = self.opts.run_opts.continue_on_error;
-            let prefix = self.prefix(&info);
+            let prefix = self.prefix(&info).to_string();
             let pretty_prefix = self.color_cache.prefix_with_color(&task_hash, &prefix);
             let ui = self.ui;
             let manager = self.manager.clone();
@@ -230,8 +232,16 @@ impl<'a> Visitor<'a> {
             let hash_tracker = self.task_hasher.task_hash_tracker();
             let tracker = self.run_tracker.track_task(info.clone().into_owned());
 
+            let log_order = self.opts.run_opts.log_order;
+            let vendor_behavior = self
+                .opts
+                .run_opts
+                .vendor
+                .and_then(|vendor| vendor.behavior.as_ref());
+
             let parent_span = Span::current();
             tasks.push(tokio::spawn(async move {
+                let task_start_time = Local::now();
                 let span = tracing::debug_span!("execute_task", task = %info.task());
                 span.follows_from(parent_span.id());
                 let _enter = span.enter();
@@ -241,6 +251,23 @@ impl<'a> Visitor<'a> {
                 let mut task_cache = task_cache;
                 let mut prefixed_ui =
                     Self::prefixed_ui(ui, is_github_actions, &output_client, pretty_prefix.clone());
+
+                // If the `log_order` is `ResolvedLogOrder::Grouped` and the current vendor
+                // supports log grouping write the vendor's CI group prefix.
+                if log_order == ResolvedLogOrder::Grouped {
+                    let vendor_group_prefix = VendorBehavior::get_vendor_group_prefix(
+                        vendor_behavior,
+                        &prefix,
+                        task_start_time,
+                    );
+                    if let Some(vendor_group_prefix) = vendor_group_prefix {
+                        if let Err(err) =
+                            writeln!(output_client.stdout(), "{}", vendor_group_prefix)
+                        {
+                            error!("cannot write CI vendor's group prefix: {:?}", err);
+                        }
+                    }
+                }
 
                 match task_cache.restore_outputs(&mut prefixed_ui).await {
                     Ok(hit) => {
@@ -376,6 +403,24 @@ impl<'a> Visitor<'a> {
                         tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         return;
+                    }
+                }
+
+                let task_finish_time = Local::now();
+                // If the `log_order` is `ResolvedLogOrder::Grouped` and the current vendor
+                // supports log grouping write the vendor's CI group suffix.
+                if log_order == ResolvedLogOrder::Grouped {
+                    let vendor_group_suffix = VendorBehavior::get_vendor_group_prefix(
+                        vendor_behavior,
+                        &prefix,
+                        task_finish_time,
+                    );
+                    if let Some(vendor_group_prefix) = vendor_group_suffix {
+                        if let Err(err) =
+                            writeln!(output_client.stdout(), "{}", vendor_group_prefix)
+                        {
+                            error!("cannot write CI vendor's group suffix: {:?}", err);
+                        }
                     }
                 }
 
