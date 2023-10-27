@@ -106,7 +106,7 @@ impl<'a> TaskSummaryFactory<'a> {
         task_id: &TaskId<'static>,
         execution: Option<TaskExecutionSummary>,
         workspace_info: &WorkspaceInfo,
-        f: impl Fn(&TaskNode) -> Option<T> + Copy,
+        display_task: impl Fn(&TaskNode) -> Option<T> + Copy,
     ) -> Result<SharedTaskSummary<T>, Error> {
         // TODO: command should be optional
         let command = workspace_info
@@ -142,7 +142,7 @@ impl<'a> TaskSummaryFactory<'a> {
 
         let cache_summary = self.hash_tracker.cache_status(task_id).into();
 
-        let (dependencies, dependents) = self.dependencies_and_dependents(task_id, f);
+        let (dependencies, dependents) = self.dependencies_and_dependents(task_id, display_task);
 
         Ok(SharedTaskSummary {
             hash,
@@ -202,12 +202,12 @@ impl<'a> TaskSummaryFactory<'a> {
     fn dependencies_and_dependents<T>(
         &self,
         task_id: &TaskId,
-        f: impl Fn(&TaskNode) -> Option<T> + Copy,
+        display_node: impl Fn(&TaskNode) -> Option<T> + Copy,
     ) -> (Vec<T>, Vec<T>) {
         let collect_nodes = |set: Option<HashSet<&TaskNode>>| {
             set.unwrap_or_default()
                 .into_iter()
-                .filter_map(f)
+                .filter_map(display_node)
                 .collect::<Vec<_>>()
         };
         let dependencies = collect_nodes(self.engine.dependencies(task_id));
