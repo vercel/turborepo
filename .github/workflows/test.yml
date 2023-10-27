@@ -315,6 +315,8 @@ jobs:
         os:
           - name: ubuntu
             runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
@@ -344,6 +346,9 @@ jobs:
         os:
           - name: ubuntu
             runner: ubuntu-latest
+          # TODO: enable macos when --experimental-rust-codepath is passing all tests on ubuntu
+          # - name: macos
+          #   runner: macos-latest
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment

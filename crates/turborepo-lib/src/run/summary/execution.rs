@@ -3,15 +3,14 @@ use std::{fmt, fmt::Formatter};
 use chrono::{DateTime, Duration, Local, SubsecRound};
 use serde::Serialize;
 use tokio::sync::mpsc;
-use tracing::log::warn;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
-use turborepo_ui::{color, BOLD, BOLD_GREEN, BOLD_RED, MAGENTA, UI};
+use turborepo_ui::{color, cprintln, BOLD, BOLD_GREEN, BOLD_RED, MAGENTA, UI, YELLOW};
 
 use crate::run::{summary::task::TaskSummary, task_id::TaskId};
 
 // Just used to make changing the type that gets passed to the state management
 // thread easy
-type Message = Event;
+type Message = TrackerMessage;
 
 // Should *not* be exposed outside of run summary module
 /// Spawns task trackers and records the final state of all tasks
@@ -20,7 +19,6 @@ pub struct ExecutionTracker {
     // this thread handles the state management
     state_thread: tokio::task::JoinHandle<SummaryState>,
     sender: mpsc::Sender<Message>,
-    pub command: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -87,7 +85,30 @@ impl fmt::Display for TurboDuration {
     }
 }
 
-impl ExecutionSummary<'_> {
+impl<'a> ExecutionSummary<'a> {
+    pub fn new(
+        command: String,
+        state: SummaryState,
+        package_inference_root: Option<&'a AnchoredSystemPath>,
+        exit_code: i32,
+        start_time: DateTime<Local>,
+        end_time: DateTime<Local>,
+    ) -> Self {
+        let duration = TurboDuration::new(&start_time, &end_time);
+        Self {
+            command,
+            success: state.success,
+            failed: state.failed,
+            cached: state.cached,
+            attempted: state.attempted,
+            package_inference_root,
+            start_time: start_time.timestamp_millis(),
+            end_time: end_time.timestamp_millis(),
+            duration,
+            exit_code,
+        }
+    }
+
     /// We implement this on `ExecutionSummary` and not `RunSummary` because
     /// the `execution` field is nullable (due to normalize).
     pub fn print(&self, ui: UI, path: AbsoluteSystemPathBuf, failed_tasks: Vec<&TaskSummary>) {
@@ -163,7 +184,7 @@ impl ExecutionSummary<'_> {
 
         if self.attempted == 0 {
             println!();
-            warn!("No tasks were executed as a part of this run.");
+            cprintln!(ui, YELLOW, "No tasks were executed as part of this run.");
         }
 
         println!();
@@ -180,12 +201,19 @@ impl ExecutionSummary<'_> {
 }
 
 /// The final states of all task executions
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct SummaryState {
     pub attempted: usize,
     pub failed: usize,
     pub cached: usize,
     pub success: usize,
+    pub tasks: Vec<TaskState>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TaskState {
+    pub task_id: TaskId<'static>,
+    pub execution: Option<TaskExecutionSummary>,
 }
 
 impl SummaryState {
@@ -204,9 +232,13 @@ impl SummaryState {
 pub struct TaskTracker<T> {
     sender: mpsc::Sender<Message>,
     started_at: T,
-    // task_id is only used as a name for the event in the chrometracing profile
-    #[allow(dead_code)]
     task_id: TaskId<'static>,
+}
+
+#[derive(Debug, Clone)]
+enum TrackerMessage {
+    Starting,
+    Finished(TaskState),
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -217,7 +249,7 @@ enum Event {
     Built,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub enum ExecutionState {
     Canceled,
     Built { exit_code: i32 },
@@ -237,13 +269,11 @@ impl ExecutionState {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskExecutionSummary {
     start_time: i64,
     end_time: i64,
-    #[serde(skip)]
-    duration: TurboDuration,
     #[serde(skip)]
     state: ExecutionState,
     exit_code: Option<i32>,
@@ -256,20 +286,24 @@ impl TaskExecutionSummary {
 }
 
 impl ExecutionTracker {
-    pub fn new(command: &str) -> Self {
+    pub fn new() -> Self {
         // This buffer size is probably overkill, but since messages are only a byte
         // it's worth the extra memory to avoid the channel filling up.
-        let (sender, mut receiver) = mpsc::channel(128);
+        let (sender, mut receiver) = mpsc::channel::<Message>(128);
         let state_thread = tokio::spawn(async move {
             let mut state = SummaryState::default();
-            while let Some(event) = receiver.recv().await {
-                state.handle_event(event);
+            while let Some(message) = receiver.recv().await {
+                if let Some(event) = message.event() {
+                    state.handle_event(event);
+                }
+                if let TrackerMessage::Finished(task_state) = message {
+                    state.tasks.push(task_state);
+                };
             }
             state
         });
 
         Self {
-            command: command.to_string(),
             state_thread,
             sender,
         }
@@ -284,13 +318,7 @@ impl ExecutionTracker {
         }
     }
 
-    pub async fn finish(
-        self,
-        package_inference_root: Option<&AnchoredSystemPath>,
-        exit_code: i32,
-        start_time: DateTime<Local>,
-        end_time: DateTime<Local>,
-    ) -> Result<ExecutionSummary<'_>, tokio::task::JoinError> {
+    pub async fn finish(self) -> Result<SummaryState, tokio::task::JoinError> {
         let Self {
             state_thread,
             sender,
@@ -303,20 +331,7 @@ impl ExecutionTracker {
 
         let summary_state = state_thread.await?;
 
-        let duration = TurboDuration::new(&start_time, &end_time);
-
-        Ok(ExecutionSummary {
-            command: self.command,
-            success: summary_state.success,
-            failed: summary_state.failed,
-            cached: summary_state.cached,
-            attempted: summary_state.attempted,
-            package_inference_root,
-            start_time: start_time.timestamp_millis(),
-            end_time: end_time.timestamp_millis(),
-            duration,
-            exit_code,
-        })
+        Ok(summary_state)
     }
 }
 
@@ -328,7 +343,7 @@ impl TaskTracker<()> {
         } = self;
         let started_at = Local::now();
         sender
-            .send(Event::Building)
+            .send(TrackerMessage::Starting)
             .await
             .expect("execution summary state thread finished");
         TaskTracker {
@@ -337,114 +352,135 @@ impl TaskTracker<()> {
             task_id,
         }
     }
+
+    // Track that the task would be executed
+    pub async fn dry_run(self) {
+        let Self {
+            sender, task_id, ..
+        } = self;
+
+        sender
+            .send(TrackerMessage::Finished(TaskState {
+                task_id,
+                execution: None,
+            }))
+            .await
+            .expect("execution summary state thread finished")
+    }
 }
 
 impl TaskTracker<chrono::DateTime<Local>> {
-    pub fn cancel(self) -> TaskExecutionSummary {
-        let Self { started_at, .. } = self;
-        let ended_at = Local::now();
-        let duration = TurboDuration::new(&started_at, &Local::now());
-        TaskExecutionSummary {
-            start_time: started_at.timestamp_millis(),
-            end_time: ended_at.timestamp_millis(),
-            duration,
-            state: ExecutionState::Canceled,
-            exit_code: None,
-        }
-    }
+    // In the case of a task getting canceled we send no information as there was an
+    // internal turbo error
+    pub fn cancel(self) {}
 
-    pub async fn cached(self) -> TaskExecutionSummary {
+    pub async fn cached(self) {
         let Self {
-            sender, started_at, ..
+            sender,
+            started_at,
+            task_id,
         } = self;
 
         let ended_at = Local::now();
-        let duration = TurboDuration::new(&started_at, &Local::now());
-
-        sender
-            .send(Event::Cached)
-            .await
-            .expect("summary state thread finished");
-
-        TaskExecutionSummary {
+        let execution = Some(TaskExecutionSummary {
             start_time: started_at.timestamp_millis(),
             end_time: ended_at.timestamp_millis(),
-            duration,
             state: ExecutionState::Cached,
             exit_code: None,
-        }
+        });
+
+        sender
+            .send(TrackerMessage::Finished(TaskState { task_id, execution }))
+            .await
+            .expect("summary state thread finished");
     }
 
-    pub async fn build_succeeded(self, exit_code: i32) -> TaskExecutionSummary {
+    pub async fn build_succeeded(self, exit_code: i32) {
         let Self {
-            sender, started_at, ..
+            sender,
+            started_at,
+            task_id,
         } = self;
 
         let ended_at = Local::now();
-        let duration = TurboDuration::new(&started_at, &Local::now());
-
-        sender
-            .send(Event::Built)
-            .await
-            .expect("summary state thread finished");
-
-        TaskExecutionSummary {
+        let execution = Some(TaskExecutionSummary {
             start_time: started_at.timestamp_millis(),
             end_time: ended_at.timestamp_millis(),
-            duration,
             state: ExecutionState::Built { exit_code },
             exit_code: Some(exit_code),
-        }
+        });
+
+        sender
+            .send(TrackerMessage::Finished(TaskState { task_id, execution }))
+            .await
+            .expect("summary state thread finished");
     }
 
-    pub async fn build_failed(
-        self,
-        exit_code: i32,
-        error: impl fmt::Display,
-    ) -> TaskExecutionSummary {
+    pub async fn build_failed(self, exit_code: i32, error: impl fmt::Display) {
         let Self {
-            sender, started_at, ..
+            sender,
+            started_at,
+            task_id,
         } = self;
 
         let ended_at = Local::now();
-        let duration = TurboDuration::new(&started_at, &Local::now());
-
-        sender
-            .send(Event::BuildFailed)
-            .await
-            .expect("summary state thread finished");
-        TaskExecutionSummary {
+        let execution = Some(TaskExecutionSummary {
             start_time: started_at.timestamp_millis(),
             end_time: ended_at.timestamp_millis(),
-            duration,
             state: ExecutionState::BuildFailed {
                 exit_code,
                 err: error.to_string(),
             },
             exit_code: Some(exit_code),
-        }
+        });
+
+        sender
+            .send(TrackerMessage::Finished(TaskState { task_id, execution }))
+            .await
+            .expect("summary state thread finished");
     }
 
-    pub async fn spawn_failed(self, error: impl fmt::Display) -> TaskExecutionSummary {
+    pub async fn spawn_failed(self, error: impl fmt::Display) {
         let Self {
-            sender, started_at, ..
+            sender,
+            started_at,
+            task_id,
         } = self;
 
         let ended_at = Local::now();
-        let duration = TurboDuration::new(&started_at, &Local::now());
-
-        sender
-            .send(Event::BuildFailed)
-            .await
-            .expect("summary state thread finished");
-        TaskExecutionSummary {
+        let execution = Some(TaskExecutionSummary {
             start_time: started_at.timestamp_millis(),
             end_time: ended_at.timestamp_millis(),
-            duration,
             state: ExecutionState::SpawnFailed {
                 err: error.to_string(),
             },
             exit_code: None,
+        });
+
+        sender
+            .send(TrackerMessage::Finished(TaskState { task_id, execution }))
+            .await
+            .expect("summary state thread finished");
+    }
+}
+
+impl TrackerMessage {
+    fn event(&self) -> Option<Event> {
+        match &self {
+            TrackerMessage::Starting => Some(Event::Building),
+            TrackerMessage::Finished(TaskState {
+                execution: Some(TaskExecutionSummary { state, .. }),
+                ..
+            }) => match state {
+                ExecutionState::Built { .. } => Some(Event::Built),
+                ExecutionState::Cached => Some(Event::Cached),
+                ExecutionState::BuildFailed { .. } => Some(Event::BuildFailed),
+                ExecutionState::SpawnFailed { .. } => Some(Event::BuildFailed),
+                ExecutionState::Canceled => None,
+            },
+            TrackerMessage::Finished(TaskState {
+                execution: None, ..
+            }) => None,
         }
     }
 }
@@ -458,56 +494,65 @@ mod test {
 
     #[tokio::test]
     async fn test_multiple_tasks() {
-        let started_at = Local::now();
-        let summary = ExecutionTracker::new("turbo build");
+        let summary = ExecutionTracker::new();
+        let foo = TaskId::new("foo", "build");
+        let bar = TaskId::new("bar", "build");
+        let baz = TaskId::new("baz", "build");
+        let boo = TaskId::new("boo", "build");
         let mut tasks = Vec::new();
         {
-            let tracker = summary.task_tracker(TaskId::new("foo", "build"));
+            let tracker = summary.task_tracker(foo.clone());
             tasks.push(tokio::spawn(async move {
                 let tracker = tracker.start().await;
-                let summary = tracker.build_succeeded(0).await;
-                assert_eq!(summary.exit_code, Some(0));
+                tracker.build_succeeded(0).await;
             }));
         }
         {
-            let tracker = summary.task_tracker(TaskId::new("bar", "build"));
+            let tracker = summary.task_tracker(bar.clone());
             tasks.push(tokio::spawn(async move {
                 let tracker = tracker.start().await;
-                let summary = tracker.cached().await;
-                assert_eq!(summary.exit_code, None);
+                tracker.cached().await;
             }));
         }
         {
-            let tracker = summary.task_tracker(TaskId::new("baz", "build"));
+            let tracker = summary.task_tracker(baz.clone());
             tasks.push(tokio::spawn(async move {
                 let tracker = tracker.start().await;
-                let summary = tracker.build_failed(1, "big bad error").await;
-                assert_eq!(summary.exit_code, Some(1));
+                tracker.build_failed(1, "big bad error").await;
             }));
         }
         {
-            let tracker = summary.task_tracker(TaskId::new("boo", "build"));
+            let tracker = summary.task_tracker(boo.clone());
             tasks.push(tokio::spawn(async move {
                 let tracker = tracker.start().await;
-                let summary = tracker.cancel();
-                assert_eq!(summary.exit_code, None);
+                tracker.cancel();
             }));
         }
         for task in tasks {
             task.await.unwrap();
         }
 
-        let ended_at = Local::now();
-        let state = summary.finish(None, 0, started_at, ended_at).await.unwrap();
+        let state = summary.finish().await.unwrap();
         assert_eq!(state.attempted, 4);
         assert_eq!(state.cached, 1);
         assert_eq!(state.failed, 1);
         assert_eq!(state.success, 1);
+        let foo_state = state.tasks.iter().find(|task| task.task_id == foo).unwrap();
+        assert_eq!(foo_state.execution.as_ref().unwrap().exit_code, Some(0));
+        let bar_state = state.tasks.iter().find(|task| task.task_id == bar).unwrap();
+        assert_eq!(bar_state.execution.as_ref().unwrap().exit_code, None);
+        let baz_state = state.tasks.iter().find(|task| task.task_id == baz).unwrap();
+        assert_eq!(baz_state.execution.as_ref().unwrap().exit_code, Some(1));
+        let boo_state = state.tasks.iter().find(|task| task.task_id == boo);
+        assert!(
+            boo_state.is_none(),
+            "canceling doesn't produce execution data"
+        );
     }
 
     #[tokio::test]
     async fn test_timing() {
-        let summary = ExecutionTracker::new("turbo build");
+        let summary = ExecutionTracker::new();
         let tracker = summary.task_tracker(TaskId::new("foo", "build"));
         let post_construction_time = Local::now().timestamp_millis();
         let sleep_duration = Duration::milliseconds(5);
@@ -516,14 +561,17 @@ mod test {
         let tracker = tracker.start().await;
 
         tokio::time::sleep(sleep_duration.to_std().unwrap()).await;
-        let summary = tracker.build_succeeded(0).await;
+        tracker.build_succeeded(0).await;
+        let mut state = summary.finish().await.unwrap();
+        assert_eq!(state.tasks.len(), 1);
+        let summary = state.tasks.pop().unwrap().execution.unwrap();
         assert!(
             post_construction_time < summary.start_time,
             "tracker start time should start when start is called"
         );
         assert!(
-            sleep_duration <= summary.duration.0,
-            "tracker duration should be at least as long as the time between calls"
+            summary.start_time + sleep_duration.num_milliseconds() <= summary.end_time,
+            "tracker end should be at least as long as the time between calls"
         );
     }
 
@@ -531,7 +579,6 @@ mod test {
         TaskExecutionSummary {
             start_time: 123,
             end_time: 234,
-            duration: TurboDuration::from(Duration::zero()),
             state: ExecutionState::Built { exit_code: 0 },
             exit_code: Some(0),
         },
