@@ -11,8 +11,10 @@ console.log(`Running ${specificTest || "all"} tests... with ${pryskBin}`);
 
 const testArg = specificTest ? `tests/${specificTest}` : "tests";
 
+const flags = ["--shell=bash", isWindows ? "--dos2unix" : ""].join(" ");
+
 try {
-  execSync(`${pryskBin} --shell="bash" "${testArg}"`, { stdio: "inherit" });
+  execSync(`${pryskBin} ${flags} "${testArg}"`, { stdio: "inherit" });
 } catch (e) {
   // Swallow the node error stack trace. stdio: inherit should
   // already have the test failures printed. We don't need the Node.js
