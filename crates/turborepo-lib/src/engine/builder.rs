@@ -393,7 +393,9 @@ impl Error {
     }
 }
 
-const INVALID_TOKENS: &[&str] = &["$colon$", "/", "\\"];
+// If/when we decide to be stricter about task names,
+// we can expand the patterns here.
+const INVALID_TOKENS: &[&str] = &["$colon$"];
 
 fn validate_task_name(task: &str) -> Result<(), Error> {
     INVALID_TOKENS
@@ -1018,8 +1020,6 @@ mod test {
     #[test_case("build", None)]
     #[test_case("build:prod", None)]
     #[test_case("build$colon$prod", Some("task contains invalid string '$colon$'"))]
-    #[test_case("build/prod", Some("task contains invalid string '/'"))]
-    #[test_case(r"build\prod", Some(r"task contains invalid string '\'"))]
     fn test_validate_task_name(task_name: &str, reason: Option<&str>) {
         let result = validate_task_name(task_name)
             .map_err(|e| {
