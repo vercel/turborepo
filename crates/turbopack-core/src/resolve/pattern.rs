@@ -728,7 +728,7 @@ pub async fn read_matches(
             // one path segment We will enumerate the list instead of the
             // directory
             let mut handled = HashSet::new();
-            for (str, until_end) in constants {
+            for (index, (str, until_end)) in constants.into_iter().enumerate() {
                 if until_end {
                     if handled.insert(str) {
                         if let Some(fs_path) = &*if force_in_lookup_dir {
@@ -746,10 +746,14 @@ pub async fn read_matches(
                                 let len = prefix.len();
                                 prefix.push_str(str);
                                 match *fs_path.get_type().await? {
-                                    FileSystemEntryType::File => results
-                                        .push((0, PatternMatch::File(prefix.to_string(), fs_path))),
+                                    FileSystemEntryType::File => {
+                                        results.push((
+                                            index,
+                                            PatternMatch::File(prefix.to_string(), fs_path),
+                                        ));
+                                    }
                                     FileSystemEntryType::Directory => results.push((
-                                        0,
+                                        index,
                                         PatternMatch::Directory(prefix.to_string(), fs_path),
                                     )),
                                     FileSystemEntryType::Symlink => {
@@ -758,7 +762,7 @@ pub async fn read_matches(
                                         {
                                             if link_type.contains(LinkType::DIRECTORY) {
                                                 results.push((
-                                                    0,
+                                                    index,
                                                     PatternMatch::Directory(
                                                         prefix.clone(),
                                                         fs_path,
@@ -766,7 +770,7 @@ pub async fn read_matches(
                                                 ));
                                             } else {
                                                 results.push((
-                                                    0,
+                                                    index,
                                                     PatternMatch::File(prefix.clone(), fs_path),
                                                 ))
                                             }
