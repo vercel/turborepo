@@ -73,10 +73,10 @@ pub(crate) struct SharedTaskSummary<T> {
     pub outputs: Vec<String>,
     pub excluded_outputs: Option<Vec<String>>,
     pub log_file: String,
-    pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
     pub dependencies: Vec<T>,
     pub dependents: Vec<T>,
     pub resolved_task_definition: TaskSummaryTaskDefinition,
+    pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
     pub framework: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution: Option<TaskExecutionSummary>,
