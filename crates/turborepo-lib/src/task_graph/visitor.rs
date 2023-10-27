@@ -191,6 +191,7 @@ impl<'a> Visitor<'a> {
 
             debug!("task {} hash is {}", info, task_hash);
             if self.dry {
+                self.run_tracker.track_task(info.clone()).dry_run().await;
                 callback.send(Ok(())).ok();
                 continue;
             }
@@ -242,13 +243,14 @@ impl<'a> Visitor<'a> {
                     Self::prefixed_ui(ui, is_github_actions, &output_client, pretty_prefix.clone());
 
                 match task_cache.restore_outputs(&mut prefixed_ui).await {
-                    Ok(_hit) => {
+                    Ok(hit) => {
                         // we need to set expanded outputs
                         hash_tracker.insert_expanded_outputs(
-                            task_id,
+                            task_id.clone(),
                             task_cache.expanded_outputs().to_vec(),
                         );
-                        let _summary = tracker.cached().await;
+                        hash_tracker.insert_cache_status(task_id, hit);
+                        tracker.cached().await;
                         callback.send(Ok(())).ok();
                         return;
                     }
@@ -278,7 +280,7 @@ impl<'a> Visitor<'a> {
                             manager.stop().await;
                             // If we have an internal failure of being unable setup log capture we
                             // mark it as cancelled.
-                            let _summary = tracker.cancel();
+                            tracker.cancel();
                             callback.send(Err(StopExecution)).ok();
                             return;
                         }
@@ -309,7 +311,7 @@ impl<'a> Visitor<'a> {
                     // Turbo is shutting down
                     None => {
                         callback.send(Ok(())).ok();
-                        let _summary = tracker.cancel();
+                        tracker.cancel();
                         return;
                     }
                 };
@@ -321,7 +323,7 @@ impl<'a> Visitor<'a> {
                     Ok(Some(exit_status)) => exit_status,
                     Err(e) => {
                         error!("unable to pipe outputs from command: {e}");
-                        let _summary = tracker.cancel();
+                        tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         manager.stop().await;
                         return;
@@ -332,7 +334,7 @@ impl<'a> Visitor<'a> {
                         // None. Is it still running?
                         error!("unable to determine why child exited");
                         manager.stop().await;
-                        let _summary = tracker.cancel();
+                        tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         return;
                     }
@@ -350,8 +352,7 @@ impl<'a> Visitor<'a> {
                         }
                         let error =
                             TaskErrorCause::from_execution(process.label().to_string(), code);
-                        // TODO pass actual code
-                        let _summary = tracker.build_failed(0, error.to_string()).await;
+                        tracker.build_failed(code, error.to_string()).await;
                         if continue_on_error {
                             prefixed_ui.warn("command finished with error, but continuing...");
                             callback.send(Ok(())).ok();
@@ -372,7 +373,7 @@ impl<'a> Visitor<'a> {
                     | ChildExit::KilledExternal
                     | ChildExit::Failed => {
                         manager.stop().await;
-                        let _summary = tracker.cancel();
+                        tracker.cancel();
                         callback.send(Err(StopExecution)).ok();
                         return;
                     }
@@ -424,12 +425,16 @@ impl<'a> Visitor<'a> {
         exit_code: i32,
         packages: HashSet<WorkspaceName>,
         global_hash_inputs: GlobalHashableInputs<'_>,
+        engine: &Engine,
+        env_at_execution_start: &EnvironmentVariableMap,
     ) -> Result<(), Error> {
         let Self {
             package_graph,
             ui,
             opts,
             repo_root,
+            global_env_mode,
+            task_hasher,
             ..
         } = self;
 
@@ -446,6 +451,10 @@ impl<'a> Visitor<'a> {
                 &opts.run_opts,
                 packages,
                 global_hash_summary,
+                global_env_mode,
+                engine,
+                task_hasher.task_hash_tracker(),
+                env_at_execution_start,
             )
             .await?)
     }
