@@ -76,7 +76,6 @@ pub(crate) struct SharedTaskSummary<T> {
     pub framework: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution: Option<TaskExecutionSummary>,
-    // TODO: Do we really want this to be cli enum instead of the one defined in the parent module?
     pub env_mode: EnvMode,
     pub environment_variables: TaskEnvVarSummary,
     pub dot_env: Vec<RelativeUnixPathBuf>,
