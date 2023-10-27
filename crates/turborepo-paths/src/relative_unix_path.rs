@@ -80,6 +80,11 @@ impl RelativeUnixPath {
     pub fn extension(&self) -> Option<&str> {
         Utf8Path::new(&self.0).extension()
     }
+
+    pub fn join_component(&self, segment: &str) -> RelativeUnixPathBuf {
+        debug_assert!(!segment.contains('/'));
+        RelativeUnixPathBuf(format!("{}/{}", &self.0, segment))
+    }
 }
 
 impl AsRef<RelativeUnixPath> for RelativeUnixPath {

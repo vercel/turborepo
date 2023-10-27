@@ -302,7 +302,7 @@ func (tc *TaskCache) SaveOutputs(ctx context.Context, logger hclog.Logger, termi
 // TaskCache returns a TaskCache instance, providing an interface to the underlying cache specific
 // to this run and the given PackageTask
 func (rc *RunCache) TaskCache(pt *nodes.PackageTask, packageTaskHash string) TaskCache {
-	logFileName := rc.repoRoot.UntypedJoin(pt.LogFile)
+	logFileName := rc.repoRoot.UntypedJoin(pt.RepoRelativeSystemLogFile())
 	hashableOutputs := pt.HashableOutputs()
 	repoRelativeGlobs := hash.TaskOutputs{
 		Inclusions: make([]string, len(hashableOutputs.Inclusions)),
