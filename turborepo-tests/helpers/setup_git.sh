@@ -4,6 +4,10 @@ TARGET_DIR=$1
 # If a second parameter isn't passed, default to true
 SHOULD_INSTALL=${2:-true}
 
+# Set the autocrlf option to true to avoid issues with line endings on Windows
+# TODO: does it need to be set for windows?
+git config --global core.autocrlf true
+
 git init ${TARGET_DIR} --quiet --initial-branch=main
 GIT_ARGS="--git-dir=${TARGET_DIR}/.git --work-tree=${TARGET_DIR}"
 git ${GIT_ARGS} config user.email "turbo-test@example.com"
