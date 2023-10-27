@@ -5,10 +5,10 @@ use turborepo_env::EnvironmentVariableMap;
 use super::{
     execution::TaskExecutionSummary,
     task::{SharedTaskSummary, TaskEnvVarSummary},
-    SingleTaskSummary, TaskSummary,
+    EnvMode, SingleTaskSummary, TaskSummary,
 };
 use crate::{
-    cli::EnvMode,
+    cli,
     engine::{Engine, TaskNode},
     opts::RunOpts,
     package_graph::{PackageGraph, WorkspaceInfo, WorkspaceName},
@@ -23,7 +23,7 @@ pub struct TaskSummaryFactory<'a> {
     hash_tracker: TaskHashTracker,
     env_at_start: &'a EnvironmentVariableMap,
     run_opts: &'a RunOpts<'a>,
-    global_env_mode: EnvMode,
+    global_env_mode: cli::EnvMode,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -41,7 +41,7 @@ impl<'a> TaskSummaryFactory<'a> {
         hash_tracker: TaskHashTracker,
         env_at_start: &'a EnvironmentVariableMap,
         run_opts: &'a RunOpts<'a>,
-        global_env_mode: EnvMode,
+        global_env_mode: cli::EnvMode,
     ) -> Self {
         Self {
             package_graph,
@@ -162,7 +162,7 @@ impl<'a> TaskSummaryFactory<'a> {
             // TODO: this is some very messy code that appears in a few places
             // we should attempt to calculate this once and reuse it
             env_mode: match self.global_env_mode {
-                EnvMode::Infer => {
+                cli::EnvMode::Infer => {
                     if task_definition.pass_through_env.is_some() {
                         EnvMode::Strict
                     } else {
@@ -172,8 +172,8 @@ impl<'a> TaskSummaryFactory<'a> {
                         EnvMode::Loose
                     }
                 }
-                EnvMode::Strict => EnvMode::Strict,
-                EnvMode::Loose => EnvMode::Loose,
+                cli::EnvMode::Strict => EnvMode::Strict,
+                cli::EnvMode::Loose => EnvMode::Loose,
             },
             environment_variables: TaskEnvVarSummary::new(
                 task_definition,

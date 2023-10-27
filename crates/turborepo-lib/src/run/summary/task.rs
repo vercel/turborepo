@@ -6,8 +6,8 @@ use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_cache::CacheResponse;
 use turborepo_env::{DetailedMap, EnvironmentVariableMap};
 
-use super::execution::TaskExecutionSummary;
-use crate::{cli::EnvMode, run::task_id::TaskId, task_graph::TaskDefinition};
+use super::{execution::TaskExecutionSummary, EnvMode};
+use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
