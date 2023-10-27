@@ -28,7 +28,7 @@ use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
 use self::{
     execution::{TaskState, TaskTracker},
-    task::SingleTaskSummary,
+    task::SinglePackageTaskSummary,
     task_factory::TaskSummaryFactory,
 };
 use super::task_id::TaskId;
@@ -321,7 +321,7 @@ struct SinglePackageRunSummary<'a> {
     global_hash_summary: &'a GlobalHashSummary<'a>,
     env_mode: EnvMode,
     framework_inference: bool,
-    tasks: Vec<SingleTaskSummary>,
+    tasks: Vec<SinglePackageTaskSummary>,
     user: &'a str,
     pub scm: &'a SCMState,
 }
@@ -332,7 +332,7 @@ impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
             .tasks
             .iter()
             .cloned()
-            .map(SingleTaskSummary::from)
+            .map(SinglePackageTaskSummary::from)
             .collect::<Vec<_>>();
         tasks.sort_by(|t1, t2| t1.task_id.cmp(&t2.task_id));
         SinglePackageRunSummary {

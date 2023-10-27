@@ -50,7 +50,7 @@ pub(crate) struct TaskSummary {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct SingleTaskSummary {
+pub(crate) struct SinglePackageTaskSummary {
     pub task_id: String,
     pub task: String,
     #[serde(flatten)]
@@ -176,7 +176,7 @@ impl TaskEnvVarSummary {
     }
 }
 
-impl From<TaskSummary> for SingleTaskSummary {
+impl From<TaskSummary> for SinglePackageTaskSummary {
     fn from(value: TaskSummary) -> Self {
         let TaskSummary {
             task_id, shared, ..

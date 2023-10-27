@@ -5,7 +5,7 @@ use turborepo_env::EnvironmentVariableMap;
 use super::{
     execution::TaskExecutionSummary,
     task::{SharedTaskSummary, TaskEnvVarSummary},
-    EnvMode, SingleTaskSummary, TaskSummary,
+    EnvMode, SinglePackageTaskSummary, TaskSummary,
 };
 use crate::{
     cli,
@@ -82,7 +82,7 @@ impl<'a> TaskSummaryFactory<'a> {
         &self,
         task_id: TaskId<'static>,
         execution: Option<TaskExecutionSummary>,
-    ) -> Result<SingleTaskSummary, Error> {
+    ) -> Result<SinglePackageTaskSummary, Error> {
         let workspace_info = self.workspace_info(&task_id)?;
         let shared = self.shared(
             &task_id,
@@ -94,7 +94,7 @@ impl<'a> TaskSummaryFactory<'a> {
             },
         )?;
 
-        Ok(SingleTaskSummary {
+        Ok(SinglePackageTaskSummary {
             task_id: task_id.task().to_string(),
             task: task_id.task().to_string(),
             shared,
