@@ -191,10 +191,7 @@ impl<'a> Visitor<'a> {
 
             debug!("task {} hash is {}", info, task_hash);
             if self.dry {
-                self.run_tracker
-                    .track_task(info.clone().into_owned())
-                    .dry_run()
-                    .await;
+                self.run_tracker.track_task(info.clone()).dry_run().await;
                 callback.send(Ok(())).ok();
                 continue;
             }
