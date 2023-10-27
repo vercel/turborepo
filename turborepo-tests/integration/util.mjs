@@ -8,7 +8,7 @@ const __dirname = __filename.replace(/[^/\\]*$/, "");
 const venvName = ".cram_env";
 const venvPath = path.join(__dirname, venvName);
 
-const isWindows = process.platform === "win32";
+export const isWindows = process.platform === "win32";
 
 const venvBin = isWindows
   ? path.join(venvPath, "Scripts")
@@ -17,10 +17,10 @@ const venvBin = isWindows
 const allowedTools = ["python3", "pip", "prysk"];
 
 export function debugVenv() {
-  console.log(`venvPath: ${venvPath}`);
-  console.log("venvPath contents");
+  console.log(`ls ${venvPath}`);
   execSync(`ls -la ${venvPath}`, { stdio: "inherit" });
-  console.log("venvBin contents");
+
+  console.log(`ls ${venvBin}`);
   execSync(`ls -la ${venvBin}`, { stdio: "inherit" });
 }
 
@@ -29,7 +29,9 @@ export function getVenvBin(tool) {
     throw new Error(`Tool not allowed: ${tool}`);
   }
 
-  return path.join(venvBin, tool);
+  const suffix = isWindows ? ".exe" : "";
+
+  return path.join(venvBin, tool + suffix);
 }
 
 export function makeVenv() {
