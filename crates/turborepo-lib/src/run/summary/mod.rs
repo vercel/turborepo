@@ -651,13 +651,16 @@ impl<'a> RunSummary<'a> {
     fn format_json(&mut self) -> Result<String, Error> {
         self.normalize();
 
-        if self.monorepo {
-            Ok(serde_json::to_string_pretty(&self)?)
+        let mut rendered_json = if self.monorepo {
+            serde_json::to_string_pretty(&self)
         } else {
             // Deref coercion used to get an immutable reference from the mutable reference.
             let monorepo_rsm = SinglePackageRunSummary::from(&*self);
-            Ok(serde_json::to_string_pretty(&monorepo_rsm)?)
-        }
+            serde_json::to_string_pretty(&monorepo_rsm)
+        }?;
+        // Go produces an extra newline at the end of the JSON
+        rendered_json.push('\n');
+        Ok(rendered_json)
     }
 
     fn normalize(&mut self) {
