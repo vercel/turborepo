@@ -82,7 +82,7 @@ pub(crate) struct SharedTaskSummary<T> {
     pub execution: Option<TaskExecutionSummary>,
     pub env_mode: EnvMode,
     pub environment_variables: TaskEnvVarSummary,
-    pub dot_env: Vec<RelativeUnixPathBuf>,
+    pub dot_env: Option<Vec<RelativeUnixPathBuf>>,
 }
 
 #[derive(Debug, Serialize, Clone)]

@@ -575,7 +575,10 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  .env Files Considered\t=\t{}",
-                task.shared.dot_env.len()
+                task.shared
+                    .dot_env
+                    .as_ref()
+                    .map_or(0, |dot_env| dot_env.len())
             )?;
 
             cwriteln!(
