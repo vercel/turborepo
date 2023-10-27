@@ -73,9 +73,11 @@ impl<'a> TaskSummaryFactory<'a> {
             },
         )?;
         let package = task_id.package().to_string();
+        let task = task_id.task().to_string();
 
         Ok(TaskSummary {
             task_id,
+            task,
             dir: workspace_info.package_path().to_string(),
             package,
             shared,

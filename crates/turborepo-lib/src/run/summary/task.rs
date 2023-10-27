@@ -46,6 +46,7 @@ enum CacheSource {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TaskSummary {
     pub task_id: TaskId<'static>,
+    pub task: String,
     pub dir: String,
     pub package: String,
     #[serde(flatten)]
