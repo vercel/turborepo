@@ -114,7 +114,8 @@ pub struct TaskEnvVarSummary {
 
     pub configured: Vec<String>,
     pub inferred: Vec<String>,
-    pub pass_through: Vec<String>,
+    #[serde(rename = "passthrough")]
+    pub pass_through: Option<Vec<String>>,
 }
 
 impl TaskCacheSummary {
@@ -171,6 +172,17 @@ impl TaskEnvVarSummary {
         env_vars: DetailedMap,
         env_at_execution_start: &EnvironmentVariableMap,
     ) -> Result<Self, regex::Error> {
+        // TODO: this operation differs from the actual env that gets passed in during
+        // task execution it should be unified, but first we should copy Go's
+        // behavior as we try to match the implementations
+        let pass_through = env_at_execution_start
+            .from_wildcards(
+                task_definition
+                    .pass_through_env
+                    .as_deref()
+                    .unwrap_or_default(),
+            )?
+            .to_secret_hashable();
         Ok(Self {
             specified: TaskEnvConfiguration {
                 env: task_definition.env.clone(),
@@ -178,17 +190,10 @@ impl TaskEnvVarSummary {
             },
             configured: env_vars.by_source.explicit.to_secret_hashable(),
             inferred: env_vars.by_source.matching.to_secret_hashable(),
-            // TODO: this operation differs from the actual env that gets passed in during task
-            // execution it should be unified, but first we should copy Go's behavior as
-            // we try to match the implementations
-            pass_through: env_at_execution_start
-                .from_wildcards(
-                    task_definition
-                        .pass_through_env
-                        .as_deref()
-                        .unwrap_or_default(),
-                )?
-                .to_secret_hashable(),
+            pass_through: match pass_through.is_empty() {
+                false => Some(pass_through),
+                true => None,
+            },
         })
     }
 }

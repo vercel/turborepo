@@ -619,7 +619,11 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  Passed Through Env Vars Values\t=\t{}",
-                task.shared.environment_variables.pass_through.join(", ")
+                task.shared
+                    .environment_variables
+                    .pass_through
+                    .as_ref()
+                    .map_or_else(String::new, |vars| vars.join(", "))
             )?;
 
             // If there's an error, we can silently ignore it, we don't need to block the
