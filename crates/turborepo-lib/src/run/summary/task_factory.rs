@@ -144,6 +144,12 @@ impl<'a> TaskSummaryFactory<'a> {
 
         let (dependencies, dependents) = self.dependencies_and_dependents(task_id, display_task);
 
+        let log_file = {
+            let path = workspace_info.package_path().to_owned();
+            let relative_log_file = TaskDefinition::workspace_relative_log_file(task_id.task());
+            path.join(&relative_log_file).to_string()
+        };
+
         Ok(SharedTaskSummary {
             hash,
             inputs: expanded_inputs.into_iter().collect(),
@@ -153,7 +159,7 @@ impl<'a> TaskSummaryFactory<'a> {
             cli_arguments: self.run_opts.pass_through_args.to_vec(),
             outputs: task_definition.outputs.inclusions.clone(),
             excluded_outputs: task_definition.outputs.exclusions.clone(),
-            log_file: workspace_info.task_log_path(task_id).to_string(),
+            log_file,
             resolved_task_definition: task_definition.clone(),
             expanded_outputs,
             framework,
