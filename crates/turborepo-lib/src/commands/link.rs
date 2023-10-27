@@ -34,8 +34,6 @@ use crate::{
 pub enum Error {
     #[error(transparent)]
     Config(#[from] config::Error),
-    #[error("unable to find team {0}")]
-    TeamNotFound(String),
     #[error("usage limit")]
     UsageLimit,
     #[error("spending paused")]
@@ -44,14 +42,23 @@ pub enum Error {
     HomeDirectoryNotFound,
     #[error("User not found. Please login to Turborepo first by running {command}.")]
     TokenNotFound { command: StyledObject<&'static str> },
+    // User decided to not link the remote cache
+    #[error("link cancelled")]
+    NotLinking,
     #[error("canceled")]
-    UserCanceled,
+    UserCanceled(#[source] io::Error),
     #[error("could not get user information {0}")]
     UserNotFound(#[source] turborepo_api_client::Error),
+    // We failed to fetch the team for whatever reason
+    #[error("could not get information for team {1}")]
+    TeamRequest(#[source] turborepo_api_client::Error, String),
+    // We fetched the team, but it doesn't exist.
+    #[error("could not find team {0}")]
+    TeamNotFound(String),
     #[error("could not get teams information")]
-    TeamsNotFound(#[source] turborepo_api_client::Error),
+    TeamsRequest(#[source] turborepo_api_client::Error),
     #[error("could not get spaces information")]
-    SpacesNotFound(#[source] turborepo_api_client::Error),
+    SpacesRequest(#[source] turborepo_api_client::Error),
     #[error("could not get caching status")]
     CachingStatusNotFound(#[source] turborepo_api_client::Error),
     #[error("Failed to open browser. Please visit {0} to enable Remote Caching")]
@@ -136,8 +143,7 @@ pub(crate) async fn verify_caching_enabled<'a>(
                         let team = api_client
                             .get_team(token, team_id)
                             .await
-                            .ok()
-                            .flatten()
+                            .map_err(|err| Error::TeamRequest(err, team_id.to_string()))?
                             .ok_or_else(|| Error::TeamNotFound(team_id.to_string()))?;
                         let url =
                             format!("https://vercel.com/teams/{}/settings/billing", team.slug);
@@ -182,7 +188,7 @@ pub async fn link(
             );
 
             if !should_link_remote_cache(base, &repo_root_with_tilde)? {
-                return Err(Error::UserCanceled);
+                return Err(Error::NotLinking);
             }
 
             let user_response = api_client
@@ -199,7 +205,7 @@ pub async fn link(
             let teams_response = api_client
                 .get_teams(token)
                 .await
-                .map_err(Error::TeamsNotFound)?;
+                .map_err(Error::TeamsRequest)?;
 
             let selected_team = select_team(base, &teams_response.teams, user_display_name)?;
 
@@ -276,7 +282,7 @@ pub async fn link(
             );
 
             if !should_link_spaces(base, &repo_root_with_tilde)? {
-                return Err(Error::UserCanceled);
+                return Err(Error::NotLinking);
             }
 
             let user_response = api_client
@@ -293,7 +299,7 @@ pub async fn link(
             let teams_response = api_client
                 .get_teams(token)
                 .await
-                .map_err(Error::TeamsNotFound)?;
+                .map_err(Error::TeamsRequest)?;
 
             let selected_team = select_team(base, &teams_response.teams, user_display_name)?;
 
@@ -305,7 +311,7 @@ pub async fn link(
             let spaces_response = api_client
                 .get_spaces(token, Some(team_id))
                 .await
-                .map_err(Error::SpacesNotFound)?;
+                .map_err(Error::SpacesRequest)?;
 
             let selected_space = select_space(base, &spaces_response.spaces)?;
 
@@ -374,7 +380,7 @@ fn should_enable_caching() -> Result<bool, Error> {
         )
         .default(true)
         .interact()
-        .map_err(|_| Error::UserCanceled)
+        .map_err(Error::UserCanceled)
 }
 
 #[cfg(test)]
@@ -423,7 +429,7 @@ fn select_team<'a>(
         .items(&team_names)
         .default(0)
         .interact()
-        .map_err(|_| Error::UserCanceled)?;
+        .map_err(Error::UserCanceled)?;
 
     if selection == 0 {
         Ok(SelectedTeam::User)
@@ -468,7 +474,7 @@ fn select_space<'a>(base: &CommandBase, spaces: &'a [Space]) -> Result<SelectedS
         .items(&space_names)
         .default(0)
         .interact()
-        .map_err(|_| Error::UserCanceled)?;
+        .map_err(Error::UserCanceled)?;
 
     Ok(SelectedSpace::Space(&spaces[selection]))
 }
@@ -491,7 +497,7 @@ fn should_link_remote_cache(base: &CommandBase, location: &str) -> Result<bool, 
     Confirm::new()
         .with_prompt(prompt)
         .interact()
-        .map_err(|_| Error::UserCanceled)
+        .map_err(Error::UserCanceled)
 }
 
 #[cfg(test)]
@@ -512,7 +518,7 @@ fn should_link_spaces(base: &CommandBase, location: &str) -> Result<bool, Error>
     Confirm::new()
         .with_prompt(prompt)
         .interact()
-        .map_err(|_| Error::UserCanceled)
+        .map_err(Error::UserCanceled)
 }
 
 fn enable_caching(url: &str) -> Result<(), Error> {

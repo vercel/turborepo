@@ -215,18 +215,6 @@ impl<'a> Run<'a> {
         let mut engine =
             self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
 
-        engine
-            .validate(&pkg_dep_graph, opts.run_opts.concurrency)
-            .map_err(|errors| {
-                Error::EngineValidation(
-                    errors
-                        .into_iter()
-                        .map(|e| e.to_string())
-                        .sorted()
-                        .join("\n"),
-                )
-            })?;
-
         if !opts.run_opts.dry_run && opts.run_opts.graph.is_none() {
             self.print_run_prelude(&opts, &filtered_pkgs);
         }
@@ -569,7 +557,7 @@ impl<'a> Run<'a> {
         opts: &Opts,
         root_turbo_json: &TurboJson,
         filtered_pkgs: &HashSet<WorkspaceName>,
-    ) -> Result<Engine> {
+    ) -> Result<Engine, Error> {
         let engine = EngineBuilder::new(
             &self.base.repo_root,
             pkg_dep_graph,
@@ -595,13 +583,12 @@ impl<'a> Run<'a> {
             engine
                 .validate(pkg_dep_graph, opts.run_opts.concurrency)
                 .map_err(|errors| {
-                    anyhow!(
-                        "error preparing engine: Invalid persistent task configuration:\n{}",
+                    Error::EngineValidation(
                         errors
                             .into_iter()
                             .map(|e| e.to_string())
                             .sorted()
-                            .join("\n")
+                            .join("\n"),
                     )
                 })?;
         }
