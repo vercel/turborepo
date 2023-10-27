@@ -7,7 +7,11 @@ use turborepo_cache::CacheResponse;
 use turborepo_env::{DetailedMap, EnvironmentVariableMap};
 
 use super::{execution::TaskExecutionSummary, EnvMode};
-use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
+use crate::{
+    cli::OutputLogsMode,
+    run::task_id::TaskId,
+    task_graph::{TaskDefinition, TaskOutputs},
+};
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -72,7 +76,7 @@ pub(crate) struct SharedTaskSummary<T> {
     pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
     pub dependencies: Vec<T>,
     pub dependents: Vec<T>,
-    pub resolved_task_definition: TaskDefinition,
+    pub resolved_task_definition: TaskSummaryTaskDefinition,
     pub framework: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution: Option<TaskExecutionSummary>,
@@ -87,6 +91,20 @@ pub struct TaskEnvConfiguration {
     pub env: Vec<String>,
     // TODO: we most likely want this to be optional
     pub pass_through_env: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskSummaryTaskDefinition {
+    outputs: Vec<String>,
+    cache: bool,
+    depends_on: Vec<String>,
+    inputs: Vec<String>,
+    output_mode: OutputLogsMode,
+    persistent: bool,
+    env: Vec<String>,
+    pass_through_env: Option<Vec<String>>,
+    dot_env: Option<Vec<RelativeUnixPathBuf>>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -241,6 +259,67 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
     }
 }
 
+impl From<TaskDefinition> for TaskSummaryTaskDefinition {
+    fn from(value: TaskDefinition) -> Self {
+        let TaskDefinition {
+            outputs:
+                TaskOutputs {
+                    inclusions,
+                    exclusions,
+                },
+            cache,
+            mut env,
+            pass_through_env,
+            dot_env,
+            topological_dependencies,
+            task_dependencies,
+            mut inputs,
+            output_mode,
+            persistent,
+        } = value;
+
+        let mut outputs = inclusions;
+        for exclusion in exclusions {
+            outputs.push(format!("!{exclusion}"));
+        }
+
+        let mut depends_on =
+            Vec::with_capacity(task_dependencies.len() + topological_dependencies.len());
+        for task_dependency in task_dependencies {
+            depends_on.push(task_dependency.to_string());
+        }
+        for topological_dependency in topological_dependencies {
+            depends_on.push(format!("^{topological_dependency}"));
+        }
+
+        // This should _not_ be sorted.
+        let dot_env = match dot_env.is_empty() {
+            false => Some(dot_env),
+            true => None,
+        };
+
+        // These _should_ already be sorted when the TaskDefinition struct was
+        // unmarshaled, but we want to ensure they're sorted on the way out
+        // also, just in case something in the middle mutates the items.
+        depends_on.sort();
+        outputs.sort();
+        env.sort();
+        inputs.sort();
+
+        Self {
+            outputs,
+            cache,
+            depends_on,
+            inputs,
+            output_mode,
+            persistent,
+            env,
+            pass_through_env,
+            dot_env,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use serde_json::json;
@@ -278,6 +357,25 @@ mod test {
                 "timeSaved": 6,
             })
         ; "local cache hit"
+    )]
+    #[test_case(
+        TaskSummaryTaskDefinition {
+            outputs: vec!["foo".into()],
+            cache: true,
+            ..Default::default()
+        },
+        json!({
+            "outputs": ["foo"],
+            "cache": true,
+            "dependsOn": [],
+            "inputs": [],
+            "outputMode": "full",
+            "persistent": false,
+            "env": [],
+            "passThroughEnv": null,
+            "dotEnv": null,
+        })
+        ; "resolved task definition"
     )]
     fn test_serialization(value: impl serde::Serialize, expected: serde_json::Value) {
         assert_eq!(serde_json::to_value(value).unwrap(), expected);

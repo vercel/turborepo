@@ -163,7 +163,7 @@ impl<'a> TaskSummaryFactory<'a> {
                 false => Some(task_definition.outputs.exclusions.clone()),
             },
             log_file,
-            resolved_task_definition: task_definition.clone(),
+            resolved_task_definition: task_definition.clone().into(),
             expanded_outputs,
             framework,
             dependencies,

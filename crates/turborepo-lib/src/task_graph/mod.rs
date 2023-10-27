@@ -70,7 +70,7 @@ impl Default for TaskDefinitionStable {
 }
 
 // Constructed from a RawTaskDefinition
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct TaskDefinition {
     pub outputs: TaskOutputs,
     pub(crate) cache: bool,
