@@ -67,7 +67,7 @@ pub(crate) struct SharedTaskSummary<T> {
     pub command: String,
     pub cli_arguments: Vec<String>,
     pub outputs: Vec<String>,
-    pub excluded_outputs: Vec<String>,
+    pub excluded_outputs: Option<Vec<String>>,
     pub log_file: String,
     pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
     pub dependencies: Vec<T>,

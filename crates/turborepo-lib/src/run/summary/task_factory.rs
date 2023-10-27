@@ -158,7 +158,10 @@ impl<'a> TaskSummaryFactory<'a> {
             command,
             cli_arguments: self.run_opts.pass_through_args.to_vec(),
             outputs: task_definition.outputs.inclusions.clone(),
-            excluded_outputs: task_definition.outputs.exclusions.clone(),
+            excluded_outputs: match task_definition.outputs.exclusions.is_empty() {
+                true => None,
+                false => Some(task_definition.outputs.exclusions.clone()),
+            },
             log_file,
             resolved_task_definition: task_definition.clone(),
             expanded_outputs,
