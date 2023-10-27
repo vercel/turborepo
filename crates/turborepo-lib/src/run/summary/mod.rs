@@ -111,7 +111,7 @@ pub struct RunSummary<'a> {
     global_hash_summary: GlobalHashSummary<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
     execution: Option<ExecutionSummary<'a>>,
-    packages: HashSet<WorkspaceName>,
+    packages: Vec<WorkspaceName>,
     env_mode: EnvMode,
     framework_inference: bool,
     tasks: Vec<TaskSummary>,
@@ -236,7 +236,7 @@ impl RunTracker {
             id: Ksuid::new(None, None),
             version: RUN_SUMMARY_SCHEMA_VERSION.to_string(),
             turbo_version: self.version,
-            packages,
+            packages: packages.into_iter().sorted().collect(),
             execution: Some(execution_summary),
             env_mode: run_opts.env_mode.into(),
             framework_inference: run_opts.framework_inference,
@@ -672,7 +672,7 @@ impl<'a> RunSummary<'a> {
         // For single packages, we don't need the packages
         // and each task summary needs some cleaning
         if !self.monorepo {
-            self.packages.drain();
+            self.packages.clear();
         }
 
         self.tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
