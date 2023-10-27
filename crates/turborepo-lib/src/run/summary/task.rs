@@ -47,7 +47,6 @@ enum CacheSource {
 pub(crate) struct TaskSummary {
     pub task_id: TaskId<'static>,
     pub task: String,
-    pub dir: String,
     pub package: String,
     #[serde(flatten)]
     pub shared: SharedTaskSummary<TaskId<'static>>,
@@ -74,6 +73,8 @@ pub(crate) struct SharedTaskSummary<T> {
     pub outputs: Option<Vec<String>>,
     pub excluded_outputs: Option<Vec<String>>,
     pub log_file: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub directory: Option<String>,
     pub dependencies: Vec<T>,
     pub dependents: Vec<T>,
     pub resolved_task_definition: TaskSummaryTaskDefinition,
@@ -232,6 +233,7 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
             env_mode,
             environment_variables,
             dot_env,
+            ..
         } = value;
         Self {
             hash,
@@ -243,6 +245,7 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
             outputs,
             excluded_outputs,
             log_file,
+            directory: None,
             expanded_outputs,
             dependencies: dependencies
                 .into_iter()

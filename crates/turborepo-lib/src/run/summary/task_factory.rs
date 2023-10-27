@@ -78,7 +78,6 @@ impl<'a> TaskSummaryFactory<'a> {
         Ok(TaskSummary {
             task_id,
             task,
-            dir: workspace_info.package_path().to_string(),
             package,
             shared,
         })
@@ -178,6 +177,7 @@ impl<'a> TaskSummaryFactory<'a> {
                 false => Some(task_definition.outputs.exclusions.clone()),
             },
             log_file,
+            directory: Some(workspace_info.package_path().to_string()),
             resolved_task_definition: task_definition.clone().into(),
             expanded_outputs,
             framework,
