@@ -162,35 +162,45 @@ impl EnvironmentVariableMap {
             exclusions: EnvironmentVariableMap::default(),
         };
 
-        let mut include_patterns = Vec::new();
-        let mut exclude_patterns = Vec::new();
+        // let mut include_patterns = Vec::new();
+        // let mut exclude_patterns = Vec::new();
 
-        for wildcard_pattern in wildcard_patterns {
-            let wildcard_pattern = wildcard_pattern.as_ref();
-            if let Some(rest) = wildcard_pattern.strip_prefix('!') {
-                let exclude_pattern = wildcard_to_regex_pattern(rest);
-                exclude_patterns.push(exclude_pattern);
-            } else if wildcard_pattern.starts_with("\\!") {
-                let include_pattern = wildcard_to_regex_pattern(&wildcard_pattern[1..]);
-                include_patterns.push(include_pattern);
-            } else {
-                let include_pattern = wildcard_to_regex_pattern(wildcard_pattern);
-                include_patterns.push(include_pattern);
-            }
-        }
+        // for wildcard_pattern in wildcard_patterns {
+        //     let wildcard_pattern = wildcard_pattern.as_ref();
+        //     if let Some(rest) = wildcard_pattern.strip_prefix('!') {
+        //         let exclude_pattern = wildcard_to_regex_pattern(rest);
+        //         exclude_patterns.push(exclude_pattern);
+        //     } else if wildcard_pattern.starts_with("\\!") {
+        //         let include_pattern =
+        // wildcard_to_regex_pattern(&wildcard_pattern[1..]);
+        //         include_patterns.push(include_pattern);
+        //     } else {
+        //         let include_pattern = wildcard_to_regex_pattern(wildcard_pattern);
+        //         include_patterns.push(include_pattern);
+        //     }
+        // }
 
-        let include_regex_string = format!("^({})$", include_patterns.join("|"));
-        let exclude_regex_string = format!("^({})$", exclude_patterns.join("|"));
+        // let include_regex_string = format!("^({})$", include_patterns.join("|"));
+        // let exclude_regex_string = format!("^({})$", exclude_patterns.join("|"));
 
-        let include_regex = Regex::new(&include_regex_string)?;
-        let exclude_regex = Regex::new(&exclude_regex_string)?;
+        // let include_regex = Regex::new(&include_regex_string)?;
+        // let exclude_regex = Regex::new(&exclude_regex_string)?;
+        let matcher = EnvMatcher::from_patterns(wildcard_patterns)?;
         for (env_var, env_value) in &self.0 {
-            if !include_patterns.is_empty() && include_regex.is_match(env_var) {
+            if matcher.is_included(env_var) {
                 output.inclusions.insert(env_var.clone(), env_value.clone());
             }
-            if !exclude_patterns.is_empty() && exclude_regex.is_match(env_var) {
+            if matcher.is_excluded(env_var) {
                 output.exclusions.insert(env_var.clone(), env_value.clone());
             }
+            // if !include_patterns.is_empty() &&
+            // include_regex.is_match(env_var) {     output.
+            // inclusions.insert(env_var.clone(), env_value.clone());
+            // }
+            // if !exclude_patterns.is_empty() &&
+            // exclude_regex.is_match(env_var) {     output.
+            // exclusions.insert(env_var.clone(), env_value.clone());
+            // }
         }
 
         Ok(output)
@@ -231,6 +241,70 @@ impl EnvironmentVariableMap {
 const WILDCARD: char = '*';
 const WILDCARD_ESCAPE: char = '\\';
 const REGEX_WILDCARD_SEGMENT: &str = ".*";
+
+#[derive(Default)]
+pub struct EnvMatcher {
+    inclusion: Option<Regex>,
+    exclusion: Option<Regex>,
+}
+
+impl EnvMatcher {
+    pub fn from_patterns(patterns: &[impl AsRef<str>]) -> Result<Self, regex::Error> {
+        let mut include_patterns = Vec::new();
+        let mut exclude_patterns = Vec::new();
+
+        for wildcard_pattern in patterns {
+            let wildcard_pattern = wildcard_pattern.as_ref();
+            if let Some(rest) = wildcard_pattern.strip_prefix('!') {
+                let exclude_pattern = wildcard_to_regex_pattern(rest);
+                exclude_patterns.push(exclude_pattern);
+            } else if wildcard_pattern.starts_with("\\!") {
+                let include_pattern = wildcard_to_regex_pattern(&wildcard_pattern[1..]);
+                include_patterns.push(include_pattern);
+            } else {
+                let include_pattern = wildcard_to_regex_pattern(wildcard_pattern);
+                include_patterns.push(include_pattern);
+            }
+        }
+
+        let inclusion = if include_patterns.is_empty() {
+            None
+        } else {
+            let include_regex_string = format!("^({})$", include_patterns.join("|"));
+            Some(Regex::new(&include_regex_string)?)
+        };
+
+        let exclusion = if exclude_patterns.is_empty() {
+            None
+        } else {
+            let exclude_regex_string = format!("^({})$", exclude_patterns.join("|"));
+            Some(Regex::new(&exclude_regex_string)?)
+        };
+
+        Ok(Self {
+            inclusion,
+            exclusion,
+        })
+    }
+
+    pub fn is_included(&self, var: &str) -> bool {
+        self.inclusion
+            .as_ref()
+            .map(|inclusion| inclusion.is_match(var))
+            .unwrap_or(false)
+    }
+
+    pub fn is_excluded(&self, var: &str) -> bool {
+        self.exclusion
+            .as_ref()
+            .map(|exclusion| exclusion.is_match(var))
+            .unwrap_or(false)
+    }
+
+    pub fn is_allowed(&self, var: &str) -> bool {
+        self.is_included(var) && !self.is_excluded(var)
+    }
+}
 
 fn wildcard_to_regex_pattern(pattern: &str) -> String {
     let mut regex_string = Vec::new();

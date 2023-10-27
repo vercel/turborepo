@@ -10,12 +10,14 @@ use std::{
 use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
+use serde::Deserialize;
 use tokio::{process::Command, sync::mpsc};
-use tracing::{debug, error, Span};
-use turbopath::AbsoluteSystemPath;
-use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
+use tracing::{debug, error, warn, Span};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, PathRelation};
+use turborepo_env::{EnvMatcher, EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
 
+use super::TaskDefinition;
 use crate::{
     cli::EnvMode,
     engine::{Engine, ExecutionOptions, StopExecution},
@@ -233,7 +235,9 @@ impl<'a> Visitor<'a> {
             let hash_tracker = self.task_hasher.task_hash_tracker();
             let tracker = self.run_tracker.track_task(info.clone().into_owned());
 
+            let repo_root = self.repo_root.to_owned();
             let parent_span = Span::current();
+            let task_definition = task_definition.clone();
             tasks.push(tokio::spawn(async move {
                 let span = tracing::debug_span!("execute_task", task = %info.task());
                 span.follows_from(parent_span.id());
@@ -273,6 +277,10 @@ impl<'a> Visitor<'a> {
                 cmd.envs(execution_env.iter());
                 // Always last to make sure it overwrites any user configured env var.
                 cmd.env("TURBO_HASH", &task_hash);
+                let trace_file =
+                    workspace_directory.join_components(&[".turbo", &task_hash, "next-trace.json"]);
+                trace_file.ensure_dir().unwrap();
+                cmd.env("TURBO_CONFIG_TRACE_FILE", trace_file.to_string());
 
                 let mut stdout_writer =
                     match task_cache.output_writer(pretty_prefix.clone(), output_client.stdout()) {
@@ -384,10 +392,23 @@ impl<'a> Visitor<'a> {
 
                 if let Err(e) = stdout_writer.flush() {
                     error!("{e}");
-                } else if let Err(e) = task_cache
-                    .save_outputs(&mut prefixed_ui, Duration::from_secs(1))
-                    .await
-                {
+                } else if let Err(e) = {
+                    if trace_file.exists()
+                        && can_cache(
+                            &trace_file,
+                            &repo_root,
+                            &workspace_directory,
+                            &task_definition,
+                            &execution_env,
+                        )
+                    {
+                        task_cache
+                            .save_outputs(&mut prefixed_ui, Duration::from_secs(1))
+                            .await
+                    } else {
+                        Ok(())
+                    }
+                } {
                     error!("error caching output: {e}");
                 } else {
                     hash_tracker.insert_expanded_outputs(
@@ -527,6 +548,134 @@ impl<'a> Visitor<'a> {
     pub fn dry_run(&mut self) {
         self.dry = true;
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct TracePaths {
+    read: Vec<String>,
+    checked: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TraceAddr {
+    addr: String,
+    port: u16,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NextJSTrace {
+    paths: TracePaths,
+    urls: Vec<String>,
+    addrs: Vec<TraceAddr>,
+    env_vars: Vec<String>,
+}
+
+fn can_cache(
+    trace_file: &AbsoluteSystemPath,
+    repo_root: &AbsoluteSystemPath,
+    workspace_dir: &AbsoluteSystemPath,
+    task_definition: &TaskDefinition,
+    env_map: &EnvironmentVariableMap,
+) -> bool {
+    let Ok(f) = trace_file.open() else {
+        // TODO: better error
+        warn!("trace file {} doesn't exist", trace_file);
+        return false;
+    };
+    let trace: NextJSTrace = match serde_json::from_reader(f) {
+        Ok(trace) => trace,
+        Err(e) => {
+            warn!("failed to parse trace file {trace_file}: {e}");
+            return false;
+        }
+    };
+    if !trace.urls.is_empty() {
+        warn!(
+            "skipping caching, trace file includes URLs: {:?}",
+            trace.urls
+        );
+        return false;
+    }
+    if !trace.addrs.is_empty() {
+        warn!(
+            "skipping caching, trace file includes network access: {:?}",
+            trace.addrs
+        );
+        return false;
+    }
+    if let Some(path) = trace.paths.read.iter().find(|raw_path| {
+        !can_cache_file_path(raw_path, task_definition, repo_root, &workspace_dir, false)
+    }) {
+        warn!("read of {path} is not covered by task definition");
+        return false;
+    }
+    if let Some(path) = trace.paths.checked.iter().find(|raw_path| {
+        !can_cache_file_path(raw_path, task_definition, repo_root, &workspace_dir, true)
+    }) {
+        warn!("check of {path} is not covered by task definition");
+        return false;
+    }
+    let env_matcher = EnvMatcher::from_patterns(&task_definition.env).unwrap();
+    let passthrough_matcher = task_definition
+        .pass_through_env
+        .as_ref()
+        .map(|pass_through_env| EnvMatcher::from_patterns(pass_through_env).unwrap())
+        .unwrap_or_default();
+    if let Some(env_var) = trace
+        .env_vars
+        .iter()
+        .find(|env_var| !can_cache_env_var(env_var, &[&env_matcher, &passthrough_matcher]))
+    {
+        warn!("env var {env_var} is not covered by task definition");
+        return false;
+    }
+    true
+}
+
+fn can_cache_env_var(var: &str, matchers: &[&EnvMatcher]) -> bool {
+    var.starts_with("TURBO_")
+        || matchers
+            .iter()
+            .find(|matcher| matcher.is_allowed(var))
+            .is_some()
+}
+
+fn can_cache_file_path(
+    raw_path: &str,
+    task_definition: &TaskDefinition,
+    repo_root: &AbsoluteSystemPath,
+    workspace_dir: &AbsoluteSystemPath,
+    is_check: bool,
+) -> bool {
+    let Ok(path) = AbsoluteSystemPathBuf::new(raw_path) else {
+        return false;
+    };
+    if path.relation_to_path(repo_root) == PathRelation::Parent {
+        is_check
+    } else {
+        // we're not exactly on the path to the repo root
+        is_nextjs(&path) || is_covered_by_inputs(&path, workspace_dir, task_definition)
+    }
+}
+
+fn is_covered_by_inputs(
+    path: &AbsoluteSystemPath,
+    workspace_dir: &AbsoluteSystemPath,
+    task_definition: &TaskDefinition,
+) -> bool {
+    if task_definition.inputs.is_empty() {
+        // TODO: check that file is not gitignored
+        workspace_dir.relation_to_path(path) == PathRelation::Parent
+    } else {
+        todo!("not yet supported")
+    }
+}
+
+fn is_nextjs(path: &AbsoluteSystemPath) -> bool {
+    let next_root =
+        AbsoluteSystemPathBuf::new("/Users/greg/workspace/next.js/packages/next/dist/").unwrap();
+    next_root.relation_to_path(path) == PathRelation::Parent
 }
 
 // A tiny enum that allows us to use the same type for stdout and stderr without
