@@ -540,7 +540,10 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  Outputs\t=\t{}",
-                task.shared.outputs.join(", ")
+                task.shared
+                    .outputs
+                    .as_ref()
+                    .map_or_else(String::new, |outputs| outputs.join(", "))
             )?;
             cwriteln!(
                 tab_writer,
