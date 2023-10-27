@@ -612,7 +612,8 @@ impl<'a> RunSummary<'a> {
                     .environment_variables
                     .specified
                     .pass_through_env
-                    .join(", ")
+                    .as_ref()
+                    .map_or_else(String::new, |pass_through_env| pass_through_env.join(", "))
             )?;
             cwriteln!(
                 tab_writer,

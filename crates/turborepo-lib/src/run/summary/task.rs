@@ -89,8 +89,7 @@ pub(crate) struct SharedTaskSummary<T> {
 #[serde(rename_all = "camelCase")]
 pub struct TaskEnvConfiguration {
     pub env: Vec<String>,
-    // TODO: we most likely want this to be optional
-    pub pass_through_env: Vec<String>,
+    pub pass_through_env: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Clone, Default)]
@@ -186,7 +185,7 @@ impl TaskEnvVarSummary {
         Ok(Self {
             specified: TaskEnvConfiguration {
                 env: task_definition.env.clone(),
-                pass_through_env: task_definition.pass_through_env.clone().unwrap_or_default(),
+                pass_through_env: task_definition.pass_through_env.clone(),
             },
             configured: env_vars.by_source.explicit.to_secret_hashable(),
             inferred: env_vars.by_source.matching.to_secret_hashable(),
