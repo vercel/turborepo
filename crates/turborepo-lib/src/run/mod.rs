@@ -388,7 +388,13 @@ impl<'a> Run<'a> {
         }
 
         visitor
-            .finish(exit_code, filtered_pkgs, global_hash_inputs)
+            .finish(
+                exit_code,
+                filtered_pkgs,
+                global_hash_inputs,
+                &engine,
+                &env_at_execution_start,
+            )
             .await?;
 
         Ok(exit_code)

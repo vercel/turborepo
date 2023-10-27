@@ -124,7 +124,7 @@ Check Rust implementation
   $ TASK_SUMMARY=$(getSummaryTask "$SUMMARY" "build")
 
   $ cat $SUMMARY | jq '.tasks | length'
-  0
+  1
   $ cat $SUMMARY | jq '.version'
   "1"
   $ cat $SUMMARY | jq '.execution | keys'

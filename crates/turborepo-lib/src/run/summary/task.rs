@@ -1,16 +1,15 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
+use itertools::Itertools;
 use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_cache::CacheResponse;
+use turborepo_env::{DetailedMap, EnvironmentVariableMap};
 
-use crate::{
-    cli::EnvMode,
-    run::{summary::execution::TaskExecutionSummary, task_id::TaskId},
-    task_graph::TaskDefinition,
-};
+use super::{execution::TaskExecutionSummary, EnvMode};
+use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskCacheSummary {
     // Deprecated, but keeping around for --dry=json
@@ -39,60 +38,65 @@ enum CacheSource {
     Remote,
 }
 
-#[derive(Debug, Serialize)]
-pub(crate) struct TaskSummary<'a> {
-    pub(crate) task_id: TaskId<'a>,
-    pub package: Option<String>,
-    pub hash: String,
-    pub expanded_inputs: HashMap<RelativeUnixPathBuf, String>,
-    pub external_deps_hash: String,
-    pub cache_summary: TaskCacheSummary,
-    pub command: String,
-    pub command_arguments: Vec<String>,
-    pub outputs: Vec<String>,
-    pub excluded_outputs: Vec<String>,
-    pub log_file_relative_path: String,
-    pub dir: Option<String>,
-    pub dependencies: Vec<TaskId<'a>>,
-    pub dependents: Vec<TaskId<'a>>,
-    pub resolved_task_definition: TaskDefinition,
-    pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
-    pub framework: String,
-    pub env_mode: EnvMode,
-    pub env_vars: TaskEnvVarSummary,
-    pub dot_env: Vec<RelativeUnixPathBuf>,
-    pub execution: TaskExecutionSummary,
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct TaskSummary {
+    pub task_id: TaskId<'static>,
+    pub dir: String,
+    pub package: String,
+    #[serde(flatten)]
+    pub shared: SharedTaskSummary<TaskId<'static>>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SinglePackageTaskSummary {
+    pub task_id: String,
+    pub task: String,
+    #[serde(flatten)]
+    pub shared: SharedTaskSummary<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SharedTaskSummary<T> {
+    pub hash: String,
+    pub inputs: BTreeMap<RelativeUnixPathBuf, String>,
+    pub hash_of_external_dependencies: String,
+    pub cache: TaskCacheSummary,
+    pub command: String,
+    pub cli_arguments: Vec<String>,
+    pub outputs: Vec<String>,
+    pub excluded_outputs: Vec<String>,
+    pub log_file: String,
+    pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
+    pub dependencies: Vec<T>,
+    pub dependents: Vec<T>,
+    pub resolved_task_definition: TaskDefinition,
+    pub framework: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution: Option<TaskExecutionSummary>,
+    pub env_mode: EnvMode,
+    pub environment_variables: TaskEnvVarSummary,
+    pub dot_env: Vec<RelativeUnixPathBuf>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskEnvConfiguration {
     pub env: Vec<String>,
+    // TODO: we most likely want this to be optional
     pub pass_through_env: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskEnvVarSummary {
     pub specified: TaskEnvConfiguration,
 
     pub configured: Vec<String>,
     pub inferred: Vec<String>,
     pub pass_through: Vec<String>,
-}
-
-impl<'a> TaskSummary<'a> {
-    pub fn clean_for_single_package(&mut self) {
-        for dependency in &mut self.dependencies {
-            dependency.strip_package();
-        }
-
-        for dependent in &mut self.dependents {
-            dependent.strip_package()
-        }
-
-        self.task_id.strip_package();
-        self.dir = None;
-        self.package = None;
-    }
 }
 
 impl TaskCacheSummary {
@@ -139,6 +143,100 @@ impl From<turborepo_cache::CacheSource> for CacheSource {
         match value {
             turborepo_cache::CacheSource::Local => Self::Local,
             turborepo_cache::CacheSource::Remote => Self::Remote,
+        }
+    }
+}
+
+impl TaskEnvVarSummary {
+    pub fn new(
+        task_definition: &TaskDefinition,
+        env_vars: DetailedMap,
+        env_at_execution_start: &EnvironmentVariableMap,
+    ) -> Result<Self, regex::Error> {
+        Ok(Self {
+            specified: TaskEnvConfiguration {
+                env: task_definition.env.clone(),
+                pass_through_env: task_definition.pass_through_env.clone().unwrap_or_default(),
+            },
+            configured: env_vars.by_source.explicit.to_secret_hashable(),
+            inferred: env_vars.by_source.matching.to_secret_hashable(),
+            // TODO: this operation differs from the actual env that gets passed in during task
+            // execution it should be unified, but first we should copy Go's behavior as
+            // we try to match the implementations
+            pass_through: env_at_execution_start
+                .from_wildcards(
+                    task_definition
+                        .pass_through_env
+                        .as_deref()
+                        .unwrap_or_default(),
+                )?
+                .to_secret_hashable(),
+        })
+    }
+}
+
+impl From<TaskSummary> for SinglePackageTaskSummary {
+    fn from(value: TaskSummary) -> Self {
+        let TaskSummary {
+            task_id, shared, ..
+        } = value;
+        Self {
+            task_id: task_id.task().to_string(),
+            task: task_id.task().to_string(),
+            shared: shared.into(),
+        }
+    }
+}
+
+impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
+    fn from(value: SharedTaskSummary<TaskId<'static>>) -> Self {
+        let SharedTaskSummary {
+            hash,
+            inputs,
+            hash_of_external_dependencies,
+            cache,
+            command,
+            cli_arguments,
+            outputs,
+            excluded_outputs,
+            log_file,
+            expanded_outputs,
+            dependencies,
+            dependents,
+            resolved_task_definition,
+            framework,
+            execution,
+            env_mode,
+            environment_variables,
+            dot_env,
+        } = value;
+        Self {
+            hash,
+            inputs,
+            hash_of_external_dependencies,
+            cache,
+            command,
+            cli_arguments,
+            outputs,
+            excluded_outputs,
+            log_file,
+            expanded_outputs,
+            dependencies: dependencies
+                .into_iter()
+                .map(|task_id| task_id.task().to_string())
+                .sorted()
+                .collect(),
+            dependents: dependents
+                .into_iter()
+                .map(|task_id| task_id.task().to_string())
+                .sorted()
+                .collect(),
+            resolved_task_definition,
+            framework,
+            execution,
+            env_mode,
+            environment_variables,
+            dot_env,
         }
     }
 }

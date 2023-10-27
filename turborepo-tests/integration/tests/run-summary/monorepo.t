@@ -175,7 +175,7 @@ Setup
   }
 
   $ cat $FIRST | jq '.tasks | length'
-  0
+  2
   $ cat $FIRST | jq '.version'
   "1"
   $ cat $FIRST | jq '.execution.exitCode'

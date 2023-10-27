@@ -76,13 +76,13 @@ impl From<turborepo_api_client::Error> for CacheError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum CacheSource {
     Local,
     Remote,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub struct CacheResponse {
     pub source: CacheSource,
     pub time_saved: u64,
