@@ -46,6 +46,7 @@ impl EcmascriptChunkItemContent {
                 let async_module = async_module_options.await?.clone_value();
 
                 EcmascriptChunkItemOptions {
+                    strict: true,
                     refresh,
                     externals,
                     async_module,
@@ -58,6 +59,7 @@ impl EcmascriptChunkItemContent {
                     // These things are not available in ESM
                     module: true,
                     exports: true,
+                    require: true,
                     this: true,
                     ..Default::default()
                 }
@@ -100,6 +102,9 @@ impl EcmascriptChunkItemContent {
         if this.options.exports {
             args.push("e: exports");
         }
+        if this.options.require {
+            args.push("t: require");
+        }
         if this.options.wasm {
             args.push("w: __turbopack_wasm__");
             args.push("u: __turbopack_wasm_module__");
@@ -107,9 +112,14 @@ impl EcmascriptChunkItemContent {
         let mut code = CodeBuilder::default();
         let args = FormatIter(|| args.iter().copied().intersperse(", "));
         if this.options.this {
-            write!(code, "(function({{ {} }}) {{ !function() {{\n\n", args,)?;
+            writeln!(code, "(function({{ {} }}) {{ !function() {{", args,)?;
         } else {
-            write!(code, "(({{ {} }}) => (() => {{\n\n", args,)?;
+            writeln!(code, "(({{ {} }}) => (() => {{", args,)?;
+        }
+        if this.options.strict {
+            code += "\"use strict\";\n\n";
+        } else {
+            code += "\n";
         }
 
         if this.options.async_module.is_some() {
@@ -140,6 +150,8 @@ impl EcmascriptChunkItemContent {
 
 #[derive(PartialEq, Eq, Default, Debug, Clone, Serialize, Deserialize, TraceRawVcs)]
 pub struct EcmascriptChunkItemOptions {
+    /// Whether this chunk item should be in "use strict" mode.
+    pub strict: bool,
     /// Whether this chunk item's module factory should include a
     /// `__turbopack_refresh__` argument.
     pub refresh: bool,
@@ -149,6 +161,9 @@ pub struct EcmascriptChunkItemOptions {
     /// Whether this chunk item's module factory should include an `exports`
     /// argument.
     pub exports: bool,
+    /// Whether this chunk item's module factory should include a `require`
+    /// argument.
+    pub require: bool,
     /// Whether this chunk item's module factory should include a
     /// `__turbopack_external_require__` argument.
     pub externals: bool,

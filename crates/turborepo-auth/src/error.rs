@@ -1,3 +1,5 @@
+use std::io;
+
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -7,4 +9,14 @@ pub enum Error {
          situations like using a `data:` URL."
     )]
     LoginUrlCannotBeABase { value: String },
+    #[error("failed to get token")]
+    FailedToGetToken,
+    #[error("failed to fetch user: {0}")]
+    FailedToFetchUser(turborepo_api_client::Error),
+    #[error("url is invalid: {0}")]
+    InvalidUrl(#[from] url::ParseError),
+    #[error("failed to validate sso token")]
+    FailedToValidateSSOToken(turborepo_api_client::Error),
+    #[error("failed to make sso token name")]
+    FailedToMakeSSOTokenName(io::Error),
 }

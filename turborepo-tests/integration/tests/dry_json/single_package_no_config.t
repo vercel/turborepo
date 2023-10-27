@@ -48,7 +48,7 @@ Setup
           "status": "MISS",
           "timeSaved": 0
         },
-        "command": "echo 'building' \u003e foo",
+        "command": "echo 'building' > foo",
         "cliArguments": [],
         "outputs": null,
         "excludedOutputs": null,
@@ -67,7 +67,7 @@ Setup
           "dotEnv": null
         },
         "expandedOutputs": [],
-        "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
+        "framework": "<NO FRAMEWORK DETECTED>",
         "envMode": "loose",
         "environmentVariables": {
           "specified": {

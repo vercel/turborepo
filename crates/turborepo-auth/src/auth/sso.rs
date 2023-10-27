@@ -1,20 +1,19 @@
 use std::{borrow::Cow, sync::Arc};
 
-use anyhow::{anyhow, Context, Result};
 use reqwest::Url;
 use tokio::sync::OnceCell;
 use tracing::warn;
 use turborepo_api_client::Client;
 use turborepo_ui::{start_spinner, BOLD, UI};
 
-use crate::{error, server, ui};
+use crate::{error, server, ui, Error};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 const DEFAULT_SSO_PROVIDER: &str = "SAML/OIDC Single Sign-On";
 
-fn make_token_name() -> Result<String> {
-    let host = hostname::get()?;
+fn make_token_name() -> Result<String, Error> {
+    let host = hostname::get().map_err(Error::FailedToMakeSSOTokenName)?;
 
     Ok(format!(
         "Turbo CLI on {} via {DEFAULT_SSO_PROVIDER}",
@@ -31,7 +30,7 @@ pub async fn sso_login<'a>(
     login_url_configuration: &str,
     sso_team: &str,
     login_server: &impl server::SSOLoginServer,
-) -> Result<Cow<'a, str>> {
+) -> Result<Cow<'a, str>, Error> {
     // Check if token exists first. Must be there for the user and contain the
     // sso_team passed into this function.
     if let Some(token) = existing_token {
@@ -80,14 +79,19 @@ pub async fn sso_login<'a>(
     login_server.run(DEFAULT_PORT, token_cell.clone()).await?;
     spinner.finish_and_clear();
 
-    let token = token_cell
-        .get()
-        .ok_or_else(|| anyhow!("no token auth token found"))?;
+    let token = token_cell.get().ok_or(Error::FailedToGetToken)?;
 
-    let token_name = make_token_name().context("failed to make sso token name")?;
+    let token_name = make_token_name()?;
 
-    let verified_user = api_client.verify_sso_token(token, &token_name).await?;
-    let user_response = api_client.get_user(&verified_user.token).await?;
+    let verified_user = api_client
+        .verify_sso_token(token, &token_name)
+        .await
+        .map_err(Error::FailedToValidateSSOToken)?;
+
+    let user_response = api_client
+        .get_user(&verified_user.token)
+        .await
+        .map_err(Error::FailedToFetchUser)?;
 
     ui::print_cli_authorized(&user_response.user.email, ui);
 
@@ -100,7 +104,7 @@ mod tests {
 
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
-    use turborepo_api_client::{Client, Error, Result};
+    use turborepo_api_client::Client;
     use turborepo_vercel_api::{
         CachingStatusResponse, Membership, PreflightResponse, Role, SpacesResponse, Team,
         TeamsResponse, User, UserResponse, VerifiedSsoUser,
@@ -151,7 +155,7 @@ mod tests {
 
     #[async_trait]
     impl Client for MockApiClient {
-        async fn get_user(&self, token: &str) -> Result<UserResponse> {
+        async fn get_user(&self, token: &str) -> turborepo_api_client::Result<UserResponse> {
             if token.is_empty() {
                 return Err(MockApiError::EmptyToken.into());
             }
@@ -166,7 +170,7 @@ mod tests {
                 },
             })
         }
-        async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
+        async fn get_teams(&self, token: &str) -> turborepo_api_client::Result<TeamsResponse> {
             if token.is_empty() {
                 return Err(MockApiError::EmptyToken.into());
             }
@@ -182,7 +186,11 @@ mod tests {
                 }],
             })
         }
-        async fn get_team(&self, _token: &str, _team_id: &str) -> Result<Option<Team>> {
+        async fn get_team(
+            &self,
+            _token: &str,
+            _team_id: &str,
+        ) -> turborepo_api_client::Result<Option<Team>> {
             unimplemented!("get_team")
         }
         fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
@@ -200,13 +208,21 @@ mod tests {
             _token: &str,
             _team_id: &str,
             _team_slug: Option<&str>,
-        ) -> Result<CachingStatusResponse> {
+        ) -> turborepo_api_client::Result<CachingStatusResponse> {
             unimplemented!("get_caching_status")
         }
-        async fn get_spaces(&self, _token: &str, _team_id: Option<&str>) -> Result<SpacesResponse> {
+        async fn get_spaces(
+            &self,
+            _token: &str,
+            _team_id: Option<&str>,
+        ) -> turborepo_api_client::Result<SpacesResponse> {
             unimplemented!("get_spaces")
         }
-        async fn verify_sso_token(&self, token: &str, _: &str) -> Result<VerifiedSsoUser> {
+        async fn verify_sso_token(
+            &self,
+            token: &str,
+            _: &str,
+        ) -> turborepo_api_client::Result<VerifiedSsoUser> {
             Ok(VerifiedSsoUser {
                 token: token.to_string(),
                 team_id: Some("team_id".to_string()),
@@ -219,10 +235,10 @@ mod tests {
             _duration: u64,
             _tag: Option<&str>,
             _token: &str,
-        ) -> Result<()> {
+        ) -> turborepo_api_client::Result<()> {
             unimplemented!("put_artifact")
         }
-        async fn handle_403(_response: Response) -> Error {
+        async fn handle_403(_response: Response) -> turborepo_api_client::Error {
             unimplemented!("handle_403")
         }
         async fn fetch_artifact(
@@ -231,7 +247,7 @@ mod tests {
             _token: &str,
             _team_id: &str,
             _team_slug: Option<&str>,
-        ) -> Result<Response> {
+        ) -> turborepo_api_client::Result<Response> {
             unimplemented!("fetch_artifact")
         }
         async fn artifact_exists(
@@ -240,7 +256,7 @@ mod tests {
             _token: &str,
             _team_id: &str,
             _team_slug: Option<&str>,
-        ) -> Result<Response> {
+        ) -> turborepo_api_client::Result<Response> {
             unimplemented!("artifact_exists")
         }
         async fn get_artifact(
@@ -250,7 +266,7 @@ mod tests {
             _team_id: &str,
             _team_slug: Option<&str>,
             _method: Method,
-        ) -> Result<Response> {
+        ) -> turborepo_api_client::Result<Response> {
             unimplemented!("get_artifact")
         }
         async fn do_preflight(
@@ -259,7 +275,7 @@ mod tests {
             _request_url: &str,
             _request_method: &str,
             _request_headers: &str,
-        ) -> Result<PreflightResponse> {
+        ) -> turborepo_api_client::Result<PreflightResponse> {
             unimplemented!("do_preflight")
         }
         fn make_url(&self, endpoint: &str) -> String {
@@ -267,6 +283,7 @@ mod tests {
         }
     }
 
+    #[derive(Clone)]
     struct MockSSOLoginServer {
         hits: Arc<AtomicUsize>,
     }
@@ -277,7 +294,7 @@ mod tests {
             &self,
             _port: u16,
             verification_token: Arc<OnceCell<String>>,
-        ) -> anyhow::Result<()> {
+        ) -> Result<(), Error> {
             self.hits.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             verification_token
                 .set(EXPECTED_VERIFICATION_TOKEN.to_string())

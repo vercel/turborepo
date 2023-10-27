@@ -16,8 +16,10 @@ export function ImageFigure(props: ImageFigureProps): React.ReactNode {
     caption,
     margin = 40,
     captionSpacing = null,
-    shadow = false,
-    borderRadius = false,
+    // Destructuring shadow and borderRadius here so
+    // they don't get passed to the `...rest` spread in <Image /> below.
+    shadow: _unusedShadow = false,
+    borderRadius: _unusedBorderRadius = false,
     ...rest
   } = props;
 

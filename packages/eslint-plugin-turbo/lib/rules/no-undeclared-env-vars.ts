@@ -153,13 +153,11 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
       if (
         "name" in node.object &&
         "name" in node.property &&
-        !isComputed(node)
+        node.object.name === "process" &&
+        node.property.name === "env"
       ) {
-        const objectName = node.object.name;
-        const propertyName = node.property.name;
-
         // we're doing something with process.env
-        if (objectName === "process" && propertyName === "env") {
+        if (!isComputed(node)) {
           // destructuring from process.env
           if ("id" in node.parent && node.parent.id?.type === "ObjectPattern") {
             const values = node.parent.id.properties.values();
@@ -177,6 +175,13 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
           ) {
             checkKey(node.parent, node.parent.property.name);
           }
+        } else if (
+          "property" in node.parent &&
+          node.parent.property.type === "Literal" &&
+          typeof node.parent.property.value === "string"
+        ) {
+          // If we're indexing by a literal, we can check it
+          checkKey(node.parent, node.parent.property.value);
         }
       }
     },

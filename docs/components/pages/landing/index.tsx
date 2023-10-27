@@ -1,10 +1,8 @@
 import React from "react";
-import Head from "next/head";
 import cn from "classnames";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Clients } from "../../clients/Clients";
-import { Marquee } from "../../clients/Marquee";
 import { FadeIn } from "../home-shared/FadeIn";
 import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
 import PackLogo from "../../logos/PackLogo";
@@ -97,7 +95,7 @@ function Card({
         </div>
 
         <div className="flex flex-col items-center flex-1">
-          {title == "pack" ? (
+          {title === "pack" ? (
             <PackLogo
               alt={alt}
               className="w-[160px] md:w-[220px] mb-3 fill-black dark:fill-white"
