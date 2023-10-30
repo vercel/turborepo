@@ -6,8 +6,8 @@
   ],
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist",
-    "./styles.css": "./dist/index.css"
+    ".": "./dist/server",
+    "./styles.css": "./dist/server/index.css"
   },
   "license": "MIT",
   "scripts": {
@@ -30,5 +30,8 @@
     "tsconfig": "workspace:*",
     "tsup": "^6.1.3",
     "typescript": "^5.1.6"
+  },
+  "dependencies": {
+    "fs-extra": "^11.1.1"
   }
 }
