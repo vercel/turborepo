@@ -121,17 +121,14 @@ pub async fn resolve_url_reference(
         ".css".to_string(),
     );
     let context_path = chunk_path.parent().await?;
-    vdbg!(&context_path);
 
     if let ReferencedAsset::Some(asset) = &*url.get_referenced_asset(chunking_context).await? {
         // TODO(WEB-662) This is not the correct way to get the path of the asset.
         // `asset` is on module-level, but we need the output-level asset instead.
         let path = asset.ident().path().await?;
-        vdbg!(&path);
         let relative_path = context_path
             .get_relative_path_to(&path)
             .unwrap_or_else(|| format!("/{}", path.path));
-        vdbg!(&relative_path);
 
         return Ok(Vc::cell(Some(relative_path)));
     }
