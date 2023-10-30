@@ -79,7 +79,7 @@ pub async fn login<'a>(
 
 #[cfg(test)]
 mod tests {
-    use std::{env::temp_dir, sync::atomic::AtomicUsize};
+    use std::sync::atomic::AtomicUsize;
 
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
