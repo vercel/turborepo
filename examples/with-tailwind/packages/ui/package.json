@@ -4,9 +4,9 @@
   "sideEffects": [
     "**/*.css"
   ],
-  "types": "./dist/index.d.ts",
+  "types": "./dist/server/index.d.ts",
   "exports": {
-    ".": "./dist/server",
+    ".": "./dist/server/index.js",
     "./styles.css": "./dist/server/index.css"
   },
   "license": "MIT",
