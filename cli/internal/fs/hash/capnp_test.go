@@ -92,6 +92,23 @@ func Test_LockfilePackagesNonEmpty(t *testing.T) {
 	assert.Equal(t, "9e60782f386d8ff1", hash)
 }
 
+func Test_LockfilePackagesEmptyVersion(t *testing.T) {
+	packages := []lockfile.Package{
+		{
+			Key:     "key",
+			Version: "",
+			Found:   true,
+		},
+	}
+
+	hash, err := HashLockfilePackages(packages)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, "bde280722f61644a", hash)
+}
+
 func Test_CapnpLockfilePackages_InOrder(t *testing.T) {
 	packages := []lockfile.Package{
 		{
