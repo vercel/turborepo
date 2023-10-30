@@ -2,12 +2,11 @@
   "name": "ui",
   "version": "0.0.0",
   "sideEffects": [
-    "**/*.css",
-    "/dist/client/**"
+    "**/*.css"
   ],
   "types": "./dist/server/index.d.ts",
   "exports": {
-    ".": "./dist/server/index.js",
+    ".": "./dist/server",
     "./client": "./dist/client/index.js",
     "./styles.css": "./dist/server/index.css"
   },
