@@ -26,9 +26,6 @@ export default defineConfig((options: Options) => ({
       path.join(__dirname, "dist", "server", "client", "index.mjs"),
       '"use client";\n' + await fs.readFile(path.join(__dirname, "dist", "server", "client", "index.mjs"))
     );
-      
-    await new Promise(resolve => setTimeout(resolve, 20000));
-    console.log("tsup onSuccess after 20000ms...")
 
     // move /dist/server/client to /dist/client
     try {
