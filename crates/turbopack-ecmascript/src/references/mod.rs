@@ -316,7 +316,7 @@ pub(crate) async fn analyze_ecmascript_module(
 
     let parsed = if let Some(part) = part {
         let parsed = parse(source, ty, transforms);
-        let split_data = split(path, parsed);
+        let split_data = split(path, source, parsed);
         part_of_module(split_data, part)
     } else {
         parse(source, ty, transforms)
@@ -435,6 +435,7 @@ pub(crate) async fn analyze_ecmascript_module(
         let r = EsmAssetReference::new(
             origin,
             Request::parse(Value::new(r.module_path.to_string().into())),
+            r.issue_source,
             Value::new(r.annotations.clone()),
             if options.import_parts {
                 match &r.imported_symbol {
@@ -1755,6 +1756,11 @@ async fn handle_free_var_reference(
                     ))
                 }),
                 Request::parse(Value::new(request.clone().into())),
+                Some(IssueSource::from_byte_offset(
+                    state.source,
+                    span.lo().to_usize(),
+                    span.hi().to_usize(),
+                )),
                 Default::default(),
                 state
                     .import_parts

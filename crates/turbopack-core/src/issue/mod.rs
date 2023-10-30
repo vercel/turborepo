@@ -397,7 +397,7 @@ impl CapturedIssues {
 }
 
 #[turbo_tasks::value]
-#[derive(Clone)]
+#[derive(Debug, Clone, Hash, PartialOrd)]
 pub struct IssueSource {
     pub source: Vc<Box<dyn Source>>,
     pub start: SourcePos,
@@ -414,8 +414,7 @@ impl IssueSource {
     ) -> Result<Vc<Self>> {
         fn find_line_and_column(lines: &[FileLine], offset: usize) -> SourcePos {
             match lines.binary_search_by(|line| line.bytes_offset.cmp(&offset)) {
-                Ok(i) => SourcePos { line: i, column: 0 },
-                Err(i) => {
+                Ok(i) | Err(i) => {
                     if i == 0 {
                         SourcePos {
                             line: 0,
@@ -424,7 +423,7 @@ impl IssueSource {
                     } else {
                         SourcePos {
                             line: i - 1,
-                            column: offset - lines[i - 1].bytes_offset,
+                            column: offset - lines[i - 1].bytes_offset - 1,
                         }
                     }
                 }
