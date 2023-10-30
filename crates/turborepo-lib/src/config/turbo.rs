@@ -249,8 +249,7 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
 
                 Ok(dot_env)
             })
-            .transpose()?
-            .unwrap_or_default();
+            .transpose()?;
 
         if raw_task.output_mode.is_some() {
             defined_fields.insert("OutputMode".to_string());
@@ -710,6 +709,20 @@ mod tests {
         }
     )]
     #[test_case(
+        r#"{ "dotEnv": [] }"#,
+        RawTaskDefinition {
+            dot_env: Some(Vec::new()),
+            ..RawTaskDefinition::default()
+        },
+        BookkeepingTaskDefinition {
+            defined_fields: ["DotEnv".to_string()].into_iter().collect(),
+            experimental_fields: HashSet::new(),
+            experimental: TaskDefinitionExperiments::default(),
+            task_definition: TaskDefinitionStable { dot_env: Some(Vec::new()), ..Default::default() }
+        }
+        ; "empty dotenv"
+    )]
+    #[test_case(
         r#"{
           "dependsOn": ["cli#build"],
           "dotEnv": ["package/a/.env"],
@@ -747,7 +760,7 @@ mod tests {
             experimental_fields: HashSet::new(),
             experimental: TaskDefinitionExperiments {},
             task_definition: TaskDefinitionStable {
-                dot_env: vec![RelativeUnixPathBuf::new("package/a/.env").unwrap()],
+                dot_env: Some(vec![RelativeUnixPathBuf::new("package/a/.env").unwrap()]),
                 env: vec!["OS".to_string()],
                 outputs: TaskOutputs {
                     inclusions: vec!["package/a/dist".to_string()],

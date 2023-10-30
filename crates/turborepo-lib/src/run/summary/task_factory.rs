@@ -205,10 +205,7 @@ impl<'a> TaskSummaryFactory<'a> {
                 self.env_at_start,
             )
             .expect("invalid glob in task definition should have been caught earlier"),
-            dot_env: match task_definition.dot_env.is_empty() {
-                false => Some(task_definition.dot_env.clone()),
-                true => None,
-            },
+            dot_env: task_definition.dot_env.clone(),
             execution,
         })
     }

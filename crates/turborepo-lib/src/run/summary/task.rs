@@ -300,12 +300,6 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             depends_on.push(format!("^{topological_dependency}"));
         }
 
-        // This should _not_ be sorted.
-        let dot_env = match dot_env.is_empty() {
-            false => Some(dot_env),
-            true => None,
-        };
-
         // These _should_ already be sorted when the TaskDefinition struct was
         // unmarshaled, but we want to ensure they're sorted on the way out
         // also, just in case something in the middle mutates the items.
@@ -323,6 +317,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             persistent,
             env,
             pass_through_env,
+            // This should _not_ be sorted.
             dot_env,
         }
     }

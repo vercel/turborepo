@@ -49,7 +49,7 @@ pub struct TaskDefinitionStable {
     pub(crate) persistent: bool,
     pub(crate) env: Vec<String>,
     pub(crate) pass_through_env: Option<Vec<String>>,
-    pub(crate) dot_env: Vec<RelativeUnixPathBuf>,
+    pub(crate) dot_env: Option<Vec<RelativeUnixPathBuf>>,
 }
 
 impl Default for TaskDefinitionStable {
@@ -64,7 +64,7 @@ impl Default for TaskDefinitionStable {
             persistent: false,
             env: Vec::new(),
             pass_through_env: None,
-            dot_env: Vec::new(),
+            dot_env: None,
         }
     }
 }
@@ -80,7 +80,7 @@ pub struct TaskDefinition {
 
     pub(crate) pass_through_env: Option<Vec<String>>,
 
-    pub(crate) dot_env: Vec<RelativeUnixPathBuf>,
+    pub(crate) dot_env: Option<Vec<RelativeUnixPathBuf>>,
 
     // TopologicalDependencies are tasks from package dependencies.
     // E.g. "build" is a topological dependency in:
