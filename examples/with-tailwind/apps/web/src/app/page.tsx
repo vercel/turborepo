@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { Card } from "ui";
+import { Counter } from "ui/client";
 
 function Gradient({
   conic,
@@ -124,7 +125,9 @@ export default function Page(): JSX.Element {
           </div>
         </div>
       </div>
-
+      <div className="my-32">
+        <Counter />
+      </div>
       <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
         {LINKS.map(({ title, href, description }) => (
           <Card href={href} key={title} title={title}>
