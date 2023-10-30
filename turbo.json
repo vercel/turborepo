@@ -24,8 +24,7 @@
   // everything by OS and RUNNER_OS. This will segment between GH actions and everything else for now.
   "globalEnv": ["OS", "RUNNER_OS"],
   "pipeline": {
-    "foo":{},
-
+    
     "test": {
       "outputs": ["coverage/**/*"],
 
