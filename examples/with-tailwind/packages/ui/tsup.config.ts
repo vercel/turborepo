@@ -6,7 +6,7 @@ export default defineConfig((options: Options) => ({
   },
   treeshake: true,
   splitting: true,
-  entry: ["src/index.tsx"],
+  entry: ["src/index.tsx", "src/client/index.tsx"],
   format: ["esm"],
   dts: true,
   minify: true,
