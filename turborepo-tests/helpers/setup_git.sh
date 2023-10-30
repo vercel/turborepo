@@ -5,8 +5,9 @@ TARGET_DIR=$1
 SHOULD_INSTALL=${2:-true}
 
 # Set the autocrlf option to true to avoid issues with line endings on Windows
-# TODO: does it need to be set for windows?
-git config --global core.autocrlf true
+if [[ "$OSTYPE" == "msys" ]]; then
+  git config --global core.autocrlf true
+fi
 
 git init ${TARGET_DIR} --quiet --initial-branch=main
 GIT_ARGS="--git-dir=${TARGET_DIR}/.git --work-tree=${TARGET_DIR}"
