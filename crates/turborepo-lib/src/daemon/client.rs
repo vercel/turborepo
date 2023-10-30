@@ -79,6 +79,10 @@ impl DaemonClient<DaemonConnector> {
         hash: String,
         output_globs: Vec<String>,
     ) -> Result<Vec<String>, DaemonError> {
+        let output_globs = output_globs
+            .iter()
+            .map(|raw_glob| format_repo_relative_glob(raw_glob))
+            .collect();
         Ok(self
             .client
             .get_changed_outputs(proto::GetChangedOutputsRequest { hash, output_globs })
@@ -87,7 +91,6 @@ impl DaemonClient<DaemonConnector> {
             .changed_output_globs)
     }
 
-    #[allow(dead_code)]
     pub async fn notify_outputs_written(
         &mut self,
         hash: String,
@@ -95,6 +98,14 @@ impl DaemonClient<DaemonConnector> {
         output_exclusion_globs: Vec<String>,
         time_saved: u64,
     ) -> Result<(), DaemonError> {
+        let output_globs = output_globs
+            .iter()
+            .map(|raw_glob| format_repo_relative_glob(raw_glob))
+            .collect();
+        let output_exclusion_globs = output_exclusion_globs
+            .iter()
+            .map(|raw_glob| format_repo_relative_glob(raw_glob))
+            .collect();
         self.client
             .notify_outputs_written(proto::NotifyOutputsWrittenRequest {
                 hash,
@@ -124,6 +135,19 @@ impl DaemonClient<DaemonConnector> {
     pub fn sock_file(&self) -> &turbopath::AbsoluteSystemPathBuf {
         &self.connect_settings.sock_file
     }
+}
+
+fn format_repo_relative_glob(glob: &str) -> String {
+    #[cfg(windows)]
+    let glob = {
+        let glob = if let Some(idx) = glob.find(':') {
+            &glob[..idx]
+        } else {
+            glob
+        };
+        glob.replace("\\", "/")
+    };
+    glob.replace(':', "\\:")
 }
 
 #[derive(Error, Debug)]
@@ -176,5 +200,24 @@ impl From<Status> for DaemonError {
             Code::Unavailable => DaemonError::Unavailable,
             c => DaemonError::GrpcFailure(c),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::path::MAIN_SEPARATOR_STR;
+
+    use crate::daemon::client::format_repo_relative_glob;
+
+    #[test]
+    fn test_format_repo_relative_glob() {
+        let raw_glob = ["some", ".turbo", "turbo-foo:bar.log"].join(MAIN_SEPARATOR_STR);
+        #[cfg(windows)]
+        let expected = "some/.turbo/turbo-foo";
+        #[cfg(not(windows))]
+        let expected = "some/.turbo/turbo-foo\\:bar.log";
+
+        let result = format_repo_relative_glob(&raw_glob);
+        assert_eq!(result, expected);
     }
 }
