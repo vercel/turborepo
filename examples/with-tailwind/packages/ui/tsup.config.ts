@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs-extra";
 
 export default defineConfig((options: Options) => ({
-  treeshake: true,
+  treeshake: false,
   splitting: true,
   entry: ["src/index.tsx", "src/client/index.tsx"],
   outDir: 'dist/server',
