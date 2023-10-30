@@ -7,7 +7,7 @@ use tracing::warn;
 use turborepo_api_client::Client;
 use turborepo_ui::{start_spinner, BOLD, UI};
 
-use crate::{error, server::LoginServer, ui};
+use crate::{error, get_token_for, server::LoginServer, ui};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
@@ -79,13 +79,13 @@ pub async fn login<'a>(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicUsize;
+    use std::{env::temp_dir, sync::atomic::AtomicUsize};
 
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
     use turborepo_api_client::Client;
     use turborepo_vercel_api::{
-        CachingStatusResponse, Membership, PreflightResponse, Role, SpacesResponse, Team,
+        CachingStatusResponse, Membership, PreflightResponse, Role, Space, SpacesResponse, Team,
         TeamsResponse, User, UserResponse, VerifiedSsoUser,
     };
     use turborepo_vercel_api_mock::start_test_server;
@@ -205,10 +205,18 @@ mod tests {
         }
         async fn get_spaces(
             &self,
-            _token: &str,
+            token: &str,
             _team_id: Option<&str>,
         ) -> turborepo_api_client::Result<SpacesResponse> {
-            unimplemented!("get_spaces")
+            if token.is_empty() {
+                return Err(MockApiError::EmptyToken.into());
+            }
+            Ok(SpacesResponse {
+                spaces: vec![Space {
+                    id: "id".to_string(),
+                    name: "name".to_string(),
+                }],
+            })
         }
         async fn verify_sso_token(
             &self,

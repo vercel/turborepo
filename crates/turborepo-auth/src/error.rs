@@ -1,9 +1,14 @@
 use std::io;
 
 use thiserror::Error;
+use turborepo_api_client::Error as APIError;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    // For conversion from APIError
+    #[error(transparent)]
+    APIError(#[from] APIError),
+
     // HTTP / API errors
     #[error(
         "loginUrl is configured to \"{value}\", but cannot be a base URL. This happens in \
@@ -30,4 +35,22 @@ pub enum Error {
     FailedToReadConfigFile(io::Error),
     #[error("failed to read auth file: {0}")]
     FailedToReadAuthFile(io::Error),
+    #[error("failed to find token for api: {api}")]
+    FailedToFindTokenForAPI { api: String },
+
+    // File write errors
+    #[error("failed to write to auth file at {auth_path}: {error}")]
+    FailedToWriteAuth {
+        auth_path: turbopath::AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
+
+    #[error(transparent)]
+    PathError(#[from] turbopath::PathError),
+
+    // File conversion errors
+    #[error("failed to convert config token to auth file: {0}")]
+    FailedToConvertConfigTokenToAuthFile(turborepo_api_client::Error),
+    #[error("failed to serialize auth file: {error}")]
+    FailedToSerializeAuthFile { error: serde_json::Error },
 }

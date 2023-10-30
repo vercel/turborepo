@@ -1,4 +1,3 @@
-use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::APIClient;
 use turborepo_auth::{
     login as auth_login, sso_login as auth_sso_login, DefaultLoginServer, DefaultSSOLoginServer,
@@ -6,6 +5,7 @@ use turborepo_auth::{
 
 use crate::{cli::Error, commands::CommandBase, rewrite_json::set_path};
 
+/// Entry point for `turbo login --sso`.
 pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Error> {
     let api_client: APIClient = base.api_client()?;
     let ui = base.ui;
@@ -47,6 +47,7 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Err
     Ok(())
 }
 
+/// Entry point for `turbo login`.
 pub async fn login(base: &mut CommandBase) -> Result<(), Error> {
     let api_client: APIClient = base.api_client()?;
     let ui = base.ui;
