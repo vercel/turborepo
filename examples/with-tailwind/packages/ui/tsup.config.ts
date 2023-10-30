@@ -15,14 +15,12 @@ export default defineConfig((options: Options) => ({
   ...options,
   async onSuccess() {
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
     // add "use client" banner to /dist/client entry point
-    await fs.writeFile(
+    fs.writeFileSync(
       path.join(__dirname, "dist", "server", "client", "index.js"),
       '"use client";\n' + await fs.readFile(path.join(__dirname, "dist", "server", "client", "index.js"))
     );
-    await fs.writeFile(
+    fs.writeFileSync(
       path.join(__dirname, "dist", "server", "client", "index.mjs"),
       '"use client";\n' + await fs.readFile(path.join(__dirname, "dist", "server", "client", "index.mjs"))
     );
