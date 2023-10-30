@@ -14,9 +14,9 @@ export default defineConfig((options: Options) => ({
   external: ["react"],
   ...options,
   async onSuccess() {
-
+    console.log("tsup onSuccess...")
     await new Promise(resolve => setTimeout(resolve, 1000));
-
+    console.log("tsup onSuccess after 1000ms...")
     // add "use client" banner to /dist/client entry point
     fs.writeFileSync(
       path.join(__dirname, "dist", "server", "client", "index.js"),
@@ -34,5 +34,8 @@ export default defineConfig((options: Options) => ({
     } catch (err) {
       console.error(err)
     }
+
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    console.log("tsup onSuccess after 10000ms...")
   },
 }));
