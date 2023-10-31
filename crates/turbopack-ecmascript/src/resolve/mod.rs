@@ -1,7 +1,7 @@
 pub mod node_native_binding;
 
 use anyhow::Result;
-use turbo_tasks::{Value, Vc};
+use turbo_tasks::{vdbg, Value, Vc};
 use turbopack_core::{
     context::AssetContext,
     issue::{IssueSeverity, IssueSource},
@@ -97,6 +97,9 @@ pub async fn url_resolve(
     issue_source: Vc<IssueSource>,
     issue_severity: Vc<IssueSeverity>,
 ) -> Result<Vc<ModuleResolveResult>> {
+    vdbg!(request);
+    vdbg!(origin.origin_path());
+
     let ty = Value::new(ReferenceType::Url(ty.into_value()));
     let resolve_options = origin.resolve_options(ty.clone());
     let rel_request = request.as_relative();
