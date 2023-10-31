@@ -13,5 +13,6 @@ pub use error::Error;
 pub use server::*;
 pub use token::*;
 
-pub const AUTH_FILE_NAME: &str = "auth.json";
+pub const TURBOREPO_AUTH_FILE_NAME: &str = "auth.json";
+pub const TURBOREPO_LEGACY_AUTH_FILE_NAME: &str = "config.json";
 pub const TURBOREPO_CONFIG_DIR: &str = "turborepo";

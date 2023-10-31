@@ -5,7 +5,9 @@ use dirs_next::config_dir;
 use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
-use turborepo_auth::AUTH_FILE_NAME;
+use turborepo_auth::{
+    TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR, TURBOREPO_LEGACY_AUTH_FILE_NAME,
+};
 use turborepo_ui::UI;
 
 use crate::{
@@ -90,7 +92,9 @@ impl CommandBase {
         }
 
         let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
-        let global_config_path = config_dir.join("turborepo").join("config.json");
+        let global_config_path = config_dir
+            .join(TURBOREPO_CONFIG_DIR)
+            .join(TURBOREPO_LEGACY_AUTH_FILE_NAME);
         AbsoluteSystemPathBuf::try_from(global_config_path).map_err(ConfigError::PathError)
     }
     /// Returns the path to the global auth file (auth.json).
@@ -101,7 +105,9 @@ impl CommandBase {
         }
 
         let config_dir = config_dir().ok_or(ConfigError::NoGlobalAuthFilePath)?;
-        let global_auth_path = config_dir.join("turborepo").join(AUTH_FILE_NAME);
+        let global_auth_path = config_dir
+            .join(TURBOREPO_CONFIG_DIR)
+            .join(TURBOREPO_AUTH_FILE_NAME);
         AbsoluteSystemPathBuf::try_from(global_auth_path).map_err(ConfigError::PathError)
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {

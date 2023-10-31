@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use async_trait::async_trait;
 use reqwest::{Method, RequestBuilder, Response};
 use turborepo_api_client::Client;
@@ -32,7 +34,7 @@ impl MockApiClient {
     #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
-            base_url: String::new(),
+            base_url: "custom-domain".to_string(),
         }
     }
 }
@@ -49,11 +51,16 @@ impl Client for MockApiClient {
 
         Ok(UserResponse {
             user: User {
-                id: "id".to_string(),
+                id: "user id".to_string(),
                 username: "username".to_string(),
                 email: "email".to_string(),
-                name: None,
-                created_at: None,
+                name: Some("Voz".to_string()),
+                created_at: Some(
+                    SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                ),
             },
         })
     }
@@ -64,9 +71,9 @@ impl Client for MockApiClient {
 
         Ok(TeamsResponse {
             teams: vec![Team {
-                id: "id".to_string(),
-                slug: "something".to_string(),
-                name: "name".to_string(),
+                id: "team id".to_string(),
+                slug: "voz-slug".to_string(),
+                name: "team-voz".to_string(),
                 created_at: 0,
                 created: chrono::Utc::now(),
                 membership: Membership::new(Role::Member),
@@ -108,8 +115,8 @@ impl Client for MockApiClient {
         }
         Ok(SpacesResponse {
             spaces: vec![Space {
-                id: "id".to_string(),
-                name: "name".to_string(),
+                id: "space id".to_string(),
+                name: "space jam".to_string(),
             }],
         })
     }

@@ -7,7 +7,7 @@ use tracing::warn;
 use turborepo_api_client::Client;
 use turborepo_ui::{start_spinner, BOLD, UI};
 
-use crate::{error, get_token_for, server::LoginServer, ui};
+use crate::{error, server::LoginServer, ui};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
@@ -86,6 +86,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_login() {
+        // Setup: Start login server on separate thread
         let port = port_scanner::request_open_port().unwrap();
         let api_server = tokio::spawn(start_test_server(port));
         let ui = UI::new(false);
@@ -97,6 +98,7 @@ mod tests {
             hits: Arc::new(0.into()),
         };
 
+        // Test: Call the login function and check the result
         let token = login(&api_client, &ui, None, &url, &login_server)
             .await
             .unwrap();

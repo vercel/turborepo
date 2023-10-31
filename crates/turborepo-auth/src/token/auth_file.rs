@@ -5,12 +5,10 @@ use turborepo_api_client::Client;
 
 use crate::{
     error::Error::{FailedToFindConfigDir, FailedToReadAuthFile},
-    TURBOREPO_CONFIG_DIR,
+    TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR,
 };
 
-const TURBOREPO_AUTH_FILE_NAME: &str = "auth.json";
-
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 /// AuthFile contains a list of domains, each with a token and a list of teams
 /// the token is valid for.
 pub struct AuthFile {
@@ -46,7 +44,7 @@ impl AuthFile {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 /// Contains the token itself and a list of teams the token is valid for.
 pub struct AuthToken {
     /// The token itself.
@@ -69,12 +67,12 @@ impl AuthToken {
         self.teams.iter().any(|t| t.contains_space(space))
     }
     /// Validates the token by checking the expiration date and the signature.
-    pub async fn validate(&self, client: impl Client) -> bool {
-        !unimplemented!("validate token")
+    pub async fn validate(&self, _client: impl Client) -> bool {
+        unimplemented!("validate token")
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Team {
     pub id: String,
     pub spaces: Vec<Space>,
@@ -86,7 +84,7 @@ impl Team {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Space {
     pub id: String,
 }
