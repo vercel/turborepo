@@ -56,15 +56,24 @@ pub async fn get_token_for(api: &str, client: &impl Client) -> Result<AuthToken,
 /// from auth.json and if it doesn't exist, creates the `auth.json` from a
 /// `config.json`.
 pub async fn load_turbo_tokens(client: &impl Client) -> Result<Vec<AuthToken>, crate::Error> {
+    // Tokens are held in the config_dir, so set up paths to the config.json and
+    // auth.json inside of there.
     let config_dir = config_dir().ok_or(error::Error::FailedToFindConfigDir)?;
     let absolute_config_path = AbsoluteSystemPathBuf::try_from(
+        config_dir
+            .join(crate::TURBOREPO_CONFIG_DIR)
+            .join(crate::TURBOREPO_LEGACY_AUTH_FILE_NAME),
+    )
+    .unwrap();
+
+    let absolute_auth_path = AbsoluteSystemPathBuf::try_from(
         config_dir
             .join(crate::TURBOREPO_CONFIG_DIR)
             .join(crate::TURBOREPO_AUTH_FILE_NAME),
     )
     .unwrap();
 
-    match read_auth_file() {
+    match read_auth_file(absolute_auth_path) {
         // We found our `auth.json`, so use that.
         Ok(auth_file) => Ok(auth_file.tokens),
         // TODO(voz): Surely there's a nicer way to accomplish this?

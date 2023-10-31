@@ -91,13 +91,8 @@ pub struct Space {
 
 /// Attempts to read the auth file and returns the parsed json as an AuthFile
 /// struct.
-pub fn read_auth_file() -> Result<AuthFile, crate::Error> {
-    let config_dir = config_dir().ok_or(FailedToFindConfigDir)?;
-    let config_path = config_dir
-        .join(TURBOREPO_CONFIG_DIR)
-        .join(TURBOREPO_AUTH_FILE_NAME);
-
-    let body = std::fs::read_to_string(config_path).map_err(FailedToReadAuthFile)?;
+pub fn read_auth_file(path: AbsoluteSystemPathBuf) -> Result<AuthFile, crate::Error> {
+    let body = std::fs::read_to_string(path).map_err(FailedToReadAuthFile)?;
     let parsed_config: AuthFile =
         serde_json::from_str(&body.to_owned()).map_err(|e| FailedToReadAuthFile(e.into()))?;
 
@@ -106,7 +101,7 @@ pub fn read_auth_file() -> Result<AuthFile, crate::Error> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{env::temp_dir, fs};
 
     use tempfile::tempdir;
 
@@ -198,22 +193,25 @@ mod tests {
 
     #[tokio::test]
     async fn test_read_auth_file() {
-        let config_dir = config_dir().unwrap();
-        let auth_file_path = config_dir
-            .as_path()
+        // Setup: Create a temporary directory with a fake auth file
+        let temp_dir = tempdir().unwrap();
+        let auth_file_path = temp_dir
+            .path()
             .join(TURBOREPO_CONFIG_DIR)
             .join(TURBOREPO_AUTH_FILE_NAME);
 
         // Write a dummy auth file
-        fs::create_dir_all(config_dir.as_path().join(TURBOREPO_CONFIG_DIR)).unwrap();
+        fs::create_dir_all(temp_dir.path().join(TURBOREPO_CONFIG_DIR)).unwrap();
         fs::write(
-            auth_file_path,
+            &auth_file_path,
             r#"{ "tokens": [ { "token": "test-token", "api": "test-api", "created_at": 1634851200, "teams": [] } ] }"#,
         )
         .unwrap();
 
-        // Now test read_auth_file
-        let auth_file = read_auth_file().unwrap();
+        let absolute_path = AbsoluteSystemPathBuf::try_from(auth_file_path).unwrap();
+
+        // Test: Ensure the auth file has been read correctly
+        let auth_file = read_auth_file(absolute_path).unwrap();
         assert_eq!(auth_file.tokens.len(), 1);
         assert_eq!(auth_file.tokens[0].token, "test-token");
     }
