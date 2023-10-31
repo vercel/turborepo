@@ -80,6 +80,7 @@ pub enum EnvMode {
 #[clap(disable_help_subcommand = true)]
 #[clap(disable_version_flag = true)]
 #[clap(arg_required_else_help = true)]
+#[command(name = "turbo")]
 pub struct Args {
     #[clap(long, global = true)]
     #[serde(skip)]
