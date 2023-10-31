@@ -1,12 +1,8 @@
-use dirs_next::config_dir;
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::Client;
 
-use crate::{
-    error::Error::{FailedToFindConfigDir, FailedToReadAuthFile},
-    TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR,
-};
+use crate::error::Error::FailedToReadAuthFile;
 
 #[derive(Serialize, Deserialize, Debug)]
 /// AuthFile contains a list of domains, each with a token and a list of teams
@@ -101,11 +97,12 @@ pub fn read_auth_file(path: AbsoluteSystemPathBuf) -> Result<AuthFile, crate::Er
 
 #[cfg(test)]
 mod tests {
-    use std::{env::temp_dir, fs};
+    use std::fs;
 
     use tempfile::tempdir;
 
     use super::*;
+    use crate::{TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR};
 
     #[tokio::test]
     async fn test_write_to_disk_and_read_back() {

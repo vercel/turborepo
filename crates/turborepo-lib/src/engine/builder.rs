@@ -1030,6 +1030,6 @@ mod test {
                 }
             })
             .err();
-        assert_eq!(result.as_deref(), reason.as_deref());
+        assert_eq!(result.as_deref(), reason);
     }
 }
