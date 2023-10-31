@@ -409,4 +409,13 @@ export const users: TurboUser[] = [
     infoLink: "https://www.makeswift.com/",
     pinned: true,
   },
+  {
+    caption: "Neo Financial",
+    image: "/images/logos/neo.svg",
+    infoLink: "https://neofinancial.com/",
+    pinned: true,
+    style: {
+      height: 29,
+    },
+  },
 ];
