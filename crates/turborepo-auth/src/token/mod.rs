@@ -8,6 +8,8 @@ mod config_token;
 
 pub use auth_file::*;
 pub use config_token::*;
+use dirs_next::config_dir;
+use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::Client;
 
 use crate::error;
@@ -54,6 +56,14 @@ pub async fn get_token_for(api: &str, client: &impl Client) -> Result<AuthToken,
 /// from auth.json and if it doesn't exist, creates the `auth.json` from a
 /// `config.json`.
 pub async fn load_turbo_tokens(client: &impl Client) -> Result<Vec<AuthToken>, crate::Error> {
+    let config_dir = config_dir().ok_or(error::Error::FailedToFindConfigDir)?;
+    let absolute_config_path = AbsoluteSystemPathBuf::try_from(
+        config_dir
+            .join(crate::TURBOREPO_CONFIG_DIR)
+            .join(crate::TURBOREPO_AUTH_FILE_NAME),
+    )
+    .unwrap();
+
     match read_auth_file() {
         // We found our `auth.json`, so use that.
         Ok(auth_file) => Ok(auth_file.tokens),
@@ -63,7 +73,7 @@ pub async fn load_turbo_tokens(client: &impl Client) -> Result<Vec<AuthToken>, c
         // `config.json` for a token.
         Err(e) => {
             let result = async {
-                match read_config_auth() {
+                match read_config_auth(absolute_config_path) {
                     Ok(config_token) => convert_to_auth_file(&config_token.token, client)
                         .await
                         .map_err(error::Error::from),

@@ -7,9 +7,8 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::Client;
 
 use crate::{
-    error::Error::{FailedToFindConfigDir, FailedToReadConfigFile},
-    AuthFile, AuthToken, Error, Space, Team, TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR,
-    TURBOREPO_LEGACY_AUTH_FILE_NAME,
+    error::Error::FailedToReadConfigFile, AuthFile, AuthToken, Error, Space, Team,
+    TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR,
 };
 
 #[derive(serde::Deserialize)]
@@ -20,15 +19,9 @@ pub struct ConfigToken {
     pub token: String,
 }
 
-/// Attempts to read the config file for an auth token and returns the token
-/// string.
-pub fn read_config_auth() -> Result<ConfigToken, crate::Error> {
-    let config_dir = config_dir().ok_or(FailedToFindConfigDir)?;
-    let config_path = config_dir
-        .join(TURBOREPO_CONFIG_DIR)
-        .join(TURBOREPO_LEGACY_AUTH_FILE_NAME);
-
-    let body = std::fs::read_to_string(config_path).map_err(FailedToReadConfigFile)?;
+/// Attempts to read the config file for an auth token and returns the token.
+pub fn read_config_auth(path: AbsoluteSystemPathBuf) -> Result<ConfigToken, crate::Error> {
+    let body = std::fs::read_to_string(path).map_err(FailedToReadConfigFile)?;
     let parsed_config: ConfigToken =
         serde_json::from_str(&body).map_err(|e| FailedToReadConfigFile(e.into()))?;
 
@@ -97,7 +90,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::mocks::*;
+    use crate::{mocks::*, TURBOREPO_LEGACY_AUTH_FILE_NAME};
 
     #[tokio::test]
     async fn test_read_config_auth() {
@@ -107,11 +100,14 @@ mod tests {
             .path()
             .join(TURBOREPO_CONFIG_DIR)
             .join(TURBOREPO_LEGACY_AUTH_FILE_NAME);
+
         fs::create_dir_all(temp_dir.path().join(TURBOREPO_CONFIG_DIR)).unwrap();
-        fs::write(config_file_path, r#"{ "token": "test-token" }"#).unwrap();
+        fs::write(&config_file_path, r#"{ "token": "test-token" }"#).unwrap();
+
+        let absolute_path = AbsoluteSystemPathBuf::try_from(config_file_path).unwrap();
 
         // Test: Call the read_config_auth function and check the result
-        let result = read_config_auth();
+        let result = read_config_auth(absolute_path);
         assert!(result.is_ok());
         let config_token = result.unwrap();
         assert_eq!(config_token.token, "test-token");
