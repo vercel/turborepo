@@ -1,6 +1,6 @@
 import Image from "next/image";
-import { Card } from "ui";
-import { Counter } from "ui/client";
+import { Card } from "ui/card";
+import { Counter } from "ui/client/counter";
 
 function Gradient({
   conic,

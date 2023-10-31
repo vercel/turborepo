@@ -4,11 +4,26 @@
   "sideEffects": [
     "**/*.css"
   ],
-  "types": "./dist/server/index.d.ts",
   "exports": {
-    ".": "./dist/server",
-    "./client": "./dist/client",
-    "./styles.css": "./dist/server/index.css"
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "./*": {
+      "import": {
+        "types": "./dist/*.d.ts",
+        "default": "./dist/*.js"
+      }
+    },
+    "./client": {
+      "import": {
+        "types": "./dist/client/index.d.ts",
+        "default": "./dist/client/index.js"
+      }
+    },
+    "./styles.css": "./dist/index.css"
   },
   "license": "MIT",
   "scripts": {
@@ -32,5 +47,8 @@
     "tsconfig": "workspace:*",
     "tsup": "^6.1.3",
     "typescript": "^5.1.6"
-  }
+  },
+  "files": [
+    "dist"
+  ]
 }
