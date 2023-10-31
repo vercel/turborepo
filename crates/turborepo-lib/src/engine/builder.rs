@@ -33,6 +33,8 @@ pub enum Error {
     Validation { error_lines: String },
     #[error(transparent)]
     Graph(#[from] graph::Error),
+    #[error("Invalid task name {task_name}: {reason}")]
+    InvalidTaskName { task_name: String, reason: String },
 }
 
 pub struct EngineBuilder<'a> {
@@ -154,6 +156,8 @@ impl<'a> EngineBuilder<'a> {
                     task_id: task_id.to_string(),
                 });
             }
+
+            validate_task_name(task_id.task())?;
 
             if task_id.package() != ROOT_PKG_NAME
                 && self
@@ -387,6 +391,23 @@ impl Error {
     fn is_missing_turbo_json(&self) -> bool {
         matches!(self, Self::Config(crate::config::Error::NoTurboJSON))
     }
+}
+
+// If/when we decide to be stricter about task names,
+// we can expand the patterns here.
+const INVALID_TOKENS: &[&str] = &["$colon$"];
+
+fn validate_task_name(task: &str) -> Result<(), Error> {
+    INVALID_TOKENS
+        .iter()
+        .find(|token| task.contains(**token))
+        .map(|found_token| {
+            Err(Error::InvalidTaskName {
+                task_name: task.to_string(),
+                reason: format!("task contains invalid string '{found_token}'"),
+            })
+        })
+        .unwrap_or(Ok(()))
 }
 
 #[cfg(test)]
@@ -994,5 +1015,21 @@ mod test {
             "c#test" => ["___ROOT___"]
         };
         assert_eq!(all_dependencies(&engine), expected);
+    }
+
+    #[test_case("build", None)]
+    #[test_case("build:prod", None)]
+    #[test_case("build$colon$prod", Some("task contains invalid string '$colon$'"))]
+    fn test_validate_task_name(task_name: &str, reason: Option<&str>) {
+        let result = validate_task_name(task_name)
+            .map_err(|e| {
+                if let Error::InvalidTaskName { reason, .. } = e {
+                    reason
+                } else {
+                    panic!("invalid error encountered {e:?}")
+                }
+            })
+            .err();
+        assert_eq!(result.as_deref(), reason.as_deref());
     }
 }
