@@ -31,13 +31,8 @@ export default defineConfig((options: Options) => ({
   external: ["react"],
   ...options,
   async onSuccess() {
-    console.log("tsup onSuccess...")
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    console.log("tsup onSuccess after 1000ms...")
 
     const paths = jsFileScan(path.join(__dirname, "dist", "client"))
-
-    // console.log({paths})
 
     await Promise.all(paths.map(async (file) => {
       await fs.writeFile(
@@ -45,21 +40,6 @@ export default defineConfig((options: Options) => ({
         '"use client";\n' + await fs.readFile(file)
       );
     }));
-
-    
-    
-    // fs.writeFileSync(
-    //   path.join(__dirname, "dist", "client", "index.mjs"),
-    //   '"use client";\n' + await fs.readFile(path.join(__dirname, "dist", "client", "index.mjs"))
-    // );
-
-    // move /dist/server/client to /dist/client
-    // try {
-    //   fs.moveSync(path.join(__dirname, "dist", "server", "client"), path.join(__dirname, "dist", "client"), { overwrite: true })
-      
-    // } catch (err) {
-    //   console.error(err)
-    // }
 
     
   },
