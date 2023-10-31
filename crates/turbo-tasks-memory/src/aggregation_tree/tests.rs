@@ -543,6 +543,7 @@ fn many_children() {
         }
         let dur = start.elapsed();
         println!("Children: {:?}", dur);
+        println!(" {:#?} {:#?}", dur, children_duration * 2);
         assert!(dur < children_duration * 2);
     }
 
