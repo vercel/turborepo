@@ -3,6 +3,7 @@
 
 mod auth;
 mod error;
+mod mocks;
 mod server;
 mod token;
 mod ui;
