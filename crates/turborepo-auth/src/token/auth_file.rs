@@ -198,14 +198,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_read_auth_file() {
-        let temp_dir = tempdir().unwrap();
-        let auth_file_path = temp_dir
-            .path()
+        let config_dir = config_dir().unwrap();
+        let auth_file_path = config_dir
+            .as_path()
             .join(TURBOREPO_CONFIG_DIR)
             .join(TURBOREPO_AUTH_FILE_NAME);
 
         // Write a dummy auth file
-        fs::create_dir_all(temp_dir.path().join(TURBOREPO_CONFIG_DIR)).unwrap();
+        fs::create_dir_all(config_dir.as_path().join(TURBOREPO_CONFIG_DIR)).unwrap();
         fs::write(
             auth_file_path,
             r#"{ "tokens": [ { "token": "test-token", "api": "test-api", "created_at": 1634851200, "teams": [] } ] }"#,
