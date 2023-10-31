@@ -13,6 +13,7 @@ pub struct CacheMultiplexer {
     // This does create a mild race condition where we might use the cache
     // even though another thread might be removing it, but that's fine.
     should_use_http_cache: AtomicBool,
+    read_only_remote_cache: bool,
     fs: Option<FSCache>,
     http: Option<HTTPCache>,
 }
@@ -54,6 +55,7 @@ impl CacheMultiplexer {
 
         Ok(CacheMultiplexer {
             should_use_http_cache: AtomicBool::new(http_cache.is_some()),
+            read_only_remote_cache: opts.read_only_remote_cache,
             fs: fs_cache,
             http: http_cache,
         })
@@ -83,9 +85,14 @@ impl CacheMultiplexer {
 
         let http_result = match self.get_http_cache() {
             Some(http) => {
-                let http_result = http.put(anchor, key, files, duration).await;
+                if self.read_only_remote_cache {
+                    let http_result = http.put(anchor, key, files, duration).await;
 
-                Some(http_result)
+                    Some(http_result)
+                }
+                else {
+                    None
+                }
             }
             _ => None,
         };
