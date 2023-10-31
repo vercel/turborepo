@@ -6,7 +6,8 @@ fn main() {
     let is_ci_release =
         &profile == "release" && matches!(env::var("RELEASE_TURBO_CLI"), Ok(v) if v == "true");
 
-    if !is_ci_release {
+    let invocation = std::env::var("RUSTC_WRAPPER").unwrap_or_default();
+    if !is_ci_release && !invocation.ends_with("rust-analyzer") {
         build_local_go_binary(profile);
     }
 }

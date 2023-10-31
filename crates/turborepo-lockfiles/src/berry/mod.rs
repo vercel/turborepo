@@ -10,10 +10,10 @@ use std::{
     iter,
 };
 
-use de::SemverString;
+use de::Entry;
 use identifiers::{Descriptor, Locator};
 use protocol_resolver::DescriptorResolver;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use thiserror::Error;
 use turbopath::RelativeUnixPathBuf;
 
@@ -55,45 +55,42 @@ pub struct BerryLockfile {
 
 // This is the direct representation of the lockfile as it appears on disk.
 // More internal tracking is required for effectively altering the lockfile
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(try_from = "Map<String, Entry>")]
 pub struct LockfileData {
-    #[serde(rename = "__metadata")]
     metadata: Metadata,
-    #[serde(flatten)]
     packages: Map<String, BerryPackage>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
 struct Metadata {
-    version: u64,
+    version: String,
     cache_key: Option<String>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Serialize, Default, Clone)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 struct BerryPackage {
-    version: SemverString,
+    version: String,
     language_name: Option<String>,
-    dependencies: Option<Map<String, SemverString>>,
-    peer_dependencies: Option<Map<String, SemverString>>,
+    dependencies: Option<Map<String, String>>,
+    peer_dependencies: Option<Map<String, String>>,
     dependencies_meta: Option<Map<String, DependencyMeta>>,
     peer_dependencies_meta: Option<Map<String, DependencyMeta>>,
     // Structured metadata we need to persist
-    bin: Option<Map<String, SemverString>>,
+    bin: Option<Map<String, String>>,
     link_type: Option<String>,
     resolution: String,
     checksum: Option<String>,
     conditions: Option<String>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Clone, Copy)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Copy)]
 struct DependencyMeta {
     optional: Option<bool>,
     unplugged: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct BerryManifest {
     resolutions: Option<Map<String, String>>,
 }
@@ -397,7 +394,7 @@ impl Lockfile for BerryLockfile {
 
         Ok(Some(crate::Package {
             key: locator.to_string(),
-            version: package.version.clone().into(),
+            version: package.version.clone(),
         }))
     }
 
@@ -619,8 +616,33 @@ mod test {
     fn test_deserialize_lockfile() {
         let lockfile: LockfileData =
             LockfileData::from_bytes(include_bytes!("../../fixtures/berry.lock")).unwrap();
-        assert_eq!(lockfile.metadata.version, 6);
+        assert_eq!(lockfile.metadata.version, "6");
         assert_eq!(lockfile.metadata.cache_key.as_deref(), Some("8c0"));
+    }
+
+    #[test]
+    fn test_problematic_semver() {
+        let lockfile =
+            LockfileData::from_bytes(include_bytes!("../../fixtures/berry_semver.lock")).unwrap();
+        assert_eq!(lockfile.metadata.version, "6");
+        assert_eq!(lockfile.metadata.cache_key.as_deref(), Some("8"));
+        assert_eq!(lockfile.packages.len(), 3);
+        assert_eq!(
+            lockfile
+                .packages
+                .get("file-source@npm:2")
+                .and_then(|pkg| pkg.dependencies.as_ref())
+                .and_then(|deps| deps.get("stream-source")),
+            Some(&"0.10".to_string())
+        );
+        assert_eq!(
+            lockfile
+                .packages
+                .get("foo@workspace:packages/foo")
+                .and_then(|pkg| pkg.dependencies.as_ref())
+                .and_then(|deps| deps.get("file-source")),
+            Some(&"2".to_string())
+        );
     }
 
     #[test]
@@ -720,7 +742,7 @@ mod test {
 
         let patch = lockfile.patches.get(&locator).unwrap();
         let package = lockfile.locator_package.get(patch).unwrap();
-        assert_eq!(package.version.as_ref(), "2.0.0-next.4");
+        assert_eq!(package.version, "2.0.0-next.4");
 
         assert_eq!(
             lockfile.patches().unwrap(),
