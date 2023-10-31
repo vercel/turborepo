@@ -75,6 +75,8 @@ impl ProcessCss for CssModuleAsset {
     async fn get_css_with_placeholder(self: Vc<Self>) -> Result<Vc<CssWithPlaceholderResult>> {
         let parse_result = self.parse_css();
 
+        dbg!("CssModuleAsset::get_css_with_placeholder");
+
         Ok(process_css_with_placeholder(parse_result))
     }
 
@@ -84,6 +86,8 @@ impl ProcessCss for CssModuleAsset {
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<FinalCssResult>> {
         let process_result = self.get_css_with_placeholder();
+
+        dbg!("CssModuleAsset::finalize_css");
 
         Ok(finalize_css(process_result, chunking_context))
     }
