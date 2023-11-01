@@ -7,6 +7,7 @@ const __dirname = __filename.replace(/[^/\\]*$/, "");
 
 const venvName = ".cram_env";
 const venvPath = path.join(__dirname, venvName);
+const allowedVenvTools = ["python3", "pip", "prysk"];
 
 const isWindows = process.platform === "win32";
 
@@ -49,10 +50,8 @@ try {
   process.exit(1);
 }
 
-const allowedTools = ["python3", "pip", "prysk"];
-
 function getVenvBin(tool) {
-  if (!allowedTools.includes(tool)) {
+  if (!allowedVenvTools.includes(tool)) {
     throw new Error(`Tool not allowed: ${tool}`);
   }
 
