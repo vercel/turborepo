@@ -35,7 +35,7 @@ pub struct ExecutionSummary<'a> {
     // number of tasks that started
     attempted: usize,
     // the (possibly empty) path from the turborepo root to where the command was run
-    #[serde(rename = "repoPath", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "repoPath", default = "AnchoredSystemPath::empty")]
     package_inference_root: Option<&'a AnchoredSystemPath>,
     pub(crate) start_time: i64,
     pub(crate) end_time: i64,
