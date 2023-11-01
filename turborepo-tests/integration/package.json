@@ -4,7 +4,7 @@
     "test:setup": "node ./setup.mjs",
     "test": "node ./test.mjs",
     "test:rust-codepath": "EXPERIMENTAL_RUST_CODEPATH=true ./test.sh",
-    "test:interactive": "./test-interactive.sh",
+    "test:interactive": "node ./test-interactive.mjs",
     "test:parallel": ".cram_env/bin/pytest -n auto tests --prysk-shell=`which bash`",
     "pretest:parallel": ".cram_env/bin/pip3 install --quiet pytest \"prysk[pytest-plugin]\" pytest-xdist"
   },

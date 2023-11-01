@@ -12,7 +12,12 @@ console.log(`Running ${specificTest || "all"} tests... with ${pryskBin}`);
 
 const testArg = specificTest ? `tests/${specificTest}` : "tests";
 
-const flags = ["--shell=bash", isWindows ? "--dos2unix" : ""].join(" ");
+// TODO: add ability to send --interactive flag to test.mjs instead of a whole new script
+const flags = [
+  "--shell=bash",
+  "--interactive",
+  isWindows ? "--dos2unix" : "",
+].join(" ");
 
 try {
   execSync(`${pryskBin} ${flags} "${testArg}"`, { stdio: "inherit" });
