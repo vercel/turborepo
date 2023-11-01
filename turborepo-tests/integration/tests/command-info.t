@@ -6,9 +6,9 @@ Run info
   $ ${TURBO} info
   3 packages found in workspace
   
-  - another packages(\|\\)another(\|\\)package\.json (re)
-  - my-app apps(\|\\)my-app(\|\\)package\.json (re)
-  - util packages(\|\\)util(\|\\)package\.json (re)
+  - another packages(\/|\\)another(\/|\\)package\.json (re)
+  - my-app apps(\/|\\)my-app(\/|\\)package\.json (re)
+  - util packages(\/|\\)util(\/|\\)package\.json (re)
 
 
 Run info on package `another`
