@@ -6,19 +6,19 @@
   ],
   "exports": {
     ".": {
-      "import": {
+      "default": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.mjs"
       }
     },
     "./*": {
-      "import": {
+      "default": {
         "types": "./dist/*.d.ts",
         "default": "./dist/*.mjs"
       }
     },
     "./client": {
-      "import": {
+      "default": {
         "types": "./dist/client/index.d.ts",
         "default": "./dist/client/index.mjs"
       }
