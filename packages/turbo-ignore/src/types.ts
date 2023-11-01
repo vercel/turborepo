@@ -2,11 +2,10 @@ export type NonFatalErrorKey =
   | "MISSING_LOCKFILE"
   | "NO_PACKAGE_MANAGER"
   | "UNREACHABLE_PARENT"
-  | "UNREACHABLE_COMMIT"
   | "INVALID_COMPARISON";
 
 export interface NonFatalError {
-  regex: RegExp;
+  regex: Array<RegExp>;
   message: string;
 }
 
