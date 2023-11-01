@@ -79,16 +79,16 @@ async-recursion = "1.0.2"
 browserslist-rs = { version = "0.12.2" }
 
 mdxjs = "0.1.19"
-modularize_imports = { version = "0.50.0" }
-styled_components = { version = "0.77.0" }
-styled_jsx = { version = "0.54.0" }
-swc_core = { version = "0.86.10", features = [
+modularize_imports = { version = "0.54.0" }
+styled_components = { version = "0.81.0" }
+styled_jsx = { version = "0.58.0" }
+swc_core = { version = "0.86.23", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
-swc_emotion = { version = "0.53.0" }
-swc_relay = { version = "0.25.0" }
-testing = { version = "0.35.0" }
+swc_emotion = { version = "0.57.0" }
+swc_relay = { version = "0.29.0" }
+testing = { version = "0.35.3" }
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
