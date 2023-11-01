@@ -150,7 +150,8 @@ pub struct Args {
 
     /// Opt-in to the rust codepath for running turbo
     /// rather than using the go shim
-    #[clap(long, env, hide = true, default_value_t = false)]
+    #[clap(long, env, hide = true, default_value_t = false, global = true)]
+    #[serde(skip)]
     pub experimental_rust_codepath: bool,
 }
 
