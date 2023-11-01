@@ -4,6 +4,7 @@ import { defineConfig, type Options } from "tsup";
 export default defineConfig((options: Options) => ({
   entry: ["src/cli.ts"],
   format: ["esm"],
+  shim: true,
   minify: true,
   clean: true,
   ...options,
