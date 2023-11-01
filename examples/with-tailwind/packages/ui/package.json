@@ -27,9 +27,9 @@
   },
   "license": "MIT",
   "scripts": {
-    "build": "tsup",
+    "build": "rimraf dist && tsup",
     "lint": "eslint src/",
-    "dev": "watch 'tsup --watch' src/",
+    "dev": "rimraf dist && watch 'tsup --watch' src/",
     "check-types": "tsc --noEmit"
   },
   "peerDependencies": {
@@ -42,6 +42,7 @@
     "fs-extra": "^11.1.1",
     "postcss": "^8.4.20",
     "react": "^18.2.0",
+    "rimraf": "^5.0.5",
     "tailwind-config": "workspace:*",
     "tailwindcss": "^3.2.4",
     "tsconfig": "workspace:*",
