@@ -9,7 +9,7 @@ on:
       - completed
   push:
     branches:
-      - main
+      - "*"
     paths:
       - "cli/**"
       - crates/turborepo*/**
@@ -104,6 +104,8 @@ jobs:
   # We'll wait for all profiles to complete before sending.
   send-to-tinybird:
     name: Send to Tinybird
+    # only dump data on main branch
+    if: github.ref == 'refs/heads/main'
     needs: [time-to-first-task]
     runs-on: ubuntu-latest
     env:
@@ -149,6 +151,8 @@ jobs:
 
   send-to-slack:
     name: Send to Slack
+    # only dump data on main branch
+    if: github.ref == 'refs/heads/main'
     needs: [time-to-first-task]
     runs-on: ubuntu-latest
     steps:
