@@ -229,7 +229,7 @@ impl<'a> Run<'a> {
                 )
             })?;
 
-        if !opts.run_opts.dry_run {
+        if !opts.run_opts.dry_run && opts.run_opts.graph.is_none() {
             self.print_run_prelude(&opts, &filtered_pkgs);
         }
 
