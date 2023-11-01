@@ -27,6 +27,21 @@ function isMusl() {
     }
   } else {
     const { glibcVersionRuntime } = process.report.getReport().header;
+    if (typeof glibcVersionRuntime === "string") {
+      try {
+        // We support glibc v2.26+
+        let [major, minor] = glibcVersionRuntime.split(".", 2);
+        if (parseInt(major, 10) !== 2) {
+          return true;
+        }
+        if (parseInt(minor, 10) < 26) {
+          return true;
+        }
+        return false;
+      } catch (e) {
+        return true;
+      }
+    }
     return !glibcVersionRuntime;
   }
 }
