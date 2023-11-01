@@ -31,18 +31,23 @@ execSync(`${pip} install "prysk"`, { stdio: "inherit" });
 // disable package manager update notifiers
 process.env.NO_UPDATE_NOTIFIER = 1;
 
-const specificTest = process.argv[2];
+let specificTest = "tests";
+const testArg = process.argv[2];
+if (testArg) {
+  if (isWindows) {
+    testArg = testArg.replaceAll("/", path.sep);
+  }
+  specificTest = path.join("tests", process.argv[2]);
+}
 
 const pryskBin = getVenvBin("prysk");
-
-console.log(`Running ${specificTest || "all"} tests... with ${pryskBin}`);
-
-const testArg = specificTest ? `tests/${specificTest}` : "tests";
-
 const flags = ["--shell=bash", isWindows ? "--dos2unix" : ""].join(" ");
 
+const cmd = `${pryskBin} ${flags} "${specificTest}"`;
+console.log(`Running ${cmd}`);
+
 try {
-  execSync(`${pryskBin} ${flags} "${testArg}"`, { stdio: "inherit" });
+  execSync(cmd, { stdio: "inherit" });
 } catch (e) {
   // Swallow the node error stack trace. stdio: inherit should
   // already have the test failures printed. We don't need the Node.js
