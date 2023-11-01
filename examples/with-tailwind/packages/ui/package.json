@@ -7,14 +7,14 @@
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.mjs"
+        "types": "./dist/server/index.d.ts",
+        "default": "./dist/server/index.mjs"
       }
     },
     "./*": {
       "import": {
-        "types": "./dist/*.d.ts",
-        "default": "./dist/*.mjs"
+        "types": "./dist/server/*.d.ts",
+        "default": "./dist/server/*.mjs"
       }
     },
     "./client": {
@@ -23,7 +23,13 @@
         "default": "./dist/client/index.mjs"
       }
     },
-    "./styles.css": "./dist/index.css"
+    "./client/*": {
+      "import": {
+        "types": "./dist/client/*.d.ts",
+        "default": "./dist/client/*.mjs"
+      }
+    },
+    "./styles.css": "./dist/server/index.css"
   },
   "license": "MIT",
   "scripts": {
