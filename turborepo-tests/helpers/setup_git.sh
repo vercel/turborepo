@@ -4,8 +4,6 @@ TARGET_DIR=$1
 # If a second parameter isn't passed, default to true
 SHOULD_INSTALL=${2:-true}
 
-echo "setup_git.sh: TARGET_DIR: ${TARGET_DIR}"
-
 # Set the autocrlf option to true to avoid issues with line endings on Windows
 if [[ "$OSTYPE" == "msys" ]]; then
   git config --global core.autocrlf true
@@ -19,7 +17,6 @@ git ${GIT_ARGS} config user.name "Turbo Test"
 echo "script-shell=$(which bash)" > ${TARGET_DIR}/.npmrc
 
 if [ $SHOULD_INSTALL == "true" ]; then
-  echo "setup_git.sh: npm install"
   npm --prefix=${TARGET_DIR} install --silent
 fi
 
