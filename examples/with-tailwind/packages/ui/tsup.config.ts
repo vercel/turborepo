@@ -24,7 +24,7 @@ export default defineConfig((options: Options) => ({
   splitting: true,
   entry: ["src/**/*.tsx"],
   outDir: 'dist',
-  format: ['cjs'],
+  format: ['esm'],
   dts: true,
   minify: true,
   clean: true,
