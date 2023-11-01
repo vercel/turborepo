@@ -402,9 +402,10 @@ impl<'a> Run<'a> {
 
         let is_single_package = opts.run_opts.single_package;
 
-        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-            .with_single_package_mode(opts.run_opts.single_package)
-            .build()?;
+        let mut pkg_dep_graph =
+            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+                .with_single_package_mode(opts.run_opts.single_package)
+                .build()?;
 
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
@@ -458,7 +459,7 @@ impl<'a> Run<'a> {
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
         let api_auth = self.base.api_auth()?;
 
-        let engine = EngineBuilder::new(
+        let mut engine = EngineBuilder::new(
             &self.base.repo_root,
             &pkg_dep_graph,
             opts.run_opts.single_package,
@@ -493,6 +494,11 @@ impl<'a> Run<'a> {
             engine.task_definitions(),
             &self.base.repo_root,
         )?;
+
+        if opts.run_opts.parallel {
+            pkg_dep_graph = pkg_dep_graph.no_workspace_dependencies();
+            engine = self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
+        }
 
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
