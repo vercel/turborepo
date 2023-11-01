@@ -150,7 +150,10 @@ pub struct Args {
 
     /// Opt-in to the rust codepath for running turbo
     /// rather than using the go shim
-    #[clap(long, env, hide = true, default_value_t = false, global = true)]
+    /// NOTE: This is only the flag. The env variable also needs to
+    /// be checked, but we can't do it in clap because then setting the
+    /// var will stop clap from showing the help text.
+    #[clap(long, hide = true, default_value_t = false, global = true)]
     #[serde(skip)]
     pub experimental_rust_codepath: bool,
 }
@@ -817,7 +820,9 @@ pub async fn run(
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
-            if cli_args.experimental_rust_codepath {
+            if cli_args.experimental_rust_codepath
+                || env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("true")
+            {
                 use crate::commands::run;
                 let exit_code = run::run(base).await?;
                 Ok(Payload::Rust(Ok(exit_code)))
