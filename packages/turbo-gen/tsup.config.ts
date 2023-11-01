@@ -4,7 +4,7 @@ import chalk from "chalk";
 
 export default defineConfig((options: Options) => ({
   entry: ["src/cli.ts", "src/types.ts"],
-  format: ["cjs"],
+  format: ["esm"],
   dts: true,
   clean: true,
   minify: true,
