@@ -125,9 +125,10 @@ impl<'a> Run<'a> {
 
         let is_single_package = opts.run_opts.single_package;
 
-        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-            .with_single_package_mode(opts.run_opts.single_package)
-            .build()?;
+        let mut pkg_dep_graph =
+            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+                .with_single_package_mode(opts.run_opts.single_package)
+                .build()?;
 
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
@@ -212,7 +213,8 @@ impl<'a> Run<'a> {
 
         info!("created cache");
 
-        let engine = self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
+        let mut engine =
+            self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
 
         engine
             .validate(&pkg_dep_graph, opts.run_opts.concurrency)
@@ -286,6 +288,11 @@ impl<'a> Run<'a> {
             engine.task_definitions(),
             &self.base.repo_root,
         )?;
+
+        if opts.run_opts.parallel {
+            pkg_dep_graph = pkg_dep_graph.no_workspace_dependencies();
+            engine = self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
+        }
 
         if let Some(graph_opts) = opts.run_opts.graph {
             match graph_opts {
@@ -555,7 +562,7 @@ impl<'a> Run<'a> {
         root_turbo_json: &TurboJson,
         filtered_pkgs: &HashSet<WorkspaceName>,
     ) -> Result<Engine> {
-        Ok(EngineBuilder::new(
+        let engine = EngineBuilder::new(
             &self.base.repo_root,
             pkg_dep_graph,
             opts.run_opts.single_package,
@@ -574,6 +581,23 @@ impl<'a> Run<'a> {
                 .iter()
                 .map(|task| TaskName::from(task.as_str()).into_owned()),
         )
-        .build()?)
+        .build()?;
+
+        if !opts.run_opts.parallel {
+            engine
+                .validate(pkg_dep_graph, opts.run_opts.concurrency)
+                .map_err(|errors| {
+                    anyhow!(
+                        "error preparing engine: Invalid persistent task configuration:\n{}",
+                        errors
+                            .into_iter()
+                            .map(|e| e.to_string())
+                            .sorted()
+                            .join("\n")
+                    )
+                })?;
+        }
+
+        Ok(engine)
     }
 }
