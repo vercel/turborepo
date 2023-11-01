@@ -5,7 +5,7 @@ import chalk from "chalk";
 export default defineConfig((options: Options) => ({
   entry: ["src/cli.ts", "src/types.ts"],
   format: ["esm"],
-  shim: true,
+  shim: true, // Add shims for things like __filename and __dirname usage
   dts: true,
   clean: true,
   minify: true,
