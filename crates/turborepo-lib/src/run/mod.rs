@@ -227,22 +227,6 @@ impl<'a> Run<'a> {
                 )
             })?;
 
-        if let Some(graph_opts) = opts.run_opts.graph {
-            match graph_opts {
-                GraphOpts::File(graph_file) => {
-                    let graph_file =
-                        AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
-                    let file = graph_file.open()?;
-                    let _writer = BufWriter::new(file);
-                    todo!("Need to implement different format support");
-                }
-                GraphOpts::Stdout => {
-                    engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?
-                }
-            }
-            return Ok(0);
-        }
-
         if !opts.run_opts.dry_run {
             self.print_run_prelude(&opts, &filtered_pkgs);
         }
@@ -302,6 +286,22 @@ impl<'a> Run<'a> {
             engine.task_definitions(),
             &self.base.repo_root,
         )?;
+
+        if let Some(graph_opts) = opts.run_opts.graph {
+            match graph_opts {
+                GraphOpts::File(graph_file) => {
+                    let graph_file =
+                        AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
+                    let file = graph_file.open()?;
+                    let _writer = BufWriter::new(file);
+                    todo!("Need to implement different format support");
+                }
+                GraphOpts::Stdout => {
+                    engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?
+                }
+            }
+            return Ok(0);
+        }
 
         // remove dead code warnings
         let _proc_manager = ProcessManager::new();
