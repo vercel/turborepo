@@ -4,7 +4,7 @@ Setup
 
   $ cd $TARGET_DIR/outer && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)nested_workspaces(\/|\\)outer (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
@@ -39,7 +39,7 @@ Setup
   
   $ cd $TARGET_DIR/outer/apps && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)nested_workspaces(\/|\\)outer (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
@@ -75,7 +75,7 @@ Setup
   
   $ cd $TARGET_DIR/outer/inner && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer/inner (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)nested_workspaces(\/|\\)outer(\/|\\)inner (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
@@ -110,7 +110,7 @@ Setup
   
   $ cd $TARGET_DIR/outer/inner/apps && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer/inner (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)nested_workspaces(\/|\\)outer(\/|\\)inner (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
@@ -147,7 +147,7 @@ Setup
 Locate a repository with no turbo.json. We'll get the right root, but there's nothing to run
   $ cd $TARGET_DIR/outer/inner-no-turbo && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer/inner-no-turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)nested_workspaces(\/|\\)outer(\/|\\)inner-no-turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
@@ -158,7 +158,7 @@ Locate a repository with no turbo.json. We'll get the right root, but there's no
 Locate a repository with no turbo.json. We'll get the right root and inference directory, but there's nothing to run
   $ cd $TARGET_DIR/outer/inner-no-turbo/apps && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer/inner-no-turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)nested_workspaces(\/|\\)outer(\/|\\)inner-no-turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
@@ -168,7 +168,7 @@ Locate a repository with no turbo.json. We'll get the right root and inference d
 
   $ cd $TARGET_DIR/outer-no-turbo && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer-no-turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)nested_workspaces(\/|\\)outer-no-turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
@@ -188,7 +188,7 @@ Locate a repository with no turbo.json. We'll get the right root and inference d
 
   $ cd $TARGET_DIR/outer-no-turbo/inner && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer-no-turbo/inner (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)nested_workspaces(\/|\\)outer-no-turbo(\/|\\)inner (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
@@ -223,7 +223,7 @@ Locate a repository with no turbo.json. We'll get the right root and inference d
   
   $ cd $TARGET_DIR/outer-no-turbo/inner/apps && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer-no-turbo/inner (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)nested_workspaces(\/|\\)outer-no-turbo(\/|\\)inner (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
@@ -259,7 +259,7 @@ Locate a repository with no turbo.json. We'll get the right root and inference d
   
   $ cd $TARGET_DIR/outer-no-turbo/inner-no-turbo && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer-no-turbo/inner-no-turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)nested_workspaces(\/|\\)outer-no-turbo(\/|\\)inner-no-turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
@@ -269,7 +269,7 @@ Locate a repository with no turbo.json. We'll get the right root and inference d
 
   $ cd $TARGET_DIR/outer-no-turbo/inner-no-turbo/apps && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/nested_workspaces/outer-no-turbo/inner-no-turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)nested_workspaces(\/|\\)outer-no-turbo(\/|\\)inner-no-turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
