@@ -32,12 +32,12 @@ execSync(`${pip} install "prysk"`, { stdio: "inherit" });
 process.env.NO_UPDATE_NOTIFIER = 1;
 
 let specificTest = "tests";
-const testArg = process.argv[2];
+let testArg = process.argv[2];
 if (testArg) {
   if (isWindows) {
     testArg = testArg.replaceAll("/", path.sep);
   }
-  specificTest = path.join("tests", process.argv[2]);
+  specificTest = path.join("tests", testArg);
 }
 
 const pryskBin = getVenvBin("prysk");
