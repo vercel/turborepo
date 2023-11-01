@@ -32,7 +32,7 @@ use crate::{
     commands::CommandBase,
     config::TurboJson,
     daemon::DaemonConnector,
-    engine::EngineBuilder,
+    engine::{Engine, EngineBuilder},
     opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
     process::ProcessManager,
@@ -212,26 +212,7 @@ impl<'a> Run<'a> {
 
         info!("created cache");
 
-        let engine = EngineBuilder::new(
-            &self.base.repo_root,
-            &pkg_dep_graph,
-            opts.run_opts.single_package,
-        )
-        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
-        .with_turbo_jsons(Some(
-            Some((WorkspaceName::Root, root_turbo_json.clone()))
-                .into_iter()
-                .collect(),
-        ))
-        .with_tasks_only(opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.iter().cloned().collect())
-        .with_tasks(
-            opts.run_opts
-                .tasks
-                .iter()
-                .map(|task| TaskName::from(task.as_str()).into_owned()),
-        )
-        .build()?;
+        let engine = self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
 
         engine
             .validate(&pkg_dep_graph, opts.run_opts.concurrency)
@@ -565,5 +546,34 @@ impl<'a> Run<'a> {
         let task_hash_tracker = visitor.into_task_hash_tracker();
 
         Ok((global_hash, task_hash_tracker))
+    }
+
+    fn build_engine(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        opts: &Opts,
+        root_turbo_json: &TurboJson,
+        filtered_pkgs: &HashSet<WorkspaceName>,
+    ) -> Result<Engine> {
+        Ok(EngineBuilder::new(
+            &self.base.repo_root,
+            pkg_dep_graph,
+            opts.run_opts.single_package,
+        )
+        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
+        .with_turbo_jsons(Some(
+            Some((WorkspaceName::Root, root_turbo_json.clone()))
+                .into_iter()
+                .collect(),
+        ))
+        .with_tasks_only(opts.run_opts.only)
+        .with_workspaces(filtered_pkgs.clone().into_iter().collect())
+        .with_tasks(
+            opts.run_opts
+                .tasks
+                .iter()
+                .map(|task| TaskName::from(task.as_str()).into_owned()),
+        )
+        .build()?)
     }
 }
