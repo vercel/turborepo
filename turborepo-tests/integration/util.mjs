@@ -16,14 +16,6 @@ const venvBin = isWindows
 
 const allowedTools = ["python3", "pip", "prysk"];
 
-export function debugVenv() {
-  console.log(`ls ${venvPath}`);
-  execSync(`ls -la ${venvPath}`, { stdio: "inherit" });
-
-  console.log(`ls ${venvBin}`);
-  execSync(`ls -la ${venvBin}`, { stdio: "inherit" });
-}
-
 export function getVenvBin(tool) {
   if (!allowedTools.includes(tool)) {
     throw new Error(`Tool not allowed: ${tool}`);

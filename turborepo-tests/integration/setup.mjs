@@ -1,5 +1,5 @@
 import { execSync } from "child_process";
-import { debugVenv, getVenvBin, makeVenv } from "./util.mjs";
+import { getVenvBin, makeVenv } from "./util.mjs";
 
 makeVenv();
 
@@ -14,5 +14,3 @@ execSync(`${python3} -m pip install --quiet --upgrade pip`, {
 console.log("install prysk@15");
 
 execSync(`${pip} install "prysk"`, { stdio: "inherit" });
-
-debugVenv();
