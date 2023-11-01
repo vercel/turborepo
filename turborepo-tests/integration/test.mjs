@@ -1,7 +1,33 @@
-// disable package manager update notifiers
 import { execSync } from "child_process";
-import { getVenvBin, isWindows } from "./util.mjs";
+import path from "node:path";
+import { fileURLToPath } from "url";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = __filename.replace(/[^/\\]*$/, "");
+
+const venvName = ".cram_env";
+const venvPath = path.join(__dirname, venvName);
+
+const isWindows = process.platform === "win32";
+
+const venvBin = isWindows
+  ? path.join(venvPath, "Scripts")
+  : path.join(venvPath, "bin");
+
+execSync(`python3 -m venv ${venvName}`, { stdio: "inherit" });
+
+const python3 = getVenvBin("python3");
+const pip = getVenvBin("pip");
+
+console.log("install latest pip");
+execSync(`${python3} -m pip install --quiet --upgrade pip`, {
+  stdio: "inherit",
+});
+
+console.log("install prysk@15");
+execSync(`${pip} install "prysk"`, { stdio: "inherit" });
+
+// disable package manager update notifiers
 process.env.NO_UPDATE_NOTIFIER = 1;
 
 const specificTest = process.argv[2];
@@ -21,4 +47,16 @@ try {
   // already have the test failures printed. We don't need the Node.js
   // execution to also print its stack trace from execSync.
   process.exit(1);
+}
+
+const allowedTools = ["python3", "pip", "prysk"];
+
+function getVenvBin(tool) {
+  if (!allowedTools.includes(tool)) {
+    throw new Error(`Tool not allowed: ${tool}`);
+  }
+
+  const suffix = isWindows ? ".exe" : "";
+
+  return path.join(venvBin, tool + suffix);
 }
