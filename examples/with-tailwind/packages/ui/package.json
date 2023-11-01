@@ -8,19 +8,19 @@
     ".": {
       "import": {
         "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+        "default": "./dist/index.mjs"
       }
     },
     "./*": {
       "import": {
         "types": "./dist/*.d.ts",
-        "default": "./dist/*.js"
+        "default": "./dist/*.mjs"
       }
     },
     "./client": {
       "import": {
         "types": "./dist/client/index.d.ts",
-        "default": "./dist/client/index.js"
+        "default": "./dist/client/index.mjs"
       }
     },
     "./styles.css": "./dist/index.css"
