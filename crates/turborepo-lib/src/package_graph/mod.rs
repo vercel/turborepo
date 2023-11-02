@@ -120,30 +120,17 @@ impl PackageGraph {
         Ok(graph::validate_graph(&self.workspace_graph)?)
     }
 
-    pub fn no_workspace_dependencies(self) -> Self {
-        let Self {
-            mut workspace_graph,
-            node_lookup,
-            workspaces,
-            package_manager,
-            lockfile,
-        } = self;
-        let root_index = node_lookup
+    pub fn remove_workspace_dependencies(&mut self) {
+        let root_index = self
+            .node_lookup
             .get(&WorkspaceNode::Root)
             .expect("graph should have root workspace node");
-        workspace_graph.retain_edges(|graph, index| {
+        self.workspace_graph.retain_edges(|graph, index| {
             let Some((_src, dst)) = graph.edge_endpoints(index) else {
                 return false;
             };
             dst == *root_index
         });
-        Self {
-            workspace_graph,
-            node_lookup,
-            workspaces,
-            package_manager,
-            lockfile,
-        }
     }
 
     /// Returns the number of workspaces in the repo

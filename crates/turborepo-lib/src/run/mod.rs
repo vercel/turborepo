@@ -290,7 +290,7 @@ impl<'a> Run<'a> {
         )?;
 
         if opts.run_opts.parallel {
-            pkg_dep_graph = pkg_dep_graph.no_workspace_dependencies();
+            pkg_dep_graph.remove_workspace_dependencies();
             engine = self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
         }
 
@@ -496,7 +496,7 @@ impl<'a> Run<'a> {
         )?;
 
         if opts.run_opts.parallel {
-            pkg_dep_graph = pkg_dep_graph.no_workspace_dependencies();
+            pkg_dep_graph.remove_workspace_dependencies();
             engine = self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
         }
 
