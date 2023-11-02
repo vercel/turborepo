@@ -32,7 +32,7 @@ use crate::{
     commands::CommandBase,
     config::TurboJson,
     daemon::DaemonConnector,
-    engine::EngineBuilder,
+    engine::{Engine, EngineBuilder},
     opts::{GraphOpts, Opts},
     package_graph::{PackageGraph, WorkspaceName},
     process::ProcessManager,
@@ -125,9 +125,10 @@ impl<'a> Run<'a> {
 
         let is_single_package = opts.run_opts.single_package;
 
-        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-            .with_single_package_mode(opts.run_opts.single_package)
-            .build()?;
+        let mut pkg_dep_graph =
+            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+                .with_single_package_mode(opts.run_opts.single_package)
+                .build()?;
 
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
@@ -212,26 +213,8 @@ impl<'a> Run<'a> {
 
         info!("created cache");
 
-        let engine = EngineBuilder::new(
-            &self.base.repo_root,
-            &pkg_dep_graph,
-            opts.run_opts.single_package,
-        )
-        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
-        .with_turbo_jsons(Some(
-            Some((WorkspaceName::Root, root_turbo_json.clone()))
-                .into_iter()
-                .collect(),
-        ))
-        .with_tasks_only(opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.iter().cloned().collect())
-        .with_tasks(
-            opts.run_opts
-                .tasks
-                .iter()
-                .map(|task| TaskName::from(task.as_str()).into_owned()),
-        )
-        .build()?;
+        let mut engine =
+            self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
 
         engine
             .validate(&pkg_dep_graph, opts.run_opts.concurrency)
@@ -246,23 +229,7 @@ impl<'a> Run<'a> {
                 )
             })?;
 
-        if let Some(graph_opts) = opts.run_opts.graph {
-            match graph_opts {
-                GraphOpts::File(graph_file) => {
-                    let graph_file =
-                        AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
-                    let file = graph_file.open()?;
-                    let _writer = BufWriter::new(file);
-                    todo!("Need to implement different format support");
-                }
-                GraphOpts::Stdout => {
-                    engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?
-                }
-            }
-            return Ok(0);
-        }
-
-        if !opts.run_opts.dry_run {
+        if !opts.run_opts.dry_run && opts.run_opts.graph.is_none() {
             self.print_run_prelude(&opts, &filtered_pkgs);
         }
 
@@ -321,6 +288,27 @@ impl<'a> Run<'a> {
             engine.task_definitions(),
             &self.base.repo_root,
         )?;
+
+        if opts.run_opts.parallel {
+            pkg_dep_graph.remove_workspace_dependencies();
+            engine = self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
+        }
+
+        if let Some(graph_opts) = opts.run_opts.graph {
+            match graph_opts {
+                GraphOpts::File(graph_file) => {
+                    let graph_file =
+                        AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
+                    let file = graph_file.open()?;
+                    let _writer = BufWriter::new(file);
+                    todo!("Need to implement different format support");
+                }
+                GraphOpts::Stdout => {
+                    engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?
+                }
+            }
+            return Ok(0);
+        }
 
         // remove dead code warnings
         let _proc_manager = ProcessManager::new();
@@ -414,9 +402,10 @@ impl<'a> Run<'a> {
 
         let is_single_package = opts.run_opts.single_package;
 
-        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-            .with_single_package_mode(opts.run_opts.single_package)
-            .build()?;
+        let mut pkg_dep_graph =
+            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+                .with_single_package_mode(opts.run_opts.single_package)
+                .build()?;
 
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
@@ -470,7 +459,7 @@ impl<'a> Run<'a> {
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
         let api_auth = self.base.api_auth()?;
 
-        let engine = EngineBuilder::new(
+        let mut engine = EngineBuilder::new(
             &self.base.repo_root,
             &pkg_dep_graph,
             opts.run_opts.single_package,
@@ -505,6 +494,11 @@ impl<'a> Run<'a> {
             engine.task_definitions(),
             &self.base.repo_root,
         )?;
+
+        if opts.run_opts.parallel {
+            pkg_dep_graph.remove_workspace_dependencies();
+            engine = self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
+        }
 
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
@@ -565,5 +559,51 @@ impl<'a> Run<'a> {
         let task_hash_tracker = visitor.into_task_hash_tracker();
 
         Ok((global_hash, task_hash_tracker))
+    }
+
+    fn build_engine(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        opts: &Opts,
+        root_turbo_json: &TurboJson,
+        filtered_pkgs: &HashSet<WorkspaceName>,
+    ) -> Result<Engine> {
+        let engine = EngineBuilder::new(
+            &self.base.repo_root,
+            pkg_dep_graph,
+            opts.run_opts.single_package,
+        )
+        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
+        .with_turbo_jsons(Some(
+            Some((WorkspaceName::Root, root_turbo_json.clone()))
+                .into_iter()
+                .collect(),
+        ))
+        .with_tasks_only(opts.run_opts.only)
+        .with_workspaces(filtered_pkgs.clone().into_iter().collect())
+        .with_tasks(
+            opts.run_opts
+                .tasks
+                .iter()
+                .map(|task| TaskName::from(task.as_str()).into_owned()),
+        )
+        .build()?;
+
+        if !opts.run_opts.parallel {
+            engine
+                .validate(pkg_dep_graph, opts.run_opts.concurrency)
+                .map_err(|errors| {
+                    anyhow!(
+                        "error preparing engine: Invalid persistent task configuration:\n{}",
+                        errors
+                            .into_iter()
+                            .map(|e| e.to_string())
+                            .sorted()
+                            .join("\n")
+                    )
+                })?;
+        }
+
+        Ok(engine)
     }
 }
