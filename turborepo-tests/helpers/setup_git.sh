@@ -4,9 +4,12 @@ TARGET_DIR=$1
 # If a second parameter isn't passed, default to true
 SHOULD_INSTALL=${2:-true}
 
-# Set the autocrlf option to true to avoid issues with line endings on Windows
+# Set the autocrlf option to "input", so Unix-style line endings are kept when checking out files
+# on Windows, and any CRLF is converted to LF when committing files during a test also. This will
+# allow file content and hashes to be hardcoded in test cases and work cross platform.
+# https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
 if [[ "$OSTYPE" == "msys" ]]; then
-  git config --global core.autocrlf true
+  git config --global core.autocrlf input
 fi
 
 git init ${TARGET_DIR} --quiet --initial-branch=main
