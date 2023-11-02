@@ -14,6 +14,9 @@ cat -vet "${TARGET_DIR}/foo.txt"
 echo "package.json before npm install"
 cat -vet "${TARGET_DIR}/package.json"
 
+echo "TARGET_DIR: ${TARGET_DIR}"
+echo "PWD: ${PWD}"
+
 ${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh ${TARGET_DIR}
 
 echo "package.json after npm install"
