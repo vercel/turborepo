@@ -70,8 +70,8 @@ Setup
       "banana.txt"
     ],
     "excludedOutputs": null,
-    "logFile": "apps(\/|\\\\)my-app(\/|\\\\)\.turbo(\/|\\\\)turbo-build\.log", (re)
-    "directory": "apps(\/|\\\\)my-app", (re)
+    "logFile": "apps(\/|\\)my-app(\/|\\)\.turbo(\/|\\)turbo-build\.log", (re)
+    "directory": "apps(\/|\\)my-app", (re)
     "dependencies": [],
     "dependents": [],
     "resolvedTaskDefinition": {
@@ -128,8 +128,8 @@ Setup
     "cliArguments": [],
     "outputs": null,
     "excludedOutputs": null,
-    "logFile": "packages(\/|\\\\)util(\/|\\\\)\.turbo(\/|\\\\)turbo-build\.log", (re)
-    "directory": "packages(\/|\\\\)util", (re)
+    "logFile": "packages(\/|\\)util(\/|\\)\.turbo(\/|\\)turbo-build\.log", (re)
+    "directory": "packages(\/|\\)util", (re)
     "dependencies": [],
     "dependents": [],
     "resolvedTaskDefinition": {
