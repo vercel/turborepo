@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use napi_derive::napi;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::{
     inference::{RepoMode, RepoState},
     package_manager::PackageManager as RustPackageManager,
@@ -81,37 +81,31 @@ impl Repository {
     }
 
     #[napi]
-    pub async fn workspace_directories(&self) -> std::result::Result<Vec<String>, napi::Error> {
+    pub async fn workspaces(&self) -> std::result::Result<Vec<Workspace>, napi::Error> {
         let package_manager = self
             .repo_state
             .package_manager
             .as_ref()
-            .map_err(|e| anyhow!("{}", e))?;
+            .map_err(|e| napi::Error::from_reason(format!("package manager error {e}")))?;
         let package_manager = package_manager.clone();
         let repo_root = self.repo_state.root.clone();
         let package_json_paths =
             tokio::task::spawn(async move { package_manager.get_package_jsons(&repo_root) })
                 .await
-                .map_err(|e| anyhow!("async task error {}", e))?
-                .map_err(|e| anyhow!("package manager error {}", e))?; //.map_err(|e| { let ne: napi::Error = e.into(); ne })?;
-                                                                       //.map_err(|e| //.map_err::<napi::Error>(|e| e.into())?;
-        let workspace_directories = package_json_paths
+                .map_err(|e| napi::Error::from_reason(format!("async failure {e}")))?
+                .map_err(|e| napi::Error::from_reason(format!("package manager error {e}")))?;
+        let workspaces = package_json_paths
             .map(|path| {
                 path.parent()
-                    .map(|dir| {
-                        self.repo_state
-                            .root
-                            .anchor(dir)
-                            .expect("workspaces are contained within the root")
+                    .map(|workspace_path| Workspace::new(&self.repo_state.root, workspace_path))
+                    .ok_or_else(|| {
+                        napi::Error::from_reason(format!(
+                            "{} does not have a parent directory",
+                            path
+                        ))
                     })
-                    .map(|dir| dir.to_string())
-                    .ok_or_else(|| anyhow!("{} does not have a parent directory", path))
             })
-            .collect::<Result<Vec<String>>>()
-            .map_err(|e| {
-                let ne: napi::Error = e.into();
-                ne
-            })?;
-        Ok(workspace_directories)
+            .collect::<std::result::Result<Vec<Workspace>, napi::Error>>()?;
+        Ok(workspaces)
     }
 }

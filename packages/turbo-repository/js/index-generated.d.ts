@@ -8,8 +8,12 @@ export class Repository {
   isMonorepo: boolean;
   static detectJS(path?: string | undefined | null): Repository;
   packageManager(): PackageManager;
-  workspaceDirectories(): Promise<Array<string>>;
+  workspaces(): Promise<Array<Workspace>>;
 }
 export class PackageManager {
   name: string;
+}
+export class Workspace {
+  absolutePath: string;
+  repoPath: string;
 }

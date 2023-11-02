@@ -3,8 +3,12 @@ export class Repository {
   readonly isMonorepo: boolean;
   static detectJS(path?: string | undefined | null): Repository;
   packageManager(): PackageManager;
-  workspaceDirectories(): Promise<Array<string>>;
+  workspaces(): Promise<Array<Workspace>>;
 }
 export class PackageManager {
-  name: string;
+  readonly name: string;
+}
+export class Workspace {
+  readonly absolutePath: string;
+  readonly repoPath: string;
 }
