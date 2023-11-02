@@ -2,6 +2,9 @@ Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
 
+  $ npm --version
+  6.14.8
+
   $ cat -vet foo.txt
   global dep! all tasks depend on this content!$
 
