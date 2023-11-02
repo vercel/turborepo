@@ -4,12 +4,14 @@ TARGET_DIR=$1
 # If a second parameter isn't passed, default to true
 SHOULD_INSTALL=${2:-true}
 
-# Set the autocrlf option to "input", so Unix-style line endings are kept when checking out files
-# on Windows, and any CRLF is converted to LF when committing files during a test also. This will
-# allow file content and hashes to be hardcoded in test cases and work cross platform.
+# Set the autocrlf option to "true", that when we init this new git repo
+# any new files added to the index will convert CRLF to LF. The files in the fixture
+# at the start should all be LF already because they were created with LF line endings
+# and in CI, on Windows, we set autocrlf to `input` to tell git to retain those line endings
+# when the monorepo is cloned (see .github/workflows/test.yml).
 # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
 if [[ "$OSTYPE" == "msys" ]]; then
-  git config --global core.autocrlf input
+  git config --local core.autocrlf true
 fi
 
 git init ${TARGET_DIR} --quiet --initial-branch=main
