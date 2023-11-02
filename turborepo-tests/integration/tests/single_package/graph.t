@@ -14,7 +14,7 @@ Graph
   }
   
 Graph in Rust
-  $ ${TURBO} run build --graph --experimental-rust-codepath
+  $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} run build --graph
   digraph {
   \tcompound = "true" (esc)
   \tnewrank = "true" (esc)

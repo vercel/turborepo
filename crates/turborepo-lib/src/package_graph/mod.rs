@@ -54,13 +54,13 @@ impl WorkspaceInfo {
     }
 
     pub fn get_external_deps_hash(&self) -> String {
-        let mut transitive_deps = Vec::with_capacity(
-            self.transitive_dependencies
-                .as_ref()
-                .map_or(0, |deps| deps.len()),
-        );
+        let Some(transitive_dependencies) = &self.transitive_dependencies else {
+            return "".into();
+        };
 
-        for dependency in self.transitive_dependencies.iter().flatten() {
+        let mut transitive_deps = Vec::with_capacity(transitive_dependencies.len());
+
+        for dependency in transitive_dependencies.iter() {
             transitive_deps.push(dependency.clone());
         }
 

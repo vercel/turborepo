@@ -17,6 +17,10 @@ use crate::{
     task_hash::TaskHashTracker,
 };
 
+const NO_FRAMEWORK_DETECTED: &str = "<NO FRAMEWORK DETECTED>";
+
+const NO_FRAMEWORK_INFERENCE: &str = "<FRAMEWORK DETECTION SKIPPED>";
+
 pub struct TaskSummaryFactory<'a> {
     package_graph: &'a PackageGraph,
     engine: &'a Engine,
@@ -69,10 +73,11 @@ impl<'a> TaskSummaryFactory<'a> {
             },
         )?;
         let package = task_id.package().to_string();
+        let task = task_id.task().to_string();
 
         Ok(TaskSummary {
             task_id,
-            dir: workspace_info.package_path().to_string(),
+            task,
             package,
             shared,
         })
@@ -123,7 +128,13 @@ impl<'a> TaskSummaryFactory<'a> {
             .expanded_outputs(task_id)
             .unwrap_or_default();
 
-        let framework = self.hash_tracker.framework(task_id).unwrap_or_default();
+        let framework = self.hash_tracker.framework(task_id).unwrap_or_else(|| {
+            match self.run_opts.framework_inference {
+                true => NO_FRAMEWORK_DETECTED,
+                false => NO_FRAMEWORK_INFERENCE,
+            }
+            .to_string()
+        });
         let hash = self
             .hash_tracker
             .hash(task_id)
@@ -157,10 +168,17 @@ impl<'a> TaskSummaryFactory<'a> {
             cache: cache_summary,
             command,
             cli_arguments: self.run_opts.pass_through_args.to_vec(),
-            outputs: task_definition.outputs.inclusions.clone(),
-            excluded_outputs: task_definition.outputs.exclusions.clone(),
+            outputs: match task_definition.outputs.inclusions.is_empty() {
+                false => Some(task_definition.outputs.inclusions.clone()),
+                true => None,
+            },
+            excluded_outputs: match task_definition.outputs.exclusions.is_empty() {
+                true => None,
+                false => Some(task_definition.outputs.exclusions.clone()),
+            },
             log_file,
-            resolved_task_definition: task_definition.clone(),
+            directory: Some(workspace_info.package_path().to_string()),
+            resolved_task_definition: task_definition.clone().into(),
             expanded_outputs,
             framework,
             dependencies,
