@@ -4,7 +4,7 @@ use turborepo_api_client::Client;
 
 use crate::error::Error::FailedToReadAuthFile;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 /// AuthFile contains a list of domains, each with a token and a list of teams
 /// the token is valid for.
 pub struct AuthFile {
@@ -14,7 +14,7 @@ pub struct AuthFile {
 impl AuthFile {
     /// Writes the contents of the auth file to disk. Will override whatever is
     /// there with what's in the struct.
-    pub fn write_to_disk(&self, path: AbsoluteSystemPathBuf) -> Result<(), crate::Error> {
+    pub fn write_to_disk(&self, path: &AbsoluteSystemPathBuf) -> Result<(), crate::Error> {
         path.ensure_dir()
             .map_err(|e| crate::Error::FailedToWriteAuth {
                 auth_path: path.clone(),
@@ -35,8 +35,13 @@ impl AuthFile {
     pub fn get_token(&self, api: &str) -> Option<AuthToken> {
         self.tokens.iter().find(|t| t.api == api).cloned()
     }
-    pub fn add_token(&mut self, token: AuthToken) {
-        self.tokens.push(token);
+    pub fn add_or_update_token(&mut self, token: AuthToken) {
+        if let Some(existing_token) = self.tokens.iter_mut().find(|t| t.api == token.api) {
+            // Update existing token.
+            *existing_token = token;
+        } else {
+            self.tokens.push(token);
+        }
     }
 }
 
@@ -87,7 +92,7 @@ pub struct Space {
 
 /// Attempts to read the auth file and returns the parsed json as an AuthFile
 /// struct.
-pub fn read_auth_file(path: AbsoluteSystemPathBuf) -> Result<AuthFile, crate::Error> {
+pub fn read_auth_file(path: &AbsoluteSystemPathBuf) -> Result<AuthFile, crate::Error> {
     let body = std::fs::read_to_string(path).map_err(FailedToReadAuthFile)?;
     let parsed_config: AuthFile =
         serde_json::from_str(&body.to_owned()).map_err(|e| FailedToReadAuthFile(e.into()))?;
@@ -121,14 +126,14 @@ mod tests {
 
         // Add a token to auth file
         let mut auth_file = AuthFile { tokens: Vec::new() };
-        auth_file.add_token(AuthToken {
+        auth_file.add_or_update_token(AuthToken {
             token: "test-token".to_string(),
             api: "test-api".to_string(),
             created_at: Some(1634851200),
             teams: Vec::new(),
         });
 
-        auth_file.write_to_disk(absolute_auth_path.clone()).unwrap();
+        auth_file.write_to_disk(&absolute_auth_path).unwrap();
 
         // Read back from disk
         let read_back: AuthFile =
@@ -140,7 +145,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_token() {
         let mut auth_file = AuthFile { tokens: Vec::new() };
-        auth_file.add_token(AuthToken {
+        auth_file.add_or_update_token(AuthToken {
             token: "test-token".to_string(),
             api: "test-api".to_string(),
             created_at: Some(1634851200),
@@ -157,7 +162,7 @@ mod tests {
         let mut auth_file = AuthFile { tokens: Vec::new() };
         assert_eq!(auth_file.tokens.len(), 0);
 
-        auth_file.add_token(AuthToken {
+        auth_file.add_or_update_token(AuthToken {
             token: "test-token".to_string(),
             api: "test-api".to_string(),
             created_at: Some(1634851200),
@@ -208,7 +213,7 @@ mod tests {
         let absolute_path = AbsoluteSystemPathBuf::try_from(auth_file_path).unwrap();
 
         // Test: Ensure the auth file has been read correctly
-        let auth_file = read_auth_file(absolute_path).unwrap();
+        let auth_file = read_auth_file(&absolute_path).unwrap();
         assert_eq!(auth_file.tokens.len(), 1);
         assert_eq!(auth_file.tokens[0].token, "test-token");
     }

@@ -2,14 +2,10 @@
  * This whole file will hopefully go away in the future when we stop writing
  * tokens to `config.json`.
  */
-use dirs_next::config_dir;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::Client;
 
-use crate::{
-    error::Error::FailedToReadConfigFile, AuthFile, AuthToken, Error, Space, Team,
-    TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR,
-};
+use crate::{error::Error::FailedToReadConfigFile, AuthFile, AuthToken, Space, Team};
 
 #[derive(serde::Deserialize)]
 /// ConfigToken describes the legacy token format. It should only be used as a
@@ -20,7 +16,7 @@ pub struct ConfigToken {
 }
 
 /// Attempts to read the config file for an auth token and returns the token.
-pub fn read_config_auth(path: AbsoluteSystemPathBuf) -> Result<ConfigToken, crate::Error> {
+pub fn read_config_auth(path: &AbsoluteSystemPathBuf) -> Result<ConfigToken, crate::Error> {
     let body = std::fs::read_to_string(path).map_err(FailedToReadConfigFile)?;
     let parsed_config: ConfigToken =
         serde_json::from_str(&body).map_err(|e| FailedToReadConfigFile(e.into()))?;
@@ -31,20 +27,13 @@ pub fn read_config_auth(path: AbsoluteSystemPathBuf) -> Result<ConfigToken, crat
 /// Converts our old style of token held in `config.json` into the new schema.
 ///
 /// Uses the client to get information not readily available in the current
-/// token.
+/// token. Will write the new token to disk immediately and return the AuthFile
+/// for use.
 pub async fn convert_to_auth_file(
     token: &str,
     client: &impl Client,
+    auth_file_path: &AbsoluteSystemPathBuf,
 ) -> Result<AuthFile, crate::Error> {
-    // Get the path to the auth file.
-    let absolute_auth_path = AbsoluteSystemPathBuf::try_from(
-        config_dir()
-            .ok_or(Error::FailedToFindConfigDir)?
-            .join(TURBOREPO_CONFIG_DIR)
-            .join(TURBOREPO_AUTH_FILE_NAME),
-    )
-    .map_err(Error::PathError)?;
-
     // Fill in auth file data.
     let user_response = client.get_user(token).await?;
     let teams_response = client.get_teams(token).await?;
@@ -70,7 +59,7 @@ pub async fn convert_to_auth_file(
     }
 
     // Add the token to the list of tokens.
-    af.add_token(AuthToken {
+    af.add_or_update_token(AuthToken {
         token: token.to_string(),
         api: client.base_url().to_owned(),
         created_at: user_response.user.created_at,
@@ -78,7 +67,7 @@ pub async fn convert_to_auth_file(
     });
 
     // Write this to disk, overwriting anything that may be in `auth.json`.
-    af.write_to_disk(absolute_auth_path)?;
+    af.write_to_disk(auth_file_path)?;
 
     Ok(af)
 }
@@ -90,7 +79,9 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::{mocks::*, TURBOREPO_LEGACY_AUTH_FILE_NAME};
+    use crate::{
+        mocks::*, TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR, TURBOREPO_LEGACY_AUTH_FILE_NAME,
+    };
 
     #[tokio::test]
     async fn test_read_config_auth() {
@@ -107,7 +98,7 @@ mod tests {
         let absolute_path = AbsoluteSystemPathBuf::try_from(config_file_path).unwrap();
 
         // Test: Call the read_config_auth function and check the result
-        let result = read_config_auth(absolute_path);
+        let result = read_config_auth(&absolute_path);
         assert!(result.is_ok());
         let config_token = result.unwrap();
         assert_eq!(config_token.token, "test-token");
@@ -118,9 +109,18 @@ mod tests {
         // Setup: Create a mock client and a fake token
         let mock_client = MockApiClient::new();
         let token = "test-token";
+        let temp_dir = tempfile::tempdir().unwrap();
+        let auth_file_path = temp_dir
+            .path()
+            .join(TURBOREPO_CONFIG_DIR)
+            .join(TURBOREPO_AUTH_FILE_NAME);
+        let absolute_auth_path = AbsoluteSystemPathBuf::try_from(auth_file_path).unwrap();
+
+        // Create the temp dir files.
+        fs::create_dir_all(temp_dir.path().join(TURBOREPO_CONFIG_DIR)).unwrap();
 
         // Test: Call the convert_to_auth_file function and check the result
-        let result = convert_to_auth_file(token, &mock_client).await;
+        let result = convert_to_auth_file(token, &mock_client, &absolute_auth_path).await;
         assert!(result.is_ok());
         let auth_file = result.unwrap();
 

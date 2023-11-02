@@ -8,101 +8,77 @@ mod config_token;
 
 pub use auth_file::*;
 pub use config_token::*;
-use dirs_next::config_dir;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::Client;
 
 use crate::error;
 
-const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
-const DEFAULT_API_URL: &str = "https://vercel.com/api";
-
-/// Fetches the token for a specific api from the auth file.
-///
-/// If the api is `vercel.com`, we attempt to use the Vercel CLI token.
-///
-/// The client is used to convert the legacy token to our new format.
-pub async fn get_token_for(api: &str, client: &impl Client) -> Result<AuthToken, crate::Error> {
-    // NOTE: In the future this will look at the Vercel CLI to see if there's a
-    // valid token in there instead of our auth.
-    //
-    // For now, we'll just use our auth file. But the logic should be very similar
-    // going forward.
-    let tokens: Vec<AuthToken> = if api == DEFAULT_LOGIN_URL || api == DEFAULT_API_URL {
-        load_vercel_tokens(client).await?
-    } else {
-        load_turbo_tokens(client).await?
-    };
-
-    // Return found token.
-    if let Some(token) = tokens.iter().find(|t| t.api == api) {
-        println!("Found token for api: {}", api);
-        // TODO: I don't like that we're cloning the whole token here. Might be
-        //       beneficial to rethink or force an AuthToken to be passed in and
-        //       overwritten.
-        Ok(token.clone())
-    } else {
-        // Couldn't find a token, bomb out.
-        Err(crate::Error::FailedToFindTokenForAPI {
-            api: api.to_string(),
-        })
-    }
-}
-
-/// If --api is passed in and it's not the default Vercel api, it means we're
+/// If `--api` is passed in and it's not the default Vercel api, it means we're
 /// looking for a non-Vercel remote cache token.
 ///
 /// This function only loads tokens
 /// from auth.json and if it doesn't exist, creates the `auth.json` from a
 /// `config.json`.
-pub async fn load_turbo_tokens(client: &impl Client) -> Result<Vec<AuthToken>, crate::Error> {
-    // Tokens are held in the config_dir, so set up paths to the config.json and
-    // auth.json inside of there.
-    let config_dir = config_dir().ok_or(error::Error::FailedToFindConfigDir)?;
-    let absolute_config_path = AbsoluteSystemPathBuf::try_from(
-        config_dir
-            .join(crate::TURBOREPO_CONFIG_DIR)
-            .join(crate::TURBOREPO_LEGACY_AUTH_FILE_NAME),
-    )
-    .unwrap();
-
-    let absolute_auth_path = AbsoluteSystemPathBuf::try_from(
-        config_dir
-            .join(crate::TURBOREPO_CONFIG_DIR)
-            .join(crate::TURBOREPO_AUTH_FILE_NAME),
-    )
-    .unwrap();
-
-    match read_auth_file(absolute_auth_path) {
+pub async fn load_turbo_tokens(
+    client: &impl Client,
+    // tokens_file_path is mostly here for testing purposes.
+    auth_file_path: &AbsoluteSystemPathBuf,
+) -> Result<AuthFile, crate::Error> {
+    match read_auth_file(auth_file_path) {
         // We found our `auth.json`, so use that.
-        Ok(auth_file) => Ok(auth_file.tokens),
-        // TODO(voz): Surely there's a nicer way to accomplish this?
-        Err(crate::Error::FailedToFindConfigDir) => Err(crate::Error::FailedToFindConfigDir),
-        // If we found the config directory but not the auth file, it means we need to check the
+        Ok(auth_file) => Ok(auth_file),
+        // We did not find the auth file, it means we need to check the
         // `config.json` for a token.
         Err(e) => {
-            let result = async {
-                match read_config_auth(absolute_config_path) {
-                    Ok(config_token) => convert_to_auth_file(&config_token.token, client)
-                        .await
-                        .map_err(error::Error::from),
+            async {
+                match read_config_auth(auth_file_path) {
+                    // Convert the found config token to an auth file.
+                    Ok(config_token) => {
+                        convert_to_auth_file(&config_token.token, client, auth_file_path)
+                            .await
+                            .map_err(error::Error::from)
+                    }
+                    // No config either, bomb out.
                     Err(_) => Err(e),
                 }
             }
-            .await;
-
-            match result {
-                Ok(auth_file) => Ok(auth_file.tokens),
-                Err(e) => Err(e),
-            }
+            .await
         }
     }
 }
 
 // If --api is passed in and it's the default Vercel api or if --api isn't
 // passed in at all.
-pub async fn load_vercel_tokens(client: &impl Client) -> Result<Vec<AuthToken>, crate::Error> {
+pub async fn load_vercel_tokens(
+    client: &impl Client,
+    auth_dir_path: &AbsoluteSystemPathBuf,
+) -> Result<AuthFile, crate::Error> {
     // TODO: Until we get the vercel auth token in com.vercel.cli to look like our
     // format, make this a passthrough for load_turbo_tokens.
-    load_turbo_tokens(client).await
+    load_turbo_tokens(client, auth_dir_path).await
+}
+
+pub async fn read_or_create_auth_file(
+    auth_file_path: &AbsoluteSystemPathBuf,
+    config_file_path: &AbsoluteSystemPathBuf,
+    client: &impl Client,
+) -> Result<AuthFile, crate::Error> {
+    if auth_file_path.exists() {
+        let content = auth_file_path
+            .read_existing_to_string_or(Ok("{}"))
+            .map_err(crate::Error::FailedToReadAuthFile)?;
+        let auth_file: AuthFile = serde_json::from_str(&content)
+            .map_err(|e| crate::Error::FailedToSerializeAuthFile { error: e })?;
+        return Ok(auth_file);
+    } else if config_file_path.exists() {
+        let content = config_file_path
+            .read_existing_to_string_or(Ok("{}"))
+            .map_err(crate::Error::FailedToReadConfigFile)?;
+        let config_token: ConfigToken = serde_json::from_str(&content)
+            .map_err(|e| crate::Error::FailedToSerializeAuthFile { error: e })?;
+
+        return convert_to_auth_file(&config_token.token, client, auth_file_path).await;
+    }
+    // If neither file exists, return an empty auth file.
+    Ok(AuthFile { tokens: Vec::new() })
 }
