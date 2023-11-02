@@ -80,6 +80,7 @@ pub enum EnvMode {
 #[clap(disable_help_subcommand = true)]
 #[clap(disable_version_flag = true)]
 #[clap(arg_required_else_help = true)]
+#[command(name = "turbo")]
 pub struct Args {
     #[clap(long, global = true)]
     #[serde(skip)]
@@ -586,11 +587,6 @@ pub struct RunArgs {
     // Pass a string to enable posting Run Summaries to Vercel
     #[clap(long, hide = true)]
     pub experimental_space_id: Option<String>,
-
-    /// Opt-in to the rust codepath for running turbo
-    /// rather than using the go shim
-    #[clap(long, env, hide = true, default_value_t = false)]
-    pub experimental_rust_codepath: bool,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
@@ -815,7 +811,7 @@ pub async fn run(
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
-            if args.experimental_rust_codepath {
+            if env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("true") {
                 use crate::commands::run;
                 let exit_code = run::run(base).await?;
                 Ok(Payload::Rust(Ok(exit_code)))

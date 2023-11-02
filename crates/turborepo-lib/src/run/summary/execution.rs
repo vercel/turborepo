@@ -196,7 +196,7 @@ impl<'a> ExecutionSummary<'a> {
     }
 
     fn successful(&self) -> usize {
-        self.success + self.attempted
+        self.success + self.cached
     }
 }
 
