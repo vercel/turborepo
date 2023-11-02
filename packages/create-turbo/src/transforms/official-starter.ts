@@ -1,9 +1,9 @@
 import path from "node:path";
-import { readJsonSync, writeJsonSync, rmSync, existsSync } from "fs-extra";
+import { readJsonSync, writeJsonSync, rmSync, existsSync } from "fs-extra/esm";
 import type { PackageJson } from "@turbo/utils";
-import semverPrerelease from "semver/functions/prerelease";
+import semverPrerelease from "semver/functions/prerelease.js";
 import cliPkgJson from "../../package.json";
-import { isDefaultExample } from "../utils/isDefaultExample";
+import { isDefaultExample } from "../utils/isDefaultExample.js";
 import type { TransformInput, TransformResult } from "./types";
 import { TransformError } from "./errors";
 
