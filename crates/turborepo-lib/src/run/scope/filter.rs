@@ -148,7 +148,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             // return all packages in the workspace
             self.pkg_graph
                 .workspaces()
-                .filter(|(name, _)| **name != WorkspaceName::Root)
+                .filter(|(name, _)| matches!(name, WorkspaceName::Other(_)))
                 .map(|(name, _)| name.to_owned())
                 .collect()
         } else {
