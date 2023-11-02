@@ -17,7 +17,6 @@ jobs:
   turborepo_integration:
     name: Turborepo Integration Tests
     # needs: [build_turborepo]
-    timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
