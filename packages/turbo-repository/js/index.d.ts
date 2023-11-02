@@ -3,7 +3,7 @@ export class Repository {
   readonly isMonorepo: boolean;
   static detectJS(path?: string | undefined | null): Repository;
   packageManager(): PackageManager;
-  workspaceDirectories(): Array<string>;
+  workspaceDirectories(): Promise<Array<string>>;
 }
 export class PackageManager {
   name: string;

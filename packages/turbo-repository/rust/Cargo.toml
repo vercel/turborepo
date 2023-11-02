@@ -9,8 +9,9 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
-napi = { version = "2.13.3", features = ["anyhow"] }
+napi = { version = "2.13.3", features = ["anyhow", "tokio_rt"] }
 napi-derive = "2.13.0"
+tokio = { workspace = true }
 turbopath = { workspace = true }
 turborepo-repository = { workspace = true }
 
