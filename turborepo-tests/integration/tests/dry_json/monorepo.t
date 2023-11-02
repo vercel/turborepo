@@ -2,6 +2,9 @@ Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
 
+  $ cat -vet foo.txt
+  global dep! all tasks depend on this content!$
+
 # Save JSON to tmp file so we don't need to keep re-running the build
   $ ${TURBO} run build --dry=json > tmpjson.log
 
@@ -180,5 +183,6 @@ Run again with NODE_ENV set and see the value in the summary. --filter=util work
 
 Tasks that don't exist throw an error
   $ ${TURBO} run doesnotexist --dry=json
-  Error: Could not find the following tasks in project: doesnotexist
+   ERROR  run failed: error preparing engine: Could not find the following tasks in project: doesnotexist
+  Turbo error: error preparing engine: Could not find the following tasks in project: doesnotexist
   [1]
