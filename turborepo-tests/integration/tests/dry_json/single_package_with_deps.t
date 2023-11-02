@@ -52,7 +52,7 @@ Setup
           "foo"
         ],
         "excludedOutputs": null,
-        "logFile": ".turbo/turbo-build.log",
+        "logFile": "\.turbo(\/|\\)turbo-build\.log", (re)
         "dependencies": [],
         "dependents": [
           "test"
@@ -105,7 +105,7 @@ Setup
         "cliArguments": [],
         "outputs": null,
         "excludedOutputs": null,
-        "logFile": ".turbo/turbo-test.log",
+        "logFile": "\.turbo(\/|\\)turbo-test\.log", (re)
         "dependencies": [
           "build"
         ],
