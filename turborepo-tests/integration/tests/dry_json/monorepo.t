@@ -8,6 +8,8 @@ Setup
   $ cat -vet foo.txt
   global dep! all tasks depend on this content!$
 
+  $ cat -vet pacakge.json
+
   $ cat -vet package-lock.json
 
 # Save JSON to tmp file so we don't need to keep re-running the build
