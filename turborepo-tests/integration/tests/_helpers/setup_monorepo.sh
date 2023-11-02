@@ -7,13 +7,7 @@ TURBOREPO_TESTS_DIR="$SCRIPT_DIR/../../.."
 TARGET_DIR=$1
 cp -a ${SCRIPT_DIR}/../$FIXTURE/. ${TARGET_DIR}/
 
-echo "before git setup"
-cat -vet "${TARGET_DIR}/foo.txt"
-
 ${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh ${TARGET_DIR}
-
-echo "after git setup"
-cat -vet "${TARGET_DIR}/foo.txt"
 
 # Update package manager
 if [ "$3" != "" ]; then
