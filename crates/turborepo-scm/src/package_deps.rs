@@ -29,10 +29,30 @@ impl<'a> CachedPackageFileHasher<'a> {
             SCM::Git(git) => {
                 let mut map: HashMap<&AnchoredSystemPath, (GitHashes, Vec<_>)> = Default::default();
 
-                let mut path_hashes = git.git_ls_tree(repo_root).unwrap();
-                let to_hash = git
-                    .append_git_status(repo_root, &Default::default(), &mut path_hashes)
-                    .unwrap();
+                let j1 = {
+                    let git = git.clone();
+                    let repo_root = repo_root.to_owned();
+                    std::thread::spawn(move || git.git_ls_tree(&repo_root).unwrap())
+                };
+
+                let j2 = {
+                    let git = git.clone();
+                    let repo_root = repo_root.to_owned();
+                    std::thread::spawn(move || {
+                        git.append_git_status(&repo_root, &Default::default())
+                            .unwrap()
+                    })
+                };
+
+                let (path_hashes, to_hash) = {
+                    let mut path_hashes = j1.join().unwrap();
+                    let (to_hash, to_remove) = j2.join().unwrap();
+
+                    for path in to_remove {
+                        path_hashes.remove(&path);
+                    }
+                    (path_hashes, to_hash)
+                };
 
                 let mut hash_trie = qp_trie::Trie::new();
                 for (path, hash) in path_hashes {
@@ -277,7 +297,11 @@ impl Git {
         let pkg_prefix = git_to_pkg_path.to_unix();
         let mut hashes = self.git_ls_tree(&full_pkg_path)?;
         // Note: to_hash is *git repo relative*
-        let to_hash = self.append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
+        let (to_hash, to_remove) = self.append_git_status(&full_pkg_path, &pkg_prefix)?;
+        for path in to_remove {
+            hashes.remove(&path);
+        }
+
         hash_objects(&self.root, &full_pkg_path, &to_hash, &mut hashes)?;
         Ok(hashes)
     }

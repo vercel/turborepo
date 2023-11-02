@@ -126,7 +126,7 @@ pub(crate) fn wait_for_success<R: Read, T>(
     Err(Error::Git(err_text, Backtrace::capture()))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Git {
     root: AbsoluteSystemPathBuf,
     bin: AbsoluteSystemPathBuf,

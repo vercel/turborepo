@@ -6,16 +6,15 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, wait_for_success, Error, Git};
+use crate::{wait_for_success, Error, Git};
 
 impl Git {
-    #[tracing::instrument(skip(self, root_path, hashes))]
+    #[tracing::instrument(skip(self, root_path))]
     pub(crate) fn append_git_status(
         &self,
         root_path: &AbsoluteSystemPath,
         pkg_prefix: &RelativeUnixPathBuf,
-        hashes: &mut GitHashes,
-    ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+    ) -> Result<(Vec<RelativeUnixPathBuf>, Vec<RelativeUnixPathBuf>), Error> {
         let mut git = Command::new(self.bin.as_std_path())
             .args([
                 "status",
@@ -38,7 +37,7 @@ impl Git {
             .stderr
             .take()
             .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
-        let parse_result = read_status(stdout, root_path, pkg_prefix, hashes);
+        let parse_result = read_status(stdout, root_path, pkg_prefix);
         wait_for_success(git, &mut stderr, "git status", root_path, parse_result)
     }
 }
@@ -47,9 +46,9 @@ fn read_status<R: Read>(
     reader: R,
     root_path: &AbsoluteSystemPath,
     pkg_prefix: &RelativeUnixPathBuf,
-    hashes: &mut GitHashes,
-) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+) -> Result<(Vec<RelativeUnixPathBuf>, Vec<RelativeUnixPathBuf>), Error> {
     let mut to_hash = Vec::new();
+    let mut to_remove = Vec::new();
     let mut reader = BufReader::new(reader);
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {
@@ -63,13 +62,13 @@ fn read_status<R: Read>(
                     root_path, path, pkg_prefix
                 ))
             })?;
-            hashes.remove(&path);
+            to_remove.push(path);
         } else {
             to_hash.push(path);
         }
         buffer.clear();
     }
-    Ok(to_hash)
+    Ok((to_hash, to_remove))
 }
 
 struct StatusEntry<'a> {
