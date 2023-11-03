@@ -396,6 +396,10 @@ impl CapturedIssues {
     }
 }
 
+/// Use this to pass and store byte offsets for an AST node along with its
+/// source. When row/column is needed, this can be lazily converted into a
+/// proper `IssueSource` at that time using
+/// [LazyIssueSource::to_issue_source].
 #[turbo_tasks::value]
 #[derive(Clone, Debug)]
 pub struct LazyIssueSource {
