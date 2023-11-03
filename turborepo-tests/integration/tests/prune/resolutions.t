@@ -1,4 +1,5 @@
 Setup
+  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/copy_fixture.sh $(pwd) berry_resolutions
 
 Prune a
