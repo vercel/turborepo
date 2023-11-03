@@ -196,7 +196,7 @@ impl<'a> Analyzer<'a> {
     ) -> usize {
         let issue_source = self
             .source
-            .map(|s| IssueSource::from_byte_offset(s, span.lo().to_usize(), span.hi().to_usize()));
+            .map(|s| IssueSource::from_byte_offset(s, span.lo.to_usize(), span.hi.to_usize()));
 
         let r = ImportMapReference {
             module_path,
