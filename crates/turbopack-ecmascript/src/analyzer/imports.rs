@@ -189,9 +189,9 @@ struct Analyzer<'a> {
 impl<'a> Analyzer<'a> {
     fn ensure_reference(
         &mut self,
+        span: Span,
         module_path: JsWord,
         imported_symbol: ImportedSymbol,
-        span: Span,
         annotations: ImportAnnotations,
     ) -> usize {
         let issue_source = self
@@ -259,18 +259,18 @@ impl Visit for Analyzer<'_> {
     fn visit_import_decl(&mut self, import: &ImportDecl) {
         let annotations = take(&mut self.current_annotations);
         self.ensure_reference(
+            import.span,
             import.src.value.clone(),
             ImportedSymbol::ModuleEvaluation,
-            import.span,
             annotations.clone(),
         );
 
         for s in &import.specifiers {
             let symbol = get_import_symbol_from_import(s);
             let i = self.ensure_reference(
+                import.span,
                 import.src.value.clone(),
                 symbol,
-                import.span,
                 annotations.clone(),
             );
 
@@ -297,15 +297,15 @@ impl Visit for Analyzer<'_> {
 
         let annotations = take(&mut self.current_annotations);
         self.ensure_reference(
+            export.span,
             export.src.value.clone(),
             ImportedSymbol::ModuleEvaluation,
-            export.span,
             annotations.clone(),
         );
         let i = self.ensure_reference(
+            export.span,
             export.src.value.clone(),
             ImportedSymbol::Namespace,
-            export.span,
             annotations,
         );
         self.data.reexports.push((i, Reexport::Star));
@@ -317,9 +317,9 @@ impl Visit for Analyzer<'_> {
             let annotations = take(&mut self.current_annotations);
 
             self.ensure_reference(
+                export.span,
                 src.value.clone(),
                 ImportedSymbol::ModuleEvaluation,
-                export.span,
                 annotations.clone(),
             );
 
@@ -327,9 +327,9 @@ impl Visit for Analyzer<'_> {
                 let symbol = get_import_symbol_from_export(spec);
 
                 let i = self.ensure_reference(
+                    export.span,
                     src.value.clone(),
                     symbol,
-                    export.span,
                     annotations.clone(),
                 );
 
