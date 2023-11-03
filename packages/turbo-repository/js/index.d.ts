@@ -1,7 +1,9 @@
+export function detectJsRepository(
+  path?: string | undefined | null
+): Promise<Repository>;
 export class Repository {
   readonly root: string;
   readonly isMonorepo: boolean;
-  static detectJS(path?: string | undefined | null): Repository;
   packageManager(): PackageManager;
   workspaces(): Promise<Array<Workspace>>;
 }
