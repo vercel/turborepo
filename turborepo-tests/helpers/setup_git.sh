@@ -17,6 +17,7 @@ git init ${TARGET_DIR} --quiet --initial-branch=main
 #   git config --local core.autocrlf input
 # fi
 
+git config --list
 
 GIT_ARGS="--git-dir=${TARGET_DIR}/.git --work-tree=${TARGET_DIR}"
 git ${GIT_ARGS} config user.email "turbo-test@example.com"
