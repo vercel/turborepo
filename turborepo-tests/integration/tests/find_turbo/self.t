@@ -7,7 +7,7 @@ Make sure we do not reinvoke ourself.
   $ ${TURBO} --version -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)self.t (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Local turbo path: .*(\/|\\)debug(\/|\\)turbo (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Local turbo path: .*(\/|\\)debug(\/|\\)(turbo|turbo\.exe) (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Local turbo version: 1.0.0 (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Currently running turbo is local turbo. (re)
   .* (re)
