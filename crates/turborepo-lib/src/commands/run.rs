@@ -4,8 +4,6 @@ use tracing::{debug, error};
 use crate::{commands::CommandBase, run::Run, signal::SignalHandler};
 
 pub async fn run(base: CommandBase) -> Result<i32> {
-    // set up signal handler here and then do a select between the run and the
-    // signal handler finishing how to handle registering callbacks?
     let handler = SignalHandler::new(tokio::signal::ctrl_c());
     let run_subscriber = handler
         .subscribe()
@@ -21,12 +19,10 @@ pub async fn run(base: CommandBase) -> Result<i32> {
         // If we get a handler exit at the same time as a run finishes we choose that
         // future to display that we're respecting user input
         _ = handler_fut => {
-            // We caught a signal, which already called the close handlers
+            // We caught a signal, which already notified the subscribers
             Ok(1)
         }
         result = run_fut => {
-            // we want to "unsubscribe" at this point
-            // closing.close();
             // Run finished so close the signal handler
             handler.close().await;
             match result {

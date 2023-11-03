@@ -28,13 +28,6 @@ pub struct SignalSubscriber(oneshot::Receiver<oneshot::Sender<()>>);
 /// signal
 pub struct SubscriberGuard(oneshot::Sender<()>);
 
-// instead of callbacks we provide mpsc
-
-// registering a callback returns a oneshot::Receiver<oneshot::Sender<>>
-// handler holds onto all of the oneshot::Sender ends and when it receives a
-// close it sends off all of the new oneshots and waits for all of them to
-// complete
-
 impl SignalHandler {
     /// Construct a new SignalHandler that will alert any subscribers when
     /// `signal_source` completes or `close` is called on it.
