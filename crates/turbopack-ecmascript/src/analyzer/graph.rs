@@ -267,8 +267,8 @@ pub struct EvalContext {
 impl EvalContext {
     pub fn new(
         module: &Program,
-        source: Option<Vc<Box<dyn Source>>>,
         unresolved_mark: Mark,
+        source: Option<Vc<Box<dyn Source>>>,
     ) -> Self {
         Self {
             unresolved_mark,

@@ -397,7 +397,7 @@ impl CapturedIssues {
 }
 
 #[turbo_tasks::value]
-#[derive(Debug, Clone, Hash, PartialOrd)]
+#[derive(Clone, Debug)]
 pub struct IssueSource {
     pub source: Vc<Box<dyn Source>>,
     pub start: SourcePos,

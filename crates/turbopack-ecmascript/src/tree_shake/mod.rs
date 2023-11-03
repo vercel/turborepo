@@ -338,7 +338,7 @@ pub(super) async fn split(
                 .map(|module| {
                     let program = Program::Module(module);
                     let eval_context =
-                        EvalContext::new(&program, Some(source), eval_context.unresolved_mark);
+                        EvalContext::new(&program, eval_context.unresolved_mark, Some(source));
 
                     ParseResult::cell(ParseResult::Ok {
                         program,
