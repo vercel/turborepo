@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup.sh lockfile_aware_caching
-  $ . ${TESTDIR}/setup.sh npm
+  $ . ${TESTDIR}/../../../helpers/setup.sh
+  $ . ${TESTDIR}/setup.sh $(pwd) npm
 
 Populate cache
   $ ${TURBO} build --filter=a

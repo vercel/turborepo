@@ -1,4 +1,5 @@
 Setup
+  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) "unplugged_moved"
 
 Make sure we use local and do not pass --skip-infer to old binary

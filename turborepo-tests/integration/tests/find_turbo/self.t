@@ -1,4 +1,5 @@
 Setup
+  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) "self"
 
 Make sure we do not reinvoke ourself.

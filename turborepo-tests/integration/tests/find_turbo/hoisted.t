@@ -1,5 +1,6 @@
 Setup
-  $ . ${TESTDIR}/setup.sh "hoisted"
+  $ . ${TESTDIR}/../../../helpers/setup.sh
+  $ . ${TESTDIR}/setup.sh $(pwd) "hoisted"
 
 Make sure we use local and do not pass --skip-infer to old binary
   $ ${TESTDIR}/set_version.sh $(pwd) "1.0.0"

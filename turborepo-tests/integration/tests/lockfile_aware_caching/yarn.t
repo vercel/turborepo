@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup.sh lockfile_aware_caching
-  $ . ${TESTDIR}/setup.sh yarn
+  $ . ${TESTDIR}/../../../helpers/setup.sh
+  $ . ${TESTDIR}/setup.sh $(pwd) yarn
 
 Populate cache
   $ ${TURBO} build --filter=a

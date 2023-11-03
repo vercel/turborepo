@@ -1,5 +1,6 @@
 Setup
-  $ . ${TESTDIR}/setup.sh "linked"
+  $ . ${TESTDIR}/../../../helpers/setup.sh
+  $ . ${TESTDIR}/setup.sh $(pwd) "linked"
 
 Make sure we use local and do not pass --skip-infer to old binary
   $ ${TESTDIR}/set_version.sh $(pwd) "1.0.0"

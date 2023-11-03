@@ -1,5 +1,6 @@
 Setup
-  $ . ${TESTDIR}/setup.sh "hoisted" $(pwd)/subdir 
+  $ . ${TESTDIR}/../../../helpers/setup.sh
+  $ . ${TESTDIR}/setup.sh $(pwd)/subdir "hoisted"
   $ TESTROOT=$(pwd)
 
 When --skip-infer is used we use the current binary and output no global/local message
