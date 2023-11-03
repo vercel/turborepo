@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh
 
 Run a build to get a local cache.
   $ ${TURBO} run build --output-logs=none

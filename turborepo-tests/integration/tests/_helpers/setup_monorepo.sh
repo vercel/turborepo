@@ -1,13 +1,16 @@
 #!/bin/bash
 
-SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
-FIXTURE="_fixtures/${2-basic_monorepo}"
+TARGET_DIR="$PWD"
+
+SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
+FIXTURE="_fixtures/${1-basic_monorepo}"
 TURBOREPO_TESTS_DIR="$SCRIPT_DIR/../../.."
+TURBOREPO_INTEGRATION_TESTS_DIR="${SCRIPT_DIR}/.."
 
 TARGET_DIR=$1
-cp -a ${SCRIPT_DIR}/../$FIXTURE/. ${TARGET_DIR}/
+cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
 
-${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh ${TARGET_DIR}
+"${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
 
 # Update package manager
 if [ "$3" != "" ]; then
