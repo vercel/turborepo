@@ -4,8 +4,9 @@ THIS_SCRIPT=$(dirname "${BASH_SOURCE[0]}")
 TURBOREPO_TESTS_DIR="$THIS_SCRIPT/../../.."
 TURBOREPO_INTEGRATION_TESTS_DIR="${THIS_SCRIPT}/.."
 
-# Run global setup script
-"${TURBOREPO_TESTS_DIR}/helpers/setup.sh"
+# Run global setup script. Using source means that it executes the script in the current
+# shell instead of a subshell, so env vars are preserved.
+source "${TURBOREPO_TESTS_DIR}/helpers/setup.sh"
 
 # Copy over all the files from the fixture into PWD.
 FIXTURE_NAME="${1-basic_monorepo}"
