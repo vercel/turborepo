@@ -54,10 +54,7 @@ impl Version for EcmascriptBuildNodeChunkVersion {
         hasher.write_ref(&self.minify_type);
         hasher.write_value(self.chunk_items.len());
         for (module_id, code) in &self.chunk_items {
-            hasher.write_value(0);
-            hasher.write_ref(&*module_id);
-            hasher.write_value(1);
-            hasher.write_ref(code.source_code());
+            hasher.write_value((module_id, code.source_code()));
         }
         let hash = hasher.finish();
         let hex_hash = encode_hex(hash);
