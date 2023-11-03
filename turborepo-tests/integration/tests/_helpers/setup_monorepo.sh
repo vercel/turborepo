@@ -8,22 +8,7 @@ TURBOREPO_INTEGRATION_TESTS_DIR="${SCRIPT_DIR}/.."
 TARGET_DIR=$1
 cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
 
-echo "before git setup"
-cat -vet "${TARGET_DIR}/foo.txt"
-
-echo "package.json before npm install"
-cat -vet "${TARGET_DIR}/package.json"
-
-echo "TARGET_DIR: ${TARGET_DIR}"
-echo "PWD: ${PWD}"
-
 ${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh ${TARGET_DIR}
-
-echo "package.json after npm install"
-cat -vet "${TARGET_DIR}/package.json"
-
-echo "after git setup"
-cat -vet "${TARGET_DIR}/foo.txt"
 
 # Update package manager
 if [ "$3" != "" ]; then
