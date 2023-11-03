@@ -6,7 +6,7 @@ use turborepo_api_client::{APIAuth, APIClient, Client, Response};
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
     signature_authentication::ArtifactSignatureAuthenticator,
-    CacheError, CacheOpts, CacheResponse, CacheSource,
+    CacheError, CacheHitMetadata, CacheOpts, CacheResult, CacheSource,
 };
 
 pub struct HTTPCache {
@@ -87,7 +87,7 @@ impl HTTPCache {
         Ok(())
     }
 
-    pub async fn exists(&self, hash: &str) -> Result<CacheResponse, CacheError> {
+    pub async fn exists(&self, hash: &str) -> Result<CacheResult<CacheHitMetadata>, CacheError> {
         let response = self
             .client
             .artifact_exists(
@@ -100,10 +100,10 @@ impl HTTPCache {
 
         let duration = Self::get_duration_from_response(&response)?;
 
-        Ok(CacheResponse {
+        Ok(CacheResult::Hit(CacheHitMetadata {
             source: CacheSource::Remote,
             time_saved: duration,
-        })
+        }))
     }
 
     fn get_duration_from_response(response: &Response) -> Result<u64, CacheError> {
@@ -123,7 +123,7 @@ impl HTTPCache {
     pub async fn fetch(
         &self,
         hash: &str,
-    ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
+    ) -> Result<CacheResult<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
         let response = self
             .client
             .fetch_artifact(
@@ -171,13 +171,13 @@ impl HTTPCache {
 
         let files = Self::restore_tar(&self.repo_root, &body)?;
 
-        Ok((
-            CacheResponse {
+        Ok(CacheResult::Hit((
+            CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: duration,
             },
             files,
-        ))
+        )))
     }
 
     pub(crate) fn restore_tar(

@@ -3,7 +3,7 @@ use std::{io::Write, sync::Arc, time::Duration};
 use console::StyledObject;
 use tracing::{debug, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-use turborepo_cache::{AsyncCache, CacheError, CacheResponse, CacheSource};
+use turborepo_cache::{AsyncCache, CacheHitMetadata, CacheResult, CacheSource};
 use turborepo_ui::{
     color, replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI,
 };
@@ -29,12 +29,6 @@ pub enum Error {
     Daemon(#[from] crate::daemon::DaemonError),
     #[error("no connection to daemon")]
     NoDaemon,
-}
-
-impl Error {
-    pub fn is_cache_miss(&self) -> bool {
-        matches!(&self, Self::Cache(CacheError::CacheMiss))
-    }
 }
 
 pub struct RunCache {
@@ -168,7 +162,7 @@ impl TaskCache {
     pub async fn restore_outputs(
         &mut self,
         prefixed_ui: &mut PrefixedUI<impl Write>,
-    ) -> Result<CacheResponse, Error> {
+    ) -> Result<CacheResult<CacheHitMetadata>, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
             if !matches!(
                 self.task_output_mode,
@@ -180,7 +174,7 @@ impl TaskCache {
                 ));
             }
 
-            return Err(CacheError::CacheMiss.into());
+            return Ok(CacheResult::Miss);
         }
 
         let changed_output_count = if let Some(daemon_client) = &mut self.daemon_client {
@@ -211,21 +205,20 @@ impl TaskCache {
             // Note that we currently don't use the output globs when restoring, but we
             // could in the future to avoid doing unnecessary file I/O. We also
             // need to pass along the exclusion globs as well.
-            let (cache_status, restored_files) = self
+            let cache_status = self
                 .run_cache
                 .cache
                 .fetch(&self.run_cache.repo_root, &self.hash)
-                .await
-                .map_err(|err| {
-                    if matches!(err, CacheError::CacheMiss) {
-                        prefixed_ui.output(format!(
-                            "cache miss, executing {}",
-                            color!(self.ui, GREY, "{}", self.hash)
-                        ));
-                    }
+                .await?;
 
-                    err
-                })?;
+            let CacheResult::Hit((cache_hit_metadata, restored_files)) = cache_status else {
+                prefixed_ui.output(format!(
+                    "cache miss, executing {}",
+                    color!(self.ui, GREY, "{}", self.hash)
+                ));
+
+                return Ok(CacheResult::Miss);
+            };
 
             self.expanded_outputs = restored_files;
 
@@ -235,7 +228,7 @@ impl TaskCache {
                         self.hash.clone(),
                         self.repo_relative_globs.inclusions.clone(),
                         self.repo_relative_globs.exclusions.clone(),
-                        cache_status.time_saved,
+                        cache_hit_metadata.time_saved,
                     )
                     .await
                 {
@@ -251,12 +244,12 @@ impl TaskCache {
                 }
             }
 
-            cache_status
+            CacheResult::Hit(cache_hit_metadata)
         } else {
-            CacheResponse {
+            CacheResult::Hit(CacheHitMetadata {
                 source: CacheSource::Local,
                 time_saved: 0,
-            }
+            })
         };
 
         let more_context = if has_changed_outputs {

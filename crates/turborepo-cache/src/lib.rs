@@ -12,7 +12,7 @@ pub mod signature_authentication;
 #[cfg(test)]
 mod test_cases;
 
-use std::{backtrace, backtrace::Backtrace};
+use std::{backtrace, backtrace::Backtrace, fmt};
 
 pub use async_cache::AsyncCache;
 use camino::Utf8Path;
@@ -64,8 +64,6 @@ pub enum CacheError {
     InvalidMetadata(serde_json::Error, #[backtrace] Backtrace),
     #[error("Failed to write cache metadata file")]
     MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
-    #[error("Cache miss")]
-    CacheMiss,
     #[error("Unable to perform write as cache is shutting down")]
     CacheShuttingDown,
 }
@@ -82,8 +80,27 @@ pub enum CacheSource {
     Remote,
 }
 
-#[derive(Debug, Clone, PartialEq, Copy)]
-pub struct CacheResponse {
+impl<T: fmt::Debug> fmt::Debug for CacheResult<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CacheResult::Miss => write!(f, "CacheResult::Miss"),
+            CacheResult::Hit(inner) => {
+                write!(f, "CacheResult::Hit({:?})", inner)
+            }
+        }
+    }
+}
+
+// This is generic because exists returns just the metadata
+// while fetch returns the metadata and the files
+#[derive(Clone)]
+pub enum CacheResult<T> {
+    Miss,
+    Hit(T),
+}
+
+#[derive(Debug, Clone)]
+pub struct CacheHitMetadata {
     pub source: CacheSource,
     pub time_saved: u64,
 }

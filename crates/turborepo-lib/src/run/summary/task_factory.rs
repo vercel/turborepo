@@ -151,7 +151,11 @@ impl<'a> TaskSummaryFactory<'a> {
             .env_vars(task_id)
             .expect("env var map is inserted at the same time as hash");
 
-        let cache_summary = self.hash_tracker.cache_status(task_id).into();
+        let cache_summary = self
+            .hash_tracker
+            .cache_status(task_id)
+            .expect("cache status should be inserted")
+            .into();
 
         let (dependencies, dependents) = self.dependencies_and_dependents(task_id, display_task);
 

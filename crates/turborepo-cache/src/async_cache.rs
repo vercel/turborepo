@@ -8,7 +8,7 @@ use tokio::{
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 
-use crate::{multiplexer::CacheMultiplexer, CacheError, CacheOpts, CacheResponse};
+use crate::{multiplexer::CacheMultiplexer, CacheError, CacheHitMetadata, CacheOpts, CacheResult};
 
 pub struct AsyncCache {
     real_cache: Arc<CacheMultiplexer>,
@@ -115,12 +115,8 @@ impl AsyncCache {
         &self,
         anchor: &AbsoluteSystemPath,
         key: &str,
-    ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
+    ) -> Result<CacheResult<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
         self.real_cache.fetch(anchor, key).await
-    }
-
-    pub async fn exists(&mut self, key: &str) -> Result<CacheResponse, CacheError> {
-        self.real_cache.exists(key).await
     }
 
     // Used for testing to ensure that the workers resolve
@@ -155,7 +151,8 @@ mod tests {
 
     use crate::{
         test_cases::{get_test_cases, TestCase},
-        AsyncCache, CacheError, CacheOpts, CacheResponse, CacheSource, RemoteCacheOpts,
+        AsyncCache, CacheError, CacheHitMetadata, CacheOpts, CacheResult, CacheSource,
+        RemoteCacheOpts,
     };
 
     #[tokio::test]
@@ -238,10 +235,10 @@ mod tests {
         // Confirm that we fetch from remote cache and not local.
         assert_eq!(
             response,
-            CacheResponse {
+            CacheResult(CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: test_case.duration
-            }
+            })
         );
 
         Ok(())
@@ -313,10 +310,10 @@ mod tests {
         // Confirm that we fetch from local cache first.
         assert_eq!(
             response,
-            CacheResponse {
+            CacheResult::Hit(CacheHitMetadata {
                 source: CacheSource::Local,
                 time_saved: test_case.duration
-            }
+            })
         );
 
         // Remove fs cache file
@@ -394,10 +391,10 @@ mod tests {
         // Confirm that we fetch from local cache first.
         assert_eq!(
             response,
-            CacheResponse {
+            CacheResult::Hit(CacheHitMetadata {
                 source: CacheSource::Local,
                 time_saved: test_case.duration
-            }
+            })
         );
 
         // Remove fs cache file
@@ -408,10 +405,10 @@ mod tests {
         // Confirm that we still can fetch from remote cache
         assert_eq!(
             response,
-            CacheResponse {
+            CacheResult::Hit(CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: test_case.duration
-            }
+            })
         );
 
         Ok(())
