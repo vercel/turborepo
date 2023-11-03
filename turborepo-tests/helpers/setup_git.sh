@@ -13,9 +13,9 @@ git init ${TARGET_DIR} --quiet --initial-branch=main
 # when the monorepo is cloned (see .github/workflows/test.yml). We do this after `git init`
 # and set the config locally so it doesn't interfere with the global config set in test.yml.
 # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
-if [[ "$OSTYPE" == "msys" ]]; then
-  git config --local core.autocrlf true
-fi
+# if [[ "$OSTYPE" == "msys" ]]; then
+#   git config --local core.autocrlf input
+# fi
 
 
 GIT_ARGS="--git-dir=${TARGET_DIR}/.git --work-tree=${TARGET_DIR}"
