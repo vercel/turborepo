@@ -1,5 +1,4 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
   $ . ${TESTDIR}/_helpers/setup.sh
 
 # Run the build task with --dry flag and cut up the logs into separate files by empty lines

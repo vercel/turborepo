@@ -1,5 +1,4 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
   $ . ${TESTDIR}/_helpers/setup.sh framework_inference
 
 Prove that we start with no inferred variables
