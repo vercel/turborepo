@@ -12,7 +12,7 @@ const __TURBOPACK__import$2e$meta__ = {
     }
 };
 "__TURBOPACK__ecmascript__hoisting__location__";
-const assetUrl = new URL(__turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/import-meta/url/input/asset.txt [test] (static)"), location.origin);
+const assetUrl = new URL(__turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/import-meta/url/input/asset.txt [test] (static)").default?.src ?? __turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/import-meta/url/input/asset.txt [test] (static)").default ?? __turbopack_require__("[project]/crates/turbopack-tests/tests/snapshot/import-meta/url/input/asset.txt [test] (static)"), location.origin);
 console.log(assetUrl);
 fetch(assetUrl).then((res)=>res.text()).then(console.log);
 
