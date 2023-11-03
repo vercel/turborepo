@@ -25,7 +25,9 @@ git ${GIT_ARGS} config user.name "Turbo Test"
 echo "script-shell=$(which bash)" > ${TARGET_DIR}/.npmrc
 
 if [ $SHOULD_INSTALL == "true" ]; then
-  npm --prefix=${TARGET_DIR} install --silent
+  pushd ${TARGET_DIR}
+  npm install --silent
+  popd
 fi
 
 git ${GIT_ARGS} add .
