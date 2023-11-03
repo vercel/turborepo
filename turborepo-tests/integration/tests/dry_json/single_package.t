@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh single_package                                                                                  
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh single_package
 
   $ ${TURBO} run build --dry=json
   {
