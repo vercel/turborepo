@@ -38,9 +38,7 @@ jobs:
       - name: set crlf
         if: matrix.os.name == 'windows'
         shell: bash
-        run: |
-          git config --global core.autocrlf input
-          git config --list
+        run: git config --global core.autocrlf input
 
       - uses: actions/checkout@v3
 
