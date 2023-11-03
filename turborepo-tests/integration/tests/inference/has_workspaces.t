@@ -1,5 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup.sh inference/has_workspaces
+  $ . ${TESTDIR}/../../../helpers/setup.sh
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) inference/has_workspaces
 
   $ cd $TARGET_DIR && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
