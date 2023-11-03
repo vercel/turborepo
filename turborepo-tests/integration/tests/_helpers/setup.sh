@@ -1,7 +1,5 @@
 #!/bin/bash
 
-echo "Running global setup script"
-
 THIS_SCRIPT=$(dirname "${BASH_SOURCE[0]}")
 TURBOREPO_TESTS_DIR="$THIS_SCRIPT/../../.."
 TURBOREPO_INTEGRATION_TESTS_DIR="${THIS_SCRIPT}/.."
