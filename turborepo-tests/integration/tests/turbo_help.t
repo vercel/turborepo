@@ -5,7 +5,7 @@ Test help flag
   $ ${TURBO} -h
   The build system that makes ship happen
   
-  Usage: turbo [OPTIONS] [COMMAND]
+  Usage: (turbo|turbo\.exe) \[OPTIONS\] \[COMMAND\] (re)
   
   Commands:
     bin         Get the path to the Turbo binary

@@ -52,7 +52,7 @@ Setup
         "cliArguments": [],
         "outputs": null,
         "excludedOutputs": null,
-        "logFile": "\.turbo(\/|\\)turbo-build\.log", (re)
+        "logFile": "\.turbo(\/|\\\\)turbo-build\.log", (re)
         "dependencies": [],
         "dependents": [],
         "resolvedTaskDefinition": {
