@@ -162,8 +162,11 @@ impl CodeGenerateable for UrlAssetReference {
                     create_visitor!(ast_path, visit_mut_expr(new_expr: &mut Expr) {
                         if let Expr::New(NewExpr { args: Some(args), .. }) = new_expr {
                             if let Some(ExprOrSpread { box expr, spread: None }) = args.get_mut(0) {
+                                // For the static asset, the imported module is a wrapper to the phsyical asset having an
+                                // exported object contains necessary values for us. Trying to grab properties, or either fall back to
+                                // the default export itself.
                                 *expr = quote!(
-                                    "__turbopack_require__($id)" as Expr,
+                                    "__turbopack_require__($id).default?.src ?? __turbopack_require__($id).default ?? __turbopack_require__($id)" as Expr,
                                     id: Expr = module_id_to_lit(&id),
                                 );
                             }
