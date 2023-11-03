@@ -1,5 +1,4 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh task_dependencies/topological
 
 Check my-app#build output

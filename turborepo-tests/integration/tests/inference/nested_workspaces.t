@@ -1,5 +1,4 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/nested_workspaces_setup.sh $(pwd)/nested_workspaces
 
   $ cd $TARGET_DIR/outer && ${TURBO} run build --filter=nothing -vv

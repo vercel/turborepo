@@ -1,5 +1,4 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh
 
 Baseline global hash

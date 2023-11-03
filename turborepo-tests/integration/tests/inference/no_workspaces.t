@@ -1,5 +1,4 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/no_workspaces_setup.sh $(pwd)/no_workspaces
 
   $ cd $TARGET_DIR && ${TURBO} run build --filter=nothing -vv

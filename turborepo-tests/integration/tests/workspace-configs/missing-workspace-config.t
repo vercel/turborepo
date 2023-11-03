@@ -1,5 +1,4 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh composable_config
 
 # The missing-workspace-config-task task in the root turbo.json has config. The workspace config

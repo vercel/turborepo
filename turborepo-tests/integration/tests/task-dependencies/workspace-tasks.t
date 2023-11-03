@@ -1,6 +1,5 @@
 
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh task_dependencies/workspace-tasks
 
 Test that root tasks are included in the graph. In this case, "//#build" task should be there

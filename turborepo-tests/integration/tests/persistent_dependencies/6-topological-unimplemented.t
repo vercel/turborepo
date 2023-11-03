@@ -1,5 +1,4 @@
 # Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh persistent_dependencies/6-topological-unimplemented
 
 # WorkspaceGraph

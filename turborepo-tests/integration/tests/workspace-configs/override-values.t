@@ -1,5 +1,4 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh composable_config
 
 # The override-values-task task in the root turbo.json has ALL the config. The workspace config

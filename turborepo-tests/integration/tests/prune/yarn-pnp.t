@@ -1,5 +1,4 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/copy_fixture.sh $(pwd) berry_resolutions
 Remove linker override
   $ rm .yarnrc.yml

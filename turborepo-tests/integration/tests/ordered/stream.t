@@ -1,5 +1,4 @@
 # Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh ordered
 
 # Build in stream order. All the .*'s are unpredictable lines, however the amount of lines is predictable.

@@ -1,5 +1,4 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh inference/has_workspaces
 
   $ cd $TARGET_DIR && ${TURBO} run build --filter=nothing -vv
