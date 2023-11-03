@@ -1756,10 +1756,10 @@ async fn handle_free_var_reference(
                     ))
                 }),
                 Request::parse(Value::new(request.clone().into())),
-                Some(IssueSource::from_byte_offset(
+                Some(LazyIssueSource::new(
                     state.source,
-                    span.lo().to_usize(),
-                    span.hi().to_usize(),
+                    span.lo.to_usize(),
+                    span.hi.to_usize(),
                 )),
                 Default::default(),
                 state

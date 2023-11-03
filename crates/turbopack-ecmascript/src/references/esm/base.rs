@@ -127,7 +127,7 @@ impl EsmAssetReference {
     pub fn new(
         origin: Vc<Box<dyn ResolveOrigin>>,
         request: Vc<Request>,
-        issue_source: Option<Vc<IssueSource>>,
+        issue_source: Option<Vc<LazyIssueSource>>,
         annotations: Value<ImportAnnotations>,
         export_name: Option<Vc<ModulePart>>,
     ) -> Vc<Self> {

@@ -11,7 +11,7 @@ use swc_core::{
     },
 };
 use turbo_tasks::Vc;
-use turbopack_core::{issue::IssueSource, source::Source};
+use turbopack_core::{issue::LazyIssueSource, source::Source};
 
 use super::{JsValue, ModuleValue};
 use crate::utils::unparen;
@@ -118,7 +118,7 @@ pub(crate) struct ImportMapReference {
     pub module_path: JsWord,
     pub imported_symbol: ImportedSymbol,
     pub annotations: ImportAnnotations,
-    pub issue_source: Option<Vc<IssueSource>>,
+    pub issue_source: Option<Vc<LazyIssueSource>>,
 }
 
 impl ImportMap {
@@ -196,7 +196,7 @@ impl<'a> Analyzer<'a> {
     ) -> usize {
         let issue_source = self
             .source
-            .map(|s| IssueSource::from_byte_offset(s, span.lo.to_usize(), span.hi.to_usize()));
+            .map(|s| LazyIssueSource::new(s, span.lo.to_usize(), span.hi.to_usize()));
 
         let r = ImportMapReference {
             module_path,
