@@ -59,8 +59,8 @@ impl ModuleReference for EsmAsyncAssetReference {
             self.origin,
             self.request,
             Default::default(),
-            try_to_severity(self.in_try),
             Some(self.issue_source),
+            try_to_severity(self.in_try),
         )
     }
 }
@@ -99,8 +99,8 @@ impl CodeGenerateable for EsmAsyncAssetReference {
                 self.origin,
                 self.request,
                 Value::new(EcmaScriptModulesReferenceSubType::Undefined),
-                try_to_severity(self.in_try),
                 Some(self.issue_source),
+                try_to_severity(self.in_try),
             ),
             Value::new(EsmAsync),
         )
