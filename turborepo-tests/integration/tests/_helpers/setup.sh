@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo "Running global setup script"
+
 THIS_SCRIPT=$(dirname "${BASH_SOURCE[0]}")
 TURBOREPO_TESTS_DIR="$THIS_SCRIPT/../../.."
 TURBOREPO_INTEGRATION_TESTS_DIR="${THIS_SCRIPT}/.."
@@ -8,19 +10,21 @@ TURBOREPO_INTEGRATION_TESTS_DIR="${THIS_SCRIPT}/.."
 # shell instead of a subshell, so env vars are preserved.
 source "${TURBOREPO_TESTS_DIR}/helpers/setup.sh"
 
+TARGET_DIR="${2-${PWD}}"
+
 # Copy over all the files from the fixture into PWD.
 FIXTURE_NAME="${1-basic_monorepo}"
-cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/_fixtures/${FIXTURE_NAME}/." "${PWD}/"
+cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/_fixtures/${FIXTURE_NAME}/." "${TARGET_DIR}/"
 
 # Initialize git repo. This also runs npm install for some reason.
-"${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${PWD}"
+"${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
 
 # Update package manager
 if [ "$3" != "" ]; then
   # Use jq to write a new file with a .packageManager field set and then
   # Overwrite original package.json. For some reason the command above won't send its output
   # directly to the original file.
-  jq --arg pm "$3" '.packageManager = $pm' "$PWD/package.json" > "$PWD/package.json.new"
-  mv "$PWD/package.json.new" "$PWD/package.json"
+  jq --arg pm "$3" '.packageManager = $pm' "$TARGET_DIR/package.json" > "$TARGET_DIR/package.json.new"
+  mv "$TARGET_DIR/package.json.new" "$TARGET_DIR/package.json"
   git commit -am "Update package manager" --quiet
 fi

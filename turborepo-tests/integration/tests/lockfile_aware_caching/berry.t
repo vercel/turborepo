@@ -1,5 +1,6 @@
 Setup
-  $ . ${TESTDIR}/setup.sh $(pwd) berry
+  $ . ${TESTDIR}/../_helpers/setup.sh lockfile_aware_caching
+  $ . ${TESTDIR}/setup.sh berry
 
 Populate cache
   $ ${TURBO} build --filter=a

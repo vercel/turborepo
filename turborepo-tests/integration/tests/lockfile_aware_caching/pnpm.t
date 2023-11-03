@@ -1,5 +1,6 @@
 Setup
-  $ . ${TESTDIR}/setup.sh $(pwd) pnpm
+  $ . ${TESTDIR}/../_helpers/setup.sh lockfile_aware_caching
+  $ . ${TESTDIR}/setup.sh pnpm
 
 Populate cache
   $ ${TURBO} build --filter=a
