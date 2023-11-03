@@ -16,8 +16,14 @@ pub async fn run(base: CommandBase) -> Result<i32> {
     debug!("configured run struct: {:?}", run);
     let run_fut = run.run(run_subscriber);
     let handler_fut = handler.done();
-    // TODO: consider what we want to do if these are both ready
     tokio::select! {
+        biased;
+        // If we get a handler exit at the same time as a run finishes we choose that
+        // future to display that we're respecting user input
+        _ = handler_fut => {
+            // We caught a signal, which already called the close handlers
+            Ok(1)
+        }
         result = run_fut => {
             // we want to "unsubscribe" at this point
             // closing.close();
@@ -31,9 +37,5 @@ pub async fn run(base: CommandBase) -> Result<i32> {
                 }
             }
         },
-        _ = handler_fut => {
-            // We caught a signal, which already called the close handlers
-            Ok(1)
-        }
     }
 }
