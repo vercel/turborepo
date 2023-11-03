@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh single_package
+  $ . ${TESTDIR}/../_helpers/setup.sh single_package
   $ rm turbo.json
   $ git commit -am "Delete turbo config" --quiet
 

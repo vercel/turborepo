@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh
+  $ . ${TESTDIR}/../_helpers/setup.sh
 
  # remove comments from our fixture turbo.json so we can do more jq things to it
   $ grep -v '^\s*//' turbo.json > turbo.json.1

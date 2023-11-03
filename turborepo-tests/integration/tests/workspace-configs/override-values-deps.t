@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh composable_config
+  $ . ${TESTDIR}/../_helpers/setup.sh composable_config
 
 # The override-values-task-with-deps configures dependsOn in the root turbo.json.
 # The workspace does not have a turbo.json config. This test checks that both regular dependencies

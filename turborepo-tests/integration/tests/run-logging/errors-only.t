@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh run_logging
+  $ . ${TESTDIR}/../_helpers/setup.sh run_logging
 
 # [ ] error exit
 # [ ] outputMode: errors-only

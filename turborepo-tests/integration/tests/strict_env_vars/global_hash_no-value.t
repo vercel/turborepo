@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh strict_env_vars
+  $ . ${TESTDIR}/../_helpers/setup.sh strict_env_vars
 
 With --env-mode (should be the same as --env-mode=infer)
 

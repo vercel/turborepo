@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/_helpers/setup_monorepo.sh
+  $ . ${TESTDIR}/_helpers/setup.sh
 
 # Run as if called by global turbo
   $ TURBO_INVOCATION_DIR=$(pwd)/packages/util ${TURBO} build --skip-infer

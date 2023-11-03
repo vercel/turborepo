@@ -1,5 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh persistent_dependencies/9-cross-workspace-nested
+  $ . ${TESTDIR}/../_helpers/setup.sh persistent_dependencies/9-cross-workspace-nested
 
 // Workspace Graph
 // - No workspace dependencies

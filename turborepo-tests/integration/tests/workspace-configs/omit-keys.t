@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh composable_config
+  $ . ${TESTDIR}/../_helpers/setup.sh composable_config
 
 # The omit-keys-task task in the root turbo.json has ALL the config. The workspace config
 # defines the task, but does not override any of the keys. The tests below use `omit-keys-task`

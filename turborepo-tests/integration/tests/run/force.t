@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh
+  $ . ${TESTDIR}/../_helpers/setup.sh
 
 # Tests
 | env var | flag    | bypass? |

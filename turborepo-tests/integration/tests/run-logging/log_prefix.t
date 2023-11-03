@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh run_logging
+  $ . ${TESTDIR}/../_helpers/setup.sh run_logging
 
 # Run for the first time with --log-prefix=none
   $ ${TURBO} run build --log-prefix=none

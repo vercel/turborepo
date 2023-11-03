@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh task_dependencies/topological
+  $ . ${TESTDIR}/../_helpers/setup.sh task_dependencies/topological
 
 Check my-app#build output
   $ ${TURBO} run build

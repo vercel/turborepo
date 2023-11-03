@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh single_package_deps
+  $ . ${TESTDIR}/../_helpers/setup.sh single_package_deps
 
 Graph
   $ ${TURBO} run test --graph

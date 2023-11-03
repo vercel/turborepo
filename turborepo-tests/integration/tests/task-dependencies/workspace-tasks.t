@@ -1,6 +1,6 @@
 
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh task_dependencies/workspace-tasks
+  $ . ${TESTDIR}/../_helpers/setup.sh task_dependencies/workspace-tasks
 
 Test that root tasks are included in the graph. In this case, "//#build" task should be there
   $ ${TURBO} run build1 --graph

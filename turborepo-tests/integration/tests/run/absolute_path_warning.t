@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh invalid_turbo_json
+  $ . ${TESTDIR}/../_helpers/setup.sh invalid_turbo_json
 
 Expect warnings
   $ ${TURBO} build -v --dry > /dev/null

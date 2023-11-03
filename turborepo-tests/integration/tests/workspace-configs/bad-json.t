@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh composable_config
+  $ . ${TESTDIR}/../_helpers/setup.sh composable_config
 
 # Put some bad JSON into the turbo.json in this app
   $ echo '{"pipeline": {"trailing-comma": {},}}' > "$TARGET_DIR/apps/bad-json/turbo.json"

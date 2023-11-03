@@ -1,5 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh ordered
+  $ . ${TESTDIR}/../_helpers/setup.sh ordered
 
 # Build in stream order. All the .*'s are unpredictable lines, however the amount of lines is predictable.
   $ ${TURBO} run build --log-order stream --force

@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh single_package "yarn@1.22.17"
+  $ . ${TESTDIR}/../_helpers/setup.sh single_package "yarn@1.22.17"
   $ rm -rf package-lock.json || true # exists because of setup.sh script above
   $ yarn install > /dev/null 2>&1
   $ git commit --quiet -am "Update lockfile" # clean git state

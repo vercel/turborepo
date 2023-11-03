@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/_helpers/setup_monorepo.sh
+  $ . ${TESTDIR}/_helpers/setup.sh
 
 Run test run
   $ ${TURBO} run build --__test-run | jq .api_client_config

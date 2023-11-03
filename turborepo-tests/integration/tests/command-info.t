@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/_helpers/setup_monorepo.sh
+  $ . ${TESTDIR}/_helpers/setup.sh
 
 Run info
   $ ${TURBO} info

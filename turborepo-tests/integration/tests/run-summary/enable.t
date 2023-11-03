@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh
+  $ . ${TESTDIR}/../_helpers/setup.sh
 
 # Delete all run summaries to start
   $ rm -rf .turbo/runs

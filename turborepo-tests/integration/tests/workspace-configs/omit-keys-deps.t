@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh composable_config
+  $ . ${TESTDIR}/../_helpers/setup.sh composable_config
 
 # The omit-keys-task-with-deps configures dependsOn. The workspace config
 # defines the task, but does not override anything. This test checks

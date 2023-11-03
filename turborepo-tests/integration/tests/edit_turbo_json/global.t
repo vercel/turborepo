@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh
+  $ . ${TESTDIR}/../_helpers/setup.sh
 
 Baseline global hash
   $ cp "$TESTDIR/fixture-configs/1-baseline.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
