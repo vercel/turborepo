@@ -6,48 +6,44 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = __filename.replace(/[^/\\]*$/, "");
 
 const venvName = ".cram_env";
-const venvPath = path.join(__dirname, venvName);
-const allowedVenvTools = ["python3", "pip", "prysk", "frysk"];
-
 const isWindows = process.platform === "win32";
 
-const venvBin = isWindows
-  ? path.join(venvPath, "Scripts")
-  : path.join(venvPath, "bin");
-
+// Make virtualenv
 execSync(`python3 -m venv ${venvName}`);
 
+// Get executables
 const python3 = getVenvBin("python3");
 const pip = getVenvBin("pip");
 
+// Install pip and prysk
 console.log("install latest pip");
 execSync(`${python3} -m pip install --quiet --upgrade pip`, {
   stdio: "inherit",
 });
 
 console.log("install prysk");
-execSync(`${pip} install "frysk"`, { stdio: "inherit" });
+execSync(`${pip} install "frysk"`, { stdio: "inherit" }); // TODO: move this back to prysk once https://github.com/prysk/prysk/pull/207 is merged
 
 // disable package manager update notifiers
 process.env.NO_UPDATE_NOTIFIER = 1;
 
-let specificTest = "tests";
-let testArg = process.argv[2];
-if (testArg) {
-  if (isWindows) {
-    testArg = testArg.replaceAll("/", path.sep);
-  }
-  specificTest = path.join("tests", testArg);
-}
+// Which tests do we want to run?
+let testArg = process.argv[2] ? process.argv[2] : "";
+testArg = isWindows ? testArg.replaceAll("/", path.sep) : testArg;
 
-const pryskBin = getVenvBin("prysk");
+// What flags to pass to prysk?
 const flags = [
   "--shell=bash",
   isWindows ? "--dos2unix" : "",
   process.env.PRYSK_INTERACTIVE === "true" ? "--interactive" : "",
 ].join(" ");
 
-const cmd = `${pryskBin} ${flags} "${specificTest}"`;
+const cmd = [
+  getVenvBin("prysk"), // prysk program
+  flags, // flags for the program
+  path.join("tests", testArg), // arguments for the program
+].join(" ");
+
 console.log(`Running ${cmd}`);
 
 try {
@@ -60,11 +56,18 @@ try {
 }
 
 function getVenvBin(tool) {
+  const allowedVenvTools = ["python3", "pip", "prysk", "frysk"];
+
   if (!allowedVenvTools.includes(tool)) {
     throw new Error(`Tool not allowed: ${tool}`);
   }
 
   const suffix = isWindows ? ".exe" : "";
+
+  const venvPath = path.join(__dirname, venvName);
+  const venvBin = isWindows
+    ? path.join(venvPath, "Scripts")
+    : path.join(venvPath, "bin");
 
   return path.join(venvBin, tool + suffix);
 }
