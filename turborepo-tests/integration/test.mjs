@@ -7,7 +7,7 @@ const __dirname = __filename.replace(/[^/\\]*$/, "");
 
 const venvName = ".cram_env";
 const venvPath = path.join(__dirname, venvName);
-const allowedVenvTools = ["python3", "pip", "prysk"];
+const allowedVenvTools = ["python3", "pip", "prysk", "frysk"];
 
 const isWindows = process.platform === "win32";
 
@@ -26,7 +26,7 @@ execSync(`${python3} -m pip install --quiet --upgrade pip`, {
 });
 
 console.log("install prysk");
-execSync(`${pip} install "prysk-windows"`, { stdio: "inherit" });
+execSync(`${pip} install "frysk"`, { stdio: "inherit" });
 
 // disable package manager update notifiers
 process.env.NO_UPDATE_NOTIFIER = 1;
