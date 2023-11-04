@@ -17,5 +17,12 @@ if [ "$3" != "" ]; then
   # directly to the original file.
   jq --arg pm "$3" '.packageManager = $pm' "$TARGET_DIR/package.json" > "$TARGET_DIR/package.json.new"
   mv "$TARGET_DIR/package.json.new" "$TARGET_DIR/package.json"
+
+  # We just created a new file. On Windows, we need to convert it to Unix line endings
+  # so the hashes will be stable with what's expected in our test cases.
+  if [[ "$OSTYPE" == "msys" ]]; then
+    dos2unix "$TARGET_DIR/package.json"
+  fi
+
   git commit -am "Update package manager" --quiet
 fi
