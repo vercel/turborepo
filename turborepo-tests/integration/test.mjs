@@ -15,7 +15,7 @@ const venvBin = isWindows
   ? path.join(venvPath, "Scripts")
   : path.join(venvPath, "bin");
 
-execSync(`python3 -m venv ${venvName}`, { stdio: "inherit" });
+execSync(`python3 -m venv ${venvName}`);
 
 const python3 = getVenvBin("python3");
 const pip = getVenvBin("pip");
