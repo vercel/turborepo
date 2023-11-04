@@ -47,7 +47,7 @@ const cmd = `${pryskBin} ${flags} "${specificTest}"`;
 console.log(`Running ${cmd}`);
 
 try {
-  execSync(cmd, { stdio: "inherit" });
+  execSync(cmd, { stdio: "inherit", env: process.env });
 } catch (e) {
   // Swallow the node error stack trace. stdio: inherit should
   // already have the test failures printed. We don't need the Node.js
