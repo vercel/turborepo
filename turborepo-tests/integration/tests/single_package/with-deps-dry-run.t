@@ -24,7 +24,7 @@ Check
     Cached (Remote)                = false                                                                                                                                           
     Command                        = echo 'building' > foo                                                                                                                           
     Outputs                        = foo                                                                                                                                             
-    Log File                       = .turbo/turbo-build.log                                                                                                                          
+    Log File                       = .turbo(\/|\\)turbo-build.log\s+ (re)
     Dependencies                   =                                                                                                                                                 
     Dependendents                  = test                                                                                                                                            
     Inputs Files Considered        = 4                                                                                                                                               
@@ -43,7 +43,7 @@ Check
     Cached (Remote)                = false                                                                                                                                             
     Command                        = [[ ( -f foo ) && $(cat foo) == 'building' ]]                                                                                                      
     Outputs                        =                                                                                                                                                   
-    Log File                       = .turbo/turbo-test.log                                                                                                                             
+    Log File                       = .turbo(\/|\\)turbo-test.log\s+ (re)
     Dependencies                   = build                                                                                                                                             
     Dependendents                  =                                                                                                                                                   
     Inputs Files Considered        = 4                                                                                                                                                 
