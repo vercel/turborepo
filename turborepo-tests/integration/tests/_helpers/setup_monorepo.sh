@@ -21,7 +21,7 @@ if [ "$3" != "" ]; then
   # We just created a new file. On Windows, we need to convert it to Unix line endings
   # so the hashes will be stable with what's expected in our test cases.
   if [[ "$OSTYPE" == "msys" ]]; then
-    dos2unix "$TARGET_DIR/package.json"
+    dos2unix --quiet "$TARGET_DIR/package.json"
   fi
 
   git commit -am "Update package manager" --quiet
