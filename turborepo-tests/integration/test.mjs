@@ -41,7 +41,11 @@ if (testArg) {
 }
 
 const pryskBin = getVenvBin("prysk");
-const flags = ["--shell=bash", isWindows ? "--dos2unix" : ""].join(" ");
+const flags = [
+  "--shell=bash",
+  isWindows ? "--dos2unix" : "",
+  process.env.PRYSK_INTERACTIVE === "true" ? "--interactive" : "",
+].join(" ");
 
 const cmd = `${pryskBin} ${flags} "${specificTest}"`;
 console.log(`Running ${cmd}`);
