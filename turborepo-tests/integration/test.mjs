@@ -17,12 +17,10 @@ const pip = getVenvBin("pip");
 
 // Install pip and frysk
 console.log("install latest pip");
-execSync(`${python3} -m pip install --quiet --upgrade pip`, {
-  stdio: "inherit",
-});
+execSync(`${python3} -m pip install --quiet --upgrade pip`);
 
 console.log("install frysk");
-execSync(`${pip} install "frysk"`, { stdio: "inherit" }); // TODO: move this back to prysk once https://github.com/prysk/prysk/pull/207 is merged
+execSync(`${pip} install "frysk"`); // TODO: move this back to prysk once https://github.com/prysk/prysk/pull/207 is merged
 
 // disable package manager update notifiers
 process.env.NO_UPDATE_NOTIFIER = 1;
