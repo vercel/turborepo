@@ -15,13 +15,13 @@ execSync(`python3 -m venv ${venvName}`);
 const python3 = getVenvBin("python3");
 const pip = getVenvBin("pip");
 
-// Install pip and prysk
+// Install pip and frysk
 console.log("install latest pip");
 execSync(`${python3} -m pip install --quiet --upgrade pip`, {
   stdio: "inherit",
 });
 
-console.log("install prysk");
+console.log("install frysk");
 execSync(`${pip} install "frysk"`, { stdio: "inherit" }); // TODO: move this back to prysk once https://github.com/prysk/prysk/pull/207 is merged
 
 // disable package manager update notifiers
@@ -31,7 +31,7 @@ process.env.NO_UPDATE_NOTIFIER = 1;
 let testArg = process.argv[2] ? process.argv[2] : "";
 testArg = isWindows ? testArg.replaceAll("/", path.sep) : testArg;
 
-// What flags to pass to prysk?
+// What flags to pass to frysk?
 const flags = [
   "--shell=bash",
   isWindows ? "--dos2unix" : "",
@@ -39,7 +39,7 @@ const flags = [
 ].join(" ");
 
 const cmd = [
-  getVenvBin("prysk"), // prysk program
+  getVenvBin("frysk"), // frysk program
   flags, // flags for the program
   path.join("tests", testArg), // arguments for the program
 ].join(" ");
