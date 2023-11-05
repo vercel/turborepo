@@ -10,6 +10,9 @@ cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
 
 ${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh ${TARGET_DIR}
 
+echo "npm version is:"
+npm --version
+
 # Update package manager
 if [ "$3" != "" ]; then
   # Use jq to write a new file with a .packageManager field set and then
