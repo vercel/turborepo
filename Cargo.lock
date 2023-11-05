@@ -7564,9 +7564,8 @@ dependencies = [
 
 [[package]]
 name = "swc_css_prefixer"
-version = "0.153.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "440823e50ce60fb4ece4d7e241849f32344676726f66324adfd38e9762ca07fe"
+version = "0.153.7"
+source = "git+https://github.com/kdy1/swc.git?branch=kdy-str#1351c6fad9761fb2aa285cd9935da6a0090f1ff1"
 dependencies = [
  "once_cell",
  "preset_env_base",
@@ -12057,11 +12056,6 @@ source = "git+https://github.com/kdy1/swc.git?branch=kdy-str#1351c6fad9761fb2aa2
 [[patch.unused]]
 name = "swc_css_lints"
 version = "0.60.7"
-source = "git+https://github.com/kdy1/swc.git?branch=kdy-str#1351c6fad9761fb2aa285cd9935da6a0090f1ff1"
-
-[[patch.unused]]
-name = "swc_css_prefixer"
-version = "0.153.7"
 source = "git+https://github.com/kdy1/swc.git?branch=kdy-str#1351c6fad9761fb2aa285cd9935da6a0090f1ff1"
 
 [[patch.unused]]
