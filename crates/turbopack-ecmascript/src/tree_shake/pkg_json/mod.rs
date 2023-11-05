@@ -1,50 +1,33 @@
-use anyhow::{bail, Result};
-use serde::Deserialize;
+use anyhow::Result;
 use turbo_tasks::Vc;
-use turbo_tasks_fs::{FileContent, FileSystemPath};
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PackageJson {
-    #[serde(default = "true_by_default")]
-    side_effects: bool,
-}
-
-fn true_by_default() -> bool {
-    true
-}
+use turbo_tasks_fs::FileSystemPath;
+use turbopack_core::{
+    package_json::read_package_json,
+    resolve::{find_context_file, FindContextFileResult},
+};
 
 #[turbo_tasks::function]
 pub async fn is_side_effect_free(filename: Vc<FileSystemPath>) -> Result<Vc<bool>> {
-    let package_json = read_package_json_for(filename.clone()).await?;
+    let package_json = find_context_file(
+        filename.parent(),
+        Vc::cell(vec!["package.json".to_string()]),
+    )
+    .await?;
 
-    match &*package_json {
-        FileContent::Content(file) => {
-            let json = serde_json::from_reader::<_, PackageJson>(file.read())?;
+    let package_json = match &*package_json {
+        FindContextFileResult::Found(path, ..) => *path,
+        _ => return Ok(Vc::cell(false)),
+    };
+    let content = read_package_json(package_json).await?;
 
-            Ok((!json.side_effects).into())
-        }
-        FileContent::NotFound => Ok(false.into()),
-    }
-}
+    let has_side_effect = match &*content {
+        Some(json) => json
+            .as_object()
+            .and_then(|json| json.get("sideEffects"))
+            .and_then(|side_effects| side_effects.as_bool())
+            .unwrap_or(true),
+        None => true,
+    };
 
-#[turbo_tasks::function]
-async fn read_package_json_for(filename: Vc<FileSystemPath>) -> Result<Vc<FileContent>> {
-    let mut f = filename;
-
-    while !f.await?.is_root() {
-        let cur = f.parent();
-        let p = cur.join("package.json".to_string());
-
-        let content_vc = p.read();
-        let content = content_vc.await?;
-
-        if let FileContent::Content(f) = &*content {
-            return Ok(content_vc);
-        }
-
-        f = cur;
-    }
-
-    bail!("Could not find package.json for {}", filename.display())
+    Ok(Vc::cell(!has_side_effect))
 }
