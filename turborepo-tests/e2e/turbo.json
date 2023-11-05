@@ -4,7 +4,8 @@
     "test": {
       "dependsOn": ["cli#build", "^build"],
       "output": [],
-      // For github actions
+      // RUNNER_OS is set by Github Actions
+      // https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables
       "env": ["RUNNER_OS"]
     }
   }

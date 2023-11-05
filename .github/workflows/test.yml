@@ -406,6 +406,8 @@ jobs:
             runner: ubuntu-latest
           - name: macos
             runner: macos-latest
+          - name: windows
+            runner: windows-latest
     runs-on: ${{ matrix.os.runner }}
     steps:
       - name: Checkout
