@@ -15,12 +15,12 @@ execSync(`python3 -m venv ${venvName}`);
 const python3 = getVenvBin("python3");
 const pip = getVenvBin("pip");
 
-// Install pip and frysk
+// Install pip and prysk
 console.log("install latest pip");
 execSync(`${python3} -m pip install --quiet --upgrade pip`);
 
-console.log("install frysk");
-execSync(`${pip} install "frysk"`); // TODO: move this back to prysk once https://github.com/prysk/prysk/pull/207 is merged
+console.log("install prysk");
+execSync(`${pip} install "prysk"`);
 
 // disable package manager update notifiers
 process.env.NO_UPDATE_NOTIFIER = 1;
@@ -29,7 +29,7 @@ process.env.NO_UPDATE_NOTIFIER = 1;
 let testArg = process.argv[2] ? process.argv[2] : "";
 testArg = isWindows ? testArg.replaceAll("/", path.sep) : testArg;
 
-// What flags to pass to frysk?
+// What flags to pass to prysk?
 const flags = [
   "--shell=bash",
   isWindows ? "--dos2unix" : "",
@@ -37,7 +37,7 @@ const flags = [
 ].join(" ");
 
 const cmd = [
-  getVenvBin("frysk"), // frysk program
+  getVenvBin("prysk"), // prysk program
   flags, // flags for the program
   path.join("tests", testArg), // arguments for the program
 ].join(" ");
@@ -54,7 +54,7 @@ try {
 }
 
 function getVenvBin(tool) {
-  const allowedVenvTools = ["python3", "pip", "prysk", "frysk"];
+  const allowedVenvTools = ["python3", "pip", "prysk"];
 
   if (!allowedVenvTools.includes(tool)) {
     throw new Error(`Tool not allowed: ${tool}`);
