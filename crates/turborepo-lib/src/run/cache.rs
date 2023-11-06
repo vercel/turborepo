@@ -198,11 +198,6 @@ impl TaskCache {
                          Proceeding to check cache",
                         self.task_id, err
                     );
-                    prefixed_ui.warn(format!(
-                        "Failed to check if we can skip restoring outputs for {}: {:?}. \
-                         Proceeding to check cache",
-                        self.task_id, err
-                    ));
                     self.repo_relative_globs.inclusions.len()
                 }
             }

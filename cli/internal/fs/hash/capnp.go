@@ -320,7 +320,10 @@ func HashLockfilePackages(packages []lockfile.Package) (string, error) {
 			return "", err
 		}
 
-		err = entry.SetVersion(pkg.Version)
+		// We explicitly write Version to match Rust behavior when writing empty strings
+		// The Go library will emit a null pointer if the string is empty instead
+		// of a zero length list.
+		err = capnp.Struct(entry).SetNewText(1, pkg.Version)
 		if err != nil {
 			return "", err
 		}

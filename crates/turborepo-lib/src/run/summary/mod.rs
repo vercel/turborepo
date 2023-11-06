@@ -111,7 +111,7 @@ pub struct RunSummary<'a> {
     global_hash_summary: GlobalHashSummary<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
     execution: Option<ExecutionSummary<'a>>,
-    packages: HashSet<WorkspaceName>,
+    packages: Vec<WorkspaceName>,
     env_mode: EnvMode,
     framework_inference: bool,
     tasks: Vec<TaskSummary>,
@@ -236,7 +236,7 @@ impl RunTracker {
             id: Ksuid::new(None, None),
             version: RUN_SUMMARY_SCHEMA_VERSION.to_string(),
             turbo_version: self.version,
-            packages,
+            packages: packages.into_iter().sorted().collect(),
             execution: Some(execution_summary),
             env_mode: run_opts.env_mode.into(),
             framework_inference: run_opts.framework_inference,
@@ -540,7 +540,10 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  Outputs\t=\t{}",
-                task.shared.outputs.join(", ")
+                task.shared
+                    .outputs
+                    .as_ref()
+                    .map_or_else(String::new, |outputs| outputs.join(", "))
             )?;
             cwriteln!(
                 tab_writer,
@@ -575,7 +578,10 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  .env Files Considered\t=\t{}",
-                task.shared.dot_env.len()
+                task.shared
+                    .dot_env
+                    .as_ref()
+                    .map_or(0, |dot_env| dot_env.len())
             )?;
 
             cwriteln!(
@@ -609,14 +615,19 @@ impl<'a> RunSummary<'a> {
                     .environment_variables
                     .specified
                     .pass_through_env
-                    .join(", ")
+                    .as_ref()
+                    .map_or_else(String::new, |pass_through_env| pass_through_env.join(", "))
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Passed Through Env Vars Values\t=\t{}",
-                task.shared.environment_variables.pass_through.join(", ")
+                task.shared
+                    .environment_variables
+                    .pass_through
+                    .as_ref()
+                    .map_or_else(String::new, |vars| vars.join(", "))
             )?;
 
             // If there's an error, we can silently ignore it, we don't need to block the
@@ -640,13 +651,16 @@ impl<'a> RunSummary<'a> {
     fn format_json(&mut self) -> Result<String, Error> {
         self.normalize();
 
-        if self.monorepo {
-            Ok(serde_json::to_string_pretty(&self)?)
+        let mut rendered_json = if self.monorepo {
+            serde_json::to_string_pretty(&self)
         } else {
             // Deref coercion used to get an immutable reference from the mutable reference.
             let monorepo_rsm = SinglePackageRunSummary::from(&*self);
-            Ok(serde_json::to_string_pretty(&monorepo_rsm)?)
-        }
+            serde_json::to_string_pretty(&monorepo_rsm)
+        }?;
+        // Go produces an extra newline at the end of the JSON
+        rendered_json.push('\n');
+        Ok(rendered_json)
     }
 
     fn normalize(&mut self) {
@@ -658,7 +672,7 @@ impl<'a> RunSummary<'a> {
         // For single packages, we don't need the packages
         // and each task summary needs some cleaning
         if !self.monorepo {
-            self.packages.drain();
+            self.packages.clear();
         }
 
         self.tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));

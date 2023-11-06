@@ -63,9 +63,9 @@ impl EnvironmentVariableMap {
                     hasher.update(v.as_bytes());
                     let hash = hasher.finalize();
                     let hexed_hash = hex::encode(hash);
-                    format!("{}=", hexed_hash)
+                    format!("{k}={hexed_hash}")
                 } else {
-                    format!("{}=", k)
+                    format!("{k}=")
                 }
             })
             .collect()

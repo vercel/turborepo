@@ -35,8 +35,8 @@ pub struct ExecutionSummary<'a> {
     // number of tasks that started
     attempted: usize,
     // the (possibly empty) path from the turborepo root to where the command was run
-    #[serde(rename = "repoPath", skip_serializing_if = "Option::is_none")]
-    package_inference_root: Option<&'a AnchoredSystemPath>,
+    #[serde(rename = "repoPath")]
+    repo_path: &'a AnchoredSystemPath,
     pub(crate) start_time: i64,
     pub(crate) end_time: i64,
     #[serde(skip)]
@@ -101,7 +101,8 @@ impl<'a> ExecutionSummary<'a> {
             failed: state.failed,
             cached: state.cached,
             attempted: state.attempted,
-            package_inference_root,
+            // We're either at some path in the repo, or at the root, which is an empty path
+            repo_path: package_inference_root.unwrap_or_else(|| AnchoredSystemPath::empty()),
             start_time: start_time.timestamp_millis(),
             end_time: end_time.timestamp_millis(),
             duration,
@@ -196,7 +197,7 @@ impl<'a> ExecutionSummary<'a> {
     }
 
     fn successful(&self) -> usize {
-        self.success + self.attempted
+        self.success + self.cached
     }
 }
 

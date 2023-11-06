@@ -297,7 +297,7 @@ impl<'a> Visitor<'a> {
                             .lock()
                             .expect("lock poisoned")
                             .push(TaskError::from_spawn(task_id_for_display.clone(), e));
-                        let _summary = tracker.spawn_failed(error_string).await;
+                        tracker.spawn_failed(error_string).await;
                         callback
                             .send(if continue_on_error {
                                 Ok(())
@@ -343,7 +343,7 @@ impl<'a> Visitor<'a> {
                 match exit_status {
                     // The task was successful, nothing special needs to happen.
                     ChildExit::Finished(Some(0)) => {
-                        let _summary = tracker.build_succeeded(0);
+                        tracker.build_succeeded(0).await;
                     }
                     ChildExit::Finished(Some(code)) => {
                         // If there was an error, flush the buffered output

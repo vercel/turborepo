@@ -57,7 +57,7 @@ impl<'a> From<&'a RunArgs> for RunCacheOpts {
 pub struct RunOpts<'a> {
     pub(crate) tasks: &'a [String],
     pub(crate) concurrency: u32,
-    parallel: bool,
+    pub(crate) parallel: bool,
     pub(crate) env_mode: EnvMode,
     // Whether or not to infer the framework for each workspace.
     pub(crate) framework_inference: bool,
