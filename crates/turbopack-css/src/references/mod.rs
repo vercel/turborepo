@@ -194,8 +194,8 @@ pub async fn css_resolve(
         origin.origin_path(),
         request,
         options,
-        IssueSeverity::Error.cell(),
         issue_source,
+        IssueSeverity::Error.cell(),
     )
     .await
 }
