@@ -15,7 +15,7 @@ use turborepo_scm::SCM;
 use crate::{
     engine::TaskNode,
     framework::infer_framework,
-    hash::{FileHashes, TaskHashable, TurboHash},
+    hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
     opts::Opts,
     package_graph::{WorkspaceInfo, WorkspaceName},
     run::task_id::TaskId,
@@ -289,7 +289,8 @@ impl<'a> TaskHasher<'a> {
         let hashable_env_pairs = env_vars.all.to_hashable();
         let outputs = task_definition.hashable_outputs(task_id);
         let task_dependency_hashes = self.calculate_dependency_hashes(dependency_set)?;
-        let external_deps_hash = is_monorepo.then(|| workspace.get_external_deps_hash());
+        let external_deps_hash =
+            is_monorepo.then(|| get_external_deps_hash(&workspace.transitive_dependencies));
 
         debug!(
             "task hash env vars for {}:{}\n vars: {:?}",
@@ -408,6 +409,27 @@ impl<'a> TaskHasher<'a> {
             ResolvedEnvMode::Loose => Ok(self.env_at_execution_start.clone()),
         }
     }
+}
+
+pub fn get_external_deps_hash(
+    transitive_dependencies: &Option<HashSet<turborepo_lockfiles::Package>>,
+) -> String {
+    let Some(transitive_dependencies) = transitive_dependencies else {
+        return "".into();
+    };
+
+    let mut transitive_deps = Vec::with_capacity(transitive_dependencies.len());
+
+    for dependency in transitive_dependencies.iter() {
+        transitive_deps.push(dependency.clone());
+    }
+
+    transitive_deps.sort_by(|a, b| match a.key.cmp(&b.key) {
+        std::cmp::Ordering::Equal => a.version.cmp(&b.version),
+        other => other,
+    });
+
+    LockFilePackages(transitive_deps).hash()
 }
 
 impl TaskHashTracker {

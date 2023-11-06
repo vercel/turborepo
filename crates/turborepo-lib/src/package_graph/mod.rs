@@ -14,8 +14,6 @@ pub(crate) mod builder;
 
 pub use builder::{Error, PackageGraphBuilder};
 
-use crate::hash::{LockFilePackages, TurboHash};
-
 pub const ROOT_PKG_NAME: &str = "//";
 
 pub struct PackageGraph {
@@ -48,25 +46,6 @@ impl WorkspaceInfo {
         self.package_json_path
             .parent()
             .expect("at least one segment")
-    }
-
-    pub fn get_external_deps_hash(&self) -> String {
-        let Some(transitive_dependencies) = &self.transitive_dependencies else {
-            return "".into();
-        };
-
-        let mut transitive_deps = Vec::with_capacity(transitive_dependencies.len());
-
-        for dependency in transitive_dependencies.iter() {
-            transitive_deps.push(dependency.clone());
-        }
-
-        transitive_deps.sort_by(|a, b| match a.key.cmp(&b.key) {
-            std::cmp::Ordering::Equal => a.version.cmp(&b.version),
-            other => other,
-        });
-
-        LockFilePackages(transitive_deps).hash()
     }
 }
 

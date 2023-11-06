@@ -41,7 +41,7 @@ use crate::{
     run::{global_hash::get_global_hash_inputs, summary::RunTracker},
     shim::TurboState,
     task_graph::Visitor,
-    task_hash::{PackageInputsHashes, TaskHashTrackerState},
+    task_hash::{get_external_deps_hash, PackageInputsHashes, TaskHashTrackerState},
 };
 
 #[derive(Debug)]
@@ -226,7 +226,7 @@ impl<'a> Run<'a> {
         let is_monorepo = !opts.run_opts.single_package;
 
         let root_external_dependencies_hash =
-            is_monorepo.then(|| root_workspace.get_external_deps_hash());
+            is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
         let mut global_hash_inputs = get_global_hash_inputs(
             root_external_dependencies_hash.as_deref(),
@@ -406,7 +406,7 @@ impl<'a> Run<'a> {
 
         let is_monorepo = !opts.run_opts.single_package;
         let root_external_dependencies_hash =
-            is_monorepo.then(|| root_workspace.get_external_deps_hash());
+            is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
         let mut global_hash_inputs = get_global_hash_inputs(
             root_external_dependencies_hash.as_deref(),
