@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ . ${TESTDIR}/../../../../helpers/setup.sh
+  $ . ${TESTDIR}/../../_helpers/setup_monorepo.sh $(pwd) single_package
   $ rm turbo.json
   $ git commit -am "Delete turbo config" --quiet
 
@@ -21,7 +21,7 @@ Check
   Tasks to Run
   build
     Task                           = build                                                                                                                                       
-    Hash                           = c58c190da9fcd80a                                                                                                                            
+    Hash                           = f299c0d84afaea02                                                                                                                            
     Cached (Local)                 = false                                                                                                                                       
     Cached (Remote)                = false                                                                                                                                       
     Command                        = echo 'building' > foo                                                                                                                       
@@ -53,7 +53,7 @@ Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing c58c190da9fcd80a
+  build: cache bypass, force executing f299c0d84afaea02
   build: 
   build: > build
   build: > echo 'building' > foo
@@ -67,7 +67,7 @@ Run a second time, verify no caching because there is no config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing c58c190da9fcd80a
+  build: cache bypass, force executing f299c0d84afaea02
   build: 
   build: > build
   build: > echo 'building' > foo

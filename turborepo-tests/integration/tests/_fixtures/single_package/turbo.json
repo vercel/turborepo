@@ -4,6 +4,10 @@
   "pipeline": {
     "build": {
       "outputs": ["foo"]
+    },
+    "test": {
+      "outputs": [],
+      "dependsOn": ["build"]
     }
   }
 }

@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ . ${TESTDIR}/../../../../helpers/setup.sh
+  $ . ${TESTDIR}/../../_helpers/setup_monorepo.sh $(pwd) single_package
 
 Check
   $ ${TURBO} run build --dry
@@ -19,7 +19,7 @@ Check
   Tasks to Run
   build
     Task                           = build                                                                                                                                           
-    Hash                           = 414559dcbbf03c41                                                                                                                                
+    Hash                           = 7518181d91f907c3                                                                                                                                
     Cached (Local)                 = false                                                                                                                                           
     Cached (Remote)                = false                                                                                                                                           
     Command                        = echo 'building' > foo                                                                                                                           
