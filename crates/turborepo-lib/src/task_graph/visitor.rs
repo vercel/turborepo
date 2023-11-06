@@ -244,18 +244,18 @@ impl<'a> Visitor<'a> {
                     Self::prefixed_ui(ui, is_github_actions, &output_client, pretty_prefix.clone());
 
                 match task_cache.restore_outputs(&mut prefixed_ui).await {
-                    Ok(hit) => {
+                    Ok(Some(status)) => {
                         // we need to set expanded outputs
                         hash_tracker.insert_expanded_outputs(
                             task_id.clone(),
                             task_cache.expanded_outputs().to_vec(),
                         );
-                        hash_tracker.insert_cache_status(task_id, hit);
+                        hash_tracker.insert_cache_status(task_id, status);
                         tracker.cached().await;
                         callback.send(Ok(())).ok();
                         return;
                     }
-                    Err(e) if e.is_cache_miss() => (),
+                    Ok(None) => (),
                     Err(e) => {
                         prefixed_ui.error(format!("error fetching from cache: {e}"));
                     }

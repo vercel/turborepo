@@ -3,7 +3,6 @@ use std::{
     fmt,
 };
 
-use anyhow::Result;
 use petgraph::visit::{depth_first_search, Reversed};
 use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
@@ -12,7 +11,7 @@ use turborepo_repository::{package_json::PackageJson, package_manager::PackageMa
 
 use crate::graph;
 
-mod builder;
+pub(crate) mod builder;
 
 pub use builder::{Error, PackageGraphBuilder};
 
@@ -117,7 +116,7 @@ impl PackageGraph {
 
     #[tracing::instrument(skip(self))]
     pub fn validate(&self) -> Result<(), Error> {
-        Ok(graph::validate_graph(&self.workspace_graph)?)
+        graph::validate_graph(&self.workspace_graph).map_err(Error::InvalidPackageGraph)
     }
 
     pub fn remove_workspace_dependencies(&mut self) {
@@ -679,7 +678,9 @@ mod test {
 
         assert_matches!(
             pkg_graph.validate(),
-            Err(builder::Error::Graph(graph::Error::CyclicDependencies(_)))
+            Err(builder::Error::InvalidPackageGraph(
+                graph::Error::CyclicDependencies(_)
+            ))
         );
     }
 
@@ -712,7 +713,9 @@ mod test {
 
         assert_matches!(
             pkg_graph.validate(),
-            Err(builder::Error::Graph(graph::Error::SelfDependency(_)))
+            Err(builder::Error::InvalidPackageGraph(
+                graph::Error::SelfDependency(_)
+            ))
         );
     }
 }

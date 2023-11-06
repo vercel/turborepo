@@ -20,9 +20,9 @@ pub use crate::{
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("cannot read logs: {0}")]
-    CannotReadLogs(std::io::Error),
+    CannotReadLogs(#[source] std::io::Error),
     #[error("cannot write logs: {0}")]
-    CannotWriteLogs(std::io::Error),
+    CannotWriteLogs(#[source] std::io::Error),
 }
 
 pub fn start_spinner(message: &str) -> ProgressBar {

@@ -3,13 +3,13 @@
 //! Can output in either text or JSON
 //! Different than run summary or dry run because it can include
 //! sensitive data like your auth token
-use anyhow::Result;
 use serde::Serialize;
 use turbopath::AnchoredSystemPath;
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 use turborepo_ui::GREY;
 
 use crate::{
+    cli,
     commands::CommandBase,
     config::ConfigurationOptions,
     package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
@@ -32,7 +32,7 @@ struct WorkspaceDetails<'a> {
     dependencies: Vec<&'a str>,
 }
 
-pub fn run(base: &mut CommandBase, workspace: Option<&str>, json: bool) -> Result<()> {
+pub fn run(base: &mut CommandBase, workspace: Option<&str>, json: bool) -> Result<(), cli::Error> {
     let root_package_json = PackageJson::load(&base.repo_root.join_component("package.json"))?;
 
     let package_manager =
@@ -49,7 +49,7 @@ pub fn run(base: &mut CommandBase, workspace: Option<&str>, json: bool) -> Resul
         if json {
             println!("{}", serde_json::to_string_pretty(&workspace_details)?);
         } else {
-            workspace_details.print()?;
+            workspace_details.print();
         }
     } else {
         let repo_details = RepositoryDetails::new(&package_graph, config);
@@ -79,7 +79,7 @@ impl<'a> RepositoryDetails<'a> {
 
         Self { config, workspaces }
     }
-    fn print(&self) -> Result<()> {
+    fn print(&self) -> Result<(), cli::Error> {
         let is_logged_in = self.config.token.is_some();
         let is_linked = self.config.team_id.is_some();
         let team_slug = self.config.team_slug.as_deref();
@@ -137,12 +137,10 @@ impl<'a> WorkspaceDetails<'a> {
         }
     }
 
-    fn print(&self) -> Result<()> {
+    fn print(&self) {
         println!("{} depends on:", self.name);
         for dep_name in &self.dependencies {
             println!("- {}", dep_name);
         }
-
-        Ok(())
     }
 }

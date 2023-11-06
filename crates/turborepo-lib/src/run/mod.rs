@@ -1,10 +1,12 @@
 #![allow(dead_code)]
 
 mod cache;
+mod error;
 pub(crate) mod global_hash;
 mod scope;
 pub(crate) mod summary;
 pub mod task_id;
+
 use std::{
     collections::HashSet,
     io::{BufWriter, IsTerminal, Write},
@@ -12,7 +14,6 @@ use std::{
     time::SystemTime,
 };
 
-use anyhow::{anyhow, Context as ErrorContext, Result};
 pub use cache::{RunCache, TaskCache};
 use chrono::Local;
 use itertools::Itertools;
@@ -27,6 +28,7 @@ use turborepo_scm::SCM;
 use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY};
 
 use self::task_id::TaskName;
+pub use crate::run::error::Error;
 use crate::{
     cli::EnvMode,
     commands::CommandBase,
@@ -58,8 +60,8 @@ impl<'a> Run<'a> {
         self.base.args().get_tasks()
     }
 
-    fn opts(&self) -> Result<Opts> {
-        self.base.args().try_into()
+    fn opts(&self) -> Result<Opts, Error> {
+        Ok(self.base.args().try_into()?)
     }
 
     fn print_run_prelude(&self, opts: &Opts<'_>, filtered_pkgs: &HashSet<WorkspaceName>) {
@@ -93,7 +95,7 @@ impl<'a> Run<'a> {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn run(&mut self) -> Result<i32> {
+    pub async fn run(&mut self) -> Result<i32, Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
@@ -103,8 +105,7 @@ impl<'a> Run<'a> {
         );
         let start_at = Local::now();
         let package_json_path = self.base.repo_root.join_component("package.json");
-        let root_package_json =
-            PackageJson::load(&package_json_path).context("failed to read package.json")?;
+        let root_package_json = PackageJson::load(&package_json_path)?;
         let mut opts = self.opts()?;
 
         let api_auth = self.base.api_auth()?;
@@ -170,9 +171,7 @@ impl<'a> Run<'a> {
             daemon = Some(client);
         }
 
-        pkg_dep_graph
-            .validate()
-            .context("Invalid package dependency graph")?;
+        pkg_dep_graph.validate()?;
 
         let scm = SCM::new(&self.base.repo_root);
 
@@ -215,19 +214,6 @@ impl<'a> Run<'a> {
 
         let mut engine =
             self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
-
-        engine
-            .validate(&pkg_dep_graph, opts.run_opts.concurrency)
-            .map_err(|errors| {
-                anyhow!(
-                    "error preparing engine: Invalid persistent task configuration:\n{}",
-                    errors
-                        .into_iter()
-                        .map(|e| e.to_string())
-                        .sorted()
-                        .join("\n")
-                )
-            })?;
 
         if !opts.run_opts.dry_run && opts.run_opts.graph.is_none() {
             self.print_run_prelude(&opts, &filtered_pkgs);
@@ -299,12 +285,16 @@ impl<'a> Run<'a> {
                 GraphOpts::File(graph_file) => {
                     let graph_file =
                         AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
-                    let file = graph_file.open()?;
+                    let file = graph_file
+                        .open()
+                        .map_err(|e| Error::OpenGraphFile(e, graph_file.clone()))?;
                     let _writer = BufWriter::new(file);
                     todo!("Need to implement different format support");
                 }
                 GraphOpts::Stdout => {
-                    engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?
+                    engine
+                        .dot_graph(std::io::stdout(), opts.run_opts.single_package)
+                        .map_err(Error::GraphOutput)?;
                 }
             }
             return Ok(0);
@@ -318,7 +308,8 @@ impl<'a> Run<'a> {
 
         let global_env = {
             let mut env = env_at_execution_start
-                .from_wildcards(global_hash_inputs.pass_through_env.unwrap_or_default())?;
+                .from_wildcards(global_hash_inputs.pass_through_env.unwrap_or_default())
+                .map_err(Error::Env)?;
             if let Some(resolved_global) = &global_hash_inputs.resolved_env_vars {
                 env.union(&resolved_global.all);
             }
@@ -390,13 +381,12 @@ impl<'a> Run<'a> {
 
     #[tokio::main]
     #[tracing::instrument(skip(self))]
-    pub async fn get_hashes(&self) -> Result<(String, TaskHashTrackerState)> {
+    pub async fn get_hashes(&self) -> Result<(String, TaskHashTrackerState), Error> {
         let started_at = Local::now();
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
         let package_json_path = self.base.repo_root.join_component("package.json");
-        let root_package_json =
-            PackageJson::load(&package_json_path).context("failed to read package.json")?;
+        let root_package_json = PackageJson::load(&package_json_path)?;
 
         let opts = self.opts()?;
 
@@ -567,7 +557,7 @@ impl<'a> Run<'a> {
         opts: &Opts,
         root_turbo_json: &TurboJson,
         filtered_pkgs: &HashSet<WorkspaceName>,
-    ) -> Result<Engine> {
+    ) -> Result<Engine, Error> {
         let engine = EngineBuilder::new(
             &self.base.repo_root,
             pkg_dep_graph,
@@ -593,13 +583,12 @@ impl<'a> Run<'a> {
             engine
                 .validate(pkg_dep_graph, opts.run_opts.concurrency)
                 .map_err(|errors| {
-                    anyhow!(
-                        "error preparing engine: Invalid persistent task configuration:\n{}",
+                    Error::EngineValidation(
                         errors
                             .into_iter()
                             .map(|e| e.to_string())
                             .sorted()
-                            .join("\n")
+                            .join("\n"),
                     )
                 })?;
         }
