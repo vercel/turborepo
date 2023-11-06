@@ -35,8 +35,11 @@ pub enum CookieError {
     Timeout(#[from] Elapsed),
     #[error("failed to receiver cookie notification: {0}")]
     RecvError(#[from] oneshot::error::RecvError),
-    #[error("failed to write cookie file {0}")]
-    IO(#[from] std::io::Error),
+    #[error("failed to write cookie file at {path}: {io_err}")]
+    IO {
+        io_err: std::io::Error,
+        path: AbsoluteSystemPathBuf,
+    },
 }
 
 type CookieResponse = Result<(), WatchError>;
@@ -102,7 +105,12 @@ impl CookieJar {
         {
             // dropping the resulting file closes the handle
             trace!("writing cookie {}", cookie_path);
-            _ = cookie_path.open_with_options(opts)?;
+            _ = cookie_path
+                .open_with_options(opts)
+                .map_err(|io_err| CookieError::IO {
+                    io_err,
+                    path: cookie_path.clone(),
+                })?;
         }
         // ??? -> timeout, recv failure, actual cookie failure
         tokio::time::timeout(self.timeout, rx).await???;
