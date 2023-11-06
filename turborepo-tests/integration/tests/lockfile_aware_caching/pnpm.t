@@ -10,7 +10,7 @@ Populate cache
   a:build: cache miss, executing [0-9a-f]+ (re)
   a:build: 
   a:build: > a@ build .*(\/|\\)apps(\/|\\)a (re)
-  a:build: > echo 'building'
+  a:build: > echo building
   a:build: 
   a:build: building
   
@@ -25,7 +25,7 @@ Populate cache
   b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: 
   b:build: > b@ build .*(\/|\\)apps(\/|\\)b (re)
-  b:build: > echo 'building'
+  b:build: > echo building
   b:build: 
   b:build: building
   
@@ -45,7 +45,7 @@ Only b should have a cache miss
   a:build: cache hit, replaying logs [0-9a-f]+ (re)
   a:build: 
   a:build: > a@ build .*(\/|\\)apps(\/|\\)a (re)
-  a:build: > echo 'building'
+  a:build: > echo building
   a:build: 
   a:build: building
   
@@ -61,7 +61,7 @@ Only b should have a cache miss
   b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: 
   b:build: > b@ build .*(\/|\\)apps(\/|\\)b (re)
-  b:build: > echo 'building'
+  b:build: > echo building
   b:build: 
   b:build: building
   
@@ -88,7 +88,7 @@ Bump of root workspace invalidates all packages
   a:build: cache miss, executing [0-9a-f]+ (re)
   a:build: 
   a:build: > a@ build .*(\/|\\)apps(\/|\\)a (re)
-  a:build: > echo 'building'
+  a:build: > echo building
   a:build: 
   a:build: building
   
@@ -103,7 +103,7 @@ Bump of root workspace invalidates all packages
   b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: 
   b:build: > b@ build .*(\/|\\)apps(\/|\\)b (re)
-  b:build: > echo 'building'
+  b:build: > echo building
   b:build: 
   b:build: building
   
