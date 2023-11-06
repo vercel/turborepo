@@ -15,8 +15,8 @@ because otherwise prysk interprets them as multiline commands
   >\sbuild (re)
   >\secho 'building' && sleep 1 && echo 'done' (re)
   
-  building
-  done
+  '?building'? (re)
+  '?done'? (re)
   ::endgroup::
   ::group::util:build
   cache bypass, force executing 66e170340d84e98e
@@ -43,8 +43,8 @@ because otherwise prysk interprets them as multiline commands
   util:build: > build
   util:build: > sleep 0.5 && echo 'building' && sleep 1 && echo 'completed'
   util:build: 
-  util:build: building
-  util:build: completed
+  util:build: '?building'? (re)
+  util:build: '?completed'? (re)
   ::endgroup::
   
    Tasks:    1 successful, 1 total
