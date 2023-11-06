@@ -853,6 +853,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          # TODO: Remove this specific version constraint once pnpm ships with
+          # node-gyp that's compatible with Python 3.12+
+          python-version: 3.11
+
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
