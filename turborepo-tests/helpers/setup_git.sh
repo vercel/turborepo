@@ -10,7 +10,10 @@ GIT_ARGS="--git-dir=${TARGET_DIR}/.git --work-tree=${TARGET_DIR}"
 git ${GIT_ARGS} config user.email "turbo-test@example.com"
 git ${GIT_ARGS} config user.name "Turbo Test"
 
-echo "script-shell=$(which bash)" > ${TARGET_DIR}/.npmrc
+
+if [[ "$OSTYPE" != "msys" ]]; then
+  echo "script-shell=$(which bash)" > ${TARGET_DIR}/.npmrc
+fi
 
 if [ $SHOULD_INSTALL == "true" ]; then
   pushd ${TARGET_DIR} > /dev/null || exit 1
