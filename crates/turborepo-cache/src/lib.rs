@@ -12,7 +12,7 @@ pub mod signature_authentication;
 #[cfg(test)]
 mod test_cases;
 
-use std::{backtrace, backtrace::Backtrace, fmt};
+use std::{backtrace, backtrace::Backtrace};
 
 pub use async_cache::AsyncCache;
 use camino::Utf8Path;
@@ -80,26 +80,45 @@ pub enum CacheSource {
     Remote,
 }
 
-impl<T: fmt::Debug> fmt::Debug for CacheResult<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CacheResult::Miss => write!(f, "CacheResult::Miss"),
-            CacheResult::Hit(inner) => {
-                write!(f, "CacheResult::Hit({:?})", inner)
-            }
-        }
-    }
-}
-
 // This is generic because exists returns just the metadata
 // while fetch returns the metadata and the files
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CacheResult<T> {
     Miss,
     Hit(T),
 }
 
-#[derive(Debug, Clone)]
+impl<T> CacheResult<T> {
+    pub fn expect_hit(self) -> T {
+        match self {
+            CacheResult::Hit(value) => value,
+            CacheResult::Miss => panic!("expected cache hit"),
+        }
+    }
+
+    pub fn is_hit(&self) -> bool {
+        match self {
+            CacheResult::Hit(_) => true,
+            CacheResult::Miss => false,
+        }
+    }
+
+    pub fn is_miss(&self) -> bool {
+        match self {
+            CacheResult::Hit(_) => false,
+            CacheResult::Miss => true,
+        }
+    }
+
+    pub fn expect_miss(self) {
+        match self {
+            CacheResult::Hit(_) => panic!("expected cache miss"),
+            CacheResult::Miss => (),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct CacheHitMetadata {
     pub source: CacheSource,
     pub time_saved: u64,

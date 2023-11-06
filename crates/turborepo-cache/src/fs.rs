@@ -153,8 +153,6 @@ impl FSCache {
 
 #[cfg(test)]
 mod test {
-    use std::assert_matches::assert_matches;
-
     use anyhow::Result;
     use futures::future::try_join_all;
     use tempfile::tempdir;
@@ -177,10 +175,8 @@ mod test {
 
         let cache = FSCache::new(None, repo_root_path)?;
 
-        let expected_miss = cache
-            .exists(test_case.hash)
-            .expect_err("Expected cache miss");
-        assert_matches!(expected_miss, CacheError::CacheMiss);
+        let expected_miss = cache.exists(test_case.hash)?;
+        expected_miss.expect_miss();
 
         let files: Vec<_> = test_case
             .files
@@ -198,13 +194,13 @@ mod test {
             })
         );
 
-        let (status, files) = cache.fetch(repo_root_path, test_case.hash)?;
+        let (status, files) = cache.fetch(repo_root_path, test_case.hash)?.expect_hit();
         assert_eq!(
             status,
-            CacheResult::Hit(CacheHitMetadata {
+            CacheHitMetadata {
                 time_saved: test_case.duration,
                 source: CacheSource::Local
-            })
+            }
         );
 
         assert_eq!(files.len(), test_case.files.len());

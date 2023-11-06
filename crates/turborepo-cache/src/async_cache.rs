@@ -111,6 +111,10 @@ impl AsyncCache {
         }
     }
 
+    pub async fn exists(&mut self, key: &str) -> Result<CacheResult<CacheHitMetadata>, CacheError> {
+        self.real_cache.exists(key).await
+    }
+
     pub async fn fetch(
         &self,
         anchor: &AbsoluteSystemPath,
@@ -151,8 +155,7 @@ mod tests {
 
     use crate::{
         test_cases::{get_test_cases, TestCase},
-        AsyncCache, CacheError, CacheHitMetadata, CacheOpts, CacheResult, CacheSource,
-        RemoteCacheOpts,
+        AsyncCache, CacheHitMetadata, CacheOpts, CacheResult, CacheSource, RemoteCacheOpts,
     };
 
     #[tokio::test]
@@ -200,7 +203,7 @@ mod tests {
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
 
-        assert_matches!(response, Err(CacheError::CacheMiss));
+        assert_matches!(response, Ok(CacheResult::Miss));
 
         // Add test case
         async_cache
@@ -235,7 +238,7 @@ mod tests {
         // Confirm that we fetch from remote cache and not local.
         assert_eq!(
             response,
-            CacheResult(CacheHitMetadata {
+            CacheResult::Hit(CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: test_case.duration
             })
@@ -275,7 +278,7 @@ mod tests {
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
 
-        assert_matches!(response, Err(CacheError::CacheMiss));
+        assert_matches!(response, Ok(CacheResult::Miss));
 
         // Add test case
         async_cache
@@ -319,10 +322,10 @@ mod tests {
         // Remove fs cache file
         fs_cache_path.remove_file()?;
 
-        let response = async_cache.exists(&hash).await;
+        let response = async_cache.exists(&hash).await?;
 
         // Confirm that we get a cache miss
-        assert_matches!(response, Err(CacheError::CacheMiss));
+        response.expect_miss();
 
         Ok(())
     }
@@ -356,7 +359,7 @@ mod tests {
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
 
-        assert_matches!(response, Err(CacheError::CacheMiss));
+        assert_matches!(response, Ok(CacheResult::Miss));
 
         // Add test case
         async_cache

@@ -88,7 +88,7 @@ impl HTTPCache {
     }
 
     pub async fn exists(&self, hash: &str) -> Result<CacheResult<CacheHitMetadata>, CacheError> {
-        let response = self
+        let Some(response) = self
             .client
             .artifact_exists(
                 hash,
@@ -96,7 +96,10 @@ impl HTTPCache {
                 &self.api_auth.team_id,
                 self.api_auth.team_slug.as_deref(),
             )
-            .await?;
+            .await?
+        else {
+            return Ok(CacheResult::Miss);
+        };
 
         let duration = Self::get_duration_from_response(&response)?;
 
@@ -124,7 +127,7 @@ impl HTTPCache {
         &self,
         hash: &str,
     ) -> Result<CacheResult<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
-        let response = self
+        let Some(response) = self
             .client
             .fetch_artifact(
                 hash,
@@ -132,7 +135,10 @@ impl HTTPCache {
                 &self.api_auth.team_id,
                 self.api_auth.team_slug.as_deref(),
             )
-            .await?;
+            .await?
+        else {
+            return Ok(CacheResult::Miss);
+        };
 
         let duration = Self::get_duration_from_response(&response)?;
 
@@ -201,7 +207,7 @@ mod test {
     use crate::{
         http::{APIAuth, HTTPCache},
         test_cases::{get_test_cases, TestCase},
-        CacheOpts, CacheSource,
+        CacheOpts, CacheResult, CacheSource,
     };
 
     #[tokio::test]
@@ -246,12 +252,15 @@ mod test {
             .put(&repo_root_path, hash, &anchored_files, duration)
             .await?;
 
-        let cache_response = cache.exists(hash).await?;
+        let cache_response = cache.exists(hash).await?.expect_hit();
 
         assert_eq!(cache_response.time_saved, duration);
         assert_eq!(cache_response.source, CacheSource::Remote);
 
-        let (cache_response, received_files) = cache.fetch(hash).await?;
+        let CacheResult::Hit((cache_response, received_files)) = cache.fetch(hash).await? else {
+            panic!("should be cache hit");
+        };
+
         assert_eq!(cache_response.time_saved, duration);
 
         for (test_file, received_file) in files.iter().zip(received_files) {
