@@ -116,6 +116,10 @@ impl PackageGraph {
         self.workspaces.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.workspaces.is_empty()
+    }
+
     pub fn package_manager(&self) -> &PackageManager {
         &self.package_manager
     }
