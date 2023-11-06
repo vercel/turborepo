@@ -14,10 +14,9 @@ pub(crate) mod builder;
 
 pub use builder::{Error, PackageGraphBuilder};
 
-use crate::{
-    hash::{LockFilePackages, TurboHash},
-    run::task_id::ROOT_PKG_NAME,
-};
+use crate::hash::{LockFilePackages, TurboHash};
+
+pub const ROOT_PKG_NAME: &str = "//";
 
 pub struct PackageGraph {
     workspace_graph: petgraph::Graph<WorkspaceNode, ()>,

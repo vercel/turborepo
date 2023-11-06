@@ -573,11 +573,8 @@ mod test {
 
     use super::{FilterResolver, PackageInference, TargetSelector};
     use crate::{
-        package_graph::{PackageGraph, WorkspaceName},
-        run::{
-            scope::change_detector::{ChangeDetectError, PackageChangeDetector},
-            task_id::ROOT_PKG_NAME,
-        },
+        package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
+        run::scope::change_detector::{ChangeDetectError, PackageChangeDetector},
     };
 
     fn get_name(name: &str) -> (Option<&str>, &str) {

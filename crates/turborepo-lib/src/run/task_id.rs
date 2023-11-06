@@ -2,10 +2,9 @@ use std::{borrow::Cow, fmt};
 
 use serde::{Deserialize, Serialize};
 
-use crate::package_graph::WorkspaceName;
+use crate::package_graph::{WorkspaceName, ROOT_PKG_NAME};
 
 pub const TASK_DELIMITER: &str = "#";
-pub const ROOT_PKG_NAME: &str = "//";
 
 /// A task identifier as it will appear in the task graph
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize)]

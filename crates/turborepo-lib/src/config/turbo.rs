@@ -11,7 +11,8 @@ use turborepo_repository::package_json::PackageJson;
 use crate::{
     cli::OutputLogsMode,
     config::{ConfigurationOptions, Error},
-    run::task_id::{TaskId, TaskName, ROOT_PKG_NAME},
+    package_graph::ROOT_PKG_NAME,
+    run::task_id::{TaskId, TaskName},
     task_graph::{BookkeepingTaskDefinition, Pipeline, TaskDefinitionStable, TaskOutputs},
 };
 
