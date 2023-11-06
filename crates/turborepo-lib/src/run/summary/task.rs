@@ -172,7 +172,7 @@ impl TaskEnvVarSummary {
         task_definition: &TaskDefinition,
         env_vars: DetailedMap,
         env_at_execution_start: &EnvironmentVariableMap,
-    ) -> Result<Self, regex::Error> {
+    ) -> Result<Self, turborepo_env::Error> {
         // TODO: this operation differs from the actual env that gets passed in during
         // task execution it should be unified, but first we should copy Go's
         // behavior as we try to match the implementations

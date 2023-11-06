@@ -1,9 +1,8 @@
-use anyhow::Result;
 use tracing::{debug, error};
 
-use crate::{commands::CommandBase, run::Run};
+use crate::{commands::CommandBase, run, run::Run};
 
-pub async fn run(base: CommandBase) -> Result<i32> {
+pub async fn run(base: CommandBase) -> Result<i32, run::Error> {
     let mut run = Run::new(&base);
     debug!("using the experimental rust codepath");
     debug!("configured run struct: {:?}", run);
