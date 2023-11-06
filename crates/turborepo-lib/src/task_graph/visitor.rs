@@ -261,7 +261,7 @@ impl<'a> Visitor<'a> {
                     }
                 }
 
-                let Ok(package_manager_binary) = which(package_manager.to_string()) else {
+                let Ok(package_manager_binary) = which(package_manager.command()) else {
                     manager.stop().await;
                     tracker.cancel();
                     callback.send(Err(StopExecution)).ok();
