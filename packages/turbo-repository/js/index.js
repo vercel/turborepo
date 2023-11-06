@@ -106,7 +106,8 @@ switch (platform) {
 
 nativeBinding = loadViaSuffix(suffix);
 
-const { Repository, PackageManager } = nativeBinding;
+const { Repository, PackageManager, detectJsRepository } = nativeBinding;
 
+module.exports.detectJsRepository = detectJsRepository;
 module.exports.Repository = Repository;
 module.exports.PackageManager = PackageManager;
