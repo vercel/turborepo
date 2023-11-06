@@ -207,7 +207,7 @@ mod test {
     use crate::{
         http::{APIAuth, HTTPCache},
         test_cases::{get_test_cases, TestCase},
-        CacheOpts, CacheResult, CacheSource,
+        CacheOpts, CacheSource,
     };
 
     #[tokio::test]
@@ -257,9 +257,7 @@ mod test {
         assert_eq!(cache_response.time_saved, duration);
         assert_eq!(cache_response.source, CacheSource::Remote);
 
-        let CacheResult::Hit((cache_response, received_files)) = cache.fetch(hash).await? else {
-            panic!("should be cache hit");
-        };
+        let (cache_response, received_files) = cache.fetch(hash).await?.expect_hit();
 
         assert_eq!(cache_response.time_saved, duration);
 
