@@ -3,9 +3,10 @@ use std::sync::{Arc, Mutex};
 use futures::{stream::FuturesUnordered, StreamExt};
 use tokio::sync::{mpsc, oneshot, Semaphore};
 use tracing::log::debug;
+use turborepo_graph_utils::Walker;
 
 use super::{Engine, TaskNode};
-use crate::{graph::Walker, run::task_id::TaskId};
+use crate::run::task_id::TaskId;
 
 pub struct Message<T, U> {
     pub info: T,

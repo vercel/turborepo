@@ -6,10 +6,9 @@ use std::{
 use petgraph::visit::{depth_first_search, Reversed};
 use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
-
-use crate::graph;
 
 pub(crate) mod builder;
 

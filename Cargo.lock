@@ -10466,6 +10466,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-graph-utils"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "itertools",
+ "log",
+ "petgraph",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "turborepo-lib"
 version = "0.1.0"
 dependencies = [
@@ -10556,6 +10569,7 @@ dependencies = [
  "turborepo-env",
  "turborepo-filewatch",
  "turborepo-fs",
+ "turborepo-graph-utils",
  "turborepo-lockfiles",
  "turborepo-repository",
  "turborepo-scm",

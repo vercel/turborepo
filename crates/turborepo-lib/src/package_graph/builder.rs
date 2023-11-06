@@ -10,14 +10,12 @@ use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
     RelativeUnixPathBuf,
 };
+use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
 use super::{PackageGraph, WorkspaceInfo, WorkspaceName, WorkspaceNode};
-use crate::{
-    graph,
-    package_graph::{PackageName, PackageVersion},
-};
+use crate::package_graph::{PackageName, PackageVersion};
 
 pub struct PackageGraphBuilder<'a> {
     repo_root: &'a AbsoluteSystemPath,
