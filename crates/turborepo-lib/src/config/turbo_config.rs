@@ -1,6 +1,5 @@
 use std::{collections::HashMap, ffi::OsString};
 
-use anyhow::anyhow;
 use dirs_next::config_dir;
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPathBuf;
@@ -170,11 +169,10 @@ fn get_env_var_config(
         |(mapping_key, mapped_property)| -> Result<(), ConfigError> {
             if let Some(value) = environment.get(&mapping_key) {
                 let converted = value.to_str().ok_or_else(|| {
-                    ConfigError::Anyhow(anyhow!(
-                        "{} is not UTF8.",
+                    ConfigError::Encoding(
                         // CORRECTNESS: the mapping_key is hardcoded above.
-                        mapping_key.to_ascii_uppercase().to_str().unwrap()
-                    ))
+                        mapping_key.to_ascii_uppercase().into_string().unwrap(),
+                    )
                 })?;
                 output_map.insert(mapped_property, converted.to_owned());
                 Ok(())
@@ -189,11 +187,7 @@ fn get_env_var_config(
         match signature.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => {
-                return Err(ConfigError::Anyhow(anyhow!(
-                    "TURBO_SIGNATURE should be either 1 or 0."
-                )))
-            }
+            _ => return Err(ConfigError::InvalidSignature),
         }
     } else {
         None
@@ -204,11 +198,7 @@ fn get_env_var_config(
         match preflight.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => {
-                return Err(ConfigError::Anyhow(anyhow!(
-                    "TURBO_PREFLIGHT should be either 1 or 0."
-                )))
-            }
+            _ => return Err(ConfigError::InvalidPreflight),
         }
     } else {
         None
@@ -219,11 +209,7 @@ fn get_env_var_config(
         match enabled.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => {
-                return Err(ConfigError::Anyhow(anyhow!(
-                    "TURBO_REMOTE_CACHE_ENABLED should be either 1 or 0."
-                )))
-            }
+            _ => return Err(ConfigError::InvalidRemoteCacheEnabled),
         }
     } else {
         None
@@ -231,12 +217,11 @@ fn get_env_var_config(
 
     // Process timeout
     let timeout = if let Some(timeout) = output_map.get("timeout") {
-        Some(timeout.parse::<u64>().map_err(|e| {
-            ConfigError::Anyhow(anyhow!(
-                "TURBO_REMOTE_CACHE_TIMEOUT: error parsing timeout. {}",
-                e
-            ))
-        })?)
+        Some(
+            timeout
+                .parse::<u64>()
+                .map_err(ConfigError::InvalidRemoteCacheTimeout)?,
+        )
     } else {
         None
     };
@@ -274,11 +259,10 @@ fn get_override_env_var_config(
         |(mapping_key, mapped_property)| -> Result<(), ConfigError> {
             if let Some(value) = environment.get(&mapping_key) {
                 let converted = value.to_str().ok_or_else(|| {
-                    ConfigError::Anyhow(anyhow!(
-                        "{} is not UTF8.",
+                    ConfigError::Encoding(
                         // CORRECTNESS: the mapping_key is hardcoded above.
-                        mapping_key.to_ascii_uppercase().to_str().unwrap()
-                    ))
+                        mapping_key.to_ascii_uppercase().into_string().unwrap(),
+                    )
                 })?;
                 output_map.insert(mapped_property, converted.to_owned());
                 Ok(())
@@ -353,12 +337,9 @@ impl TurborepoConfigBuilder {
         let global_config_path = self.global_config_path()?;
         let mut contents = global_config_path
             .read_existing_to_string_or(Ok("{}"))
-            .map_err(|e| {
-                anyhow!(
-                    "Encountered an IO error while attempting to read {}: {}",
-                    global_config_path,
-                    e
-                )
+            .map_err(|error| ConfigError::FailedToReadConfig {
+                config_path: global_config_path.clone(),
+                error,
             })?;
         if contents.is_empty() {
             contents = String::from("{}");
@@ -371,12 +352,9 @@ impl TurborepoConfigBuilder {
         let local_config_path = self.local_config_path();
         let mut contents = local_config_path
             .read_existing_to_string_or(Ok("{}"))
-            .map_err(|e| {
-                anyhow!(
-                    "Encountered an IO error while attempting to read {}: {}",
-                    local_config_path,
-                    e
-                )
+            .map_err(|error| ConfigError::FailedToReadConfig {
+                config_path: local_config_path.clone(),
+                error,
             })?;
         if contents.is_empty() {
             contents = String::from("{}");

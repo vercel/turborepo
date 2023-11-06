@@ -8,7 +8,7 @@ use std::{
     fmt,
 };
 
-pub use builder::EngineBuilder;
+pub use builder::{EngineBuilder, Error as BuilderError};
 pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
 use petgraph::Graph;
 

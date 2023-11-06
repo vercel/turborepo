@@ -1,4 +1,6 @@
-use anyhow::{anyhow, Result};
+use std::backtrace;
+
+use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
 use turborepo_cache::CacheOpts;
 
@@ -6,6 +8,26 @@ use crate::{
     cli::{Command, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, RunArgs},
     Args,
 };
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Expected run command")]
+    ExpectedRun,
+    #[error(transparent)]
+    ParseFloat(#[from] std::num::ParseFloatError),
+    #[error(
+        "invalid percentage value for --concurrency CLI flag. This should be a percentage of CPU \
+         cores, between 1% and 100% : {1}"
+    )]
+    InvalidConcurrencyPercentage(#[backtrace] backtrace::Backtrace, f64),
+    #[error(
+        "invalid value for --concurrency CLI flag. This should be a positive integer greater than \
+         or equal to 1: {1}"
+    )]
+    ConcurrencyOutOfBounds(#[backtrace] backtrace::Backtrace, String),
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
+}
 
 #[derive(Debug)]
 pub struct Opts<'a> {
@@ -16,11 +38,11 @@ pub struct Opts<'a> {
 }
 
 impl<'a> TryFrom<&'a Args> for Opts<'a> {
-    type Error = anyhow::Error;
+    type Error = self::Error;
 
-    fn try_from(args: &'a Args) -> std::result::Result<Self, Self::Error> {
+    fn try_from(args: &'a Args) -> Result<Self, Self::Error> {
         let Some(Command::Run(run_args)) = &args.command else {
-            return Err(anyhow!("Expected run command"));
+            return Err(Error::ExpectedRun);
         };
         let run_opts = RunOpts::try_from(run_args.as_ref())?;
         let cache_opts = CacheOpts::from(run_args.as_ref());
@@ -98,9 +120,9 @@ pub enum ResolvedLogPrefix {
 const DEFAULT_CONCURRENCY: u32 = 10;
 
 impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
-    type Error = anyhow::Error;
+    type Error = self::Error;
 
-    fn try_from(args: &'a RunArgs) -> Result<Self> {
+    fn try_from(args: &'a RunArgs) -> Result<Self, Self::Error> {
         let concurrency = args
             .concurrency
             .as_deref()
@@ -154,25 +176,23 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
     }
 }
 
-fn parse_concurrency(concurrency_raw: &str) -> Result<u32> {
+fn parse_concurrency(concurrency_raw: &str) -> Result<u32, self::Error> {
     if let Some(percent) = concurrency_raw.strip_suffix('%') {
         let percent = percent.parse::<f64>()?;
         return if percent > 0.0 && percent.is_finite() {
             Ok((num_cpus::get() as f64 * percent / 100.0).max(1.0) as u32)
         } else {
-            Err(anyhow!(
-                "invalid percentage value for --concurrency CLI flag. This should be a percentage \
-                 of CPU cores, between 1% and 100% : {}",
-                percent
+            Err(Error::InvalidConcurrencyPercentage(
+                backtrace::Backtrace::capture(),
+                percent,
             ))
         };
     }
     match concurrency_raw.parse::<u32>() {
         Ok(concurrency) if concurrency >= 1 => Ok(concurrency),
-        Ok(_) | Err(_) => Err(anyhow!(
-            "invalid value for --concurrency CLI flag. This should be a positive integer greater \
-             than or equal to 1: {}",
-            concurrency_raw
+        Ok(_) | Err(_) => Err(Error::ConcurrencyOutOfBounds(
+            backtrace::Backtrace::capture(),
+            concurrency_raw.to_string(),
         )),
     }
 }
@@ -241,14 +261,15 @@ pub struct ScopeOpts {
 }
 
 impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
-    type Error = anyhow::Error;
+    type Error = self::Error;
 
-    fn try_from(args: &'a RunArgs) -> std::result::Result<Self, Self::Error> {
+    fn try_from(args: &'a RunArgs) -> Result<Self, Self::Error> {
         let pkg_inference_root = args
             .pkg_inference_root
             .as_ref()
             .map(AnchoredSystemPathBuf::from_raw)
             .transpose()?;
+
         let legacy_filter = LegacyFilter {
             include_dependencies: args.include_dependencies,
             skip_dependents: args.no_deps,

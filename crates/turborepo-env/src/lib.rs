@@ -156,7 +156,7 @@ impl EnvironmentVariableMap {
     fn wildcard_map_from_wildcards(
         &self,
         wildcard_patterns: &[impl AsRef<str>],
-    ) -> Result<WildcardMaps, regex::Error> {
+    ) -> Result<WildcardMaps, Error> {
         let mut output = WildcardMaps {
             inclusions: EnvironmentVariableMap::default(),
             exclusions: EnvironmentVariableMap::default(),
@@ -201,7 +201,7 @@ impl EnvironmentVariableMap {
     pub fn from_wildcards(
         &self,
         wildcard_patterns: &[impl AsRef<str>],
-    ) -> Result<EnvironmentVariableMap, regex::Error> {
+    ) -> Result<EnvironmentVariableMap, Error> {
         if wildcard_patterns.is_empty() {
             return Ok(EnvironmentVariableMap::default());
         }
@@ -216,7 +216,7 @@ impl EnvironmentVariableMap {
     pub fn wildcard_map_from_wildcards_unresolved(
         &self,
         wildcard_patterns: &[String],
-    ) -> Result<WildcardMaps, regex::Error> {
+    ) -> Result<WildcardMaps, Error> {
         if wildcard_patterns.is_empty() {
             return Ok(WildcardMaps {
                 inclusions: EnvironmentVariableMap::default(),
