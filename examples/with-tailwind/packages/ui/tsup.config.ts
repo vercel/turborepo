@@ -21,6 +21,30 @@ const jsFileScan = (dir: string): string[] => {
   return paths;
 };
 
+const exportRegex =
+  /export([ \n\t]*(?:[^ \n\t\{\}]+[ \n\t]*,?)?(?:[ \n\t]*\{(?:[ \n\t]*[^ \n\t"'\{\}]+[ \n\t]*,?)+\})?[ \n\t]*)from[ \n\t]*(['"])([^'"\n]+)(?:['"])/g;
+
+const injectUseClient = async (filepath: string) => {
+  const fileContent = await fs.readFile(filepath, "utf-8");
+  if (!fileContent.startsWith('"use client";')) {
+    await fs.writeFile(filepath, '"use client";\n' + fileContent);
+  }
+
+  const exportPaths = [...fileContent.matchAll(exportRegex)]?.map(
+    (exportStatement) => exportStatement[3],
+  );
+
+  await Promise.all(
+    exportPaths.map(async (exportPath) => {
+      const exportFilePath = path.join(
+        path.dirname(filepath),
+        exportPath.replace(/^\.\//, ""),
+      );
+      await injectUseClient(exportFilePath);
+    }),
+  );
+};
+
 export default defineConfig((options: Options) => ({
   treeshake: true,
   splitting: true,
@@ -33,11 +57,11 @@ export default defineConfig((options: Options) => ({
   external: ["react"],
   ...options,
   async onSuccess() {
-    const paths = jsFileScan(path.join(__dirname, "dist", "client"));
+    const filepaths = jsFileScan(path.join(__dirname, "dist", "client"));
 
     await Promise.all(
-      paths.map(async (file) => {
-        await fs.writeFile(file, '"use client";\n' + (await fs.readFile(file)));
+      filepaths.map(async (filepath) => {
+        await injectUseClient(filepath);
       }),
     );
   },
