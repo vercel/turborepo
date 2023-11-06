@@ -1930,8 +1930,8 @@ pub async fn handle_resolve_error(
     origin_path: Vc<FileSystemPath>,
     request: Vc<Request>,
     resolve_options: Vc<ResolveOptions>,
-    severity: Vc<IssueSeverity>,
     source: Option<Vc<LazyIssueSource>>,
+    severity: Vc<IssueSeverity>,
 ) -> Result<Vc<ModuleResolveResult>> {
     Ok(match result.is_unresolveable().await {
         Ok(unresolveable) => {

@@ -117,8 +117,8 @@ pub async fn url_resolve(
         origin.origin_path(),
         request,
         resolve_options,
-        issue_severity,
         Some(issue_source),
+        issue_severity,
     )
     .await
 }
@@ -139,8 +139,8 @@ async fn specific_resolve(
         origin.origin_path(),
         request,
         options,
-        issue_severity,
         issue_source,
+        issue_severity,
     )
     .await
 }
