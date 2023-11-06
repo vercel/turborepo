@@ -24,6 +24,7 @@ use tracing::log::warn;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_repository::package_graph::{PackageGraph, WorkspaceName};
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
 use self::{
@@ -36,7 +37,6 @@ use crate::{
     cli,
     engine::Engine,
     opts::RunOpts,
-    package_graph::{PackageGraph, WorkspaceName},
     run::summary::{
         execution::{ExecutionSummary, ExecutionTracker},
         scm::SCMState,

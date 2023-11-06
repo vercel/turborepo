@@ -1,8 +1,7 @@
 use std::{borrow::Cow, fmt};
 
 use serde::{Deserialize, Serialize};
-
-use crate::package_graph::{WorkspaceName, ROOT_PKG_NAME};
+use turborepo_repository::package_graph::{WorkspaceName, ROOT_PKG_NAME};
 
 pub const TASK_DELIMITER: &str = "#";
 

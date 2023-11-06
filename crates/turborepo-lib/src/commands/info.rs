@@ -5,15 +5,14 @@
 //! sensitive data like your auth token
 use serde::Serialize;
 use turbopath::AnchoredSystemPath;
-use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
+use turborepo_repository::{
+    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
+    package_json::PackageJson,
+    package_manager::PackageManager,
+};
 use turborepo_ui::GREY;
 
-use crate::{
-    cli,
-    commands::CommandBase,
-    config::ConfigurationOptions,
-    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
-};
+use crate::{cli, commands::CommandBase, config::ConfigurationOptions};
 
 #[derive(Serialize)]
 struct RepositoryDetails<'a> {

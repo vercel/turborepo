@@ -23,7 +23,10 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_repository::package_json::PackageJson;
+use turborepo_repository::{
+    package_graph::{PackageGraph, WorkspaceName},
+    package_json::PackageJson,
+};
 use turborepo_scm::SCM;
 use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY};
 
@@ -36,7 +39,6 @@ use crate::{
     daemon::DaemonConnector,
     engine::{Engine, EngineBuilder},
     opts::{GraphOpts, Opts},
-    package_graph::{PackageGraph, WorkspaceName},
     process::ProcessManager,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker},
     shim::TurboState,

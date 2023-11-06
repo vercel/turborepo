@@ -14,6 +14,7 @@ use tokio::{process::Command, sync::mpsc};
 use tracing::{debug, error, Span};
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
+use turborepo_repository::package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME};
 use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
 use which::which;
 
@@ -21,7 +22,6 @@ use crate::{
     cli::EnvMode,
     engine::{Engine, ExecutionOptions, StopExecution},
     opts::Opts,
-    package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
     process::{ChildExit, ProcessManager},
     run::{
         global_hash::GlobalHashableInputs,

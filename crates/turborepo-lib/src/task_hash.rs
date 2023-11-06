@@ -10,6 +10,7 @@ use tracing::{debug, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
+use turborepo_repository::package_graph::{WorkspaceInfo, WorkspaceName};
 use turborepo_scm::SCM;
 
 use crate::{
@@ -17,7 +18,6 @@ use crate::{
     framework::infer_framework,
     hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
     opts::Opts,
-    package_graph::{WorkspaceInfo, WorkspaceName},
     run::task_id::TaskId,
     task_graph::TaskDefinition,
 };

@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_repository::package_graph::{PackageGraph, WorkspaceInfo, WorkspaceName};
 
 use super::{
     execution::TaskExecutionSummary,
@@ -11,7 +12,6 @@ use crate::{
     cli,
     engine::{Engine, TaskNode},
     opts::RunOpts,
-    package_graph::{PackageGraph, WorkspaceInfo, WorkspaceName},
     run::task_id::TaskId,
     task_graph::TaskDefinition,
     task_hash::{get_external_deps_hash, TaskHashTracker},

@@ -20,7 +20,6 @@ mod framework;
 pub(crate) mod globwatcher;
 mod hash;
 mod opts;
-mod package_graph;
 mod process;
 mod rewrite_json;
 mod run;
