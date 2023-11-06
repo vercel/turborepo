@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use itertools::Itertools;
 use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
-use turborepo_cache::{CacheHitMetadata, CacheResult};
+use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{DetailedMap, EnvironmentVariableMap};
 
 use super::{execution::TaskExecutionSummary, EnvMode};
@@ -131,13 +131,13 @@ impl TaskCacheSummary {
     }
 }
 
-// This is an `Option<CacheResult<CacheHitMetadata>>` because we could fail
+// This is an `Option<Option<CacheHitMetadata>>` because we could fail
 // to fetch from cache (giving `None`), and we could also get a miss
-// `Some(CacheResult::Miss)`
-impl From<Option<CacheResult<CacheHitMetadata>>> for TaskCacheSummary {
-    fn from(response: Option<CacheResult<CacheHitMetadata>>) -> Self {
+// `Some(None)`
+impl From<Option<CacheHitMetadata>> for TaskCacheSummary {
+    fn from(response: Option<CacheHitMetadata>) -> Self {
         match response {
-            Some(CacheResult::Hit(CacheHitMetadata { source, time_saved })) => {
+            Some(CacheHitMetadata { source, time_saved }) => {
                 let source = CacheSource::from(source);
                 // Assign these deprecated fields Local and Remote based on the information
                 // available in the itemStatus. Note that these fields are
@@ -159,7 +159,7 @@ impl From<Option<CacheResult<CacheHitMetadata>>> for TaskCacheSummary {
                     time_saved,
                 }
             }
-            Some(CacheResult::Miss) | None => Self::cache_miss(),
+            None => Self::cache_miss(),
         }
     }
 }

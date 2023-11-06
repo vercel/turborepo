@@ -13,7 +13,6 @@ use regex::Regex;
 use tokio::{process::Command, sync::mpsc};
 use tracing::{debug, error, Span};
 use turbopath::AbsoluteSystemPath;
-use turborepo_cache::CacheResult;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
 
@@ -244,7 +243,7 @@ impl<'a> Visitor<'a> {
                     Self::prefixed_ui(ui, is_github_actions, &output_client, pretty_prefix.clone());
 
                 match task_cache.restore_outputs(&mut prefixed_ui).await {
-                    Ok(status @ CacheResult::Hit(_)) => {
+                    Ok(Some(status)) => {
                         // we need to set expanded outputs
                         hash_tracker.insert_expanded_outputs(
                             task_id.clone(),
@@ -255,7 +254,7 @@ impl<'a> Visitor<'a> {
                         callback.send(Ok(())).ok();
                         return;
                     }
-                    Ok(CacheResult::Miss) => (),
+                    Ok(None) => (),
                     Err(e) => {
                         prefixed_ui.error(format!("error fetching from cache: {e}"));
                     }

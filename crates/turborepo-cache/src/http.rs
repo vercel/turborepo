@@ -6,7 +6,7 @@ use turborepo_api_client::{APIAuth, APIClient, Client, Response};
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
     signature_authentication::ArtifactSignatureAuthenticator,
-    CacheError, CacheHitMetadata, CacheOpts, CacheResult, CacheSource,
+    CacheError, CacheHitMetadata, CacheOpts, CacheSource,
 };
 
 pub struct HTTPCache {
@@ -87,7 +87,7 @@ impl HTTPCache {
         Ok(())
     }
 
-    pub async fn exists(&self, hash: &str) -> Result<CacheResult<CacheHitMetadata>, CacheError> {
+    pub async fn exists(&self, hash: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         let Some(response) = self
             .client
             .artifact_exists(
@@ -98,12 +98,12 @@ impl HTTPCache {
             )
             .await?
         else {
-            return Ok(CacheResult::Miss);
+            return Ok(None);
         };
 
         let duration = Self::get_duration_from_response(&response)?;
 
-        Ok(CacheResult::Hit(CacheHitMetadata {
+        Ok(Some(CacheHitMetadata {
             source: CacheSource::Remote,
             time_saved: duration,
         }))
@@ -126,7 +126,7 @@ impl HTTPCache {
     pub async fn fetch(
         &self,
         hash: &str,
-    ) -> Result<CacheResult<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
         let Some(response) = self
             .client
             .fetch_artifact(
@@ -137,7 +137,7 @@ impl HTTPCache {
             )
             .await?
         else {
-            return Ok(CacheResult::Miss);
+            return Ok(None);
         };
 
         let duration = Self::get_duration_from_response(&response)?;
@@ -177,7 +177,7 @@ impl HTTPCache {
 
         let files = Self::restore_tar(&self.repo_root, &body)?;
 
-        Ok(CacheResult::Hit((
+        Ok(Some((
             CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: duration,
@@ -252,12 +252,12 @@ mod test {
             .put(&repo_root_path, hash, &anchored_files, duration)
             .await?;
 
-        let cache_response = cache.exists(hash).await?.expect_hit();
+        let cache_response = cache.exists(hash).await?.unwrap();
 
         assert_eq!(cache_response.time_saved, duration);
         assert_eq!(cache_response.source, CacheSource::Remote);
 
-        let (cache_response, received_files) = cache.fetch(hash).await?.expect_hit();
+        let (cache_response, received_files) = cache.fetch(hash).await?.unwrap();
 
         assert_eq!(cache_response.time_saved, duration);
 

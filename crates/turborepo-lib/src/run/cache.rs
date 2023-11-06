@@ -3,7 +3,7 @@ use std::{io::Write, sync::Arc, time::Duration};
 use console::StyledObject;
 use tracing::{debug, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-use turborepo_cache::{AsyncCache, CacheHitMetadata, CacheResult, CacheSource};
+use turborepo_cache::{AsyncCache, CacheHitMetadata, CacheSource};
 use turborepo_ui::{
     color, replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI,
 };
@@ -162,7 +162,7 @@ impl TaskCache {
     pub async fn restore_outputs(
         &mut self,
         prefixed_ui: &mut PrefixedUI<impl Write>,
-    ) -> Result<CacheResult<CacheHitMetadata>, Error> {
+    ) -> Result<Option<CacheHitMetadata>, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
             if !matches!(
                 self.task_output_mode,
@@ -174,7 +174,7 @@ impl TaskCache {
                 ));
             }
 
-            return Ok(CacheResult::Miss);
+            return Ok(None);
         }
 
         let changed_output_count = if let Some(daemon_client) = &mut self.daemon_client {
@@ -211,13 +211,13 @@ impl TaskCache {
                 .fetch(&self.run_cache.repo_root, &self.hash)
                 .await?;
 
-            let CacheResult::Hit((cache_hit_metadata, restored_files)) = cache_status else {
+            let Some((cache_hit_metadata, restored_files)) = cache_status else {
                 prefixed_ui.output(format!(
                     "cache miss, executing {}",
                     color!(self.ui, GREY, "{}", self.hash)
                 ));
 
-                return Ok(CacheResult::Miss);
+                return Ok(None);
             };
 
             self.expanded_outputs = restored_files;
@@ -244,9 +244,9 @@ impl TaskCache {
                 }
             }
 
-            CacheResult::Hit(cache_hit_metadata)
+            Some(cache_hit_metadata)
         } else {
-            CacheResult::Hit(CacheHitMetadata {
+            Some(CacheHitMetadata {
                 source: CacheSource::Local,
                 time_saved: 0,
             })

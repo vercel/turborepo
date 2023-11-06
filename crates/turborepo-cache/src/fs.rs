@@ -6,7 +6,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf
 
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
-    CacheError, CacheHitMetadata, CacheResult, CacheSource,
+    CacheError, CacheHitMetadata, CacheSource,
 };
 
 pub struct FSCache {
@@ -52,7 +52,7 @@ impl FSCache {
         &self,
         anchor: &AbsoluteSystemPath,
         hash: &str,
-    ) -> Result<CacheResult<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
         let uncompressed_cache_path = self
             .cache_directory
             .join_component(&format!("{}.tar", hash));
@@ -65,7 +65,7 @@ impl FSCache {
         } else if compressed_cache_path.exists() {
             compressed_cache_path
         } else {
-            return Ok(CacheResult::Miss);
+            return Ok(None);
         };
 
         let mut cache_reader = CacheReader::open(&cache_path)?;
@@ -78,7 +78,7 @@ impl FSCache {
                 .join_component(&format!("{}-meta.json", hash)),
         )?;
 
-        Ok(CacheResult::Hit((
+        Ok(Some((
             CacheHitMetadata {
                 time_saved: meta.duration,
                 source: CacheSource::Local,
@@ -87,7 +87,7 @@ impl FSCache {
         )))
     }
 
-    pub(crate) fn exists(&self, hash: &str) -> Result<CacheResult<CacheHitMetadata>, CacheError> {
+    pub(crate) fn exists(&self, hash: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         let uncompressed_cache_path = self
             .cache_directory
             .join_component(&format!("{}.tar", hash));
@@ -96,7 +96,7 @@ impl FSCache {
             .join_component(&format!("{}.tar.zst", hash));
 
         if !uncompressed_cache_path.exists() && !compressed_cache_path.exists() {
-            return Ok(CacheResult::Miss);
+            return Ok(None);
         }
 
         let duration = CacheMetadata::read(
@@ -107,7 +107,7 @@ impl FSCache {
         .map(|meta| meta.duration)
         .unwrap_or(0);
 
-        Ok(CacheResult::Hit(CacheHitMetadata {
+        Ok(Some(CacheHitMetadata {
             time_saved: duration,
             source: CacheSource::Local,
         }))
@@ -176,7 +176,7 @@ mod test {
         let cache = FSCache::new(None, repo_root_path)?;
 
         let expected_miss = cache.exists(test_case.hash)?;
-        expected_miss.expect_miss();
+        assert!(expected_miss.is_none());
 
         let files: Vec<_> = test_case
             .files
@@ -188,13 +188,13 @@ mod test {
         let expected_hit = cache.exists(test_case.hash)?;
         assert_eq!(
             expected_hit,
-            CacheResult::Hit(CacheHitMetadata {
+            Some(CacheHitMetadata {
                 time_saved: test_case.duration,
                 source: CacheSource::Local
             })
         );
 
-        let (status, files) = cache.fetch(repo_root_path, test_case.hash)?.expect_hit();
+        let (status, files) = cache.fetch(repo_root_path, test_case.hash)?.unwrap();
         assert_eq!(
             status,
             CacheHitMetadata {

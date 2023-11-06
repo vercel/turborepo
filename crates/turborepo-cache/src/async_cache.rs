@@ -8,7 +8,7 @@ use tokio::{
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 
-use crate::{multiplexer::CacheMultiplexer, CacheError, CacheHitMetadata, CacheOpts, CacheResult};
+use crate::{multiplexer::CacheMultiplexer, CacheError, CacheHitMetadata, CacheOpts};
 
 pub struct AsyncCache {
     real_cache: Arc<CacheMultiplexer>,
@@ -111,7 +111,7 @@ impl AsyncCache {
         }
     }
 
-    pub async fn exists(&mut self, key: &str) -> Result<CacheResult<CacheHitMetadata>, CacheError> {
+    pub async fn exists(&mut self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         self.real_cache.exists(key).await
     }
 
@@ -119,7 +119,7 @@ impl AsyncCache {
         &self,
         anchor: &AbsoluteSystemPath,
         key: &str,
-    ) -> Result<CacheResult<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
         self.real_cache.fetch(anchor, key).await
     }
 
@@ -155,7 +155,7 @@ mod tests {
 
     use crate::{
         test_cases::{get_test_cases, TestCase},
-        AsyncCache, CacheHitMetadata, CacheOpts, CacheResult, CacheSource, RemoteCacheOpts,
+        AsyncCache, CacheHitMetadata, CacheOpts, CacheSource, RemoteCacheOpts,
     };
 
     #[tokio::test]
@@ -203,7 +203,7 @@ mod tests {
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
 
-        assert_matches!(response, Ok(CacheResult::Miss));
+        assert_matches!(response, Ok(None));
 
         // Add test case
         async_cache
@@ -238,7 +238,7 @@ mod tests {
         // Confirm that we fetch from remote cache and not local.
         assert_eq!(
             response,
-            CacheResult::Hit(CacheHitMetadata {
+            Some(CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: test_case.duration
             })
@@ -278,7 +278,7 @@ mod tests {
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
 
-        assert_matches!(response, Ok(CacheResult::Miss));
+        assert_matches!(response, Ok(None));
 
         // Add test case
         async_cache
@@ -313,7 +313,7 @@ mod tests {
         // Confirm that we fetch from local cache first.
         assert_eq!(
             response,
-            CacheResult::Hit(CacheHitMetadata {
+            Some(CacheHitMetadata {
                 source: CacheSource::Local,
                 time_saved: test_case.duration
             })
@@ -325,7 +325,7 @@ mod tests {
         let response = async_cache.exists(&hash).await?;
 
         // Confirm that we get a cache miss
-        response.expect_miss();
+        assert!(response.is_none());
 
         Ok(())
     }
@@ -359,7 +359,7 @@ mod tests {
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
 
-        assert_matches!(response, Ok(CacheResult::Miss));
+        assert_matches!(response, Ok(None));
 
         // Add test case
         async_cache
@@ -394,7 +394,7 @@ mod tests {
         // Confirm that we fetch from local cache first.
         assert_eq!(
             response,
-            CacheResult::Hit(CacheHitMetadata {
+            Some(CacheHitMetadata {
                 source: CacheSource::Local,
                 time_saved: test_case.duration
             })
@@ -408,7 +408,7 @@ mod tests {
         // Confirm that we still can fetch from remote cache
         assert_eq!(
             response,
-            CacheResult::Hit(CacheHitMetadata {
+            Some(CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: test_case.duration
             })

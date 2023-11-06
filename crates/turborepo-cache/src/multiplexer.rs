@@ -4,7 +4,7 @@ use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 
-use crate::{fs::FSCache, http::HTTPCache, CacheError, CacheHitMetadata, CacheOpts, CacheResult};
+use crate::{fs::FSCache, http::HTTPCache, CacheError, CacheHitMetadata, CacheOpts};
 
 pub struct CacheMultiplexer {
     // We use an `AtomicBool` instead of removing the cache because that would require
@@ -96,15 +96,15 @@ impl CacheMultiplexer {
         &self,
         anchor: &AbsoluteSystemPath,
         key: &str,
-    ) -> Result<CacheResult<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
         if let Some(fs) = &self.fs {
-            if let response @ Ok(CacheResult::Hit(_)) = fs.fetch(anchor, key) {
+            if let response @ Ok(Some(_)) = fs.fetch(anchor, key) {
                 return response;
             }
         }
 
         if let Some(http) = self.get_http_cache() {
-            if let Ok(CacheResult::Hit((CacheHitMetadata { source, time_saved }, files))) =
+            if let Ok(Some((CacheHitMetadata { source, time_saved }, files))) =
                 http.fetch(key).await
             {
                 // Store this into fs cache. We can ignore errors here because we know
@@ -115,37 +115,34 @@ impl CacheMultiplexer {
                     let _ = fs.put(anchor, key, &files, time_saved);
                 }
 
-                return Ok(CacheResult::Hit((
-                    CacheHitMetadata { source, time_saved },
-                    files,
-                )));
+                return Ok(Some((CacheHitMetadata { source, time_saved }, files)));
             }
         }
 
-        Ok(CacheResult::Miss)
+        Ok(None)
     }
 
-    pub async fn exists(&self, key: &str) -> Result<CacheResult<CacheHitMetadata>, CacheError> {
+    pub async fn exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         if let Some(fs) = &self.fs {
             match fs.exists(key) {
-                cache_hit @ Ok(CacheResult::Hit(_)) => {
+                cache_hit @ Ok(Some(_)) => {
                     return cache_hit;
                 }
-                Ok(CacheResult::Miss) => {}
+                Ok(None) => {}
                 Err(err) => debug!("failed to check fs cache: {:?}", err),
             }
         }
 
         if let Some(http) = self.get_http_cache() {
             match http.exists(key).await {
-                cache_hit @ Ok(CacheResult::Hit(_)) => {
+                cache_hit @ Ok(Some(_)) => {
                     return cache_hit;
                 }
-                Ok(CacheResult::Miss) => {}
+                Ok(None) => {}
                 Err(err) => debug!("failed to check http cache: {:?}", err),
             }
         }
 
-        Ok(CacheResult::Miss)
+        Ok(None)
     }
 }
