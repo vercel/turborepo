@@ -4,11 +4,12 @@ Setup
 
 Run info
   $ ${TURBO} info
+  You are not logged in
   3 packages found in workspace
   
-  - another packages(\/|\\)another(\/|\\)package\.json (re)
-  - my-app apps(\/|\\)my-app(\/|\\)package\.json (re)
-  - util packages(\/|\\)util(\/|\\)package\.json (re)
+  - another packages(\/|\\)another (re)
+  - my-app apps(\/|\\)my-app (re)
+  - util packages(\/|\\)util (re)
 
 
 Run info on package `another`
