@@ -986,7 +986,7 @@ pub async fn read_matches(
                 }
                 DirectoryContent::NotFound => {}
             };
-            Ok::<_, anyhow::Error>(())
+            anyhow::Ok(())
         }
         .instrument(tracing::trace_span!("read_matches slow_path"))
         .await?;
