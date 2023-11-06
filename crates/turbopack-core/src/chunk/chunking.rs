@@ -312,7 +312,7 @@ fn folder_name(ident: &str, location: usize) -> (&str, Option<usize>) {
     }
 }
 
-const LARGE_CHUNK: usize = 1000_000;
+const LARGE_CHUNK: usize = 1_000_000;
 const SMALL_CHUNK: usize = 100_000;
 
 enum ChunkSize {
