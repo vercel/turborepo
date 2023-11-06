@@ -9,8 +9,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
-napi = { version = "2.13.3", features = ["anyhow", "tokio_rt"] }
-napi-derive = "2.13.0"
+#napi = { version = "2.13.3", features = ["anyhow", "tokio_rt"] }
+napi = { git = "https://github.com/napi-rs/napi-rs", rev = "36581336c696812fe36883650a4839e186563f0a", features = ["anyhow", "tokio_rt"] }
+#napi-derive = "2.13.0"
+napi-derive = { git = "https://github.com/napi-rs/napi-rs", rev = "36581336c696812fe36883650a4839e186563f0a" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 turbopath = { workspace = true }

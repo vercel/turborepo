@@ -5,8 +5,8 @@
   "bugs": "https://github.com/vercel/turbo/issues",
   "homepage": "https://turbo.build/repo",
   "scripts": {
-    "build": "napi build --platform -p turborepo-napi --cargo-cwd ../../ --cargo-name turborepo_napi native --js false --dts ../js/index-generated.d.ts && mkdir -p js/dist && cp js/index.js js/dist/index.js && cp js/index.d.ts js/dist/index.d.ts",
-    "build:release": "napi build --release --platform -p turborepo-napi --cargo-cwd ../../ --cargo-name turborepo_napi native --js false --dts false",
+    "build": "napi build --platform -p turborepo-napi --cargo-cwd ../../ --cargo-name turborepo_napi native --js false --dts ../js/index.d.ts && mkdir -p js/dist && cp js/index.js js/dist/index.js && cp js/index.d.ts js/dist/index.d.ts",
+    "build:release": "napi build --release --platform -p turborepo-napi --cargo-cwd ../../ --cargo-name turborepo_napi native --js false",
     "package": "node scripts/publish.mjs",
     "test": "jest"
   },

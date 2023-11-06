@@ -52,17 +52,13 @@ impl From<RustPackageManager> for PackageManager {
     }
 }
 
-// TODO: this should be an async static factory method on Repository once https://github.com/napi-rs/napi-rs/issues/1777
-// is resolved
-#[napi]
-pub async fn detect_js_repository(path: Option<String>) -> Result<Repository, napi::Error> {
-    Repository::detect_js_internal(path)
-        .await
-        .map_err(|e| e.into())
-}
-
 #[napi]
 impl Repository {
+    #[napi(factory, js_name = "detectJS")]
+    pub async fn detect_js_repository(path: Option<String>) -> Result<Repository, napi::Error> {
+        Self::detect_js_internal(path).await.map_err(|e| e.into())
+    }
+
     #[napi]
     pub fn package_manager(&self) -> Result<PackageManager, napi::Error> {
         // match rather than map/map_err due to only the Ok variant implementing "Copy"

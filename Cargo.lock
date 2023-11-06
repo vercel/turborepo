@@ -1247,7 +1247,7 @@ checksum = "c688fc74432808e3eb684cae8830a86be1d66a2bd58e1f248ed0960a590baf6f"
 dependencies = [
  "glob",
  "libc",
- "libloading",
+ "libloading 0.7.4",
 ]
 
 [[package]]
@@ -2284,7 +2284,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac1b7517328c04c2aa68422fc60a41b92208182142ed04a25879c26c8f878794"
 dependencies = [
- "libloading",
+ "libloading 0.7.4",
 ]
 
 [[package]]
@@ -4019,6 +4019,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "libloading"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c571b676ddfc9a8c12f1f3d3085a7b163966a8fd8098a90640953ce5f6170161"
+dependencies = [
+ "cfg-if 1.0.0",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "libm"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4547,14 +4557,26 @@ version = "2.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd063c93b900149304e3ba96ce5bf210cd4f81ef5eb80ded0d100df3e85a3ac0"
 dependencies = [
- "anyhow",
  "bitflags 2.4.0",
  "ctor",
- "napi-derive",
- "napi-sys",
+ "napi-derive 2.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "napi-sys 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "once_cell",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "napi"
+version = "2.13.3"
+source = "git+https://github.com/napi-rs/napi-rs?rev=36581336c696812fe36883650a4839e186563f0a#36581336c696812fe36883650a4839e186563f0a"
+dependencies = [
+ "anyhow",
+ "bitflags 2.4.0",
+ "ctor",
+ "napi-derive 2.13.0 (git+https://github.com/napi-rs/napi-rs?rev=36581336c696812fe36883650a4839e186563f0a)",
+ "napi-sys 2.2.3 (git+https://github.com/napi-rs/napi-rs?rev=36581336c696812fe36883650a4839e186563f0a)",
+ "once_cell",
  "tokio",
 ]
 
@@ -4572,7 +4594,20 @@ checksum = "da1c6a8fa84d549aa8708fcd062372bf8ec6e849de39016ab921067d21bde367"
 dependencies = [
  "cfg-if 1.0.0",
  "convert_case 0.6.0",
- "napi-derive-backend",
+ "napi-derive-backend 1.0.52 (registry+https://github.com/rust-lang/crates.io-index)",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "napi-derive"
+version = "2.13.0"
+source = "git+https://github.com/napi-rs/napi-rs?rev=36581336c696812fe36883650a4839e186563f0a#36581336c696812fe36883650a4839e186563f0a"
+dependencies = [
+ "cfg-if 1.0.0",
+ "convert_case 0.6.0",
+ "napi-derive-backend 1.0.52 (git+https://github.com/napi-rs/napi-rs?rev=36581336c696812fe36883650a4839e186563f0a)",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -4594,12 +4629,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "napi-derive-backend"
+version = "1.0.52"
+source = "git+https://github.com/napi-rs/napi-rs?rev=36581336c696812fe36883650a4839e186563f0a#36581336c696812fe36883650a4839e186563f0a"
+dependencies = [
+ "convert_case 0.6.0",
+ "once_cell",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "semver 1.0.18",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "napi-sys"
 version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "166b5ef52a3ab5575047a9fe8d4a030cdd0f63c96f071cd6907674453b07bae3"
 dependencies = [
- "libloading",
+ "libloading 0.7.4",
+]
+
+[[package]]
+name = "napi-sys"
+version = "2.2.3"
+source = "git+https://github.com/napi-rs/napi-rs?rev=36581336c696812fe36883650a4839e186563f0a#36581336c696812fe36883650a4839e186563f0a"
+dependencies = [
+ "libloading 0.8.1",
 ]
 
 [[package]]
@@ -7259,8 +7316,8 @@ dependencies = [
  "indexmap 1.9.3",
  "jsonc-parser",
  "lru",
- "napi",
- "napi-derive",
+ "napi 2.13.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "napi-derive 2.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "once_cell",
  "parking_lot",
  "pathdiff",
@@ -7411,8 +7468,8 @@ checksum = "a5aa27756be34b2dcba6e632ac35e1416aefaef7aa1cf9e32c54bdd482a8b5ab"
 dependencies = [
  "anyhow",
  "base64 0.13.1",
- "napi",
- "napi-derive",
+ "napi 2.13.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "napi-derive 2.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pathdiff",
  "serde",
  "sourcemap",
@@ -8470,7 +8527,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c121e55ae90c12401f80a95f0e6de71ba3f3c4dd22b512d163e46fae2f9e175b"
 dependencies = [
  "anyhow",
- "napi",
+ "napi 2.13.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_json",
  "tracing",
@@ -10688,9 +10745,9 @@ name = "turborepo-napi"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "napi",
+ "napi 2.13.3 (git+https://github.com/napi-rs/napi-rs?rev=36581336c696812fe36883650a4839e186563f0a)",
  "napi-build",
- "napi-derive",
+ "napi-derive 2.13.0 (git+https://github.com/napi-rs/napi-rs?rev=36581336c696812fe36883650a4839e186563f0a)",
  "thiserror",
  "tokio",
  "turbopath",
