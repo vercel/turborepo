@@ -98,8 +98,8 @@ impl CacheMultiplexer {
         key: &str,
     ) -> Result<CacheResult<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
         if let Some(fs) = &self.fs {
-            if let Ok(cache_response) = fs.fetch(anchor, key) {
-                return Ok(cache_response);
+            if let response @ Ok(CacheResult::Hit(_)) = fs.fetch(anchor, key) {
+                return response;
             }
         }
 
@@ -128,18 +128,20 @@ impl CacheMultiplexer {
     pub async fn exists(&self, key: &str) -> Result<CacheResult<CacheHitMetadata>, CacheError> {
         if let Some(fs) = &self.fs {
             match fs.exists(key) {
-                Ok(cache_response) => {
-                    return Ok(cache_response);
+                cache_hit @ Ok(CacheResult::Hit(_)) => {
+                    return cache_hit;
                 }
+                Ok(CacheResult::Miss) => {}
                 Err(err) => debug!("failed to check fs cache: {:?}", err),
             }
         }
 
         if let Some(http) = self.get_http_cache() {
             match http.exists(key).await {
-                Ok(cache_response) => {
-                    return Ok(cache_response);
+                cache_hit @ Ok(CacheResult::Hit(_)) => {
+                    return cache_hit;
                 }
+                Ok(CacheResult::Miss) => {}
                 Err(err) => debug!("failed to check http cache: {:?}", err),
             }
         }
