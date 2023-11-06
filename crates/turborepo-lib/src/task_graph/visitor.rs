@@ -15,6 +15,7 @@ use tracing::{debug, error, Span};
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
+use which::which;
 
 use crate::{
     cli::EnvMode,
@@ -260,7 +261,14 @@ impl<'a> Visitor<'a> {
                     }
                 }
 
-                let mut cmd = Command::new(package_manager.to_string());
+                let Ok(package_manager_binary) = which(package_manager.to_string()) else {
+                    manager.stop().await;
+                    tracker.cancel();
+                    callback.send(Err(StopExecution)).ok();
+                    return;
+                };
+
+                let mut cmd = Command::new(package_manager_binary);
                 cmd.args(["run", task_id.task()]);
                 cmd.current_dir(workspace_directory.as_path());
                 cmd.stdout(Stdio::piped());
