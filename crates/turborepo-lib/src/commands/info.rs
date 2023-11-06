@@ -19,6 +19,7 @@ use crate::{
 struct RepositoryDetails<'a> {
     config: &'a ConfigurationOptions,
     workspaces: Vec<(&'a WorkspaceName, RepositoryWorkspaceDetails<'a>)>,
+    package_graph: &PackageGraph,
 }
 
 #[derive(Serialize)]
@@ -77,8 +78,13 @@ impl<'a> RepositoryDetails<'a> {
             .collect();
         workspaces.sort_by(|a, b| a.0.cmp(b.0));
 
-        Self { config, workspaces }
+        Self {
+            config,
+            workspaces,
+            package_graph,
+        }
     }
+
     fn print(&self) -> Result<(), cli::Error> {
         let is_logged_in = self.config.token.is_some();
         let is_linked = self.config.team_id.is_some();
@@ -90,6 +96,11 @@ impl<'a> RepositoryDetails<'a> {
             (true, false, _) => println!("You are logged in but not linked"),
             (false, _, _) => println!("You are not logged in"),
         }
+
+        println!(
+            "Detected package manager: {}",
+            self.package_graph.package_manager()
+        );
 
         // We subtract 1 for the root workspace
         println!(
