@@ -420,7 +420,6 @@ impl LazyIssueSource {
     /// * `end`: The end index of the span. Must use **1-based** indexing.
     #[turbo_tasks::function]
     pub fn from_swc_offsets(source: Vc<Box<dyn Source>>, start: usize, end: usize) -> Vc<Self> {
-        println!("received {} {}", start, end);
         Self::cell(LazyIssueSource {
             source,
             start: start - 1,
