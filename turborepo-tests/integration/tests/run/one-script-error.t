@@ -53,7 +53,7 @@ Make sure error isn't cached
   my-app:error: npm ERR! Lifecycle script `error` failed with error: 
   my-app:error: npm ERR! Error: command failed 
   my-app:error: npm ERR!   in workspace: my-app 
-  my-app:error: npm ERR!   at location: .*apps/my-app  (re)
+  my-app:error: npm ERR!   at location: .*apps(\/|\\)my-app  (re)
   my-app:error: ERROR: command finished with error: command \(.*apps(\/|\\)my-app\) npm run error exited \(1\) (re)
   my-app#error: command \(.*apps(\/|\\)my-app\) npm run error exited \(1\) (re)
   
@@ -84,7 +84,7 @@ Make sure error code isn't swallowed with continue
   my-app:error: npm ERR! Lifecycle script `error` failed with error: 
   my-app:error: npm ERR! Error: command failed 
   my-app:error: npm ERR!   in workspace: my-app 
-  my-app:error: npm ERR!   at location: .*apps/my-app  (re)
+  my-app:error: npm ERR!   at location: .*apps(\/|\\)my-app  (re)
   my-app:error: command finished with error, but continuing...
   my-app:okay2: cache miss, executing 13c728e793c08f30
   my-app:okay2: 
