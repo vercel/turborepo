@@ -11,6 +11,11 @@ git ${GIT_ARGS} config user.email "turbo-test@example.com"
 git ${GIT_ARGS} config user.name "Turbo Test"
 
 
+# https://docs.npmjs.com/cli/v9/using-npm/config#script-shell
+# Setting script-shell=$(which bash) on windows is causing failures
+# for all builds. Not clear why that is, but skipping this step for Windows
+# on the first pass. According to the docs, not setting this should make `npm run ...`
+# use cmd.exe, but I think it doesn't matter because _prysk_ then uses `--shell=bash`.
 if [[ "$OSTYPE" != "msys" ]]; then
   echo "script-shell=$(which bash)" > ${TARGET_DIR}/.npmrc
 fi
