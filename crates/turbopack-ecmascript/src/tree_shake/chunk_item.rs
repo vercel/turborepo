@@ -45,7 +45,7 @@ impl EcmascriptChunkItem for EcmascriptModulePartChunkItem {
             .get_async_module()
             .module_options(async_module_info);
 
-        let split_data = split_module(module.full_module, module.full_module.await?.source);
+        let split_data = split_module(module.full_module);
         let parsed = part_of_module(split_data, module.part);
 
         let content = EcmascriptModuleContent::new(
