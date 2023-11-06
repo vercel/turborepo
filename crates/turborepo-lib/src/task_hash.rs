@@ -164,7 +164,7 @@ pub struct TaskHashTrackerState {
     #[serde(skip)]
     package_task_outputs: HashMap<TaskId<'static>, Vec<AnchoredSystemPathBuf>>,
     #[serde(skip)]
-    package_task_cache: HashMap<TaskId<'static>, CacheResult<CacheHitMetadata>>,
+    package_task_cache: HashMap<TaskId<'static>, CacheHitMetadata>,
     #[serde(skip)]
     package_task_inputs_expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
 }
