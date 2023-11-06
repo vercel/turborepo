@@ -963,7 +963,11 @@ pub(crate) async fn analyze_ecmascript_module(
                     Request::parse(Value::new(pat)),
                     compile_time_info.environment().rendering(),
                     Vc::cell(ast_path),
-                    LazyIssueSource::new(source, span.lo.to_usize(), span.hi.to_usize()),
+                    LazyIssueSource::from_swc_offsets(
+                        source,
+                        span.lo.to_usize(),
+                        span.hi.to_usize(),
+                    ),
                     in_try,
                 ));
             }
@@ -1756,7 +1760,7 @@ async fn handle_free_var_reference(
                     ))
                 }),
                 Request::parse(Value::new(request.clone().into())),
-                Some(LazyIssueSource::new(
+                Some(LazyIssueSource::from_swc_offsets(
                     state.source,
                     span.lo.to_usize(),
                     span.hi.to_usize(),
@@ -1785,7 +1789,7 @@ async fn handle_free_var_reference(
 }
 
 fn issue_source(source: Vc<Box<dyn Source>>, span: Span) -> Vc<LazyIssueSource> {
-    LazyIssueSource::new(source, span.lo.to_usize(), span.hi.to_usize())
+    LazyIssueSource::from_swc_offsets(source, span.lo.to_usize(), span.hi.to_usize())
 }
 
 fn analyze_amd_define(

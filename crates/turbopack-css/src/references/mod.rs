@@ -127,13 +127,18 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
         };
 
         let issue_span = i.href.span();
+        println!(
+            "import prelude {} {}",
+            issue_span.lo.to_usize(),
+            issue_span.hi.to_usize()
+        );
 
         self.references.push(Vc::upcast(ImportAssetReference::new(
             self.origin,
             Request::parse(Value::new(src.to_string().into())),
             Vc::cell(as_parent_path(ast_path)),
             ImportAttributes::new_from_prelude(i).into(),
-            LazyIssueSource::new(
+            LazyIssueSource::from_swc_offsets(
                 Vc::upcast(self.source),
                 issue_span.lo.to_usize(),
                 issue_span.hi.to_usize(),
@@ -160,7 +165,7 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
                 self.origin,
                 Request::parse(Value::new(src.to_string().into())),
                 Vc::cell(as_parent_path(ast_path)),
-                LazyIssueSource::new(
+                LazyIssueSource::from_swc_offsets(
                     Vc::upcast(self.source),
                     issue_span.lo.to_usize(),
                     issue_span.hi.to_usize(),

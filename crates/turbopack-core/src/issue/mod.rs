@@ -410,9 +410,22 @@ pub struct LazyIssueSource {
 
 #[turbo_tasks::value_impl]
 impl LazyIssueSource {
+    /// Create a [`LazyIssueSource`] from byte offsets given by an swc ast node
+    /// span.
+    ///
+    /// Arguments:
+    ///
+    /// * `source`: The source code in which to look up the byte offsets.
+    /// * `start`: The start index of the span. Must use **1-based** indexing.
+    /// * `end`: The end index of the span. Must use **1-based** indexing.
     #[turbo_tasks::function]
-    pub fn new(source: Vc<Box<dyn Source>>, start: usize, end: usize) -> Vc<Self> {
-        Self::cell(LazyIssueSource { source, start, end })
+    pub fn from_swc_offsets(source: Vc<Box<dyn Source>>, start: usize, end: usize) -> Vc<Self> {
+        println!("received {} {}", start, end);
+        Self::cell(LazyIssueSource {
+            source,
+            start: start - 1,
+            end: end - 1,
+        })
     }
 
     #[turbo_tasks::function]
@@ -437,6 +450,17 @@ pub struct IssueSource {
 #[turbo_tasks::value_impl]
 impl IssueSource {
     #[turbo_tasks::function]
+    /// Returns an `IssueSource` representing a span of code in the `source`.
+    /// Positions are derived from byte offsets and stored as lines and columns.
+    /// Requires a binary search of the source text to perform this.
+    ///
+    /// Arguments:
+    ///
+    /// * `source`: The source code in which to look up the byte offsets.
+    /// * `start`: Byte offset into the source that the text begins. 0-based
+    ///   index and inclusive.
+    /// * `end`: Byte offset into the source that the text ends. 0-based index
+    ///   and exclusive.
     pub async fn from_byte_offset(
         source: Vc<Box<dyn Source>>,
         start: usize,
@@ -444,7 +468,8 @@ impl IssueSource {
     ) -> Result<Vc<Self>> {
         fn find_line_and_column(lines: &[FileLine], offset: usize) -> SourcePos {
             match lines.binary_search_by(|line| line.bytes_offset.cmp(&offset)) {
-                Ok(i) | Err(i) => {
+                Ok(i) => SourcePos { line: i, column: 0 },
+                Err(i) => {
                     if i == 0 {
                         SourcePos {
                             line: 0,
@@ -453,7 +478,7 @@ impl IssueSource {
                     } else {
                         SourcePos {
                             line: i - 1,
-                            column: offset - lines[i - 1].bytes_offset - 1,
+                            column: offset - lines[i - 1].bytes_offset,
                         }
                     }
                 }
