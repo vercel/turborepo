@@ -64,8 +64,8 @@ pub async fn esm_resolve(
     origin: Vc<Box<dyn ResolveOrigin>>,
     request: Vc<Request>,
     ty: Value<EcmaScriptModulesReferenceSubType>,
-    issue_source: Option<Vc<LazyIssueSource>>,
     issue_severity: Vc<IssueSeverity>,
+    issue_source: Option<Vc<LazyIssueSource>>,
 ) -> Result<Vc<ModuleResolveResult>> {
     let ty = Value::new(ReferenceType::EcmaScriptModules(ty.into_value()));
     let options = apply_esm_specific_options(origin.resolve_options(ty.clone()))
@@ -117,8 +117,8 @@ pub async fn url_resolve(
         origin.origin_path(),
         request,
         resolve_options,
-        Some(issue_source),
         issue_severity,
+        Some(issue_source),
     )
     .await
 }
@@ -139,8 +139,8 @@ async fn specific_resolve(
         origin.origin_path(),
         request,
         options,
-        issue_source,
         issue_severity,
+        issue_source,
     )
     .await
 }

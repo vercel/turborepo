@@ -164,8 +164,8 @@ impl ModuleReference for EsmAssetReference {
             self.get_origin().resolve().await?,
             self.request,
             ty,
-            self.issue_source,
             IssueSeverity::Error.cell(),
+            self.issue_source,
         ))
     }
 }

@@ -127,11 +127,6 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
         };
 
         let issue_span = i.href.span();
-        println!(
-            "import prelude {} {}",
-            issue_span.lo.to_usize(),
-            issue_span.hi.to_usize()
-        );
 
         self.references.push(Vc::upcast(ImportAssetReference::new(
             self.origin,
@@ -194,8 +189,8 @@ pub async fn css_resolve(
         origin.origin_path(),
         request,
         options,
-        issue_source,
         IssueSeverity::Error.cell(),
+        issue_source,
     )
     .await
 }
