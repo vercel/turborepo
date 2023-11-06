@@ -273,6 +273,15 @@ static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
     lazy_regex!(r"(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)");
 
 impl PackageManager {
+    pub fn command(&self) -> &'static str {
+        match self {
+            PackageManager::Npm => "npm",
+            PackageManager::Pnpm | PackageManager::Pnpm6 => "pnpm",
+            PackageManager::Yarn | PackageManager::Berry => "yarn",
+            PackageManager::Bun => "bun",
+        }
+    }
+
     /// Returns the set of globs for the workspace.
     pub fn get_workspace_globs(
         &self,
