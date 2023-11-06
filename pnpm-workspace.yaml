@@ -12,3 +12,5 @@ packages:
   - "crates/turbopack-tests/tests/execution"
   - "crates/*/js"
   - examples
+  # Exclude the non-monorepo example as it should be treated as independent of this repo
+  - "!examples/non-monorepo"
