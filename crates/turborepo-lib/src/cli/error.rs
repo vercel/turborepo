@@ -42,4 +42,6 @@ pub enum Error {
     PackageManager(#[from] turborepo_repository::package_manager::Error),
     #[error(transparent)]
     Run(#[from] run::Error),
+    #[error(transparent)]
+    SerdeJson(#[from] serde_json::Error),
 }
