@@ -264,29 +264,27 @@ class BrowserSessionImpl implements BrowserSession {
 
     const page = this.page;
     await withRequestMetrics(metricName, page, async () => {
-      /* eslint-disable @typescript-eslint/no-floating-promises -- don't wait for reporting */
-      measureTime(`${metricName}/start`);
+      await measureTime(`${metricName}/start`);
       const idle = networkIdle(page, 3000);
       await page.goto(url, {
         waitUntil: "commit",
       });
-      measureTime(`${metricName}/html`, {
+      await measureTime(`${metricName}/html`, {
         relativeTo: `${metricName}/start`,
       });
       await page.waitForLoadState("domcontentloaded");
-      measureTime(`${metricName}/dom`, {
+      await measureTime(`${metricName}/dom`, {
         relativeTo: `${metricName}/start`,
       });
       await page.waitForLoadState("load");
-      measureTime(`${metricName}/load`, {
+      await measureTime(`${metricName}/load`, {
         relativeTo: `${metricName}/start`,
       });
       const offset = await idle;
-      measureTime(`${metricName}`, {
+      await measureTime(`${metricName}`, {
         offset,
         relativeTo: `${metricName}/start`,
       });
-      /* eslint-enable @typescript-eslint/no-floating-promises -- don't wait for reporting */
     });
     return page;
   }
@@ -299,8 +297,7 @@ class BrowserSessionImpl implements BrowserSession {
       );
     }
     await withRequestMetrics(metricName, page, async () => {
-      /* eslint-disable @typescript-eslint/no-floating-promises -- don't wait for reporting */
-      measureTime(`${metricName}/start`);
+      await measureTime(`${metricName}/start`);
       const firstResponse = new Promise<void>((resolve) => {
         page.once("response", () => {
           resolve();
@@ -309,15 +306,14 @@ class BrowserSessionImpl implements BrowserSession {
       const idle = networkIdle(page, 3000);
       await page.click(selector);
       await firstResponse;
-      measureTime(`${metricName}/firstResponse`, {
+      await measureTime(`${metricName}/firstResponse`, {
         relativeTo: `${metricName}/start`,
       });
       await idle;
-      measureTime(`${metricName}`, {
+      await measureTime(`${metricName}`, {
         offset: 3000,
         relativeTo: `${metricName}/start`,
       });
-      /* eslint-enable @typescript-eslint/no-floating-promises -- don't wait for reporting */
     });
   }
 
@@ -327,29 +323,27 @@ class BrowserSessionImpl implements BrowserSession {
       throw new Error("reload() must be called after hardNavigation()");
     }
     await withRequestMetrics(metricName, page, async () => {
-      /* eslint-disable @typescript-eslint/no-floating-promises -- don't wait for reporting */
-      measureTime(`${metricName}/start`);
+      await measureTime(`${metricName}/start`);
       const idle = networkIdle(page, 3000);
       await page.reload({
         waitUntil: "commit",
       });
-      measureTime(`${metricName}/html`, {
+      await measureTime(`${metricName}/html`, {
         relativeTo: `${metricName}/start`,
       });
       await page.waitForLoadState("domcontentloaded");
-      measureTime(`${metricName}/dom`, {
+      await measureTime(`${metricName}/dom`, {
         relativeTo: `${metricName}/start`,
       });
       await page.waitForLoadState("load");
-      measureTime(`${metricName}/load`, {
+      await measureTime(`${metricName}/load`, {
         relativeTo: `${metricName}/start`,
       });
       await idle;
-      measureTime(`${metricName}`, {
+      await measureTime(`${metricName}`, {
         offset: 3000,
         relativeTo: `${metricName}/start`,
       });
-      /* eslint-enable @typescript-eslint/no-floating-promises -- don't wait for reporting */
     });
   }
 }
