@@ -15,10 +15,10 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 51c32b4db159c81a
+  omit-keys:omit-keys-task: cache miss, executing 0e2764d66f4e31cb
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
-  omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
+  omit-keys:omit-keys-task: > echo running-omit-keys-task > out/foo.min.txt
   omit-keys:omit-keys-task: 
   
    Tasks:    1 successful, 1 total
@@ -37,22 +37,22 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache hit, suppressing logs 51c32b4db159c81a
+  omit-keys:omit-keys-task: cache hit, suppressing logs 0e2764d66f4e31cb
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 3. Change input file and assert cache miss, and not FULL TURBO
-  $ echo "more text" >> $TARGET_DIR/apps/omit-keys/src/foo.txt
+  $ echo more-text >> $TARGET_DIR/apps/omit-keys/src/foo.txt
   $ ${TURBO} run omit-keys-task --filter=omit-keys
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 4562feb30d21a9e2
+  omit-keys:omit-keys-task: cache miss, executing 7a30fda44c6b376b
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
-  omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
+  omit-keys:omit-keys-task: > echo running-omit-keys-task > out/foo.min.txt
   omit-keys:omit-keys-task: 
   
    Tasks:    1 successful, 1 total
@@ -61,12 +61,12 @@ Setup
   
 
 3a. Changing a different file (that is not in `inputs` config) gets cache hit and FULL TURBO
-  $ echo "more text" >> $TARGET_DIR/apps/omit-keys/src/bar.txt
+  $ echo more-text >> $TARGET_DIR/apps/omit-keys/src/bar.txt
   $ ${TURBO} run omit-keys-task --filter=omit-keys
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache hit, suppressing logs 4562feb30d21a9e2
+  omit-keys:omit-keys-task: cache hit, suppressing logs 7a30fda44c6b376b
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -77,10 +77,10 @@ Setup
   \xe2\x80\xa2 Packages in scope: omit-keys (esc)
   \xe2\x80\xa2 Running omit-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  omit-keys:omit-keys-task: cache miss, executing 02617ddc347c2ea2
+  omit-keys:omit-keys-task: cache miss, executing 8a19bd3182587ab3
   omit-keys:omit-keys-task: 
   omit-keys:omit-keys-task: > omit-keys-task
-  omit-keys:omit-keys-task: > echo "running omit-keys-task" > out/foo.min.txt
+  omit-keys:omit-keys-task: > echo running-omit-keys-task > out/foo.min.txt
   omit-keys:omit-keys-task: 
   
    Tasks:    1 successful, 1 total

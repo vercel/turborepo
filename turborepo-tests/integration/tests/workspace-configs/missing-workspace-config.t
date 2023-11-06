@@ -12,10 +12,10 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache miss, executing 0526fb94189f32e9
+  missing-workspace-config:missing-workspace-config-task: cache miss, executing fa2b3189d6b42055
   missing-workspace-config:missing-workspace-config-task: 
   missing-workspace-config:missing-workspace-config-task: > missing-workspace-config-task
-  missing-workspace-config:missing-workspace-config-task: > echo "running missing-workspace-config-task" > out/foo.min.txt
+  missing-workspace-config:missing-workspace-config-task: > echo running-missing-workspace-config-task > out/foo.min.txt
   missing-workspace-config:missing-workspace-config-task: 
   
    Tasks:    1 successful, 1 total
@@ -34,22 +34,22 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs 0526fb94189f32e9
+  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs fa2b3189d6b42055
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s >>> FULL TURBO (re)
   
 3. Change input file and assert cache miss, and not FULL TURBO
-  $ echo "more text" >> $TARGET_DIR/apps/missing-workspace-config/src/foo.txt
+  $ echo more-text >> $TARGET_DIR/apps/missing-workspace-config/src/foo.txt
   $ ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache miss, executing 8bbf2392407bd493
+  missing-workspace-config:missing-workspace-config-task: cache miss, executing 137766781818e32c
   missing-workspace-config:missing-workspace-config-task: 
   missing-workspace-config:missing-workspace-config-task: > missing-workspace-config-task
-  missing-workspace-config:missing-workspace-config-task: > echo "running missing-workspace-config-task" > out/foo.min.txt
+  missing-workspace-config:missing-workspace-config-task: > echo running-missing-workspace-config-task > out/foo.min.txt
   missing-workspace-config:missing-workspace-config-task: 
   
    Tasks:    1 successful, 1 total
@@ -58,12 +58,12 @@ Setup
   
 
 3a. Changing a different file (that is not in `inputs` config) gets cache hit and FULL TURBO
-  $ echo "more text" >> $TARGET_DIR/apps/missing-workspace-config/src/bar.txt
+  $ echo more-text >> $TARGET_DIR/apps/missing-workspace-config/src/bar.txt
   $ ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs 8bbf2392407bd493
+  missing-workspace-config:missing-workspace-config-task: cache hit, suppressing logs 137766781818e32c
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -74,10 +74,10 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:missing-workspace-config-task: cache miss, executing 4a7b4b23f63fe57c
+  missing-workspace-config:missing-workspace-config-task: cache miss, executing 5bb86345c2c926c3
   missing-workspace-config:missing-workspace-config-task: 
   missing-workspace-config:missing-workspace-config-task: > missing-workspace-config-task
-  missing-workspace-config:missing-workspace-config-task: > echo "running missing-workspace-config-task" > out/foo.min.txt
+  missing-workspace-config:missing-workspace-config-task: > echo running-missing-workspace-config-task > out/foo.min.txt
   missing-workspace-config:missing-workspace-config-task: 
   
    Tasks:    1 successful, 1 total
@@ -90,10 +90,10 @@ Setup
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running cached-task-4 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  missing-workspace-config:cached-task-4: cache bypass, force executing b1b396ea12912b72
+  missing-workspace-config:cached-task-4: cache bypass, force executing f5ce92587b02e19e
   missing-workspace-config:cached-task-4: 
   missing-workspace-config:cached-task-4: > cached-task-4
-  missing-workspace-config:cached-task-4: > echo 'cached-task-4' > out/foo.min.txt
+  missing-workspace-config:cached-task-4: > echo cached-task-4 > out/foo.min.txt
   missing-workspace-config:cached-task-4: 
   
    Tasks:    1 successful, 1 total
