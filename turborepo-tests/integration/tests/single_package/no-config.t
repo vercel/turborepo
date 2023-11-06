@@ -48,8 +48,7 @@ Check
   \t\t"[root] build" -> "[root] ___ROOT___" (esc)
   \t} (esc)
   }
-
-
+  
 Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
@@ -59,11 +58,11 @@ Run real once
   build: > build
   build: > echo 'building' > foo
   build: 
-
-  Tasks:    1 successful, 1 total
+  
+   Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-  Time:\s*[\.0-9]+m?s  (re)
-
+    Time:\s*[\.0-9]+m?s  (re)
+  
 Run a second time, verify no caching because there is no config
   $ ${TURBO} run build --single-package
   \xe2\x80\xa2 Running build (esc)
@@ -73,7 +72,8 @@ Run a second time, verify no caching because there is no config
   build: > build
   build: > echo 'building' > foo
   build: 
-
-  Tasks:    1 successful, 1 total
+  
+   Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-  Time:\s*[\.0-9]+m?s  (re)
+    Time:\s*[\.0-9]+m?s  (re)
+  
