@@ -49,8 +49,8 @@ Validate that we got a full task summary for the failed task with an error in .e
     "cliArguments": [],
     "outputs": null,
     "excludedOutputs": null,
-    "logFile": "apps/my-app/.turbo/turbo-maybefails.log",
-    "directory": "apps/my-app",
+    "logFile": "apps(\/|\\)my-app(\/|\\).turbo(\/|\\)turbo-maybefails\.log", (re)
+    "directory": "apps(\/|\\)my-app", (re)
     "dependencies": [],
     "dependents": [],
     "resolvedTaskDefinition": {

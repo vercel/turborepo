@@ -10,7 +10,7 @@ Setup
   my-app:build: cache miss, executing b42768856d16033a
   my-app:build: 
   my-app:build: > build
-  my-app:build: > echo 'building'
+  my-app:build: > echo '?building'? (re)
   my-app:build: 
   my-app:build: building
   

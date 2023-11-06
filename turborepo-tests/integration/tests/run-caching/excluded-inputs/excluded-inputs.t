@@ -13,7 +13,7 @@ Running build for my-app succeeds
   my-app:build: cache miss, executing 94249a7280a39143
   my-app:build: 
   my-app:build: > build
-  my-app:build: > echo 'building'
+  my-app:build: > echo building
   my-app:build: 
   my-app:build: building
   
@@ -30,7 +30,7 @@ Update exluded file and try again
   my-app:build: cache hit, replaying logs 94249a7280a39143
   my-app:build: 
   my-app:build: > build
-  my-app:build: > echo 'building'
+  my-app:build: > echo building
   my-app:build: 
   my-app:build: building
   
