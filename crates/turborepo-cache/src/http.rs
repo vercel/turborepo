@@ -219,8 +219,6 @@ impl HTTPCache {
 
 #[cfg(test)]
 mod test {
-    use std::assert_matches::assert_matches;
-
     use anyhow::Result;
     use futures::future::try_join_all;
     use tempfile::tempdir;
@@ -232,7 +230,7 @@ mod test {
     use crate::{
         http::{APIAuth, HTTPCache},
         test_cases::{get_test_cases, validate_analytics, TestCase},
-        CacheError, CacheOpts, CacheSource,
+        CacheOpts, CacheSource,
     };
 
     #[tokio::test]
@@ -281,8 +279,8 @@ mod test {
         );
 
         // Should be a cache miss at first
-        let err = cache.fetch(hash).await.unwrap_err();
-        assert_matches!(err, CacheError::CacheMiss);
+        let miss = cache.fetch(hash).await?;
+        assert!(miss.is_none());
 
         let anchored_files: Vec<_> = files.iter().map(|f| f.path().to_owned()).collect();
         cache

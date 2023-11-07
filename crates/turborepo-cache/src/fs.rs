@@ -223,7 +223,7 @@ mod test {
 
         let cache = FSCache::new(None, repo_root_path, Some(analytics_sender.clone()))?;
 
-        let expected_miss = cache.exists(test_case.hash)?;
+        let expected_miss = cache.fetch(repo_root_path, test_case.hash)?;
         assert!(expected_miss.is_none());
 
         let files: Vec<_> = test_case
@@ -232,15 +232,6 @@ mod test {
             .map(|f| f.path().to_owned())
             .collect();
         cache.put(repo_root_path, test_case.hash, &files, test_case.duration)?;
-
-        let expected_hit = cache.exists(test_case.hash)?;
-        assert_eq!(
-            expected_hit,
-            Some(CacheHitMetadata {
-                time_saved: test_case.duration,
-                source: CacheSource::Local
-            })
-        );
 
         let (status, files) = cache.fetch(repo_root_path, test_case.hash)?.unwrap();
 
