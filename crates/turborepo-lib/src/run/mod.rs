@@ -40,6 +40,7 @@ use crate::{
     process::ProcessManager,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker},
     shim::TurboState,
+    signal::SignalSubscriber,
     task_graph::Visitor,
     task_hash::{PackageInputsHashes, TaskHashTrackerState},
 };
@@ -54,6 +55,14 @@ impl<'a> Run<'a> {
     pub fn new(base: &'a CommandBase) -> Self {
         let processes = ProcessManager::new();
         Self { base, processes }
+    }
+
+    fn connect_process_manager(&self, signal_subscriber: SignalSubscriber) {
+        let manager = self.processes.clone();
+        tokio::spawn(async move {
+            let _guard = signal_subscriber.listen().await;
+            manager.stop().await;
+        });
     }
 
     fn targets(&self) -> &[String] {
@@ -94,8 +103,8 @@ impl<'a> Run<'a> {
         }
     }
 
-    #[tracing::instrument(skip(self))]
-    pub async fn run(&mut self) -> Result<i32, Error> {
+    #[tracing::instrument(skip(self, signal_subscriber))]
+    pub async fn run(&mut self, signal_subscriber: SignalSubscriber) -> Result<i32, Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
@@ -104,6 +113,7 @@ impl<'a> Run<'a> {
             TurboState::platform_name(),
         );
         let start_at = Local::now();
+        self.connect_process_manager(signal_subscriber);
         let package_json_path = self.base.repo_root.join_component("package.json");
         let root_package_json = PackageJson::load(&package_json_path)?;
         let mut opts = self.opts()?;
