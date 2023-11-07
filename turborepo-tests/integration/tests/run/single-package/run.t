@@ -1,15 +1,15 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ . ${TESTDIR}/../../../../helpers/setup.sh
+  $ . ${TESTDIR}/../../_helpers/setup_monorepo.sh $(pwd) single_package
 
 Check
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache miss, executing 414559dcbbf03c41
+  build: cache miss, executing 273cd179351c6ef3
   build: 
   build: > build
-  build: > echo 'building' > foo
+  build: > echo 'building' > foo.txt
   build: 
   
    Tasks:    1 successful, 1 total
@@ -20,13 +20,13 @@ Check
   [1]
 
 Run a second time, verify caching works because there is a config
-  $ ${TURBO} run build --single-package
+  $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, replaying logs 414559dcbbf03c41
+  build: cache hit, replaying logs 273cd179351c6ef3
   build: 
   build: > build
-  build: > echo 'building' > foo
+  build: > echo 'building' > foo.txt
   build: 
   
    Tasks:    1 successful, 1 total
