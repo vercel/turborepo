@@ -54,7 +54,7 @@ async function loadWebAssemblyModule(
 
 // [TODO] need to match behavior as similar to UrlAssetReference
 function resolveAbsolutePath(modulePath?: string) {
-  throw new Error("resolveAbsolutePath is not implemented in the DOM runtime");
+  throw new Error('resolveAbsolutePath is not implemented in the DOM runtime');
 }
 
 (() => {
