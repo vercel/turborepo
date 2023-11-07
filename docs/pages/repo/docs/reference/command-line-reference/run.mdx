@@ -323,6 +323,15 @@ turbo run lint --parallel --no-cache
 turbo run dev --parallel --no-cache
 ```
 
+### `--profile`
+
+Generates a trace of the run in Chrome Tracing format that you can use to analyze performance.
+The profile can be viewed in [Perfetto](https://ui.perfetto.dev/).
+
+```sh
+turbo run build --profile=profile.json
+```
+
 ### `--remote-only`
 
 Default `false`. Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache.
