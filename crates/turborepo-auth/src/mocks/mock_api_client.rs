@@ -150,7 +150,7 @@ impl Client for MockApiClient {
         _token: &str,
         _team_id: &str,
         _team_slug: Option<&str>,
-    ) -> turborepo_api_client::Result<Response> {
+    ) -> turborepo_api_client::Result<Option<Response>> {
         unimplemented!("fetch_artifact")
     }
     async fn artifact_exists(
@@ -159,7 +159,7 @@ impl Client for MockApiClient {
         _token: &str,
         _team_id: &str,
         _team_slug: Option<&str>,
-    ) -> turborepo_api_client::Result<Response> {
+    ) -> turborepo_api_client::Result<Option<Response>> {
         unimplemented!("artifact_exists")
     }
     async fn get_artifact(
@@ -169,7 +169,7 @@ impl Client for MockApiClient {
         _team_id: &str,
         _team_slug: Option<&str>,
         _method: Method,
-    ) -> turborepo_api_client::Result<Response> {
+    ) -> turborepo_api_client::Result<Option<Response>> {
         unimplemented!("get_artifact")
     }
     async fn do_preflight(
