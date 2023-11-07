@@ -4,7 +4,7 @@ Setup
 
 Make sure that the internal util package is part of the prune output
   $ ${TURBO} prune docs
-  Generating pruned monorepo for docs in .*\/out (re)
+  Generating pruned monorepo for docs in .*(\/|\\)out (re)
    - Added docs
    - Added shared
    - Added util

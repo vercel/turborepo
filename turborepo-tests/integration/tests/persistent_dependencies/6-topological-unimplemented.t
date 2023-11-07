@@ -27,5 +27,5 @@
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:\s+[0-9]+m?s  (re)
+    Time:\s*[\.0-9ms]+  (re)
   
