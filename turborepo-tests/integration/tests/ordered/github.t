@@ -15,7 +15,7 @@ because otherwise prysk interprets them as multiline commands
   >\sbuild (re)
   \> echo 'building' && sleep 1 && echo 'done' (re)
   
-  '?building'?\s* (re)
+  '?building'? (re)
   '?done'? (re)
   ::endgroup::
   ::group::util:build
@@ -24,7 +24,7 @@ because otherwise prysk interprets them as multiline commands
   >\sbuild (re)
   \> sleep 0.5 && echo 'building' && sleep 1 && echo 'completed' (re)
   
-  '?building'?\s* (re)
+  '?building'? (re)
   '?completed'? (re)
   ::endgroup::
   
@@ -43,7 +43,7 @@ because otherwise prysk interprets them as multiline commands
   util:build: > build
   util:build: > sleep 0.5 && echo 'building' && sleep 1 && echo 'completed'
   util:build: 
-  util:build: '?building'?\s* (re)
+  util:build: '?building'? (re)
   util:build: '?completed'? (re)
   ::endgroup::
   
