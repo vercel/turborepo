@@ -64,8 +64,6 @@ pub enum CacheError {
     InvalidMetadata(serde_json::Error, #[backtrace] Backtrace),
     #[error("Failed to write cache metadata file")]
     MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
-    #[error("Cache miss")]
-    CacheMiss,
     #[error("Unable to perform write as cache is shutting down")]
     CacheShuttingDown,
 }
@@ -83,7 +81,7 @@ pub enum CacheSource {
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub struct CacheResponse {
+pub struct CacheHitMetadata {
     pub source: CacheSource,
     pub time_saved: u64,
 }

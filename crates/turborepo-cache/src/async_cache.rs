@@ -8,7 +8,7 @@ use tokio::{
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 
-use crate::{multiplexer::CacheMultiplexer, CacheError, CacheOpts, CacheResponse};
+use crate::{multiplexer::CacheMultiplexer, CacheError, CacheHitMetadata, CacheOpts};
 
 pub struct AsyncCache {
     real_cache: Arc<CacheMultiplexer>,
@@ -111,16 +111,16 @@ impl AsyncCache {
         }
     }
 
+    pub async fn exists(&mut self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
+        self.real_cache.exists(key).await
+    }
+
     pub async fn fetch(
         &self,
         anchor: &AbsoluteSystemPath,
         key: &str,
-    ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
         self.real_cache.fetch(anchor, key).await
-    }
-
-    pub async fn exists(&mut self, key: &str) -> Result<CacheResponse, CacheError> {
-        self.real_cache.exists(key).await
     }
 
     // Used for testing to ensure that the workers resolve
@@ -155,7 +155,7 @@ mod tests {
 
     use crate::{
         test_cases::{get_test_cases, TestCase},
-        AsyncCache, CacheError, CacheOpts, CacheResponse, CacheSource, RemoteCacheOpts,
+        AsyncCache, CacheHitMetadata, CacheOpts, CacheSource, RemoteCacheOpts,
     };
 
     #[tokio::test]
@@ -203,7 +203,7 @@ mod tests {
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
 
-        assert_matches!(response, Err(CacheError::CacheMiss));
+        assert_matches!(response, Ok(None));
 
         // Add test case
         async_cache
@@ -238,10 +238,10 @@ mod tests {
         // Confirm that we fetch from remote cache and not local.
         assert_eq!(
             response,
-            CacheResponse {
+            Some(CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: test_case.duration
-            }
+            })
         );
 
         Ok(())
@@ -278,7 +278,7 @@ mod tests {
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
 
-        assert_matches!(response, Err(CacheError::CacheMiss));
+        assert_matches!(response, Ok(None));
 
         // Add test case
         async_cache
@@ -313,19 +313,19 @@ mod tests {
         // Confirm that we fetch from local cache first.
         assert_eq!(
             response,
-            CacheResponse {
+            Some(CacheHitMetadata {
                 source: CacheSource::Local,
                 time_saved: test_case.duration
-            }
+            })
         );
 
         // Remove fs cache file
         fs_cache_path.remove_file()?;
 
-        let response = async_cache.exists(&hash).await;
+        let response = async_cache.exists(&hash).await?;
 
         // Confirm that we get a cache miss
-        assert_matches!(response, Err(CacheError::CacheMiss));
+        assert!(response.is_none());
 
         Ok(())
     }
@@ -359,7 +359,7 @@ mod tests {
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
 
-        assert_matches!(response, Err(CacheError::CacheMiss));
+        assert_matches!(response, Ok(None));
 
         // Add test case
         async_cache
@@ -394,10 +394,10 @@ mod tests {
         // Confirm that we fetch from local cache first.
         assert_eq!(
             response,
-            CacheResponse {
+            Some(CacheHitMetadata {
                 source: CacheSource::Local,
                 time_saved: test_case.duration
-            }
+            })
         );
 
         // Remove fs cache file
@@ -408,10 +408,10 @@ mod tests {
         // Confirm that we still can fetch from remote cache
         assert_eq!(
             response,
-            CacheResponse {
+            Some(CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: test_case.duration
-            }
+            })
         );
 
         Ok(())

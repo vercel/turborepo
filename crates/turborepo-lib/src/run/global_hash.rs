@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use anyhow::Result;
 use globwalk::WalkType;
 use thiserror::Error;
 use tracing::debug;
@@ -20,7 +19,16 @@ static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 const GLOBAL_CACHE_KEY: &str = "HEY STELLLLLLLAAAAAAAAAAAAA";
 
 #[derive(Debug, Error)]
-enum GlobalHashError {}
+pub enum Error {
+    #[error(transparent)]
+    Env(#[from] turborepo_env::Error),
+    #[error(transparent)]
+    Globwalk(#[from] globwalk::WalkError),
+    #[error(transparent)]
+    Scm(#[from] turborepo_scm::Error),
+    #[error(transparent)]
+    PackageManager(#[from] turborepo_repository::package_manager::Error),
+}
 
 #[derive(Debug)]
 pub struct GlobalHashableInputs<'a> {
@@ -51,7 +59,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     env_mode: EnvMode,
     framework_inference: bool,
     dot_env: Option<&'a [RelativeUnixPathBuf]>,
-) -> Result<GlobalHashableInputs<'a>> {
+) -> Result<GlobalHashableInputs<'a>, Error> {
     let global_hashable_env_vars =
         get_global_hashable_env_vars(env_at_execution_start, global_env)?;
 
