@@ -16,12 +16,15 @@ use crate::{
 };
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct RepositoryDetails<'a> {
     config: &'a ConfigurationOptions,
+    package_manager: &'a PackageManager,
     workspaces: Vec<(&'a WorkspaceName, RepositoryWorkspaceDetails<'a>)>,
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct RepositoryWorkspaceDetails<'a> {
     path: &'a AnchoredSystemPath,
 }
@@ -77,7 +80,11 @@ impl<'a> RepositoryDetails<'a> {
             .collect();
         workspaces.sort_by(|a, b| a.0.cmp(b.0));
 
-        Self { config, workspaces }
+        Self {
+            config,
+            package_manager: package_graph.package_manager(),
+            workspaces,
+        }
     }
     fn print(&self) -> Result<(), cli::Error> {
         let is_logged_in = self.config.token.is_some();

@@ -26,6 +26,7 @@ mod process;
 mod rewrite_json;
 mod run;
 mod shim;
+mod signal;
 mod task_graph;
 mod task_hash;
 mod tracing;
