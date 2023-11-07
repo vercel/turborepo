@@ -12,14 +12,14 @@
   my-app:build: > build
   my-app:build: > echo 'building' && sleep 1 && echo 'done'
   my-app:build: 
-  my-app:build: '?building'? (re)
+  my-app:build: '?building'?\s* (re)
   my-app:build: '?done'? (re)
   util:build: cache bypass, force executing [0-9a-f]+ (re)
   util:build: 
   util:build: > build
   util:build: > sleep 0.5 && echo 'building' && sleep 1 && echo 'completed'
   util:build: 
-  util:build: '?building'? (re)
+  util:build: '?building'?\s* (re)
   util:build: '?completed'? (re)
   
    Tasks:    2 successful, 2 total
@@ -37,14 +37,14 @@
   my-app:build: > build
   my-app:build: > echo 'building' && sleep 1 && echo 'done'
   my-app:build: 
-  my-app:build: '?building'? (re)
+  my-app:build: '?building'?\s* (re)
   my-app:build: '?done'? (re)
   util:build: cache bypass, force executing [0-9a-f]+ (re)
   util:build: 
   util:build: > build
   util:build: > sleep 0.5 && echo 'building' && sleep 1 && echo 'completed'
   util:build: 
-  util:build: '?building'? (re)
+  util:build: '?building'?\s* (re)
   util:build: '?completed'? (re)
   
    Tasks:    2 successful, 2 total
@@ -61,14 +61,14 @@
   my-app:build: > build
   my-app:build: > echo 'building' && sleep 1 && echo 'done'
   my-app:build: 
-  my-app:build: '?building'? (re)
+  my-app:build: '?building'?\s* (re)
   my-app:build: '?done'? (re)
   util:build: cache bypass, force executing [0-9a-f]+ (re)
   util:build: 
   util:build: > build
   util:build: > sleep 0.5 && echo 'building' && sleep 1 && echo 'completed'
   util:build: 
-  util:build: '?building'? (re)
+  util:build: '?building'?\s* (re)
   util:build: '?completed'? (re)
   
    Tasks:    2 successful, 2 total

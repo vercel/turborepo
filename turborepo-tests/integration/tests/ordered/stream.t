@@ -18,7 +18,7 @@
   .* (re)
   .* (re)
   .* (re)
-  util:build: '?building'? (re)
+  util:build: '?building'?\s* (re)
   my-app:build: '?done'? (re)
   util:build: '?completed'? (re)
   
@@ -43,7 +43,7 @@ it just guarantees setting this env var won't crash.
   .* (re)
   .* (re)
   .* (re)
-  util:build: '?building'? (re)
+  util:build: '?building'?\s* (re)
   my-app:build: '?done'? (re)
   util:build: '?completed'? (re)
   
@@ -67,7 +67,7 @@ The flag wins over the env var
   .* (re)
   .* (re)
   .* (re)
-  util:build: '?building'? (re)
+  util:build: '?building'?\s* (re)
   my-app:build: '?done'? (re)
   util:build: '?completed'? (re)
   
