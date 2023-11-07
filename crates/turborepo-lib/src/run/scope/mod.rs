@@ -7,13 +7,11 @@ use std::collections::HashSet;
 
 use filter::{FilterResolver, PackageInference};
 use turbopath::AbsoluteSystemPath;
+use turborepo_repository::package_graph::{PackageGraph, WorkspaceName};
 use turborepo_scm::SCM;
 
+use crate::opts::ScopeOpts;
 pub use crate::run::scope::filter::ResolutionError;
-use crate::{
-    opts::ScopeOpts,
-    package_graph::{PackageGraph, WorkspaceName},
-};
 
 #[tracing::instrument(skip(opts, pkg_graph, scm))]
 pub fn resolve_packages(

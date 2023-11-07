@@ -2,13 +2,15 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use itertools::Itertools;
 use turbopath::AbsoluteSystemPath;
+use turborepo_graph_utils as graph;
+use turborepo_repository::package_graph::{
+    PackageGraph, WorkspaceName, WorkspaceNode, ROOT_PKG_NAME,
+};
 
 use super::Engine;
 use crate::{
     config::{validate_extends, validate_no_package_task_syntax, TurboJson},
-    graph,
-    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
-    run::task_id::{TaskId, TaskName, ROOT_PKG_NAME},
+    run::task_id::{TaskId, TaskName},
     task_graph::{BookkeepingTaskDefinition, TaskDefinition},
 };
 

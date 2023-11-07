@@ -7,14 +7,14 @@ use tracing::trace;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
 };
-use turborepo_repository::package_json::PackageJson;
+use turborepo_repository::{
+    package_graph::{self, PackageGraph, WorkspaceName, WorkspaceNode},
+    package_json::PackageJson,
+};
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
-use crate::{
-    config::RawTurboJSON,
-    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
-};
+use crate::config::RawTurboJSON;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -29,7 +29,7 @@ pub enum Error {
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(transparent)]
-    PackageGraph(#[from] crate::package_graph::Error),
+    PackageGraph(#[from] package_graph::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error("turbo doesn't support workspaces at file system root")]

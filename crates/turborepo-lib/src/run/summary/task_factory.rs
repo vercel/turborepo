@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_repository::package_graph::{PackageGraph, WorkspaceInfo, WorkspaceName};
 
 use super::{
     execution::TaskExecutionSummary,
@@ -11,10 +12,9 @@ use crate::{
     cli,
     engine::{Engine, TaskNode},
     opts::RunOpts,
-    package_graph::{PackageGraph, WorkspaceInfo, WorkspaceName},
     run::task_id::TaskId,
     task_graph::TaskDefinition,
-    task_hash::TaskHashTracker,
+    task_hash::{get_external_deps_hash, TaskHashTracker},
 };
 
 const NO_FRAMEWORK_DETECTED: &str = "<NO FRAMEWORK DETECTED>";
@@ -164,7 +164,9 @@ impl<'a> TaskSummaryFactory<'a> {
         Ok(SharedTaskSummary {
             hash,
             inputs: expanded_inputs.into_iter().collect(),
-            hash_of_external_dependencies: workspace_info.get_external_deps_hash(),
+            hash_of_external_dependencies: get_external_deps_hash(
+                &workspace_info.transitive_dependencies,
+            ),
             cache: cache_summary,
             command,
             cli_arguments: self.run_opts.pass_through_args.to_vec(),

@@ -25,7 +25,10 @@ use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_repository::package_json::PackageJson;
+use turborepo_repository::{
+    package_graph::{PackageGraph, WorkspaceName},
+    package_json::PackageJson,
+};
 use turborepo_scm::SCM;
 use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY};
 
@@ -38,13 +41,12 @@ use crate::{
     daemon::DaemonConnector,
     engine::{Engine, EngineBuilder},
     opts::{GraphOpts, Opts},
-    package_graph::{PackageGraph, WorkspaceName},
     process::ProcessManager,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker},
     shim::TurboState,
     signal::SignalSubscriber,
     task_graph::Visitor,
-    task_hash::{PackageInputsHashes, TaskHashTrackerState},
+    task_hash::{get_external_deps_hash, PackageInputsHashes, TaskHashTrackerState},
 };
 
 #[derive(Debug)]
@@ -273,7 +275,7 @@ impl<'a> Run<'a> {
         let is_monorepo = !opts.run_opts.single_package;
 
         let root_external_dependencies_hash =
-            is_monorepo.then(|| root_workspace.get_external_deps_hash());
+            is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
         let mut global_hash_inputs = get_global_hash_inputs(
             root_external_dependencies_hash.as_deref(),
@@ -453,7 +455,7 @@ impl<'a> Run<'a> {
 
         let is_monorepo = !opts.run_opts.single_package;
         let root_external_dependencies_hash =
-            is_monorepo.then(|| root_workspace.get_external_deps_hash());
+            is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
         let mut global_hash_inputs = get_global_hash_inputs(
             root_external_dependencies_hash.as_deref(),
