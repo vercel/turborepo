@@ -8,7 +8,7 @@ Run dos2unix on Windows for newly generated lockfile.
   $ git commit --quiet -am "Update lockfile" # clean git state
 
 Check
-  $ ${TURBO} run build --summarize
+  $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache miss, executing 551563378a0c0a7e
@@ -21,7 +21,7 @@ Check
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-  $ ${TURBO} run build --summarize
+  $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, replaying logs 551563378a0c0a7e
