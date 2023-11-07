@@ -546,6 +546,15 @@ struct ExecContext {
     errors: Arc<Mutex<Vec<TaskError>>>,
 }
 
+enum ExecOutcome {
+    // All operations during execution succeeded
+    Success,
+    // An internal error that indicates a shutdown should be performed
+    Internal,
+    // An error with the task execution
+    Task,
+}
+
 impl ExecContext {
     pub async fn execute(
         &mut self,
@@ -554,6 +563,47 @@ impl ExecContext {
         output_client: OutputClient<impl std::io::Write>,
         callback: oneshot::Sender<Result<(), StopExecution>>,
     ) {
+        let mut result = self
+            .execute_inner(parent_span_id, tracker, &output_client)
+            .await;
+
+        let _logs = match output_client.finish() {
+            Ok(logs) => logs,
+            Err(e) => {
+                error!("unable to flush output client: {e}");
+                result = ExecOutcome::Internal;
+                None
+            }
+        };
+
+        match result {
+            ExecOutcome::Success => {
+                callback.send(Ok(())).ok();
+            }
+            ExecOutcome::Internal => {
+                callback.send(Err(StopExecution)).ok();
+                self.manager.stop().await;
+            }
+            ExecOutcome::Task => {
+                callback
+                    .send(match self.continue_on_error {
+                        true => Ok(()),
+                        false => Err(StopExecution),
+                    })
+                    .ok();
+                if !self.continue_on_error {
+                    self.manager.stop().await;
+                }
+            }
+        }
+    }
+
+    async fn execute_inner(
+        &mut self,
+        parent_span_id: Option<tracing::Id>,
+        tracker: TaskTracker<()>,
+        output_client: &OutputClient<impl std::io::Write>,
+    ) -> ExecOutcome {
         let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
         span.follows_from(parent_span_id);
         let _enter = span.enter();
@@ -562,7 +612,7 @@ impl ExecContext {
         let mut prefixed_ui = Visitor::prefixed_ui(
             self.ui,
             self.is_github_actions,
-            &output_client,
+            output_client,
             self.pretty_prefix.clone(),
         );
 
@@ -576,8 +626,7 @@ impl ExecContext {
                 self.hash_tracker
                     .insert_cache_status(self.task_id.clone(), status);
                 tracker.cached().await;
-                callback.send(Ok(())).ok();
-                return;
+                return ExecOutcome::Success;
             }
             Ok(None) => (),
             Err(e) => {
@@ -586,10 +635,8 @@ impl ExecContext {
         }
 
         let Ok(package_manager_binary) = which(self.package_manager.command()) else {
-            self.manager.stop().await;
             tracker.cancel();
-            callback.send(Err(StopExecution)).ok();
-            return;
+            return ExecOutcome::Internal;
         };
 
         let mut cmd = Command::new(package_manager_binary);
@@ -615,8 +662,7 @@ impl ExecContext {
                 // If we have an internal failure of being unable setup log capture we
                 // mark it as cancelled.
                 tracker.cancel();
-                callback.send(Err(StopExecution)).ok();
-                return;
+                return ExecOutcome::Internal;
             }
         };
 
@@ -632,21 +678,12 @@ impl ExecContext {
                     .expect("lock poisoned")
                     .push(TaskError::from_spawn(self.task_id_for_display.clone(), e));
                 tracker.spawn_failed(error_string).await;
-                callback
-                    .send(if self.continue_on_error {
-                        Ok(())
-                    } else {
-                        self.manager.stop().await;
-                        Err(StopExecution)
-                    })
-                    .ok();
-                return;
+                return ExecOutcome::Task;
             }
             // Turbo is shutting down
             None => {
-                callback.send(Ok(())).ok();
                 tracker.cancel();
-                return;
+                return ExecOutcome::Internal;
             }
         };
 
@@ -658,19 +695,15 @@ impl ExecContext {
             Err(e) => {
                 error!("unable to pipe outputs from command: {e}");
                 tracker.cancel();
-                callback.send(Err(StopExecution)).ok();
-                self.manager.stop().await;
-                return;
+                return ExecOutcome::Internal;
             }
             Ok(None) => {
                 // TODO: how can this happen? we only update the
                 // exit status with Some and it is only initialized with
                 // None. Is it still running?
                 error!("unable to determine why child exited");
-                self.manager.stop().await;
                 tracker.cancel();
-                callback.send(Err(StopExecution)).ok();
-                return;
+                return ExecOutcome::Internal;
             }
         };
 
@@ -688,27 +721,22 @@ impl ExecContext {
                 tracker.build_failed(code, error.to_string()).await;
                 if self.continue_on_error {
                     prefixed_ui.warn("command finished with error, but continuing...");
-                    callback.send(Ok(())).ok();
                 } else {
                     prefixed_ui.error(format!("command finished with error: {error}"));
-                    self.manager.stop().await;
-                    callback.send(Err(StopExecution)).ok();
                 }
                 self.errors.lock().expect("lock poisoned").push(TaskError {
                     task_id: self.task_id_for_display.clone(),
                     cause: error,
                 });
-                return;
+                return ExecOutcome::Task;
             }
             // All of these indicate a failure where we don't know how to recover
             ChildExit::Finished(None)
             | ChildExit::Killed
             | ChildExit::KilledExternal
             | ChildExit::Failed => {
-                self.manager.stop().await;
                 tracker.cancel();
-                callback.send(Err(StopExecution)).ok();
-                return;
+                return ExecOutcome::Internal;
             }
         }
 
@@ -727,12 +755,6 @@ impl ExecContext {
             );
         }
 
-        if let Err(e) = output_client.finish() {
-            error!("unable to flush output client: {e}");
-            callback.send(Err(StopExecution)).unwrap();
-            return;
-        }
-
-        callback.send(Ok(())).unwrap();
+        ExecOutcome::Success
     }
 }
