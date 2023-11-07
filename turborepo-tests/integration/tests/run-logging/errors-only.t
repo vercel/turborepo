@@ -15,8 +15,6 @@ Setup
     Time:\s*[\.0-9]+m?s  (re)
   
 
-
-
 # [ ] error exit
 # [x] outputMode: errors-only
 # [ ] --ouptut-logs=errors-only
@@ -29,8 +27,6 @@ Setup
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-
-
 # [x] error exit
 # [ ] outputMode: errors-only
 # [x] --ouptut-logs=errors-only
@@ -38,7 +34,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running builderror in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  app-a:builderror: cache miss, executing 4165ea6858095a4c
+  app-a:builderror: cache miss, executing 63f09c22afb626a8
   app-a:builderror: 
   app-a:builderror: > builderror
   app-a:builderror: > echo error-builderror-app-a && exit 1
@@ -59,8 +55,6 @@ Setup
    ERROR  run failed: command  exited (1)
   [1]
 
-
-
 # [x] error exit
 # [x] outputMode: errors-only
 # [ ] --ouptut-logs=errors-only
@@ -68,7 +62,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running builderror2 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  app-a:builderror2: cache miss, executing 1c812027a9e93105
+  app-a:builderror2: cache miss, executing 7303c469d075d34c
   app-a:builderror2: 
   app-a:builderror2: > builderror2
   app-a:builderror2: > echo error-builderror2-app-a && exit 1
