@@ -14,6 +14,7 @@ mod task_factory;
 use std::{collections::HashSet, io, io::Write};
 
 use chrono::{DateTime, Local};
+pub use execution::TaskTracker;
 pub use global_hash::GlobalHashSummary;
 use itertools::Itertools;
 use serde::Serialize;
@@ -27,9 +28,7 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
 use self::{
-    execution::{TaskState, TaskTracker},
-    task::SinglePackageTaskSummary,
-    task_factory::TaskSummaryFactory,
+    execution::TaskState, task::SinglePackageTaskSummary, task_factory::TaskSummaryFactory,
 };
 use super::task_id::TaskId;
 use crate::{
