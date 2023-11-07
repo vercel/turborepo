@@ -29,6 +29,7 @@ lazy_static! {
 
 #[async_trait]
 pub trait Client {
+    fn base_url(&self) -> &str;
     async fn get_user(&self, token: &str) -> Result<UserResponse>;
     async fn get_teams(&self, token: &str) -> Result<TeamsResponse>;
     async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>>;
@@ -104,6 +105,9 @@ pub struct APIAuth {
 
 #[async_trait]
 impl Client for APIClient {
+    fn base_url(&self) -> &str {
+        &self.base_url
+    }
     async fn get_user(&self, token: &str) -> Result<UserResponse> {
         let url = self.make_url("/v2/user");
         let request_builder = self

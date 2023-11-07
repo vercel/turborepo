@@ -1,6 +1,7 @@
-use std::backtrace;
+use std::{backtrace, io};
 
 use thiserror::Error;
+use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
     commands::{bin, generate, prune},
@@ -26,6 +27,26 @@ pub enum Error {
     ChromeTracing(#[from] crate::tracing::Error),
     #[error(transparent)]
     BuildPackageGraph(#[from] package_graph::builder::Error),
+    #[error("Encountered an IO error while attempting to read {config_path}: {error}")]
+    FailedToReadConfig {
+        config_path: AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
+    #[error("Encountered an IO error while attempting to read {auth_path}: {error}")]
+    FailedToReadAuth {
+        auth_path: AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
+    #[error("Encountered an IO error while attempting to set {config_path}: {error}")]
+    FailedToSetConfig {
+        config_path: AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
+    #[error("Encountered an IO error while attempting to set {auth_path}: {error}")]
+    FailedToSetAuth {
+        auth_path: AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
     #[error(transparent)]
     Rewrite(#[from] RewriteError),
     #[error(transparent)]
