@@ -35,6 +35,7 @@ use self::{
 use super::task_id::TaskId;
 use crate::{
     cli,
+    cli::DryRunMode,
     engine::Engine,
     opts::RunOpts,
     run::summary::{
@@ -206,17 +207,14 @@ impl RunTracker {
         let single_package = run_opts.single_package;
         let should_save = run_opts.summarize.flatten().is_some_and(|s| s);
 
-        let run_type = if run_opts.dry_run {
-            if run_opts.dry_run_json {
-                RunType::DryJson
-            } else {
-                RunType::DryText
-            }
-        } else {
-            RunType::Real
+        let run_type = match run_opts.dry_run {
+            None => RunType::Real,
+            Some(DryRunMode::Json) => RunType::DryJson,
+            Some(DryRunMode::Text) => RunType::DryText,
         };
 
         let summary_state = self.execution_tracker.finish().await?;
+
         let tasks = summary_state
             .tasks
             .iter()
@@ -539,6 +537,8 @@ impl<'a> RunSummary<'a> {
         )?;
 
         tab_writer.flush()?;
+        println!();
+        cprintln!(ui, BOLD_CYAN, "Tasks to Run");
 
         for task in &self.tasks {
             if self.monorepo {
@@ -667,6 +667,9 @@ impl<'a> RunSummary<'a> {
                     task_definition_json
                 )?;
             }
+
+            writeln!(tab_writer, "")?;
+            tab_writer.flush()?;
         }
 
         Ok(())
