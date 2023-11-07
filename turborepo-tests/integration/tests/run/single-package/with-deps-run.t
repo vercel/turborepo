@@ -6,17 +6,17 @@ Check
   $ ${TURBO} run test
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache miss, executing 7518181d91f907c3
+  build: cache miss, executing 273cd179351c6ef3
   build: 
   build: > build
-  build: > echo 'building' > foo
+  build: > echo 'building' > foo.txt
   build: 
-  test: cache miss, executing b703c211b969b9c2
+  test: cache miss, executing f21d7ac37c171ce7
   test: 
   test: > test
-  test: > echo 'testing'
+  test: > cat foo.txt
   test: 
-  test: testing
+  test: building
   
    Tasks:    2 successful, 2 total
   Cached:    0 cached, 2 total
@@ -26,17 +26,17 @@ Run a second time, verify caching works because there is a config
   $ ${TURBO} run test
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, replaying logs 7518181d91f907c3
+  build: cache hit, replaying logs 273cd179351c6ef3
   build: 
   build: > build
-  build: > echo 'building' > foo
+  build: > echo 'building' > foo.txt
   build: 
-  test: cache hit, replaying logs b703c211b969b9c2
+  test: cache hit, replaying logs f21d7ac37c171ce7
   test: 
   test: > test
-  test: > echo 'testing'
+  test: > cat foo.txt
   test: 
-  test: testing
+  test: building
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total
@@ -46,8 +46,8 @@ Run with --output-logs=hash-only
   $ ${TURBO} run test --output-logs=hash-only
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, suppressing logs 7518181d91f907c3
-  test: cache hit, suppressing logs b703c211b969b9c2
+  build: cache hit, suppressing logs 273cd179351c6ef3
+  test: cache hit, suppressing logs f21d7ac37c171ce7
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total

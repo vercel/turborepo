@@ -18,21 +18,21 @@ Check
   
   Tasks to Run
   build
-    Task                           = build                                                                                                                                           
-    Hash                           = 7518181d91f907c3                                                                                                                                
-    Cached (Local)                 = false                                                                                                                                           
-    Cached (Remote)                = false                                                                                                                                           
-    Command                        = echo 'building' > foo                                                                                                                           
-    Outputs                        = foo                                                                                                                                             
-    Log File                       = .turbo/turbo-build.log                                                                                                                          
-    Dependencies                   =                                                                                                                                                 
-    Dependendents                  =                                                                                                                                                 
-    Inputs Files Considered        = 5                                                                                                                                               
-    .env Files Considered          = 0                                                                                                                                               
-    Env Vars                       =                                                                                                                                                 
-    Env Vars Values                =                                                                                                                                                 
-    Inferred Env Vars Values       =                                                                                                                                                 
-    Passed Through Env Vars        =                                                                                                                                                 
-    Passed Through Env Vars Values =                                                                                                                                                 
-    ResolvedTaskDefinition         = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
-    Framework                      = <NO FRAMEWORK DETECTED>                                                                                                                         
+    Task                           = build                                                                                                                                               
+    Hash                           = 273cd179351c6ef3                                                                                                                                    
+    Cached (Local)                 = false                                                                                                                                               
+    Cached (Remote)                = false                                                                                                                                               
+    Command                        = echo 'building' > foo.txt                                                                                                                           
+    Outputs                        = foo.txt                                                                                                                                             
+    Log File                       = .turbo/turbo-build.log                                                                                                                              
+    Dependencies                   =                                                                                                                                                     
+    Dependendents                  =                                                                                                                                                     
+    Inputs Files Considered        = 5                                                                                                                                                   
+    .env Files Considered          = 0                                                                                                                                                   
+    Env Vars                       =                                                                                                                                                     
+    Env Vars Values                =                                                                                                                                                     
+    Inferred Env Vars Values       =                                                                                                                                                     
+    Passed Through Env Vars        =                                                                                                                                                     
+    Passed Through Env Vars Values =                                                                                                                                                     
+    ResolvedTaskDefinition         = {"outputs":["foo.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
+    Framework                      = <NO FRAMEWORK DETECTED>                                                                                                                             
