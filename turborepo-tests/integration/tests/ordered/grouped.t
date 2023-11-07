@@ -3,7 +3,8 @@
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) ordered
 
 # Build in grouped order.
-  $ ${TURBO} run build --log-order grouped --force
+  $ ${TURBO} run build --log-order grouped --force > something.txt
+  $ cat -vet something.txt
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
