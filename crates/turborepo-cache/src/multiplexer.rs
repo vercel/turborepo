@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
 use crate::{fs::FSCache, http::HTTPCache, CacheError, CacheHitMetadata, CacheOpts};
@@ -22,6 +23,7 @@ impl CacheMultiplexer {
         repo_root: &AbsoluteSystemPath,
         api_client: APIClient,
         api_auth: Option<APIAuth>,
+        analytics_recorder: Option<AnalyticsSender>,
     ) -> Result<Self, CacheError> {
         let use_fs_cache = !opts.skip_filesystem;
         let use_http_cache = !opts.skip_remote;
@@ -34,13 +36,21 @@ impl CacheMultiplexer {
         }
 
         let fs_cache = use_fs_cache
-            .then(|| FSCache::new(opts.override_dir, repo_root))
+            .then(|| FSCache::new(opts.override_dir, repo_root, analytics_recorder.clone()))
             .transpose()?;
 
         let http_cache = use_http_cache
             .then_some(api_auth)
             .flatten()
-            .map(|api_auth| HTTPCache::new(api_client, opts, repo_root.to_owned(), api_auth));
+            .map(|api_auth| {
+                HTTPCache::new(
+                    api_client,
+                    opts,
+                    repo_root.to_owned(),
+                    api_auth,
+                    analytics_recorder.clone(),
+                )
+            });
 
         Ok(CacheMultiplexer {
             should_use_http_cache: AtomicBool::new(http_cache.is_some()),

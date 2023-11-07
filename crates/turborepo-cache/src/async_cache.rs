@@ -6,6 +6,7 @@ use tokio::{
     task::JoinHandle,
 };
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
 use crate::{multiplexer::CacheMultiplexer, CacheError, CacheHitMetadata, CacheOpts};
@@ -33,10 +34,15 @@ impl AsyncCache {
         repo_root: &AbsoluteSystemPath,
         api_client: APIClient,
         api_auth: Option<APIAuth>,
+        analytics_recorder: Option<AnalyticsSender>,
     ) -> Result<AsyncCache, CacheError> {
         let max_workers = opts.workers.try_into().expect("usize is smaller than u32");
         let real_cache = Arc::new(CacheMultiplexer::new(
-            opts, repo_root, api_client, api_auth,
+            opts,
+            repo_root,
+            api_client,
+            api_auth,
+            analytics_recorder,
         )?);
         let (writer_sender, mut write_consumer) = mpsc::channel(1);
 
@@ -198,7 +204,7 @@ mod tests {
             token: "my-token".to_string(),
             team_slug: None,
         });
-        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth)?;
+        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -273,7 +279,7 @@ mod tests {
             token: "my-token".to_string(),
             team_slug: None,
         });
-        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth)?;
+        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -354,7 +360,7 @@ mod tests {
             token: "my-token".to_string(),
             team_slug: None,
         });
-        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth)?;
+        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
