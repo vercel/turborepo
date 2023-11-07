@@ -219,7 +219,7 @@ impl Display for MissingWorkspaceError {
 impl From<&PackageManager> for MissingWorkspaceError {
     fn from(value: &PackageManager) -> Self {
         Self {
-            package_manager: value.clone(),
+            package_manager: *value,
         }
     }
 }
