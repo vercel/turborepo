@@ -16,7 +16,7 @@ Run without --continue
   some-lib:build: npm ERR!   in workspace: some-lib 
   some-lib:build: npm ERR!   at location: (.*)(\/|\\)apps(\/|\\)some-lib  (re)
   some-lib:build: ERROR: command finished with error: command \((.*)\/apps\/some-lib\) npm run build exited \(1\) (re)
-  some-lib#build: command \(.*\/apps\/some-lib\) npm run build exited \(1\) (re)
+  some-lib#build: command \(.*(\/|\\)apps(\/|\\)some-lib\) npm run build exited \(1\) (re)
   
    Tasks:    0 successful, 1 total
   Cached:    0 cached, 1 total
@@ -41,7 +41,7 @@ Run without --continue, and with only errors.
   some-lib:build: npm ERR! Error: command failed 
   some-lib:build: npm ERR!   in workspace: some-lib 
   some-lib:build: npm ERR!   at location: (.*)(\/|\\)apps(\/|\\)some-lib  (re)
-  some-lib:build: ERROR: command finished with error: command \((.*)\/apps\/some-lib\) npm run build exited \(1\) (re)
+  some-lib:build: ERROR: command finished with error: command \((.*)(\/|\\)apps(\/|\\)some-lib\) npm run build exited \(1\) (re)
   some-lib#build: command \(.*\) npm run build exited \(1\) (re)
   
    Tasks:    0 successful, 1 total
@@ -65,7 +65,7 @@ Run with --continue
   some-lib:build: npm ERR! Lifecycle script `build` failed with error: 
   some-lib:build: npm ERR! Error: command failed 
   some-lib:build: npm ERR!   in workspace: some-lib 
-  some-lib:build: npm ERR!   at location: (.*)/apps/some-lib  (re)
+  some-lib:build: npm ERR!   at location: (.*)(\/|\\)apps(\/|\\)some-lib  (re)
   some-lib:build: command finished with error, but continuing...
   other-app:build: cache miss, executing a40a9e67334d0ae6
   other-app:build: 
