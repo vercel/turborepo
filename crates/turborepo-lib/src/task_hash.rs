@@ -8,7 +8,7 @@ use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
-use turborepo_cache::CacheResponse;
+use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_scm::SCM;
 
@@ -164,7 +164,7 @@ pub struct TaskHashTrackerState {
     #[serde(skip)]
     package_task_outputs: HashMap<TaskId<'static>, Vec<AnchoredSystemPathBuf>>,
     #[serde(skip)]
-    package_task_cache: HashMap<TaskId<'static>, CacheResponse>,
+    package_task_cache: HashMap<TaskId<'static>, CacheHitMetadata>,
     #[serde(skip)]
     package_task_inputs_expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
 }
@@ -457,12 +457,12 @@ impl TaskHashTracker {
         state.package_task_outputs.insert(task_id, outputs);
     }
 
-    pub fn cache_status(&self, task_id: &TaskId) -> Option<CacheResponse> {
+    pub fn cache_status(&self, task_id: &TaskId) -> Option<CacheHitMetadata> {
         let state = self.state.lock().expect("hash tracker mutex poisoned");
         state.package_task_cache.get(task_id).copied()
     }
 
-    pub fn insert_cache_status(&self, task_id: TaskId<'static>, cache_status: CacheResponse) {
+    pub fn insert_cache_status(&self, task_id: TaskId<'static>, cache_status: CacheHitMetadata) {
         let mut state = self.state.lock().expect("hash tracker mutex poisoned");
         state.package_task_cache.insert(task_id, cache_status);
     }

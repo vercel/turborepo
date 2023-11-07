@@ -63,7 +63,7 @@ pub enum Error {
     #[error("failed to contact spaces client")]
     SpacesClientSend(#[from] tokio::sync::mpsc::error::SendError<SpaceRequest>),
     #[error("failed to parse environment variables")]
-    EnvironmentVars(regex::Error),
+    Env(#[source] turborepo_env::Error),
     #[error("failed to construct task summary: {0}")]
     TaskSummary(#[from] task_factory::Error),
 }

@@ -344,7 +344,12 @@ pub enum Command {
         command: Option<Box<GenerateCommand>>,
     },
     #[clap(hide = true)]
-    Info { workspace: Option<String> },
+    Info {
+        workspace: Option<String>,
+        // We output turbo info as json. Currently just for internal testing
+        #[clap(long)]
+        json: bool,
+    },
     /// Link your local directory to a Vercel organization and enable remote
     /// caching.
     Link {
@@ -740,10 +745,11 @@ pub async fn run(
             generate::run(tag, command, &args)?;
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Info { workspace } => {
+        Command::Info { workspace, json } => {
+            let json = *json;
             let workspace = workspace.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
-            info::run(&mut base, workspace.as_deref())?;
+            info::run(&mut base, workspace.as_deref(), json)?;
 
             Ok(Payload::Rust(Ok(0)))
         }

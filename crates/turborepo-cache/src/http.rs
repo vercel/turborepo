@@ -6,7 +6,7 @@ use turborepo_api_client::{APIAuth, APIClient, Client, Response};
 use crate::{
     cache_archive::{CacheReader, CacheWriter},
     signature_authentication::ArtifactSignatureAuthenticator,
-    CacheError, CacheOpts, CacheResponse, CacheSource,
+    CacheError, CacheHitMetadata, CacheOpts, CacheSource,
 };
 
 pub struct HTTPCache {
@@ -87,8 +87,8 @@ impl HTTPCache {
         Ok(())
     }
 
-    pub async fn exists(&self, hash: &str) -> Result<CacheResponse, CacheError> {
-        let response = self
+    pub async fn exists(&self, hash: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
+        let Some(response) = self
             .client
             .artifact_exists(
                 hash,
@@ -96,14 +96,17 @@ impl HTTPCache {
                 &self.api_auth.team_id,
                 self.api_auth.team_slug.as_deref(),
             )
-            .await?;
+            .await?
+        else {
+            return Ok(None);
+        };
 
         let duration = Self::get_duration_from_response(&response)?;
 
-        Ok(CacheResponse {
+        Ok(Some(CacheHitMetadata {
             source: CacheSource::Remote,
             time_saved: duration,
-        })
+        }))
     }
 
     fn get_duration_from_response(response: &Response) -> Result<u64, CacheError> {
@@ -123,8 +126,8 @@ impl HTTPCache {
     pub async fn fetch(
         &self,
         hash: &str,
-    ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
-        let response = self
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+        let Some(response) = self
             .client
             .fetch_artifact(
                 hash,
@@ -132,7 +135,10 @@ impl HTTPCache {
                 &self.api_auth.team_id,
                 self.api_auth.team_slug.as_deref(),
             )
-            .await?;
+            .await?
+        else {
+            return Ok(None);
+        };
 
         let duration = Self::get_duration_from_response(&response)?;
 
@@ -171,13 +177,13 @@ impl HTTPCache {
 
         let files = Self::restore_tar(&self.repo_root, &body)?;
 
-        Ok((
-            CacheResponse {
+        Ok(Some((
+            CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: duration,
             },
             files,
-        ))
+        )))
     }
 
     pub(crate) fn restore_tar(
@@ -246,12 +252,13 @@ mod test {
             .put(&repo_root_path, hash, &anchored_files, duration)
             .await?;
 
-        let cache_response = cache.exists(hash).await?;
+        let cache_response = cache.exists(hash).await?.unwrap();
 
         assert_eq!(cache_response.time_saved, duration);
         assert_eq!(cache_response.source, CacheSource::Remote);
 
-        let (cache_response, received_files) = cache.fetch(hash).await?;
+        let (cache_response, received_files) = cache.fetch(hash).await?.unwrap();
+
         assert_eq!(cache_response.time_saved, duration);
 
         for (test_file, received_file) in files.iter().zip(received_files) {
