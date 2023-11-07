@@ -13,9 +13,9 @@ Running build for my-app succeeds
   my-app:build: cache miss, executing 94249a7280a39143
   my-app:build: 
   my-app:build: > build
-  my-app:build: > echo '?building'? (re)
+  my-app:build: > echo 'building' (re)
   my-app:build: 
-  my-app:build: building
+  my-app:build: '?building'? (re)
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -30,9 +30,9 @@ Update exluded file and try again
   my-app:build: cache hit, replaying logs 94249a7280a39143
   my-app:build: 
   my-app:build: > build
-  my-app:build: > echo '?building'? (re)
+  my-app:build: > echo 'building'
   my-app:build: 
-  my-app:build: building
+  my-app:build: '?building'? (re)
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
