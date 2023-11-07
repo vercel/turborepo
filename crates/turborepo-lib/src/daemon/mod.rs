@@ -6,7 +6,7 @@ pub(crate) mod endpoint;
 mod server;
 
 pub use client::{DaemonClient, DaemonError};
-pub use connector::DaemonConnector;
+pub use connector::{DaemonConnector, DaemonConnectorError};
 pub use server::{serve, CloseReason};
 
 pub(crate) mod proto {

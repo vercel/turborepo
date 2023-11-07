@@ -247,7 +247,7 @@ mod tests {
             _token: &str,
             _team_id: &str,
             _team_slug: Option<&str>,
-        ) -> turborepo_api_client::Result<Response> {
+        ) -> turborepo_api_client::Result<Option<Response>> {
             unimplemented!("fetch_artifact")
         }
         async fn artifact_exists(
@@ -256,7 +256,7 @@ mod tests {
             _token: &str,
             _team_id: &str,
             _team_slug: Option<&str>,
-        ) -> turborepo_api_client::Result<Response> {
+        ) -> turborepo_api_client::Result<Option<Response>> {
             unimplemented!("artifact_exists")
         }
         async fn get_artifact(
@@ -266,7 +266,7 @@ mod tests {
             _team_id: &str,
             _team_slug: Option<&str>,
             _method: Method,
-        ) -> turborepo_api_client::Result<Response> {
+        ) -> turborepo_api_client::Result<Option<Response>> {
             unimplemented!("get_artifact")
         }
         async fn do_preflight(

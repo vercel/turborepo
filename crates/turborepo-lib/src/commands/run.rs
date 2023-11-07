@@ -1,9 +1,8 @@
-use anyhow::Result;
 use tracing::{debug, error};
 
-use crate::{commands::CommandBase, run::Run, signal::SignalHandler};
+use crate::{commands::CommandBase, run, run::Run, signal::SignalHandler};
 
-pub async fn run(base: CommandBase) -> Result<i32> {
+pub async fn run(base: CommandBase) -> Result<i32, run::Error> {
     let handler = SignalHandler::new(tokio::signal::ctrl_c());
     let run_subscriber = handler
         .subscribe()

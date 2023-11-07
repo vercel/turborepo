@@ -3,7 +3,7 @@ use tracing::trace;
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
 use crate::{
-    cli::Args, commands::CommandBase, config::ConfigurationOptions, run::Run,
+    cli::Args, commands::CommandBase, config::ConfigurationOptions, run, run::Run,
     task_hash::TaskHashTrackerState,
 };
 
@@ -43,7 +43,7 @@ pub struct SpacesAPIClientConfig<'a> {
 }
 
 impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
-    type Error = anyhow::Error;
+    type Error = run::Error;
     fn try_from(base: &'a CommandBase) -> Result<Self, Self::Error> {
         let run = Run::new(base);
 

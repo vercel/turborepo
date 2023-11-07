@@ -61,14 +61,14 @@ pub trait Client {
         token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-    ) -> Result<Response>;
+    ) -> Result<Option<Response>>;
     async fn artifact_exists(
         &self,
         hash: &str,
         token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-    ) -> Result<Response>;
+    ) -> Result<Option<Response>>;
     async fn get_artifact(
         &self,
         hash: &str,
@@ -76,7 +76,7 @@ pub trait Client {
         team_id: &str,
         team_slug: Option<&str>,
         method: Method,
-    ) -> Result<Response>;
+    ) -> Result<Option<Response>>;
     async fn do_preflight(
         &self,
         token: &str,
@@ -327,7 +327,7 @@ impl Client for APIClient {
         token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-    ) -> Result<Response> {
+    ) -> Result<Option<Response>> {
         self.get_artifact(hash, token, team_id, team_slug, Method::GET)
             .await
     }
@@ -338,7 +338,7 @@ impl Client for APIClient {
         token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-    ) -> Result<Response> {
+    ) -> Result<Option<Response>> {
         self.get_artifact(hash, token, team_id, team_slug, Method::HEAD)
             .await
     }
@@ -350,7 +350,7 @@ impl Client for APIClient {
         team_id: &str,
         team_slug: Option<&str>,
         method: Method,
-    ) -> Result<Response> {
+    ) -> Result<Option<Response>> {
         let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
         let mut allow_auth = true;
 
@@ -376,10 +376,10 @@ impl Client for APIClient {
 
         let response = retry::make_retryable_request(request_builder).await?;
 
-        if response.status() == StatusCode::FORBIDDEN {
-            Err(Self::handle_403(response).await)
-        } else {
-            Ok(response.error_for_status()?)
+        match response.status() {
+            StatusCode::FORBIDDEN => Err(Self::handle_403(response).await),
+            StatusCode::NOT_FOUND => Ok(None),
+            _ => Ok(Some(response.error_for_status()?)),
         }
     }
 
