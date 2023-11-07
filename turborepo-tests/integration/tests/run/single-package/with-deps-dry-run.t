@@ -27,7 +27,7 @@ Check
     Log File                       = .turbo(\/|\\)turbo-build.log\s+ (re)
     Dependencies                   =                                                                                                                                                 
     Dependendents                  = test                                                                                                                                            
-    Inputs Files Considered        = 4                                                                                                                                               
+    Inputs Files Considered        = 5                                                                                                                                               
     .env Files Considered          = 0                                                                                                                                               
     Env Vars                       =                                                                                                                                                 
     Env Vars Values                =                                                                                                                                                 
