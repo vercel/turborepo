@@ -21,10 +21,10 @@ Check
   Tasks to Run
   build
     Task                           = build                                                                                                                                       
-    Hash                           = db9ab850083a69be                                                                                                                            
+    Hash                           = e46d6df5143cae99                                                                                                                            
     Cached (Local)                 = false                                                                                                                                       
     Cached (Remote)                = false                                                                                                                                       
-    Command                        = echo 'building' > foo.txt                                                                                                                   
+    Command                        = echo building > foo.txt                                                                                                                     
     Outputs                        =                                                                                                                                             
     Log File                       = .turbo(\/|\\)turbo-build.log\s+ (re)
     Dependencies                   =                                                                                                                                             
@@ -53,10 +53,10 @@ Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing db9ab850083a69be
+  build: cache bypass, force executing e46d6df5143cae99
   build: 
   build: > build
-  build: > echo 'building' > foo.txt
+  build: > echo building > foo.txt
   build: 
   
    Tasks:    1 successful, 1 total
@@ -67,10 +67,10 @@ Run a second time, verify no caching because there is no config
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing db9ab850083a69be
+  build: cache bypass, force executing e46d6df5143cae99
   build: 
   build: > build
-  build: > echo 'building' > foo.txt
+  build: > echo building > foo.txt
   build: 
   
    Tasks:    1 successful, 1 total

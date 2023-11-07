@@ -18,27 +18,27 @@ Check
   
   Tasks to Run
   build
-    Task                           = build                                                                                                                                           
-    Hash                           = cb6df6cef2cfd596                                                                                                                                
-    Cached (Local)                 = false                                                                                                                                           
-    Cached (Remote)                = false                                                                                                                                           
-    Command                        = echo 'building' > foo                                                                                                                           
-    Outputs                        = foo                                                                                                                                             
+    Task                           = build                                                                                                                                               
+    Hash                           = f09bf783beacf5c9                                                                                                                                    
+    Cached (Local)                 = false                                                                                                                                               
+    Cached (Remote)                = false                                                                                                                                               
+    Command                        = echo building > foo.txt                                                                                                                             
+    Outputs                        = foo.txt                                                                                                                                             
     Log File                       = .turbo(\/|\\)turbo-build.log\s+ (re)
-    Dependencies                   =                                                                                                                                                 
-    Dependendents                  = test                                                                                                                                            
-    Inputs Files Considered        = 5                                                                                                                                               
-    .env Files Considered          = 0                                                                                                                                               
-    Env Vars                       =                                                                                                                                                 
-    Env Vars Values                =                                                                                                                                                 
-    Inferred Env Vars Values       =                                                                                                                                                 
-    Passed Through Env Vars        =                                                                                                                                                 
-    Passed Through Env Vars Values =                                                                                                                                                 
+    Dependencies                   =                                                                                                                                                     
+    Dependendents                  = test                                                                                                                                                
+    Inputs Files Considered        = 5                                                                                                                                                   
+    .env Files Considered          = 0                                                                                                                                                   
+    Env Vars                       =                                                                                                                                                     
+    Env Vars Values                =                                                                                                                                                     
+    Inferred Env Vars Values       =                                                                                                                                                     
+    Passed Through Env Vars        =                                                                                                                                                     
+    Passed Through Env Vars Values =                                                                                                                                                     
     ResolvedTaskDefinition         = {"outputs":["foo.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
-    Framework                      = <NO FRAMEWORK DETECTED>                                                                                                                         
+    Framework                      = <NO FRAMEWORK DETECTED>                                                                                                                             
   test
     Task                           = test                                                                                                                                              
-    Hash                           = f21d7ac37c171ce7                                                                                                                                  
+    Hash                           = 8bfab5dc6b4ccb3b                                                                                                                                  
     Cached (Local)                 = false                                                                                                                                             
     Cached (Remote)                = false                                                                                                                                             
     Command                        = cat foo.txt                                                                                                                                       

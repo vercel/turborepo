@@ -92,7 +92,7 @@ Setup
   "459c029558afe716"
   $ echo $FIRST_APP_BUILD | jq '.expandedOutputs'
   [
-    "apps(\/\\\\)my-app(\/\\\\).turbo(\/\\\\)turbo-build.log" (re)
+    "apps(\/|\\\\)my-app(\/|\\\\).turbo(\/|\\\\)turbo-build.log" (re)
   ]
 # validate that cache state updates in second run
   $ echo $FIRST_APP_BUILD | jq '.cache'
