@@ -1,0 +1,315 @@
+use serde::{Deserialize, Serialize};
+use turbopath::AbsoluteSystemPathBuf;
+use turborepo_api_client::Client;
+use turborepo_vercel_api::User;
+
+use crate::Error;
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+/// AuthFile contains a list of domains, each with a token and a list of teams
+/// the token is valid for.
+pub struct AuthFile {
+    pub tokens: Vec<AuthToken>,
+}
+
+impl AuthFile {
+    /// Writes the contents of the auth file to disk. Will override whatever is
+    /// there with what's in the struct.
+    pub fn write_to_disk(&self, path: &AbsoluteSystemPathBuf) -> Result<(), Error> {
+        path.ensure_dir().map_err(|e| Error::PathError(e.into()))?;
+
+        path.create_with_contents(
+            serde_json::to_string_pretty(self)
+                .map_err(|e| Error::FailedToSerializeAuthFile { source: e })?,
+        )
+        .map_err(|e| crate::Error::FailedToWriteAuth {
+            auth_path: path.clone(),
+            error: e,
+        })?;
+
+        Ok(())
+    }
+    pub fn get_token(&self, api: &str) -> Option<AuthToken> {
+        self.tokens.iter().find(|t| t.api == api).cloned()
+    }
+    /// Adds a token to the auth file. Attempts to match exclusively on `api`.
+    /// If the api matches a token already in the file, it will be updated with
+    /// the new token.
+    ///
+    /// TODO(voz): This should probably be able to match on more than just the
+    /// `api` field, like an `id`.
+    pub fn add_or_update_token(&mut self, token: AuthToken) {
+        if let Some(existing_token) = self.tokens.iter_mut().find(|t| t.api == token.api) {
+            // Update existing token.
+            *existing_token = token;
+        } else {
+            self.tokens.push(token);
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+/// Contains the token itself and a list of teams the token is valid for.
+pub struct AuthToken {
+    /// The token itself.
+    pub token: String,
+    /// The API URL the token was issued from / for.
+    pub api: String,
+    /// The date the token was created.
+    pub created_at: Option<u64>,
+    /// The user the token was issued for.
+    pub user: User,
+    /// A list of teams the token is valid for.
+    pub teams: Vec<Team>,
+}
+
+impl AuthToken {
+    /// Searches the teams to see if any team ID matches the passed in team.
+    pub fn contains_team(&self, team: &str) -> bool {
+        self.teams.iter().any(|t| t.id == team)
+    }
+    /// Searches the teams to see if any team contains the space ID matching the
+    /// passed in space.
+    pub fn contains_space(&self, space: &str) -> bool {
+        self.teams.iter().any(|t| t.contains_space(space))
+    }
+    /// Validates the token by checking the expiration date and the signature.
+    pub async fn validate(&self, _client: impl Client) -> bool {
+        unimplemented!("validate token")
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Team {
+    pub id: String,
+    pub spaces: Vec<Space>,
+}
+impl Team {
+    // Search the team to see if it contains the space.
+    pub fn contains_space(&self, space: &str) -> bool {
+        self.spaces.iter().any(|s| s.id == space)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Space {
+    pub id: String,
+}
+
+/// Converts our old style of token held in `config.json` into the new schema.
+///
+/// Uses the client to get information not readily available in the current
+/// token. Will write the new token to disk immediately and return the AuthFile
+/// for use.
+pub async fn convert_to_auth_token(token: &str, client: &impl Client) -> Result<AuthToken, Error> {
+    // Fill in auth file data.
+    let user_response = client.get_user(token).await.map_err(Error::APIError)?;
+    let teams_response = client.get_teams(token).await.map_err(Error::APIError)?;
+
+    let mut teams = Vec::new();
+    // NOTE(voz): This doesn't feel great. Ideally we should async fetch all the
+    // teams and their spaces, but this should also only be invoked once in a while
+    // (until config.json doesn't have tokens anymore) so the perf hit shouldn't be
+    // a worry.
+    for team in teams_response.teams {
+        let team_id = &team.id;
+        let spaces_response = client
+            .get_spaces(token, Some(team_id))
+            .await
+            .map_err(Error::APIError)?;
+        let spaces = spaces_response
+            .spaces
+            .into_iter()
+            .map(|space_data| Space { id: space_data.id })
+            .collect();
+        teams.push(Team {
+            id: team_id.to_string(),
+            spaces,
+        })
+    }
+
+    let auth_token = AuthToken {
+        token: token.to_string(),
+        api: client.base_url().to_owned(),
+        created_at: user_response.user.created_at,
+        user: user_response.user,
+        teams,
+    };
+    Ok(auth_token)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::tempdir;
+
+    use super::*;
+    use crate::{mocks::*, TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR};
+
+    #[tokio::test]
+    async fn test_convert_to_auth_token() {
+        // Setup: Create a mock client and a fake token
+        let mock_client = MockApiClient::new();
+        let token = "test-token";
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        // Create the temp dir files.
+        fs::create_dir_all(temp_dir.path().join(TURBOREPO_CONFIG_DIR)).unwrap();
+
+        // Test: Call the convert_to_auth_file function and check the result
+        let result = convert_to_auth_token(token, &mock_client).await;
+        assert!(result.is_ok());
+        let auth_token = result.unwrap();
+
+        // Check that the AuthFile contains the correct data
+        assert_eq!(auth_token.token, "test-token".to_string());
+        assert_eq!(auth_token.api, "custom-domain".to_string());
+    }
+
+    #[tokio::test]
+    async fn test_write_to_disk_and_read_back() {
+        // Setup: Use temp dirs to avoid polluting the user's config dir
+        let temp_dir = tempdir().unwrap();
+        let auth_file_path = temp_dir
+            .path()
+            .join(TURBOREPO_CONFIG_DIR)
+            .join(TURBOREPO_AUTH_FILE_NAME);
+
+        // unwrapping is fine because we know the path exists
+        let absolute_auth_path = AbsoluteSystemPathBuf::try_from(auth_file_path).unwrap();
+
+        // Make sure the temp dir exists before writing to it.
+        fs::create_dir_all(temp_dir.path().join(TURBOREPO_CONFIG_DIR)).unwrap();
+
+        // Add a token to auth file
+        let mut auth_file = AuthFile { tokens: Vec::new() };
+        auth_file.add_or_update_token(AuthToken {
+            token: "test-token".to_string(),
+            api: "test-api".to_string(),
+            created_at: Some(1634851200),
+            teams: Vec::new(),
+            user: User {
+                id: "user id".to_owned(),
+                username: "voz".to_owned(),
+                email: "mitch.vostrez@vercel.com".to_owned(),
+                name: Some("voz".to_owned()),
+                created_at: None,
+            },
+        });
+
+        // Test: Write the auth file to disk and then read it back.
+        auth_file.write_to_disk(&absolute_auth_path).unwrap();
+
+        let read_back: AuthFile =
+            serde_json::from_str(&fs::read_to_string(absolute_auth_path.clone()).unwrap()).unwrap();
+        assert_eq!(read_back.tokens.len(), 1);
+        assert_eq!(read_back.tokens[0].token, "test-token");
+    }
+
+    #[tokio::test]
+    async fn test_get_token() {
+        let mut auth_file = AuthFile { tokens: Vec::new() };
+        auth_file.add_or_update_token(AuthToken {
+            token: "test-token".to_string(),
+            api: "test-api".to_string(),
+            created_at: Some(1634851200),
+            teams: Vec::new(),
+            user: User {
+                id: "user id".to_owned(),
+                username: "voz".to_owned(),
+                email: "mitch.vostrez@vercel.com".to_owned(),
+                name: Some("voz".to_owned()),
+                created_at: None,
+            },
+        });
+
+        let token = auth_file.get_token("test-api");
+        assert!(token.is_some());
+        assert_eq!(token.unwrap().token, "test-token");
+    }
+
+    #[tokio::test]
+    async fn test_add_token() {
+        let mut auth_file = AuthFile { tokens: Vec::new() };
+        assert_eq!(auth_file.tokens.len(), 0);
+
+        // Add the first token to the file.
+        auth_file.add_or_update_token(AuthToken {
+            token: "test-token".to_string(),
+            api: "test-api".to_string(),
+            created_at: Some(1634851200),
+            teams: Vec::new(),
+            user: User {
+                id: "user id".to_owned(),
+                username: "voz".to_owned(),
+                email: "mitch.vostrez@vercel.com".to_owned(),
+                name: Some("voz".to_owned()),
+                created_at: None,
+            },
+        });
+
+        // Do it twice to make sure it doesn't add duplicates.
+        auth_file.add_or_update_token(AuthToken {
+            token: "some new token".to_string(),
+            api: "test-api".to_string(),
+            created_at: Some(1634851200),
+            teams: Vec::new(),
+            user: User {
+                id: "user id".to_owned(),
+                username: "voz".to_owned(),
+                email: "mitch.vostrez@vercel.com".to_owned(),
+                name: Some("voz".to_owned()),
+                created_at: None,
+            },
+        });
+
+        assert_eq!(auth_file.tokens.len(), 1);
+        assert!(auth_file.tokens[0].token == *"some new token");
+
+        auth_file.add_or_update_token(AuthToken {
+            token: "a second token".to_string(),
+            api: "some vercel api".to_string(),
+            created_at: Some(1634851200),
+            teams: Vec::new(),
+            user: User {
+                id: "user id".to_owned(),
+                username: "voz".to_owned(),
+                email: "mitch.vostrez@vercel.com".to_owned(),
+                name: Some("voz".to_owned()),
+                created_at: None,
+            },
+        });
+
+        assert_eq!(auth_file.tokens.len(), 2);
+        assert!(auth_file.tokens[1].token == *"a second token");
+    }
+
+    #[tokio::test]
+    async fn test_contains_team_and_space() {
+        let team = Team {
+            id: "team1".to_string(),
+            spaces: vec![Space {
+                id: "space1".to_string(),
+            }],
+        };
+        let auth_token = AuthToken {
+            token: "token1".to_string(),
+            api: "api1".to_string(),
+            created_at: None,
+            teams: vec![team.clone()],
+            user: User {
+                id: "user id".to_owned(),
+                username: "voz".to_owned(),
+                email: "mitch.vostrez@vercel.com".to_owned(),
+                name: Some("voz".to_owned()),
+                created_at: None,
+            },
+        };
+
+        assert!(auth_token.contains_team("team1"));
+        assert!(!auth_token.contains_team("team2"));
+        assert!(team.contains_space("space1"));
+        assert!(!team.contains_space("space2"));
+    }
+}

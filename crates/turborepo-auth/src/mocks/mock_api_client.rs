@@ -26,6 +26,7 @@ impl From<MockApiError> for turborepo_api_client::Error {
     }
 }
 
+#[derive(Default)]
 pub struct MockApiClient {
     pub base_url: String,
 }

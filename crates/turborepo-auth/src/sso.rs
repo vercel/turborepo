@@ -6,7 +6,7 @@ use tracing::warn;
 use turborepo_api_client::Client;
 use turborepo_ui::{start_spinner, BOLD, UI};
 
-use crate::{error, server, ui, Error};
+use crate::{error, ui, Error, SSOLoginServer};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
@@ -29,7 +29,7 @@ pub async fn sso_login<'a>(
     existing_token: Option<&'a str>,
     login_url_configuration: &str,
     sso_team: &str,
-    login_server: &impl server::SSOLoginServer,
+    login_server: &impl SSOLoginServer,
 ) -> Result<Cow<'a, str>, Error> {
     // Check if token exists first. Must be there for the user and contain the
     // sso_team passed into this function.

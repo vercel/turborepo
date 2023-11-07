@@ -108,6 +108,16 @@ pub struct User {
     pub created_at: Option<u64>,
 }
 
+impl PartialEq for User {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.username == other.username
+            && self.email == other.email
+            && self.name == other.name
+            && self.created_at == other.created_at
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserResponse {
     pub user: User,

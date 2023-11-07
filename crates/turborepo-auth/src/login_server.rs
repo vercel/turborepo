@@ -21,9 +21,11 @@ pub trait LoginServer {
         login_url_base: String,
         login_token: Arc<OnceCell<String>>,
     ) -> Result<(), Error>;
+    fn open_web_browser(&self, url: &str) -> std::io::Result<()>;
 }
 
 /// TODO: Document this.
+#[derive(Default)]
 pub struct DefaultLoginServer;
 
 #[async_trait]
@@ -55,5 +57,8 @@ impl LoginServer for DefaultLoginServer {
             .expect("failed to start one-shot server");
 
         Ok(())
+    }
+    fn open_web_browser(&self, url: &str) -> std::io::Result<()> {
+        webbrowser::open(url)
     }
 }
