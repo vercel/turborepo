@@ -4,13 +4,13 @@ Setup
 
   $ cd $TARGET_DIR && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/no_workspaces (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)no_workspaces (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: global hash env vars \[] (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: external deps hash: no hash \(single package\) (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/\\\:]+" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: rust (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: filter patterns: patterns=\["nothing"] (re)
@@ -36,13 +36,13 @@ Setup
   
   $ cd $TARGET_DIR/parent && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/no_workspaces/parent (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)no_workspaces(\/|\\)parent (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: global hash env vars \[] (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: external deps hash: no hash \(single package\) (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/\\\:]+" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: filter patterns: patterns=\["nothing"] (re)
@@ -68,13 +68,13 @@ Setup
   
   $ cd $TARGET_DIR/parent/child && ${TURBO} run build --filter=nothing -vv
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*/no_workspaces/parent/child (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)no_workspaces(\/|\\)parent(\/|\\)child (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: No local turbo binary found at: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Running command as global turbo (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: global hash env vars \[] (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::run::global_hash: external deps hash: no hash \(single package\) (re)
-  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/]+" (re)
+  [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/\\\:]+" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: (go|rust) (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: filter patterns: patterns=\["nothing"] (re)
