@@ -3,11 +3,11 @@
 pathset="no"
 sysrootset="no"
 
-if [ ! -z "$PATH" ]; then
+if [ -n "$PATH" ]; then
   pathset="yes"
 fi
 
-if [ ! -z "$SYSTEMROOT" ]; then
+if [ -n "$SYSTEMROOT" ]; then
   sysrootset="yes"
 fi
 
