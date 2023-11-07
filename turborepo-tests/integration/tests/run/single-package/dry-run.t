@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ . ${TESTDIR}/../../../../helpers/setup.sh
+  $ . ${TESTDIR}/../../_helpers/setup_monorepo.sh $(pwd) single_package
 
 Check
   $ ${TURBO} run build --dry
@@ -34,5 +34,5 @@ Check
     Inferred Env Vars Values       =                                                                                                                                                 
     Passed Through Env Vars        =                                                                                                                                                 
     Passed Through Env Vars Values =                                                                                                                                                 
-    ResolvedTaskDefinition         = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
+    ResolvedTaskDefinition         = {"outputs":["foo.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
     Framework                      = <NO FRAMEWORK DETECTED>                                                                                                                         

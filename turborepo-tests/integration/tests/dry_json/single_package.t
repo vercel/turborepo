@@ -12,7 +12,7 @@ Setup
       "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
       "files": {
         "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-        "package.json": "185771929d92c3865ce06c863c07d357500d3364",
+        "package.json": "c38e07c8d8d5f851dec8cdbc3d103deed82bc960",
         "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
       },
       "hashOfExternalDependencies": "",
@@ -33,13 +33,13 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "414559dcbbf03c41",
+        "hash": "273cd179351c6ef3",
         "inputs": {
-          ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
+          ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-          "package.json": "185771929d92c3865ce06c863c07d357500d3364",
+          "package.json": "c38e07c8d8d5f851dec8cdbc3d103deed82bc960",
           "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
-          "turbo.json": "505752e75c10f9e7a0d2538cf8b6f0fcfb8980a0"
+          "turbo.json": "bf9ddbce36808b6ea5a0ea2b7ceb400ee6c42c4c"
         },
         "hashOfExternalDependencies": "",
         "cache": {
@@ -48,10 +48,10 @@ Setup
           "status": "MISS",
           "timeSaved": 0
         },
-        "command": "echo 'building' > foo",
+        "command": "echo 'building' > foo.txt",
         "cliArguments": [],
         "outputs": [
-          "foo"
+          "foo.txt"
         ],
         "excludedOutputs": null,
         "logFile": ".turbo(\/|\\\\)turbo-build.log", (re)
@@ -59,7 +59,7 @@ Setup
         "dependents": [],
         "resolvedTaskDefinition": {
           "outputs": [
-            "foo"
+            "foo.txt"
           ],
           "cache": true,
           "dependsOn": [],

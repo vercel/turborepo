@@ -1,12 +1,12 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package_deps
+  $ . ${TESTDIR}/../../../../helpers/setup.sh
+  $ . ${TESTDIR}/../../_helpers/setup_monorepo.sh $(pwd) single_package
 
 Check
   $ ${TURBO} run test --dry
   
   Global Hash Inputs
-    Global Files                          = 2
+    Global Files                          = 3
     External Dependencies Hash            = 
     Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
     Global .env Files Considered          = 0
@@ -34,19 +34,19 @@ Check
     Inferred Env Vars Values       =                                                                                                                                                 
     Passed Through Env Vars        =                                                                                                                                                 
     Passed Through Env Vars Values =                                                                                                                                                 
-    ResolvedTaskDefinition         = {"outputs":["foo"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
+    ResolvedTaskDefinition         = {"outputs":["foo.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
     Framework                      = <NO FRAMEWORK DETECTED>                                                                                                                         
   test
     Task                           = test                                                                                                                                              
-    Hash                           = af35177522814c73                                                                                                                                  
+    Hash                           = f21d7ac37c171ce7                                                                                                                                  
     Cached (Local)                 = false                                                                                                                                             
     Cached (Remote)                = false                                                                                                                                             
-    Command                        = [[ ( -f foo ) && $(cat foo) == 'building' ]]                                                                                                      
+    Command                        = cat foo.txt                                                                                                                                       
     Outputs                        =                                                                                                                                                   
     Log File                       = .turbo(\/|\\)turbo-test.log\s+ (re)
     Dependencies                   = build                                                                                                                                             
     Dependendents                  =                                                                                                                                                   
-    Inputs Files Considered        = 4                                                                                                                                                 
+    Inputs Files Considered        = 5                                                                                                                                                 
     .env Files Considered          = 0                                                                                                                                                 
     Env Vars                       =                                                                                                                                                   
     Env Vars Values                =                                                                                                                                                   
