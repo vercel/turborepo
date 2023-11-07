@@ -8,10 +8,8 @@ license = "MPL-2.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-anyhow.workspace = true
-# Switch back a published release once they make a new one that contains the below commit
-napi = { git = "https://github.com/napi-rs/napi-rs", rev = "36581336c696812fe36883650a4839e186563f0a", features = ["anyhow", "tokio_rt"] }
-napi-derive = { git = "https://github.com/napi-rs/napi-rs", rev = "36581336c696812fe36883650a4839e186563f0a" }
+napi = { version = "2.14.0", features = ["tokio_rt"] }
+napi-derive = "2.14.0"
 thiserror = { workspace = true }
 tokio = { workspace = true }
 turbopath = { workspace = true }
