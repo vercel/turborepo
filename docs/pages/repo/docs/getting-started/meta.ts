@@ -1,6 +1,6 @@
-{
+export default {
   "add-to-project": "Add to Existing Project",
   "from-example": "Start from an Example",
   "create-new": "Create a New Monorepo",
-  "existing-monorepo": "Add to Existing Monorepo"
-}
+  "existing-monorepo": "Add to Existing Monorepo",
+};

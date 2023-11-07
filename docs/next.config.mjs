@@ -1,9 +1,10 @@
-const { withSentryConfig } = require("@sentry/nextjs");
-const withNextra = require("nextra")({
+import { withSentryConfig } from "@sentry/nextjs";
+import nextra from "nextra";
+
+const withNextra = nextra({
   theme: "nextra-theme-docs",
   themeConfig: "./theme.config.tsx",
-  // options
-  flexsearch: true,
+  // flexsearch: true,
   staticImage: true,
   defaultShowCopyCode: true,
 });
@@ -59,9 +60,6 @@ const nextConfig = withNextra({
     hideSourceMaps: true,
   },
   reactStrictMode: true,
-  experimental: {
-    legacyBrowsers: false,
-  },
   eslint: {
     // TODO: remove after eslint has been fixed from new config introduced in vercel/turbo/pull/5752
     ignoreDuringBuilds: true,
@@ -243,4 +241,4 @@ const nextConfig = withNextra({
   },
 });
 
-module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);
+export default withSentryConfig(nextConfig, sentryWebpackPluginOptions);

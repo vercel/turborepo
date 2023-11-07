@@ -1,0 +1,11 @@
+export default {
+  javascript: "JavaScript",
+  typescript: "TypeScript",
+  frameworks: "Frameworks",
+  css: "CSS",
+  "dev-server": "Dev Server",
+  "static-assets": "Static Assets",
+  imports: "Imports",
+  "environment-variables": "Environment Variables",
+  "customizing-turbopack": "Customizing Turbopack",
+};

@@ -1,7 +1,7 @@
-{
+export default {
   "running-tasks": "Running Tasks",
   "task-dependencies": "Task Dependencies",
-  "filtering": "Filtering Workspaces",
+  filtering: "Filtering Workspaces",
   "code-generation": "Code Generation",
-  "skipping-tasks": "Skipping Tasks in CI"
-}
+  "skipping-tasks": "Skipping Tasks in CI",
+};

@@ -1,15 +1,15 @@
-{
+export default {
   "what-is-a-monorepo": "What is a Monorepo?",
   "package-installation": "Package Installation",
-  "workspaces": "Workspaces",
+  workspaces: "Workspaces",
   "migrating-to-a-monorepo": "Migrating to a Monorepo",
-  "dev": "Development Tasks",
+  dev: "Development Tasks",
   "building-your-app": "Building Your App",
   "deploying-with-docker": "Deploying with Docker",
   "environment-variables": "Using Environment Variables",
   "sharing-code": "Sharing Code",
-  "linting": "Linting",
-  "testing": "Testing",
+  linting: "Linting",
+  testing: "Testing",
   "publishing-packages": "Publishing Packages",
-  "troubleshooting": "Troubleshooting"
-}
+  troubleshooting: "Troubleshooting",
+};

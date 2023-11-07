@@ -1,4 +1,4 @@
-import { useSSG } from "nextra/ssg";
+import { useSSG } from "nextra/data";
 import { ExampleCard } from "./ExamplesCard";
 
 interface Example {
@@ -51,7 +51,7 @@ export function ExamplesArea({
   });
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:mt-16 mt-12 gap-x-6 gap-y-12  lg:gap-x-8 lg:gap-y-12">
+    <div className="grid grid-cols-1 mt-12 md:grid-cols-2 lg:mt-16 gap-x-6 gap-y-12 lg:gap-x-8 lg:gap-y-12">
       {/* Render examples in three groups -
         1. Examples that have been explicitly boosted
         2. Examples with Vercel templates

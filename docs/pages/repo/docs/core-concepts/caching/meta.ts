@@ -1,6 +1,6 @@
-{
+export default {
   "to-cache-or-not-to-cache": "To Cache or Not To Cache",
   "what-to-cache": "What to Cache",
   "file-inputs": "File Inputs",
-  "environment-variable-inputs": "Environment Variable Inputs"
-}
+  "environment-variable-inputs": "Environment Variable Inputs",
+};

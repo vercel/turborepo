@@ -1,12 +1,12 @@
-{
+export default {
   "*": {
-    "display": "hidden",
-    "theme": {
-      "toc": false,
-      "sidebar": false,
-      "pagination": false,
-      "typesetting": "article"
-    }
+    display: "hidden",
+    theme: {
+      toc: false,
+      sidebar: false,
+      pagination: false,
+      typesetting: "article",
+    },
   },
   "turbo-1-10-0": "Turborepo 1.10",
   "turbo-1-9-0": "Turborepo 1.9",
@@ -21,6 +21,7 @@
   "turbo-1-1-0": "Turborepo 1.1",
   "joining-vercel": "Joining Vercel",
   "saml-sso-now-available": "SAML SSO now available",
-  "you-might-not-need-typescript-project-references": "You might not need TypeScript project references",
-  "turbo-0-4-0": "Turborepo 0.4.0"
-}
+  "you-might-not-need-typescript-project-references":
+    "You might not need TypeScript project references",
+  "turbo-0-4-0": "Turborepo 0.4.0",
+};
