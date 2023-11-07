@@ -87,8 +87,7 @@ pub struct RunOpts<'a> {
     pub(crate) continue_on_error: bool,
     pub(crate) pass_through_args: &'a [String],
     pub(crate) only: bool,
-    pub(crate) dry_run: bool,
-    pub(crate) dry_run_json: bool,
+    pub(crate) dry_run: Option<DryRunMode>,
     pub graph: Option<GraphOpts<'a>>,
     pub(crate) no_daemon: bool,
     pub(crate) single_package: bool,
@@ -169,8 +168,7 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
             no_daemon: args.no_daemon,
             single_package: args.single_package,
             graph,
-            dry_run_json: matches!(args.dry_run, Some(DryRunMode::Json)),
-            dry_run: args.dry_run.is_some(),
+            dry_run: args.dry_run,
             is_github_actions,
         })
     }
