@@ -5,9 +5,7 @@ Setup
 Remove comments from our fixture turbo.json so we can do more jq things to it
   $ grep -v '^\s*//' turbo.json > turbo.json.1
   $ mv turbo.json.1 turbo.json
-
-We just created a new file. On Windows, we need to convert it to Unix line endings
-so the hashes will be stable with what's expected in our test cases.
+On Windows, convert CRLF line endings to LF Unix line endings, so hashes will match fixtures
   $ if [[ "$OSTYPE" == "msys" ]]; then dos2unix --quiet "$TARGET_DIR/package.json"; fi
 
   $ git commit -am "remove comments" > /dev/null
@@ -23,6 +21,8 @@ Test that remote caching is enabled by default
 Set `remoteCache = {}` into turbo.json
   $ jq -r --argjson value "{}" '.remoteCache = $value' turbo.json > turbo.json.1
   $ mv turbo.json.1 turbo.json
+On Windows, convert CRLF line endings to LF Unix line endings, so hashes will match fixtures
+  $ if [[ "$OSTYPE" == "msys" ]]; then dos2unix --quiet "$TARGET_DIR/package.json"; fi
   $ git commit -am "add empty remote caching config" > /dev/null
 
 Test that remote caching is still enabled
@@ -32,6 +32,8 @@ Test that remote caching is still enabled
 Set `remoteCache = { enabled: false }` into turbo.json
   $ jq -r --argjson value false '.remoteCache.enabled = $value' turbo.json > turbo.json.1
   $ mv turbo.json.1 turbo.json
+On Windows, convert CRLF line endings to LF Unix line endings, so hashes will match fixtures
+  $ if [[ "$OSTYPE" == "msys" ]]; then dos2unix --quiet "$TARGET_DIR/package.json"; fi
   $ git commit -am "disable remote caching" > /dev/null
 
 Test that this time, remote caching is disabled
