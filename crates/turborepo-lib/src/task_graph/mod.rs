@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
-pub use visitor::{Error, Visitor};
+pub use visitor::{Error as VisitorError, Visitor};
 
 use crate::{
     cli::OutputLogsMode,
@@ -49,7 +49,7 @@ pub struct TaskDefinitionStable {
     pub(crate) persistent: bool,
     pub(crate) env: Vec<String>,
     pub(crate) pass_through_env: Option<Vec<String>>,
-    pub(crate) dot_env: Vec<RelativeUnixPathBuf>,
+    pub(crate) dot_env: Option<Vec<RelativeUnixPathBuf>>,
 }
 
 impl Default for TaskDefinitionStable {
@@ -64,13 +64,13 @@ impl Default for TaskDefinitionStable {
             persistent: false,
             env: Vec::new(),
             pass_through_env: None,
-            dot_env: Vec::new(),
+            dot_env: None,
         }
     }
 }
 
 // Constructed from a RawTaskDefinition
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Deserialize, PartialEq, Clone)]
 pub struct TaskDefinition {
     pub outputs: TaskOutputs,
     pub(crate) cache: bool,
@@ -80,7 +80,7 @@ pub struct TaskDefinition {
 
     pub(crate) pass_through_env: Option<Vec<String>>,
 
-    pub(crate) dot_env: Vec<RelativeUnixPathBuf>,
+    pub(crate) dot_env: Option<Vec<RelativeUnixPathBuf>>,
 
     // TopologicalDependencies are tasks from package dependencies.
     // E.g. "build" is a topological dependency in:

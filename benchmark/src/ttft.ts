@@ -30,7 +30,7 @@ if (!fs.existsSync(TURBO_BIN)) {
   throw new Error("No turbo binary found");
 }
 
-const turboFlags = `-vvv --experimental-rust-codepath --dry --skip-infer --profile=${fullProfilePath}`;
+const turboFlags = `-vvv --dry --skip-infer --profile=${fullProfilePath}`;
 
 console.log("Executing turbo build in child process", {
   cwd: process.cwd(),
@@ -42,7 +42,10 @@ console.log("Executing turbo build in child process", {
 // When this script runs, cwd is benchmark/large-monorepo (i.e. REPO_PATH)
 const cmd = `${TURBO_BIN} run build ${turboFlags}`;
 try {
-  cp.execSync(cmd, DEFAULT_EXEC_OPTS);
+  cp.execSync(cmd, {
+    ...DEFAULT_EXEC_OPTS,
+    env: { ...process.env, EXPERIMENTAL_RUST_CODEPATH: "true" },
+  });
 } catch (e) {
   // catch errors and exit. the build command seems to be erroring out due to very large output?
   // need to chase it down, but the benchmark seems to still be working, and when the same turbo run build

@@ -12,7 +12,7 @@ pub enum Error {
     #[error("skipping HTTP Request, too many failures have occurred.\nLast error: {0}")]
     TooManyFailures(#[from] Box<reqwest::Error>),
     #[error("Unable to set up TLS.")]
-    TlsError(reqwest::Error),
+    TlsError(#[source] reqwest::Error),
     #[error("Error parsing header: {0}")]
     InvalidHeader(#[from] ToStrError),
     #[error("Error parsing URL: {0}")]
@@ -31,6 +31,8 @@ pub enum Error {
         status: CachingStatus,
         message: String,
     },
+    #[error("cache miss")]
+    CacheMiss,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -101,7 +101,7 @@ Check
   $ echo $TASK_SUMMARY | jq '.expandedOutputs'
   [
     ".turbo/turbo-build.log",
-    "foo"
+    "foo.txt"
   ]
   $ echo $TASK_SUMMARY | jq '.cache'
   {
@@ -113,7 +113,7 @@ Check
 
   $ rm -r .turbo/runs
 Check Rust implementation
-  $ ${TURBO} run build --summarize --experimental-rust-codepath --no-daemon > /dev/null
+  $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} run build --summarize --no-daemon > /dev/null
   $ test -d .turbo/runs
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)

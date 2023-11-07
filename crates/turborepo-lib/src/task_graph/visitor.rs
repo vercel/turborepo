@@ -16,7 +16,9 @@ use tracing::{debug, error, Span};
 use turbopath::AbsoluteSystemPath;
 use turborepo_ci::VendorBehavior;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
+use turborepo_repository::package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME};
 use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
+use which::which;
 
 use crate::{
     cli::EnvMode,
@@ -28,7 +30,7 @@ use crate::{
         global_hash::GlobalHashableInputs,
         summary,
         summary::{GlobalHashSummary, RunTracker},
-        task_id::{self, TaskId},
+        task_id::TaskId,
         RunCache,
     },
     task_hash::{self, PackageInputsHashes, TaskHashTrackerState, TaskHasher},
@@ -153,9 +155,7 @@ impl<'a> Visitor<'a> {
                 .cloned();
 
             match command {
-                Some(cmd)
-                    if info.package() == task_id::ROOT_PKG_NAME && turbo_regex().is_match(&cmd) =>
-                {
+                Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(&cmd) => {
                     return Err(Error::RecursiveTurbo {
                         task_name: info.to_string(),
                         command: cmd.to_string(),
@@ -270,24 +270,31 @@ impl<'a> Visitor<'a> {
                 }
 
                 match task_cache.restore_outputs(&mut prefixed_ui).await {
-                    Ok(hit) => {
+                    Ok(Some(status)) => {
                         // we need to set expanded outputs
                         hash_tracker.insert_expanded_outputs(
                             task_id.clone(),
                             task_cache.expanded_outputs().to_vec(),
                         );
-                        hash_tracker.insert_cache_status(task_id, hit);
+                        hash_tracker.insert_cache_status(task_id, status);
                         tracker.cached().await;
                         callback.send(Ok(())).ok();
                         return;
                     }
-                    Err(e) if e.is_cache_miss() => (),
+                    Ok(None) => (),
                     Err(e) => {
                         prefixed_ui.error(format!("error fetching from cache: {e}"));
                     }
                 }
 
-                let mut cmd = Command::new(package_manager.to_string());
+                let Ok(package_manager_binary) = which(package_manager.command()) else {
+                    manager.stop().await;
+                    tracker.cancel();
+                    callback.send(Err(StopExecution)).ok();
+                    return;
+                };
+
+                let mut cmd = Command::new(package_manager_binary);
                 cmd.args(["run", task_id.task()]);
                 cmd.current_dir(workspace_directory.as_path());
                 cmd.stdout(Stdio::piped());
@@ -324,7 +331,7 @@ impl<'a> Visitor<'a> {
                             .lock()
                             .expect("lock poisoned")
                             .push(TaskError::from_spawn(task_id_for_display.clone(), e));
-                        let _summary = tracker.spawn_failed(error_string).await;
+                        tracker.spawn_failed(error_string).await;
                         callback
                             .send(if continue_on_error {
                                 Ok(())
@@ -370,7 +377,7 @@ impl<'a> Visitor<'a> {
                 match exit_status {
                     // The task was successful, nothing special needs to happen.
                     ChildExit::Finished(Some(0)) => {
-                        let _summary = tracker.build_succeeded(0);
+                        tracker.build_succeeded(0).await;
                     }
                     ChildExit::Finished(Some(code)) => {
                         // If there was an error, flush the buffered output

@@ -445,6 +445,10 @@ mod test {
     }], "1b266409f3ae154e" ; "non-empty")]
     #[test_case(vec![Package {
         key: "key".to_string(),
+        version: "".to_string(),
+    }], "bde280722f61644a" ; "empty version")]
+    #[test_case(vec![Package {
+        key: "key".to_string(),
         version: "version".to_string(),
     }, Package {
         key: "zey".to_string(),

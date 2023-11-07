@@ -24,6 +24,7 @@ use tracing::log::warn;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_repository::package_graph::{PackageGraph, WorkspaceName};
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
 use self::{
@@ -36,7 +37,6 @@ use crate::{
     cli,
     engine::Engine,
     opts::RunOpts,
-    package_graph::{PackageGraph, WorkspaceName},
     run::summary::{
         execution::{ExecutionSummary, ExecutionTracker},
         scm::SCMState,
@@ -63,7 +63,7 @@ pub enum Error {
     #[error("failed to contact spaces client")]
     SpacesClientSend(#[from] tokio::sync::mpsc::error::SendError<SpaceRequest>),
     #[error("failed to parse environment variables")]
-    EnvironmentVars(regex::Error),
+    Env(#[source] turborepo_env::Error),
     #[error("failed to construct task summary: {0}")]
     TaskSummary(#[from] task_factory::Error),
 }
@@ -111,7 +111,7 @@ pub struct RunSummary<'a> {
     global_hash_summary: GlobalHashSummary<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
     execution: Option<ExecutionSummary<'a>>,
-    packages: HashSet<WorkspaceName>,
+    packages: Vec<WorkspaceName>,
     env_mode: EnvMode,
     framework_inference: bool,
     tasks: Vec<TaskSummary>,
@@ -236,7 +236,7 @@ impl RunTracker {
             id: Ksuid::new(None, None),
             version: RUN_SUMMARY_SCHEMA_VERSION.to_string(),
             turbo_version: self.version,
-            packages,
+            packages: packages.into_iter().sorted().collect(),
             execution: Some(execution_summary),
             env_mode: run_opts.env_mode.into(),
             framework_inference: run_opts.framework_inference,
@@ -433,8 +433,8 @@ impl<'a> RunSummary<'a> {
 
         if self.monorepo {
             println!("\n{}", color!(ui, BOLD_CYAN, "Packages in Scope"));
-            let mut tab_writer = TabWriter::new(io::stdout());
-            writeln!(tab_writer, "Name\tPath")?;
+            let mut tab_writer = TabWriter::new(io::stdout()).minwidth(0).padding(1);
+            writeln!(tab_writer, "Name\tPath\t")?;
             for pkg in &self.packages {
                 if matches!(pkg, WorkspaceName::Root) {
                     continue;
@@ -445,13 +445,13 @@ impl<'a> RunSummary<'a> {
                     .package_path();
 
                 writeln!(tab_writer, "{}\t{}", pkg, dir)?;
-                tab_writer.flush()?;
             }
+            tab_writer.flush()?;
         }
 
         let file_count = self.global_hash_summary.files.len();
 
-        let mut tab_writer = TabWriter::new(io::stdout());
+        let mut tab_writer = TabWriter::new(io::stdout()).minwidth(0).padding(1);
         cprintln!(ui, BOLD_CYAN, "\nGlobal Hash Inputs");
         cwriteln!(tab_writer, ui, GREY, "  Global Files\t=\t{}", file_count)?;
         cwriteln!(
@@ -472,7 +472,7 @@ impl<'a> RunSummary<'a> {
             tab_writer,
             ui,
             GREY,
-            "  Global .env Files considered\t=\t{}",
+            "  Global .env Files Considered\t=\t{}",
             self.global_hash_summary
                 .global_dot_env
                 .unwrap_or_default()
@@ -513,6 +513,30 @@ impl<'a> RunSummary<'a> {
                 .unwrap_or_default()
                 .join(", ")
         )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Passed Through Env Vars\t=\t{}",
+            self.global_hash_summary
+                .environment_variables
+                .specified
+                .pass_through_env
+                .unwrap_or_default()
+                .join(", ")
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Passed Through Env Vars Values\t=\t{}",
+            self.global_hash_summary
+                .environment_variables
+                .pass_through
+                .as_deref()
+                .unwrap_or_default()
+                .join(", ")
+        )?;
 
         tab_writer.flush()?;
 
@@ -540,7 +564,10 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  Outputs\t=\t{}",
-                task.shared.outputs.join(", ")
+                task.shared
+                    .outputs
+                    .as_ref()
+                    .map_or_else(String::new, |outputs| outputs.join(", "))
             )?;
             cwriteln!(
                 tab_writer,
@@ -575,7 +602,10 @@ impl<'a> RunSummary<'a> {
                 ui,
                 GREY,
                 "  .env Files Considered\t=\t{}",
-                task.shared.dot_env.len()
+                task.shared
+                    .dot_env
+                    .as_ref()
+                    .map_or(0, |dot_env| dot_env.len())
             )?;
 
             cwriteln!(
@@ -609,14 +639,19 @@ impl<'a> RunSummary<'a> {
                     .environment_variables
                     .specified
                     .pass_through_env
-                    .join(", ")
+                    .as_ref()
+                    .map_or_else(String::new, |pass_through_env| pass_through_env.join(", "))
             )?;
             cwriteln!(
                 tab_writer,
                 ui,
                 GREY,
                 "  Passed Through Env Vars Values\t=\t{}",
-                task.shared.environment_variables.pass_through.join(", ")
+                task.shared
+                    .environment_variables
+                    .pass_through
+                    .as_ref()
+                    .map_or_else(String::new, |vars| vars.join(", "))
             )?;
 
             // If there's an error, we can silently ignore it, we don't need to block the
@@ -640,13 +675,16 @@ impl<'a> RunSummary<'a> {
     fn format_json(&mut self) -> Result<String, Error> {
         self.normalize();
 
-        if self.monorepo {
-            Ok(serde_json::to_string_pretty(&self)?)
+        let mut rendered_json = if self.monorepo {
+            serde_json::to_string_pretty(&self)
         } else {
             // Deref coercion used to get an immutable reference from the mutable reference.
             let monorepo_rsm = SinglePackageRunSummary::from(&*self);
-            Ok(serde_json::to_string_pretty(&monorepo_rsm)?)
-        }
+            serde_json::to_string_pretty(&monorepo_rsm)
+        }?;
+        // Go produces an extra newline at the end of the JSON
+        rendered_json.push('\n');
+        Ok(rendered_json)
     }
 
     fn normalize(&mut self) {
@@ -658,7 +696,7 @@ impl<'a> RunSummary<'a> {
         // For single packages, we don't need the packages
         // and each task summary needs some cleaning
         if !self.monorepo {
-            self.packages.drain();
+            self.packages.clear();
         }
 
         self.tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));

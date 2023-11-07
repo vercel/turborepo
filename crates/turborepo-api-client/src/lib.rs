@@ -18,6 +18,7 @@ use url::Url;
 
 pub use crate::error::{Error, Result};
 
+pub mod analytics;
 mod error;
 mod retry;
 pub mod spaces;
@@ -61,14 +62,14 @@ pub trait Client {
         token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-    ) -> Result<Response>;
+    ) -> Result<Option<Response>>;
     async fn artifact_exists(
         &self,
         hash: &str,
         token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-    ) -> Result<Response>;
+    ) -> Result<Option<Response>>;
     async fn get_artifact(
         &self,
         hash: &str,
@@ -76,7 +77,7 @@ pub trait Client {
         team_id: &str,
         team_slug: Option<&str>,
         method: Method,
-    ) -> Result<Response>;
+    ) -> Result<Option<Response>>;
     async fn do_preflight(
         &self,
         token: &str,
@@ -327,7 +328,7 @@ impl Client for APIClient {
         token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-    ) -> Result<Response> {
+    ) -> Result<Option<Response>> {
         self.get_artifact(hash, token, team_id, team_slug, Method::GET)
             .await
     }
@@ -338,7 +339,7 @@ impl Client for APIClient {
         token: &str,
         team_id: &str,
         team_slug: Option<&str>,
-    ) -> Result<Response> {
+    ) -> Result<Option<Response>> {
         self.get_artifact(hash, token, team_id, team_slug, Method::HEAD)
             .await
     }
@@ -350,7 +351,7 @@ impl Client for APIClient {
         team_id: &str,
         team_slug: Option<&str>,
         method: Method,
-    ) -> Result<Response> {
+    ) -> Result<Option<Response>> {
         let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
         let mut allow_auth = true;
 
@@ -376,10 +377,10 @@ impl Client for APIClient {
 
         let response = retry::make_retryable_request(request_builder).await?;
 
-        if response.status() == StatusCode::FORBIDDEN {
-            Err(Self::handle_403(response).await)
-        } else {
-            Ok(response.error_for_status()?)
+        match response.status() {
+            StatusCode::FORBIDDEN => Err(Self::handle_403(response).await),
+            StatusCode::NOT_FOUND => Ok(None),
+            _ => Ok(Some(response.error_for_status()?)),
         }
     }
 
@@ -462,6 +463,50 @@ impl APIClient {
             user_agent,
             use_preflight,
         })
+    }
+
+    /// Create a new request builder with the preflight check done,
+    /// team parameters added, CI header, and a content type of json.
+    pub(crate) async fn create_request_builder(
+        &self,
+        url: &str,
+        api_auth: &APIAuth,
+        method: Method,
+    ) -> Result<RequestBuilder> {
+        let mut url = self.make_url(url);
+        let mut allow_auth = true;
+
+        let APIAuth {
+            token,
+            team_id,
+            team_slug,
+        } = api_auth;
+
+        if self.use_preflight {
+            let preflight_response = self
+                .do_preflight(token, &url, method.as_str(), "Authorization, User-Agent")
+                .await?;
+
+            allow_auth = preflight_response.allow_authorization_header;
+            url = preflight_response.location.to_string();
+        }
+
+        let mut request_builder = self
+            .client
+            .request(method, &url)
+            .header("Content-Type", "application/json");
+
+        if allow_auth {
+            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+        }
+
+        request_builder = Self::add_team_params(request_builder, team_id, team_slug.as_deref());
+
+        if let Some(constant) = turborepo_ci::Vendor::get_constant() {
+            request_builder = request_builder.header("x-artifact-client-ci", constant);
+        }
+
+        Ok(request_builder)
     }
 }
 

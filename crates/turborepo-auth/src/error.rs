@@ -12,11 +12,11 @@ pub enum Error {
     #[error("failed to get token")]
     FailedToGetToken,
     #[error("failed to fetch user: {0}")]
-    FailedToFetchUser(turborepo_api_client::Error),
+    FailedToFetchUser(#[source] turborepo_api_client::Error),
     #[error("url is invalid: {0}")]
     InvalidUrl(#[from] url::ParseError),
     #[error("failed to validate sso token")]
-    FailedToValidateSSOToken(turborepo_api_client::Error),
+    FailedToValidateSSOToken(#[source] turborepo_api_client::Error),
     #[error("failed to make sso token name")]
-    FailedToMakeSSOTokenName(io::Error),
+    FailedToMakeSSOTokenName(#[source] io::Error),
 }
