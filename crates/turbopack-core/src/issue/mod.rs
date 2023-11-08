@@ -91,6 +91,7 @@ impl DeterministicHash for StyledString {
                 }
             }
             StyledString::String(s) | StyledString::Pre(s) | StyledString::Strong(s) => {
+                // Normalize syspaths from Windows. These appear in stack traces.
                 s.replace('\\', "/").deterministic_hash(state);
             }
         }
@@ -536,11 +537,7 @@ fn hash_plain_issue(issue: &PlainIssue, hasher: &mut Xxh3Hash64Hasher, full: boo
     hasher.write_ref(&issue.file_path);
     hasher.write_ref(&issue.category);
     hasher.write_ref(&issue.title);
-    hasher.write_ref(
-        // Normalize syspaths from Windows. These appear in stack traces.
-        // &issue.description.replace('\\', "/"),
-        &issue.description,
-    );
+    hasher.write_ref(&issue.description);
     hasher.write_ref(&issue.detail);
     hasher.write_ref(&issue.documentation_link);
 
