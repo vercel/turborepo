@@ -214,8 +214,12 @@ pub fn bottom_tree<C: AggregationContext>(
         add_left_upper_to_item_step_2(aggregation_context, reference, &new_bottom_tree, result);
     }
     if height != 0 {
-        bottom_tree(aggregation_context, reference, height - 1)
-            .add_left_bottom_tree_upper(aggregation_context, &new_bottom_tree);
+        let bottom_tree = &bottom_tree(aggregation_context, reference, height - 1);
+        if height % 4 != 0
+            || !bottom_tree.add_inner_bottom_tree_upper(aggregation_context, &new_bottom_tree, 0)
+        {
+            bottom_tree.add_left_bottom_tree_upper(aggregation_context, &new_bottom_tree);
+        }
     }
     new_bottom_tree
 }
