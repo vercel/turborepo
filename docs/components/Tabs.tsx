@@ -1,5 +1,4 @@
 import type { FC, ReactElement } from "react";
-
 import { Tabs as NextraTabs, Tab } from "nextra-theme-docs";
 import useSWR from "swr";
 
@@ -23,12 +22,12 @@ export const Tabs: FC<{
 
   return (
     <NextraTabs
+      items={items}
       onChange={(index) => {
         localStorage.setItem(storageKey, JSON.stringify(items[index]));
         mutate(items[index], false);
       }}
       selectedIndex={selectedIndex === -1 ? undefined : selectedIndex}
-      items={items}
       {...props}
     >
       {children}

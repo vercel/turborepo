@@ -7,7 +7,7 @@ These are some common issues when starting.
 On Macs, unsigned binaries cannot be run by default. To manually approve this
 app, go to: [Apple menu > System Preferences, click Security & Privacy, under the General tab](x-apple.systempreferences:com.apple.preference.security). You'll see "“cargo-nextest” was blocked from use because it is
 not from an identified developer". Click the "Allow Anyway" button, and
-`cargo-nexttest` can be run on the next invocation.
+`cargo-nextest` can be run on the next invocation.
 
 See also: https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616/mac
 
@@ -40,3 +40,12 @@ brew install python pkg-config pixman cairo pango
 Now try `pnpm install` again.
 
 See also: https://github.com/Automattic/node-canvas/blob/master/Readme.md#compiling
+
+## Enabling logging in Turborepo
+
+Logging can be enabled in two ways, first with the verbosity flag (-vvv) which
+sets the global log level, but it is also possible to use the TURBO_LOG_VERBOSITY
+environment variable. With this, you can set different log levels per module.
+For syntax, see the [Env Filter Syntax][1]
+
+[1][https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html]

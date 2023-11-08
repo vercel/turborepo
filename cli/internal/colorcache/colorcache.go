@@ -48,5 +48,9 @@ func (c *ColorCache) colorForKey(key string) colorFn {
 // color based on the cacheKey
 func (c *ColorCache) PrefixWithColor(cacheKey string, prefix string) string {
 	colorFn := c.colorForKey(cacheKey)
-	return colorFn("%s: ", prefix)
+	if prefix != "" {
+		return colorFn("%s: ", prefix)
+	}
+
+	return ""
 }

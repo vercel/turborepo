@@ -1,17 +1,12 @@
 import cn from "classnames";
-import {
-  animate,
-  motion,
-  useInView,
-  useAnimation,
-  AnimationPlaybackControls,
-} from "framer-motion";
-import Image from "next/future/image";
+import type { AnimationPlaybackControls } from "framer-motion";
+import { animate, motion, useInView, useAnimation } from "framer-motion";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import benchmarkData from "./benchmark-data/data.json";
 import { Gradient } from "../home-shared/Gradient";
 import gradients from "../home-shared/gradients.module.css";
-import {
+import benchmarkData from "./benchmark-data/data.json";
+import type {
   BenchmarkBar,
   BenchmarkCategory,
   BenchmarkData,
@@ -42,27 +37,34 @@ export function BenchmarksGraph({
     <div className="flex w-full max-w-[1248px] relative px-6">
       <div className="absolute top-0 flex items-center justify-center flex-1 w-full h-full">
         <Gradient
-          gray
-          width="100%"
-          height="100%"
           className="dark:opacity-0 dark:md:opacity-25 opacity-10"
+          gray
+          height="100%"
+          width="100%"
         />
       </div>
       <div
-        ref={graphRef}
         className="relative flex flex-col flex-1 gap-6 md:gap-10"
+        ref={graphRef}
       >
         {bars.map((bar) => {
           return (
             <GraphBar
-              key={bar.key}
-              turbo={bar.turbo}
-              Label={<GraphLabel label={bar.label} turbo={bar.turbo} />}
+              Label={
+                <GraphLabel
+                  label={bar.label}
+                  swc={bar.swc}
+                  turbo={bar.turbo}
+                  version={bar.version}
+                />
+              }
               duration={data[bar.key] * 1000}
-              longestTime={longestTimeWithPadding}
               inView={graphInView}
+              key={bar.key}
+              longestTime={longestTimeWithPadding}
               pinTime={pinTime}
-            ></GraphBar>
+              turbo={bar.turbo}
+            />
           );
         })}
       </div>
@@ -178,35 +180,35 @@ function GraphBar({
       <div className="flex w-full items-center justify-between gap-4 z-10 border dark:border-[#333333] rounded-lg p-1">
         <motion.div
           animate={controls}
-          variants={graphBarWrapperVariants}
-          style={{ width: `${barWidth}%` }}
-          transition={{ duration: 0.1 }}
-          initial="hidden"
           className={cn(
             "flex items-center h-full rounded relative dark:bg-[#383838] bg-[#E6E6E6]"
           )}
+          initial="hidden"
+          style={{ width: `${barWidth}%` }}
+          transition={{ duration: 0.1 }}
+          variants={graphBarWrapperVariants}
         >
           <motion.div
+            animate={controls}
             className={cn(
               "h-12 rounded w-0 relative",
               turbo ? gradients.benchmarkTurbo : gradients.benchmark,
               { [gradients.barBorder]: !turbo }
             )}
-            variants={graphBarVariants}
-            animate={controls}
             transition={{ duration: 0.1 }}
+            variants={graphBarVariants}
           />
         </motion.div>
         <motion.div
           animate={controls}
-          variants={graphBarWrapperVariants}
           className="pr-2"
           transition={{ duration: 0.1 }}
+          variants={graphBarWrapperVariants}
         >
           <GraphTimer
-            turbo={turbo}
-            timer={pinTime ? duration : timer}
             duration={duration}
+            timer={pinTime ? duration : timer}
+            turbo={turbo}
           />
         </motion.div>
       </div>
@@ -214,7 +216,7 @@ function GraphBar({
   );
 }
 
-const GraphTimer = ({
+function GraphTimer({
   turbo,
   timer,
   duration,
@@ -222,53 +224,53 @@ const GraphTimer = ({
   turbo: boolean;
   timer: number;
   duration: number;
-}) => {
+}) {
   return (
-    <div className={`flex flex-row gap-2 w-24 justify-end items-center z-10`}>
-      {turbo && (
-        <div className="relative flex w-8 h-8 ">
+    <div className="flex flex-row gap-2 w-24 justify-end items-center z-10">
+      {turbo ? (
+        <div className="relative flex w-6 h-6">
           <Image
             alt="Turbopack"
+            className="block dark:hidden"
+            height={32}
             src="/images/docs/pack/turbo-benchmark-icon-light.svg"
             width={32}
-            height={32}
-            className="block dark:hidden"
           />
           <Image
             alt="Turbopack"
+            className="hidden dark:block"
+            height={32}
             src="/images/docs/pack/turbo-benchmark-icon-dark.svg"
             width={32}
-            height={32}
-            className="hidden dark:block"
           />
           <Gradient
-            pink
-            width="100%"
-            height="100%"
-            small
             className="opacity-0 dark:opacity-60"
+            height="100%"
+            pink
+            small
+            width="100%"
           />
         </div>
-      )}
+      ) : null}
       <p className="font-mono">
-        <Time value={timer} maxValue={duration} />
+        <Time maxValue={duration} value={timer} />
       </p>
     </div>
   );
-};
+}
 
 function roundTo(num: number, decimals: number) {
   const factor = Math.pow(10, decimals);
   return Math.round(num * factor) / factor;
 }
 
-const Time = ({
+function Time({
   value,
   maxValue,
 }: {
   value: number;
   maxValue: number;
-}): JSX.Element => {
+}): JSX.Element {
   let unitValue: string;
   let unit: string;
   if (maxValue < 1000) {
@@ -286,16 +288,20 @@ const Time = ({
       {unit}
     </>
   );
-};
+}
 
 function GraphLabel({
   label,
   turbo,
+  swc,
   mobileOnly,
   esbuild,
+  version,
 }: {
   label: string;
+  version: string;
   turbo?: boolean;
+  swc?: boolean;
   mobileOnly?: boolean;
   esbuild?: boolean;
 }) {
@@ -304,9 +310,10 @@ function GraphLabel({
       className={`flex items-center h-12 whitespace-nowrap font-bold gap-y-1 gap-x-2 ${
         mobileOnly && "md:hidden"
       }`}
+      title={version}
     >
       <p>{label}</p>
-      {turbo && (
+      {turbo ? (
         <p
           className={cn(
             "font-space-grotesk m-0",
@@ -315,10 +322,15 @@ function GraphLabel({
         >
           turbo
         </p>
-      )}
-      {esbuild && (
+      ) : null}
+      {swc ? (
+        <p className="font-space-grotesk m-0 font-light text-[#666666]">
+          with SWC
+        </p>
+      ) : null}
+      {esbuild ? (
         <p className="font-space-grotesk m-0 text-[#666666]">esbuild</p>
-      )}
+      ) : null}
     </div>
   );
 }

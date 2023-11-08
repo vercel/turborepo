@@ -1,0 +1,11 @@
+{
+  "extends": ["//"],
+  "pipeline": {
+    "test": {
+      "dependsOn": ["cli#build", "^build"],
+      "output": [],
+      // For github actions
+      "env": ["RUNNER_OS"]
+    }
+  }
+}

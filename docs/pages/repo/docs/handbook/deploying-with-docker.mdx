@@ -71,7 +71,7 @@ In a large monorepo, this can result in a huge amount of lost time, as any chang
 The solution is to prune the inputs to the Dockerfile to only what is strictly necessary. Turborepo provides a simple solution - `turbo prune`.
 
 ```bash
-turbo prune --scope="docs" --docker
+turbo prune docs --docker
 ```
 
 Running this command creates a **pruned version of your monorepo** inside an `./out` directory. It only includes workspaces which `docs` depends on.
@@ -87,14 +87,17 @@ First, we want to copy over only what we need to install the packages. When runn
 ```txt
 out
 ├── json
-│   └── apps
-│       └── docs
-│           └── package.json
+│   ├── apps
+│   │   └── docs
+│   │       └── package.json
+│   └── package.json
 ├── full
-│   └── apps
-│       └── docs
-│           ├── server.js
-│           └── package.json
+│   ├── apps
+│   │   └── docs
+│   │       ├── server.js
+│   │       └── package.json
+│   ├── package.json
+│   └── turbo.json
 └── package-lock.json
 ```
 
@@ -110,18 +113,24 @@ Splitting up **dependencies** and **source files** in this way lets us **only ru
 
 Our detailed [`with-docker` example](https://github.com/vercel/turbo/tree/main/examples/with-docker) goes into depth on how to utilise `prune` to its full potential. Here's the Dockerfile, copied over for convenience.
 
+<Callout type="info">
+  This Dockerfile is written for a [Next.js](https://nextjs.org/) app that is using the `standalone` [output mode](https://nextjs.org/docs/pages/api-reference/next-config-js/output).
+</Callout>
+
 ```docker
-FROM node:alpine AS builder
+FROM node:18-alpine AS base
+
+FROM base AS builder
 RUN apk add --no-cache libc6-compat
 RUN apk update
 # Set working directory
 WORKDIR /app
 RUN yarn global add turbo
 COPY . .
-RUN turbo prune --scope=web --docker
+RUN turbo prune web --docker
 
 # Add lockfile and package.json's of isolated subworkspace
-FROM node:alpine AS installer
+FROM base AS installer
 RUN apk add --no-cache libc6-compat
 RUN apk update
 WORKDIR /app
@@ -134,10 +143,9 @@ RUN yarn install
 
 # Build the project
 COPY --from=builder /app/out/full/ .
-COPY turbo.json turbo.json
 RUN yarn turbo run build --filter=web...
 
-FROM node:alpine AS runner
+FROM base AS runner
 WORKDIR /app
 
 # Don't run production as root
@@ -152,6 +160,31 @@ COPY --from=installer /app/apps/web/package.json .
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=installer --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=installer --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=installer --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 
 CMD node apps/web/server.js
+```
+
+## Remote caching
+
+To take advantage of remote caches during Docker builds, you will need to make sure your build container has credentials to access your Remote Cache.
+
+There are many ways to take care of secrets in a Docker image. We will use a simple strategy here with multi-stage builds using secrets as build arguments that will get hidden for the final image.
+
+Assuming you are using a Dockerfile similar to the one above, we will bring in some environment variables from build arguments right before `turbo build`:
+
+```docker
+ARG TURBO_TEAM
+ENV TURBO_TEAM=$TURBO_TEAM
+
+ARG TURBO_TOKEN
+ENV TURBO_TOKEN=$TURBO_TOKEN
+
+RUN yarn turbo run build --filter=web...
+```
+
+`turbo` will now be able to hit your remote cache. To see a Turborepo cache hit for a non-cached Docker build image, run a command like this one from your project root:
+
+```sh
+docker build -f apps/web/Dockerfile . --build-arg TURBO_TEAM=“your-team-name” --build-arg TURBO_TOKEN=“your-token“ --no-cache
 ```

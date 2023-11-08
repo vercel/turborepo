@@ -2,6 +2,8 @@ package scope
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -9,24 +11,85 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/context"
-	internalGraph "github.com/vercel/turbo/cli/internal/graph"
+	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/packagemanager"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
+	"github.com/vercel/turbo/cli/internal/workspace"
 )
 
 type mockSCM struct {
-	changed []string
+	changed  []string
+	contents map[string][]byte
 }
 
-func (m *mockSCM) ChangedFiles(_fromCommit string, _toCommit string, _includeUntracked bool, _relativeTo string) ([]string, error) {
+func (m *mockSCM) ChangedFiles(_fromCommit string, _toCommit string, _relativeTo string) ([]string, error) {
 	return m.changed, nil
 }
 
+func (m *mockSCM) PreviousContent(fromCommit string, filePath string) ([]byte, error) {
+	contents, ok := m.contents[filePath]
+	if !ok {
+		return nil, fmt.Errorf("No contents found")
+	}
+	return contents, nil
+}
+
+type mockLockfile struct {
+	globalChange bool
+	versions     map[string]string
+	allDeps      map[string]map[string]string
+}
+
+func (m *mockLockfile) ResolvePackage(workspacePath turbopath.AnchoredUnixPath, name string, version string) (lockfile.Package, error) {
+	resolvedVersion, ok := m.versions[name]
+	if ok {
+		key := fmt.Sprintf("%s%s", name, version)
+		return lockfile.Package{Key: key, Version: resolvedVersion, Found: true}, nil
+	}
+	return lockfile.Package{Found: false}, nil
+}
+
+func (m *mockLockfile) AllDependencies(key string) (map[string]string, bool) {
+	deps, ok := m.allDeps[key]
+	return deps, ok
+}
+
+func (m *mockLockfile) Encode(w io.Writer) error {
+	return nil
+}
+
+func (m *mockLockfile) GlobalChange(other lockfile.Lockfile) bool {
+	return m.globalChange || (other != nil && other.(*mockLockfile).globalChange)
+}
+
+func (m *mockLockfile) Patches() []turbopath.AnchoredUnixPath {
+	return nil
+}
+
+func (m *mockLockfile) Subgraph(workspaces []turbopath.AnchoredSystemPath, packages []string) (lockfile.Lockfile, error) {
+	return nil, nil
+}
+
+var _ (lockfile.Lockfile) = (*mockLockfile)(nil)
+
 func TestResolvePackages(t *testing.T) {
-	tui := ui.Default()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("cwd: %v", err)
+	}
+	root, err := fs.GetCwd(cwd)
+	if err != nil {
+		t.Fatalf("cwd: %v", err)
+	}
+	defaultUIFactory := ui.ColoredUIFactory{
+		Base: &ui.BasicUIFactory{},
+	}
+	tui := defaultUIFactory.Build(os.Stdin, os.Stdout, os.Stderr)
 	logger := hclog.Default()
+	// Dependency graph:
 	//
 	// app0 -
 	//        \
@@ -40,6 +103,18 @@ func TestResolvePackages(t *testing.T) {
 	//              /
 	//     app2-a <
 	//
+	// Filesystem layout:
+	//
+	// app/
+	//   app0
+	//   app1
+	//   app2
+	//   app2-a
+	// libs/
+	//   libA
+	//   libB
+	//   libC
+	//   libD
 	graph := dag.AcyclicGraph{}
 	graph.Add("app0")
 	graph.Add("app1")
@@ -56,35 +131,95 @@ func TestResolvePackages(t *testing.T) {
 	graph.Connect(dag.BasicEdge("app2", "libB"))
 	graph.Connect(dag.BasicEdge("app2", "libC"))
 	graph.Connect(dag.BasicEdge("app2-a", "libC"))
-	workspaceInfos := internalGraph.WorkspaceInfos{
-		"app0": {
-			Dir: turbopath.AnchoredUnixPath("app/app0").ToSystemPath(),
-		},
-		"app1": {
-			Dir: turbopath.AnchoredUnixPath("app/app1").ToSystemPath(),
-		},
-		"app2": {
-			Dir: turbopath.AnchoredUnixPath("app/app2").ToSystemPath(),
-		},
-		"app2-a": {
-			Dir: turbopath.AnchoredUnixPath("app/app2-a").ToSystemPath(),
-		},
-		"libA": {
-			Dir: turbopath.AnchoredUnixPath("libs/libA").ToSystemPath(),
-		},
-		"libB": {
-			Dir: turbopath.AnchoredUnixPath("libs/libB").ToSystemPath(),
-		},
-		"libC": {
-			Dir: turbopath.AnchoredUnixPath("libs/libC").ToSystemPath(),
-		},
-		"libD": {
-			Dir: turbopath.AnchoredUnixPath("libs/libD").ToSystemPath(),
+	workspaceInfos := workspace.Catalog{
+		PackageJSONs: map[string]*fs.PackageJSON{
+			"//": {
+				Dir:                    turbopath.AnchoredSystemPath("").ToSystemPath(),
+				UnresolvedExternalDeps: map[string]string{"global": "2"},
+				TransitiveDeps:         []lockfile.Package{{Key: "global2", Version: "2", Found: true}},
+			},
+			"app0": {
+				Dir:                    turbopath.AnchoredUnixPath("app/app0").ToSystemPath(),
+				Name:                   "app0",
+				UnresolvedExternalDeps: map[string]string{"app0-dep": "2"},
+				TransitiveDeps: []lockfile.Package{
+					{Key: "app0-dep2", Version: "2", Found: true},
+					{Key: "app0-util2", Version: "2", Found: true},
+				},
+			},
+			"app1": {
+				Dir:  turbopath.AnchoredUnixPath("app/app1").ToSystemPath(),
+				Name: "app1",
+			},
+			"app2": {
+				Dir:  turbopath.AnchoredUnixPath("app/app2").ToSystemPath(),
+				Name: "app2",
+			},
+			"app2-a": {
+				Dir:  turbopath.AnchoredUnixPath("app/app2-a").ToSystemPath(),
+				Name: "app2-a",
+			},
+			"libA": {
+				Dir:  turbopath.AnchoredUnixPath("libs/libA").ToSystemPath(),
+				Name: "libA",
+			},
+			"libB": {
+				Dir:                    turbopath.AnchoredUnixPath("libs/libB").ToSystemPath(),
+				Name:                   "libB",
+				UnresolvedExternalDeps: map[string]string{"external": "1"},
+				TransitiveDeps: []lockfile.Package{
+					{Key: "external-dep-a1", Version: "1", Found: true},
+					{Key: "external-dep-b1", Version: "1", Found: true},
+					{Key: "external1", Version: "1", Found: true},
+				},
+			},
+			"libC": {
+				Dir:  turbopath.AnchoredUnixPath("libs/libC").ToSystemPath(),
+				Name: "libC",
+			},
+			"libD": {
+				Dir:  turbopath.AnchoredUnixPath("libs/libD").ToSystemPath(),
+				Name: "libD",
+			},
 		},
 	}
 	packageNames := []string{}
-	for name := range workspaceInfos {
+	for name := range workspaceInfos.PackageJSONs {
 		packageNames = append(packageNames, name)
+	}
+
+	// global -> globalDep
+	// app0-dep -> app0-dep :)
+
+	makeLockfile := func(f func(*mockLockfile)) *mockLockfile {
+		l := mockLockfile{
+			globalChange: false,
+			versions: map[string]string{
+				"global":         "2",
+				"app0-dep":       "2",
+				"app0-util":      "2",
+				"external":       "1",
+				"external-dep-a": "1",
+				"external-dep-b": "1",
+			},
+			allDeps: map[string]map[string]string{
+				"global2": map[string]string{},
+				"app0-dep2": map[string]string{
+					"app0-util": "2",
+				},
+				"app0-util2": map[string]string{},
+				"external1": map[string]string{
+					"external-dep-a": "1",
+					"external-dep-b": "1",
+				},
+				"external-dep-a1": map[string]string{},
+				"external-dep-b1": map[string]string{},
+			},
+		}
+		if f != nil {
+			f(&l)
+		}
+		return &l
 	}
 
 	testCases := []struct {
@@ -99,6 +234,9 @@ func TestResolvePackages(t *testing.T) {
 		includeDependencies bool
 		includeDependents   bool
 		lockfile            string
+		currLockfile        *mockLockfile
+		prevLockfile        *mockLockfile
+		inferPkgPath        string
 	}{
 		{
 			name:                "Just scope and dependencies",
@@ -110,21 +248,21 @@ func TestResolvePackages(t *testing.T) {
 		{
 			name:                "Only turbo.json changed",
 			changed:             []string{"turbo.json"},
-			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:            []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			since:               "dummy",
 			includeDependencies: true,
 		},
 		{
 			name:                "Only root package.json changed",
 			changed:             []string{"package.json"},
-			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:            []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			since:               "dummy",
 			includeDependencies: true,
 		},
 		{
 			name:                "Only package-lock.json changed",
 			changed:             []string{"package-lock.json"},
-			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:            []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			since:               "dummy",
 			includeDependencies: true,
 			lockfile:            "package-lock.json",
@@ -132,7 +270,7 @@ func TestResolvePackages(t *testing.T) {
 		{
 			name:                "Only yarn.lock changed",
 			changed:             []string{"yarn.lock"},
-			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:            []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			since:               "dummy",
 			includeDependencies: true,
 			lockfile:            "yarn.lock",
@@ -140,7 +278,7 @@ func TestResolvePackages(t *testing.T) {
 		{
 			name:                "Only pnpm-lock.yaml changed",
 			changed:             []string{"pnpm-lock.yaml"},
-			expected:            []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:            []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			since:               "dummy",
 			includeDependencies: true,
 			lockfile:            "pnpm-lock.yaml",
@@ -148,6 +286,12 @@ func TestResolvePackages(t *testing.T) {
 		{
 			name:     "One package changed",
 			changed:  []string{"libs/libB/src/index.ts"},
+			expected: []string{"libB"},
+			since:    "dummy",
+		},
+		{
+			name:     "One package manifest changed",
+			changed:  []string{"libs/libB/package.json"},
 			expected: []string{"libB"},
 			since:    "dummy",
 		},
@@ -202,7 +346,7 @@ func TestResolvePackages(t *testing.T) {
 		{
 			name:       "global dependency changed, even though it was ignored, forcing a build of everything",
 			changed:    []string{"libs/libB/src/index.ts"},
-			expected:   []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:   []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			since:      "dummy",
 			ignore:     "libs/libB/**/*.ts",
 			globalDeps: []string{"libs/**/*.ts"},
@@ -225,7 +369,7 @@ func TestResolvePackages(t *testing.T) {
 			// no changes, no base to compare against, defaults to everything
 			name:              "no changes or scope specified, build everything",
 			since:             "",
-			expected:          []string{"app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			expected:          []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
 			expectAllPackages: true,
 		},
 		{
@@ -254,6 +398,103 @@ func TestResolvePackages(t *testing.T) {
 			expected: []string{"app2", "app2-a"},
 			since:    "dummy",
 		},
+		{
+			name:         "Global lockfile change invalidates all packages",
+			changed:      []string{"dummy.lock"},
+			expected:     []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			lockfile:     "dummy.lock",
+			currLockfile: makeLockfile(nil),
+			prevLockfile: makeLockfile(func(ml *mockLockfile) {
+				ml.globalChange = true
+			}),
+			since: "dummy",
+		},
+		{
+			name:         "Dependency of workspace root change invalidates all packages",
+			changed:      []string{"dummy.lock"},
+			expected:     []string{"//", "app0", "app1", "app2", "app2-a", "libA", "libB", "libC", "libD"},
+			lockfile:     "dummy.lock",
+			currLockfile: makeLockfile(nil),
+			prevLockfile: makeLockfile(func(ml *mockLockfile) {
+				ml.versions["global"] = "3"
+				ml.allDeps["global3"] = map[string]string{}
+			}),
+			since: "dummy",
+		},
+		{
+			name:         "Version change invalidates package",
+			changed:      []string{"dummy.lock"},
+			expected:     []string{"//", "app0"},
+			lockfile:     "dummy.lock",
+			currLockfile: makeLockfile(nil),
+			prevLockfile: makeLockfile(func(ml *mockLockfile) {
+				ml.versions["app0-util"] = "3"
+				ml.allDeps["app0-dep2"] = map[string]string{"app0-util": "3"}
+				ml.allDeps["app0-util3"] = map[string]string{}
+			}),
+			since: "dummy",
+		},
+		{
+			name:         "Transitive dep invalidates package",
+			changed:      []string{"dummy.lock"},
+			expected:     []string{"//", "libB"},
+			lockfile:     "dummy.lock",
+			currLockfile: makeLockfile(nil),
+			prevLockfile: makeLockfile(func(ml *mockLockfile) {
+				ml.versions["external-dep-a"] = "2"
+				ml.allDeps["external1"] = map[string]string{"external-dep-a": "2", "external-dep-b": "1"}
+				ml.allDeps["external-dep-a2"] = map[string]string{}
+			}),
+			since: "dummy",
+		},
+		{
+			name:              "Transitive dep invalidates package and dependents",
+			changed:           []string{"dummy.lock"},
+			expected:          []string{"//", "app0", "app1", "app2", "libA", "libB"},
+			lockfile:          "dummy.lock",
+			includeDependents: true,
+			currLockfile:      makeLockfile(nil),
+			prevLockfile: makeLockfile(func(ml *mockLockfile) {
+				ml.versions["external-dep-a"] = "2"
+				ml.allDeps["external1"] = map[string]string{"external-dep-a": "2", "external-dep-b": "1"}
+				ml.allDeps["external-dep-a2"] = map[string]string{}
+			}),
+			since: "dummy",
+		},
+		{
+			name:         "Infer app2 from directory",
+			inferPkgPath: "app/app2",
+			expected:     []string{"app2"},
+		},
+		{
+			name:         "Infer app2 from a subdirectory",
+			inferPkgPath: "app/app2/src",
+			expected:     []string{"app2"},
+		},
+		{
+			name:         "Infer from a directory with no packages",
+			inferPkgPath: "wrong",
+			expected:     []string{},
+		},
+		{
+			name:         "Infer from a parent directory",
+			inferPkgPath: "app",
+			expected:     []string{"app0", "app1", "app2", "app2-a"},
+		},
+		{
+			name:         "library change, no scope, inferred libs",
+			changed:      []string{"libs/libA/src/index.ts"},
+			expected:     []string{"libA"},
+			since:        "dummy",
+			inferPkgPath: "libs",
+		},
+		{
+			name:         "library change, no scope, inferred app",
+			changed:      []string{"libs/libA/src/index.ts"},
+			expected:     []string{},
+			since:        "dummy",
+			inferPkgPath: "app",
+		},
 	}
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("test #%v %v", i, tc.name), func(t *testing.T) {
@@ -263,7 +504,18 @@ func TestResolvePackages(t *testing.T) {
 				systemSeparatorChanged[index] = filepath.FromSlash(path)
 			}
 			scm := &mockSCM{
-				changed: systemSeparatorChanged,
+				changed:  systemSeparatorChanged,
+				contents: make(map[string][]byte, len(systemSeparatorChanged)),
+			}
+			for _, path := range systemSeparatorChanged {
+				scm.contents[path] = nil
+			}
+			readLockfile := func(_rootPackageJSON *fs.PackageJSON, content []byte) (lockfile.Lockfile, error) {
+				return tc.prevLockfile, nil
+			}
+			pkgInferenceRoot, err := resolvePackageInferencePath(tc.inferPkgPath)
+			if err != nil {
+				t.Errorf("bad inference path (%v): %v", tc.inferPkgPath, err)
 			}
 			pkgs, isAllPackages, err := ResolvePackages(&Opts{
 				LegacyFilter: LegacyFilter{
@@ -272,13 +524,16 @@ func TestResolvePackages(t *testing.T) {
 					IncludeDependencies: tc.includeDependencies,
 					SkipDependents:      !tc.includeDependents,
 				},
-				IgnorePatterns:    []string{tc.ignore},
-				GlobalDepPatterns: tc.globalDeps,
-			}, filepath.FromSlash("/dummy/repo/root"), scm, &context.Context{
+				IgnorePatterns:       []string{tc.ignore},
+				GlobalDepPatterns:    tc.globalDeps,
+				PackageInferenceRoot: pkgInferenceRoot,
+			}, root, scm, &context.Context{
 				WorkspaceInfos: workspaceInfos,
 				WorkspaceNames: packageNames,
-				PackageManager: &packagemanager.PackageManager{Lockfile: tc.lockfile},
+				PackageManager: &packagemanager.PackageManager{Lockfile: tc.lockfile, UnmarshalLockfile: readLockfile, GetLockfileName: func(_ turbopath.AbsoluteSystemPath) string { return tc.lockfile }},
 				WorkspaceGraph: graph,
+				RootNode:       "root",
+				Lockfile:       tc.currLockfile,
 			}, tui, logger)
 			if err != nil {
 				t.Errorf("expected no error, got %v", err)

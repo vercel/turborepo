@@ -1,0 +1,21 @@
+lockfileVersion: 5.4
+
+importers:
+
+  .:
+    specifiers: {}
+
+  apps/a:
+    specifiers:
+      ui: workspace:*
+    dependencies:
+      ui: link:../../packages/ui
+
+  apps/b:
+    specifiers:
+      ui: workspace:*
+    dependencies:
+      ui: link:../../packages/ui
+
+  packages/ui:
+    specifiers: {}

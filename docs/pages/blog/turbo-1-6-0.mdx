@@ -3,7 +3,7 @@ title: Turborepo 1.6
 date: 2022/10/21
 description: Turborepo 1.6 lets you use Turborepo in non-monorepos, prune for npm, and improves cache performance.
 tag: "web development"
-ogImage: /images/blog/turbo-1-6-0/twitter-card.png
+ogImage: /images/blog/turbo-1-6-0/x-card.png
 ---
 
 import { Tabs, Tab } from '../../components/Tabs'
@@ -79,7 +79,7 @@ Try it out now by [starting from the example](https://github.com/vercel/turbo/tr
 {
   "pipeline": {
     "build": {
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     },
     "lint": {
       "outputs": []
@@ -206,7 +206,7 @@ Turborepo will figure out the fastest possible way to run all your tasks in para
 
 ## Prune now supported on npm
 
-Over the last several releases, we've been adding support for [`turbo prune`](/repo/docs/reference/command-line-reference#turbo-prune---scopetarget) on different workspace managers. This has been a challenge - `turbo prune` creates a subset of your monorepo, including pruning the dependencies in your lockfile. This means we've had to implement logic for each workspace manager separately.
+Over the last several releases, we've been adding support for [`turbo prune`](/repo/docs/reference/command-line-reference/prune) on different workspace managers. This has been a challenge - `turbo prune` creates a subset of your monorepo, including pruning the dependencies in your lockfile. This means we've had to implement logic for each workspace manager separately.
 
 We're delighted to announce that `turbo prune` now works for `npm`, completing support for all major package managers. This means that if your monorepo uses `npm`, `yarn`, `yarn 2+` or `pnpm`, you'll be able to deploy to Docker with ease.
 

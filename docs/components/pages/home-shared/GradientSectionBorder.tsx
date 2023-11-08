@@ -1,6 +1,6 @@
 import cn from "classnames";
+import gradients from "./gradients.module.css";
 import { FadeIn } from "./FadeIn";
-import gradients from "../home-shared/gradients.module.css";
 
 export function GradientSectionBorder({
   children,

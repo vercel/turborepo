@@ -1,6 +1,10 @@
-use std::borrow::Cow;
-#[cfg(target_family = "windows")]
-use std::path::Path;
+use std::{
+    borrow::Cow,
+    io::{ErrorKind, Result as IoResult},
+    path::Path,
+};
+
+use anyhow::{anyhow, Result};
 
 /// Joins two /-separated paths into a normalized path.
 /// Paths are concatenated with /.
@@ -113,15 +117,13 @@ pub fn normalize_request(str: &str) -> String {
     seqments.join("/")
 }
 
-#[cfg(target_family = "windows")]
-/// Checks if the path has the `\\?\` prefix which "tells the Windows APIs to
-/// disable all string parsing and to send the string that follows it straight
-/// to the file system."
-///
-/// See [Win32 File Namespaces](https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#win32-file-namespaces)
-pub fn is_windows_raw_path(path: impl AsRef<Path>) -> bool {
-    // `Path::new("\\\\?\\D:\\workspace\\turbo-tooling").starts_with("\\\\?\\")` is
-    // `false`.
-    // So we use `String::starts_with` here
-    path.as_ref().to_string_lossy().starts_with("\\\\?\\")
+/// Converts a disk access Result<T> into a Result<Some<T>>, where a NotFound
+/// error results in a None value. This is purely to reduce boilerplate code
+/// comparing NotFound errors against all other errors.
+pub fn extract_disk_access<T>(value: IoResult<T>, path: &Path) -> Result<Option<T>> {
+    match value {
+        Ok(v) => Ok(Some(v)),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(anyhow!(e).context(format!("reading file {}", path.display()))),
+    }
 }

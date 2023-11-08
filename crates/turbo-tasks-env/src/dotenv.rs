@@ -2,41 +2,42 @@ use std::{env, sync::MutexGuard};
 
 use anyhow::{anyhow, Context, Result};
 use indexmap::IndexMap;
-use turbo_tasks::ValueToString;
-use turbo_tasks_fs::{FileContent, FileSystemPathVc};
+use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks_fs::{FileContent, FileSystemPath};
 
-use crate::{EnvMapVc, ProcessEnv, ProcessEnvVc, GLOBAL_ENV_LOCK};
+use crate::{sorted_env_vars, EnvMap, ProcessEnv, GLOBAL_ENV_LOCK};
 
 /// Load the environment variables defined via a dotenv file, with an
 /// optional prior state that we can lookup already defined variables
 /// from.
 #[turbo_tasks::value]
 pub struct DotenvProcessEnv {
-    prior: Option<ProcessEnvVc>,
-    path: FileSystemPathVc,
+    prior: Option<Vc<Box<dyn ProcessEnv>>>,
+    path: Vc<FileSystemPath>,
 }
 
 #[turbo_tasks::value_impl]
-impl DotenvProcessEnvVc {
+impl DotenvProcessEnv {
     #[turbo_tasks::function]
-    pub fn new(prior: Option<ProcessEnvVc>, path: FileSystemPathVc) -> Self {
+    pub fn new(prior: Option<Vc<Box<dyn ProcessEnv>>>, path: Vc<FileSystemPath>) -> Vc<Self> {
         DotenvProcessEnv { prior, path }.cell()
     }
-}
 
-#[turbo_tasks::value_impl]
-impl ProcessEnv for DotenvProcessEnv {
     #[turbo_tasks::function]
-    async fn read_all(&self) -> Result<EnvMapVc> {
-        let prior = if let Some(p) = self.prior {
-            Some(p.read_all().await?)
-        } else {
-            None
-        };
-        let empty = IndexMap::new();
-        let prior = prior.as_deref().unwrap_or(&empty);
+    pub async fn read_prior(self: Vc<Self>) -> Result<Vc<EnvMap>> {
+        let this = self.await?;
+        match this.prior {
+            None => Ok(EnvMap::empty()),
+            Some(p) => Ok(p.read_all()),
+        }
+    }
 
-        let file = self.path.read().await?;
+    #[turbo_tasks::function]
+    pub async fn read_all_with_prior(self: Vc<Self>, prior: Vc<EnvMap>) -> Result<Vc<EnvMap>> {
+        let this = self.await?;
+        let prior = prior.await?;
+
+        let file = this.path.read().await?;
         if let FileContent::Content(f) = &*file {
             let res;
             let vars;
@@ -46,30 +47,39 @@ impl ProcessEnv for DotenvProcessEnv {
                 // Unfortunately, dotenvy only looks up variable references from the global env.
                 // So we must mutate while we process. Afterwards, we can restore the initial
                 // state.
-                let initial = env::vars().collect();
+                let initial = sorted_env_vars();
 
-                restore_env(&initial, prior, &lock);
+                restore_env(&initial, &prior, &lock);
 
                 // from_read will load parse and evalute the Read, and set variables
                 // into the global env. If a later dotenv defines an already defined
                 // var, it'll be ignored.
-                res = dotenvy::from_read(f.read());
+                res = dotenv::from_read(f.read()).map(|e| e.load());
 
-                vars = env::vars().collect();
+                vars = sorted_env_vars();
                 restore_env(&vars, &initial, &lock);
             }
 
-            if res.is_err() {
-                res.context(anyhow!(
+            if let Err(e) = res {
+                return Err(e).context(anyhow!(
                     "unable to read {} for env vars",
-                    self.path.to_string().await?
-                ))?;
+                    this.path.to_string().await?
+                ));
             }
 
-            Ok(EnvMapVc::cell(vars))
+            Ok(Vc::cell(vars))
         } else {
-            Ok(EnvMapVc::cell(prior.clone()))
+            Ok(Vc::cell(prior.clone_value()))
         }
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ProcessEnv for DotenvProcessEnv {
+    #[turbo_tasks::function]
+    async fn read_all(self: Vc<Self>) -> Result<Vc<EnvMap>> {
+        let prior = self.read_prior();
+        Ok(self.read_all_with_prior(prior))
     }
 }
 

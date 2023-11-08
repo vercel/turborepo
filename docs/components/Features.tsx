@@ -10,9 +10,9 @@ export function HomeFeatures() {
     <DetailedFeaturesGrid>
       {LEGACY_REPO_HOME_FEATURES.map((feature) => (
         <Feature
-          key={feature.name.split(" ").join("-")}
-          feature={feature}
           detailed
+          feature={feature}
+          key={feature.name.split(" ").join("-")}
         />
       ))}
     </DetailedFeaturesGrid>
@@ -24,9 +24,9 @@ export function DocsFeatures({ detailed = true }: { detailed?: boolean }) {
     <div className="grid grid-cols-2 gap-6 my-12 sm:grid-cols-3 ">
       {LEGACY_REPO_DOCS_FEATURES.map((feature) => (
         <Feature
-          key={feature.name.split(" ").join("-")}
-          feature={feature}
           detailed={detailed}
+          feature={feature}
+          key={feature.name.split(" ").join("-")}
         />
       ))}
     </div>

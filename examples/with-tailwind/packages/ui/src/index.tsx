@@ -1,2 +1,5 @@
-import * as React from "react";
-export * from "./Button";
+// styles
+import "./styles.css";
+
+// components
+export * from "./card";

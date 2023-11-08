@@ -25,9 +25,11 @@ function Navigation(props) {
     props.items.push({
       title: "Enterprise",
       newWindow: true,
+      // https://github.com/shuding/nextra/issues/1028
+      route: "enterprise",
       href: `https://vercel.com/${
-        site === "repo" ? "solutions" : "contact"
-      }/turborepo?utm_source=turbo.build&utm_medium=referral&utm_campaign=header-enterpriseLink`,
+        site === "repo" ? "solutions/turborepo" : "contact/sales"
+      }?utm_source=turbo.build&utm_medium=referral&utm_campaign=header-enterpriseLink`,
       id: "contextual-enterprise",
       key: "contextual-enterprise",
     });

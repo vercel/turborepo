@@ -1,40 +1,32 @@
 package main
 
-import "C"
 import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"unsafe"
+	"strings"
 
 	"github.com/vercel/turbo/cli/internal/cmd"
 	"github.com/vercel/turbo/cli/internal/turbostate"
 )
 
 func main() {
-	os.Exit(cmd.RunWithArgs(os.Args[1:], turboVersion))
-}
-
-//export nativeRunWithArgs
-func nativeRunWithArgs(argc C.int, argv **C.char) C.uint {
-	arglen := int(argc)
-	args := make([]string, arglen)
-	for i, arg := range unsafe.Slice(argv, arglen) {
-		args[i] = C.GoString(arg)
+	if len(os.Args) != 2 {
+		fmt.Printf("go-turbo is expected to be invoked via turbo")
+		os.Exit(1)
 	}
 
-	exitCode := cmd.RunWithArgs(args, turboVersion)
-	return C.uint(exitCode)
-}
+	executionStateString := os.Args[1]
+	var executionState turbostate.ExecutionState
+	decoder := json.NewDecoder(strings.NewReader(executionStateString))
+	decoder.DisallowUnknownFields()
 
-//export nativeRunWithTurboState
-func nativeRunWithTurboState(turboStateString string) C.uint {
-	var turboState turbostate.CLIExecutionStateFromRust
-	err := json.Unmarshal([]byte(turboStateString), &turboState)
+	err := decoder.Decode(&executionState)
 	if err != nil {
-		fmt.Printf("Error unmarshalling turboState: %v\n Turbo state string: %v\n", err, turboStateString)
-		return 1
+		fmt.Printf("Error unmarshalling execution state: %v\n Execution state string: %v\n", err, executionStateString)
+		os.Exit(1)
 	}
-	exitCode := cmd.RunWithTurboState(turboState, turboVersion)
-	return C.uint(exitCode)
+
+	exitCode := cmd.RunWithExecutionState(&executionState, turboVersion)
+	os.Exit(exitCode)
 }

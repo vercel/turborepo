@@ -52,35 +52,21 @@ Using the CSS `@import` syntax to import other CSS files works **out-of-the-box*
 @import './dark.css';
 ```
 
-<Callout type="info">
-  Turbopack does not currently support absolute URI imports in css, such as `@import "https://example.com/stylesheet.css"`. As a workaround, add
-  `<link rel="stylesheet" href="https://example.com/stylesheet.css" />` to your HTML document. Next.js users using `pages/` should
-  [add this to `pages/_document.js`](https://nextjs.org/docs/messages/no-page-custom-font#possible-ways-to-fix-it).
-</Callout>
-
 ## PostCSS
 
 PostCSS gives you the ability to use plugins to enhance your CSS toolchain. It's been an invaluable tool for integrating libraries like Tailwind and `autoprefixer` into applications.
 
 The most common pattern is adding a `postcss.config.js` file to the root of your application, where you can import and configure your plugins.
 
-We **don't currently offer** the ability to use PostCSS plugins. We may end up adding these out-of-the-box, or make them available via a plugin.
+When Turbopack finds a `postcss.config.js` file, it will automatically process your CSS files with PostCSS in a Node.js worker pool.
 
-### Workaround for PostCSS
-
-As a workaround, we recommend running the [PostCSS CLI](https://www.npmjs.com/package/postcss-cli) in a sidecar process.
-
-```sh
-npm install --save-dev postcss postcss-cli concurrently
-```
-
-```json filename="package.json"
-{
-  "scripts": {
-    "dev": "concurrently \"next dev --turbo\" \"postcss input.css --output output.css --watch\"",
-    "build": "postcss input.css --output output.css && next build"
+```js filename="postcss.config.js"
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {}
   }
-}
+};
 ```
 
 ## SCSS and LESS
@@ -91,19 +77,4 @@ These are likely to be available via plugins in the future.
 
 ## Tailwind CSS
 
-We currently don't support [Tailwind CSS](https://tailwindcss.com/) out of the box. Since it can be used as a PostCSS plugin, we'll likely support it through the plugin system.
-
-It can be used today by using a sidecar process:
-
-```sh
-npm install --save-dev tailwindcss autoprefixer concurrently
-```
-
-```json filename="package.json"
-{
-  "scripts": {
-    "dev": "concurrently \"next dev --turbo\" \"tailwindcss --input input.css --output output.css --watch\"",
-    "build": "tailwindcss input.css --output output.css && next build"
-  }
-}
-```
+Tailwind CSS can be used via PostCSS plugins. You can use the [official Tailwind Next.js guide](https://tailwindcss.com/docs/guides/nextjs) to get started.

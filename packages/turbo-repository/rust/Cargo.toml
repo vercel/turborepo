@@ -1,0 +1,18 @@
+[package]
+name = "turborepo-napi"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow.workspace = true
+napi = { version = "2.13.3", features = ["anyhow"] }
+napi-derive = "2.13.0"
+turbopath = { workspace = true }
+turborepo-repository = { workspace = true }
+
+[build-dependencies]
+napi-build = "2.0.1"

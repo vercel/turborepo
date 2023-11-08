@@ -5,13 +5,21 @@
     "typescript",
     "typescriptreact"
   ],
-  "eslint.packageManager": "pnpm",
+  "eslint.workingDirectories": [{ "mode": "auto" }],
   "debug.javascript.unmapMissingSources": true,
-  "gopls": {
-    "experimentalWorkspaceModule": true
-  },
   "go.lintTool": "golangci-lint",
+  "go.buildTags": "rust",
   "files.associations": {
-    "libturbo.h": "c"
-  }
+    "libturbo.h": "c",
+    "turbo.json": "jsonc"
+  },
+  "[cram]": {
+    "editor.trimAutoWhitespace": false,
+    "files.trimFinalNewlines": false,
+    "files.insertFinalNewline": false,
+    "files.trimTrailingWhitespace": false
+  },
+  "search.exclude": {
+    "crates/turbopack-tests/tests/snapshot/**": true
+  },
 }

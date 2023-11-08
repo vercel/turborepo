@@ -29,14 +29,14 @@ pub fn wrap_html(graph: &str) -> String {
 }
 
 struct GlobalData<'a> {
-    ids: HashMap<&'a TaskType, usize>,
-    depths: HashMap<&'a TaskType, usize>,
+    ids: HashMap<&'a StatsTaskType, usize>,
+    depths: HashMap<&'a StatsTaskType, usize>,
     output: String,
     edges: String,
 }
 
 impl<'a> GlobalData<'a> {
-    fn get_id(&mut self, ty: &'a TaskType) -> usize {
+    fn get_id(&mut self, ty: &'a StatsTaskType) -> usize {
         get_id(ty, &mut self.ids)
     }
 }
@@ -138,7 +138,7 @@ fn visualize_stats_tree_internal<'a>(
 fn visualize_stats_references_internal<'a>(
     source_id: usize,
     source_count: usize,
-    references: &'a HashMap<(ReferenceType, TaskType), ReferenceStats>,
+    references: &'a HashMap<(ReferenceType, StatsTaskType), ReferenceStats>,
     depth: usize,
     tree_ref_type: ReferenceType,
     global_data: &mut GlobalData<'a>,
@@ -203,7 +203,7 @@ fn visualize_stats_references_internal<'a>(
 }
 
 fn get_task_label(
-    ty: &TaskType,
+    ty: &StatsTaskType,
     stats: &ExportedTaskStats,
     max_values: &MaxValues,
     stats_type: StatsType,
@@ -248,12 +248,6 @@ fn get_task_label(
         } else {
             ("N/A".to_string(), "#ffffff".to_string())
         };
-    let roots = as_frac(stats.roots, max_values.roots);
-    let max_scopes = max_values.scopes.saturating_sub(100);
-    let scopes = as_frac(
-        (100 * stats.scopes / stats.count).saturating_sub(100),
-        max_scopes,
-    );
 
     let full_stats_disclaimer = if stats_type.is_full() {
         "".to_string()
@@ -282,11 +276,6 @@ fn get_task_label(
         <td bgcolor=\"{}\">{}</td>
         <td bgcolor=\"{}\">{}</td>
     </tr>
-    <tr>
-        <td>scopes</td>
-        <td bgcolor=\"{}\">{} roots</td>
-        <td bgcolor=\"{}\">avg {}</td>
-    </tr>
     {}
 </table>>",
         total_color,
@@ -299,10 +288,6 @@ fn get_task_label(
         total_millis,
         avg_color,
         avg_label,
-        as_color(roots),
-        stats.roots,
-        as_color(scopes),
-        (100 * stats.scopes / stats.count) as f32 / 100.0,
         full_stats_disclaimer
     )
 }

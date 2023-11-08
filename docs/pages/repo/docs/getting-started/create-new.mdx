@@ -8,19 +8,39 @@ import { Tabs, Tab } from "../../../../components/Tabs";
 
 # Creating a new monorepo
 
+<Callout type="info">
+  This guide uses a global installation of `turbo`. Follow the [installation guide](../installing)
+  to get this setup. Alternatively, you can use your package manager to run a locally installed `turbo`
+  in the commands below.
+</Callout>
+
 ## Quickstart
 
 To create a new monorepo, use our [`create-turbo`](https://www.npmjs.com/package/create-turbo) npm package:
 
-```sh
-npx create-turbo@latest
-```
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npx create-turbo@latest
+    ```
+  </Tab>
+  <Tab>
+    ```sh
+    yarn dlx create-turbo@latest
+    ```
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm dlx create-turbo@latest
+    ```
+  </Tab>
+</Tabs>
 
 You can also clone a Turborepo starter repository to get a head start on your monorepo. To see Turborepo examples and starters, see the [Turborepo examples directory on GitHub](https://github.com/vercel/turbo/tree/main/examples).
 
 ## Full tutorial
 
-This tutorial will walk you through using the Turborepo [`basic` example](https://github.com/vercel/turbo/tree/main/examples/basic). By the end, you'll feel confident with using `turbo`, and know all the basic functionality.
+This tutorial will walk you through setting up a basic example. By the end, you'll feel confident with using `turbo`, and know all the basic functionality.
 
 <Callout type="info">
 
@@ -32,9 +52,23 @@ During this tutorial, some lines of code are omitted from the code samples. For 
 
 First, run:
 
-```sh
-npx create-turbo@latest
-```
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```sh
+    npx create-turbo@latest
+    ```
+  </Tab>
+  <Tab>
+    ```sh
+    yarn dlx create-turbo@latest
+    ```
+  </Tab>
+  <Tab>
+    ```sh
+    pnpm dlx create-turbo@latest
+    ```
+  </Tab>
+</Tabs>
 
 This installs the [`create-turbo`](https://www.npmjs.com/package/create-turbo) CLI, and runs it. You'll be asked several questions:
 
@@ -44,13 +78,14 @@ Choose anywhere you like. The default is `./my-turborepo`.
 
 #### Which package manager do you want to use?
 
-Turborepo doesn't handle installing packages, so you'll need to choose either:
+Turborepo doesn't handle installing packages, so you'll need to choose one of:
 
+- [bun](https://bun.sh/)
 - [npm](https://www.npmjs.com//)
 - [pnpm](https://pnpm.io/)
 - [yarn](https://yarnpkg.com/)
 
-If you're not sure, we recommend choosing `pnpm`. If you don't have it installed, cancel `create-turbo` (via `ctrl-C`) and take a look at the [installation instructions](https://pnpm.io/installation).
+`create-turbo` will detect which package managers you have available on your system. If you're unsure which to choose, Turborepo recommends `pnpm`.
 
 #### Installation
 
@@ -80,15 +115,37 @@ First, open `./packages/ui/package.json`. You'll notice that the package's name 
 
 Next, open `./apps/web/package.json`. You'll notice that this package's name is `"name": "web"`. But also - take a look in its dependencies.
 
-You'll see that `"web"` depends on a package called `"ui"`. If you're using `pnpm`, you'll see it's declared like this:
+You'll see that `"web"` depends on a package called `"ui"`.
 
-```json filename="apps/web/package.json"
-{
-  "dependencies": {
-    "ui": "workspace:*"
-  }
-}
-```
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "dependencies": {
+        "ui": "*"
+      }
+    }
+    ```
+  </Tab>
+  <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "dependencies": {
+        "ui": "*"
+      }
+    }
+    ```
+  </Tab>
+  <Tab>
+    ```json filename="apps/web/package.json"
+    {
+      "dependencies": {
+        "ui": "workspace:*"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
 
 This means that our **web app depends on our local `ui` package**.
 
@@ -98,18 +155,18 @@ This pattern of sharing code across applications is extremely common in monorepo
 
 #### Understanding imports and exports
 
-Take a look inside `./apps/docs/pages/index.tsx`. Both `docs` and `web` are [Next.js](https://nextjs.org/) applications, and they both use the `ui` library in a similar way:
+Take a look inside `./apps/docs/app/page.tsx`. Both `docs` and `web` are [Next.js](https://nextjs.org/) applications, and they both use the `ui` library in a similar way:
 
-```tsx filename="apps/docs/pages/index.tsx"
-import { Button } from "ui";
-//       ^^^^^^         ^^
+```tsx filename="apps/docs/app/page.tsx"
+import { Button, Header } from "ui";
+//       ^^^^^^^^^^^^^^         ^^
 
-export default function Docs() {
+export default function Page() {
   return (
-    <div>
-      <h1>Docs</h1>
+    <>
+      <Header text="Docs">
       <Button />
-    </div>
+    <>
   );
 }
 ```
@@ -142,7 +199,7 @@ Everything inside this file will be able to be used by workspaces that depend on
 import * as React from "react";
 
 export const Button = () => {
-  return <button>Boop</button>;
+  return <button onClick={() => alert("boop")}>Boop</button>;
 };
 ```
 
@@ -171,13 +228,35 @@ Here, we specify three files to be exported, inside `files`. Packages which depe
 
 For instance, `packages/ui` depends on `tsconfig`:
 
-```json filename="packages/ui/package.json"
-{
-  "devDependencies": {
-    "tsconfig": "workspace:*"
-  }
-}
-```
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```json filename="packages/ui/package.json"
+    {
+      "devDependencies": {
+        "tsconfig": "*"
+      }
+    }
+    ```
+  </Tab>
+  <Tab>
+    ```json filename="packages/ui/package.json"
+    {
+      "devDependencies": {
+        "tsconfig": "*"
+      }
+    }
+    ```
+  </Tab>
+  <Tab>
+    ```json filename="packages/ui/package.json"
+    {
+      "devDependencies": {
+        "tsconfig": "workspace:*"
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
 
 And inside its `tsconfig.json` file, it imports it using `extends`:
 
@@ -197,7 +276,7 @@ You'll notice that this is named slightly differently to the other workspaces. I
 
 ```ts filename=".eslintrc.js"
 module.exports = {
-  // This tells ESLint to load the config from the workspace `eslint-config-custom`
+  // This tells ESLint to load the config from the package `eslint-config-custom`
   extends: ["custom"],
 };
 ```
@@ -225,8 +304,6 @@ Just like `tsconfig`, `eslint-config-custom` lets us share ESLint configs across
 
 It's important to understand the dependencies between these workspaces. Let's map them out:
 
-{/* Could be worth a diagram here? */}
-
 - `web` - depends on `ui`, `tsconfig` and `eslint-config-custom`
 - `docs` - depends on `ui`, `tsconfig` and `eslint-config-custom`
 - `ui` - depends on `tsconfig` and `eslint-config-custom`
@@ -241,86 +318,43 @@ We now understand our repository and its dependencies. How does Turborepo help?
 
 Turborepo helps by making running tasks simpler and _much_ more efficient.
 
-Let's take a look inside our root `package.json`:
-
-```json filename="package.json"
-{
-  "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint"
-  }
-}
-```
-
-We've got three tasks specified here in `scripts` which use `turbo run`. You'll notice that each of them is specified in `turbo.json`:
+Let's take a look inside `turbo.json`, at the root:
 
 ```json filename="turbo.json"
 {
   "pipeline": {
     "build": {
-      //   ^^^^^
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     },
-    "lint": {
-      //   ^^^^
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
-      //   ^^^
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
 ```
 
-What we're seeing here is that we've _registered_ three tasks with `turbo` - `lint`, `dev` and `build`. Every task that's registered inside `turbo.json` can be run with `turbo run <task>`.
+What we're seeing here is that we've _registered_ three tasks with `turbo`: `lint`, `dev` and `build`.
+Every task registered inside `turbo.json` can be run with `turbo run <task>` (or `turbo <task>` for short).
 
-To see this in action, let's add a script to the root `package.json`:
+<Callout type="error">
+  Before we move on, let's try running a task called `hello` that _isn't_ registered in `turbo.json`:
 
-```diff filename="package.json"
-{
-  "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev --parallel",
-    "lint": "turbo run lint",
-+   "hello": "turbo run hello"
-  }
-}
+```bash
+turbo hello
 ```
 
-Now, let's run `hello`.
-
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
-  <Tab>
-    ```sh
-    npm run hello
-    ```
-
-  </Tab>
-  <Tab>
-    ```sh
-    yarn hello
-    ```
-
-  </Tab>
-  <Tab>
-    ```sh
-    pnpm run hello
-    ```
-
-  </Tab>
-</Tabs>
-
-You'll see this error in the console:
+You'll see an error in the terminal. Something resembling:
 
 ```
-task `hello` not found in turbo `pipeline` in "turbo.json".
-Are you sure you added it?
+Could not find the following tasks in project: hello
 ```
 
 That's worth remembering - **in order for `turbo` to run a task, it must be in `turbo.json`**.
+
+</Callout>
 
 Let's investigate the scripts we already have in place.
 
@@ -328,26 +362,9 @@ Let's investigate the scripts we already have in place.
 
 Try running our `lint` script:
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
-  <Tab>
-    ```sh
-    npm run lint
-    ```
-
-  </Tab>
-  <Tab>
-    ```sh
-    yarn lint
-    ```
-
-  </Tab>
-  <Tab>
-    ```sh
-    pnpm run lint
-    ```
-
-  </Tab>
-</Tabs>
+```sh
+turbo lint
+```
 
 You'll notice several things happen in the terminal.
 
@@ -376,18 +393,18 @@ The scripts that each run come from each workspace's `package.json`. Each worksp
 ```json filename="packages/ui/package.json"
 {
   "scripts": {
-    "lint": "eslint *.ts*"
+    "lint": "eslint \"**/*.ts*\""
   }
 }
 ```
 
-When we run `turbo run lint`, Turborepo looks at each `lint` script in each workspace and runs it. For more details, see our [pipelines](/repo/docs/core-concepts/monorepos/running-tasks#defining-a-pipeline) docs.
+When we run `turbo lint`, Turborepo looks at each `lint` script in each workspace and runs it. For more details, see our [pipelines](/repo/docs/core-concepts/monorepos/running-tasks#defining-a-pipeline) docs.
 
 #### Using the cache
 
 Let's run our `lint` script one more time. You'll notice a few new things appear in the terminal:
 
-1. `cache hit, replaying output` appears for `docs:lint`, `web:lint` and `ui:lint`.
+1. `cache hit, replaying logs` appears for `docs:lint`, `web:lint` and `ui:lint`.
 2. You'll see `3 cached, 3 total`.
 3. The total runtime should be under `100ms`, and `>>> FULL TURBO` appears.
 
@@ -397,16 +414,16 @@ It had saved the logs from the previous run, so it just replayed them.
 
 Let's try changing some code to see what happens. Make a change to a file inside `apps/docs`:
 
-```diff filename="apps/docs/pages/index.tsx"
-import { Button } from "ui";
+```diff filename="apps/docs/app/page.tsx"
+import { Button, Header } from "ui";
 
-export default function Docs() {
+export default function Page() {
   return (
-    <div>
--     <h1>Docs</h1>
-+     <h1>My great docs</h1>
+    <>
+-     <Header text="Docs" />
++     <Header text="My great docs" />
       <Button />
-    </div>
+    <>
   );
 }
 ```
@@ -422,26 +439,9 @@ This means that **the results of our previous tasks were still cached**. Only th
 
 Let's try running our `build` script:
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
-  <Tab>
-    ```sh
-    npm run build
-    ```
-
-  </Tab>
-  <Tab>
-    ```sh
-    yarn build
-    ```
-
-  </Tab>
-  <Tab>
-    ```sh
-    pnpm run build
-    ```
-
-  </Tab>
-</Tabs>
+```bash
+turbo build
+```
 
 You'll see similar outputs to when we ran our lint script. Only `apps/docs` and `apps/web` specify a `build` script in their `package.json`, so only those are run.
 
@@ -451,7 +451,7 @@ Take a look inside `build` in `turbo.json`. There's some interesting config ther
 {
   "pipeline": {
     "build": {
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     }
   }
 }
@@ -468,32 +468,15 @@ Run the `build` script again. You'll notice:
 1. We hit `FULL TURBO` - the builds complete in under `100ms`.
 2. The `.next` folder re-appears!
 
-Turborepo cached the result of our previous build. When we ran the `build` command again, it restored the entire `.next/**` folder from the cache. To learn more, check out our docs on [cache outputs](/repo/docs/core-concepts/caching#configuring-cache-outputs).
+Turborepo cached the result of our previous build. When we ran the `build` command again, it restored the entire `.next/**` folder from the cache. To learn more, check out our docs on [cache outputs](/repo/docs/core-concepts/caching/what-to-cache).
 
 ### 6. Running dev scripts
 
 Let's now try running `dev`.
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
-  <Tab>
-    ```sh
-    npm run dev
-    ```
-
-  </Tab>
-  <Tab>
-    ```sh
-    yarn dev
-    ```
-
-  </Tab>
-  <Tab>
-    ```sh
-    pnpm run dev
-    ```
-
-  </Tab>
-</Tabs>
+```bash
+turbo dev
+```
 
 You'll notice some information in the terminal:
 
@@ -509,40 +492,30 @@ Take a look at `turbo.json`:
 {
   "pipeline": {
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     }
   }
 }
 ```
 
-Inside `dev`, we've specified `"cache": false`. This means we're telling Turborepo _not_ to cache the results of the `dev` script. `dev` runs a persistent dev server and produces no outputs, so caching it makes no sense. Learn more about in our docs on [turning off caching](/repo/docs/core-concepts/caching#turn-off-caching).
+Inside `dev`, we've specified `"cache": false`. This means we're telling Turborepo _not_ to cache the
+results of the `dev` script. `dev` runs a persistent dev server and produces no outputs, so there
+is nothing to cache. Learn more about it in our docs on [turning off caching](/repo/docs/core-concepts/caching#turn-off-caching).
+
+Additionally, we set `"persistent": true`, to let turbo know that this is a long-running dev server,
+so that turbo can ensure that no other tasks depend on it. You can read more in the [docs for the
+`persistent` option](/repo/docs/reference/configuration#persistent).
 
 #### Running `dev` on only one workspace at a time
 
-By default, `turbo run dev` will run `dev` on all workspaces at once. But sometimes, we might only want to choose one workspace.
+By default, `turbo dev` will run `dev` on all workspaces at once. But sometimes, we might only want to choose one workspace.
 
-To handle this, we can add a `--filter` flag to our command. This `--filter` gets passed to the `turbo` CLI.
+To handle this, we can add a `--filter` flag to our command.
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
-  <Tab>
-    ```sh
-    npm run dev -- --filter docs
-    ```
-
-  </Tab>
-  <Tab>
-    ```sh
-    yarn dev --filter docs
-    ```
-
-  </Tab>
-  <Tab>
-    ```sh
-    pnpm run dev --filter docs
-    ```
-
-  </Tab>
-</Tabs>
+```bash
+turbo dev --filter docs
+```
 
 You'll notice that it now only runs `docs:dev`. Learn more about [filtering workspaces](/repo/docs/core-concepts/monorepos/filtering) from our docs.
 

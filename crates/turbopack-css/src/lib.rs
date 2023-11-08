@@ -1,13 +1,15 @@
 #![feature(min_specialization)]
 #![feature(box_patterns)]
-#![feature(box_syntax)]
 #![feature(iter_intersperse)]
 #![feature(int_roundings)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 mod asset;
 pub mod chunk;
 mod code_gen;
 pub mod embed;
+mod global_asset;
 mod module_asset;
 pub(crate) mod parse;
 mod path_visitor;
@@ -15,17 +17,36 @@ pub(crate) mod references;
 pub(crate) mod transform;
 pub(crate) mod util;
 
-use anyhow::Result;
-pub use asset::CssModuleAssetVc;
-pub use module_asset::ModuleCssModuleAssetVc;
-pub use transform::{CssInputTransform, CssInputTransformsVc};
+pub use asset::CssModuleAsset;
+pub use global_asset::GlobalCssAsset;
+pub use module_asset::ModuleCssAsset;
+pub use parse::{ParseCss, ParseCssResult};
+use serde::{Deserialize, Serialize};
+pub use transform::{CssInputTransform, CssInputTransforms};
+use turbo_tasks::{trace::TraceRawVcs, TaskInput};
 
-use crate::{chunk::CssChunkItemContentVc, references::import::ImportAssetReferenceVc};
+use crate::references::import::ImportAssetReference;
 
-#[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
+#[derive(
+    PartialOrd,
+    Ord,
+    Eq,
+    PartialEq,
+    Hash,
+    Debug,
+    Copy,
+    Clone,
+    Default,
+    Serialize,
+    Deserialize,
+    TaskInput,
+    TraceRawVcs,
+)]
 pub enum CssModuleAssetType {
-    Global,
+    /// Default parsing mode.
+    #[default]
+    Default,
+    /// The CSS is parsed as CSS modules.
     Module,
 }
 

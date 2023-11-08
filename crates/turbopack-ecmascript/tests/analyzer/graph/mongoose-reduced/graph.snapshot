@@ -4,7 +4,7 @@
         Call(
             5,
             FreeVar(
-                Require,
+                "require",
             ),
             [
                 Concat(
@@ -12,13 +12,15 @@
                     [
                         Variable(
                             (
-                                Atom('driver' type=inline),
-                                #1,
+                                "driver",
+                                #2,
                             ),
                         ),
                         Constant(
-                            StrWord(
-                                Atom('/collection' type=dynamic),
+                            Str(
+                                Word(
+                                    "/collection",
+                                ),
                             ),
                         ),
                     ],
@@ -31,7 +33,7 @@
         Call(
             5,
             FreeVar(
-                Require,
+                "require",
             ),
             [
                 Concat(
@@ -39,13 +41,15 @@
                     [
                         Variable(
                             (
-                                Atom('driver' type=inline),
-                                #1,
+                                "driver",
+                                #2,
                             ),
                         ),
                         Constant(
-                            StrWord(
-                                Atom('/connection' type=dynamic),
+                            Str(
+                                Word(
+                                    "/connection",
+                                ),
                             ),
                         ),
                     ],
@@ -55,25 +59,28 @@
     ),
     (
         "driver",
-        Alternatives(
+        Logical(
             5,
+            Or,
             [
                 Member(
                     3,
                     FreeVar(
-                        Other(
-                            Atom('global' type=static),
-                        ),
+                        "global",
                     ),
                     Constant(
-                        StrWord(
-                            Atom('MONGOOSE_DRIVER_PATH' type=dynamic),
+                        Str(
+                            Atom(
+                                "MONGOOSE_DRIVER_PATH",
+                            ),
                         ),
                     ),
                 ),
                 Constant(
-                    StrWord(
-                        Atom('./drivers/node-mongodb-native' type=dynamic),
+                    Str(
+                        Word(
+                            "./drivers/node-mongodb-native",
+                        ),
                     ),
                 ),
             ],

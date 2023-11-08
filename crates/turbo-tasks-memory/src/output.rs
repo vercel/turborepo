@@ -1,31 +1,28 @@
 use std::{
     borrow::Cow,
     fmt::{Debug, Display},
+    mem::take,
 };
 
 use anyhow::{anyhow, Error, Result};
-use auto_hash_map::AutoSet;
-use turbo_tasks::{util::SharedError, RawVc, TaskId, TurboTasksBackendApi};
+use turbo_tasks::{util::SharedError, RawVc, TaskId, TaskIdSet, TurboTasksBackendApi};
+
+use crate::MemoryBackend;
 
 #[derive(Default, Debug)]
 pub struct Output {
     pub(crate) content: OutputContent,
     updates: u32,
-    pub(crate) dependent_tasks: AutoSet<TaskId>,
+    pub(crate) dependent_tasks: TaskIdSet,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum OutputContent {
+    #[default]
     Empty,
     Link(RawVc),
     Error(SharedError),
     Panic(Option<Cow<'static, str>>),
-}
-
-impl Default for OutputContent {
-    fn default() -> Self {
-        OutputContent::Empty
-    }
 }
 
 impl Display for OutputContent {
@@ -51,74 +48,70 @@ impl Output {
     pub fn read_untracked(&mut self) -> Result<RawVc> {
         match &self.content {
             OutputContent::Empty => Err(anyhow!("Output is empty")),
-            OutputContent::Error(err) => Err(err.clone().into()),
+            OutputContent::Error(err) => Err(anyhow::Error::new(err.clone())),
             OutputContent::Link(raw_vc) => Ok(*raw_vc),
             OutputContent::Panic(Some(message)) => Err(anyhow!("A task panicked: {message}")),
             OutputContent::Panic(None) => Err(anyhow!("A task panicked")),
         }
     }
 
-    pub fn track_read(&mut self, reader: TaskId) {
-        self.dependent_tasks.insert(reader);
+    pub fn link(&mut self, target: RawVc, turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>) {
+        debug_assert!(*self != target);
+        self.assign(OutputContent::Link(target), turbo_tasks)
     }
 
-    pub fn link(&mut self, target: RawVc, turbo_tasks: &dyn TurboTasksBackendApi) {
-        let change;
-        let mut _type_change = false;
-        match &self.content {
-            OutputContent::Link(old_target) => {
-                if match (old_target, &target) {
-                    (RawVc::TaskOutput(old_task), RawVc::TaskOutput(new_task)) => {
-                        old_task == new_task
-                    }
-                    (
-                        RawVc::TaskCell(old_task, old_index),
-                        RawVc::TaskCell(new_task, new_index),
-                    ) => old_task == new_task && *old_index == *new_index,
-                    _ => false,
-                } {
-                    change = None;
-                } else {
-                    change = Some(target);
-                }
-            }
-            OutputContent::Empty | OutputContent::Error(_) | OutputContent::Panic(_) => {
-                change = Some(target);
-            }
-        };
-        if let Some(target) = change {
-            self.assign(OutputContent::Link(target), turbo_tasks)
-        }
-    }
-
-    pub fn error(&mut self, error: Error, turbo_tasks: &dyn TurboTasksBackendApi) {
+    pub fn error(&mut self, error: Error, turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>) {
         self.content = OutputContent::Error(SharedError::new(error));
         self.updates += 1;
         // notify
         if !self.dependent_tasks.is_empty() {
-            turbo_tasks.schedule_notify_tasks_set(&self.dependent_tasks);
+            turbo_tasks.schedule_notify_tasks_set(&take(&mut self.dependent_tasks));
         }
     }
 
     pub fn panic(
         &mut self,
         message: Option<Cow<'static, str>>,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
         self.content = OutputContent::Panic(message);
         self.updates += 1;
         // notify
         if !self.dependent_tasks.is_empty() {
-            turbo_tasks.schedule_notify_tasks_set(&self.dependent_tasks);
+            turbo_tasks.schedule_notify_tasks_set(&take(&mut self.dependent_tasks));
         }
     }
 
-    pub fn assign(&mut self, content: OutputContent, turbo_tasks: &dyn TurboTasksBackendApi) {
+    pub fn assign(
+        &mut self,
+        content: OutputContent,
+        turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
+    ) {
         self.content = content;
         self.updates += 1;
         // notify
         if !self.dependent_tasks.is_empty() {
+            turbo_tasks.schedule_notify_tasks_set(&take(&mut self.dependent_tasks));
+        }
+    }
+
+    pub fn dependent_tasks(&self) -> &TaskIdSet {
+        &self.dependent_tasks
+    }
+
+    pub fn gc_drop(self, turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>) {
+        // notify
+        if !self.dependent_tasks.is_empty() {
             turbo_tasks.schedule_notify_tasks_set(&self.dependent_tasks);
+        }
+    }
+}
+
+impl PartialEq<RawVc> for Output {
+    fn eq(&self, rhs: &RawVc) -> bool {
+        match &self.content {
+            OutputContent::Link(old_target) => old_target == rhs,
+            OutputContent::Empty | OutputContent::Error(_) | OutputContent::Panic(_) => false,
         }
     }
 }

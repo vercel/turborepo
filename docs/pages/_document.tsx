@@ -14,15 +14,34 @@ class MyDocument extends Document {
     return (
       <Html lang="en">
         <Head>
-          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link href="https://fonts.googleapis.com" rel="preconnect" />
           <link
-            rel="preconnect"
+            crossOrigin="anonymous"
             href="https://fonts.gstatic.com"
-            crossOrigin="true"
+            rel="preconnect"
           />
           <link
             href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=optional"
             rel="stylesheet"
+          />
+
+          {/* we can disable these lint rules because we've already established a preconnect to https://fonts.gstatic.com above */}
+
+          {/* eslint-disable-next-line @next/next/google-font-preconnect */}
+          <link
+            as="font"
+            crossOrigin="anonymous"
+            href="https://fonts.gstatic.com/s/spacegrotesk/v13/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7aUXskPMBBSSJLm2E.woff2"
+            rel="preload"
+            type="font/woff2"
+          />
+          {/* eslint-disable-next-line @next/next/google-font-preconnect */}
+          <link
+            as="font"
+            crossOrigin="anonymous"
+            href="https://fonts.gstatic.com/s/spacegrotesk/v13/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7oUXskPMBBSSJLm2E.woff2"
+            rel="preload"
+            type="font/woff2"
           />
         </Head>
         <body>

@@ -121,6 +121,24 @@
       "program": "${workspaceRoot}/cli/cmd/turbo",
       "cwd": "${workspaceRoot}/cli/testbed",
       "args": ["run", "build", "--single-package"]
+    },
+    {
+      "name": "Build Basic (Shim)",
+      "type": "lldb",
+      "request": "launch",
+      "preLaunchTask": "prepare turbo",
+      "program": "${workspaceRoot}/target/debug/turbo",
+      "args": ["build"],
+      "cwd": "${workspaceRoot}/examples/basic"
+    },
+    {
+      "name": "Daemon",
+      "type": "lldb",
+      "request": "launch",
+      "preLaunchTask": "prepare turbo",
+      "program": "${workspaceRoot}/target/debug/turbo",
+      "args": ["--skip-infer", "daemon"],
+      "cwd": "${workspaceRoot}"
     }
   ]
 }

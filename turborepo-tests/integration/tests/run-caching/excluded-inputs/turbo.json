@@ -1,0 +1,9 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "inputs": ["*.txt", "!excluded.txt"],
+      "outputs": ["banana.txt", "apple.json"]
+    }
+  }
+}

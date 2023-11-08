@@ -6,19 +6,23 @@
             Call(
                 3,
                 FreeVar(
-                    Require,
+                    "require",
                 ),
                 [
                     Constant(
-                        StrWord(
-                            Atom('os' type=inline),
+                        Str(
+                            Word(
+                                "os",
+                            ),
                         ),
                     ),
                 ],
             ),
             Constant(
-                StrWord(
-                    Atom('arch' type=inline),
+                Str(
+                    Atom(
+                        "arch",
+                    ),
                 ),
             ),
         ),
@@ -28,54 +32,62 @@
         Call(
             13,
             FreeVar(
-                Require,
+                "require",
             ),
             [
                 Concat(
                     11,
                     [
                         Constant(
-                            StrAtom(
-                                "esbuild-",
+                            Str(
+                                Atom(
+                                    "esbuild-",
+                                ),
                             ),
                         ),
                         Member(
                             3,
                             FreeVar(
-                                NodeProcess,
+                                "process",
                             ),
                             Constant(
-                                StrWord(
-                                    Atom('arch' type=inline),
+                                Str(
+                                    Atom(
+                                        "arch",
+                                    ),
                                 ),
                             ),
                         ),
                         Constant(
-                            StrAtom(
-                                "-",
+                            Str(
+                                Atom(
+                                    "-",
+                                ),
                             ),
                         ),
                         Call(
                             2,
                             Variable(
                                 (
-                                    Atom('platform' type=dynamic),
-                                    #1,
+                                    "platform",
+                                    #2,
                                 ),
                             ),
                             [],
                         ),
                         Constant(
-                            StrAtom(
-                                "-",
+                            Str(
+                                Atom(
+                                    "-",
+                                ),
                             ),
                         ),
                         Call(
                             2,
                             Variable(
                                 (
-                                    Atom('endianness' type=dynamic),
-                                    #1,
+                                    "endianness",
+                                    #2,
                                 ),
                             ),
                             [],
@@ -90,53 +102,59 @@
         Call(
             12,
             FreeVar(
-                Require,
+                "require",
             ),
             [
                 Concat(
                     10,
                     [
                         Constant(
-                            StrAtom(
-                                "esbuild-",
+                            Str(
+                                Atom(
+                                    "esbuild-",
+                                ),
                             ),
                         ),
                         Call(
                             2,
                             Variable(
                                 (
-                                    Atom('arch' type=inline),
-                                    #1,
+                                    "arch",
+                                    #2,
                                 ),
                             ),
                             [],
                         ),
                         Constant(
-                            StrAtom(
-                                "-",
+                            Str(
+                                Atom(
+                                    "-",
+                                ),
                             ),
                         ),
                         Call(
                             2,
                             Variable(
                                 (
-                                    Atom('platform' type=dynamic),
-                                    #1,
+                                    "platform",
+                                    #2,
                                 ),
                             ),
                             [],
                         ),
                         Constant(
-                            StrAtom(
-                                "-",
+                            Str(
+                                Atom(
+                                    "-",
+                                ),
                             ),
                         ),
                         Call(
                             2,
                             Variable(
                                 (
-                                    Atom('endianness' type=dynamic),
-                                    #1,
+                                    "endianness",
+                                    #2,
                                 ),
                             ),
                             [],
@@ -151,54 +169,62 @@
         Call(
             13,
             FreeVar(
-                Require,
+                "require",
             ),
             [
                 Concat(
                     11,
                     [
                         Constant(
-                            StrAtom(
-                                "esbuild-",
+                            Str(
+                                Atom(
+                                    "esbuild-",
+                                ),
                             ),
                         ),
                         Call(
                             2,
                             Variable(
                                 (
-                                    Atom('arch' type=inline),
-                                    #1,
+                                    "arch",
+                                    #2,
                                 ),
                             ),
                             [],
                         ),
                         Constant(
-                            StrAtom(
-                                "-",
+                            Str(
+                                Atom(
+                                    "-",
+                                ),
                             ),
                         ),
                         Member(
                             3,
                             FreeVar(
-                                NodeProcess,
+                                "process",
                             ),
                             Constant(
-                                StrWord(
-                                    Atom('platform' type=dynamic),
+                                Str(
+                                    Atom(
+                                        "platform",
+                                    ),
                                 ),
                             ),
                         ),
                         Constant(
-                            StrAtom(
-                                "-",
+                            Str(
+                                Atom(
+                                    "-",
+                                ),
                             ),
                         ),
                         Call(
                             2,
                             Variable(
                                 (
-                                    Atom('endianness' type=dynamic),
-                                    #1,
+                                    "endianness",
+                                    #2,
                                 ),
                             ),
                             [],
@@ -213,55 +239,65 @@
         Call(
             14,
             FreeVar(
-                Require,
+                "require",
             ),
             [
                 Concat(
                     12,
                     [
                         Constant(
-                            StrAtom(
-                                "esbuild-",
+                            Str(
+                                Atom(
+                                    "esbuild-",
+                                ),
                             ),
                         ),
                         Member(
                             3,
                             FreeVar(
-                                NodeProcess,
+                                "process",
                             ),
                             Constant(
-                                StrWord(
-                                    Atom('arch' type=inline),
+                                Str(
+                                    Atom(
+                                        "arch",
+                                    ),
                                 ),
                             ),
                         ),
                         Constant(
-                            StrAtom(
-                                "-",
+                            Str(
+                                Atom(
+                                    "-",
+                                ),
                             ),
                         ),
                         Member(
                             3,
                             FreeVar(
-                                NodeProcess,
+                                "process",
                             ),
                             Constant(
-                                StrWord(
-                                    Atom('platform' type=dynamic),
+                                Str(
+                                    Atom(
+                                        "platform",
+                                    ),
                                 ),
                             ),
                         ),
                         Constant(
-                            StrAtom(
-                                "-",
+                            Str(
+                                Atom(
+                                    "-",
+                                ),
                             ),
                         ),
                         Call(
                             2,
                             Variable(
                                 (
-                                    Atom('endianness' type=dynamic),
-                                    #1,
+                                    "endianness",
+                                    #2,
                                 ),
                             ),
                             [],
@@ -276,61 +312,71 @@
         Call(
             14,
             FreeVar(
-                Require,
+                "require",
             ),
             [
                 Concat(
                     12,
                     [
                         Constant(
-                            StrAtom(
-                                "esbuild-",
+                            Str(
+                                Atom(
+                                    "esbuild-",
+                                ),
                             ),
                         ),
                         Member(
                             3,
                             Variable(
                                 (
-                                    Atom('p' type=static),
-                                    #1,
+                                    "p",
+                                    #2,
                                 ),
                             ),
                             Constant(
-                                StrWord(
-                                    Atom('arch' type=inline),
+                                Str(
+                                    Atom(
+                                        "arch",
+                                    ),
                                 ),
                             ),
                         ),
                         Constant(
-                            StrAtom(
-                                "-",
+                            Str(
+                                Atom(
+                                    "-",
+                                ),
                             ),
                         ),
                         Member(
                             3,
                             Variable(
                                 (
-                                    Atom('p' type=static),
-                                    #1,
+                                    "p",
+                                    #2,
                                 ),
                             ),
                             Constant(
-                                StrWord(
-                                    Atom('platform' type=dynamic),
+                                Str(
+                                    Atom(
+                                        "platform",
+                                    ),
                                 ),
                             ),
                         ),
                         Constant(
-                            StrAtom(
-                                "-",
+                            Str(
+                                Atom(
+                                    "-",
+                                ),
                             ),
                         ),
                         Call(
                             2,
                             Variable(
                                 (
-                                    Atom('endianness' type=dynamic),
-                                    #1,
+                                    "endianness",
+                                    #2,
                                 ),
                             ),
                             [],
@@ -345,53 +391,61 @@
         Call(
             12,
             FreeVar(
-                Require,
+                "require",
             ),
             [
                 Concat(
                     10,
                     [
                         Constant(
-                            StrAtom(
-                                "esbuild-",
+                            Str(
+                                Atom(
+                                    "esbuild-",
+                                ),
                             ),
                         ),
                         Member(
                             3,
                             Variable(
                                 (
-                                    Atom('p' type=static),
-                                    #1,
+                                    "p",
+                                    #2,
                                 ),
                             ),
                             Constant(
-                                StrWord(
-                                    Atom('arch' type=inline),
+                                Str(
+                                    Atom(
+                                        "arch",
+                                    ),
                                 ),
                             ),
                         ),
                         Constant(
-                            StrAtom(
-                                "-",
+                            Str(
+                                Atom(
+                                    "-",
+                                ),
                             ),
                         ),
                         Variable(
                             (
-                                Atom('processPlatform' type=dynamic),
-                                #1,
+                                "processPlatform",
+                                #2,
                             ),
                         ),
                         Constant(
-                            StrAtom(
-                                "-",
+                            Str(
+                                Atom(
+                                    "-",
+                                ),
                             ),
                         ),
                         Call(
                             2,
                             Variable(
                                 (
-                                    Atom('endianness' type=dynamic),
-                                    #1,
+                                    "endianness",
+                                    #2,
                                 ),
                             ),
                             [],
@@ -408,19 +462,23 @@
             Call(
                 3,
                 FreeVar(
-                    Require,
+                    "require",
                 ),
                 [
                     Constant(
-                        StrWord(
-                            Atom('os' type=inline),
+                        Str(
+                            Word(
+                                "os",
+                            ),
                         ),
                     ),
                 ],
             ),
             Constant(
-                StrWord(
-                    Atom('endianness' type=dynamic),
+                Str(
+                    Atom(
+                        "endianness",
+                    ),
                 ),
             ),
         ),
@@ -428,7 +486,7 @@
     (
         "p",
         FreeVar(
-            NodeProcess,
+            "process",
         ),
     ),
     (
@@ -438,19 +496,23 @@
             Call(
                 3,
                 FreeVar(
-                    Require,
+                    "require",
                 ),
                 [
                     Constant(
-                        StrWord(
-                            Atom('os' type=inline),
+                        Str(
+                            Word(
+                                "os",
+                            ),
                         ),
                     ),
                 ],
             ),
             Constant(
-                StrWord(
-                    Atom('platform' type=dynamic),
+                Str(
+                    Atom(
+                        "platform",
+                    ),
                 ),
             ),
         ),
@@ -462,19 +524,23 @@
             Call(
                 3,
                 FreeVar(
-                    Require,
+                    "require",
                 ),
                 [
                     Constant(
-                        StrWord(
-                            Atom('process' type=static),
+                        Str(
+                            Word(
+                                "process",
+                            ),
                         ),
                     ),
                 ],
             ),
             Constant(
-                StrWord(
-                    Atom('platform' type=dynamic),
+                Str(
+                    Atom(
+                        "platform",
+                    ),
                 ),
             ),
         ),

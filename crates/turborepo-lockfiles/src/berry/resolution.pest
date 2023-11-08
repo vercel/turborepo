@@ -1,0 +1,23 @@
+// See
+// https://github.com/yarnpkg/berry/blob/master/packages/yarnpkg-parsers/sources/grammars/resolution.pegjs
+
+resolution = {
+  SOI ~
+  ((specifier ~ "/" ~ specifier)
+  | specifier)
+  ~ EOI
+}
+
+specifier = {
+  (fullName ~ "@" ~ description)
+  | fullName
+}
+
+fullName = {
+  ( "@" ~ ident ~ "/" ~ ident  )
+  | ident
+}
+
+ident = { (!("/" | "@") ~ ANY) + }
+
+description = { (!("/") ~ ANY) + }

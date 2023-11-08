@@ -140,9 +140,9 @@ type PrettyStdoutWriter struct {
 var _ io.Writer = (*PrettyStdoutWriter)(nil)
 
 // NewPrettyStdoutWriter returns an instance of PrettyStdoutWriter
-func NewPrettyStdoutWriter(prefix string) *PrettyStdoutWriter {
+func NewPrettyIoWriter(prefix string, ioWriter io.Writer) *PrettyStdoutWriter {
 	return &PrettyStdoutWriter{
-		w:      os.Stdout,
+		w:      ioWriter,
 		Prefix: prefix,
 	}
 }

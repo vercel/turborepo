@@ -660,6 +660,129 @@ func TestGlobFilesFs(t *testing.T) {
 				"/repos/some-app/dist/js/node_modules/browserify.js",
 			},
 		},
+		{
+			name: "exclude single file",
+			files: []string{
+				"/repos/some-app/included.txt",
+				"/repos/some-app/excluded.txt",
+			},
+			args: args{
+				basePath:        "/repos/some-app",
+				includePatterns: []string{"*.txt"},
+				excludePatterns: []string{"excluded.txt"},
+			},
+			wantAll: []string{
+				"/repos/some-app/included.txt",
+			},
+			wantFiles: []string{
+				"/repos/some-app/included.txt",
+			},
+		},
+		{
+			name: "exclude nested single file",
+			files: []string{
+				"/repos/some-app/one/included.txt",
+				"/repos/some-app/one/two/included.txt",
+				"/repos/some-app/one/two/three/included.txt",
+				"/repos/some-app/one/excluded.txt",
+				"/repos/some-app/one/two/excluded.txt",
+				"/repos/some-app/one/two/three/excluded.txt",
+			},
+			args: args{
+				basePath:        "/repos/some-app",
+				includePatterns: []string{"**"},
+				excludePatterns: []string{"**/excluded.txt"},
+			},
+			wantAll: []string{
+				"/repos/some-app/one/included.txt",
+				"/repos/some-app/one/two/included.txt",
+				"/repos/some-app/one/two/three/included.txt",
+				"/repos/some-app/one",
+				"/repos/some-app/one/two",
+				"/repos/some-app/one/two/three",
+			},
+			wantFiles: []string{
+				"/repos/some-app/one/included.txt",
+				"/repos/some-app/one/two/included.txt",
+				"/repos/some-app/one/two/three/included.txt",
+			},
+		},
+		{
+			name: "exclude everything",
+			files: []string{
+				"/repos/some-app/one/included.txt",
+				"/repos/some-app/one/two/included.txt",
+				"/repos/some-app/one/two/three/included.txt",
+				"/repos/some-app/one/excluded.txt",
+				"/repos/some-app/one/two/excluded.txt",
+				"/repos/some-app/one/two/three/excluded.txt",
+			},
+			args: args{
+				basePath:        "/repos/some-app",
+				includePatterns: []string{"**"},
+				excludePatterns: []string{"**"},
+			},
+			wantAll:   []string{},
+			wantFiles: []string{},
+		},
+		{
+			name: "exclude everything with slash",
+			files: []string{
+				"/repos/some-app/one/included.txt",
+				"/repos/some-app/one/two/included.txt",
+				"/repos/some-app/one/two/three/included.txt",
+				"/repos/some-app/one/excluded.txt",
+				"/repos/some-app/one/two/excluded.txt",
+				"/repos/some-app/one/two/three/excluded.txt",
+			},
+			args: args{
+				basePath:        "/repos/some-app",
+				includePatterns: []string{"**"},
+				excludePatterns: []string{"**/"},
+			},
+			wantAll:   []string{},
+			wantFiles: []string{},
+		},
+		{
+			name: "exclude everything with leading **",
+			files: []string{
+				"/repos/some-app/foo/bar",
+				"/repos/some-app/some-foo",
+				"/repos/some-app/some-foo/bar",
+				"/repos/some-app/included",
+			},
+			args: args{
+				basePath:        "/repos/some-app",
+				includePatterns: []string{"**"},
+				excludePatterns: []string{"**foo"},
+			},
+			wantAll: []string{
+				"/repos/some-app/included",
+			},
+			wantFiles: []string{
+				"/repos/some-app/included",
+			},
+		},
+		{
+			name: "exclude everything with trailing **",
+			files: []string{
+				"/repos/some-app/foo/bar",
+				"/repos/some-app/foo-file",
+				"/repos/some-app/foo-dir/bar",
+				"/repos/some-app/included",
+			},
+			args: args{
+				basePath:        "/repos/some-app",
+				includePatterns: []string{"**"},
+				excludePatterns: []string{"foo**"},
+			},
+			wantAll: []string{
+				"/repos/some-app/included",
+			},
+			wantFiles: []string{
+				"/repos/some-app/included",
+			},
+		},
 	}
 	for _, tt := range tests {
 		fsysRoot := "/"
@@ -699,6 +822,7 @@ func TestGlobFilesFs(t *testing.T) {
 			}
 
 			sort.Strings(gotToSlash)
+			sort.Strings(tt.wantAll)
 
 			if !reflect.DeepEqual(gotToSlash, tt.wantAll) {
 				t.Errorf("globAllFs() = %v, want %v", gotToSlash, tt.wantAll)

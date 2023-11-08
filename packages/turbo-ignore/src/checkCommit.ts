@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
 
 export const skipAllCommits = [
   `[skip ci]`,
@@ -48,7 +48,7 @@ export function checkCommit({ workspace }: { workspace: string }): {
     return {
       result: "conflict",
       scope: "workspace",
-      reason: `conflicting commit messages found: ${forceWorkspaceDeploy} and ${forceWorkspaceSkip}`,
+      reason: `Conflicting commit messages found: ${forceWorkspaceDeploy} and ${forceWorkspaceSkip}`,
     };
   }
 
@@ -56,7 +56,7 @@ export function checkCommit({ workspace }: { workspace: string }): {
     return {
       result: "deploy",
       scope: "workspace",
-      reason: `found commit message: ${forceWorkspaceDeploy}`,
+      reason: `Found commit message: ${forceWorkspaceDeploy}`,
     };
   }
 
@@ -64,7 +64,7 @@ export function checkCommit({ workspace }: { workspace: string }): {
     return {
       result: "skip",
       scope: "workspace",
-      reason: `found commit message: ${forceWorkspaceSkip}`,
+      reason: `Found commit message: ${forceWorkspaceSkip}`,
     };
   }
 
@@ -76,7 +76,7 @@ export function checkCommit({ workspace }: { workspace: string }): {
     return {
       result: "conflict",
       scope: "global",
-      reason: `conflicting commit messages found: ${forceDeploy} and ${forceSkip}`,
+      reason: `Conflicting commit messages found: ${forceDeploy} and ${forceSkip}`,
     };
   }
 
@@ -84,7 +84,7 @@ export function checkCommit({ workspace }: { workspace: string }): {
     return {
       result: "deploy",
       scope: "global",
-      reason: `found commit message: ${forceDeploy}`,
+      reason: `Found commit message: ${forceDeploy}`,
     };
   }
 
@@ -92,13 +92,13 @@ export function checkCommit({ workspace }: { workspace: string }): {
     return {
       result: "skip",
       scope: "global",
-      reason: `found commit message: ${forceSkip}`,
+      reason: `Found commit message: ${forceSkip}`,
     };
   }
 
   return {
     result: "continue",
     scope: "global",
-    reason: `no deploy or skip string found in commit message.`,
+    reason: `No deploy or skip string found in commit message.`,
   };
 }

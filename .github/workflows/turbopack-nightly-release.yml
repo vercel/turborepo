@@ -1,0 +1,21 @@
+name: Turbopack Nightly Release
+
+on:
+  schedule:
+    - cron: "15 8 * * *" # Run every day at 00:15 PST
+  workflow_dispatch:
+
+jobs:
+  turbopack_nightly:
+    name: Cut nightly Turbopack release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Tag nightly
+        id: tag_version
+        uses: ./.github/actions/turbopack-bump
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prefix: "turbopack-"

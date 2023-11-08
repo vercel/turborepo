@@ -2,9 +2,13 @@
   "exclude": ["node_modules"],
   "extends": "@acme/tsconfig/nextjs.json",
   "compilerOptions": {
-    "rootDir": "src",
     "outDir": "dist",
-    "incremental": true
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
-  "include": ["src", "next-env.d.ts"]
+  "include": ["src", "next-env.d.ts", ".next/types/**/*.ts"]
 }

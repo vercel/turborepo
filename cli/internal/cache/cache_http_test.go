@@ -5,10 +5,11 @@ import (
 	"bytes"
 	"errors"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/DataDog/zstd"
-
+	"github.com/vercel/turbo/cli/internal/cacheitem"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
@@ -17,9 +18,21 @@ import (
 
 type errorResp struct {
 	err error
+	t   *testing.T
 }
 
 func (sr *errorResp) PutArtifact(hash string, body []byte, duration int, tag string) error {
+	sr.t.Helper()
+	outdir := turbopath.AbsoluteSystemPathFromUpstream(sr.t.TempDir())
+	cache := cacheitem.FromReader(bytes.NewReader(body), true)
+	restored, err := cache.Restore(outdir)
+
+	sr.t.Log(restored)
+	assert.Equal(sr.t, restored[0].ToString(), "one")
+	assert.Equal(sr.t, restored[1].ToString(), "two")
+	assert.Equal(sr.t, len(restored), 2)
+	assert.NilError(sr.t, err, "Restoration was successful.")
+
 	return sr.err
 }
 
@@ -46,7 +59,7 @@ func TestRemoteCachingDisabled(t *testing.T) {
 		requestLimiter: make(limiter, 20),
 	}
 	cd := &util.CacheDisabledError{}
-	_, _, _, err := cache.Fetch("unused-target", "some-hash", []string{"unused", "outputs"})
+	_, _, err := cache.Fetch("unused-target", "some-hash", []string{"unused", "outputs"})
 	if !errors.As(err, &cd) {
 		t.Errorf("cache.Fetch err got %v, want a CacheDisabled error", err)
 	}
@@ -81,7 +94,7 @@ func makeValidTar(t *testing.T) *bytes.Buffer {
 	// my-pkg
 	h := &tar.Header{
 		Name:     "my-pkg/",
-		Mode:     int64(0644),
+		Mode:     int64(0755),
 		Typeflag: tar.TypeDir,
 	}
 	if err := tw.WriteHeader(h); err != nil {
@@ -182,7 +195,7 @@ func TestRestoreTar(t *testing.T) {
 
 	expectedFiles := []turbopath.AnchoredSystemPath{
 		turbopath.AnchoredUnixPath("extra-file").ToSystemPath(),
-		turbopath.AnchoredUnixPath("my-pkg/").ToSystemPath(),
+		turbopath.AnchoredUnixPath("my-pkg").ToSystemPath(),
 		turbopath.AnchoredUnixPath("my-pkg/some-file").ToSystemPath(),
 		turbopath.AnchoredUnixPath("my-pkg/link-to-extra-file").ToSystemPath(),
 		turbopath.AnchoredUnixPath("my-pkg/broken-link").ToSystemPath(),
@@ -240,6 +253,34 @@ func TestRestoreInvalidTar(t *testing.T) {
 	assert.Equal(t, string(contents), string(expectedContents), "expected to not overwrite file")
 }
 
-// Note that testing Put will require mocking the filesystem and is not currently the most
-// interesting test. The current implementation directly returns the error from PutArtifact.
-// We should still add the test once feasible to avoid future breakage.
+func Test_httpCache_Put(t *testing.T) {
+	root := fs.AbsoluteSystemPathFromUpstream(t.TempDir())
+	_ = root.Join("one").WriteFile(nil, 0644)
+	_ = root.Join("two").WriteFile(nil, 0644)
+
+	clientErr := errors.New("PutArtifact")
+	client := &errorResp{err: clientErr, t: t}
+
+	cache := newHTTPCache(Opts{}, client, nil, root)
+
+	assert.ErrorIs(
+		t,
+		cache.Put(root, "000", 10, []turbopath.AnchoredSystemPath{"one", "two"}),
+		clientErr,
+		"Succeeds at writing, cache item is successfully passed through.",
+	)
+
+	assert.ErrorIs(
+		t,
+		cache.Put(root, "000", 10, []turbopath.AnchoredSystemPath{"one", "two", "missing"}),
+		os.ErrNotExist,
+		"Errors with missing file.",
+	)
+
+	assert.ErrorIs(
+		t,
+		cache.Put(root, "000", 10, []turbopath.AnchoredSystemPath{"missing", "one", "two"}),
+		os.ErrNotExist,
+		"Errors with missing file at first load.",
+	)
+}

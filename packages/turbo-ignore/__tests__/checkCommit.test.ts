@@ -1,6 +1,6 @@
-import child_process, { ChildProcess, ExecException } from "child_process";
+import child_process from "node:child_process";
+import { mockEnv } from "@turbo/test-utils";
 import { checkCommit } from "../src/checkCommit";
-import { mockEnv } from "./test-utils";
 
 describe("checkCommit()", () => {
   describe("on Vercel", () => {
@@ -13,7 +13,7 @@ describe("checkCommit()", () => {
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
           result: "continue",
           scope: "global",
-          reason: "no deploy or skip string found in commit message.",
+          reason: "No deploy or skip string found in commit message.",
         });
       });
 
@@ -25,7 +25,7 @@ describe("checkCommit()", () => {
           result: "conflict",
           scope: "global",
           reason:
-            "conflicting commit messages found: [vercel deploy] and [vercel skip]",
+            "Conflicting commit messages found: [vercel deploy] and [vercel skip]",
         });
       });
 
@@ -35,7 +35,7 @@ describe("checkCommit()", () => {
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
           result: "deploy",
           scope: "global",
-          reason: "found commit message: [vercel deploy]",
+          reason: "Found commit message: [vercel deploy]",
         });
       });
 
@@ -45,7 +45,7 @@ describe("checkCommit()", () => {
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
           result: "skip",
           scope: "global",
-          reason: "found commit message: [vercel skip]",
+          reason: "Found commit message: [vercel skip]",
         });
       });
     });
@@ -58,7 +58,7 @@ describe("checkCommit()", () => {
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
           result: "continue",
           scope: "global",
-          reason: "no deploy or skip string found in commit message.",
+          reason: "No deploy or skip string found in commit message.",
         });
       });
 
@@ -70,7 +70,7 @@ describe("checkCommit()", () => {
           result: "conflict",
           scope: "workspace",
           reason:
-            "conflicting commit messages found: [vercel deploy test-workspace] and [vercel skip test-workspace]",
+            "Conflicting commit messages found: [vercel deploy test-workspace] and [vercel skip test-workspace]",
         });
       });
 
@@ -81,7 +81,7 @@ describe("checkCommit()", () => {
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
           result: "deploy",
           scope: "workspace",
-          reason: "found commit message: [vercel deploy test-workspace]",
+          reason: "Found commit message: [vercel deploy test-workspace]",
         });
       });
 
@@ -92,7 +92,7 @@ describe("checkCommit()", () => {
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
           result: "skip",
           scope: "workspace",
-          reason: "found commit message: [vercel skip test-workspace]",
+          reason: "Found commit message: [vercel skip test-workspace]",
         });
       });
     });
@@ -108,7 +108,7 @@ describe("checkCommit()", () => {
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
           result: "continue",
           scope: "global",
-          reason: "no deploy or skip string found in commit message.",
+          reason: "No deploy or skip string found in commit message.",
         });
         expect(mockExecSync).toHaveBeenCalledWith("git show -s --format=%B");
         mockExecSync.mockRestore();
@@ -125,7 +125,7 @@ describe("checkCommit()", () => {
           result: "conflict",
           scope: "global",
           reason:
-            "conflicting commit messages found: [vercel deploy] and [vercel skip]",
+            "Conflicting commit messages found: [vercel deploy] and [vercel skip]",
         });
         expect(mockExecSync).toHaveBeenCalledWith("git show -s --format=%B");
         mockExecSync.mockRestore();
@@ -140,7 +140,7 @@ describe("checkCommit()", () => {
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
           result: "deploy",
           scope: "global",
-          reason: "found commit message: [vercel deploy]",
+          reason: "Found commit message: [vercel deploy]",
         });
         expect(mockExecSync).toHaveBeenCalledWith("git show -s --format=%B");
         mockExecSync.mockRestore();
@@ -155,7 +155,7 @@ describe("checkCommit()", () => {
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
           result: "skip",
           scope: "global",
-          reason: "found commit message: [vercel skip]",
+          reason: "Found commit message: [vercel skip]",
         });
         expect(mockExecSync).toHaveBeenCalledWith("git show -s --format=%B");
         mockExecSync.mockRestore();
@@ -172,7 +172,7 @@ describe("checkCommit()", () => {
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
           result: "continue",
           scope: "global",
-          reason: "no deploy or skip string found in commit message.",
+          reason: "No deploy or skip string found in commit message.",
         });
         expect(mockExecSync).toHaveBeenCalledWith("git show -s --format=%B");
         mockExecSync.mockRestore();
@@ -189,7 +189,7 @@ describe("checkCommit()", () => {
           result: "conflict",
           scope: "workspace",
           reason:
-            "conflicting commit messages found: [vercel deploy test-workspace] and [vercel skip test-workspace]",
+            "Conflicting commit messages found: [vercel deploy test-workspace] and [vercel skip test-workspace]",
         });
         expect(mockExecSync).toHaveBeenCalledWith("git show -s --format=%B");
         mockExecSync.mockRestore();
@@ -204,7 +204,7 @@ describe("checkCommit()", () => {
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
           result: "deploy",
           scope: "workspace",
-          reason: "found commit message: [vercel deploy test-workspace]",
+          reason: "Found commit message: [vercel deploy test-workspace]",
         });
         expect(mockExecSync).toHaveBeenCalledWith("git show -s --format=%B");
         mockExecSync.mockRestore();
@@ -219,7 +219,7 @@ describe("checkCommit()", () => {
         expect(checkCommit({ workspace: "test-workspace" })).toEqual({
           result: "skip",
           scope: "workspace",
-          reason: "found commit message: [vercel skip test-workspace]",
+          reason: "Found commit message: [vercel skip test-workspace]",
         });
         expect(mockExecSync).toHaveBeenCalledWith("git show -s --format=%B");
         mockExecSync.mockRestore();

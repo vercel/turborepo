@@ -1,5 +1,5 @@
+import { spyConsole, validateLogs } from "@turbo/test-utils";
 import { getWorkspace } from "../src/getWorkspace";
-import { spyConsole, validateLogs } from "./test-utils";
 
 describe("getWorkspace()", () => {
   const mockConsole = spyConsole();
@@ -10,8 +10,9 @@ describe("getWorkspace()", () => {
       })
     ).toEqual("test-workspace");
     validateLogs(
-      ['using "test-workspace" as workspace from arguments'],
-      mockConsole.log
+      ['Using "test-workspace" as workspace from arguments'],
+      mockConsole.log,
+      { prefix: "≫  " }
     );
   });
 
@@ -23,7 +24,7 @@ describe("getWorkspace()", () => {
     ).toEqual("test-app");
     expect(mockConsole.log).toHaveBeenCalledWith(
       "≫  ",
-      'inferred "test-app" as workspace from "package.json"'
+      'Inferred "test-app" as workspace from "package.json"'
     );
   });
 
@@ -31,7 +32,7 @@ describe("getWorkspace()", () => {
     expect(getWorkspace({})).toEqual("turbo-ignore");
     expect(mockConsole.log).toHaveBeenCalledWith(
       "≫  ",
-      'inferred "turbo-ignore" as workspace from "package.json"'
+      'Inferred "turbo-ignore" as workspace from "package.json"'
     );
   });
 

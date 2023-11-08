@@ -1,6 +1,9 @@
 use std::{
     any::{type_name, Any},
-    fmt::{self, Debug, Display, Formatter},
+    borrow::Cow,
+    fmt::{
+        Debug, Display, Formatter, {self},
+    },
     hash::Hash,
     sync::Arc,
 };
@@ -12,56 +15,14 @@ use crate::{
     id::{FunctionId, TraitTypeId},
     magic_any::{AnyDeserializeSeed, MagicAny, MagicAnyDeserializeSeed},
     registry::{register_trait_type, register_value_type},
-    CollectiblesSource, RawVc, ValueTypeId,
 };
-
-pub trait Typed {
-    fn get_value_type_id() -> ValueTypeId;
-}
-
-pub trait ValueVc:
-    From<RawVc>
-    + Into<RawVc>
-    + CollectiblesSource
-    + Hash
-    + PartialEq
-    + Eq
-    + PartialOrd
-    + Ord
-    + Copy
-    + Clone
-{
-    fn get_value_type_id() -> ValueTypeId;
-    fn get_trait_type_ids() -> Box<dyn Iterator<Item = TraitTypeId>>;
-}
-
-pub trait ValueTraitVc:
-    From<RawVc>
-    + Into<RawVc>
-    + CollectiblesSource
-    + Hash
-    + PartialEq
-    + Eq
-    + PartialOrd
-    + Ord
-    + Copy
-    + Clone
-{
-    fn get_trait_type_id() -> TraitTypeId;
-}
-
-/// Marker trait that a turbo_tasks::value is prepared for
-/// serialization as Value<...> input.
-/// Either use `#[turbo_tasks::value(serialization: auto_for_input)]`
-/// or avoid Value<...> in favor of a real Vc
-pub trait TypedForInput: Typed {}
 
 type MagicSerializationFn = fn(&dyn MagicAny) -> &dyn erased_serde::Serialize;
 type AnySerializationFn = fn(&(dyn Any + Sync + Send)) -> &dyn erased_serde::Serialize;
 
 // TODO this type need some refactoring when multiple languages are added to
 // turbo-task In this case a trait_method might be of a different function type.
-// It probably need to be a FunctionVc.
+// It probably need to be a Vc<Function>.
 // That's also needed in a distributed world, where the function might be only
 // available on a remote instance.
 
@@ -74,7 +35,7 @@ pub struct ValueType {
     /// List of traits available
     pub traits: AutoSet<TraitTypeId>,
     /// List of trait methods available
-    pub trait_methods: AutoMap<(TraitTypeId, String), FunctionId>,
+    pub trait_methods: AutoMap<(TraitTypeId, Cow<'static, str>), FunctionId>,
 
     /// Functors for serialization
     magic_serialization: Option<(MagicSerializationFn, MagicAnyDeserializeSeed)>,
@@ -97,7 +58,7 @@ impl PartialEq for ValueType {
 
 impl PartialOrd for ValueType {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        (self as *const ValueType).partial_cmp(&(other as *const ValueType))
+        Some(self.cmp(other))
     }
 }
 impl Ord for ValueType {
@@ -205,7 +166,7 @@ impl ValueType {
     pub fn register_trait_method(
         &mut self,
         trait_type: TraitTypeId,
-        name: String,
+        name: Cow<'static, str>,
         native_fn: FunctionId,
     ) {
         self.trait_methods.insert((trait_type, name), native_fn);
@@ -213,7 +174,7 @@ impl ValueType {
 
     pub fn get_trait_method(
         &self,
-        trait_method_key: &(TraitTypeId, String),
+        trait_method_key: &(TraitTypeId, Cow<'static, str>),
     ) -> Option<&FunctionId> {
         self.trait_methods.get(trait_method_key)
     }
@@ -239,7 +200,7 @@ impl ValueType {
 #[derive(Debug)]
 pub struct TraitType {
     pub name: String,
-    pub(crate) default_trait_methods: AutoMap<String, FunctionId>,
+    pub(crate) default_trait_methods: AutoMap<Cow<'static, str>, FunctionId>,
 }
 
 impl Hash for TraitType {
@@ -264,7 +225,7 @@ impl PartialEq for TraitType {
 
 impl PartialOrd for TraitType {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        (self as *const TraitType).partial_cmp(&(other as *const TraitType))
+        Some(self.cmp(other))
     }
 }
 
@@ -282,7 +243,11 @@ impl TraitType {
         }
     }
 
-    pub fn register_default_trait_method(&mut self, name: String, native_fn: FunctionId) {
+    pub fn register_default_trait_method(
+        &mut self,
+        name: Cow<'static, str>,
+        native_fn: FunctionId,
+    ) {
         self.default_trait_methods.insert(name, native_fn);
     }
 

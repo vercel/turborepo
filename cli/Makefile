@@ -1,11 +1,16 @@
 TURBO_VERSION = $(shell cat ../version.txt | sed -n '1 p')
 TURBO_TAG = $(shell cat ../version.txt | sed -n '2 p')
 
+EXT :=
 ifeq ($(OS),Windows_NT)
 	UNAME := Windows
+	EXT = .exe
 else
 	UNAME := $(shell uname -s)
 endif
+
+GOARCH:=$(shell go env GOARCH | xargs)
+GOOS:=$(shell go env GOOS | xargs)
 
 # Strip debug info
 GO_FLAGS += "-ldflags=-s -w"
@@ -15,21 +20,95 @@ GO_FLAGS += -trimpath
 
 CLI_DIR = $(shell pwd)
 
+# allow opting in to the rust codepaths
+GO_TAG ?= rust
+
 GO_FILES = $(shell find . -name "*.go")
 SRC_FILES = $(shell find . -name "*.go" | grep -v "_test.go")
 GENERATED_FILES = internal/turbodprotocol/turbod.pb.go internal/turbodprotocol/turbod_grpc.pb.go
 
-turbo: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	CGO_ENABLED=1 go build $(GO_FLAGS) ./cmd/turbo
+# We do not set go-turbo as a dependency because the Rust build.rs
+# script will call it for us and copy over the binary
+turbo:
+	cargo build -p turbo
 
-shim: libturbo.a
-	cargo build --manifest-path ../shim/Cargo.toml
+turbo-prod:
+	cargo build --release --manifest-path ../crates/turborepo/Cargo.toml
 
-libturbo.a: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	go build -buildmode=c-archive -o libturbo.a  ./cmd/turbo/...
+turbo-capnp:
+	cd ../crates/turborepo-lib/src/hash && capnp compile -I std -ogo proto.capnp && mv ./proto.capnp.go ../../../../cli/internal/fs/hash/capnp
 
-turbo.lib: $(GENERATED_FILES) $(SRC_FILES) go.mod
-	go build -buildmode=c-archive -o turbo.lib  ./cmd/turbo/...
+go-turbo$(EXT): $(GENERATED_FILES) $(SRC_FILES) go.mod turborepo-ffi-install
+	CGO_ENABLED=1 go build -tags $(GO_TAG) -o go-turbo$(EXT) ./cmd/turbo
+
+
+.PHONY: turborepo-ffi-install
+turborepo-ffi-install: turborepo-ffi turborepo-ffi-copy-bindings
+	cp ../crates/turborepo-ffi/target/debug/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_$(GOOS)_$(GOARCH).a
+
+.PHONY: turborepo-ffi
+turborepo-ffi:
+	cd ../crates/turborepo-ffi && cargo build --target-dir ./target
+
+.PHONY: turborepo-ffi-copy-bindings
+turborepo-ffi-copy-bindings:
+	cp ../crates/turborepo-ffi/bindings.h ./internal/ffi/bindings.h
+
+#
+# ffi cross compiling
+#
+# these targets are used to build the ffi library for each platform
+# when doing a release. they _may_ work on your local machine, but
+# they're not intended to be used for development.
+#
+
+.PHONY: turborepo-ffi-install-windows-amd64
+turborepo-ffi-install-windows-amd64: turborepo-ffi-windows-amd64 turborepo-ffi-copy-bindings
+	cp ../crates/turborepo-ffi/target/x86_64-pc-windows-gnu/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_windows_amd64.a
+
+.PHONY: turborepo-ffi-install-darwin-arm64
+turborepo-ffi-install-darwin-arm64: turborepo-ffi-darwin-arm64 turborepo-ffi-copy-bindings
+	cp ../crates/turborepo-ffi/target/aarch64-apple-darwin/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_darwin_arm64.a
+
+.PHONY: turborepo-ffi-install-darwin-amd64
+turborepo-ffi-install-darwin-amd64: turborepo-ffi-darwin-amd64 turborepo-ffi-copy-bindings
+	cp ../crates/turborepo-ffi/target/x86_64-apple-darwin/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_darwin_amd64.a
+
+.PHONY: turborepo-ffi-install-linux-arm64
+turborepo-ffi-install-linux-arm64: turborepo-ffi-linux-arm64 turborepo-ffi-copy-bindings
+	cp ../crates/turborepo-ffi/target/aarch64-unknown-linux-musl/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_linux_arm64.a
+
+.PHONY: turborepo-ffi-install-linux-amd64
+turborepo-ffi-install-linux-amd64: turborepo-ffi-linux-amd64 turborepo-ffi-copy-bindings
+	cp ../crates/turborepo-ffi/target/x86_64-unknown-linux-musl/release/libturborepo_ffi.a ./internal/ffi/libturborepo_ffi_linux_amd64.a
+
+.PHONY: turborepo-ffi-windows-amd64
+turborepo-ffi-windows-amd64:
+	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target x86_64-pc-windows-gnu
+
+.PHONY: turborepo-ffi-darwin-arm64
+turborepo-ffi-darwin-arm64:
+	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target aarch64-apple-darwin
+
+.PHONY: turborepo-ffi-darwin-amd64
+turborepo-ffi-darwin-amd64:
+	cd ../crates/turborepo-ffi && cargo build --release --target-dir ./target --target x86_64-apple-darwin
+
+.PHONY: turborepo-ffi-linux-arm64
+turborepo-ffi-linux-arm64:
+	cd ../crates/turborepo-ffi && CC="zig cc -target aarch64-linux-musl" cargo build --release --target-dir ./target --target aarch64-unknown-linux-musl
+
+.PHONY: turborepo-ffi-linux-amd64
+turborepo-ffi-linux-amd64:
+	cd ../crates/turborepo-ffi && CC="zig cc -target x86_64-linux-musl" cargo build --release --target-dir ./target --target x86_64-unknown-linux-musl
+
+#
+# end
+#
+
+.PHONY: turborepo-ffi-proto
+turborepo-ffi-proto:
+	protoc -I../crates/ ../crates/turborepo-ffi/messages.proto --go_out=./internal/
 
 protoc: internal/turbodprotocol/turbod.proto
 	protoc --go_out=. --go_opt=paths=source_relative \
@@ -58,10 +137,10 @@ ifeq ($(UNAME), Windows)
 endif
 
 clean-go:
-	go clean -testcache ./...
+	go clean -testcache -r
 
-test-go: $(GENERATED_FILES) $(GO_FILES) go.mod go.sum
-	go test $(TURBO_RACE) ./...
+test-go: $(GENERATED_FILES) $(GO_FILES) go.mod go.sum turborepo-ffi-install
+	go test $(TURBO_RACE) -tags $(GO_TAG) ./...
 
 # protos need to be compiled before linting, since linting needs to pick up
 # some types from the generated code
@@ -81,15 +160,26 @@ corepack:
 e2e: corepack install turbo
 	node -r esbuild-register scripts/e2e/e2e.ts
 
+# Expects turbo to be built and up to date
+# Only should be used by CI
+e2e-prebuilt: corepack install
+	node -r esbuild-register scripts/e2e/e2e.ts
+
 cmd/turbo/version.go: ../version.txt
 	# Update this atomically to avoid issues with this being overwritten during use
 	node -e 'console.log(`package main\n\nconst turboVersion = "$(TURBO_VERSION)"`)' > cmd/turbo/version.go.txt
 	mv cmd/turbo/version.go.txt cmd/turbo/version.go
 
 build: install
-	# cd $(CLI_DIR)/../packages/turbo-ignore && pnpm install --filter=turbo-ignore && npm run build
-	cd $(CLI_DIR)/../packages/create-turbo && pnpm install --filter=create-turbo && npm run build
-	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm install --filter=@turbo/codemod && npm run build
+	cd $(CLI_DIR)/../ && pnpm build:turbo
+	cd $(CLI_DIR)/../ && pnpm install --filter=create-turbo && pnpm turbo-prebuilt build --filter=create-turbo...
+	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/codemod && pnpm turbo-prebuilt build --filter=@turbo/codemod...
+	cd $(CLI_DIR)/../ && pnpm install --filter=turbo-ignore && pnpm turbo-prebuilt build --filter=turbo-ignore...
+	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/workspaces && pnpm turbo-prebuilt build --filter=@turbo/workspaces...
+	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/gen && pnpm turbo-prebuilt build --filter=@turbo/gen...
+	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-plugin-turbo && pnpm turbo-prebuilt build --filter=eslint-plugin-turbo...
+	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-config-turbo && pnpm turbo-prebuilt build --filter=eslint-config-turbo...
+	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/types && pnpm turbo-prebuilt build --filter=@turbo/types...
 
 .PHONY: prepublish
 prepublish: compile-protos cmd/turbo/version.go
@@ -111,10 +201,6 @@ snapshot-turbo-cross:
 snapshot-turbo-darwin:
 	goreleaser release --snapshot --rm-dist -f darwin-release.yml
 
-.PHONY: snapshot-turbo
-snapshot-turbo: clean
-	goreleaser release --snapshot --rm-dist -f combined-release.yml
-
 .PHONY: snapshot-lib-turbo-darwin
 snapshot-lib-turbo-darwin:
 	goreleaser release --snapshot --rm-dist -f darwin-lib.yml
@@ -127,10 +213,17 @@ snapshot-lib-turbo-cross:
 build-lib-turbo-darwin:
 	goreleaser release --rm-dist -f darwin-lib.yml
 
+.PHONY: build-go-turbo-darwin
+build-go-turbo-darwin:
+	goreleaser release --rm-dist -f darwin-release.yml
+
+.PHONY: build-go-turbo-cross
+build-go-turbo-cross:
+	goreleaser release --rm-dist -f cross-release.yml
+
 .PHONY: build-lib-turbo-cross
 build-lib-turbo-cross:
 	goreleaser release --rm-dist -f cross-lib.yml
-
 
 .PHONY: stage-release
 stage-release: cmd/turbo/version.go
@@ -139,7 +232,6 @@ stage-release: cmd/turbo/version.go
 	cat $(CLI_DIR)/../version.txt
 	git diff -- $(CLI_DIR)/../version.txt
 	git status
-	@test main = "`git rev-parse --abbrev-ref HEAD`" || (echo "Refusing to publish from non-main branch `git rev-parse --abbrev-ref HEAD`" && false)
 	@test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
 
 	# Stop if versions are not updated.
@@ -147,18 +239,23 @@ stage-release: cmd/turbo/version.go
 	@test "" != "`git diff -- $(CLI_DIR)/cmd/turbo/version.go`" || (echo "Refusing to publish with unupdated version.go" && false)
 
 	# Prepare the packages.
-	cd $(CLI_DIR)/../packages/turbo && npm version "$(TURBO_VERSION)" --allow-same-version
-	# cd $(CLI_DIR)/../packages/turbo-ignore && npm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/create-turbo && npm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-codemod && npm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/create-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-workspaces && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-gen && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/eslint-plugin-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo-types && pnpm version "$(TURBO_VERSION)" --allow-same-version
 
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
 	git push origin staging-$(TURBO_VERSION) --tags --force
 
-.PHONY: publish
-publish: clean build
+.PHONY: publish-turbo
+publish-turbo: clean build
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 
@@ -167,68 +264,33 @@ publish: clean build
 
 	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
 
-
 	# Publishes the native npm modules.
-	goreleaser release --rm-dist -f combined-release.yml
+	goreleaser release --rm-dist -f combined-shim.yml $(SKIP_PUBLISH)
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
-	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/create-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo-workspaces && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo-gen && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/eslint-plugin-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
+	cd $(CLI_DIR)/../packages/turbo-types && pnpm pack --pack-destination=$(CLI_DIR)/../
 
+ifneq ($(SKIP_PUBLISH),--skip-publish)
 	# Publish the remaining JS packages in order to avoid race conditions.
 	cd $(CLI_DIR)/../
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
-	# npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
-
-.PHONY: snapshot-shim
-snapshot-shim:
-	echo "Version: $(TURBO_VERSION)"
-	echo "Tag: $(TURBO_TAG)"
-
-	# Include the patch in the log.
-	git format-patch HEAD~1 --stdout | cat
-
-	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
-
-	# Publishes the native npm modules.
-	goreleaser release --rm-dist -f combined-shim.yml --snapshot
-
-	# Split packing from the publish step so that npm locates the correct .npmrc file.
-	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
-
-
-.PHONY: publish-shim
-publish-shim:
-	echo "Version: $(TURBO_VERSION)"
-	echo "Tag: $(TURBO_TAG)"
-
-	# Include the patch in the log.
-	git format-patch HEAD~1 --stdout | cat
-
-	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
-
-	# Publishes the native npm modules.
-	goreleaser release --rm-dist -f combined-shim.yml
-
-	# Split packing from the publish step so that npm locates the correct .npmrc file.
-	npm pack $(CLI_DIR)/../packages/turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-ignore --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/create-turbo --pack-destination=$(CLI_DIR)/../
-	npm pack $(CLI_DIR)/../packages/turbo-codemod --pack-destination=$(CLI_DIR)/../
-
-	# Publish the remaining JS packages in order to avoid race conditions.
-	cd $(CLI_DIR)/../
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
-	# npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
-	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-ignore-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-workspaces-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-gen-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../eslint-plugin-turbo-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../eslint-config-turbo-$(TURBO_VERSION).tgz
+	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-types-$(TURBO_VERSION).tgz
+endif
 
 demo/lage: install
 	node $(CLI_DIR)/scripts/generate.mjs lage
@@ -258,7 +320,10 @@ bench/turbo: demo/turbo turbo
 
 bench: bench/lerna bench/lage bench/nx bench/turbo
 
-clean: clean-go clean-build clean-demo
+clean: clean-go clean-build clean-demo clean-rust
+
+clean-rust:
+	cargo clean
 
 clean-build:
 	rm -f turbo
@@ -267,28 +332,12 @@ clean-demo:
 	rm -rf node_modules
 	rm -rf demo
 
-CRAM_ENV := .cram_env
-
-$(CRAM_ENV)/bin/pip:
-	python3 -m venv $(CRAM_ENV)
-
-$(CRAM_ENV)/bin/prysk: $(CRAM_ENV)/bin/pip
-	$(CRAM_ENV)/bin/pip install prysk
-
-INTEGRATION_TEST_FILES = $(shell find integration_tests -name "*.t")
-
-integration-tests: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack shim
-	$(CRAM_ENV)/bin/prysk --shell=`which bash` $(INTEGRATION_TEST_FILES)
-
-integration-tests-interactive: $(CRAM_ENV)/bin/prysk turbo $(INTEGRATION_TEST_FILES) corepack shim
-	$(CRAM_ENV)/bin/prysk --shell=`which bash` -i $(INTEGRATION_TEST_FILES)
-
-# use target testbed-<some directory under integration_tests> to set up the testbed directory
-.PHONY=testbed-%
-testbed-%:
-	$(eval $@_TEST := $(@:testbed-%=%))
-	@echo "testbed setup $($@_TEST)"
+# use target fixture-<some directory under integration_tests/_fixtures> to set up the testbed directory
+.PHONY=fixture-%
+fixture-%:
+	$(eval $@_FIXTURE := $(@:fixture-%=%))
+	@echo "fixture setup $($@_FIXTURE)"
 	rm -rf testbed
 	mkdir -p testbed
-	./integration_tests/$($@_TEST)/setup.sh testbed
+	../turborepo-tests/integration/tests/_helpers/setup_monorepo.sh ./testbed $($@_FIXTURE)
 

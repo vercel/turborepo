@@ -1,25 +1,27 @@
 use std::{
     any::Any,
     borrow::Cow,
-    fmt::{Debug, Display},
+    fmt,
+    fmt::{Debug, Display, Write},
     future::Future,
+    mem::take,
     pin::Pin,
     sync::Arc,
     time::{Duration, Instant},
 };
 
-use anyhow::{anyhow, Result};
-use auto_hash_map::AutoSet;
+use anyhow::{anyhow, bail, Result};
+use auto_hash_map::AutoMap;
 use serde::{Deserialize, Serialize};
+use tracing::Instrument;
 
 pub use crate::id::BackendJobId;
 use crate::{
     event::EventListener, manager::TurboTasksBackendApi, raw_vc::CellId, registry,
-    task_input::SharedReference, FunctionId, RawVc, ReadRef, TaskId, TaskIdProvider, TaskInput,
-    TraitTypeId,
+    ConcreteTaskInput, FunctionId, RawVc, ReadRef, SharedReference, TaskId, TaskIdProvider,
+    TaskIdSet, TraitRef, TraitTypeId, VcValueTrait, VcValueType,
 };
 
-/// Different Task types
 pub enum TaskType {
     /// Tasks that only exist for a certain operation and
     /// won't persist between sessions
@@ -62,20 +64,41 @@ impl Debug for TransientTaskType {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum PersistentTaskType {
     /// A normal task execution a native (rust) function
-    Native(FunctionId, Vec<TaskInput>),
+    Native(FunctionId, Vec<ConcreteTaskInput>),
 
     /// A resolve task, which resolves arguments and calls the function with
     /// resolve arguments. The inner function call will do a cache lookup.
-    ResolveNative(FunctionId, Vec<TaskInput>),
+    ResolveNative(FunctionId, Vec<ConcreteTaskInput>),
 
     /// A trait method resolve task. It resolves the first (`self`) argument and
     /// looks up the trait method on that value. Then it calls that method.
     /// The method call will do a cache lookup and might resolve arguments
     /// before.
-    ResolveTrait(TraitTypeId, Cow<'static, str>, Vec<TaskInput>),
+    ResolveTrait(TraitTypeId, Cow<'static, str>, Vec<ConcreteTaskInput>),
+}
+
+impl Display for PersistentTaskType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Native(fid, _) | Self::ResolveNative(fid, _) => {
+                Display::fmt(&registry::get_function(*fid).name, f)
+            }
+            Self::ResolveTrait(tid, n, _) => {
+                write!(f, "{}::{n}", registry::get_trait(*tid).name)
+            }
+        }
+    }
 }
 
 impl PersistentTaskType {
+    pub fn shrink_to_fit(&mut self) {
+        match self {
+            Self::Native(_, inputs) => inputs.shrink_to_fit(),
+            Self::ResolveNative(_, inputs) => inputs.shrink_to_fit(),
+            Self::ResolveTrait(_, _, inputs) => inputs.shrink_to_fit(),
+        }
+    }
+
     pub fn len(&self) -> usize {
         match self {
             PersistentTaskType::Native(_, v)
@@ -111,7 +134,7 @@ pub struct TaskExecutionSpec {
 
 // TODO technically CellContent is already indexed by the ValueTypeId, so we
 // don't need to store it here
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CellContent(pub Option<SharedReference>);
 
 impl Display for CellContent {
@@ -124,7 +147,7 @@ impl Display for CellContent {
 }
 
 impl CellContent {
-    pub fn cast<T: Any + Send + Sync>(self) -> Result<ReadRef<T>> {
+    pub fn cast<T: Any + VcValueType>(self) -> Result<ReadRef<T>> {
         let data = self.0.ok_or_else(|| anyhow!("Cell is empty"))?;
         let data = data
             .downcast()
@@ -134,16 +157,23 @@ impl CellContent {
 
     /// # Safety
     ///
-    /// T and U must be binary identical (#[repr(transparent)])
-    pub unsafe fn cast_transparent<T: Any + Send + Sync, U>(self) -> Result<ReadRef<T, U>> {
-        let data = self.0.ok_or_else(|| anyhow!("Cell is empty"))?;
-        let data = data
-            .downcast()
-            .ok_or_else(|| anyhow!("Unexpected type in cell"))?;
-        Ok(unsafe { ReadRef::new_transparent(data) })
+    /// The caller must ensure that the CellContent contains a vc that
+    /// implements T.
+    pub fn cast_trait<T>(self) -> Result<TraitRef<T>>
+    where
+        T: VcValueTrait + ?Sized,
+    {
+        let shared_reference = self.0.ok_or_else(|| anyhow!("Cell is empty"))?;
+        if shared_reference.0.is_none() {
+            bail!("Cell content is untyped");
+        }
+        Ok(
+            // Safety: We just checked that the content is typed.
+            TraitRef::new(shared_reference),
+        )
     }
 
-    pub fn try_cast<T: Any + Send + Sync>(self) -> Option<ReadRef<T>> {
+    pub fn try_cast<T: Any + VcValueType>(self) -> Option<ReadRef<T>> {
         self.0
             .and_then(|data| data.downcast().map(|data| ReadRef::new(data)))
     }
@@ -154,14 +184,18 @@ pub trait Backend: Sync + Send {
     fn initialize(&mut self, task_id_provider: &dyn TaskIdProvider) {}
 
     #[allow(unused_variables)]
-    fn startup(&self, turbo_tasks: &dyn TurboTasksBackendApi) {}
+    fn startup(&self, turbo_tasks: &dyn TurboTasksBackendApi<Self>) {}
 
     #[allow(unused_variables)]
-    fn stop(&self, turbo_tasks: &dyn TurboTasksBackendApi) {}
+    fn stop(&self, turbo_tasks: &dyn TurboTasksBackendApi<Self>) {}
 
-    fn invalidate_task(&self, task: TaskId, turbo_tasks: &dyn TurboTasksBackendApi);
+    #[allow(unused_variables)]
+    fn idle_start(&self, turbo_tasks: &dyn TurboTasksBackendApi<Self>) {}
 
-    fn invalidate_tasks(&self, tasks: Vec<TaskId>, turbo_tasks: &dyn TurboTasksBackendApi);
+    fn invalidate_task(&self, task: TaskId, turbo_tasks: &dyn TurboTasksBackendApi<Self>);
+
+    fn invalidate_tasks(&self, tasks: &[TaskId], turbo_tasks: &dyn TurboTasksBackendApi<Self>);
+    fn invalidate_tasks_set(&self, tasks: &TaskIdSet, turbo_tasks: &dyn TurboTasksBackendApi<Self>);
 
     fn get_task_description(&self, task: TaskId) -> String;
 
@@ -178,14 +212,14 @@ pub trait Backend: Sync + Send {
     fn try_start_task_execution(
         &self,
         task: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     ) -> Option<TaskExecutionSpec>;
 
     fn task_execution_result(
         &self,
         task: TaskId,
         result: Result<Result<RawVc>, Option<Cow<'static, str>>>,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     );
 
     fn task_execution_completed(
@@ -193,13 +227,14 @@ pub trait Backend: Sync + Send {
         task: TaskId,
         duration: Duration,
         instant: Instant,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        stateful: bool,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     ) -> bool;
 
     fn run_backend_job<'a>(
         &'a self,
         id: BackendJobId,
-        turbo_tasks: &'a dyn TurboTasksBackendApi,
+        turbo_tasks: &'a dyn TurboTasksBackendApi<Self>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 
     fn try_read_task_output(
@@ -207,7 +242,7 @@ pub trait Backend: Sync + Send {
         task: TaskId,
         reader: TaskId,
         strongly_consistent: bool,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     ) -> Result<Result<RawVc, EventListener>>;
 
     /// INVALIDATION: Be careful with this, it will not track dependencies, so
@@ -216,22 +251,15 @@ pub trait Backend: Sync + Send {
         &self,
         task: TaskId,
         strongly_consistent: bool,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     ) -> Result<Result<RawVc, EventListener>>;
-
-    fn track_read_task_output(
-        &self,
-        task: TaskId,
-        reader: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
-    );
 
     fn try_read_task_cell(
         &self,
         task: TaskId,
         index: CellId,
         reader: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     ) -> Result<Result<CellContent, EventListener>>;
 
     /// INVALIDATION: Be careful with this, it will not track dependencies, so
@@ -240,7 +268,7 @@ pub trait Backend: Sync + Send {
         &self,
         task: TaskId,
         index: CellId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     ) -> Result<Result<CellContent, EventListener>>;
 
     /// INVALIDATION: Be careful with this, it will not track dependencies, so
@@ -249,7 +277,7 @@ pub trait Backend: Sync + Send {
         &self,
         current_task: TaskId,
         index: CellId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     ) -> Result<CellContent> {
         match self.try_read_task_cell_untracked(current_task, index, turbo_tasks)? {
             Ok(content) => Ok(content),
@@ -257,36 +285,29 @@ pub trait Backend: Sync + Send {
         }
     }
 
-    fn track_read_task_cell(
-        &self,
-        task: TaskId,
-        index: CellId,
-        reader: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
-    );
-
-    fn try_read_task_collectibles(
+    fn read_task_collectibles(
         &self,
         task: TaskId,
         trait_id: TraitTypeId,
         reader: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
-    ) -> Result<Result<AutoSet<RawVc>, EventListener>>;
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
+    ) -> AutoMap<RawVc, i32>;
 
     fn emit_collectible(
         &self,
         trait_type: TraitTypeId,
         collectible: RawVc,
         task: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     );
 
     fn unemit_collectible(
         &self,
         trait_type: TraitTypeId,
         collectible: RawVc,
+        count: u32,
         task: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     );
 
     fn update_task_cell(
@@ -294,86 +315,125 @@ pub trait Backend: Sync + Send {
         task: TaskId,
         index: CellId,
         content: CellContent,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     );
 
     fn get_or_create_persistent_task(
         &self,
         task_type: PersistentTaskType,
         parent_task: TaskId,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     ) -> TaskId;
+
+    fn connect_task(
+        &self,
+        task: TaskId,
+        parent_task: TaskId,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
+    );
+
+    fn mark_own_task_as_finished(
+        &self,
+        _task: TaskId,
+        _turbo_tasks: &dyn TurboTasksBackendApi<Self>,
+    ) {
+        // Do nothing by default
+    }
 
     fn create_transient_task(
         &self,
         task_type: TransientTaskType,
-        turbo_tasks: &dyn TurboTasksBackendApi,
+        turbo_tasks: &dyn TurboTasksBackendApi<Self>,
     ) -> TaskId;
+
+    fn dispose_root_task(&self, task: TaskId, turbo_tasks: &dyn TurboTasksBackendApi<Self>);
 }
 
 impl PersistentTaskType {
-    pub async fn run_resolve_native(
+    pub async fn run_resolve_native<B: Backend + 'static>(
         fn_id: FunctionId,
-        inputs: Vec<TaskInput>,
-        turbo_tasks: Arc<dyn TurboTasksBackendApi>,
+        mut inputs: Vec<ConcreteTaskInput>,
+        turbo_tasks: Arc<dyn TurboTasksBackendApi<B>>,
     ) -> Result<RawVc> {
-        let mut resolved_inputs = Vec::with_capacity(inputs.len());
-        for input in inputs.into_iter() {
-            resolved_inputs.push(input.resolve().await?)
-        }
-        Ok(turbo_tasks.native_call(fn_id, resolved_inputs))
-    }
-
-    pub async fn run_resolve_trait(
-        trait_type: TraitTypeId,
-        name: Cow<'static, str>,
-        inputs: Vec<TaskInput>,
-        turbo_tasks: Arc<dyn TurboTasksBackendApi>,
-    ) -> Result<RawVc> {
-        let mut resolved_inputs = Vec::with_capacity(inputs.len());
-        let mut iter = inputs.into_iter();
-        if let Some(this) = iter.next() {
-            let this = this.resolve().await?;
-            let this_value = this.clone().resolve_to_value().await?;
-            match this_value.get_trait_method(trait_type, name) {
-                Ok(native_fn) => {
-                    resolved_inputs.push(this);
-                    for input in iter {
-                        resolved_inputs.push(input)
-                    }
-                    Ok(turbo_tasks.dynamic_call(native_fn, resolved_inputs))
-                }
-                Err(name) => {
-                    if !this_value.has_trait(trait_type) {
-                        let traits = this_value
-                            .traits()
-                            .iter()
-                            .map(|t| format!(" {}", t))
-                            .collect::<String>();
-                        Err(anyhow!(
-                            "{} doesn't implement {} (only{})",
-                            this_value,
-                            registry::get_trait(trait_type),
-                            traits,
-                        ))
-                    } else {
-                        Err(anyhow!(
-                            "{} implements trait {}, but method {} is missing",
-                            this_value,
-                            registry::get_trait(trait_type),
-                            name
-                        ))
-                    }
+        let span = tracing::trace_span!(
+            "turbo_tasks::resolve_call",
+            name = &registry::get_function(fn_id).name.as_str()
+        );
+        async move {
+            for i in 0..inputs.len() {
+                let input = unsafe { take(inputs.get_unchecked_mut(i)) };
+                let input = input.resolve().await?;
+                unsafe {
+                    *inputs.get_unchecked_mut(i) = input;
                 }
             }
-        } else {
-            panic!("No arguments for trait call");
+            Ok(turbo_tasks.native_call(fn_id, inputs))
         }
+        .instrument(span)
+        .await
     }
 
-    pub fn run(
+    pub async fn run_resolve_trait<B: Backend + 'static>(
+        trait_type: TraitTypeId,
+        name: Cow<'static, str>,
+        inputs: Vec<ConcreteTaskInput>,
+        turbo_tasks: Arc<dyn TurboTasksBackendApi<B>>,
+    ) -> Result<RawVc> {
+        let span = tracing::trace_span!(
+            "turbo_tasks::resolve_trait_call",
+            name = format!("{}::{name}", &registry::get_trait(trait_type).name),
+        );
+        async move {
+            let mut resolved_inputs = Vec::with_capacity(inputs.len());
+            let mut iter = inputs.into_iter();
+            if let Some(this) = iter.next() {
+                let this = this.resolve().await?;
+                let this_value = this.clone().resolve_to_value().await?;
+                match this_value.get_trait_method(trait_type, name) {
+                    Ok(native_fn) => {
+                        resolved_inputs.push(this);
+                        for input in iter {
+                            resolved_inputs.push(input)
+                        }
+                        Ok(turbo_tasks.dynamic_call(native_fn, resolved_inputs))
+                    }
+                    Err(name) => {
+                        if !this_value.has_trait(trait_type) {
+                            let traits =
+                                this_value
+                                    .traits()
+                                    .iter()
+                                    .fold(String::new(), |mut out, t| {
+                                        let _ = write!(out, " {}", t);
+                                        out
+                                    });
+                            Err(anyhow!(
+                                "{} doesn't implement {} (only{})",
+                                this_value,
+                                registry::get_trait(trait_type),
+                                traits,
+                            ))
+                        } else {
+                            Err(anyhow!(
+                                "{} implements trait {}, but method {} is missing",
+                                this_value,
+                                registry::get_trait(trait_type),
+                                name
+                            ))
+                        }
+                    }
+                }
+            } else {
+                panic!("No arguments for trait call");
+            }
+        }
+        .instrument(span)
+        .await
+    }
+
+    pub fn run<B: Backend + 'static>(
         self,
-        turbo_tasks: Arc<dyn TurboTasksBackendApi>,
+        turbo_tasks: Arc<dyn TurboTasksBackendApi<B>>,
     ) -> Pin<Box<dyn Future<Output = Result<RawVc>> + Send>> {
         match self {
             PersistentTaskType::Native(fn_id, inputs) => {

@@ -2,7 +2,10 @@
 # https://help.github.com/en/articles/about-code-owners
 
 # Default to both teams
-* @vercel/turbo-oss @vercel/web-tooling
+* @vercel/turbo-oss @vercel/turbopack
+
+# Shared docs (team specific overrides below)
+/docs @vercel/turbopack @vercel/turbo-oss @anthonyshew
 
 # Turborepo-specific things
 
@@ -10,21 +13,40 @@
 /benchmark @vercel/turbo-oss
 /buildcontainer @vercel/turbo-oss
 /examples @vercel/turbo-oss
-/shim @vercel/turbo-oss
-/docs/pages/repo @vercel/turbo-oss
+/examples-tests @vercel/turbo-oss
+/docs/pages/repo @vercel/turbo-oss @anthonyshew
+.github/workflows/bench-turborepo.yml @vercel/turbo-oss
 .github/workflows/pr-go-*.yml @vercel/turbo-oss
 .github/workflows/pr-js-tests-*.yml @vercel/turbo-oss
+/version.txt @vercel/turbo-oss
+.github/turborepo-release.yml @vercel/turbo-oss
+/turborepo-tests @vercel/turbo-oss
+
+# Nobody owns these files, so nobody should get tagged on changes
+Cargo.lock
+pnpm-lock.yaml
+.gitignore
 
 # Turbopack-specific things
+/.config/nextest.toml
+/docs/pages/pack @vercel/turbopack
+/xtask @vercel/turbopack
+.github/release.yml @vercel/turbopack
+.github/workflows/bench-turbopack.yml @vercel/turbopack
+.github/workflows/on-nextjs-release-publish.yml @vercel/turbopack
+.github/workflows/setup-nextjs-build.yml @vercel/turbopack
+.github/workflows/daily-nextjs-integration-test.yml @vercel/turbopack
 
-/crates @vercel/web-tooling
-/Cargo.lock @vercel/web-tooling
-/Cargo.toml @vercel/web-tooling
-/rust-toolchain @vercel/web-tooling
-.rustfmt.toml @vercel/web-tooling
-.taplo.toml @vercel/web-tooling
-/docs/pages/pack @vercel/web-tooling
-/xtask @vercel/web-tooling
+# Nobody owns crates by default
+/crates
+
+# overrides for crates that are owned by turbo-oss
+/crates/turborepo* @vercel/turbo-oss
+
+# overrides for crates that are owned by turbopack
+/crates/turbo-tasks* @vercel/turbopack
+/crates/turbopack* @vercel/turbopack
+/crates/node-file-trace @vercel/turbopack
 
 # packages in alphabetical order, to match view github https://github.com/vercel/turbo/tree/main/packages
 # Separate section in this file, so we can add new entries more easily.
@@ -33,11 +55,13 @@
 /packages/create-turbo					@vercel/turbo-oss
 /packages/eslint-config-turbo			@vercel/turbo-oss
 /packages/eslint-plugin-turbo			@vercel/turbo-oss
-/packages/node-module-trace				@vercel/web-tooling
-/packages/turbo							@vercel/turbo-oss
+/packages/node-module-trace				@vercel/turbopack
 /packages/turbo-codemod					@vercel/turbo-oss
+/packages/turbo-gen							@vercel/turbo-oss
 /packages/turbo-ignore					@vercel/turbo-oss
-/packages/turbo-tracing-next-plugin		@vercel/web-tooling
+/packages/turbo-tracing-next-plugin		@vercel/turbopack
 /packages/turbo-types					@vercel/turbo-oss
 /packages/turbo-utils					@vercel/turbo-oss
-/packages/webpack-nmt					@vercel/web-tooling
+/packages/turbo-workspaces					@vercel/turbo-oss
+/packages/turbo							@vercel/turbo-oss
+/packages/webpack-nmt					@vercel/turbopack

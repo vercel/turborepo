@@ -7,11 +7,11 @@
 package scm
 
 import (
-	"path/filepath"
+	"os/exec"
+	"strings"
 
 	"github.com/pkg/errors"
 
-	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
@@ -19,14 +19,16 @@ var ErrFallback = errors.New("cannot find a .git folder. Falling back to manual 
 
 // An SCM represents an SCM implementation that we can ask for various things.
 type SCM interface {
-	// ChangedFiles returns a list of modified files since the given commit, optionally including untracked files.*/
-	ChangedFiles(fromCommit string, toCommit string, includeUntracked bool, relativeTo string) ([]string, error)
+	// ChangedFiles returns a list of modified files since the given commit, including untracked files
+	ChangedFiles(fromCommit string, toCommit string, relativeTo string) ([]string, error)
+	// PreviousContent Returns the content of the file at fromCommit
+	PreviousContent(fromCommit string, filePath string) ([]byte, error)
 }
 
 // newGitSCM returns a new SCM instance for this repo root.
 // It returns nil if there is no known implementation there.
-func newGitSCM(repoRoot string) SCM {
-	if fs.PathExists(filepath.Join(repoRoot, ".git")) {
+func newGitSCM(repoRoot turbopath.AbsoluteSystemPath) SCM {
+	if repoRoot.UntypedJoin(".git").Exists() {
 		return &git{repoRoot: repoRoot}
 	}
 	return nil
@@ -34,7 +36,7 @@ func newGitSCM(repoRoot string) SCM {
 
 // newFallback returns a new SCM instance for this repo root.
 // If there is no known implementation it returns a stub.
-func newFallback(repoRoot string) (SCM, error) {
+func newFallback(repoRoot turbopath.AbsoluteSystemPath) (SCM, error) {
 	if scm := newGitSCM(repoRoot); scm != nil {
 		return scm, nil
 	}
@@ -50,5 +52,29 @@ func FromInRepo(repoRoot turbopath.AbsoluteSystemPath) (SCM, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newFallback(dotGitDir.Dir().ToStringDuringMigration())
+	return newFallback(dotGitDir.Dir())
+}
+
+// GetCurrentBranch returns the current branch
+func GetCurrentBranch(dir turbopath.AbsoluteSystemPath) string {
+	cmd := exec.Command("git", []string{"branch", "--show-current"}...)
+	cmd.Dir = dir.ToString()
+
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimRight(string(out), "\n")
+}
+
+// GetCurrentSha returns the current SHA
+func GetCurrentSha(dir turbopath.AbsoluteSystemPath) string {
+	cmd := exec.Command("git", []string{"rev-parse", "HEAD"}...)
+	cmd.Dir = dir.ToString()
+
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimRight(string(out), "\n")
 }

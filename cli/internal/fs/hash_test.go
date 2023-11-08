@@ -3,6 +3,7 @@ package fs
 import (
 	"testing"
 
+	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"gotest.tools/v3/assert"
 )
 
@@ -14,7 +15,7 @@ func Test_HashObjectStability(t *testing.T) {
 		obj  interface{}
 	}
 	type complexStruct struct {
-		nested TaskOutputs
+		nested hash.TaskOutputs
 		foo    string
 		bar    []string
 	}
@@ -22,7 +23,7 @@ func Test_HashObjectStability(t *testing.T) {
 	testCases := []TestCase{
 		{
 			name: "task object",
-			obj: TaskOutputs{
+			obj: hash.TaskOutputs{
 				Inclusions: []string{"foo", "bar"},
 				Exclusions: []string{"baz"},
 			},
@@ -30,7 +31,7 @@ func Test_HashObjectStability(t *testing.T) {
 		{
 			name: "complex struct",
 			obj: complexStruct{
-				nested: TaskOutputs{
+				nested: hash.TaskOutputs{
 					Exclusions: []string{"bar", "baz"},
 					Inclusions: []string{"foo"},
 				},
@@ -41,11 +42,11 @@ func Test_HashObjectStability(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		expectedHash, err := HashObject(tc.obj)
+		expectedHash, err := hashObject(tc.obj)
 		assert.NilError(t, err, tc.name)
 
 		for n := 0; n < _numOfRuns; n++ {
-			hash, err := HashObject(tc.obj)
+			hash, err := hashObject(tc.obj)
 			assert.NilError(t, err, tc.name)
 			assert.Equal(t, expectedHash, hash, tc.name)
 		}

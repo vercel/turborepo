@@ -1,39 +1,41 @@
-use std::{collections::HashSet, fmt::Display};
+use std::{borrow::Cow, collections::HashSet, fmt::Display};
 
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt};
-use turbo_tasks_fs::{File, FileContent};
+use turbo_tasks::{ReadRef, TryJoinIterExt, Vc};
+use turbo_tasks_fs::{json::parse_json_with_source_context, File};
 use turbopack_core::{
     asset::AssetContent,
-    introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc},
+    introspect::{Introspectable, IntrospectableChildren},
+    version::VersionedContentExt,
 };
 use turbopack_ecmascript::utils::FormatIter;
 
 use crate::source::{
-    ContentSource, ContentSourceContent, ContentSourceData, ContentSourceResultVc, ContentSourceVc,
+    route_tree::{RouteTree, RouteTrees, RouteType},
+    ContentSource, ContentSourceContent, ContentSourceData, GetContentSourceContent,
 };
 
 #[turbo_tasks::value(shared)]
 pub struct IntrospectionSource {
-    pub roots: HashSet<IntrospectableVc>,
+    pub roots: HashSet<Vc<Box<dyn Introspectable>>>,
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for IntrospectionSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> StringVc {
-        StringVc::cell("introspection-source".to_string())
+    fn ty(&self) -> Vc<String> {
+        Vc::cell("introspection-source".to_string())
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> StringVc {
-        StringVc::cell("introspection-source".to_string())
+    fn title(&self) -> Vc<String> {
+        Vc::cell("introspection-source".to_string())
     }
 
     #[turbo_tasks::function]
-    fn children(&self) -> IntrospectableChildrenVc {
-        let name = StringVc::cell("root".to_string());
-        IntrospectableChildrenVc::cell(self.roots.iter().map(|root| (name, *root)).collect())
+    fn children(&self) -> Vc<IntrospectableChildren> {
+        let name = Vc::cell("root".to_string());
+        Vc::cell(self.roots.iter().map(|root| (name, *root)).collect())
     }
 }
 
@@ -73,32 +75,59 @@ impl<T: Display> Display for HtmlStringEscaped<T> {
 #[turbo_tasks::value_impl]
 impl ContentSource for IntrospectionSource {
     #[turbo_tasks::function]
+    fn get_routes(self: Vc<Self>) -> Vc<RouteTree> {
+        Vc::<RouteTrees>::cell(vec![
+            RouteTree::new_route(Vec::new(), RouteType::Exact, Vc::upcast(self)),
+            RouteTree::new_route(Vec::new(), RouteType::CatchAll, Vc::upcast(self)),
+        ])
+        .merge()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl GetContentSourceContent for IntrospectionSource {
+    #[turbo_tasks::function]
     async fn get(
-        self_vc: IntrospectionSourceVc,
-        path: &str,
+        self: Vc<Self>,
+        path: String,
         _data: turbo_tasks::Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
+    ) -> Result<Vc<ContentSourceContent>> {
+        // get last segment
+        let path = &path[path.rfind('/').unwrap_or(0) + 1..];
         let introspectable = if path.is_empty() {
-            let roots = &self_vc.await?.roots;
+            let roots = &self.await?.roots;
             if roots.len() == 1 {
                 *roots.iter().next().unwrap()
             } else {
-                self_vc.as_introspectable()
+                Vc::upcast(self)
             }
         } else {
-            serde_json::from_str(path)?
+            parse_json_with_source_context(path)?
         };
-        let ty = introspectable.ty().await?;
-        let title = introspectable.title().await?;
-        let details = introspectable.details().await?;
+        let internal_ty = Vc::debug_identifier(introspectable).await?;
+        fn str_or_err(s: &Result<ReadRef<String>>) -> Cow<'_, str> {
+            s.as_ref().map_or_else(
+                |e| Cow::<'_, str>::Owned(format!("ERROR: {:?}", e)),
+                |d| Cow::Borrowed(&**d),
+            )
+        }
+        let ty = introspectable.ty().await;
+        let ty = str_or_err(&ty);
+        let title = introspectable.title().await;
+        let title = str_or_err(&title);
+        let details = introspectable.details().await;
+        let details = str_or_err(&details);
         let children = introspectable.children().await?;
         let has_children = !children.is_empty();
-        let mut children = children
+        let children = children
             .iter()
             .map(|&(name, child)| async move {
-                let name = name.await?;
-                let ty = child.ty().await?;
-                let title = child.title().await?;
+                let name = name.await;
+                let name = str_or_err(&name);
+                let ty = child.ty().await;
+                let ty = str_or_err(&ty);
+                let title = child.title().await;
+                let title = str_or_err(&title);
                 let path = serde_json::to_string(&child)?;
                 Ok(format!(
                     "<li>{name} <!-- {title} --><a href=\"./{path}\">[{ty}] {title}</a></li>",
@@ -110,7 +139,6 @@ impl ContentSource for IntrospectionSource {
             })
             .try_join()
             .await?;
-        children.sort();
         let details = if details.is_empty() {
             String::new()
         } else if has_children {
@@ -129,6 +157,7 @@ impl ContentSource for IntrospectionSource {
             "<!DOCTYPE html>
 <html><head><title>{title}</title></head>
 <body>
+  <h3>{internal_ty}</h3>
   <h2>{ty}</h2>
   <h1>{title}</h1>
   {details}
@@ -139,16 +168,13 @@ impl ContentSource for IntrospectionSource {
             ty = HtmlEscaped(ty),
             children = FormatIter(|| children.iter())
         );
-        Ok(ContentSourceResultVc::exact(
-            ContentSourceContent::Static(
-                AssetContent::File(
-                    FileContent::Content(File::from(html).with_content_type(mime::TEXT_HTML_UTF_8))
-                        .cell(),
-                )
-                .cell()
-                .into(),
+        Ok(ContentSourceContent::static_content(
+            AssetContent::file(
+                File::from(html)
+                    .with_content_type(mime::TEXT_HTML_UTF_8)
+                    .into(),
             )
-            .cell(),
+            .versioned(),
         ))
     }
 }

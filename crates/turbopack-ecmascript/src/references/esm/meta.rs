@@ -6,13 +6,14 @@ use swc_core::{
     ecma::ast::{Expr, Ident},
     quote,
 };
-use turbo_tasks_fs::FileSystemPathVc;
-use turbopack_core::chunk::ChunkingContextVc;
+use turbo_tasks::Vc;
+use turbo_tasks_fs::FileSystemPath;
 
 use crate::{
-    code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
+    chunk::EcmascriptChunkingContext,
+    code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor, magic_identifier,
-    references::{as_abs_path, esm::base::insert_hoisted_stmt, AstPathVc},
+    references::{as_abs_path, esm::base::insert_hoisted_stmt, AstPath},
 };
 
 /// Responsible for initializing the `import.meta` object binding, so that it
@@ -23,13 +24,13 @@ use crate::{
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
 pub struct ImportMetaBinding {
-    path: FileSystemPathVc,
+    path: Vc<FileSystemPath>,
 }
 
 #[turbo_tasks::value_impl]
-impl ImportMetaBindingVc {
+impl ImportMetaBinding {
     #[turbo_tasks::function]
-    pub fn new(path: FileSystemPathVc) -> Self {
+    pub fn new(path: Vc<FileSystemPath>) -> Vc<Self> {
         ImportMetaBinding { path }.cell()
     }
 }
@@ -37,7 +38,10 @@ impl ImportMetaBindingVc {
 #[turbo_tasks::value_impl]
 impl CodeGenerateable for ImportMetaBinding {
     #[turbo_tasks::function]
-    async fn code_generation(&self, _context: ChunkingContextVc) -> Result<CodeGenerationVc> {
+    async fn code_generation(
+        &self,
+        _context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    ) -> Result<Vc<CodeGeneration>> {
         let path = as_abs_path(self.path).await?.as_str().map_or_else(
             || {
                 quote!(
@@ -45,12 +49,20 @@ impl CodeGenerateable for ImportMetaBinding {
                         as Expr
                 )
             },
-            |path| format!("file://{}", encode_path(path)).into(),
+            |path| {
+                let formatted = encode_path(path).trim_start_matches("/ROOT/").to_string();
+                quote!(
+                    "`file://${__turbopack_resolve_absolute_path__($formatted)}`" as Expr,
+                    formatted: Expr = formatted.into()
+                )
+            },
         );
 
         let visitor = create_visitor!(visit_mut_program(program: &mut Program) {
+            // [NOTE] url property is lazy-evaluated, as it should be computed once turbopack_runtime injects a function
+            // to calculate an absolute path.
             let meta = quote!(
-                "const $name = { url: $path };" as Stmt,
+                "const $name = { get url() { return $path } };" as Stmt,
                 name = meta_ident(),
                 path: Expr = path.clone(),
             );
@@ -72,13 +84,13 @@ impl CodeGenerateable for ImportMetaBinding {
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
 pub struct ImportMetaRef {
-    ast_path: AstPathVc,
+    ast_path: Vc<AstPath>,
 }
 
 #[turbo_tasks::value_impl]
-impl ImportMetaRefVc {
+impl ImportMetaRef {
     #[turbo_tasks::function]
-    pub fn new(ast_path: AstPathVc) -> Self {
+    pub fn new(ast_path: Vc<AstPath>) -> Vc<Self> {
         ImportMetaRef { ast_path }.cell()
     }
 }
@@ -86,7 +98,10 @@ impl ImportMetaRefVc {
 #[turbo_tasks::value_impl]
 impl CodeGenerateable for ImportMetaRef {
     #[turbo_tasks::function]
-    async fn code_generation(&self, _context: ChunkingContextVc) -> Result<CodeGenerationVc> {
+    async fn code_generation(
+        &self,
+        _context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    ) -> Result<Vc<CodeGeneration>> {
         let ast_path = &self.ast_path.await?;
         let visitor = create_visitor!(ast_path, visit_mut_expr(expr: &mut Expr) {
             *expr = Expr::Ident(meta_ident());
@@ -131,7 +146,7 @@ fn encode_path(path: &'_ str) -> Cow<'_, str> {
 }
 
 fn meta_ident() -> Ident {
-    Ident::new(magic_identifier::encode("import.meta").into(), DUMMY_SP)
+    Ident::new(magic_identifier::mangle("import.meta").into(), DUMMY_SP)
 }
 
 #[cfg(test)]

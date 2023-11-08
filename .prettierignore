@@ -1,15 +1,34 @@
 .next/
 build/
-dist/
+dist
+
 node_modules/
 target/
+coverage/
+snapshot/
+generated/
+pnpm-lock.yaml
 
-/crates/turbopack-tests/tests/snapshot/**/output/
+__generated__/
+/benchmark/large-monorepo
+/cli/dist-cross*
+/docs/public/schema.json
+/packages/eslint-plugin-turbo/__tests__/fixtures/
+/packages/turbo-codemod/templates/
+/docs/components/pages/pack-home/benchmark-data/data.json
 /examples/with-svelte
 
-pnpm-lock.yaml
-crates/next-core/js/src/compiled
-crates/turbopack/bench.json
 
-# This file has intentional trailing commas
-crates/turbopack/tests/node-file-trace/integration/ts-package/tsconfig.json
+# crates
+crates/*/js/src/compiled
+crates/turbopack/bench.json
+crates/turbopack/tests
+crates/turbopack-ecmascript/tests/analyzer/graph
+crates/turbopack-ecmascript/tests/tree-shaker
+crates/next-transform-strip-page-exports/tests
+crates/next-transform-dynamic/tests
+crates/turbopack-tests/tests/execution/turbopack/basic/error/input/broken.js
+crates/turbopack-tests/tests/execution/**/output*
+
+# generators
+*.hbs

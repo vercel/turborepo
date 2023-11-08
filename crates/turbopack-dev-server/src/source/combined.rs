@@ -1,22 +1,23 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, TryJoinIterExt, Value};
-use turbopack_core::introspect::{Introspectable, IntrospectableChildrenVc, IntrospectableVc};
+use turbo_tasks::{TryJoinIterExt, Vc};
+use turbopack_core::introspect::{Introspectable, IntrospectableChildren};
 
 use super::{
-    specificity::SpecificityReadRef, ContentSource, ContentSourceData, ContentSourceResultVc,
-    ContentSourceVc,
+    route_tree::{RouteTree, RouteTrees},
+    ContentSource,
 };
+use crate::source::ContentSources;
 
 /// Combines multiple [ContentSource]s by trying all content sources in order.
-/// First [ContentSource] that responds with something other than NotFound will
-/// serve the request.
+/// The content source which responds with the most specific response (that is
+/// not a [ContentSourceContent::NotFound]) will be returned.
 #[turbo_tasks::value(shared)]
 pub struct CombinedContentSource {
-    pub sources: Vec<ContentSourceVc>,
+    pub sources: Vec<Vc<Box<dyn ContentSource>>>,
 }
 
-impl CombinedContentSourceVc {
-    pub fn new(sources: Vec<ContentSourceVc>) -> Self {
+impl CombinedContentSource {
+    pub fn new(sources: Vec<Vc<Box<dyn ContentSource>>>) -> Vc<Self> {
         CombinedContentSource { sources }.cell()
     }
 }
@@ -24,54 +25,34 @@ impl CombinedContentSourceVc {
 #[turbo_tasks::value_impl]
 impl ContentSource for CombinedContentSource {
     #[turbo_tasks::function]
-    async fn get(
-        &self,
-        path: &str,
-        data: Value<ContentSourceData>,
-    ) -> Result<ContentSourceResultVc> {
-        let mut max: Option<(SpecificityReadRef, ContentSourceResultVc)> = None;
-        for source in self.sources.iter() {
-            let result = source.get(path, data.clone());
-            let specificity = result.await?.specificity.await?;
-            if specificity.is_exact() {
-                return Ok(result);
-            }
-            if let Some((max, _)) = max.as_ref() {
-                if *max >= specificity {
-                    // we can keep the current max
-                    continue;
-                }
-            }
-            max = Some((specificity, result));
-        }
-        if let Some((_, result)) = max {
-            Ok(result)
-        } else {
-            Ok(ContentSourceResultVc::not_found())
-        }
+    fn get_routes(&self) -> Vc<RouteTree> {
+        let all_routes = self.sources.iter().map(|s| s.get_routes()).collect();
+        Vc::<RouteTrees>::cell(all_routes).merge()
     }
-}
 
-#[turbo_tasks::function]
-fn introspectable_type() -> StringVc {
-    StringVc::cell("combined content source".to_string())
+    #[turbo_tasks::function]
+    fn get_children(&self) -> Vc<ContentSources> {
+        Vc::cell(self.sources.clone())
+    }
 }
 
 #[turbo_tasks::value_impl]
 impl Introspectable for CombinedContentSource {
     #[turbo_tasks::function]
-    fn ty(&self) -> StringVc {
-        introspectable_type()
+    fn ty(&self) -> Vc<String> {
+        Vc::cell("combined content source".to_string())
     }
 
     #[turbo_tasks::function]
-    async fn title(&self) -> Result<StringVc> {
+    async fn title(&self) -> Result<Vc<String>> {
         let titles = self
             .sources
             .iter()
             .map(|&source| async move {
                 Ok(
-                    if let Some(source) = IntrospectableVc::resolve_from(source).await? {
+                    if let Some(source) =
+                        Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(source).await?
+                    {
                         Some(source.title().await?)
                     } else {
                         None
@@ -92,17 +73,19 @@ impl Introspectable for CombinedContentSource {
         if titles.len() > NUMBER_OF_TITLES_TO_DISPLAY {
             titles[NUMBER_OF_TITLES_TO_DISPLAY] = "...";
         }
-        Ok(StringVc::cell(titles.join(", ")))
+        Ok(Vc::cell(titles.join(", ")))
     }
 
     #[turbo_tasks::function]
-    async fn children(&self) -> Result<IntrospectableChildrenVc> {
-        let source = StringVc::cell("source".to_string());
-        Ok(IntrospectableChildrenVc::cell(
+    async fn children(&self) -> Result<Vc<IntrospectableChildren>> {
+        let source = Vc::cell("source".to_string());
+        Ok(Vc::cell(
             self.sources
                 .iter()
                 .copied()
-                .map(|s| async move { Ok(IntrospectableVc::resolve_from(s).await?) })
+                .map(|s| async move {
+                    Ok(Vc::try_resolve_sidecast::<Box<dyn Introspectable>>(s).await?)
+                })
                 .try_join()
                 .await?
                 .into_iter()

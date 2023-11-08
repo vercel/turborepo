@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../../../../docs/public/schema.json",
+  "pipeline": {
+    "case_1": {
+      "inputs": ["../../app-store/**/**", "**/**/result.json"],
+      "outputs": ["../../app-store/**/**", "**/**/result.json"]
+    },
+    "case_2": {
+      "inputs": ["!**/dist", "!**/node_modules"],
+      "outputs": ["!**/dist", "!**/node_modules"]
+    },
+    "case_3": {
+      "inputs": [
+        "cypress/integration/**.test.ts",
+        "src/types/generated/**.ts",
+        "scripts/**.mjs",
+        "scripts/**.js"
+      ],
+      "outputs": [
+        "cypress/integration/**.test.ts",
+        "src/types/generated/**.ts",
+        "scripts/**.mjs",
+        "scripts/**.js"
+      ]
+    }
+  }
+}

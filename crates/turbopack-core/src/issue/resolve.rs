@@ -1,72 +1,108 @@
-use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, ValueToString};
-use turbo_tasks_fs::FileSystemPathVc;
+use std::fmt::Write;
 
-use super::{Issue, IssueVc};
-use crate::resolve::{options::ResolveOptionsVc, parse::RequestVc};
+use anyhow::Result;
+use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks_fs::FileSystemPath;
+
+use super::{Issue, OptionIssueSource};
+use crate::{
+    error::PrettyPrintError,
+    issue::{IssueSeverity, LazyIssueSource},
+    resolve::{options::ResolveOptions, parse::Request},
+};
 
 #[turbo_tasks::value(shared)]
 pub struct ResolvingIssue {
+    pub severity: Vc<IssueSeverity>,
     pub request_type: String,
-    pub request: RequestVc,
-    pub context: FileSystemPathVc,
-    pub resolve_options: ResolveOptionsVc,
+    pub request: Vc<Request>,
+    pub file_path: Vc<FileSystemPath>,
+    pub resolve_options: Vc<ResolveOptions>,
     pub error_message: Option<String>,
+    pub source: Option<Vc<LazyIssueSource>>,
 }
 
 #[turbo_tasks::value_impl]
 impl Issue for ResolvingIssue {
     #[turbo_tasks::function]
-    fn title(&self) -> StringVc {
-        StringVc::cell(format!(
+    fn severity(&self) -> Vc<IssueSeverity> {
+        self.severity
+    }
+
+    #[turbo_tasks::function]
+    fn title(&self) -> Vc<String> {
+        Vc::cell(format!(
             "Error resolving {request_type}",
             request_type = self.request_type,
         ))
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> StringVc {
-        StringVc::cell("resolve".to_string())
+    fn category(&self) -> Vc<String> {
+        Vc::cell("resolve".to_string())
     }
 
     #[turbo_tasks::function]
-    fn context(&self) -> FileSystemPathVc {
-        self.context
+    fn file_path(&self) -> Vc<FileSystemPath> {
+        self.file_path
     }
 
     #[turbo_tasks::function]
-    async fn description(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn description(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "unable to resolve {module_name}",
             module_name = self.request.to_string().await?
         )))
     }
 
     #[turbo_tasks::function]
-    async fn detail(&self) -> Result<StringVc> {
+    async fn detail(&self) -> Result<Vc<String>> {
+        let mut detail = String::new();
+
         if let Some(error_message) = &self.error_message {
-            Ok(StringVc::cell(format!(
-                "An error happened during resolving.
-Error message: {error}
-Parsed request as written in source code: {request}
-Path where resolving has started: {context}
-Type of request: {request_type}",
-                error = error_message,
-                request_type = self.request_type,
-                request = self.request.to_string().await?,
-                context = self.context.to_string().await?
-            )))
+            writeln!(detail, "An error happened during resolving.")?;
+            writeln!(detail, "Error message: {error_message}")?;
         } else {
-            Ok(StringVc::cell(format!(
-                "It was not possible to find the requested file.
-Parsed request as written in source code: {request}
-Path where resolving has started: {context}
-Type of request: {request_type}",
-                request_type = self.request_type,
-                request = self.request.to_string().await?,
-                context = self.context.to_string().await?
-            )))
+            writeln!(detail, "It was not possible to find the requested file.")?;
         }
+        writeln!(
+            detail,
+            "Parsed request as written in source code: {request}",
+            request = self.request.to_string().await?
+        )?;
+        writeln!(
+            detail,
+            "Path where resolving has started: {context}",
+            context = self.file_path.to_string().await?
+        )?;
+        writeln!(
+            detail,
+            "Type of request: {request_type}",
+            request_type = self.request_type,
+        )?;
+        if let Some(import_map) = &self.resolve_options.await?.import_map {
+            let result = import_map
+                .await?
+                .lookup(self.file_path, self.request)
+                .await?;
+
+            match result.cell().to_string().await {
+                Ok(str) => writeln!(detail, "Import map: {}", str)?,
+                Err(err) => {
+                    writeln!(
+                        detail,
+                        "Error while looking up import map: {}",
+                        PrettyPrintError(&err)
+                    )?;
+                }
+            }
+        }
+        Ok(Vc::cell(detail))
+    }
+
+    #[turbo_tasks::function]
+    fn source(&self) -> Vc<OptionIssueSource> {
+        Vc::cell(self.source.map(|s| s.to_issue_source()))
     }
 
     // TODO add sub_issue for a description of resolve_options

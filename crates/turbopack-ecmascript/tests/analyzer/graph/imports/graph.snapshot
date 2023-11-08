@@ -5,15 +5,17 @@
             3,
             Module(
                 ModuleValue {
-                    module: Atom('x2' type=inline),
+                    module: "x2",
                     annotations: ImportAnnotations {
                         map: {},
                     },
                 },
             ),
             Constant(
-                StrWord(
-                    Atom('a' type=static),
+                Str(
+                    Atom(
+                        "a",
+                    ),
                 ),
             ),
         ),
@@ -24,15 +26,17 @@
             3,
             Module(
                 ModuleValue {
-                    module: Atom('x1' type=inline),
+                    module: "x1",
                     annotations: ImportAnnotations {
                         map: {},
                     },
                 },
             ),
             Constant(
-                StrWord(
-                    Atom('default' type=static),
+                Str(
+                    Atom(
+                        "default",
+                    ),
                 ),
             ),
         ),
@@ -41,7 +45,7 @@
         "yy",
         Module(
             ModuleValue {
-                module: Atom('x3' type=inline),
+                module: "x3",
                 annotations: ImportAnnotations {
                     map: {},
                 },

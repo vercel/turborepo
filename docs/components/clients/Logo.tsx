@@ -1,7 +1,7 @@
 import React from "react";
 import cn from "classnames";
-import Image from "next/future/image";
-import { TurboUser } from "./users";
+import Image from "next/image";
+import type { TurboUser } from "./users";
 
 const DEFAULT_SIZE = {
   width: 100,
@@ -21,34 +21,42 @@ export function Logo({
     ...DEFAULT_SIZE,
     ...user.style,
   };
+  let numericWidth: number;
+  let numericHeight: number;
+  if (typeof styles.width === "number") {
+    numericWidth = styles.width;
+  }
+  if (typeof styles.height === "number") {
+    numericHeight = styles.height;
+  }
   const logo = (
     <Image
-      src={user.image.replace(
-        "/logos",
-        theme === "light" ? "/logos/white" : "/logos/color"
-      )}
       alt={`${user.caption}'s Logo`}
-      width={styles.width}
-      height={styles.height}
-      priority={true}
-      style={styles}
       className={cn("mx-8", {
         "hidden dark:inline": theme !== "dark",
         "dark:hidden inline": theme === "dark",
       })}
+      height={numericHeight}
+      priority
+      src={user.image.replace(
+        "/logos",
+        theme === "light" ? "/logos/white" : "/logos/color"
+      )}
+      style={styles}
+      width={numericWidth}
     />
   );
 
   if (isLink) {
     return (
       <a
-        href={user.infoLink}
-        target="_blank"
-        rel="noopener noreferrer"
         className={cn("flex justify-center item-center", {
           "hidden dark:flex": theme !== "dark",
           "dark:hidden flex": theme === "dark",
         })}
+        href={user.infoLink}
+        rel="noopener noreferrer"
+        target="_blank"
       >
         {logo}
       </a>

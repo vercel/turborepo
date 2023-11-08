@@ -1,10 +1,7 @@
-import { NextApiRequest, NextApiResponse } from "next";
+import type { NextApiRequest, NextApiResponse } from "next";
 import { withSentry } from "@sentry/nextjs";
-import {
-  getSubscriber,
-  Subscriber,
-  updateSubscriber,
-} from "../../../lib/ConvertKitApi";
+import type { Subscriber } from "../../../lib/ConvertKitApi";
+import { getSubscriber, updateSubscriber } from "../../../lib/ConvertKitApi";
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {

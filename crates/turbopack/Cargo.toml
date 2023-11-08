@@ -14,51 +14,43 @@ test_persistent_cache = []
 bench_against_node_nft = []
 
 [dependencies]
-anyhow = "1.0.47"
-lazy_static = "1.4.0"
-rand = "0.8.5"
-regex = "1.5.4"
-serde = "1.0.136"
-serde_json = "1.0.85"
-serde_regex = "1.1.0"
-tokio = "1.21.2"
-turbo-tasks = { path = "../turbo-tasks" }
-turbo-tasks-env = { path = "../turbo-tasks-env" }
-turbo-tasks-fs = { path = "../turbo-tasks-fs" }
-turbopack-core = { path = "../turbopack-core" }
-turbopack-css = { path = "../turbopack-css" }
-turbopack-ecmascript = { path = "../turbopack-ecmascript" }
-turbopack-env = { path = "../turbopack-env" }
-turbopack-json = { path = "../turbopack-json" }
-turbopack-static = { path = "../turbopack-static" }
-url = "2.2.2"
-# turbo-tasks-rocksdb could be a dev dependencies, but optional dev dependencies are not allowed
-# turbo-tasks-rocksdb = { path = "../turbo-tasks-rocksdb", optional = true }
+anyhow = { workspace = true }
+async-recursion = { workspace = true }
+futures = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
+lazy_static = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
 
-swc_core = { workspace = true, features = [
-  "common",
-  "common_concurrent",
-  "ecma_parser",
-  "ecma_utils",
-  "ecma_visit",
-] }
-
-  [dependencies.num-bigint]
-  version = "0.4"
+turbo-tasks = { workspace = true }
+turbo-tasks-env = { workspace = true }
+turbo-tasks-fs = { workspace = true }
+turbopack-core = { workspace = true }
+turbopack-css = { workspace = true }
+turbopack-ecmascript = { workspace = true }
+turbopack-ecmascript-plugins = { workspace = true }
+turbopack-env = { workspace = true }
+turbopack-image = { workspace = true }
+turbopack-json = { workspace = true }
+turbopack-mdx = { workspace = true }
+turbopack-node = { workspace = true }
+turbopack-static = { workspace = true }
+turbopack-wasm = { workspace = true }
 
 [dev-dependencies]
-criterion = { version = "0.3.5", features = ["async_tokio"] }
+criterion = { workspace = true, features = ["async_tokio"] }
 difference = "2.0"
-futures = "0.3.21"
-rstest = "0.12.0"
-rstest_reuse = "0.3.0"
-test-generator = "0.3.0"
-tokio = "1.21.2"
-turbo-malloc = { path = "../turbo-malloc" }
-turbo-tasks-memory = { path = "../turbo-tasks-memory" }
+futures = { workspace = true }
+rstest = { workspace = true }
+rstest_reuse = "0.5.0"
+tokio = { workspace = true }
+turbo-tasks-malloc = { workspace = true, default-features = false }
+turbo-tasks-memory = { workspace = true }
 
 [build-dependencies]
-turbo-tasks-build = { path = "../turbo-tasks-build" }
+turbo-tasks-build = { workspace = true }
 
 [[bench]]
 name = "mod"

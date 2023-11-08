@@ -1,75 +1,80 @@
 const TURBO_TEAM: Record<string, AuthorDetails> = {
   jaredpalmer: {
     name: "Jared Palmer",
-    twitterUsername: "jaredpalmer",
     picture: "/images/people/jaredpalmer.jpeg",
+    xUsername: "jaredpalmer",
   },
   gaspargarcia: {
     name: "Gaspar Garcia",
-    twitterUsername: "gaspargarcia_",
     picture: "/images/people/gaspargarcia.jpeg",
+    xUsername: "gaspargarcia_",
   },
   becca__z: {
     name: "Becca Z.",
-    twitterUsername: "becca__z",
     picture: "/images/people/becca__z.jpeg",
+    xUsername: "becca__z",
   },
   gregsoltis: {
     name: "Greg Soltis",
-    twitterUsername: "gsoltis",
     picture: "/images/people/gregsoltis.jpeg",
+    xUsername: "gsoltis",
   },
   nathanhammond: {
     name: "Nathan Hammond",
-    twitterUsername: "nathanhammond",
     picture: "/images/people/nathanhammond.png",
+    xUsername: "nathanhammond",
   },
   tomknickman: {
     name: "Tom Knickman",
-    twitterUsername: "tknickman",
     picture: "/images/people/tomknickman.jpeg",
+    xUsername: "tknickman",
   },
   mehulkar: {
     name: "Mehul Kar",
-    twitterUsername: "mehulkar",
     picture: "/images/people/mehulkar.jpeg",
+    xUsername: "mehulkar",
   },
   mattpocock: {
     name: "Matt Pocock",
-    twitterUsername: "mattpocockuk",
     picture: "/images/people/mattpocock.jpeg",
+    xUsername: "mattpocockuk",
   },
   tobiaskoppers: {
     name: "Tobias Koppers",
-    twitterUsername: "wSokra",
     picture: "/images/people/tobiaskoppers-avatar.jpg",
+    xUsername: "wSokra",
   },
   alexkirsz: {
     name: "Alex Kirszenberg",
-    twitterUsername: "alexkirsz",
     picture: "/images/people/alexkirsz.jpg",
+    xUsername: "alexkirsz",
   },
   anthonyshew: {
     name: "Anthony Schew",
-    twitterUsername: "anthonyShewDev",
     picture: "/images/people/anthonyshew.png",
+    xUsername: "anthonysheww",
   },
   nicholasyang: {
     name: "Nicholas Yang",
-    twitterUsername: "nicholaslyang",
     picture: "/images/people/nicholasyang.png",
+    xUsername: "nicholaslyang",
   },
   chrisolszewski: {
     name: "Chris Olszewski",
     picture: "/images/people/chrisolszewski.jpg",
+  },
+  alexanderlyon: {
+    name: "Alexander Lyon",
+    picture: "/images/people/alexanderlyon.jpg",
+    xUsername: "_arlyon",
   },
 };
 
 export type Author = keyof typeof TURBO_TEAM;
 export type AuthorDetails = {
   name: string;
-  twitterUsername?: string;
   picture: string;
+  xUsername?: string;
 };
 
 export default TURBO_TEAM;

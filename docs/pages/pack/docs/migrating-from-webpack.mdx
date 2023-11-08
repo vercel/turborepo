@@ -1,24 +1,34 @@
 ---
-title: Migrate from Webpack to Turbopack
-description: Learn about how to migrate from Webpack to its Rust-powered successor, Turbopack.
+title: Migrate from webpack to Turbopack
+description: Learn about how to migrate from webpack to its Rust-powered successor, Turbopack.
 ---
 
-# Migrating from Webpack to Turbopack
+import Callout from "../../../components/Callout";
 
-We're planning Turbopack as the successor to Webpack. In the future, we plan to give Turbopack all the tools needed to support your Webpack app.
+# Migrating from webpack to Turbopack
 
-Currently, migrating to Turbopack from Webpack is **not yet possible**. In the future, we're planning to offer a smooth migration path for all Webpack users to join the Turbopack future.
+<Callout type="info">
+  Turbopack now implements basic webpack loader support and configuration familiar to webpack users. Visit [Customizing Turbopack](features/customizing-turbopack) for how to configure Turbopack to use webpack loaders.
+</Callout>
 
-## Will it be compatible with Webpack's API?
+We're planning Turbopack as the successor to webpack. In the future, we plan to give Turbopack all the tools needed to support your webpack app.
 
-Webpack has a huge API. It's extremely flexible and extensible, which is a big reason why it's so popular.
+## webpack loaders and resolve aliases
 
-We're planning on making Turbopack very flexible and extensible, but we're **not planning 1:1 compatibility with Webpack**. This lets us make choices which improve on Webpack's API, and lets us optimize for speed and efficiency.
+For apps running Next.js 13.2 or later, Turbopack supports configuration familiar to webpack users, including support for webpack loaders and customizing resolution rules. Visit [Customizing Turbopack](features/customizing-turbopack) for how to configure Turbopack with these options. Note that using webpack-based Next.js plugins as-is from `next.config.js` is **not yet possible**.
 
-## Will we be able to use Webpack plugins?
+## FAQ
 
-Webpack plugins are a crucial part of Webpack's ecosystem. They let you customize your toolchain, giving you low-level tools to maximize your productivity.
+### Will it be compatible with webpack's API?
 
-Since we're not offering 1:1 API compatibility, most Webpack plugins won't work out of the box with Turbopack.
+webpack has a huge API. It's extremely flexible and extensible, which is a big reason why it's so popular.
 
-However, we're working on porting several of the most popular Webpack plugins to Turbopack.
+We're planning on making Turbopack very flexible and extensible, but we're **not planning 1:1 compatibility with webpack**. This lets us make choices which improve on webpack's API, and lets us optimize for speed and efficiency.
+
+### Will we be able to use webpack plugins?
+
+webpack plugins are a crucial part of webpack's ecosystem. They let you customize your toolchain, giving you low-level tools to maximize your productivity.
+
+Unlike loaders, webpack plugins can be tightly integrated with webpack's internals.
+
+Since we're not offering 1:1 API compatibility for plugins, most won't work out of the box with Turbopack. However, we're working on porting several of the most popular webpack plugins to Turbopack.

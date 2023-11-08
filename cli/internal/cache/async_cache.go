@@ -50,11 +50,11 @@ func (c *asyncCache) Put(anchor turbopath.AbsoluteSystemPath, key string, durati
 	return nil
 }
 
-func (c *asyncCache) Fetch(anchor turbopath.AbsoluteSystemPath, key string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
+func (c *asyncCache) Fetch(anchor turbopath.AbsoluteSystemPath, key string, files []string) (ItemStatus, []turbopath.AnchoredSystemPath, error) {
 	return c.realCache.Fetch(anchor, key, files)
 }
 
-func (c *asyncCache) Exists(key string) (ItemStatus, error) {
+func (c *asyncCache) Exists(key string) ItemStatus {
 	return c.realCache.Exists(key)
 }
 

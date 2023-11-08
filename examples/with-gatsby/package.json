@@ -1,0 +1,25 @@
+{
+  "name": "with-gatsby",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+  },
+  "devDependencies": {
+    "eslint": "^8.49.0",
+    "prettier": "^3.0.3",
+    "tsconfig": "workspace:*",
+    "turbo": "^1.10.13"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@8.6.10"
+}

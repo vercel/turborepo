@@ -5,7 +5,7 @@ interface LinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
   href: string;
 }
 
-export const Link = (props: LinkProps) => {
+export function Link(props: LinkProps): JSX.Element {
   const { children, href, ...rest } = props;
 
   if (rest.target === "_blank") {
@@ -17,4 +17,4 @@ export const Link = (props: LinkProps) => {
       {children}
     </a>
   );
-};
+}

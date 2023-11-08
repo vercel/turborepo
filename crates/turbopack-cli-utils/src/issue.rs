@@ -1,9 +1,9 @@
 use std::{
     borrow::Cow,
-    cmp::{min, Ordering},
+    cmp::min,
     collections::{hash_map::Entry, HashMap, HashSet},
     fmt::Write as _,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, Mutex},
 };
@@ -11,14 +11,14 @@ use std::{
 use anyhow::{anyhow, Result};
 use crossterm::style::{StyledContent, Stylize};
 use owo_colors::{OwoColorize as _, Style};
-use turbo_tasks::{RawVc, TransientValue, TryJoinIterExt, ValueToString};
-use turbo_tasks_fs::{
-    attach::AttachedFileSystemVc, to_sys_path, FileLinesContent, FileSystemPathVc,
-};
+use turbo_tasks::{RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt, Vc};
+use turbo_tasks_fs::{source_context::get_source_context, FileLinesContent};
 use turbopack_core::issue::{
-    IssueProcessingPathItem, IssueSeverity, IssueVc, OptionIssueProcessingPathItemsVc, PlainIssue,
+    CapturedIssues, Issue, IssueReporter, IssueSeverity, PlainIssue, PlainIssueProcessingPathItem,
     PlainIssueSource,
 };
+
+use crate::source_context::format_source_context_lines;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct IssueSeverityCliOption(pub IssueSeverity);
@@ -78,117 +78,43 @@ fn severity_to_style(severity: IssueSeverity) -> Style {
 }
 
 fn format_source_content(source: &PlainIssueSource, formatted_issue: &mut String) {
-    if let FileLinesContent::Lines(lines) = source.asset.content.lines() {
-        let context_start = source.start.line.saturating_sub(4);
-        let context_end = source.end.line + 4;
-        for (i, l) in lines
-            .iter()
-            .map(|l| &l.content)
-            .enumerate()
-            .take(context_end + 1)
-            .skip(context_start)
-        {
-            let n = i + 1;
-            fn safe_split_at(s: &str, i: usize) -> (&str, &str) {
-                if i < s.len() {
-                    s.split_at(s.floor_char_boundary(i))
-                } else {
-                    (s, "")
-                }
-            }
-            fn limit_len(s: &str) -> Cow<'_, str> {
-                if s.len() < 200 {
-                    return Cow::Borrowed(s);
-                }
-                let (a, b) = s.split_at(s.floor_char_boundary(98));
-                let (_, c) = b.split_at(b.ceil_char_boundary(b.len() - 99));
-                Cow::Owned(format!("{}...{}", a, c))
-            }
-            match (i.cmp(&source.start.line), i.cmp(&source.end.line)) {
-                // outside
-                (Ordering::Less, _) | (_, Ordering::Greater) => {
-                    writeln!(
-                        formatted_issue,
-                        "{:>6}   {}",
-                        n.dimmed(),
-                        limit_len(l).dimmed()
-                    )
-                    .unwrap();
-                }
-                // start line
-                (Ordering::Equal, Ordering::Less) => {
-                    let (before, marked) = safe_split_at(l, source.start.column);
-                    writeln!(
-                        formatted_issue,
-                        "{:>6} + {}{}",
-                        n,
-                        limit_len(before).dimmed(),
-                        limit_len(marked).bold()
-                    )
-                    .unwrap();
-                }
-                // start and end line
-                (Ordering::Equal, Ordering::Equal) => {
-                    let real_start = l.floor_char_boundary(source.start.column);
-                    let (before, temp) = safe_split_at(l, real_start);
-                    let (middle, after) = safe_split_at(temp, source.end.column - real_start);
-                    writeln!(
-                        formatted_issue,
-                        "{:>6} > {}{}{}",
-                        n,
-                        limit_len(before).dimmed(),
-                        limit_len(middle).bold(),
-                        limit_len(after).dimmed()
-                    )
-                    .unwrap();
-                }
-                // end line
-                (Ordering::Greater, Ordering::Equal) => {
-                    let (marked, after) = safe_split_at(l, source.end.column);
-                    writeln!(
-                        formatted_issue,
-                        "{:>6} + {}{}",
-                        n,
-                        limit_len(marked).bold(),
-                        limit_len(after).dimmed()
-                    )
-                    .unwrap();
-                }
-                // middle line
-                (Ordering::Greater, Ordering::Less) => {
-                    writeln!(formatted_issue, "{:>6} | {}", n, limit_len(l).bold()).unwrap()
-                }
-            }
-        }
+    if let FileLinesContent::Lines(lines) = source.asset.content.lines_ref() {
+        let start_line = source.start.line;
+        let end_line = source.end.line;
+        let start_column = source.start.column;
+        let end_column = source.end.column;
+        let lines = lines.iter().map(|l| l.content.as_str());
+        let ctx = get_source_context(lines, start_line, start_column, end_line, end_column);
+        format_source_context_lines(&ctx, formatted_issue);
     }
 }
 
-async fn format_optional_path(
-    path: &OptionIssueProcessingPathItemsVc,
+fn format_optional_path(
+    path: &Option<Vec<ReadRef<PlainIssueProcessingPathItem>>>,
     formatted_issue: &mut String,
 ) -> Result<()> {
-    if let Some(path) = &*path.await? {
+    if let Some(path) = path {
         let mut last_context = None;
         for item in path.iter().rev() {
-            let IssueProcessingPathItem {
-                context,
-                description,
-            } = &*item.await?;
+            let PlainIssueProcessingPathItem {
+                file_path: ref context,
+                ref description,
+            } = **item;
             if let Some(context) = context {
-                let context = context.resolve().await?;
-                if last_context == Some(context) {
-                    writeln!(formatted_issue, " at {}", &*description.await?)?;
+                let option_context = Some(context.clone());
+                if last_context == option_context {
+                    writeln!(formatted_issue, " at {}", description)?;
                 } else {
                     writeln!(
                         formatted_issue,
                         " at {} ({})",
-                        context.to_string().await?.bright_blue(),
-                        &*description.await?
+                        context.to_string().bright_blue(),
+                        description
                     )?;
-                    last_context = Some(context);
+                    last_context = option_context;
                 }
             } else {
-                writeln!(formatted_issue, " at {}", &*description.await?)?;
+                writeln!(formatted_issue, " at {}", description)?;
                 last_context = None;
             }
         }
@@ -212,7 +138,7 @@ pub fn format_issue(
     let severity = plain_issue.severity;
     // TODO CLICKABLE PATHS
     let context_path = plain_issue
-        .context
+        .file_path
         .replace("[project]", &current_dir.to_string_lossy())
         .replace("/./", "/")
         .replace("\\\\?\\", "");
@@ -261,7 +187,7 @@ pub fn format_issue(
         "{} - [{}] {}",
         severity.style(severity_to_style(severity)),
         category,
-        plain_issue.context
+        plain_issue.file_path
     )
     .unwrap();
 
@@ -291,6 +217,7 @@ const ORDERED_GROUPS: &[IssueSeverity] = &[
 #[derive(Debug, Clone)]
 pub struct LogOptions {
     pub current_dir: PathBuf,
+    pub project_dir: PathBuf,
     pub show_all: bool,
     pub log_detail: bool,
     pub log_level: IssueSeverity,
@@ -405,83 +332,74 @@ impl PartialEq for ConsoleUi {
     }
 }
 
+#[turbo_tasks::value_impl]
 impl ConsoleUi {
-    pub fn new(options: LogOptions) -> Self {
+    #[turbo_tasks::function]
+    pub fn new(options: TransientInstance<LogOptions>) -> Vc<Self> {
         ConsoleUi {
-            options,
+            options: (*options).clone(),
             seen: Arc::new(Mutex::new(SeenIssues::new())),
         }
+        .cell()
     }
 }
 
-#[turbo_tasks::value(transparent)]
-pub struct DisplayIssueState {
-    pub has_fatal: bool,
-    pub has_issues: bool,
-    pub has_new_issues: bool,
-}
-
 #[turbo_tasks::value_impl]
-impl ConsoleUiVc {
+impl IssueReporter for ConsoleUi {
     #[turbo_tasks::function]
-    pub async fn group_and_display_issues(
-        self,
+    async fn report_issues(
+        &self,
+        issues: TransientInstance<CapturedIssues>,
         source: TransientValue<RawVc>,
-    ) -> Result<DisplayIssueStateVc> {
-        let source = source.into_value();
-        let this = self.await?;
-
-        let issues = IssueVc::peek_issues_with_path(source).await?;
-        let issues = issues.await?;
-        let &LogOptions {
+        min_failing_severity: Vc<IssueSeverity>,
+    ) -> Result<Vc<bool>> {
+        let issues = &*issues;
+        let LogOptions {
             ref current_dir,
+            ref project_dir,
             show_all,
             log_detail,
             log_level,
             ..
-        } = &this.options;
+        } = self.options;
         let mut grouped_issues: GroupedIssues = HashMap::new();
 
         let issues = issues
             .iter_with_shortest_path()
             .map(|(issue, path)| async move {
-                // (issue.)
-                let plain_issue = issue.into_plain();
-                let id = plain_issue.internal_hash().await?;
-                Ok((plain_issue.await?, path, issue.context(), *id))
+                let plain_issue = issue.into_plain(path);
+                let id = plain_issue.internal_hash(false).await?;
+                Ok((plain_issue.await?, *id))
             })
             .try_join()
             .await?;
 
-        let issue_ids = issues
-            .iter()
-            .map(|(_, _, _, id)| *id)
-            .collect::<HashSet<_>>();
-        let mut new_ids = this.seen.lock().unwrap().new_ids(source, issue_ids);
+        let issue_ids = issues.iter().map(|(_, id)| *id).collect::<HashSet<_>>();
+        let mut new_ids = self
+            .seen
+            .lock()
+            .unwrap()
+            .new_ids(source.into_value(), issue_ids);
 
         let mut has_fatal = false;
-        let has_issues = !issues.is_empty();
-        let has_new_issues = !new_ids.is_empty();
-
-        for (plain_issue, path, context, id) in issues {
+        for (plain_issue, id) in issues {
             if !new_ids.remove(&id) {
                 continue;
             }
 
             let severity = plain_issue.severity;
-            let context_path = make_relative_to_cwd(context, current_dir).await?;
+            if severity <= *min_failing_severity.await? {
+                has_fatal = true;
+            }
+
+            let context_path =
+                make_relative_to_cwd(&plain_issue.file_path, project_dir, current_dir);
             let category = &plain_issue.category;
             let title = &plain_issue.title;
-            has_fatal = severity == IssueSeverity::Fatal;
-            let severity_map = grouped_issues
-                .entry(severity)
-                .or_insert_with(Default::default);
-            let category_map = severity_map
-                .entry(category.clone())
-                .or_insert_with(Default::default);
-            let issues = category_map
-                .entry(context_path.clone())
-                .or_insert_with(Default::default);
+            let processing_path = &*plain_issue.processing_path;
+            let severity_map = grouped_issues.entry(severity).or_default();
+            let category_map = severity_map.entry(category.clone()).or_default();
+            let issues = category_map.entry(context_path.to_string()).or_default();
 
             let mut styled_issue = if let Some(source) = &plain_issue.source {
                 let mut styled_issue = format!(
@@ -515,7 +433,7 @@ impl ConsoleUiVc {
                 if !documentation_link.is_empty() {
                     writeln!(&mut styled_issue, "\ndocumentation: {documentation_link}")?;
                 }
-                format_optional_path(&path, &mut styled_issue).await?;
+                format_optional_path(processing_path, &mut styled_issue)?;
             }
             issues.push(styled_issue);
         }
@@ -605,30 +523,25 @@ impl ConsoleUiVc {
             }
         }
 
-        Ok(DisplayIssueState {
-            has_fatal,
-            has_issues,
-            has_new_issues,
-        }
-        .cell())
+        Ok(Vc::cell(has_fatal))
     }
 }
 
-async fn make_relative_to_cwd(path: FileSystemPathVc, cwd: &PathBuf) -> Result<String> {
-    let path = if let Some(fs) = AttachedFileSystemVc::resolve_from(path.fs()).await? {
-        fs.get_inner_fs_path(path)
-    } else {
-        path
-    };
-    if let Some(sys_path) = to_sys_path(path).await? {
-        let relative = sys_path
+fn make_relative_to_cwd<'a>(path: &'a str, project_dir: &Path, cwd: &Path) -> Cow<'a, str> {
+    if let Some(path_in_project) = path.strip_prefix("[project]/") {
+        let abs_path = if std::path::MAIN_SEPARATOR != '/' {
+            project_dir.join(path_in_project.replace('/', std::path::MAIN_SEPARATOR_STR))
+        } else {
+            project_dir.join(path_in_project)
+        };
+        let relative = abs_path
             .strip_prefix(cwd)
-            .unwrap_or(&sys_path)
+            .unwrap_or(&abs_path)
             .to_string_lossy()
             .to_string();
-        Ok(relative)
+        relative.into()
     } else {
-        Ok(path.to_string().await?.clone_value())
+        path.into()
     }
 }
 

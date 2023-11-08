@@ -67,7 +67,7 @@ func safeMkdirAll(dirCache *cachedDirTree, anchor turbopath.AbsoluteSystemPath, 
 	// Iterate through path segments by os.Separator, appending them onto the anchor.
 	// Check to see if that path segment is a symlink with a target outside of anchor.
 
-	// Pull the iteration starting point from thie directory cache.
+	// Pull the iteration starting point from the directory cache.
 	calculatedAnchor, pathSegments := dirCache.getStartingPoint(processedName)
 	for _, segment := range pathSegments {
 		calculatedAnchor, checkPathErr := checkPath(anchor, calculatedAnchor, segment)

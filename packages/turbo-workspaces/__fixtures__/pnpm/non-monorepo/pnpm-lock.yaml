@@ -1,0 +1,33 @@
+lockfileVersion: 5.4
+
+importers:
+
+  .:
+    specifiers: {}
+
+  apps/docs:
+    specifiers:
+      tsconfig: workspace:*
+      ui: workspace:*
+    dependencies:
+      ui: link:../../packages/ui
+    devDependencies:
+      tsconfig: link:../../packages/tsconfig
+
+  apps/web:
+    specifiers:
+      tsconfig: workspace:*
+      ui: workspace:*
+    dependencies:
+      ui: link:../../packages/ui
+    devDependencies:
+      tsconfig: link:../../packages/tsconfig
+
+  packages/tsconfig:
+    specifiers: {}
+
+  packages/ui:
+    specifiers:
+      tsconfig: workspace:*
+    devDependencies:
+      tsconfig: link:../tsconfig

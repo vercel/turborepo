@@ -12,8 +12,10 @@
     (
         "b",
         Constant(
-            StrWord(
-                Atom('foo' type=inline),
+            Str(
+                Word(
+                    "foo",
+                ),
             ),
         ),
     ),
@@ -21,9 +23,9 @@
         "c",
         Member(
             7,
-            Array(
-                3,
-                [
+            Array {
+                total_nodes: 3,
+                items: [
                     Constant(
                         Num(
                             ConstantNumber(
@@ -32,22 +34,25 @@
                         ),
                     ),
                     Constant(
-                        StrWord(
-                            Atom('foo' type=inline),
+                        Str(
+                            Word(
+                                "foo",
+                            ),
                         ),
                     ),
                 ],
-            ),
+                mutable: true,
+            },
             Member(
                 3,
                 FreeVar(
-                    Other(
-                        Atom('global' type=static),
-                    ),
+                    "global",
                 ),
                 Constant(
-                    StrWord(
-                        Atom('index' type=inline),
+                    Str(
+                        Atom(
+                            "index",
+                        ),
                     ),
                 ),
             ),
@@ -55,9 +60,9 @@
     ),
     (
         "d1",
-        Array(
-            3,
-            [
+        Array {
+            total_nodes: 3,
+            items: [
                 Constant(
                     Num(
                         ConstantNumber(
@@ -66,12 +71,15 @@
                     ),
                 ),
                 Constant(
-                    StrWord(
-                        Atom('foo' type=inline),
+                    Str(
+                        Word(
+                            "foo",
+                        ),
                     ),
                 ),
             ],
-        ),
+            mutable: true,
+        },
     ),
     (
         "d2",
@@ -79,20 +87,20 @@
             5,
             Variable(
                 (
-                    Atom('d1' type=inline),
-                    #1,
+                    "d1",
+                    #2,
                 ),
             ),
             Member(
                 3,
                 FreeVar(
-                    Other(
-                        Atom('global' type=static),
-                    ),
+                    "global",
                 ),
                 Constant(
-                    StrWord(
-                        Atom('index' type=inline),
+                    Str(
+                        Atom(
+                            "index",
+                        ),
                     ),
                 ),
             ),
@@ -104,8 +112,8 @@
             3,
             Variable(
                 (
-                    Atom('d1' type=inline),
-                    #1,
+                    "d1",
+                    #2,
                 ),
             ),
             Constant(
@@ -123,8 +131,8 @@
             3,
             Variable(
                 (
-                    Atom('d1' type=inline),
-                    #1,
+                    "d1",
+                    #2,
                 ),
             ),
             Constant(

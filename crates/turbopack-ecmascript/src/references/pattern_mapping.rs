@@ -4,17 +4,17 @@ use swc_core::{
     ecma::ast::{Expr, Lit},
     quote,
 };
-use turbo_tasks::{debug::ValueDebug, primitives::StringVc, Value, ValueToString};
+use turbo_tasks::{debug::ValueDebug, Value, Vc};
 use turbopack_core::{
-    chunk::{ChunkableAssetVc, ChunkingContextVc, FromChunkableAsset, ModuleId},
-    issue::{code_gen::CodeGenerationIssue, IssueSeverity},
+    chunk::{ChunkItemExt, ChunkableModule, ChunkingContext, ModuleId},
+    issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity},
     resolve::{
-        origin::ResolveOriginVc, parse::RequestVc, ResolveResult, ResolveResultVc, SpecialType,
+        origin::ResolveOrigin, parse::Request, ModuleResolveResult, ModuleResolveResultItem,
     },
 };
 
 use super::util::{request_to_string, throw_module_not_found_expr};
-use crate::{chunk::EcmascriptChunkItemVc, utils::module_id_to_lit};
+use crate::utils::module_id_to_lit;
 
 /// A mapping from a request pattern (e.g. "./module", `./images/${name}.png`)
 /// to corresponding module ids. The same pattern can map to multiple module ids
@@ -34,6 +34,15 @@ pub(crate) enum PatternMapping {
     /// require("./module")
     /// ```
     Single(ModuleId),
+    /// Constant request that always maps to the same module.
+    /// This is used for dynamic imports.
+    /// Module id points to a loader module.
+    ///
+    /// ### Example
+    /// ```js
+    /// import("./module")
+    /// ```
+    SingleLoader(ModuleId),
     /// Variable request that can map to different modules at runtime.
     ///
     /// ### Example
@@ -61,6 +70,7 @@ impl PatternMapping {
             | PatternMapping::Unresolveable(_)
             | PatternMapping::Ignored
             | PatternMapping::Single(_)
+            | PatternMapping::SingleLoader(_)
             | PatternMapping::Map(_) => true,
             PatternMapping::OriginalReferenceExternal
             | PatternMapping::OriginalReferenceTypeExternal(_) => false,
@@ -77,7 +87,9 @@ impl PatternMapping {
             PatternMapping::Ignored => {
                 quote!("undefined" as Expr)
             }
-            PatternMapping::Single(module_id) => module_id_to_lit(module_id),
+            PatternMapping::Single(module_id) | PatternMapping::SingleLoader(module_id) => {
+                module_id_to_lit(module_id)
+            }
             PatternMapping::Map(_) => {
                 todo!("emit an error for this case: Complex expression can't be transformed");
             }
@@ -100,51 +112,42 @@ impl PatternMapping {
 }
 
 #[turbo_tasks::value_impl]
-impl PatternMappingVc {
+impl PatternMapping {
     /// Resolves a request into a pattern mapping.
     // NOTE(alexkirsz) I would rather have used `resolve` here but it's already reserved by the Vc
     // impl.
     #[turbo_tasks::function]
     pub async fn resolve_request(
-        request: RequestVc,
-        origin: ResolveOriginVc,
-        context: ChunkingContextVc,
-        resolve_result: ResolveResultVc,
+        request: Vc<Request>,
+        origin: Vc<Box<dyn ResolveOrigin>>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+        resolve_result: Vc<ModuleResolveResult>,
         resolve_type: Value<ResolveType>,
-    ) -> Result<PatternMappingVc> {
+    ) -> Result<Vc<PatternMapping>> {
         let result = resolve_result.await?;
-        let asset = match &*result {
-            ResolveResult::Alternatives(assets, _) => {
-                if let Some(asset) = assets.first() {
-                    asset
-                } else {
-                    return Ok(PatternMappingVc::cell(PatternMapping::Invalid));
-                }
-            }
-            ResolveResult::Single(asset, _) => asset,
-            ResolveResult::Special(SpecialType::OriginalReferenceExternal, _) => {
-                return Ok(PatternMapping::OriginalReferenceExternal.cell())
-            }
-            ResolveResult::Special(SpecialType::OriginalReferenceTypeExternal(s), _) => {
-                return Ok(PatternMapping::OriginalReferenceTypeExternal(s.clone()).cell())
-            }
-            ResolveResult::Special(SpecialType::Ignore, _) => {
-                return Ok(PatternMapping::Ignored.cell())
-            }
-            ResolveResult::Unresolveable(_) => {
+        let module = match result.primary.first() {
+            None => {
                 return Ok(PatternMapping::Unresolveable(
                     request_to_string(request).await?.to_string(),
                 )
-                .cell());
+                .cell())
             }
+            Some(ModuleResolveResultItem::Module(module)) => *module,
+            Some(ModuleResolveResultItem::OriginalReferenceExternal) => {
+                return Ok(PatternMapping::OriginalReferenceExternal.cell())
+            }
+            Some(ModuleResolveResultItem::OriginalReferenceTypeExternal(s)) => {
+                return Ok(PatternMapping::OriginalReferenceTypeExternal(s.clone()).cell())
+            }
+            Some(ModuleResolveResultItem::Ignore) => return Ok(PatternMapping::Ignored.cell()),
             _ => {
                 // TODO implement mapping
                 CodeGenerationIssue {
                     severity: IssueSeverity::Bug.into(),
-                    title: StringVc::cell(
+                    title: Vc::cell(
                         "pattern mapping is not implemented for this result".to_string(),
                     ),
-                    message: StringVc::cell(format!(
+                    message: Vc::cell(format!(
                         "the reference resolves to a non-trivial result, which is not supported \
                          yet: {:?}",
                         resolve_result.dbg().await?
@@ -152,41 +155,39 @@ impl PatternMappingVc {
                     path: origin.origin_path(),
                 }
                 .cell()
-                .as_issue()
                 .emit();
-                return Ok(PatternMappingVc::cell(PatternMapping::Invalid));
+                return Ok(PatternMapping::cell(PatternMapping::Invalid));
             }
         };
 
-        if let Some(chunkable) = ChunkableAssetVc::resolve_from(asset).await? {
-            if *resolve_type == ResolveType::EsmAsync {
-                if let Some((loader, _)) =
-                    EcmascriptChunkItemVc::from_async_asset(context, chunkable).await?
-                {
-                    return Ok(PatternMappingVc::cell(PatternMapping::Single(
-                        loader.id().await?.clone_value(),
+        if let Some(chunkable) =
+            Vc::try_resolve_downcast::<Box<dyn ChunkableModule>>(module).await?
+        {
+            match *resolve_type {
+                ResolveType::EsmAsync => {
+                    let loader_id = chunking_context.async_loader_chunk_item_id(chunkable);
+                    return Ok(PatternMapping::cell(PatternMapping::SingleLoader(
+                        loader_id.await?.clone_value(),
                     )));
                 }
-            } else if let Some(chunk_item) =
-                EcmascriptChunkItemVc::from_asset(context, *asset).await?
-            {
-                return Ok(PatternMappingVc::cell(PatternMapping::Single(
-                    chunk_item.id().await?.clone_value(),
-                )));
+                ResolveType::Cjs => {
+                    let chunk_item = chunkable.as_chunk_item(chunking_context);
+                    return Ok(PatternMapping::cell(PatternMapping::Single(
+                        chunk_item.id().await?.clone_value(),
+                    )));
+                }
             }
         }
         CodeGenerationIssue {
             severity: IssueSeverity::Bug.into(),
-            title: StringVc::cell("non-ecmascript placeable asset".to_string()),
-            message: StringVc::cell(format!(
-                "asset {} is not placeable in ESM chunks, so it doesn't have a module id",
-                asset.path().to_string().await?
-            )),
+            title: Vc::cell("non-ecmascript placeable asset".to_string()),
+            message: Vc::cell(
+                "asset is not placeable in ESM chunks, so it doesn't have a module id".to_string(),
+            ),
             path: origin.origin_path(),
         }
         .cell()
-        .as_issue()
         .emit();
-        Ok(PatternMappingVc::cell(PatternMapping::Invalid))
+        Ok(PatternMapping::cell(PatternMapping::Invalid))
     }
 }

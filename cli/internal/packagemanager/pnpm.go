@@ -1,15 +1,18 @@
 package packagemanager
 
 import (
+	"errors"
 	"fmt"
+	stdfs "io/fs"
 	"strings"
 
-	"github.com/Masterminds/semver"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/lockfile"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/yaml"
 )
+
+const pnpmLockfile = "pnpm-lock.yaml"
 
 // PnpmWorkspaces is a representation of workspace package globs found
 // in pnpm-workspace.yaml
@@ -59,6 +62,10 @@ func getPnpmWorkspaceIgnores(pm PackageManager, rootpath turbopath.AbsoluteSyste
 	}
 	pkgGlobs, err := readPnpmWorkspacePackages(rootpath.UntypedJoin("pnpm-workspace.yaml"))
 	if err != nil {
+		// If workspace file doesn't exist we shouldn't error as we might be a single package repo
+		if errors.Is(err, stdfs.ErrNotExist) {
+			return ignores, nil
+		}
 		return nil, err
 	}
 	for _, pkgGlob := range pkgGlobs {
@@ -74,7 +81,7 @@ var nodejsPnpm = PackageManager{
 	Slug:       "pnpm",
 	Command:    "pnpm",
 	Specfile:   "package.json",
-	Lockfile:   "pnpm-lock.yaml",
+	Lockfile:   pnpmLockfile,
 	PackageDir: "node_modules",
 	// pnpm v7+ changed their handling of '--'. We no longer need to pass it to pass args to
 	// the script being run, and in fact doing so will cause the '--' to be passed through verbatim,
@@ -82,42 +89,30 @@ var nodejsPnpm = PackageManager{
 	// We are allowed to use nil here because ArgSeparator already has a type, so it's a typed nil,
 	// This could just as easily be []string{}, but the style guide says to prefer
 	// nil for empty slices.
-	ArgSeparator:               nil,
+	ArgSeparator:               func(_userArgs []string) []string { return nil },
 	WorkspaceConfigurationPath: "pnpm-workspace.yaml",
 
 	getWorkspaceGlobs: getPnpmWorkspaceGlobs,
 
 	getWorkspaceIgnores: getPnpmWorkspaceIgnores,
 
-	Matches: func(manager string, version string) (bool, error) {
-		if manager != "pnpm" {
-			return false, nil
-		}
-
-		v, err := semver.NewVersion(version)
-		if err != nil {
-			return false, fmt.Errorf("could not parse pnpm version: %w", err)
-		}
-		c, err := semver.NewConstraint(">=7.0.0")
-		if err != nil {
-			return false, fmt.Errorf("could not create constraint: %w", err)
-		}
-
-		return c.Check(v), nil
-	},
-
-	detect: func(projectDirectory turbopath.AbsoluteSystemPath, packageManager *PackageManager) (bool, error) {
-		specfileExists := projectDirectory.UntypedJoin(packageManager.Specfile).FileExists()
-		lockfileExists := projectDirectory.UntypedJoin(packageManager.Lockfile).FileExists()
-
-		return (specfileExists && lockfileExists), nil
-	},
-
 	canPrune: func(cwd turbopath.AbsoluteSystemPath) (bool, error) {
 		return true, nil
 	},
 
-	readLockfile: func(contents []byte) (lockfile.Lockfile, error) {
+	GetLockfileName: func(_ turbopath.AbsoluteSystemPath) string {
+		return pnpmLockfile
+	},
+
+	GetLockfilePath: func(projectDirectory turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+		return projectDirectory.UntypedJoin(pnpmLockfile)
+	},
+
+	GetLockfileContents: func(projectDirectory turbopath.AbsoluteSystemPath) ([]byte, error) {
+		return projectDirectory.UntypedJoin(pnpmLockfile).ReadFile()
+	},
+
+	UnmarshalLockfile: func(_rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {
 		return lockfile.DecodePnpmLockfile(contents)
 	},
 

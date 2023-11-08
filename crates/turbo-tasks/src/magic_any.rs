@@ -90,7 +90,7 @@ impl Eq for dyn MagicAny {}
 
 impl PartialOrd for dyn MagicAny {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.magic_cmp(other))
+        Some(self.cmp(other))
     }
 }
 
@@ -106,7 +106,7 @@ impl Hash for dyn MagicAny {
     }
 }
 
-pub struct HasherMut<H: ?Sized>(H);
+pub struct HasherMut<H: ?Sized>(pub H);
 
 impl<H: DerefMut + ?Sized> Hasher for HasherMut<H>
 where

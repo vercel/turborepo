@@ -1,18 +1,16 @@
 import React, { createElement } from "react";
 import { ImageResponse } from "@vercel/og";
-
+import type { NextApiRequest } from "next/index";
 import PackLogo from "../../components/logos/og/PackLogo";
 import RepoLogo from "../../components/logos/og/RepoLogo";
 import TurboLogo from "../../components/logos/og/TurboLogo";
 import VercelLogo from "../../components/logos/og/VercelLogo";
 
-import type { NextApiRequest } from "next/index";
-
 function _arrayBufferToBase64(buffer) {
-  var binary = "";
-  var bytes = new Uint8Array(buffer);
-  var len = bytes.byteLength;
-  for (var i = 0; i < len; i++) {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
@@ -59,8 +57,10 @@ async function loadAssets(): Promise<
   ];
 }
 
-export const config = {
-  runtime: "experimental-edge",
+// ?type=<pack|repo>
+const TITLE_FOR_TYPE: Record<string, string> = {
+  pack: "The successor to Webpack",
+  repo: "The build system that makes ship happen",
 };
 
 export default async function openGraphImage(
@@ -72,15 +72,13 @@ export default async function openGraphImage(
 
     const type = searchParams.get("type");
 
-    // ?title=<title>
-    const hasTitle = searchParams.has("title");
-    const title = hasTitle
-      ? searchParams.get("title")?.slice(0, 100)
-      : type === "pack"
-      ? "The successor to Webpack"
-      : type === "repo"
-      ? "The build system that makes ship happen"
-      : "";
+    // Start with the default title for the type
+    let title = TITLE_FOR_TYPE[type];
+
+    // If there'sa a ?title=<title> query param, always prefer that.
+    if (searchParams.has("title")) {
+      title = searchParams.get("title").slice(0, 100);
+    }
 
     return new ImageResponse(createElement(OGImage, { title, type, bg }), {
       width: 1200,
@@ -123,15 +121,9 @@ export function OGImage({
         color: "#fff",
       }}
     >
-      {/* eslint-disable-next-line  @next/next/no-img-element, jsx-a11y/alt-text */}
+      {}
       <div style={{ display: "flex", height: 97 * 1.1, alignItems: "center" }}>
-        {type === "pack" ? (
-          <PackLogo height={96 * 1.1} width={594 * 1.1} />
-        ) : type === "repo" ? (
-          <RepoLogo height={83 * 1.1} width={616 * 1.1} />
-        ) : (
-          <TurboLogo height={97 * 1.1} width={459 * 1.1} />
-        )}
+        <Logo type={type} />
       </div>
       {title ? (
         <div
@@ -165,3 +157,19 @@ export function OGImage({
     </div>
   );
 }
+
+function Logo({ type }: { type: string | undefined }): JSX.Element {
+  if (type === "pack") {
+    return <PackLogo height={103 * 1.1} width={697 * 1.1} />;
+  }
+
+  if (type === "repo") {
+    return <RepoLogo height={83 * 1.1} width={616 * 1.1} />;
+  }
+
+  return <TurboLogo height={97 * 1.1} width={459 * 1.1} />;
+}
+
+export const config = {
+  runtime: "edge",
+};

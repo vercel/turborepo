@@ -1,85 +1,83 @@
-use std::collections::HashMap;
-
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{primitives::Regex, trace::TraceRawVcs};
-use turbo_tasks_fs::FileSystemPathReadRef;
-use turbopack_css::CssInputTransformsVc;
-use turbopack_ecmascript::EcmascriptInputTransformsVc;
+use turbo_tasks::{trace::TraceRawVcs, Vc};
+use turbo_tasks_fs::FileSystemPath;
+use turbopack_core::{
+    reference_type::ReferenceType, source::Source, source_transform::SourceTransforms,
+};
+use turbopack_css::{CssInputTransforms, CssModuleAssetType};
+use turbopack_ecmascript::{EcmascriptInputTransforms, EcmascriptOptions};
+use turbopack_mdx::MdxTransformOptions;
+use turbopack_wasm::source::WebAssemblySourceType;
+
+use super::{CustomModuleType, ModuleRuleCondition};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TraceRawVcs, PartialEq, Eq)]
 pub struct ModuleRule {
     condition: ModuleRuleCondition,
-    effects: HashMap<ModuleRuleEffectKey, ModuleRuleEffect>,
+    effects: Vec<ModuleRuleEffect>,
+    match_mode: MatchMode,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
+enum MatchMode {
+    // Match all but internal references.
+    NonInternal,
+    // Only match internal references.
+    Internal,
+    // Match both internal and non-internal references.
+    All,
+}
+
+impl MatchMode {
+    fn matches(&self, reference_type: &ReferenceType) -> bool {
+        matches!(
+            (self, reference_type.is_internal()),
+            (MatchMode::All, _) | (MatchMode::NonInternal, false) | (MatchMode::Internal, true)
+        )
+    }
 }
 
 impl ModuleRule {
+    /// Creates a new module rule. Will not match internal references.
     pub fn new(condition: ModuleRuleCondition, effects: Vec<ModuleRuleEffect>) -> Self {
         ModuleRule {
             condition,
-            effects: effects.into_iter().map(|e| (e.key(), e)).collect(),
+            effects,
+            match_mode: MatchMode::NonInternal,
         }
     }
-}
 
-impl ModuleRule {
-    pub fn effects(&self) -> impl Iterator<Item = (&ModuleRuleEffectKey, &ModuleRuleEffect)> {
+    /// Creates a new module rule. Will only matches internal references.
+    pub fn new_internal(condition: ModuleRuleCondition, effects: Vec<ModuleRuleEffect>) -> Self {
+        ModuleRule {
+            condition,
+            effects,
+            match_mode: MatchMode::Internal,
+        }
+    }
+
+    /// Creates a new module rule. Will only matches internal references.
+    pub fn new_all(condition: ModuleRuleCondition, effects: Vec<ModuleRuleEffect>) -> Self {
+        ModuleRule {
+            condition,
+            effects,
+            match_mode: MatchMode::All,
+        }
+    }
+
+    pub fn effects(&self) -> impl Iterator<Item = &ModuleRuleEffect> {
         self.effects.iter()
     }
-}
 
-impl ModuleRule {
-    pub fn matches(&self, path: &FileSystemPathReadRef) -> bool {
-        self.condition.matches(path)
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TraceRawVcs, PartialEq, Eq)]
-pub enum ModuleRuleCondition {
-    All(Vec<ModuleRuleCondition>),
-    Any(Vec<ModuleRuleCondition>),
-    ResourcePathHasNoExtension,
-    ResourcePathEndsWith(String),
-    ResourcePathInDirectory(String),
-    ResourcePathInExactDirectory(FileSystemPathReadRef),
-    ResourcePathRegex(#[turbo_tasks(trace_ignore)] Regex),
-}
-
-impl ModuleRuleCondition {
-    pub fn all(conditions: Vec<ModuleRuleCondition>) -> ModuleRuleCondition {
-        ModuleRuleCondition::All(conditions)
-    }
-
-    pub fn any(conditions: Vec<ModuleRuleCondition>) -> ModuleRuleCondition {
-        ModuleRuleCondition::Any(conditions)
-    }
-}
-
-impl ModuleRuleCondition {
-    pub fn matches(&self, path: &FileSystemPathReadRef) -> bool {
-        match self {
-            ModuleRuleCondition::All(conditions) => conditions.iter().all(|c| c.matches(path)),
-            ModuleRuleCondition::Any(conditions) => conditions.iter().any(|c| c.matches(path)),
-            ModuleRuleCondition::ResourcePathEndsWith(end) => path.path.ends_with(end),
-            ModuleRuleCondition::ResourcePathHasNoExtension => {
-                if let Some(i) = path.path.rfind('.') {
-                    if let Some(j) = path.path.rfind('/') {
-                        j > i
-                    } else {
-                        false
-                    }
-                } else {
-                    true
-                }
-            }
-            ModuleRuleCondition::ResourcePathInDirectory(dir) => {
-                path.path.starts_with(&format!("{dir}/")) || path.path.contains(&format!("/{dir}/"))
-            }
-            ModuleRuleCondition::ResourcePathInExactDirectory(parent_path) => {
-                path.is_inside(parent_path)
-            }
-            _ => todo!("not implemented yet"),
-        }
+    pub async fn matches(
+        &self,
+        source: Vc<Box<dyn Source>>,
+        path: &FileSystemPath,
+        reference_type: &ReferenceType,
+    ) -> Result<bool> {
+        Ok(self.match_mode.matches(reference_type)
+            && self.condition.matches(source, path, reference_type).await?)
     }
 }
 
@@ -87,40 +85,48 @@ impl ModuleRuleCondition {
 #[derive(Debug, Clone)]
 pub enum ModuleRuleEffect {
     ModuleType(ModuleType),
-    AddEcmascriptTransforms(EcmascriptInputTransformsVc),
-    Custom,
+    AddEcmascriptTransforms(Vc<EcmascriptInputTransforms>),
+    SourceTransforms(Vc<SourceTransforms>),
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input", shared)]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
 pub enum ModuleType {
-    Ecmascript(EcmascriptInputTransformsVc),
-    Typescript(EcmascriptInputTransformsVc),
-    TypescriptDeclaration(EcmascriptInputTransformsVc),
+    Ecmascript {
+        transforms: Vc<EcmascriptInputTransforms>,
+        #[turbo_tasks(trace_ignore)]
+        options: EcmascriptOptions,
+    },
+    Typescript {
+        transforms: Vc<EcmascriptInputTransforms>,
+        #[turbo_tasks(trace_ignore)]
+        options: EcmascriptOptions,
+    },
+    TypescriptWithTypes {
+        transforms: Vc<EcmascriptInputTransforms>,
+        #[turbo_tasks(trace_ignore)]
+        options: EcmascriptOptions,
+    },
+    TypescriptDeclaration {
+        transforms: Vc<EcmascriptInputTransforms>,
+        #[turbo_tasks(trace_ignore)]
+        options: EcmascriptOptions,
+    },
     Json,
     Raw,
-    Css(CssInputTransformsVc),
-    CssModule(CssInputTransformsVc),
+    Mdx {
+        transforms: Vc<EcmascriptInputTransforms>,
+        options: Vc<MdxTransformOptions>,
+    },
+    CssGlobal,
+    CssModule,
+    Css {
+        ty: CssModuleAssetType,
+        transforms: Vc<CssInputTransforms>,
+    },
     Static,
-    // TODO allow custom function when we support function pointers
-    Custom(u8),
-}
-
-impl ModuleRuleEffect {
-    pub fn key(&self) -> ModuleRuleEffectKey {
-        match self {
-            ModuleRuleEffect::ModuleType(_) => ModuleRuleEffectKey::ModuleType,
-            ModuleRuleEffect::AddEcmascriptTransforms(_) => {
-                ModuleRuleEffectKey::AddEcmascriptTransforms
-            }
-            ModuleRuleEffect::Custom => ModuleRuleEffectKey::Custom,
-        }
-    }
-}
-
-#[derive(TraceRawVcs, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum ModuleRuleEffectKey {
-    ModuleType,
-    AddEcmascriptTransforms,
-    Custom,
+    WebAssembly {
+        source_ty: WebAssemblySourceType,
+    },
+    Custom(Vc<Box<dyn CustomModuleType>>),
 }

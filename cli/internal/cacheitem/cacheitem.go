@@ -7,7 +7,6 @@ import (
 	"crypto/sha512"
 	"errors"
 	"io"
-	"os"
 
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -32,7 +31,7 @@ type CacheItem struct {
 	tw         *tar.Writer
 	zw         io.WriteCloser
 	fileBuffer *bufio.Writer
-	handle     *os.File
+	handle     interface{}
 	compressed bool
 }
 
@@ -57,9 +56,14 @@ func (ci *CacheItem) Close() error {
 	}
 
 	if ci.handle != nil {
-		if err := ci.handle.Close(); err != nil {
-			return err
+		closer, isCloser := ci.handle.(io.Closer)
+
+		if isCloser {
+			if err := closer.Close(); err != nil {
+				return err
+			}
 		}
+
 	}
 
 	return nil
@@ -68,7 +72,13 @@ func (ci *CacheItem) Close() error {
 // GetSha returns the SHA-512 hash for the CacheItem.
 func (ci *CacheItem) GetSha() ([]byte, error) {
 	sha := sha512.New()
-	if _, err := io.Copy(sha, ci.handle); err != nil {
+
+	reader, isReader := ci.handle.(io.Reader)
+	if !isReader {
+		panic("can't read from this cache item")
+	}
+
+	if _, err := io.Copy(sha, reader); err != nil {
 		return nil, err
 	}
 

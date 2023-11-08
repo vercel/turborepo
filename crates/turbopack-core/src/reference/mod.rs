@@ -1,100 +1,150 @@
 use std::collections::{HashSet, VecDeque};
 
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
-
-use crate::{
-    asset::{AssetVc, AssetsVc},
-    issue::IssueVc,
-    resolve::{ResolveResult, ResolveResultVc},
+use turbo_tasks::{
+    graph::{AdjacencyMap, GraphTraversal},
+    TryJoinIterExt, ValueToString, Vc,
 };
 
+use crate::{
+    issue::IssueDescriptionExt,
+    module::{Module, Modules},
+    output::{OutputAsset, OutputAssets},
+    resolve::ModuleResolveResult,
+};
 pub mod source_map;
 
-pub use source_map::SourceMapVc;
+pub use source_map::SourceMapReference;
 
-/// A reference to one or multiple [Asset]s or other special things.
-/// There are a bunch of optional traits that can influence how these references
-/// are handled. e. g. [ChunkableAssetReference] or [ParallelChunkReference]
+/// A reference to one or multiple [Module]s, [OutputAsset]s or other special
+/// things. There are a bunch of optional traits that can influence how these
+/// references are handled. e. g. [ChunkableModuleReference]
 ///
-/// [Asset]: crate::asset::Asset
-/// [ChunkableAssetReference]: crate::chunk::ChunkableAssetReference
-/// [ParallelChunkReference]: crate::chunk::ParallelChunkReference
+/// [Module]: crate::module::Module
+/// [OutputAsset]: crate::output::OutputAsset
+/// [ChunkableModuleReference]: crate::chunk::ChunkableModuleReference
 #[turbo_tasks::value_trait]
-pub trait AssetReference: ValueToString {
-    fn resolve_reference(&self) -> ResolveResultVc;
+pub trait ModuleReference: ValueToString {
+    fn resolve_reference(self: Vc<Self>) -> Vc<ModuleResolveResult>;
     // TODO think about different types
-    // fn kind(&self) -> AssetReferenceTypeVc;
+    // fn kind(&self) -> Vc<AssetReferenceType>;
 }
 
-/// Multiple [AssetReference]s
+/// Multiple [ModuleReference]s
 #[turbo_tasks::value(transparent)]
-pub struct AssetReferences(Vec<AssetReferenceVc>);
+pub struct ModuleReferences(Vec<Vc<Box<dyn ModuleReference>>>);
 
 #[turbo_tasks::value_impl]
-impl AssetReferencesVc {
-    /// An empty list of [AssetReference]s
+impl ModuleReferences {
+    /// An empty list of [ModuleReference]s
     #[turbo_tasks::function]
-    pub fn empty() -> Self {
-        AssetReferencesVc::cell(Vec::new())
+    pub fn empty() -> Vc<Self> {
+        Vc::cell(Vec::new())
     }
 }
 
-/// A reference that always resolves to a single asset.
+/// A reference that always resolves to a single module.
 #[turbo_tasks::value]
-pub struct SingleAssetReference {
-    asset: AssetVc,
-    description: StringVc,
+pub struct SingleModuleReference {
+    asset: Vc<Box<dyn Module>>,
+    description: Vc<String>,
 }
 
-impl SingleAssetReference {
+impl SingleModuleReference {
     /// Returns the asset that this reference resolves to.
-    pub fn asset(&self) -> AssetVc {
+    pub fn asset_ref(&self) -> Vc<Box<dyn Module>> {
         self.asset
     }
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for SingleAssetReference {
+impl ModuleReference for SingleModuleReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::Single(self.asset, vec![]).cell()
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        ModuleResolveResult::module(self.asset).cell()
     }
 }
 
 #[turbo_tasks::value_impl]
-impl ValueToString for SingleAssetReference {
+impl ValueToString for SingleModuleReference {
     #[turbo_tasks::function]
-    fn to_string(&self) -> StringVc {
+    fn to_string(&self) -> Vc<String> {
         self.description
     }
 }
 
 #[turbo_tasks::value_impl]
-impl SingleAssetReferenceVc {
-    /// Create a new [SingleAssetReferenceVc] that resolves to the given asset.
+impl SingleModuleReference {
+    /// Create a new [Vc<SingleModuleReference>] that resolves to the given
+    /// asset.
     #[turbo_tasks::function]
-    pub fn new(asset: AssetVc, description: StringVc) -> Self {
-        Self::cell(SingleAssetReference { asset, description })
+    pub fn new(asset: Vc<Box<dyn Module>>, description: Vc<String>) -> Vc<Self> {
+        Self::cell(SingleModuleReference { asset, description })
     }
 
-    /// The [AssetVc] that this reference resolves to.
+    /// The [Vc<Box<dyn Asset>>] that this reference resolves to.
     #[turbo_tasks::function]
-    pub async fn asset(self) -> Result<AssetVc> {
+    pub async fn asset(self: Vc<Self>) -> Result<Vc<Box<dyn Module>>> {
         Ok(self.await?.asset)
     }
 }
 
-/// Aggregates all [Asset]s referenced by an [Asset]. [AssetReference]
-/// This does not include transitively references [Asset]s, but it includes
-/// primary and secondary [Asset]s referenced.
+/// A reference that always resolves to a single module.
+#[turbo_tasks::value]
+pub struct SingleOutputAssetReference {
+    asset: Vc<Box<dyn OutputAsset>>,
+    description: Vc<String>,
+}
+
+impl SingleOutputAssetReference {
+    /// Returns the asset that this reference resolves to.
+    pub fn asset_ref(&self) -> Vc<Box<dyn OutputAsset>> {
+        self.asset
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ModuleReference for SingleOutputAssetReference {
+    #[turbo_tasks::function]
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        ModuleResolveResult::output_asset(self.asset).cell()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ValueToString for SingleOutputAssetReference {
+    #[turbo_tasks::function]
+    fn to_string(&self) -> Vc<String> {
+        self.description
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl SingleOutputAssetReference {
+    /// Create a new [Vc<SingleOutputAssetReference>] that resolves to the given
+    /// asset.
+    #[turbo_tasks::function]
+    pub fn new(asset: Vc<Box<dyn OutputAsset>>, description: Vc<String>) -> Vc<Self> {
+        Self::cell(SingleOutputAssetReference { asset, description })
+    }
+
+    /// The [Vc<Box<dyn Asset>>] that this reference resolves to.
+    #[turbo_tasks::function]
+    pub async fn asset(self: Vc<Self>) -> Result<Vc<Box<dyn OutputAsset>>> {
+        Ok(self.await?.asset)
+    }
+}
+
+/// Aggregates all [Module]s referenced by an [Module]. [ModuleReference]
+/// This does not include transitively references [Module]s, but it includes
+/// primary and secondary [Module]s referenced.
 ///
-/// [Asset]: crate::asset::Asset
+/// [Module]: crate::module::Module
 #[turbo_tasks::function]
-pub async fn all_referenced_assets(asset: AssetVc) -> Result<AssetsVc> {
-    let references_set = asset.references().await?;
-    let mut assets = Vec::new();
-    let mut queue = VecDeque::new();
+pub async fn all_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
+    let references_set = module.references().await?;
+    let mut modules = Vec::new();
+    let mut queue = VecDeque::with_capacity(32);
     for reference in references_set.iter() {
         queue.push_back(reference.resolve_reference());
     }
@@ -102,57 +152,91 @@ pub async fn all_referenced_assets(asset: AssetVc) -> Result<AssetsVc> {
     // while let Some(result) = race_pop(&mut queue).await {
     // match &*result? {
     while let Some(resolve_result) = queue.pop_front() {
-        match &*resolve_result.await? {
-            ResolveResult::Single(module, references) => {
-                assets.push(*module);
-                for reference in references {
-                    queue.push_back(reference.resolve_reference());
-                }
-            }
-            ResolveResult::Alternatives(modules, references) => {
-                assets.extend(modules);
-                for reference in references {
-                    queue.push_back(reference.resolve_reference());
-                }
-            }
-            ResolveResult::Special(_, references) => {
-                for reference in references {
-                    queue.push_back(reference.resolve_reference());
-                }
-            }
-            ResolveResult::Keyed(_, _) => todo!(),
-            ResolveResult::Unresolveable(references) => {
-                for reference in references {
-                    queue.push_back(reference.resolve_reference());
-                }
-            }
+        modules.extend(resolve_result.primary_modules().await?.iter().copied());
+        for &reference in resolve_result.await?.get_references() {
+            queue.push_back(reference.resolve_reference());
         }
     }
-    Ok(AssetsVc::cell(assets))
+    Ok(Vc::cell(modules))
 }
 
-/// Aggregates all [Asset]s referenced by an [Asset] including transitively
-/// referenced [Asset]s. This basically gives all [Asset]s in a subgraph
-/// starting from the passed [Asset].
+/// Aggregates all primary [Module]s referenced by an [Module]. [AssetReference]
+/// This does not include transitively references [Module]s, only includes
+/// primary [Module]s referenced.
+///
+/// [Module]: crate::module::Module
 #[turbo_tasks::function]
-pub async fn all_assets(asset: AssetVc) -> Result<AssetsVc> {
+pub async fn primary_referenced_modules(module: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
+    let modules = module
+        .references()
+        .await?
+        .iter()
+        .map(|reference| async {
+            Ok(reference
+                .resolve_reference()
+                .primary_modules()
+                .await?
+                .clone_value())
+        })
+        .try_join()
+        .await?
+        .into_iter()
+        .flatten()
+        .collect();
+    Ok(Vc::cell(modules))
+}
+
+/// Aggregates all [Module]s referenced by an [Module] including transitively
+/// referenced [Module]s. This basically gives all [Module]s in a subgraph
+/// starting from the passed [Module].
+#[turbo_tasks::function]
+pub async fn all_modules(asset: Vc<Box<dyn Module>>) -> Result<Vc<Modules>> {
     // TODO need to track import path here
-    let mut queue = VecDeque::new();
-    queue.push_back((asset, all_referenced_assets(asset)));
+    let mut queue = VecDeque::with_capacity(32);
+    queue.push_back((asset, all_referenced_modules(asset)));
     let mut assets = HashSet::new();
     assets.insert(asset);
     while let Some((parent, references)) = queue.pop_front() {
-        IssueVc::attach_context(
-            parent.path(),
-            "expanding references of asset".to_string(),
-            references,
-        )
-        .await?;
+        let references = references
+            .issue_file_path(parent.ident().path(), "expanding references of asset")
+            .await?;
         for asset in references.await?.iter() {
             if assets.insert(*asset) {
-                queue.push_back((*asset, all_referenced_assets(*asset)));
+                queue.push_back((*asset, all_referenced_modules(*asset)));
             }
         }
     }
-    Ok(AssetsVc::cell(assets.into_iter().collect()))
+    Ok(Vc::cell(assets.into_iter().collect()))
+}
+
+/// Walks the asset graph from multiple assets and collect all referenced
+/// assets.
+#[turbo_tasks::function]
+pub async fn all_assets_from_entries(entries: Vc<OutputAssets>) -> Result<Vc<OutputAssets>> {
+    Ok(Vc::cell(
+        AdjacencyMap::new()
+            .skip_duplicates()
+            .visit(
+                entries.await?.iter().copied().map(Vc::upcast),
+                get_referenced_assets,
+            )
+            .await
+            .completed()?
+            .into_inner()
+            .into_reverse_topological()
+            .collect(),
+    ))
+}
+
+/// Computes the list of all chunk children of a given chunk.
+pub async fn get_referenced_assets(
+    asset: Vc<Box<dyn OutputAsset>>,
+) -> Result<impl Iterator<Item = Vc<Box<dyn OutputAsset>>> + Send> {
+    Ok(asset
+        .references()
+        .await?
+        .iter()
+        .copied()
+        .collect::<Vec<_>>()
+        .into_iter())
 }

@@ -26,12 +26,12 @@ type Client interface {
 }
 
 type Sink interface {
-	RecordAnalyticsEvents(events Events) error
+	RecordAnalyticsEvents(ctx context.Context, events Events) error
 }
 
 type nullSink struct{}
 
-func (n *nullSink) RecordAnalyticsEvents(events Events) error {
+func (n *nullSink) RecordAnalyticsEvents(_ context.Context, _ Events) error {
 	return nil
 }
 
@@ -60,6 +60,7 @@ type worker struct {
 const bufferThreshold = 10
 const eventTimeout = 200 * time.Millisecond
 const noTimeout = 24 * time.Hour
+const requestTimeout = 10 * time.Second
 
 func newWorker(ctx context.Context, ch <-chan EventPayload, sink Sink, logger hclog.Logger) *worker {
 	buffer := []EventPayload{}
@@ -150,15 +151,18 @@ func (w *worker) flush() {
 func (w *worker) sendEvents(events []EventPayload) {
 	w.wg.Add(1)
 	go func() {
+		defer w.wg.Done()
 		payload, err := addSessionID(w.sessionID.String(), events)
 		if err != nil {
 			w.logger.Debug("failed to encode cache usage analytics", "error", err)
+			return
 		}
-		err = w.sink.RecordAnalyticsEvents(payload)
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
+		defer cancel()
+		err = w.sink.RecordAnalyticsEvents(ctx, payload)
 		if err != nil {
 			w.logger.Debug("failed to record cache usage analytics", "error", err)
 		}
-		w.wg.Done()
 	}()
 }
 

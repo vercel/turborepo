@@ -9,12 +9,13 @@ use swc_core::{
     },
     quote,
 };
-use turbopack_core::chunk::ChunkingContextVc;
+use turbo_tasks::Vc;
 
 use crate::{
-    code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
+    chunk::EcmascriptChunkingContext,
+    code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor, magic_identifier,
-    references::AstPathVc,
+    references::AstPath,
 };
 
 /// Makes code changes to remove export/import declarations and places the
@@ -23,13 +24,13 @@ use crate::{
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct EsmModuleItem {
-    pub path: AstPathVc,
+    pub path: Vc<AstPath>,
 }
 
 #[turbo_tasks::value_impl]
-impl EsmModuleItemVc {
+impl EsmModuleItem {
     #[turbo_tasks::function]
-    pub fn new(path: AstPathVc) -> Self {
+    pub fn new(path: Vc<AstPath>) -> Vc<Self> {
         Self::cell(EsmModuleItem { path })
     }
 }
@@ -37,7 +38,10 @@ impl EsmModuleItemVc {
 #[turbo_tasks::value_impl]
 impl CodeGenerateable for EsmModuleItem {
     #[turbo_tasks::function]
-    async fn code_generation(&self, _context: ChunkingContextVc) -> Result<CodeGenerationVc> {
+    async fn code_generation(
+        &self,
+        _context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    ) -> Result<Vc<CodeGeneration>> {
         let mut visitors = Vec::new();
 
         let path = &self.path.await?;
@@ -48,29 +52,30 @@ impl CodeGenerateable for EsmModuleItem {
                     match module_decl {
                         ModuleDecl::ExportDefaultExpr(ExportDefaultExpr { box expr, .. }) => {
                             let stmt = quote!("const $name = $expr;" as Stmt,
-                                name = Ident::new(magic_identifier::encode("default export").into(), DUMMY_SP),
+                                name = Ident::new(magic_identifier::mangle("default export").into(), DUMMY_SP),
                                 expr: Expr = expr
                             );
                             *module_item = ModuleItem::Stmt(stmt);
                         }
-                        ModuleDecl::ExportDefaultDecl(ExportDefaultDecl { decl, ..}) => {
+                        ModuleDecl::ExportDefaultDecl(ExportDefaultDecl { decl, span }) => {
                             match decl {
                                 DefaultDecl::Class(class) => {
                                     *module_item = ModuleItem::Stmt(Stmt::Decl(Decl::Class(ClassDecl {
-                                        ident: class.ident.unwrap_or_else(|| Ident::new(magic_identifier::encode("default export").into(), DUMMY_SP)),
+                                        ident: class.ident.unwrap_or_else(|| Ident::new(magic_identifier::mangle("default export").into(), DUMMY_SP)),
                                         declare: false,
                                         class: class.class
                                     })))
                                 }
                                 DefaultDecl::Fn(fn_expr) => {
                                     *module_item = ModuleItem::Stmt(Stmt::Decl(Decl::Fn(FnDecl {
-                                        ident: fn_expr.ident.unwrap_or_else(|| Ident::new(magic_identifier::encode("default export").into(), DUMMY_SP)),
+                                        ident: fn_expr.ident.unwrap_or_else(|| Ident::new(magic_identifier::mangle("default export").into(), DUMMY_SP)),
                                         declare: false,
                                         function: fn_expr.function
                                     })))
                                 }
                                 DefaultDecl::TsInterfaceDecl(_) => {
-                                    panic!("typescript declarations are unexpected here");
+                                    // not matching, might happen due to eventual consistency
+                                    *module_item = ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(ExportDefaultDecl { decl, span }));
                                 }
                             }
                         }
@@ -86,12 +91,14 @@ impl CodeGenerateable for EsmModuleItem {
                         ModuleDecl::Import(_) => {
                             // already removed
                         }
-                        other => {
-                            panic!("EsmModuleItem was created with a path that points to a unexpected ModuleDecl {:?}", other);
+                        _ => {
+                            // not matching, might happen due to eventual consistency
+                            *module_item = ModuleItem::ModuleDecl(module_decl);
                         }
                     }
                 } else {
-                    panic!("EsmModuleItem was created with a path that points to a unexpected ModuleItem {:?}", item);
+                    // not matching, might happen due to eventual consistency
+                    *module_item = item;
                 }
             }),
         );

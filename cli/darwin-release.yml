@@ -9,7 +9,14 @@ dist: dist-darwin
 builds:
   - id: turbo
     main: ./cmd/turbo
-    binary: bin/turbo
+    tags:
+      - rust
+      - staticbinary
+    binary: bin/go-turbo
+    hooks:
+      pre:
+        - cmd: make turborepo-ffi-install-{{ .Os }}-{{ .Arch }}
+          output: true
     flags:
       - -trimpath
     ldflags:

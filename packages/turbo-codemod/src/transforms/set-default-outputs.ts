@@ -1,27 +1,45 @@
-import { Flags } from "../types";
-import path from "path";
-import fs from "fs-extra";
-import { error, ok, skip } from "../logger";
-import chalk from "chalk";
+import path from "node:path";
+import { readJsonSync, existsSync } from "fs-extra";
+import { type PackageJson, getTurboConfigs } from "@turbo/utils";
+import type { Schema as TurboJsonSchema } from "@turbo/types";
+import type { TransformerArgs } from "../types";
+import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import type { TransformerResults } from "../runner";
 
-const DEFAULT_OUTPUTS = ["dist/**/*", "build/**/*"];
+const DEFAULT_OUTPUTS = ["dist/**", "build/**"];
 
-interface TaskDefinition {
-  outputs: [];
-}
+// transformer details
+const TRANSFORMER = "set-default-outputs";
+const DESCRIPTION =
+  'Add the "outputs" key with defaults where it is missing in `turbo.json`';
+const INTRODUCED_IN = "1.7.0";
 
-interface PipelineConfig {
-  [taskName: string]: TaskDefinition;
-}
-
-export default function addDefaultOutputs(files: string[], flags: Flags) {
-  // We should only get a directory as input
-  if (files.length !== 1) {
-    return;
+function migrateConfig(config: TurboJsonSchema) {
+  for (const [_, taskDef] of Object.entries(config.pipeline)) {
+    if (taskDef.cache !== false) {
+      if (!taskDef.outputs) {
+        taskDef.outputs = DEFAULT_OUTPUTS;
+      } else if (
+        Array.isArray(taskDef.outputs) &&
+        taskDef.outputs.length === 0
+      ) {
+        delete taskDef.outputs;
+      }
+    }
   }
 
-  const dir = files[0];
-  const root = path.resolve(process.cwd(), dir);
+  return config;
+}
+
+export function transformer({
+  root,
+  options,
+}: TransformerArgs): TransformerResults {
+  const { log, runner } = getTransformerHelpers({
+    transformer: TRANSFORMER,
+    rootPath: root,
+    options,
+  });
 
   // If `turbo` key is detected in package.json, require user to run the other codemod first.
   const packageJsonPath = path.join(root, "package.json");
@@ -29,59 +47,51 @@ export default function addDefaultOutputs(files: string[], flags: Flags) {
   let packageJSON = {};
 
   try {
-    packageJSON = fs.readJSONSync(packageJsonPath);
+    packageJSON = readJsonSync(packageJsonPath) as PackageJson;
   } catch (e) {
     // readJSONSync probably failed because the file doesn't exist
   }
 
   if ("turbo" in packageJSON) {
-    throw new Error(
-      '"turbo" key detected in package.json. Run `npx @turbo/codemod create-turbo-config` first'
-    );
-  }
-
-  console.log(`Adding default \`outputs\` key into tasks if it doesn't exist`);
-
-  const turboConfigPath = path.join(root, "turbo.json");
-  if (!fs.existsSync(turboConfigPath)) {
-    error(`No turbo.json found at ${root}. Is the path correct?`);
-    process.exit(1);
-  }
-
-  const rootTurboJson: PipelineConfig = fs.readJsonSync(turboConfigPath);
-
-  let skippedCount = 0;
-  let modifiedCount = 0;
-  let deletedEmptyOutputs = 0;
-
-  for (const [taskName, taskDef] of Object.entries(rootTurboJson.pipeline)) {
-    if (!taskDef.outputs) {
-      ok(`Updating outputs for ${taskName}`);
-      taskDef.outputs = DEFAULT_OUTPUTS;
-      modifiedCount++;
-    } else if (Array.isArray(taskDef.outputs) && taskDef.outputs.length === 0) {
-      ok(
-        `Removing outputs: [] from ${taskName} as that is now the default behavior`
-      );
-      deletedEmptyOutputs++;
-      delete taskDef.outputs;
-    } else {
-      skippedCount++;
-      skip(`Skipping "${taskName}", it already has an outputs key defined`);
-    }
-  }
-
-  if (!flags.dry) {
-    fs.writeJsonSync(turboConfigPath, rootTurboJson, {
-      spaces: 2,
+    return runner.abortTransform({
+      reason:
+        '"turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first',
     });
-  } else {
-    console.log(JSON.stringify(rootTurboJson, null, 2));
   }
 
-  console.log("All done.");
-  console.log("Results:");
-  console.log(chalk.green(`${modifiedCount} modified`));
-  console.log(chalk.red(`${deletedEmptyOutputs} unmodified`));
-  console.log(chalk.yellow(`${skippedCount} skipped`));
+  log.info(`Adding default \`outputs\` key into tasks if it doesn't exist`);
+  const turboConfigPath = path.join(root, "turbo.json");
+  if (!existsSync(turboConfigPath)) {
+    return runner.abortTransform({
+      reason: `No turbo.json found at ${root}. Is the path correct?`,
+    });
+  }
+
+  const turboJson = readJsonSync(turboConfigPath) as TurboJsonSchema;
+  runner.modifyFile({
+    filePath: turboConfigPath,
+    after: migrateConfig(turboJson),
+  });
+
+  // find and migrate any workspace configs
+  const workspaceConfigs = getTurboConfigs(root);
+  workspaceConfigs.forEach((workspaceConfig) => {
+    const { config, turboConfigPath: filePath } = workspaceConfig;
+    runner.modifyFile({
+      filePath,
+      after: migrateConfig(config),
+    });
+  });
+
+  return runner.finish();
 }
+
+const transformerMeta = {
+  name: TRANSFORMER,
+  description: DESCRIPTION,
+  introducedIn: INTRODUCED_IN,
+  transformer,
+};
+
+// eslint-disable-next-line import/no-default-export -- transforms require default export
+export default transformerMeta;

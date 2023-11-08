@@ -18,6 +18,8 @@ func getWriterAndColor(terminal cli.Ui, useColor bool) (io.Writer, bool) {
 	switch terminal := terminal.(type) {
 	case *cli.BasicUi:
 		return terminal.Writer, useColor
+	case *ui.BasicUI:
+		return terminal.Writer, useColor
 	case *cli.ColoredUi:
 		return getWriterAndColor(terminal.Ui, true)
 	case *cli.ConcurrentUi:

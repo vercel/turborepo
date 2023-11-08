@@ -30,6 +30,14 @@ struct Args {
     /// Generate a package.json with required dependencies
     #[clap(long)]
     package_json: bool,
+
+    /// How to communicate changes to the consumer (none | hook | component)
+    #[clap(long, default_value = "none")]
+    effect_mode: EffectMode,
+
+    /// Make leaf modules client components for app dir
+    #[clap(long, default_value_t = false)]
+    leaf_client_components: bool,
 }
 
 fn main() -> Result<()> {
@@ -48,7 +56,8 @@ fn main() -> Result<()> {
             } else {
                 None
             },
-            effect_mode: EffectMode::Hook
+            effect_mode: args.effect_mode,
+            leaf_client_components: args.leaf_client_components,
         }
         .build()?
         .path()

@@ -2,6 +2,7 @@
 {
   "pipeline": {
     "build": {
+      "passThroughEnv": ["GITHUB_TOKEN"],
       // mocked test comment
       "dependsOn": [
         // mocked test comment
@@ -18,7 +19,8 @@
     },
     "dev": {
       "cache": false,
-      "outputMode": "full"
+      "outputMode": "full",
+      "passThroughEnv": []
     },
     /* mocked test comment */
     "publish": {
@@ -40,6 +42,7 @@
   },
   "globalDependencies": ["some-file", "../another-dir/**", "$GLOBAL_ENV_VAR"],
   "globlaEnv": ["SOME_VAR", "ANOTHER_VAR"],
+  "globalPassThroughEnv": ["AWS_SECRET_KEY"],
   "remoteCache": {
     "teamId": "team_id",
     "signature": true

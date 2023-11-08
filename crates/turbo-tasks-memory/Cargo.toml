@@ -10,29 +10,37 @@ autobenches = false
 bench = false
 
 [dependencies]
-anyhow = "1.0.47"
-auto-hash-map = { path = "../auto-hash-map" }
-concurrent-queue = "1.2.2"
-dashmap = "5.4.0"
-lazy_static = "1.4.0"
-nohash-hasher = "0.2.0"
+anyhow = { workspace = true }
+auto-hash-map = { workspace = true }
+concurrent-queue = { workspace = true }
+dashmap = { workspace = true }
+nohash-hasher = { workspace = true }
 num_cpus = "1.13.1"
-parking_lot = "0.12.1"
-rustc-hash = "1.1.0"
-tokio = "1.21.2"
-turbo-tasks = { path = "../turbo-tasks" }
-turbo-tasks-hash = { path = "../turbo-tasks-hash" }
+once_cell = { workspace = true }
+parking_lot = { workspace = true }
+priority-queue = "1.3.0"
+ref-cast = "1.0.20"
+rustc-hash = { workspace = true }
+smallvec = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+turbo-tasks = { workspace = true }
+turbo-tasks-hash = { workspace = true }
+turbo-tasks-malloc = { workspace = true, default-features = false }
 
 [dev-dependencies]
-criterion = { version = "0.3.5", features = ["async_tokio"] }
-serde = "1.0.136"
-tokio = { version = "1.21.2", features = ["full"] }
-turbo-tasks-testing = { path = "../turbo-tasks-testing" }
+criterion = { workspace = true, features = ["async_tokio"] }
+indexmap = { workspace = true }
+lazy_static = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+turbo-tasks-testing = { workspace = true }
 
 [build-dependencies]
-turbo-tasks-build = { path = "../turbo-tasks-build" }
+turbo-tasks-build = { workspace = true }
 
 [features]
+track_unfinished = []
 unsafe_once_map = []
 log_running_tasks = []
 log_scheduled_tasks = []
@@ -40,6 +48,10 @@ log_activate_tasks = []
 log_connect_tasks = []
 report_expensive = []
 print_scope_updates = []
+print_task_invalidation = []
+inline_add_to_scope = []
+inline_remove_from_scope = []
+default = []
 
 [[bench]]
 name = "mod"

@@ -1,9 +1,13 @@
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use indexmap::IndexMap;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use swc_core::{
-    common::{errors::Handler, FileName, SourceMap},
+    common::{
+        errors::Handler, source_map::SourceMapGenConfig, BytePos, FileName, LineCol, SourceMap,
+    },
     css::{
         ast::Stylesheet,
         modules::{CssClassName, TransformConfig},
@@ -11,18 +15,26 @@ use swc_core::{
     },
     ecma::atoms::JsWord,
 };
-use turbo_tasks::{Value, ValueToString};
+use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
-use turbopack_core::asset::{AssetContent, AssetVc};
+use turbopack_core::{
+    asset::{Asset, AssetContent},
+    source::Source,
+    source_map::{GenerateSourceMap, OptionSourceMap},
+    SOURCE_MAP_ROOT_NAME,
+};
 use turbopack_swc_utils::emitter::IssueEmitter;
 
 use crate::{
-    transform::{CssInputTransform, CssInputTransformsVc, TransformContext},
+    transform::{CssInputTransform, CssInputTransforms, TransformContext},
     CssModuleAssetType,
 };
 
+// Capture up until the first "."
+static BASENAME_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[^.]*").unwrap());
+
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
-pub enum ParseResult {
+pub enum ParseCssResult {
     Ok {
         #[turbo_tasks(trace_ignore)]
         stylesheet: Stylesheet,
@@ -37,7 +49,7 @@ pub enum ParseResult {
     NotFound,
 }
 
-impl PartialEq for ParseResult {
+impl PartialEq for ParseCssResult {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Ok { .. }, Self::Ok { .. }) => false,
@@ -46,28 +58,86 @@ impl PartialEq for ParseResult {
     }
 }
 
+#[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
+pub struct ParseCssResultSourceMap {
+    #[turbo_tasks(debug_ignore, trace_ignore)]
+    source_map: Arc<SourceMap>,
+
+    /// The position mappings that can generate a real source map given a (SWC)
+    /// SourceMap.
+    #[turbo_tasks(debug_ignore, trace_ignore)]
+    mappings: Vec<(BytePos, LineCol)>,
+}
+
+impl PartialEq for ParseCssResultSourceMap {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.source_map, &other.source_map) && self.mappings == other.mappings
+    }
+}
+
+impl ParseCssResultSourceMap {
+    pub fn new(source_map: Arc<SourceMap>, mappings: Vec<(BytePos, LineCol)>) -> Self {
+        ParseCssResultSourceMap {
+            source_map,
+            mappings,
+        }
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl GenerateSourceMap for ParseCssResultSourceMap {
+    #[turbo_tasks::function]
+    fn generate_source_map(&self) -> Vc<OptionSourceMap> {
+        let map = self.source_map.build_source_map_with_config(
+            &self.mappings,
+            None,
+            InlineSourcesContentConfig {},
+        );
+        Vc::cell(Some(
+            turbopack_core::source_map::SourceMap::new_regular(map).cell(),
+        ))
+    }
+}
+
+/// A config to generate a source map which includes the source content of every
+/// source file. SWC doesn't inline sources content by default when generating a
+/// sourcemap, so we need to provide a custom config to do it.
+struct InlineSourcesContentConfig {}
+
+impl SourceMapGenConfig for InlineSourcesContentConfig {
+    fn file_name_to_source(&self, f: &FileName) -> String {
+        match f {
+            FileName::Custom(s) => format!("/{SOURCE_MAP_ROOT_NAME}/{s}"),
+            _ => f.to_string(),
+        }
+    }
+
+    fn inline_sources_content(&self, _f: &FileName) -> bool {
+        true
+    }
+}
+
 #[turbo_tasks::function]
-pub async fn parse(
-    source: AssetVc,
-    ty: Value<CssModuleAssetType>,
-    transforms: CssInputTransformsVc,
-) -> Result<ParseResultVc> {
+pub async fn parse_css(
+    source: Vc<Box<dyn Source>>,
+    ty: CssModuleAssetType,
+    transforms: Vc<CssInputTransforms>,
+) -> Result<Vc<ParseCssResult>> {
     let content = source.content();
-    let fs_path = &*source.path().await?;
-    let fs_path_str = &*source.path().to_string().await?;
-    let ty = ty.into_value();
+    let fs_path = &*source.ident().path().await?;
+    let ident_str = &*source.ident().to_string().await?;
     Ok(match &*content.await? {
-        AssetContent::Redirect { .. } => ParseResult::Unparseable.cell(),
+        AssetContent::Redirect { .. } => ParseCssResult::Unparseable.cell(),
         AssetContent::File(file) => match &*file.await? {
-            FileContent::NotFound => ParseResult::NotFound.cell(),
+            FileContent::NotFound => ParseCssResult::NotFound.cell(),
             FileContent::Content(file) => match file.content().to_str() {
-                Err(_err) => ParseResult::Unparseable.cell(),
+                Err(_err) => ParseCssResult::Unparseable.cell(),
                 Ok(string) => {
                     let transforms = &*transforms.await?;
                     parse_content(
                         string.into_owned(),
                         fs_path,
-                        fs_path_str,
+                        ident_str,
                         source,
                         ty,
                         transforms,
@@ -82,37 +152,38 @@ pub async fn parse(
 async fn parse_content(
     string: String,
     fs_path: &FileSystemPath,
-    fs_path_str: &str,
-    source: AssetVc,
+    ident_str: &str,
+    source: Vc<Box<dyn Source>>,
     ty: CssModuleAssetType,
     transforms: &[CssInputTransform],
-) -> Result<ParseResultVc> {
+) -> Result<Vc<ParseCssResult>> {
     let source_map: Arc<SourceMap> = Default::default();
     let handler = Handler::with_emitter(
         true,
         false,
-        box IssueEmitter {
+        Box::new(IssueEmitter {
             source,
             source_map: source_map.clone(),
             title: Some("Parsing css source code failed".to_string()),
-        },
+        }),
     );
 
-    let fm = source_map.new_source_file(FileName::Custom(fs_path_str.to_string()), string);
+    let fm = source_map.new_source_file(FileName::Custom(ident_str.to_string()), string);
 
     let config = ParserConfig {
         css_modules: matches!(ty, CssModuleAssetType::Module),
         legacy_nesting: true,
+        legacy_ie: true,
         ..Default::default()
     };
 
     let mut errors = Vec::new();
-    let mut parsed_stylesheet = match parse_file::<Stylesheet>(&fm, config, &mut errors) {
+    let mut parsed_stylesheet = match parse_file::<Stylesheet>(&fm, None, config, &mut errors) {
         Ok(stylesheet) => stylesheet,
         Err(e) => {
             // TODO report in in a stream
             e.to_diagnostics(&handler).emit();
-            return Ok(ParseResult::Unparseable.into());
+            return Ok(ParseCssResult::Unparseable.into());
         }
     };
 
@@ -123,30 +194,35 @@ async fn parse_content(
     }
 
     if has_errors {
-        return Ok(ParseResult::Unparseable.into());
+        return Ok(ParseCssResult::Unparseable.into());
     }
 
-    let context = TransformContext {
+    let transform_context = TransformContext {
         source_map: &source_map,
-        file_name_str: fs_path.file_name(),
     };
     for transform in transforms.iter() {
-        transform.apply(&mut parsed_stylesheet, &context).await?;
+        transform
+            .apply(&mut parsed_stylesheet, &transform_context)
+            .await?;
     }
 
     let (imports, exports) = match ty {
-        CssModuleAssetType::Global => Default::default(),
+        CssModuleAssetType::Default => Default::default(),
         CssModuleAssetType::Module => {
             let imports = swc_core::css::modules::imports::analyze_imports(&parsed_stylesheet);
+            let basename = BASENAME_RE
+                .captures(fs_path.file_name())
+                .context("Must include basename preceding .")?
+                .get(0)
+                .context("Must include basename preceding .")?
+                .as_str();
+            // Truncate this as u32 so it's formated as 8-character hex in the suffic below
+            let path_hash = turbo_tasks_hash::hash_xxh3_hash64(ident_str) as u32;
             let result = swc_core::css::modules::compile(
                 &mut parsed_stylesheet,
                 // TODO swc_css_modules should take `impl TransformConfig + '_`
                 ModuleTransformConfig {
-                    // Note this uses an square emoji to join class name with module name
-                    // This emoji is usually not used in css class names so it's easy for the user
-                    // to see which class names are generated by css modules. Its also a pretty
-                    // small, so it's not too intense for the eyes.
-                    suffix: format!("◽{}", fs_path_str),
+                    suffix: format!("__{}__{:x}", basename, path_hash),
                 },
             );
             let mut exports = result.renamed.into_iter().collect::<IndexMap<_, _>>();
@@ -158,7 +234,7 @@ async fn parse_content(
         }
     };
 
-    Ok(ParseResult::Ok {
+    Ok(ParseCssResult::Ok {
         stylesheet: parsed_stylesheet,
         source_map,
         imports,
@@ -175,4 +251,11 @@ impl TransformConfig for ModuleTransformConfig {
     fn new_name_for(&self, local: &JsWord) -> JsWord {
         format!("{}{}", *local, self.suffix).into()
     }
+}
+
+/// Trait to be implemented by assets which can be parsed as CSS.
+#[turbo_tasks::value_trait]
+pub trait ParseCss {
+    /// Returns the parsed css.
+    fn parse_css(self: Vc<Self>) -> Vc<ParseCssResult>;
 }

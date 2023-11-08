@@ -31,12 +31,11 @@ And a `turbo.json`:
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [".next/**", "!.next/cache/**"],
+      "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "dependsOn": ["^build"]
     }
   },
 }
@@ -57,35 +56,35 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
 
     jobs:
       build:
-          name: Build and Test
-          timeout-minutes: 15
-          runs-on: ubuntu-latest
-          # To use Remote Caching, uncomment the next lines and follow the steps below.
-          # env:
-          #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          #  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
-          #  TURBO_REMOTE_ONLY: true
+        name: Build and Test
+        timeout-minutes: 15
+        runs-on: ubuntu-latest
+        # To use Remote Caching, uncomment the next lines and follow the steps below.
+        # env:
+        #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+        #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+        #  TURBO_REMOTE_ONLY: true
 
-          steps:
-            - name: Check out code
-              uses: actions/checkout@v3
-              with:
-                fetch-depth: 2
+        steps:
+          - name: Check out code
+            uses: actions/checkout@v3
+            with:
+              fetch-depth: 2
 
-            - name: Setup Node.js environment
-              uses: actions/setup-node@v3
-              with:
-                node-version: 16
-                cache: 'npm'
+          - name: Setup Node.js environment
+            uses: actions/setup-node@v3
+            with:
+              node-version: 18
+              cache: 'npm'
 
-            - name: Install dependencies
-              run: npm install
+          - name: Install dependencies
+            run: npm install
 
-            - name: Build
-              run: npm run build
+          - name: Build
+            run: npm run build
 
-            - name: Test
-              run: npm run test
+          - name: Test
+            run: npm run test
     ```
 
   </Tab>
@@ -101,34 +100,34 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
 
     jobs:
       build:
-          name: Build and Test
-          timeout-minutes: 15
-          runs-on: ubuntu-latest
-          # To use Remote Caching, uncomment the next lines and follow the steps below.
-          # env:
-          #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          #  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+        name: Build and Test
+        timeout-minutes: 15
+        runs-on: ubuntu-latest
+        # To use Remote Caching, uncomment the next lines and follow the steps below.
+        # env:
+        #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+        #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
-          steps:
-            - name: Check out code
-              uses: actions/checkout@v3
-              with:
-                fetch-depth: 2
+        steps:
+          - name: Check out code
+            uses: actions/checkout@v3
+            with:
+              fetch-depth: 2
 
-            - name: Setup Node.js environment
-              uses: actions/setup-node@v3
-              with:
-                node-version: 16
-                cache: 'yarn'
+          - name: Setup Node.js environment
+            uses: actions/setup-node@v3
+            with:
+              node-version: 18
+              cache: 'yarn'
 
-            - name: Install dependencies
-              run: yarn
+          - name: Install dependencies
+            run: yarn
 
-            - name: Build
-              run: yarn build
+          - name: Build
+            run: yarn build
 
-            - name: Test
-              run: yarn test
+          - name: Test
+            run: yarn test
     ```
 
   </Tab>
@@ -144,38 +143,38 @@ Create file called `.github/workflows/ci.yml` in your repository with the follow
 
     jobs:
       build:
-          name: Build and Test
-          timeout-minutes: 15
-          runs-on: ubuntu-latest
-          # To use Remote Caching, uncomment the next lines and follow the steps below.
-          # env:
-          #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          #  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+        name: Build and Test
+        timeout-minutes: 15
+        runs-on: ubuntu-latest
+        # To use Remote Caching, uncomment the next lines and follow the steps below.
+        # env:
+        #  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+        #  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
-          steps:
-            - name: Check out code
-              uses: actions/checkout@v3
-              with:
-                fetch-depth: 2
+        steps:
+          - name: Check out code
+            uses: actions/checkout@v3
+            with:
+              fetch-depth: 2
 
-            - uses: pnpm/action-setup@v2.0.1
-              with:
-                version: 6.32.2
+          - uses: pnpm/action-setup@v2.0.1
+            with:
+              version: 6.32.2
 
-            - name: Setup Node.js environment
-              uses: actions/setup-node@v3
-              with:
-                node-version: 16
-                cache: 'pnpm'
+          - name: Setup Node.js environment
+            uses: actions/setup-node@v3
+            with:
+              node-version: 18
+              cache: 'pnpm'
 
-            - name: Install dependencies
-              run: pnpm install
+          - name: Install dependencies
+            run: pnpm install
 
-            - name: Build
-              run: pnpm build
+          - name: Build
+            run: pnpm build
 
-            - name: Test
-              run: pnpm test
+          - name: Test
+            run: pnpm test
     ```
 
   </Tab>
@@ -193,7 +192,6 @@ To use Vercel Remote Caching, you can get the value of these variables in a few 
 
 1. Create a Scoped Access Token to your account in the [Vercel Dashboard](https://vercel.com/account/tokens)
 
-![Vercel Access Tokens](/images/docs/vercel-tokens.png)
 ![Vercel Access Tokens](/images/docs/vercel-create-token.png)
 
 Copy the value to a safe place. You'll need it in a moment.
@@ -203,9 +201,12 @@ Copy the value to a safe place. You'll need it in a moment.
 ![GitHub Secrets](/images/docs/github-actions-secrets.png)
 ![GitHub Secrets Create](/images/docs/github-actions-create-secret.png)
 
-3. Make a second secret called `TURBO_TEAM` and enter the value of your team's Vercel URL _without_ the `vercel.com/`. Your Team URL can be found inside your team's general project settings from the dashboard.
+3. Create a new repository variable (click the **Variables** tab) called `TURBO_TEAM` and enter the value of your team's Vercel URL _without_ the `vercel.com/`.
+   Using a repository variable rather than a secret will keep Github Actions from censoring your team name in log output.
 
-   If you're using a Hobby Plan, you can use your username. Your username can be found in your [Vercel Personal Account Settings](https://vercel.com/account)
+![GitHub Repository Variables](/images/docs/vercel-team-repo-var.png)
+
+Your Team URL can be found inside your team's general project settings from the dashboard. If you're using a Hobby Plan, you can use your username. Your username can be found in your [Vercel Personal Account Settings](https://vercel.com/account)
 
 ![Vercel Account Slug](/images/docs/vercel-slug.png)
 
@@ -222,11 +223,11 @@ jobs:
     # To use Turborepo Remote Caching, set the following environment variables for the job.
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 2
     # ...

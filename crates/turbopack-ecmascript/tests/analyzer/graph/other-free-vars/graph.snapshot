@@ -2,7 +2,7 @@
     (
         "O",
         FreeVar(
-            Object,
+            "Object",
         ),
     ),
     (
@@ -10,18 +10,20 @@
         MemberCall(
             4,
             FreeVar(
-                Object,
+                "Object",
             ),
             Constant(
-                StrWord(
-                    Atom('keys' type=inline),
+                Str(
+                    Atom(
+                        "keys",
+                    ),
                 ),
             ),
             [
                 Variable(
                     (
-                        Atom('O' type=inline),
-                        #1,
+                        "O",
+                        #2,
                     ),
                 ),
             ],
@@ -33,18 +35,20 @@
             4,
             Variable(
                 (
-                    Atom('O' type=inline),
-                    #1,
+                    "O",
+                    #2,
                 ),
             ),
             Constant(
-                StrWord(
-                    Atom('keys' type=inline),
+                Str(
+                    Atom(
+                        "keys",
+                    ),
                 ),
             ),
             [
                 FreeVar(
-                    Object,
+                    "Object",
                 ),
             ],
         ),

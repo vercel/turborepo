@@ -3,24 +3,25 @@ use swc_core::{
     common::DUMMY_SP,
     css::{
         ast::*,
-        codegen::{writer::basic::BasicCssWriter, CodeGenerator, Emit},
+        codegen::{
+            writer::basic::{BasicCssWriter, BasicCssWriterConfig},
+            CodeGenerator, Emit,
+        },
     },
 };
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc, ChunkingContextVc},
-    reference::{AssetReference, AssetReferenceVc},
-    resolve::{
-        origin::ResolveOriginVc,
-        parse::{Request, RequestVc},
-        ResolveResultVc,
-    },
+    chunk::{ChunkableModuleReference, ChunkingContext},
+    issue::LazyIssueSource,
+    reference::ModuleReference,
+    reference_type::CssReferenceSubType,
+    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
 
 use crate::{
     chunk::CssImport,
-    code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
-    references::{css_resolve, AstPathVc},
+    code_gen::{CodeGenerateable, CodeGeneration},
+    references::{css_resolve, AstPath},
 };
 
 #[turbo_tasks::value(into = "new")]
@@ -44,7 +45,7 @@ impl ImportAttributes {
                 assert_eq!(f.value.len(), 1);
                 assert!(matches!(&f.value[0], ComponentValue::LayerName(_)));
                 if let ComponentValue::LayerName(layer_name) = &f.value[0] {
-                    layer_name.clone()
+                    *layer_name.clone()
                 } else {
                     unreachable!()
                 }
@@ -65,12 +66,12 @@ impl ImportAttributes {
 
                     if let Some(supports) = v {
                         match &supports {
-                            ComponentValue::SupportsCondition(s) => Some(s.clone()),
+                            ComponentValue::SupportsCondition(s) => Some(*s.clone()),
                             ComponentValue::Declaration(d) => Some(SupportsCondition {
                                 span: DUMMY_SP,
                                 conditions: vec![SupportsConditionType::SupportsInParens(
                                     SupportsInParens::Feature(SupportsFeature::Declaration(
-                                        Box::new(d.clone()),
+                                        d.clone(),
                                     )),
                                 )],
                             }),
@@ -96,7 +97,7 @@ impl ImportAttributes {
         }
     }
 
-    pub fn print_block(&self) -> Result<(String, usize, String)> {
+    pub fn print_block(&self) -> Result<(String, String)> {
         fn token(token: Token) -> TokenAndSpan {
             TokenAndSpan {
                 span: DUMMY_SP,
@@ -105,30 +106,31 @@ impl ImportAttributes {
         }
 
         // something random that's never gonna be in real css
-        let mut rule = Rule::ListOfComponentValues(box ListOfComponentValues {
+        let mut rule = Rule::ListOfComponentValues(Box::new(ListOfComponentValues {
             span: DUMMY_SP,
-            children: vec![ComponentValue::PreservedToken(token(Token::String {
-                value: Default::default(),
-                raw: r#""""__turbopack_placeholder__""""#.into(),
-            }))],
-        });
-        let mut indent = 0;
+            children: vec![ComponentValue::PreservedToken(Box::new(token(
+                Token::String {
+                    value: Default::default(),
+                    raw: r#""""__turbopack_placeholder__""""#.into(),
+                },
+            )))],
+        }));
 
         fn at_rule(name: &str, prelude: AtRulePrelude, inner_rule: Rule) -> Rule {
-            Rule::AtRule(box AtRule {
+            Rule::AtRule(Box::new(AtRule {
                 span: DUMMY_SP,
                 name: AtRuleName::Ident(Ident {
                     span: DUMMY_SP,
                     value: name.into(),
                     raw: None,
                 }),
-                prelude: Some(box prelude),
+                prelude: Some(Box::new(prelude)),
                 block: Some(SimpleBlock {
                     span: DUMMY_SP,
                     name: token(Token::LBrace),
-                    value: vec![ComponentValue::Rule(inner_rule)],
+                    value: vec![ComponentValue::from(inner_rule)],
                 }),
-            })
+            }))
         }
 
         if let Some(media) = &self.media {
@@ -140,7 +142,6 @@ impl ImportAttributes {
                 }),
                 rule,
             );
-            indent += 2;
         }
         if let Some(supports) = &self.supports {
             rule = at_rule(
@@ -148,7 +149,6 @@ impl ImportAttributes {
                 AtRulePrelude::SupportsPrelude(supports.clone()),
                 rule,
             );
-            indent += 2;
         }
         if let Some(layer_name) = &self.layer_name {
             rule = at_rule(
@@ -156,12 +156,18 @@ impl ImportAttributes {
                 AtRulePrelude::LayerPrelude(LayerPrelude::Name(layer_name.clone())),
                 rule,
             );
-            indent += 2;
         }
 
         let mut output = String::new();
         let mut code_gen = CodeGenerator::new(
-            BasicCssWriter::new(&mut output, None, Default::default()),
+            BasicCssWriter::new(
+                &mut output,
+                None,
+                BasicCssWriterConfig {
+                    indent_width: 0,
+                    ..Default::default()
+                },
+            ),
             Default::default(),
         );
         code_gen.emit(&rule)?;
@@ -170,50 +176,58 @@ impl ImportAttributes {
             .split_once(r#""""__turbopack_placeholder__""""#)
             .unwrap();
 
-        Ok((open.trim().into(), indent, close.trim().into()))
+        Ok((open.trim().into(), close.trim().into()))
     }
 }
 
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct ImportAssetReference {
-    pub origin: ResolveOriginVc,
-    pub request: RequestVc,
-    pub path: AstPathVc,
-    pub attributes: ImportAttributesVc,
+    pub origin: Vc<Box<dyn ResolveOrigin>>,
+    pub request: Vc<Request>,
+    pub path: Vc<AstPath>,
+    pub attributes: Vc<ImportAttributes>,
+    pub issue_source: Vc<LazyIssueSource>,
 }
 
 #[turbo_tasks::value_impl]
-impl ImportAssetReferenceVc {
+impl ImportAssetReference {
     #[turbo_tasks::function]
     pub fn new(
-        origin: ResolveOriginVc,
-        request: RequestVc,
-        path: AstPathVc,
-        attributes: ImportAttributesVc,
-    ) -> Self {
+        origin: Vc<Box<dyn ResolveOrigin>>,
+        request: Vc<Request>,
+        path: Vc<AstPath>,
+        attributes: Vc<ImportAttributes>,
+        issue_source: Vc<LazyIssueSource>,
+    ) -> Vc<Self> {
         Self::cell(ImportAssetReference {
             origin,
             request,
             path,
             attributes,
+            issue_source,
         })
     }
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for ImportAssetReference {
+impl ModuleReference for ImportAssetReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
-        css_resolve(self.origin, self.request)
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        css_resolve(
+            self.origin,
+            self.request,
+            Value::new(CssReferenceSubType::AtImport),
+            Some(self.issue_source),
+        )
     }
 }
 
 #[turbo_tasks::value_impl]
 impl ValueToString for ImportAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "import(url) {}",
             self.request.to_string().await?,
         )))
@@ -224,17 +238,17 @@ impl ValueToString for ImportAssetReference {
 impl CodeGenerateable for ImportAssetReference {
     #[turbo_tasks::function]
     async fn code_generation(
-        self_vc: ImportAssetReferenceVc,
-        _context: ChunkingContextVc,
-    ) -> Result<CodeGenerationVc> {
-        let this = &*self_vc.await?;
+        self: Vc<Self>,
+        _context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Result<Vc<CodeGeneration>> {
+        let this = &*self.await?;
         let mut imports = vec![];
         if let Request::Uri {
             protocol,
             remainder,
         } = &*this.request.await?
         {
-            imports.push(CssImport::External(StringVc::cell(format!(
+            imports.push(CssImport::External(Vc::cell(format!(
                 "{}{}",
                 protocol, remainder
             ))))
@@ -249,4 +263,4 @@ impl CodeGenerateable for ImportAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAssetReference for ImportAssetReference {}
+impl ChunkableModuleReference for ImportAssetReference {}

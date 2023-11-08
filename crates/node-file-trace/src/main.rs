@@ -7,7 +7,7 @@ use clap::Parser;
 use node_file_trace::{start, Args};
 
 #[global_allocator]
-static ALLOC: turbo_malloc::TurboMalloc = turbo_malloc::TurboMalloc;
+static ALLOC: turbo_tasks_malloc::TurboMalloc = turbo_tasks_malloc::TurboMalloc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -15,7 +15,7 @@ async fn main() -> Result<()> {
     console_subscriber::init();
     let args = Arc::new(Args::parse());
     let should_print = matches!(&*args, Args::Print { .. });
-    let result = start(args).await?;
+    let result = start(args, None, None, None).await?;
     if should_print {
         for file in result.iter() {
             println!("{}", file);

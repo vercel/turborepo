@@ -4,23 +4,16 @@
 package cache
 
 import (
-	"archive/tar"
 	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	log "log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
-	"time"
-
-	"github.com/DataDog/zstd"
 
 	"github.com/vercel/turbo/cli/internal/analytics"
-	"github.com/vercel/turbo/cli/internal/tarpatch"
+	"github.com/vercel/turbo/cli/internal/cacheitem"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
@@ -50,19 +43,15 @@ func (l limiter) release() {
 	<-l
 }
 
-// mtime is the time we attach for the modification time of all files.
-var mtime = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
-
-// nobody is the usual uid / gid of the 'nobody' user.
-const nobody = 65534
-
 func (cache *httpCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error {
 	// if cache.writable {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
 
 	r, w := io.Pipe()
-	go cache.write(w, hash, files)
+
+	cacheErrorChan := make(chan error, 1)
+	go cache.write(w, anchor, files, cacheErrorChan)
 
 	// Read the entire artifact tar into memory so we can easily compute the signature.
 	// Note: retryablehttp.NewRequest reads the files into memory anyways so there's no
@@ -78,102 +67,62 @@ func (cache *httpCache) Put(anchor turbopath.AbsoluteSystemPath, hash string, du
 			return fmt.Errorf("failed to store files in HTTP cache: %w", err)
 		}
 	}
+
+	cacheCreateError := <-cacheErrorChan
+	if cacheCreateError != nil {
+		return cacheCreateError
+	}
+
 	return cache.client.PutArtifact(hash, artifactBody, duration, tag)
 }
 
 // write writes a series of files into the given Writer.
-func (cache *httpCache) write(w io.WriteCloser, hash string, files []turbopath.AnchoredSystemPath) {
-	defer w.Close()
-	defer func() { _ = w.Close() }()
-	zw := zstd.NewWriter(w)
-	defer func() { _ = zw.Close() }()
-	tw := tar.NewWriter(zw)
-	defer func() { _ = tw.Close() }()
+func (cache *httpCache) write(w io.WriteCloser, anchor turbopath.AbsoluteSystemPath, files []turbopath.AnchoredSystemPath, cacheErrorChan chan error) {
+	cacheItem := cacheitem.CreateWriter(w)
+
 	for _, file := range files {
-		// log.Printf("caching file %v", file)
-		if err := cache.storeFile(tw, file); err != nil {
-			log.Printf("[ERROR] Error uploading artifact %s to HTTP cache due to: %s", file, err)
-			// TODO(jaredpalmer): How can we cancel the request at this point?
-		}
-	}
-}
-
-func (cache *httpCache) storeFile(tw *tar.Writer, repoRelativePath turbopath.AnchoredSystemPath) error {
-	absoluteFilePath := repoRelativePath.RestoreAnchor(cache.repoRoot)
-	info, err := absoluteFilePath.Lstat()
-	if err != nil {
-		return err
-	}
-	target := ""
-	if info.Mode()&os.ModeSymlink != 0 {
-		target, err = absoluteFilePath.Readlink()
+		err := cacheItem.AddFile(anchor, file)
 		if err != nil {
-			return err
+			_ = cacheItem.Close()
+			cacheErrorChan <- err
+			return
 		}
 	}
-	hdr, err := tarpatch.FileInfoHeader(repoRelativePath.ToUnixPath(), info, filepath.ToSlash(target))
-	if err != nil {
-		return err
-	}
-	// Ensure posix path for filename written in header.
-	hdr.Name = repoRelativePath.ToUnixPath().ToString()
-	// Zero out all timestamps.
-	hdr.ModTime = mtime
-	hdr.AccessTime = mtime
-	hdr.ChangeTime = mtime
-	// Strip user/group ids.
-	hdr.Uid = nobody
-	hdr.Gid = nobody
-	hdr.Uname = "nobody"
-	hdr.Gname = "nobody"
-	if err := tw.WriteHeader(hdr); err != nil {
-		return err
-	} else if info.IsDir() || target != "" {
-		return nil // nothing to write
-	}
-	f, err := absoluteFilePath.Open()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-	_, err = io.Copy(tw, f)
-	if errors.Is(err, tar.ErrWriteTooLong) {
-		log.Printf("Error writing %v to tar file, info: %v, mode: %v, is regular: %v", repoRelativePath, info, info.Mode(), info.Mode().IsRegular())
-	}
-	return err
+
+	cacheErrorChan <- cacheItem.Close()
 }
 
-func (cache *httpCache) Fetch(anchor turbopath.AbsoluteSystemPath, key string, _unusedOutputGlobs []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
+func (cache *httpCache) Fetch(_ turbopath.AbsoluteSystemPath, key string, _ []string) (ItemStatus, []turbopath.AnchoredSystemPath, error) {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
 	hit, files, duration, err := cache.retrieve(key)
 	if err != nil {
 		// TODO: analytics event?
-		return false, files, duration, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
+		return newRemoteTaskCacheStatus(false, duration), files, fmt.Errorf("failed to retrieve files from HTTP cache: %w", err)
 	}
 	cache.logFetch(hit, key, duration)
-	return hit, files, duration, err
+	return newRemoteTaskCacheStatus(hit, duration), files, err
 }
 
-func (cache *httpCache) Exists(key string) (ItemStatus, error) {
+func (cache *httpCache) Exists(key string) ItemStatus {
 	cache.requestLimiter.acquire()
 	defer cache.requestLimiter.release()
-	hit, err := cache.exists(key)
+	hit, timeSaved, err := cache.exists(key)
 	if err != nil {
-		return ItemStatus{}, fmt.Errorf("failed to verify files from HTTP cache: %w", err)
+		return newRemoteTaskCacheStatus(false, 0)
 	}
-	return ItemStatus{Remote: hit}, err
+	return newRemoteTaskCacheStatus(hit, timeSaved)
 }
 
 func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 	var event string
 	if hit {
-		event = cacheEventHit
+		event = CacheEventHit
 	} else {
-		event = cacheEventMiss
+		event = CacheEventMiss
 	}
 	payload := &CacheEvent{
-		Source:   "REMOTE",
+		Source:   CacheSourceRemote,
 		Event:    event,
 		Hash:     hash,
 		Duration: duration,
@@ -181,20 +130,26 @@ func (cache *httpCache) logFetch(hit bool, hash string, duration int) {
 	cache.recorder.LogEvent(payload)
 }
 
-func (cache *httpCache) exists(hash string) (bool, error) {
+func (cache *httpCache) exists(hash string) (bool, int, error) {
 	resp, err := cache.client.ArtifactExists(hash)
 	if err != nil {
-		return false, nil
+		return false, 0, nil
 	}
 
 	defer func() { err = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return false, nil
+		return false, 0, nil
 	} else if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("%s", strconv.Itoa(resp.StatusCode))
+		return false, 0, fmt.Errorf("%s", strconv.Itoa(resp.StatusCode))
 	}
-	return true, err
+
+	duration, err := getDurationFromResponse(resp)
+	if err != nil {
+		return false, 0, err
+	}
+
+	return true, duration, err
 }
 
 func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemPath, int, error) {
@@ -209,15 +164,12 @@ func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemP
 		b, _ := ioutil.ReadAll(resp.Body)
 		return false, nil, 0, fmt.Errorf("%s", string(b))
 	}
-	// If present, extract the duration from the response.
-	duration := 0
-	if resp.Header.Get("x-artifact-duration") != "" {
-		intVar, err := strconv.Atoi(resp.Header.Get("x-artifact-duration"))
-		if err != nil {
-			return false, nil, 0, fmt.Errorf("invalid x-artifact-duration header: %w", err)
-		}
-		duration = intVar
+
+	duration, err := getDurationFromResponse(resp)
+	if err != nil {
+		return false, nil, 0, err
 	}
+
 	var tarReader io.Reader
 
 	defer func() { _ = resp.Body.Close() }()
@@ -251,105 +203,27 @@ func (cache *httpCache) retrieve(hash string) (bool, []turbopath.AnchoredSystemP
 	return true, files, duration, nil
 }
 
-// restoreTar returns posix-style repo-relative paths of the files it
-// restored. In the future, these should likely be repo-relative system paths
-// so that they are suitable for being fed into cache.Put for other caches.
-// For now, I think this is working because windows also accepts /-delimited paths.
-func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopath.AnchoredSystemPath, error) {
-	files := []turbopath.AnchoredSystemPath{}
-	missingLinks := []*tar.Header{}
-	zr := zstd.NewReader(reader)
-	var closeError error
-	defer func() { closeError = zr.Close() }()
-	tr := tar.NewReader(zr)
-	for {
-		hdr, err := tr.Next()
+// getDurationFromResponse extracts the duration from the response header
+func getDurationFromResponse(resp *http.Response) (int, error) {
+	duration := 0
+	if resp.Header.Get("x-artifact-duration") != "" {
+		// If we had an error reading the duration header, just swallow it for now.
+		intVar, err := strconv.Atoi(resp.Header.Get("x-artifact-duration"))
 		if err != nil {
-			if err == io.EOF {
-				for _, link := range missingLinks {
-					err := restoreSymlink(root, link, true)
-					if err != nil {
-						return nil, err
-					}
-				}
-
-				return files, closeError
-			}
-			return nil, err
+			return 0, fmt.Errorf("invalid x-artifact-duration header: %w", err)
 		}
-		// hdr.Name is always a posix-style path
-		// FIXME: THIS IS A BUG.
-		restoredName := turbopath.AnchoredUnixPath(hdr.Name)
-		files = append(files, restoredName.ToSystemPath())
-		filename := restoredName.ToSystemPath().RestoreAnchor(root)
-		if isChild, err := root.ContainsPath(filename); err != nil {
-			return nil, err
-		} else if !isChild {
-			return nil, fmt.Errorf("cannot untar file to %v", filename)
-		}
-		switch hdr.Typeflag {
-		case tar.TypeDir:
-			if err := filename.MkdirAll(0775); err != nil {
-				return nil, err
-			}
-		case tar.TypeReg:
-			if dir := filename.Dir(); dir != "." {
-				if err := dir.MkdirAll(0775); err != nil {
-					return nil, err
-				}
-			}
-			if f, err := filename.OpenFile(os.O_WRONLY|os.O_TRUNC|os.O_CREATE, os.FileMode(hdr.Mode)); err != nil {
-				return nil, err
-			} else if _, err := io.Copy(f, tr); err != nil {
-				return nil, err
-			} else if err := f.Close(); err != nil {
-				return nil, err
-			}
-		case tar.TypeSymlink:
-			if err := restoreSymlink(root, hdr, false); errors.Is(err, errNonexistentLinkTarget) {
-				missingLinks = append(missingLinks, hdr)
-			} else if err != nil {
-				return nil, err
-			}
-		default:
-			log.Printf("Unhandled file type %d for %s", hdr.Typeflag, hdr.Name)
-		}
+		duration = intVar
 	}
+
+	return duration, nil
 }
 
-var errNonexistentLinkTarget = errors.New("the link target does not exist")
-
-func restoreSymlink(root turbopath.AbsoluteSystemPath, hdr *tar.Header, allowNonexistentTargets bool) error {
-	// Note that hdr.Linkname is really the link target
-	relativeLinkTarget := filepath.FromSlash(hdr.Linkname)
-	linkFilename := root.UntypedJoin(hdr.Name)
-	if err := linkFilename.EnsureDir(); err != nil {
-		return err
-	}
-
-	// TODO: check if this is an absolute path, or if we even care
-	linkTarget := linkFilename.Dir().UntypedJoin(relativeLinkTarget)
-	if _, err := linkTarget.Lstat(); err != nil {
-		if os.IsNotExist(err) {
-			if !allowNonexistentTargets {
-				return errNonexistentLinkTarget
-			}
-			// if we're allowing nonexistent link targets, proceed to creating the link
-		} else {
-			return err
-		}
-	}
-	// Ensure that the link we're about to create doesn't already exist
-	if err := linkFilename.Remove(); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	if err := linkFilename.Symlink(relativeLinkTarget); err != nil {
-		return err
-	}
-	return nil
+func restoreTar(root turbopath.AbsoluteSystemPath, reader io.Reader) ([]turbopath.AnchoredSystemPath, error) {
+	cache := cacheitem.FromReader(reader, true)
+	return cache.Restore(root)
 }
 
-func (cache *httpCache) Clean(anchor turbopath.AbsoluteSystemPath) {
+func (cache *httpCache) Clean(_ turbopath.AbsoluteSystemPath) {
 	// Not possible; this implementation can only clean for a hash.
 }
 
@@ -359,17 +233,18 @@ func (cache *httpCache) CleanAll() {
 
 func (cache *httpCache) Shutdown() {}
 
-func newHTTPCache(opts Opts, client client, recorder analytics.Recorder) *httpCache {
+func newHTTPCache(opts Opts, client client, recorder analytics.Recorder, repoRoot turbopath.AbsoluteSystemPath) *httpCache {
 	return &httpCache{
 		writable:       true,
 		client:         client,
 		requestLimiter: make(limiter, 20),
 		recorder:       recorder,
+		repoRoot:       repoRoot,
 		signerVerifier: &ArtifactSignatureAuthentication{
 			// TODO(Gaspar): this should use RemoteCacheOptions.TeamId once we start
 			// enforcing team restrictions for repositories.
-			teamId:  client.GetTeamID(),
-			enabled: opts.RemoteCacheOpts.Signature,
+			teamID:  client.GetTeamID(),
+			enabled: opts.Signature,
 		},
 	}
 }

@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turbo/cli/internal/doublestar"
 	"github.com/vercel/turbo/cli/internal/filewatcher"
-	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 	"github.com/vercel/turbo/cli/internal/util"
 )
@@ -63,7 +63,7 @@ func (g *GlobWatcher) isClosed() bool {
 // WatchGlobs registers the given set of globs to be watched for changes and grouped
 // under the given hash. This method pairs with GetChangedGlobs to determine which globs
 // out of a set of candidates have changed since WatchGlobs was called for the same hash.
-func (g *GlobWatcher) WatchGlobs(hash string, globsToWatch fs.TaskOutputs) error {
+func (g *GlobWatcher) WatchGlobs(hash string, globsToWatch hash.TaskOutputs) error {
 	if g.isClosed() {
 		return ErrClosed
 	}
@@ -135,7 +135,7 @@ func (g *GlobWatcher) OnFileWatchEvent(ev filewatcher.Event) {
 	absolutePath := ev.Path
 	repoRelativePath, err := g.repoRoot.RelativePathString(absolutePath.ToStringDuringMigration())
 	if err != nil {
-		g.logger.Error(fmt.Sprintf("could not get relative path from %v to %v: %v", g.repoRoot, absolutePath, err))
+		g.logger.Debug(fmt.Sprintf("could not get relative path from %v to %v: %v", g.repoRoot, absolutePath, err))
 		return
 	}
 	g.mu.Lock()

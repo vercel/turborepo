@@ -2,7 +2,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:base"],
   "rangeStrategy": "update-lockfile",
-  "lockFileMaintenance": { "enabled": true },
+  "lockFileMaintenance": { "enabled": false },
   "dependencyDashboard": true,
   "dependencyDashboardAutoclose": true,
   "major": {
@@ -18,12 +18,26 @@
     {
       "matchLanguages": ["golang"],
       "enabled": false
+    },
+    {
+      "matchLanguages": ["rust"],
+      "matchPackageNames": [
+        "swc_core",
+        "testing",
+        "swc_emotion",
+        "styled_jsx",
+        "styled_components",
+        "modularize_imports",
+        "mdxjs"
+      ],
+      "enabled": true
     }
   ],
   "ignorePaths": [
     "**/node_modules/**",
     "cli/integration_tests/**",
-    "crates/turbopack/tests**"
+    "crates/turbopack/tests/**",
+    "crates/turbopack-tests/**"
   ],
   "prCreation": "not-pending",
   "prConcurrentLimit": 5,

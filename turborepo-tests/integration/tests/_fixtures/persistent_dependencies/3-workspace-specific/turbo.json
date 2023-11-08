@@ -1,0 +1,12 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["pkg-a#dev"]
+    },
+
+    "pkg-a#dev": {
+      "persistent": true
+    }
+  }
+}

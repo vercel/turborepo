@@ -1,13 +1,22 @@
+import path from "node:path";
 import type { Rule } from "eslint";
-import { Node, MemberExpression } from "estree";
+import type { Node, MemberExpression } from "estree";
+import { logger } from "@turbo/utils";
 import { RULES } from "../constants";
-import getEnvVarDependencies from "../utils/getEnvVarDependencies";
+import { Project, getWorkspaceFromFilePath } from "../utils/calculate-inputs";
+
+export interface RuleContextWithOptions extends Rule.RuleContext {
+  options: Array<{
+    cwd?: string;
+    allowList?: Array<string>;
+  }>;
+}
 
 const meta: Rule.RuleMetaData = {
   type: "problem",
   docs: {
     description:
-      "Do not allow the use of `process.env` without including the env key in turbo.json",
+      "Do not allow the use of `process.env` without including the env key in any turbo.json",
     category: "Configuration Issues",
     recommended: true,
     url: `https://github.com/vercel/turbo/tree/main/packages/eslint-plugin-turbo/docs/rules/${RULES.noUndeclaredEnvVars}.md`,
@@ -18,9 +27,10 @@ const meta: Rule.RuleMetaData = {
       default: {},
       additionalProperties: false,
       properties: {
-        turboConfig: {
+        // override cwd, primarily exposed for easier testing
+        cwd: {
           require: false,
-          type: "object",
+          type: "string",
         },
         allowList: {
           default: [],
@@ -39,7 +49,14 @@ const meta: Rule.RuleMetaData = {
  * Extracted from eslint
  * SPDX-License-Identifier: MIT
  */
-function normalizeCwd(cwd: string | undefined): string | undefined {
+function normalizeCwd(
+  cwd: string | undefined,
+  options: RuleContextWithOptions["options"]
+): string | undefined {
+  if (options[0]?.cwd) {
+    return options[0].cwd;
+  }
+
   if (cwd) {
     return cwd;
   }
@@ -50,46 +67,74 @@ function normalizeCwd(cwd: string | undefined): string | undefined {
   return undefined;
 }
 
-function create(context: Rule.RuleContext): Rule.RuleListener {
+function create(context: RuleContextWithOptions): Rule.RuleListener {
   const { options } = context;
-  const allowList: Array<string> = options?.[0]?.allowList || [];
+
+  const allowList: Array<string> = options[0]?.allowList || [];
   const regexAllowList: Array<RegExp> = [];
   allowList.forEach((allowed) => {
     try {
       regexAllowList.push(new RegExp(allowed));
     } catch (err) {
       // log the error, but just move on without this allowList entry
-      console.error(`Unable to convert "${allowed}" to regex`);
+      logger.error(`Unable to convert "${allowed}" to regex`);
     }
   });
 
-  const cwd = normalizeCwd(context.getCwd ? context.getCwd() : undefined);
-  const turboConfig = options?.[0]?.turboConfig;
-  const turboVars = getEnvVarDependencies({
-    cwd,
-    turboConfig,
-  });
+  const cwd = normalizeCwd(
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- needed to support older eslint versions
+    context.getCwd ? context.getCwd() : undefined,
+    options
+  );
 
-  // if this returns null, something went wrong reading from the turbo config
-  // (this is different from finding a config with no env vars present, which would
-  // return an empty set) - so there is no point continuing if we have nothing to check against
-  if (!turboVars) {
-    // return of {} bails early from a rule check
+  const project = new Project(cwd);
+  if (!project.valid()) {
     return {};
   }
 
+  const filePath = context.getPhysicalFilename();
+  const hasWorkspaceConfigs = project.projectWorkspaces.some(
+    (workspaceConfig) => Boolean(workspaceConfig.turboConfig)
+  );
+  const workspaceConfig = getWorkspaceFromFilePath(
+    project.projectWorkspaces,
+    filePath
+  );
+
   const checkKey = (node: Node, envKey?: string) => {
-    if (
-      envKey &&
-      !turboVars.has(envKey) &&
-      !regexAllowList.some((regex) => regex.test(envKey))
-    ) {
-      context.report({
-        node,
-        message: "${{ envKey }} is not listed as a dependency in turbo.json",
-        data: { envKey },
-      });
+    if (!envKey) {
+      return {};
     }
+
+    if (regexAllowList.some((regex) => regex.test(envKey))) {
+      return {};
+    }
+
+    const configured = project.test(workspaceConfig?.workspaceName, envKey);
+
+    if (configured) {
+      return {};
+    }
+    let message = `{{ envKey }} is not listed as a dependency in ${
+      hasWorkspaceConfigs ? "root turbo.json" : "turbo.json"
+    }`;
+    if (workspaceConfig?.turboConfig) {
+      if (cwd) {
+        // if we have a cwd, we can provide a relative path to the workspace config
+        message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace (${path.relative(
+          cwd,
+          workspaceConfig.workspacePath
+        )}) turbo.json`;
+      } else {
+        message = `{{ envKey }} is not listed as a dependency in the root turbo.json or workspace turbo.json`;
+      }
+    }
+
+    context.report({
+      node,
+      message,
+      data: { envKey },
+    });
   };
 
   const isComputed = (
@@ -108,13 +153,11 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
       if (
         "name" in node.object &&
         "name" in node.property &&
-        !isComputed(node)
+        node.object.name === "process" &&
+        node.property.name === "env"
       ) {
-        const objectName = node.object.name;
-        const propertyName = node.property.name;
-
         // we're doing something with process.env
-        if (objectName === "process" && propertyName === "env") {
+        if (!isComputed(node)) {
           // destructuring from process.env
           if ("id" in node.parent && node.parent.id?.type === "ObjectPattern") {
             const values = node.parent.id.properties.values();
@@ -130,8 +173,15 @@ function create(context: Rule.RuleContext): Rule.RuleListener {
             "property" in node.parent &&
             "name" in node.parent.property
           ) {
-            checkKey(node.parent, node.parent.property?.name);
+            checkKey(node.parent, node.parent.property.name);
           }
+        } else if (
+          "property" in node.parent &&
+          node.parent.property.type === "Literal" &&
+          typeof node.parent.property.value === "string"
+        ) {
+          // If we're indexing by a literal, we can check it
+          checkKey(node.parent, node.parent.property.value);
         }
       }
     },

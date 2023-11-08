@@ -9,7 +9,6 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/spf13/pflag"
 	"github.com/vercel/turbo/cli/internal/analytics"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -21,8 +20,8 @@ import (
 type Cache interface {
 	// Fetch returns true if there is a cache it. It is expected to move files
 	// into their correct position as a side effect
-	Fetch(anchor turbopath.AbsoluteSystemPath, hash string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error)
-	Exists(hash string) (ItemStatus, error)
+	Fetch(anchor turbopath.AbsoluteSystemPath, hash string, files []string) (ItemStatus, []turbopath.AnchoredSystemPath, error)
+	Exists(hash string) ItemStatus
 	// Put caches files for a given hash
 	Put(anchor turbopath.AbsoluteSystemPath, hash string, duration int, files []turbopath.AnchoredSystemPath) error
 	Clean(anchor turbopath.AbsoluteSystemPath)
@@ -33,12 +32,49 @@ type Cache interface {
 // ItemStatus holds whether artifacts exists for a given hash on local
 // and/or remote caching server
 type ItemStatus struct {
-	Local  bool `json:"local"`
-	Remote bool `json:"remote"`
+	Hit       bool
+	Source    string // only relevant if Hit is true
+	TimeSaved int    // will be 0 if Hit is false
 }
 
-const cacheEventHit = "HIT"
-const cacheEventMiss = "MISS"
+// NewCacheMiss returns an ItemStatus with the fields set to indicate a cache miss
+func NewCacheMiss() ItemStatus {
+	return ItemStatus{
+		Source:    CacheSourceNone,
+		Hit:       false,
+		TimeSaved: 0,
+	}
+}
+
+// newFSTaskCacheStatus returns an ItemStatus with the fields set to indicate a local cache hit
+func newFSTaskCacheStatus(hit bool, timeSaved int) ItemStatus {
+	return ItemStatus{
+		Source:    CacheSourceFS,
+		Hit:       hit,
+		TimeSaved: timeSaved,
+	}
+}
+
+func newRemoteTaskCacheStatus(hit bool, timeSaved int) ItemStatus {
+	return ItemStatus{
+		Source:    CacheSourceRemote,
+		Hit:       hit,
+		TimeSaved: timeSaved,
+	}
+}
+
+const (
+	// CacheSourceFS is a constant to indicate local cache hit
+	CacheSourceFS = "LOCAL"
+	// CacheSourceRemote is a constant to indicate remote cache hit
+	CacheSourceRemote = "REMOTE"
+	// CacheSourceNone is an empty string because there is no source for a cache miss
+	CacheSourceNone = ""
+	// CacheEventHit is a constant to indicate a cache hit
+	CacheEventHit = "HIT"
+	// CacheEventMiss is a constant to indicate a cache miss
+	CacheEventMiss = "MISS"
+)
 
 type CacheEvent struct {
 	Source   string `mapstructure:"source"`
@@ -63,11 +99,11 @@ var ErrNoCachesEnabled = errors.New("no caches are enabled")
 // Opts holds configuration options for the cache
 // TODO(gsoltis): further refactor this into fs cache opts and http cache opts
 type Opts struct {
-	OverrideDir     string
-	SkipRemote      bool
-	SkipFilesystem  bool
-	Workers         int
-	RemoteCacheOpts fs.RemoteCacheOptions
+	OverrideDir    string
+	SkipRemote     bool
+	SkipFilesystem bool
+	Workers        int
+	Signature      bool
 }
 
 // resolveCacheDir calculates the location turbo should use to cache artifacts,
@@ -77,17 +113,6 @@ func (o *Opts) resolveCacheDir(repoRoot turbopath.AbsoluteSystemPath) turbopath.
 		return fs.ResolveUnknownPath(repoRoot, o.OverrideDir)
 	}
 	return DefaultLocation(repoRoot)
-}
-
-var _remoteOnlyHelp = `Ignore the local filesystem cache for all tasks. Only
-allow reading and caching artifacts using the remote cache.`
-
-// AddFlags adds cache-related flags to the given FlagSet
-func AddFlags(opts *Opts, flags *pflag.FlagSet) {
-	// skipping remote caching not currently a flag
-	flags.BoolVar(&opts.SkipFilesystem, "remote-only", false, _remoteOnlyHelp)
-	flags.StringVar(&opts.OverrideDir, "cache-dir", "", "Override the filesystem cache directory.")
-	flags.IntVar(&opts.Workers, "cache-workers", 10, "Set the number of concurrent cache operations")
 }
 
 // New creates a new cache
@@ -115,7 +140,7 @@ func newSyncCache(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client clien
 	// Further, since the httpCache can be removed at runtime, we need to insert a noopCache
 	// as a backup if you are configured to have *just* an httpCache.
 	//
-	// This is reduced from (!useFsCache && !useHTTPCache) || (!useFsCache & useHTTPCache)
+	// This is reduced from (!useFsCache && !useHTTPCache) || (!useFsCache && useHTTPCache)
 	useNoopCache := !useFsCache
 
 	// Build up an array of cache implementations, we can only ever have 1 or 2.
@@ -130,7 +155,7 @@ func newSyncCache(opts Opts, repoRoot turbopath.AbsoluteSystemPath, client clien
 	}
 
 	if useHTTPCache {
-		implementation := newHTTPCache(opts, client, recorder)
+		implementation := newHTTPCache(opts, client, recorder, repoRoot)
 		cacheImplementations = append(cacheImplementations, implementation)
 	}
 
@@ -241,7 +266,7 @@ func (mplex *cacheMultiplexer) removeCache(removal *cacheRemoval) {
 	}
 }
 
-func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key string, files []string) (bool, []turbopath.AnchoredSystemPath, int, error) {
+func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key string, files []string) (ItemStatus, []turbopath.AnchoredSystemPath, error) {
 	// Make a shallow copy of the caches, since storeUntil can call removeCache
 	mplex.mu.RLock()
 	caches := make([]Cache, len(mplex.caches))
@@ -251,7 +276,7 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 	// Retrieve from caches sequentially; if we did them simultaneously we could
 	// easily write the same file from two goroutines at once.
 	for i, cache := range caches {
-		ok, actualFiles, duration, err := cache.Fetch(anchor, key, files)
+		itemStatus, actualFiles, err := cache.Fetch(anchor, key, files)
 		if err != nil {
 			cd := &util.CacheDisabledError{}
 			if errors.As(err, &cd) {
@@ -265,30 +290,31 @@ func (mplex *cacheMultiplexer) Fetch(anchor turbopath.AbsoluteSystemPath, key st
 			// the operation. Future work that plumbs UI / Logging into the cache system
 			// should probably log this at least.
 		}
-		if ok {
+
+		if itemStatus.Hit {
 			// Store this into other caches. We can ignore errors here because we know
 			// we have previously successfully stored in a higher-priority cache, and so the overall
 			// result is a success at fetching. Storing in lower-priority caches is an optimization.
-			_ = mplex.storeUntil(anchor, key, duration, actualFiles, i)
-			return ok, actualFiles, duration, err
+			_ = mplex.storeUntil(anchor, key, itemStatus.TimeSaved, actualFiles, i)
+
+			// Return this cache, and exit the for loop, since we don't need to keep looking.
+			return itemStatus, actualFiles, nil
 		}
 	}
 
-	return false, nil, 0, nil
+	return NewCacheMiss(), nil, nil
 }
 
-func (mplex *cacheMultiplexer) Exists(target string) (ItemStatus, error) {
-	syncCacheState := ItemStatus{}
+// Exists check each cache sequentially and return the first one that has a cache hit
+func (mplex *cacheMultiplexer) Exists(target string) ItemStatus {
 	for _, cache := range mplex.caches {
-		itemStatus, err := cache.Exists(target)
-		if err != nil {
-			return syncCacheState, err
+		itemStatus := cache.Exists(target)
+		if itemStatus.Hit {
+			return itemStatus
 		}
-		syncCacheState.Local = syncCacheState.Local || itemStatus.Local
-		syncCacheState.Remote = syncCacheState.Remote || itemStatus.Remote
 	}
 
-	return syncCacheState, nil
+	return NewCacheMiss()
 }
 
 func (mplex *cacheMultiplexer) Clean(anchor turbopath.AbsoluteSystemPath) {

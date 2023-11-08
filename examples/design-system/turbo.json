@@ -9,11 +9,10 @@
       "outputs": ["coverage/**"],
       "dependsOn": []
     },
-    "lint": {
-      "outputs": []
-    },
+    "lint": {},
     "dev": {
-      "cache": false
+      "cache": false,
+      "persistent": true
     },
     "clean": {
       "cache": false

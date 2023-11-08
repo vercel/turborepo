@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vercel/turbo/cli/internal/filewatcher"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/globwatcher"
 	"github.com/vercel/turbo/cli/internal/turbodprotocol"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -33,6 +34,8 @@ type Server struct {
 	repoRoot     turbopath.AbsoluteSystemPath
 	closerMu     sync.Mutex
 	closer       *closer
+	timeSavedMu  sync.Mutex
+	timesSaved   map[string]uint64
 }
 
 // GRPCServer is the interface that the turbo server needs to the underlying
@@ -82,6 +85,7 @@ func New(serverName string, logger hclog.Logger, repoRoot turbopath.AbsoluteSyst
 		started:      time.Now(),
 		logFilePath:  logFilePath,
 		repoRoot:     repoRoot,
+		timesSaved:   map[string]uint64{},
 	}
 	server.watcher.AddClient(cookieJar)
 	server.watcher.AddClient(globWatcher)
@@ -137,7 +141,10 @@ func (s *Server) Register(grpcServer GRPCServer) {
 
 // NotifyOutputsWritten implements the NotifyOutputsWritten rpc from turbo.proto
 func (s *Server) NotifyOutputsWritten(ctx context.Context, req *turbodprotocol.NotifyOutputsWrittenRequest) (*turbodprotocol.NotifyOutputsWrittenResponse, error) {
-	outputs := fs.TaskOutputs{
+	s.timeSavedMu.Lock()
+	s.timesSaved[req.Hash] = req.TimeSaved
+	s.timeSavedMu.Unlock()
+	outputs := hash.TaskOutputs{
 		Inclusions: req.OutputGlobs,
 		Exclusions: req.OutputExclusionGlobs,
 	}
@@ -151,6 +158,9 @@ func (s *Server) NotifyOutputsWritten(ctx context.Context, req *turbodprotocol.N
 
 // GetChangedOutputs implements the GetChangedOutputs rpc from turbo.proto
 func (s *Server) GetChangedOutputs(ctx context.Context, req *turbodprotocol.GetChangedOutputsRequest) (*turbodprotocol.GetChangedOutputsResponse, error) {
+	s.timeSavedMu.Lock()
+	timeSaved := s.timesSaved[req.Hash]
+	s.timeSavedMu.Unlock()
 
 	changedGlobs, err := s.globWatcher.GetChangedGlobs(req.Hash, req.OutputGlobs)
 	if err != nil {
@@ -158,6 +168,7 @@ func (s *Server) GetChangedOutputs(ctx context.Context, req *turbodprotocol.GetC
 	}
 	return &turbodprotocol.GetChangedOutputsResponse{
 		ChangedOutputGlobs: changedGlobs,
+		TimeSaved:          timeSaved,
 	}, nil
 }
 

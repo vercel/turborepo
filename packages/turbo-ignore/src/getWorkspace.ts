@@ -1,14 +1,15 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
+import type { PackageJson } from "@turbo/utils";
 import { error, info } from "./logger";
-import { TurboIgnoreArgs } from "./types";
+import type { TurboIgnoreOptions } from "./types";
 
-export function getWorkspace(args: TurboIgnoreArgs): string | null {
+export function getWorkspace(args: TurboIgnoreOptions): string | null {
   const { directory = process.cwd(), workspace } = args;
 
   // if the workspace is provided via args, use that
   if (workspace) {
-    info(`using "${workspace}" as workspace from arguments`);
+    info(`Using "${workspace}" as workspace from arguments`);
     return workspace;
   }
 
@@ -16,8 +17,7 @@ export function getWorkspace(args: TurboIgnoreArgs): string | null {
   const packageJsonPath = path.join(directory, "package.json");
   try {
     const raw = fs.readFileSync(packageJsonPath, "utf8");
-    const packageJsonContent: Record<string, string> & { name: string } =
-      JSON.parse(raw);
+    const packageJsonContent = JSON.parse(raw) as PackageJson;
 
     if (!packageJsonContent.name) {
       error(`"${packageJsonPath}" is missing the "name" field (required).`);
@@ -25,7 +25,7 @@ export function getWorkspace(args: TurboIgnoreArgs): string | null {
     }
 
     info(
-      `inferred "${packageJsonContent.name}" as workspace from "package.json"`
+      `Inferred "${packageJsonContent.name}" as workspace from "package.json"`
     );
     return packageJsonContent.name;
   } catch (e) {

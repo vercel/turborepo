@@ -1,16 +1,16 @@
 use std::{fmt::Debug, marker::PhantomData, ops::Deref, sync::Arc};
 
-use crate::{SharedReference, Typed};
+use crate::SharedReference;
 
-/// Pass a value by value (`Value<Xxx>`) instead of by reference (`XxxVc`).
+/// Pass a value by value (`Value<Xxx>`) instead of by reference (`Vc<Xxx>`).
 ///
 /// Persistent, requires serialization.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct Value<T: Typed> {
+pub struct Value<T> {
     inner: T,
 }
 
-impl<T: Typed> Value<T> {
+impl<T> Value<T> {
     pub fn new(value: T) -> Self {
         Self { inner: value }
     }
@@ -20,7 +20,7 @@ impl<T: Typed> Value<T> {
     }
 }
 
-impl<T: Typed> Deref for Value<T> {
+impl<T> Deref for Value<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -28,9 +28,15 @@ impl<T: Typed> Deref for Value<T> {
     }
 }
 
-impl<T: Typed + Copy> Copy for Value<T> {}
+impl<T: Copy> Copy for Value<T> {}
 
-/// Pass a value by value (`Value<Xxx>`) instead of by reference (`XxxVc`).
+impl<T: Default> Default for Value<T> {
+    fn default() -> Self {
+        Value::new(Default::default())
+    }
+}
+
+/// Pass a value by value (`Value<Xxx>`) instead of by reference (`Vc<Xxx>`).
 ///
 /// Doesn't require serialization, and won't be stored in the persistent cache
 /// in the future.
@@ -94,7 +100,7 @@ impl<T> std::hash::Hash for TransientInstance<T> {
 
 impl<T> PartialOrd for TransientInstance<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.inner.partial_cmp(&other.inner)
+        Some(self.cmp(other))
     }
 }
 

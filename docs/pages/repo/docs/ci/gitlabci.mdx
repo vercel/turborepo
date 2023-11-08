@@ -31,12 +31,11 @@ And a `turbo.json`:
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [".svelte-kit/**"],
+      "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"],
-      "outputs": []
+      "dependsOn": ["^build"]
     },
   }
 }
@@ -48,10 +47,6 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
     <Tab>
         ```yaml
         image: node:latest
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # variables:
-        #   TURBO_TOKEN: $TURBO_TOKEN
-        #   TURBO_TEAM: $TURBO_TEAM
         stages:
           - build
         build:
@@ -65,10 +60,6 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
     <Tab>
         ```yaml
         image: node:latest
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # variables:
-        #   TURBO_TOKEN: $TURBO_TOKEN
-        #   TURBO_TEAM: $TURBO_TEAM
         stages:
           - build
         build:
@@ -86,10 +77,6 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
     <Tab>
         ```yaml
         image: node:latest
-        # To use Remote Caching, uncomment the next lines and follow the steps below.
-        # variables:
-        #   TURBO_TOKEN: $TURBO_TOKEN
-        #   TURBO_TEAM: $TURBO_TEAM
         stages:
           - build
         build:
@@ -102,7 +89,9 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
             - pnpm build
             - pnpm test
           cache:
-            key: "$CI_COMMIT_REF_SLUG"
+            key:
+              files:
+                - pnpm-lock.yaml
             paths:
               - .pnpm-store
         ```
@@ -121,7 +110,6 @@ To use Vercel Remote Caching, you can get the value of these variables in a few 
 
 1. Create a Scoped Access Token to your account in the [Vercel Dashboard](https://vercel.com/account/tokens)
 
-![Vercel Access Tokens](/images/docs/vercel-tokens.png)
 ![Vercel Access Tokens](/images/docs/vercel-create-token.png)
 
 Copy the value to a safe place. You'll need it in a moment.

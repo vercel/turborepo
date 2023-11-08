@@ -3,10 +3,9 @@
         "a",
         Function(
             2,
-            FreeVar(
-                Other(
-                    Atom('undefined' type=static),
-                ),
+            37,
+            Constant(
+                Undefined,
             ),
         ),
     ),
@@ -14,10 +13,9 @@
         "b",
         Function(
             2,
-            FreeVar(
-                Other(
-                    Atom('undefined' type=static),
-                ),
+            76,
+            Constant(
+                Undefined,
             ),
         ),
     ),
@@ -25,10 +23,9 @@
         "c",
         Function(
             2,
-            FreeVar(
-                Other(
-                    Atom('undefined' type=static),
-                ),
+            116,
+            Constant(
+                Undefined,
             ),
         ),
     ),
@@ -49,13 +46,15 @@
                     [
                         Variable(
                             (
-                                Atom('y' type=inline),
-                                #1,
+                                "y",
+                                #2,
                             ),
                         ),
                         Constant(
-                            StrWord(
-                                Atom('.js' type=inline),
+                            Str(
+                                Word(
+                                    ".js",
+                                ),
                             ),
                         ),
                     ],
@@ -69,13 +68,17 @@
             3,
             [
                 Constant(
-                    StrWord(
-                        Atom('hello' type=inline),
+                    Str(
+                        Word(
+                            "hello",
+                        ),
                     ),
                 ),
                 Constant(
-                    StrWord(
-                        Atom('world' type=inline),
+                    Str(
+                        Word(
+                            "world",
+                        ),
                     ),
                 ),
             ],

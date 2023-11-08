@@ -6,26 +6,29 @@
   "scripts": {
     "build": "remix build",
     "dev": "remix dev",
-    "start": "remix-serve api/build"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint app/"
   },
   "dependencies": {
-    "@remix-run/node": "^1.7.0",
-    "@remix-run/react": "^1.7.0",
-    "@remix-run/vercel": "^1.7.0",
-    "@vercel/node": "^2.5.14",
+    "@remix-run/node": "^1.19.3",
+    "@remix-run/react": "^1.19.3",
+    "@remix-run/serve": "^1.19.3",
+    "@remix-run/server-runtime": "^1.19.3",
+    "@vercel/analytics": "^0.1.11",
+    "@vercel/remix-entry-server": "^0.1.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "ui": "workspace:*"
   },
   "devDependencies": {
-    "@remix-run/dev": "^1.7.0",
-    "@remix-run/serve": "^1.7.0",
-    "@types/react": "^17.0.47",
-    "@types/react-dom": "^17.0.17",
+    "@remix-run/dev": "^1.19.3",
+    "@types/react": "^18.2.21",
+    "@types/react-dom": "^18.2.7",
+    "eslint-config-custom": "workspace:*",
     "tsconfig": "workspace:*",
-    "typescript": "^4.8.3"
+    "typescript": "^5.2.2"
   },
   "engines": {
-    "node": ">=14"
+    "node": ">=18"
   }
 }

@@ -2,7 +2,9 @@ import cn from "classnames";
 import { useRouter } from "next/router";
 import Link from "next/link";
 
-export function useTurboSite(): "pack" | "repo" | undefined {
+export type TurboSite = "pack" | "repo";
+
+export function useTurboSite(): TurboSite | undefined {
   const { pathname } = useRouter();
 
   if (pathname.startsWith("/repo")) {
@@ -21,11 +23,11 @@ function SiteSwitcherLink({ href, text, isActive }) {
     "py-1 transition-colors duration-300 inline-block w-[50px] cursor-pointer hover:text-black dark:hover:text-white";
 
   const conditionalClasses = {
-    "text-black dark:text-white": !!isActive,
+    "text-black dark:text-white": Boolean(isActive),
   };
 
   return (
-    <Link href={href} className={cn(classes, conditionalClasses)}>
+    <Link className={cn(classes, conditionalClasses)} href={href}>
       {text}
     </Link>
   );
@@ -54,8 +56,8 @@ function SiteSwitcher() {
           { "hover:text-black dark:hover:text-white": site }
         )}
       >
-        <SiteSwitcherLink href="/repo" text="Repo" isActive={site === "repo"} />
-        <SiteSwitcherLink href="/pack" text="Pack" isActive={site === "pack"} />
+        <SiteSwitcherLink href="/repo" isActive={site === "repo"} text="Repo" />
+        <SiteSwitcherLink href="/pack" isActive={site === "pack"} text="Pack" />
       </span>
     </div>
   );

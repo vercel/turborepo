@@ -1,0 +1,20 @@
+name: "Setup Capnproto"
+description: "Sets up capnproto for the current platform"
+
+runs:
+  using: "composite"
+  steps:
+    - name: "Setup capnproto for Linux"
+      if: runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get -y update && sudo apt-get install -y capnproto
+
+    - name: "Setup capnproto for macos"
+      if: runner.os == 'macOS'
+      shell: bash
+      run: brew install capnp
+
+    - name: "Setup capnproto for Windows"
+      if: runner.os == 'Windows'
+      shell: bash
+      run: choco install capnproto

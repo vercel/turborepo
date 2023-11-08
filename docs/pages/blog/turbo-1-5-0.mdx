@@ -3,7 +3,7 @@ title: Turborepo 1.5
 date: 2022/09/19
 description: Turborepo 1.5 brings the Monorepo Handbook, drops the 'run' command, improves pruning, and much more!
 tag: web development
-ogImage: /images/blog/turbo-1-5-0/twitter-card.png
+ogImage: /images/blog/turbo-1-5-0/x-card.png
 ---
 
 # Turborepo 1.5
@@ -80,7 +80,7 @@ If your task name conflicts with a built-in `turbo` subcommand, we'll run our su
 
 ## Prune now supported on pnpm and yarn 2+
 
-We're delighted to announce that [`turbo prune`](/repo/docs/reference/command-line-reference#turbo-prune---scopetarget) now supports in pnpm, yarn, and yarn 2+.
+We're delighted to announce that [`turbo prune`](/repo/docs/reference/command-line-reference/prune) now supports in pnpm, yarn, and yarn 2+.
 
 You can use `turbo prune` to create a pruned subset of your monorepo with a dedicated lockfile--with the correct dependencies needed for a given target application and its dependencies. This is especially useful for using efficiently Turborepo within a Docker image.
 
@@ -113,7 +113,7 @@ We've introduced two new keys to `turbo.json` - `env` and `globalEnv`. These all
 }
 ```
 
-`globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read. Read more [in our updated docs](/repo/docs/core-concepts/caching#altering-caching-based-on-environment-variables).
+`globalEnv` and `env` allow you to specify a list of environment variables _without_ `$` prefixes. This makes the configuration file significantly easier to read. Read more [in our updated docs](/repo/docs/core-concepts/caching/environment-variable-inputs).
 
 To help migrate from the previous syntax, we've prepared a codemod. You can run `npx @turbo/codemod migrate-env-var-dependencies`.
 

@@ -1,9 +1,4 @@
-use std::{
-    fs,
-    path::PathBuf,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{fs, path::PathBuf, sync::Arc, time::Duration};
 
 use criterion::{Bencher, BenchmarkId, Criterion};
 use swc_core::{
@@ -18,13 +13,14 @@ use swc_core::{
 use turbo_tasks::Value;
 use turbo_tasks_testing::VcStorage;
 use turbopack_core::{
-    environment::{EnvironmentIntention, EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
-    target::CompileTargetVc,
+    compile_time_info::CompileTimeInfo,
+    environment::{Environment, ExecutionEnvironment, NodeJsEnvironment},
+    target::CompileTarget,
 };
 use turbopack_ecmascript::analyzer::{
     graph::{create_graph, EvalContext, VarGraph},
-    linker::{link, LinkCache},
-    test_utils::visitor,
+    linker::link,
+    test_utils::{early_visitor, visitor},
 };
 
 pub fn benchmark(c: &mut Criterion) {
@@ -95,28 +91,24 @@ fn bench_link(b: &mut Bencher, input: &BenchInput) {
         .unwrap();
 
     b.to_async(rt).iter(|| async {
-        let cache = Mutex::new(LinkCache::new());
         for val in input.var_graph.values.values() {
             VcStorage::with(async {
+                let compile_time_info = CompileTimeInfo::builder(Environment::new(Value::new(
+                    ExecutionEnvironment::NodeJsLambda(
+                        NodeJsEnvironment {
+                            compile_target: CompileTarget::unknown(),
+                            ..Default::default()
+                        }
+                        .into(),
+                    ),
+                )))
+                .cell();
                 link(
                     &input.var_graph,
                     val.clone(),
-                    &(|val| {
-                        Box::pin(visitor(
-                            val,
-                            EnvironmentVc::new(
-                                Value::new(ExecutionEnvironment::NodeJsLambda(
-                                    NodeJsEnvironment {
-                                        compile_target: CompileTargetVc::unknown(),
-                                        ..Default::default()
-                                    }
-                                    .into(),
-                                )),
-                                Value::new(EnvironmentIntention::ServerRendering),
-                            ),
-                        ))
-                    }),
-                    &cache,
+                    &early_visitor,
+                    &(|val| visitor(val, compile_time_info)),
+                    Default::default(),
                 )
                 .await
             })

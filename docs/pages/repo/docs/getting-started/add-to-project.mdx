@@ -25,25 +25,27 @@ npm create vite@latest
   </Tab>
 </Tabs>
 
-1. **Install `turbo`:**
+1. **Install `turbo` globally:**
 
 <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
   <Tab>
     ```bash
-    npm install turbo --save-dev
+    npm install turbo --global
     ```
   </Tab>
   <Tab>
     ```bash
-    yarn add turbo --dev
+    yarn global add turbo
     ```
   </Tab>
   <Tab>
     ```bash
-    pnpm install turbo --save-dev --workspace-root
+    pnpm add turbo --global
     ```
   </Tab>
 </Tabs>
+
+For more details about installation, see [Installing Turborepo](../installing)
 
 2. **Add a `turbo.json` file at the base of your new repository:**
 
@@ -56,11 +58,9 @@ For more information on configuring your `turbo.json`, see the [Configuration Op
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
-      "outputs": [".next/**"]
+      "outputs": [".next/**", "!.next/cache/**"]
     },
-    "lint": {
-      "outputs": []
-    }
+    "lint": {}
   }
 }
 ```
@@ -73,9 +73,7 @@ For more information on configuring your `turbo.json`, see the [Configuration Op
     "build": {
       "outputs": ["dist/**"]
     },
-    "lint": {
-      "outputs": []
-    }
+    "lint": {}
   }
 }
 ```
@@ -116,45 +114,17 @@ Add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and 
 
 4. **Try running `build` and `lint` with `turbo`:**
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
-  <Tab>
-    ```bash
-    npx turbo build lint
-    ```
-  </Tab>
-  <Tab>
-    ```bash
-    yarn turbo build lint
-    ```
-  </Tab>
-  <Tab>
-    ```bash
-    pnpm turbo build lint
-    ```
-  </Tab>
-</Tabs>
+```bash
+turbo build lint
+```
 
 This runs `build` and `lint` at the same time.
 
 5. **Without making any changes to the code, try running `build` and `lint` again:**
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
-  <Tab>
-    ```bash
-    npx turbo build lint
-    ```
-  </Tab>
-  <Tab>
-    ```bash
-    yarn turbo build lint
-    ```
-  </Tab>
-  <Tab>
-    ```bash
-    pnpm turbo build lint
-    ```
-  </Tab>
-</Tabs>
+```bash
+turbo build lint
+```
 
 You should see terminal output like this:
 
@@ -170,22 +140,8 @@ To learn how this is possible, check out our [core concepts docs](/repo/docs/cor
 
 6. **Try running `dev` with `turbo`:**
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
-  <Tab>
-    ```bash
-    npx turbo dev
-    ```
-  </Tab>
-  <Tab>
-    ```bash
-    yarn turbo dev
-    ```
-  </Tab>
-  <Tab>
-    ```bash
-    pnpm turbo dev
-    ```
-  </Tab>
-</Tabs>
+```bash
+turbo dev
+```
 
 You'll notice that your `dev` script starts up. You can use `turbo` to run any script in your `package.json`.

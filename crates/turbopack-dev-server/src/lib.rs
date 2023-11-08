@@ -1,67 +1,71 @@
 #![feature(min_specialization)]
 #![feature(trait_alias)]
 #![feature(array_chunks)]
+#![feature(iter_intersperse)]
+#![feature(str_split_remainder)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
-pub mod fs;
 pub mod html;
+mod http;
 pub mod introspect;
+mod invalidation;
 pub mod source;
 pub mod update;
 
 use std::{
-    borrow::Cow,
-    collections::{btree_map::Entry, BTreeMap},
+    collections::VecDeque,
     future::Future,
-    net::SocketAddr,
+    net::{SocketAddr, TcpListener},
     pin::Pin,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+    sync::Arc,
     time::{Duration, Instant},
 };
 
-use anyhow::{bail, Context, Result};
-use futures::{StreamExt, TryStreamExt};
+use anyhow::{Context, Result};
 use hyper::{
-    header::HeaderName,
+    server::{conn::AddrIncoming, Builder},
     service::{make_service_fn, service_fn},
     Request, Response, Server,
 };
-use mime_guess::mime;
-use source::{Body, Bytes};
+use parking_lot::Mutex;
+use socket2::{Domain, Protocol, Socket, Type};
+use tokio::task::JoinHandle;
+use tracing::{event, info_span, Instrument, Level, Span};
 use turbo_tasks::{
-    run_once, trace::TraceRawVcs, util::FormatDuration, RawVc, TransientValue, TurboTasksApi, Value,
+    run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, TurboTasksApi, Vc,
 };
-use turbo_tasks_fs::{FileContent, FileContentReadRef};
-use turbopack_cli_utils::issue::{ConsoleUi, ConsoleUiVc};
-use turbopack_core::asset::AssetContent;
+use turbopack_core::{
+    error::PrettyPrintError,
+    issue::{handle_issues, IssueReporter, IssueSeverity},
+};
 
-use self::{
-    source::{
-        query::Query, ContentSourceContent, ContentSourceDataVary, ContentSourceResultVc,
-        ContentSourceVc, ProxyResultReadRef,
-    },
-    update::{protocol::ResourceIdentifier, UpdateServer},
+use self::{source::ContentSource, update::UpdateServer};
+use crate::{
+    invalidation::{ServerRequest, ServerRequestSideEffects},
+    source::ContentSourceSideEffect,
 };
-use crate::source::{ContentSourceData, HeaderValue};
 
 pub trait SourceProvider: Send + Clone + 'static {
     /// must call a turbo-tasks function internally
-    fn get_source(&self) -> ContentSourceVc;
-}
-
-pub trait ContentProvider: Send + Clone + 'static {
-    fn get_content(&self) -> ContentSourceResultVc;
+    fn get_source(&self) -> Vc<Box<dyn ContentSource>>;
 }
 
 impl<T> SourceProvider for T
 where
-    T: Fn() -> ContentSourceVc + Send + Clone + 'static,
+    T: Fn() -> Vc<Box<dyn ContentSource>> + Send + Clone + 'static,
 {
-    fn get_source(&self) -> ContentSourceVc {
+    fn get_source(&self) -> Vc<Box<dyn ContentSource>> {
         self()
     }
+}
+
+#[derive(TraceRawVcs, Debug)]
+pub struct DevServerBuilder {
+    #[turbo_tasks(trace_ignore)]
+    pub addr: SocketAddr,
+    #[turbo_tasks(trace_ignore)]
+    server: Builder<AddrIncoming>,
 }
 
 #[derive(TraceRawVcs)]
@@ -72,211 +76,183 @@ pub struct DevServer {
     pub future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
 }
 
-// Just print issues to console for now...
-async fn handle_issues<T: Into<RawVc>>(
-    source: T,
-    path: &str,
-    operation: &str,
-    console_ui: ConsoleUiVc,
-) -> Result<()> {
-    let state = console_ui
-        .group_and_display_issues(TransientValue::new(source.into()))
-        .await?;
-    if state.has_fatal {
-        bail!("Fatal issue(s) occurred in {path} ({operation}")
-    }
-
-    Ok(())
-}
-
-#[turbo_tasks::value(serialization = "none")]
-enum GetFromSourceResult {
-    Static(FileContentReadRef),
-    HttpProxy(ProxyResultReadRef),
-    NeedData {
-        source: ContentSourceVc,
-        path: String,
-        vary: ContentSourceDataVary,
-    },
-    NotFound,
-}
-
-#[turbo_tasks::function]
-async fn get_from_source(
-    source: ContentSourceVc,
-    path: &str,
-    data: Value<ContentSourceData>,
-) -> Result<GetFromSourceResultVc> {
-    let content = source.get(path, data).await?.content.await?;
-    Ok(match &*content {
-        ContentSourceContent::Static(content_vc) => {
-            if let AssetContent::File(file) = &*content_vc.content().await? {
-                GetFromSourceResult::Static(file.await?)
-            } else {
-                GetFromSourceResult::NotFound
-            }
-        }
-        ContentSourceContent::HttpProxy(proxy) => GetFromSourceResult::HttpProxy(proxy.await?),
-        ContentSourceContent::NeedData { source, path, vary } => GetFromSourceResult::NeedData {
-            source: source.resolve().await?,
-            path: path.clone(),
-            vary: vary.clone(),
-        },
-        ContentSourceContent::NotFound => GetFromSourceResult::NotFound,
-    }
-    .cell())
-}
-
-async fn process_request_with_content_source(
-    path: &str,
-    mut resolved_source: ContentSourceVc,
-    mut asset_path: Cow<'_, str>,
-    mut request: Request<hyper::Body>,
-    console_ui: ConsoleUiVc,
-) -> Result<Response<hyper::Body>> {
-    let mut data = ContentSourceData::default();
-    loop {
-        let content_source_result = get_from_source(resolved_source, &asset_path, Value::new(data));
-        handle_issues(
-            content_source_result,
-            path,
-            "get content from source",
-            console_ui,
-        )
-        .await?;
-        match &*content_source_result.strongly_consistent().await? {
-            GetFromSourceResult::Static(file) => {
-                if let FileContent::Content(content) = &**file {
-                    let content_type = content.content_type().map_or_else(
-                        || {
-                            let guess =
-                                mime_guess::from_path(asset_path.as_ref()).first_or_octet_stream();
-                            // If a text type, application/javascript, or application/json was
-                            // guessed, use a utf-8 charset as  we most likely generated it as
-                            // such.
-                            if (guess.type_() == mime::TEXT
-                                || guess.subtype() == mime::JAVASCRIPT
-                                || guess.subtype() == mime::JSON)
-                                && guess.get_param("charset").is_none()
-                            {
-                                guess.to_string() + "; charset=utf-8"
-                            } else {
-                                guess.to_string()
-                            }
-                        },
-                        |m| m.to_string(),
-                    );
-
-                    let content = content.content();
-                    let bytes = content.read();
-                    return Ok(Response::builder()
-                        .status(200)
-                        .header("Content-Type", content_type)
-                        .header("Content-Length", content.len().to_string())
-                        .body(hyper::Body::wrap_stream(bytes))?);
-                }
-            }
-            GetFromSourceResult::HttpProxy(proxy_result) => {
-                let mut response = Response::builder().status(proxy_result.status);
-                let headers = response.headers_mut().expect("headers must be defined");
-
-                for [name, value] in proxy_result.headers.array_chunks() {
-                    headers.append(
-                        HeaderName::from_bytes(name.as_bytes())?,
-                        hyper::header::HeaderValue::from_str(value)?,
-                    );
-                }
-
-                return Ok(response.body(hyper::Body::wrap_stream(proxy_result.body.read()))?);
-            }
-            GetFromSourceResult::NeedData { source, path, vary } => {
-                resolved_source = *source;
-                asset_path = Cow::Owned(path.to_string());
-                data = request_to_data(&mut request, vary).await?;
-                continue;
-            }
-            GetFromSourceResult::NotFound => {}
-        }
-        return Ok(Response::builder().status(404).body(hyper::Body::empty())?);
-    }
-}
-
 impl DevServer {
-    pub fn listen(
+    pub fn listen(addr: SocketAddr) -> Result<DevServerBuilder, anyhow::Error> {
+        // This is annoying. The hyper::Server doesn't allow us to know which port was
+        // bound (until we build it with a request handler) when using the standard
+        // `server::try_bind` approach. This is important when binding the `0` port,
+        // because the OS will remap that to an actual free port, and we need to know
+        // that port before we build the request handler. So we need to construct a
+        // real TCP listener, see if it bound, and get its bound address.
+        let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))
+            .context("unable to create socket")?;
+        // Allow the socket to be reused immediately after closing. This ensures that
+        // the dev server can be restarted on the same address without a buffer time for
+        // the OS to release the socket.
+        // https://docs.microsoft.com/en-us/windows/win32/winsock/using-so-reuseaddr-and-so-exclusiveaddruse
+        #[cfg(not(windows))]
+        let _ = socket.set_reuse_address(true);
+        if matches!(addr, SocketAddr::V6(_)) {
+            // When possible bind to v4 and v6, otherwise ignore the error
+            let _ = socket.set_only_v6(false);
+        }
+        let sock_addr = addr.into();
+        socket
+            .bind(&sock_addr)
+            .context("not able to bind address")?;
+        socket.listen(128).context("not able to listen on socket")?;
+
+        let listener: TcpListener = socket.into();
+        let addr = listener
+            .local_addr()
+            .context("not able to get bound address")?;
+        let server = Server::from_tcp(listener).context("Not able to start server")?;
+        Ok(DevServerBuilder { addr, server })
+    }
+}
+
+impl DevServerBuilder {
+    pub fn serve(
+        self,
         turbo_tasks: Arc<dyn TurboTasksApi>,
         source_provider: impl SourceProvider + Clone + Send + Sync,
-        addr: SocketAddr,
-        console_ui: Arc<ConsoleUi>,
-    ) -> Result<Self, anyhow::Error> {
+        get_issue_reporter: Arc<dyn Fn() -> Vc<Box<dyn IssueReporter>> + Send + Sync>,
+    ) -> DevServer {
+        let ongoing_side_effects = Arc::new(Mutex::new(VecDeque::<
+            Arc<tokio::sync::Mutex<Option<JoinHandle<Result<()>>>>>,
+        >::with_capacity(16)));
         let make_svc = make_service_fn(move |_| {
             let tt = turbo_tasks.clone();
             let source_provider = source_provider.clone();
-            let console_ui = console_ui.clone();
+            let get_issue_reporter = get_issue_reporter.clone();
+            let ongoing_side_effects = ongoing_side_effects.clone();
             async move {
                 let handler = move |request: Request<hyper::Body>| {
-                    let console_ui = console_ui.clone();
+                    let request_span = info_span!(parent: None, "request", name = ?request.uri());
                     let start = Instant::now();
                     let tt = tt.clone();
+                    let get_issue_reporter = get_issue_reporter.clone();
+                    let ongoing_side_effects = ongoing_side_effects.clone();
                     let source_provider = source_provider.clone();
                     let future = async move {
-                        if hyper_tungstenite::is_upgrade_request(&request) {
-                            let uri = request.uri();
-                            let path = uri.path();
-
-                            if path == "/turbopack-hmr" {
-                                let (response, websocket) =
-                                    hyper_tungstenite::upgrade(request, None)?;
-                                let update_server = UpdateServer::new(source_provider);
-                                update_server.run(&*tt, websocket);
-                                return Ok(response);
+                        event!(parent: Span::current(), Level::DEBUG, "request start");
+                        // Wait until all ongoing side effects are completed
+                        // We only need to wait for the ongoing side effects that were started
+                        // before this request. Later added side effects are not relevant for this.
+                        let current_ongoing_side_effects = {
+                            // Cleanup the ongoing_side_effects list
+                            let mut guard = ongoing_side_effects.lock();
+                            while let Some(front) = guard.front() {
+                                let Ok(front_guard) = front.try_lock() else {
+                                    break;
+                                };
+                                if front_guard.is_some() {
+                                    break;
+                                }
+                                drop(front_guard);
+                                guard.pop_front();
                             }
-
-                            println!("[404] {} (WebSocket)", path);
-                            if path == "/_next/webpack-hmr" {
-                                // Special-case requests to webpack-hmr as these are made by Next.js
-                                // clients built without turbopack, which may be making requests in
-                                // development.
-                                println!("A non-turbopack next.js client is trying to connect.");
-                                println!(
-                                    "Make sure to reload/close any browser window which has been \
-                                     opened without --turbo."
-                                );
+                            // Get a clone of the remaining list
+                            (*guard).clone()
+                        };
+                        // Wait for the side effects to complete
+                        for side_effect_mutex in current_ongoing_side_effects {
+                            let mut guard = side_effect_mutex.lock().await;
+                            if let Some(join_handle) = guard.take() {
+                                join_handle.await??;
                             }
-
-                            return Ok(Response::builder()
-                                .status(404)
-                                .body(hyper::Body::empty())?);
+                            drop(guard);
                         }
+                        let reason = ServerRequest {
+                            method: request.method().clone(),
+                            uri: request.uri().clone(),
+                        };
+                        let side_effects_reason = ServerRequestSideEffects {
+                            method: request.method().clone(),
+                            uri: request.uri().clone(),
+                        };
+                        run_once_with_reason(tt.clone(), reason, async move {
+                            let issue_reporter = get_issue_reporter();
 
-                        run_once(tt, async move {
-                            let console_ui = (*console_ui).clone().cell();
+                            if hyper_tungstenite::is_upgrade_request(&request) {
+                                let uri = request.uri();
+                                let path = uri.path();
+
+                                if path == "/turbopack-hmr" {
+                                    let (response, websocket) =
+                                        hyper_tungstenite::upgrade(request, None)?;
+                                    let update_server =
+                                        UpdateServer::new(source_provider, issue_reporter);
+                                    update_server.run(&*tt, websocket);
+                                    return Ok(response);
+                                }
+
+                                println!("[404] {} (WebSocket)", path);
+                                if path == "/_next/webpack-hmr" {
+                                    // Special-case requests to webpack-hmr as these are made by
+                                    // Next.js clients built
+                                    // without turbopack, which may be making requests in
+                                    // development.
+                                    println!(
+                                        "A non-turbopack next.js client is trying to connect."
+                                    );
+                                    println!(
+                                        "Make sure to reload/close any browser window which has \
+                                         been opened without --turbo."
+                                    );
+                                }
+
+                                return Ok(Response::builder()
+                                    .status(404)
+                                    .body(hyper::Body::empty())?);
+                            }
+
                             let uri = request.uri();
-                            let path = uri.path();
-                            // Remove leading slash.
-                            let path = &path[1..].to_string();
-                            let asset_path = urlencoding::decode(path)?;
+                            let path = uri.path().to_string();
                             let source = source_provider.get_source();
-                            handle_issues(source, path, "get source", console_ui).await?;
                             let resolved_source = source.resolve_strongly_consistent().await?;
-                            let response = process_request_with_content_source(
-                                path,
-                                resolved_source,
-                                asset_path,
-                                request,
-                                console_ui,
+                            handle_issues(
+                                source,
+                                issue_reporter,
+                                IssueSeverity::Fatal.cell(),
+                                Some(&path),
+                                Some("get source"),
                             )
                             .await?;
+                            let (response, side_effects) =
+                                http::process_request_with_content_source(
+                                    resolved_source,
+                                    request,
+                                    issue_reporter,
+                                )
+                                .await?;
                             let status = response.status().as_u16();
-                            let success = response.status().is_success();
+                            let is_error = response.status().is_client_error()
+                                || response.status().is_server_error();
                             let elapsed = start.elapsed();
-                            if !success
+                            if is_error
                                 || (cfg!(feature = "log_request_stats")
                                     && elapsed > Duration::from_secs(1))
                             {
                                 println!(
-                                    "[{status}] /{path} ({duration})",
+                                    "[{status}] {path} ({duration})",
                                     duration = FormatDuration(elapsed)
                                 );
+                            }
+                            if !side_effects.is_empty() {
+                                let join_handle = tokio::spawn(run_once_with_reason(
+                                    tt.clone(),
+                                    side_effects_reason,
+                                    async move {
+                                        for side_effect in side_effects {
+                                            side_effect.apply().await?;
+                                        }
+                                        Ok(())
+                                    },
+                                ));
+                                ongoing_side_effects.lock().push_back(Arc::new(
+                                    tokio::sync::Mutex::new(Some(join_handle)),
+                                ));
                             }
                             Ok(response)
                         })
@@ -287,140 +263,36 @@ impl DevServer {
                             Ok(r) => Ok::<_, hyper::http::Error>(r),
                             Err(e) => {
                                 println!(
-                                    "[500] error: {:?} ({})",
-                                    e,
-                                    FormatDuration(start.elapsed())
+                                    "[500] error ({}): {}",
+                                    FormatDuration(start.elapsed()),
+                                    PrettyPrintError(&e),
                                 );
                                 Ok(Response::builder()
                                     .status(500)
-                                    .body(hyper::Body::from(format!("{:?}", e,)))?)
+                                    .body(hyper::Body::from(format!("{}", PrettyPrintError(&e))))?)
                             }
                         }
                     }
+                    .instrument(request_span)
                 };
                 anyhow::Ok(service_fn(handler))
             }
         });
-        let server = Server::try_bind(&addr)
-            .context("Not able to start server")?
-            .serve(make_svc);
+        let server = self.server.serve(make_svc);
 
-        Ok(Self {
-            addr: server.local_addr(),
+        DevServer {
+            addr: self.addr,
             future: Box::pin(async move {
                 server.await?;
                 Ok(())
             }),
-        })
-    }
-}
-
-static CACHE_BUSTER: AtomicU64 = AtomicU64::new(0);
-
-async fn request_to_data(
-    request: &mut Request<hyper::Body>,
-    vary: &ContentSourceDataVary,
-) -> Result<ContentSourceData> {
-    let mut data = ContentSourceData::default();
-    if vary.method {
-        data.method = Some(request.method().to_string());
-    }
-    if vary.url {
-        data.url = Some(request.uri().to_string());
-    }
-    if vary.body {
-        let bytes: Vec<_> = request
-            .body_mut()
-            .map(|bytes| bytes.map(Bytes::from))
-            .try_collect::<Vec<_>>()
-            .await?;
-        data.body = Some(Body::new(bytes).into());
-    }
-    if let Some(filter) = vary.query.as_ref() {
-        if let Some(query) = request.uri().query() {
-            let mut query: Query = serde_qs::from_str(query)?;
-            query.filter_with(filter);
-            data.query = Some(query);
-        } else {
-            data.query = Some(Query::default())
         }
     }
-    if let Some(filter) = vary.headers.as_ref() {
-        let mut headers = BTreeMap::new();
-        for (header_name, header_value) in request.headers().iter() {
-            if !filter.contains(header_name.as_str()) {
-                continue;
-            }
-            match headers.entry(header_name.to_string()) {
-                Entry::Vacant(e) => {
-                    if let Ok(s) = header_value.to_str() {
-                        e.insert(HeaderValue::SingleString(s.to_string()));
-                    } else {
-                        e.insert(HeaderValue::SingleBytes(header_value.as_bytes().to_vec()));
-                    }
-                }
-                Entry::Occupied(mut e) => {
-                    if let Ok(s) = header_value.to_str() {
-                        e.get_mut().extend_with_string(s.to_string());
-                    } else {
-                        e.get_mut()
-                            .extend_with_bytes(header_value.as_bytes().to_vec());
-                    }
-                }
-            }
-        }
-        data.headers = Some(headers);
-    }
-    if vary.cache_buster {
-        data.cache_buster = CACHE_BUSTER.fetch_add(1, Ordering::SeqCst);
-    }
-    Ok(data)
-}
-
-pub(crate) fn resource_to_data(
-    resource: ResourceIdentifier,
-    vary: &ContentSourceDataVary,
-) -> ContentSourceData {
-    let mut data = ContentSourceData::default();
-    if vary.method {
-        data.method = Some("GET".to_string());
-    }
-    if vary.url {
-        data.url = Some(resource.path);
-    }
-    if vary.body {
-        data.body = Some(Body::new(Vec::new()).into());
-    }
-    if vary.query.is_some() {
-        data.query = Some(Query::default())
-    }
-    if let Some(filter) = vary.headers.as_ref() {
-        let mut headers = BTreeMap::new();
-        if let Some(resource_headers) = resource.headers {
-            for (header_name, header_value) in resource_headers {
-                if !filter.contains(header_name.as_str()) {
-                    continue;
-                }
-                match headers.entry(header_name) {
-                    Entry::Vacant(e) => {
-                        e.insert(HeaderValue::SingleString(header_value));
-                    }
-                    Entry::Occupied(mut e) => {
-                        e.get_mut().extend_with_string(header_value);
-                    }
-                }
-            }
-        }
-        data.headers = Some(headers);
-    }
-    if vary.cache_buster {
-        data.cache_buster = CACHE_BUSTER.fetch_add(1, Ordering::SeqCst);
-    }
-    data
 }
 
 pub fn register() {
     turbo_tasks::register();
+    turbo_tasks_bytes::register();
     turbo_tasks_fs::register();
     turbopack_core::register();
     turbopack_cli_utils::register();

@@ -2,6 +2,7 @@
     (
         "a",
         Argument(
+            1,
             0,
         ),
     ),
@@ -9,40 +10,43 @@
         "b",
         Argument(
             1,
+            1,
         ),
     ),
     (
         "c",
         Function(
             6,
-            Array(
-                5,
-                [
+            1,
+            Array {
+                total_nodes: 5,
+                items: [
                     Concat(
                         3,
                         [
                             Variable(
                                 (
-                                    Atom('a' type=static),
-                                    #2,
+                                    "a",
+                                    #3,
                                 ),
                             ),
                             Variable(
                                 (
-                                    Atom('x' type=static),
-                                    #2,
+                                    "x",
+                                    #3,
                                 ),
                             ),
                         ],
                     ),
                     Variable(
                         (
-                            Atom('a' type=static),
-                            #2,
+                            "a",
+                            #3,
                         ),
                     ),
                 ],
-            ),
+                mutable: true,
+            },
         ),
     ),
     (
@@ -51,19 +55,23 @@
             4,
             Variable(
                 (
-                    Atom('c' type=inline),
-                    #1,
+                    "c",
+                    #2,
                 ),
             ),
             [
                 Constant(
-                    StrWord(
-                        Atom('1' type=inline),
+                    Str(
+                        Word(
+                            "1",
+                        ),
                     ),
                 ),
                 Constant(
-                    StrWord(
-                        Atom('2' type=inline),
+                    Str(
+                        Word(
+                            "2",
+                        ),
                     ),
                 ),
             ],
@@ -75,8 +83,8 @@
             3,
             Variable(
                 (
-                    Atom('d' type=inline),
-                    #1,
+                    "d",
+                    #2,
                 ),
             ),
             Constant(
@@ -94,8 +102,8 @@
             3,
             Variable(
                 (
-                    Atom('d' type=inline),
-                    #1,
+                    "d",
+                    #2,
                 ),
             ),
             Constant(
@@ -111,8 +119,8 @@
         "x",
         Variable(
             (
-                Atom('b' type=static),
-                #2,
+                "b",
+                #3,
             ),
         ),
     ),

@@ -5,15 +5,15 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev --parallel",
-    "lint": "turbo run lint"
+    "build": "turbo build",
+    "dev": "turbo dev --parallel",
+    "lint": "turbo lint"
   },
   "devDependencies": {
     "eslint-config-custom": "*",
     "eslint": "7.32.0",
     "prettier": "^2.5.1",
-    "turbo": "latest"
+    "turbo": "^1.9.3"
   },
-  "packageManager": "pnpm@7.15.0"
+  "packageManager": "yarn@1.22.19"
 }

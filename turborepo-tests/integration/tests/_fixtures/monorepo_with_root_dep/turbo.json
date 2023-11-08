@@ -1,0 +1,15 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": []
+    },
+    // Root tasks
+    "web#gen": {
+      "outputs": ["gen.txt"]
+    },
+    "web#build": {
+      "dependsOn": ["web#gen"]
+    }
+  }
+}

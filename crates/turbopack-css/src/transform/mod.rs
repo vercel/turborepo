@@ -19,21 +19,21 @@ pub struct CssInputTransforms(Vec<CssInputTransform>);
 
 pub struct TransformContext<'a> {
     pub source_map: &'a Arc<SourceMap>,
-    pub file_name_str: &'a str,
 }
 
 impl CssInputTransform {
     pub async fn apply(
         &self,
         stylesheet: &mut Stylesheet,
-        &TransformContext {
-            source_map: _,
-            file_name_str: _,
-        }: &TransformContext<'_>,
+        &TransformContext { source_map: _ }: &TransformContext<'_>,
     ) -> Result<()> {
         match *self {
             CssInputTransform::Nested => {
-                stylesheet.visit_mut_with(&mut swc_core::css::compat::nesting::nesting());
+                stylesheet.visit_mut_with(&mut swc_core::css::compat::compiler::Compiler::new(
+                    swc_core::css::compat::compiler::Config {
+                        process: swc_core::css::compat::feature::Features::NESTING,
+                    },
+                ));
             }
             CssInputTransform::Custom => todo!(),
         }

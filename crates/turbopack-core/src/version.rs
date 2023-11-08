@@ -1,34 +1,44 @@
+use std::sync::Arc;
+
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
-    debug::ValueDebugFormat,
-    primitives::{JsonValueVc, StringVc},
-    trace::TraceRawVcs,
+    debug::ValueDebugFormat, trace::TraceRawVcs, IntoTraitRef, ReadRef, State, TraitRef, Vc,
 };
-use turbo_tasks_fs::{FileContent, FileContentReadRef, LinkType};
+use turbo_tasks_fs::{FileContent, LinkType};
 use turbo_tasks_hash::{encode_hex, hash_xxh3_hash64};
 
-use crate::asset::{AssetContent, AssetContentReadRef, AssetContentVc};
+use crate::asset::AssetContent;
 
 /// The content of an [Asset] alongside its version.
 #[turbo_tasks::value_trait]
 pub trait VersionedContent {
     /// The content of the [Asset].
-    fn content(&self) -> AssetContentVc;
+    fn content(self: Vc<Self>) -> Vc<AssetContent>;
 
-    /// Get a unique identifier of the version as a string. There is no way
-    /// to convert a version identifier back to the original `VersionedContent`,
-    /// so the original object needs to be stored somewhere.
-    fn version(&self) -> VersionVc;
+    /// Get a [`Version`] implementor that contains enough information to
+    /// identify and diff a future [`VersionedContent`] against it.
+    fn version(self: Vc<Self>) -> Vc<Box<dyn Version>>;
 
     /// Describes how to update the content from an earlier version to the
     /// latest available one.
-    async fn update(self_vc: VersionedContentVc, from: VersionVc) -> Result<UpdateVc> {
+    async fn update(self: Vc<Self>, from: Vc<Box<dyn Version>>) -> Result<Vc<Update>> {
         // By default, since we can't make any assumptions about the versioning
         // scheme of the content, we ask for a full invalidation, except in the
-        // case where versions are the same. And we can't compare `VersionVc`s
-        // directly since `.cell_local()` breaks referential equality checks.
-        let to = self_vc.version();
+        // case where versions are the same.
+        let to = self.version();
+        let from_ref = from.into_trait_ref().await?;
+        let to_ref = to.into_trait_ref().await?;
+
+        // Fast path: versions are the same.
+        if from_ref == to_ref {
+            return Ok(Update::None.into());
+        }
+
+        // The fast path might not always work since `self` might have been converted
+        // from a `ReadRef` or a `ReadRef`, in which case `self.version()` would
+        // return a new `Vc<Box<dyn Version>>`. In this case, we need to compare
+        // version ids.
         let from_id = from.id();
         let to_id = to.id();
         let from_id = from_id.await?;
@@ -36,7 +46,7 @@ pub trait VersionedContent {
         Ok(if *from_id == *to_id {
             Update::None.into()
         } else {
-            Update::Total(TotalUpdate { to }).into()
+            Update::Total(TotalUpdate { to: to_ref }).into()
         })
     }
 }
@@ -44,66 +54,64 @@ pub trait VersionedContent {
 /// A versioned file content.
 #[turbo_tasks::value]
 pub struct VersionedAssetContent {
-    // We can't store a `FileContentVc` directly because we don't want
-    // `VersionedAssetContentVc` to invalidate when the content changes.
+    // We can't store a `Vc<FileContent>` directly because we don't want
+    // `Vc<VersionedAssetContent>` to invalidate when the content changes.
     // Otherwise, reading `content` and `version` at two different instants in
     // time might return inconsistent values.
-    asset_content: AssetContentReadRef,
+    asset_content: ReadRef<AssetContent>,
 }
 
 #[turbo_tasks::value]
 #[derive(Clone)]
 enum AssetContentSnapshot {
-    File(FileContentReadRef),
+    File(ReadRef<FileContent>),
     Redirect { target: String, link_type: LinkType },
 }
 
 #[turbo_tasks::value_impl]
 impl VersionedContent for VersionedAssetContent {
     #[turbo_tasks::function]
-    fn content(&self) -> AssetContentVc {
+    fn content(&self) -> Vc<AssetContent> {
         (*self.asset_content).clone().cell()
     }
 
     #[turbo_tasks::function]
-    async fn version(&self) -> Result<VersionVc> {
-        Ok(FileHashVersionVc::compute(&self.asset_content)
-            .await?
-            .into())
+    async fn version(&self) -> Result<Vc<Box<dyn Version>>> {
+        Ok(Vc::upcast(
+            FileHashVersion::compute(&self.asset_content).await?,
+        ))
     }
 }
 
 #[turbo_tasks::value_impl]
-impl VersionedAssetContentVc {
+impl VersionedAssetContent {
     #[turbo_tasks::function]
-    /// Creates a new [VersionedAssetContentVc] from a [FileContentVc].
-    pub async fn new(asset_content: AssetContentVc) -> Result<Self> {
+    /// Creates a new [Vc<VersionedAssetContent>] from a [Vc<FileContent>].
+    pub async fn new(asset_content: Vc<AssetContent>) -> Result<Vc<Self>> {
         let asset_content = asset_content.strongly_consistent().await?;
         Ok(Self::cell(VersionedAssetContent { asset_content }))
     }
 }
 
-impl From<AssetContent> for VersionedAssetContentVc {
+impl From<AssetContent> for Vc<VersionedAssetContent> {
     fn from(asset_content: AssetContent) -> Self {
-        VersionedAssetContentVc::new(asset_content.cell())
+        VersionedAssetContent::new(asset_content.cell())
     }
 }
 
-impl From<AssetContentVc> for VersionedAssetContentVc {
-    fn from(asset_content: AssetContentVc) -> Self {
-        VersionedAssetContentVc::new(asset_content)
-    }
-}
-
-impl From<AssetContent> for VersionedContentVc {
+impl From<AssetContent> for Vc<Box<dyn VersionedContent>> {
     fn from(asset_content: AssetContent) -> Self {
-        VersionedAssetContentVc::new(asset_content.cell()).into()
+        Vc::upcast(VersionedAssetContent::new(asset_content.cell()))
     }
 }
 
-impl From<AssetContentVc> for VersionedContentVc {
-    fn from(asset_content: AssetContentVc) -> Self {
-        VersionedAssetContentVc::new(asset_content).into()
+pub trait VersionedContentExt: Send {
+    fn versioned(self: Vc<Self>) -> Vc<Box<dyn VersionedContent>>;
+}
+
+impl VersionedContentExt for AssetContent {
+    fn versioned(self: Vc<Self>) -> Vc<Box<dyn VersionedContent>> {
+        Vc::upcast(VersionedAssetContent::new(self))
     }
 }
 
@@ -114,16 +122,36 @@ pub trait Version {
     /// Get a unique identifier of the version as a string. There is no way
     /// to convert an id back to its original `Version`, so the original object
     /// needs to be stored somewhere.
-    fn id(&self) -> StringVc;
+    fn id(self: Vc<Self>) -> Vc<String>;
 }
+
+/// This trait allows multiple `VersionedContent` to declare which
+/// [`VersionedContentMerger`] implementation should be used for merging.
+///
+/// [`MergeableVersionedContent`] which return the same merger will be merged
+/// together.
+#[turbo_tasks::value_trait]
+pub trait MergeableVersionedContent: VersionedContent {
+    fn get_merger(self: Vc<Self>) -> Vc<Box<dyn VersionedContentMerger>>;
+}
+
+/// A [`VersionedContentMerger`] merges multiple [`VersionedContent`] into a
+/// single one.
+#[turbo_tasks::value_trait]
+pub trait VersionedContentMerger {
+    fn merge(self: Vc<Self>, contents: Vc<VersionedContents>) -> Vc<Box<dyn VersionedContent>>;
+}
+
+#[turbo_tasks::value(transparent)]
+pub struct VersionedContents(Vec<Vc<Box<dyn VersionedContent>>>);
 
 #[turbo_tasks::value]
 pub struct NotFoundVersion;
 
 #[turbo_tasks::value_impl]
-impl NotFoundVersionVc {
+impl NotFoundVersion {
     #[turbo_tasks::function]
-    pub fn new() -> Self {
+    pub fn new() -> Vc<Self> {
         NotFoundVersion.cell()
     }
 }
@@ -131,8 +159,8 @@ impl NotFoundVersionVc {
 #[turbo_tasks::value_impl]
 impl Version for NotFoundVersion {
     #[turbo_tasks::function]
-    fn id(&self) -> StringVc {
-        StringVc::empty()
+    fn id(&self) -> Vc<String> {
+        Vc::cell("".to_string())
     }
 }
 
@@ -156,17 +184,20 @@ pub enum Update {
 #[derive(PartialEq, Eq, Debug, Clone, TraceRawVcs, ValueDebugFormat, Serialize, Deserialize)]
 pub struct TotalUpdate {
     /// The version this update will bring the object to.
-    pub to: VersionVc,
+    #[turbo_tasks(trace_ignore)]
+    pub to: TraitRef<Box<dyn Version>>,
 }
 
 /// A partial update to a versioned object.
 #[derive(PartialEq, Eq, Debug, Clone, TraceRawVcs, ValueDebugFormat, Serialize, Deserialize)]
 pub struct PartialUpdate {
     /// The version this update will bring the object to.
-    pub to: VersionVc,
+    #[turbo_tasks(trace_ignore)]
+    pub to: TraitRef<Box<dyn Version>>,
     /// The instructions to be passed to a remote system in order to update the
     /// versioned object.
-    pub instruction: JsonValueVc,
+    #[turbo_tasks(trace_ignore)]
+    pub instruction: Arc<serde_json::Value>,
 }
 
 /// [`Version`] implementation that hashes a file at a given path and returns
@@ -177,9 +208,9 @@ pub struct FileHashVersion {
     hash: String,
 }
 
-impl FileHashVersionVc {
-    /// Computes a new [`FileHashVersionVc`] from a path.
-    pub async fn compute(asset_content: &AssetContent) -> Result<Self> {
+impl FileHashVersion {
+    /// Computes a new [`Vc<FileHashVersion>`] from a path.
+    pub async fn compute(asset_content: &AssetContent) -> Result<Vc<Self>> {
         match asset_content {
             AssetContent::File(file_vc) => match &*file_vc.await? {
                 FileContent::Content(file) => {
@@ -197,7 +228,37 @@ impl FileHashVersionVc {
 #[turbo_tasks::value_impl]
 impl Version for FileHashVersion {
     #[turbo_tasks::function]
-    async fn id(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(self.hash.clone()))
+    async fn id(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(self.hash.clone()))
+    }
+}
+
+#[turbo_tasks::value]
+pub struct VersionState {
+    #[turbo_tasks(trace_ignore)]
+    version: State<TraitRef<Box<dyn Version>>>,
+}
+
+#[turbo_tasks::value_impl]
+impl VersionState {
+    #[turbo_tasks::function]
+    pub async fn get(self: Vc<Self>) -> Result<Vc<Box<dyn Version>>> {
+        let this = self.await?;
+        let version = TraitRef::cell(this.version.get().clone());
+        Ok(version)
+    }
+}
+
+impl VersionState {
+    pub async fn new(version: TraitRef<Box<dyn Version>>) -> Result<Vc<Self>> {
+        Ok(Self::cell(VersionState {
+            version: State::new(version),
+        }))
+    }
+
+    pub async fn set(self: Vc<Self>, new_version: TraitRef<Box<dyn Version>>) -> Result<()> {
+        let this = self.await?;
+        this.version.set(new_version);
+        Ok(())
     }
 }
