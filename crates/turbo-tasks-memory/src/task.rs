@@ -1075,8 +1075,7 @@ impl Task {
                 } => {
                     let event = event.take();
                     let outdated_collectibles = outdated_collectibles.take_collectibles();
-                    let mut change_job = None;
-                    if count_as_finished {
+                    let change = if count_as_finished {
                         let mut change = TaskChange {
                             unfinished: 1,
                             #[cfg(feature = "track_unfinished")]
@@ -1088,22 +1087,21 @@ impl Task {
                                 change.collectibles.push((trait_type, value, -count));
                             }
                         }
-                        change_job = Some(
-                            state
-                                .aggregation_leaf
-                                .change_job(&aggregation_context, change),
-                        );
+                        Some(change)
                     } else if let Some(collectibles) = outdated_collectibles {
                         let mut change = TaskChange::default();
                         for ((trait_type, value), count) in collectibles.into_iter() {
                             change.collectibles.push((trait_type, value, -count));
                         }
-                        change_job = Some(
-                            state
-                                .aggregation_leaf
-                                .change_job(&aggregation_context, change),
-                        );
-                    }
+                        Some(change)
+                    } else {
+                        None
+                    };
+                    let change_job = change.map(|change| {
+                        state
+                            .aggregation_leaf
+                            .change_job(&aggregation_context, change)
+                    });
                     state.state_type = InProgressDirty { event };
                     drop(state);
                     if let Some(job) = change_job {
