@@ -430,11 +430,10 @@ impl LazyIssueSource {
     #[turbo_tasks::function]
     pub async fn to_issue_source(self: Vc<Self>) -> Result<Vc<IssueSource>> {
         let this = &*self.await?;
-        Ok(IssueSource::from_byte_offset(
-            this.source,
-            this.start,
-            this.end,
-        ))
+        Ok(match (this.start, this.end) {
+            (0, 0) => IssueSource::from_source_only(this.source),
+            _ => IssueSource::from_byte_offset(this.source, this.start, this.end),
+        })
     }
 }
 
@@ -442,12 +441,21 @@ impl LazyIssueSource {
 #[derive(Clone, Debug)]
 pub struct IssueSource {
     source: Vc<Box<dyn Source>>,
-    start: SourcePos,
-    end: SourcePos,
+    range: Option<(SourcePos, SourcePos)>,
 }
 
 #[turbo_tasks::value_impl]
 impl IssueSource {
+    // Sometimes we only have the source file that causes an issue, not the
+    // exact location, such as as in some generated code.
+    #[turbo_tasks::function]
+    pub fn from_source_only(source: Vc<Box<dyn Source>>) -> Vc<Self> {
+        Self::cell(IssueSource {
+            source,
+            range: None,
+        })
+    }
+
     #[turbo_tasks::function]
     /// Returns an `IssueSource` representing a span of code in the `source`.
     /// Positions are derived from byte offsets and stored as lines and columns.
@@ -487,12 +495,14 @@ impl IssueSource {
             if let FileLinesContent::Lines(lines) = &*source.content().lines().await? {
                 let start = find_line_and_column(lines.as_ref(), start);
                 let end = find_line_and_column(lines.as_ref(), end);
-                IssueSource { source, start, end }
+                IssueSource {
+                    source,
+                    range: Some((start, end)),
+                }
             } else {
                 IssueSource {
                     source,
-                    start: SourcePos::default(),
-                    end: SourcePos::max(),
+                    range: Some((SourcePos::default(), SourcePos::max())),
                 }
             },
         ))
@@ -535,8 +545,7 @@ fn hash_plain_issue(issue: &PlainIssue, hasher: &mut Xxh3Hash64Hasher, full: boo
         hasher.write_value(1_u8);
         // I'm assuming we don't need to hash the contents. Not 100% correct, but
         // probably 99%.
-        hasher.write_ref(&source.start);
-        hasher.write_ref(&source.end);
+        hasher.write_ref(&source.range);
     } else {
         hasher.write_value(0_u8);
     }
@@ -587,8 +596,7 @@ impl PlainIssue {
 #[derive(Clone, Debug)]
 pub struct PlainIssueSource {
     pub asset: ReadRef<PlainSource>,
-    pub start: SourcePos,
-    pub end: SourcePos,
+    pub range: Option<(SourcePos, SourcePos)>,
 }
 
 #[turbo_tasks::value_impl]
@@ -598,8 +606,7 @@ impl IssueSource {
         let this = self.await?;
         Ok(PlainIssueSource {
             asset: PlainSource::from_source(this.source).await?,
-            start: this.start,
-            end: this.end,
+            range: this.range,
         }
         .cell())
     }
