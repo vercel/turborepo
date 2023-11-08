@@ -587,10 +587,19 @@ fn render_styled_string_to_ansi(styled_string: &StyledString) -> String {
             for part in parts {
                 string.push_str(&render_styled_string_to_ansi(part));
             }
+            string.push('\n');
             string
         }
-        StyledString::String(string) => string.to_string(),
-        StyledString::Pre(string) => string.blue().to_string(),
+        StyledString::Stack(parts) => {
+            let mut string = String::new();
+            for part in parts {
+                string.push_str(&render_styled_string_to_ansi(part));
+                string.push('\n');
+            }
+            string
+        }
+        StyledString::Text(string) => string.to_string(),
+        StyledString::Code(string) => string.blue().to_string(),
         StyledString::Strong(string) => string.bold().to_string(),
     }
 }

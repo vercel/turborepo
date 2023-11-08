@@ -73,12 +73,18 @@ impl Display for IssueSeverity {
     }
 }
 
+/// Represents a section of structured styled text. This can be interpreted and
+/// rendered by various UIs as appropriate, e.g. HTML for display on the web,
+/// ANSI sequences in TTYs.
 #[derive(Clone, Debug)]
 #[turbo_tasks::value(shared)]
 pub enum StyledString {
-    /// Multiple [StyledString]s concatenated into a single line. Each item is considered as inline element. Items might contain line breaks, which would be considered as soft line breaks.
+    /// Multiple [StyledString]s concatenated into a single line. Each item is
+    /// considered as inline element. Items might contain line breaks, which
+    /// would be considered as soft line breaks.
     Line(Vec<StyledString>),
-    /// Multiple [StyledString]s stacked vertically. They are considered as block elements, just like the top level [StyledString].
+    /// Multiple [StyledString]s stacked vertically. They are considered as
+    /// block elements, just like the top level [StyledString].
     Stack(Vec<StyledString>),
     /// Some prose text.
     Text(String),
@@ -93,13 +99,33 @@ impl DeterministicHash for StyledString {
     fn deterministic_hash<H: turbo_tasks_hash::DeterministicHasher>(&self, state: &mut H) {
         match self {
             StyledString::Line(parts) => {
+                "line_start".deterministic_hash(state);
                 for part in parts {
                     part.deterministic_hash(state);
                 }
+                "line_end".deterministic_hash(state);
             }
-            StyledString::String(s) | StyledString::Pre(s) | StyledString::Strong(s) => {
-                // Normalize syspaths from Windows. These appear in stack traces.
-                s.replace('\\', "/").deterministic_hash(state);
+            StyledString::Stack(parts) => {
+                "stack_start".deterministic_hash(state);
+                for part in parts {
+                    part.deterministic_hash(state);
+                }
+                "stack_end".deterministic_hash(state);
+            }
+            StyledString::Text(s) => {
+                "text_start".deterministic_hash(state);
+                s.deterministic_hash(state);
+                "text_end".deterministic_hash(state);
+            }
+            StyledString::Code(s) => {
+                "code_start".deterministic_hash(state);
+                s.deterministic_hash(state);
+                "code_end".deterministic_hash(state);
+            }
+            StyledString::Strong(s) => {
+                "strong_start".deterministic_hash(state);
+                s.deterministic_hash(state);
+                "strong_end".deterministic_hash(state);
             }
         }
     }
@@ -108,9 +134,11 @@ impl DeterministicHash for StyledString {
 impl StyledString {
     pub fn is_empty(&self) -> bool {
         match self {
-            StyledString::Line(parts) => parts.iter().all(|part| part.is_empty()),
-            StyledString::String(string)
-            | StyledString::Pre(string)
+            StyledString::Line(parts) | StyledString::Stack(parts) => {
+                parts.iter().all(|part| part.is_empty())
+            }
+            StyledString::Text(string)
+            | StyledString::Code(string)
             | StyledString::Strong(string) => string.is_empty(),
         }
     }

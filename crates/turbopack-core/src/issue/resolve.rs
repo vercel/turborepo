@@ -51,8 +51,8 @@ impl Issue for ResolvingIssue {
     async fn description(&self) -> Result<Vc<StyledString>> {
         Ok(StyledString::Line(vec![
             StyledString::Strong("Module not found".to_string()),
-            StyledString::String(": Can't resolve".to_string()),
-            StyledString::Pre(self.request.to_string().await?.to_string()),
+            StyledString::Text(": Can't resolve".to_string()),
+            StyledString::Code(self.request.to_string().await?.to_string()),
         ])
         .cell())
     }

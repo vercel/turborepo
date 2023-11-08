@@ -315,6 +315,6 @@ impl Issue for UnsupportedServerActionIssue {
 
     #[turbo_tasks::function]
     async fn description(&self) -> Result<Vc<StyledString>> {
-        Ok(StyledString::String("".to_string()).cell())
+        Ok(StyledString::Text("".to_string()).cell())
     }
 }

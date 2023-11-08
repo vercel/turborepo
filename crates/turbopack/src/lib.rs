@@ -372,7 +372,7 @@ async fn process_default(
                                 ModuleIssue {
                                     ident,
                                     title: Vc::cell("Invalid module type".to_string()),
-                                    description: StyledString::String(
+                                    description: StyledString::Text(
                                         "The module type must be Ecmascript or Typescript to add \
                                          Ecmascript transforms"
                                             .to_string(),
@@ -387,7 +387,7 @@ async fn process_default(
                                 ModuleIssue {
                                     ident,
                                     title: Vc::cell("Missing module type".to_string()),
-                                    description: StyledString::String(
+                                    description: StyledString::Text(
                                         "The module type effect must be applied before adding \
                                          Ecmascript transforms"
                                             .to_string(),

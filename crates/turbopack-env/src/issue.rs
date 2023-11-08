@@ -28,6 +28,6 @@ impl Issue for ProcessEnvIssue {
 
     #[turbo_tasks::function]
     fn description(&self) -> Vc<StyledString> {
-        StyledString::String(self.description.clone()).cell()
+        StyledString::Text(self.description.clone()).cell()
     }
 }

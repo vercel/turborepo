@@ -83,7 +83,7 @@ impl Issue for UnsupportedSwcEcmaTransformPluginsIssue {
 
     #[turbo_tasks::function]
     fn description(&self) -> Vc<StyledString> {
-        StyledString::String(
+        StyledString::Text(
             "Turbopack does not yet support running SWC EcmaScript transform plugins on this \
              platform."
                 .to_string(),

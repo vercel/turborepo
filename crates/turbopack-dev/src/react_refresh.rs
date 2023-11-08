@@ -90,7 +90,7 @@ impl Issue for ReactRefreshResolvingIssue {
 
     #[turbo_tasks::function]
     fn description(&self) -> Vc<StyledString> {
-        StyledString::String(
+        StyledString::Text(
             "React Refresh will be disabled.\nTo enable React Refresh, install the \
              `react-refresh` and `@next/react-refresh-utils` modules."
                 .to_string(),

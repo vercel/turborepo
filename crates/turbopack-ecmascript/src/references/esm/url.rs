@@ -159,7 +159,7 @@ impl CodeGenerateable for UrlAssetReference {
                             title: Vc::cell(
                                 "new URL(…) not implemented for this environment".to_string(),
                             ),
-                            message: StyledString::String(
+                            message: StyledString::Text(
                                 "new URL(…) is only currently supported for rendering \
                                  environments like Client-Side or Server-Side Rendering."
                                     .to_string(),

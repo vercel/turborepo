@@ -87,7 +87,7 @@ impl Issue for UnsupportedSassModuleIssue {
 
     #[turbo_tasks::function]
     fn description(&self) -> Vc<StyledString> {
-        StyledString::String("Turbopack does not yet support importing Sass modules.".to_string())
+        StyledString::Text("Turbopack does not yet support importing Sass modules.".to_string())
             .cell()
     }
 }

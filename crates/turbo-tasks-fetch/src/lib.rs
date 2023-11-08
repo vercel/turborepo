@@ -158,7 +158,7 @@ impl Issue for FetchIssue {
         let url = &*self.url.await?;
         let kind = &*self.kind.await?;
 
-        Ok(StyledString::String(match kind {
+        Ok(StyledString::Text(match kind {
             FetchErrorKind::Connect => format!(
                 "There was an issue establishing a connection while requesting {}.",
                 url

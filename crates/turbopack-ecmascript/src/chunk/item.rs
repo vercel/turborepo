@@ -237,7 +237,7 @@ async fn module_factory_with_code_generation_issue(
                     severity: IssueSeverity::Error.cell(),
                     path: chunk_item.asset_ident().path(),
                     title: Vc::cell("Code generation for chunk item errored".to_string()),
-                    message: StyledString::String(error_message).cell(),
+                    message: StyledString::Text(error_message).cell(),
                 }
                 .cell()
                 .emit();

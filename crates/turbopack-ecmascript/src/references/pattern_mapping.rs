@@ -147,7 +147,7 @@ impl PatternMapping {
                     title: Vc::cell(
                         "pattern mapping is not implemented for this result".to_string(),
                     ),
-                    message: StyledString::String(format!(
+                    message: StyledString::Text(format!(
                         "the reference resolves to a non-trivial result, which is not supported \
                          yet: {:?}",
                         resolve_result.dbg().await?
@@ -182,7 +182,7 @@ impl PatternMapping {
         CodeGenerationIssue {
             severity: IssueSeverity::Bug.into(),
             title: Vc::cell("non-ecmascript placeable asset".to_string()),
-            message: StyledString::String(
+            message: StyledString::Text(
                 "asset is not placeable in ESM chunks, so it doesn't have a module id".to_string(),
             )
             .cell(),

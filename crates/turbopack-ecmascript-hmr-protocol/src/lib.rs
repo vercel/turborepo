@@ -135,7 +135,7 @@ pub struct Issue<'a> {
     pub category: &'a str,
 
     pub title: &'a str,
-    pub description: StyledString,
+    pub description: &'a StyledString,
     pub detail: &'a str,
     pub documentation_link: &'a str,
 
@@ -160,7 +160,7 @@ impl<'a> From<&'a PlainIssue> for Issue<'a> {
             file_path: &plain.file_path,
             category: &plain.category,
             title: &plain.title,
-            description: plain.description.clone(),
+            description: &plain.description,
             documentation_link: &plain.documentation_link,
             detail: &plain.detail,
             source,

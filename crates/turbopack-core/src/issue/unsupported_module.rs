@@ -35,7 +35,7 @@ impl Issue for UnsupportedModuleIssue {
 
     #[turbo_tasks::function]
     async fn description(&self) -> Result<Vc<StyledString>> {
-        Ok(StyledString::String(match &self.package_path {
+        Ok(StyledString::Text(match &self.package_path {
             Some(path) => format!("The module {}{} is not yet supported", self.package, path),
             None => format!("The package {} is not yet supported", self.package),
         })

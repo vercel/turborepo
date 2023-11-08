@@ -104,7 +104,7 @@ async fn item_code(
                     severity: IssueSeverity::Error.cell(),
                     path: item.asset_ident().path(),
                     title: Vc::cell("Code generation for chunk item errored".to_string()),
-                    message: StyledString::String(error_message).cell(),
+                    message: StyledString::Text(error_message).cell(),
                 }
                 .cell()
                 .emit();

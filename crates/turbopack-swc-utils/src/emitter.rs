@@ -61,7 +61,7 @@ impl Emitter for IssueEmitter {
             category: Vc::cell("parse".to_string()),
             source_ident: self.source.ident(),
             title: Vc::cell(title),
-            message: StyledString::String(message).cell(),
+            message: StyledString::Text(message).cell(),
             code,
             source,
         }

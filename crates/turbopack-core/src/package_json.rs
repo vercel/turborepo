@@ -80,6 +80,6 @@ impl Issue for PackageJsonIssue {
 
     #[turbo_tasks::function]
     fn description(&self) -> Vc<StyledString> {
-        StyledString::String(self.error_message.clone()).cell()
+        StyledString::Text(self.error_message.clone()).cell()
     }
 }

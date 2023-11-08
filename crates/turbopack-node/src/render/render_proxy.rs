@@ -117,7 +117,7 @@ async fn proxy_error(
 
     RenderingIssue {
         file_path: path,
-        message: StyledString::String(message).cell(),
+        message: StyledString::Text(message).cell(),
         status: status.and_then(|status| status.code()),
     }
     .cell()

@@ -643,7 +643,7 @@ pub(crate) async fn analyze_ecmascript_module(
             AnalyzeIssue {
                 code: None,
                 category: Vc::cell("analyze".to_string()),
-                message: StyledString::String(
+                message: StyledString::Text(
                     "top level await is only supported in ESM modules.".to_string(),
                 )
                 .cell(),

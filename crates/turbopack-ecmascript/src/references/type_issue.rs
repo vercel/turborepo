@@ -39,7 +39,7 @@ impl Issue for SpecifiedModuleTypeIssue {
 
     #[turbo_tasks::function]
     fn description(&self) -> Vc<StyledString> {
-        StyledString::String(match self.specified_type {
+        StyledString::Text(match self.specified_type {
             SpecifiedModuleType::CommonJs => {
                 "The CommonJs module format was specified in the package.json that is affecting \
                  this source file or by using an special extension, but Ecmascript import/export \

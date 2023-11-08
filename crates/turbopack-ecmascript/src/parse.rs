@@ -396,7 +396,7 @@ impl Issue for ReadSourceIssue {
 
     #[turbo_tasks::function]
     fn description(&self) -> Vc<StyledString> {
-        StyledString::String(format!(
+        StyledString::Text(format!(
             "An unexpected error happened while trying to read the source code to parse: {}",
             self.error
         ))

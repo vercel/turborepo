@@ -441,6 +441,6 @@ impl Issue for CssModuleComposesIssue {
 
     #[turbo_tasks::function]
     fn description(&self) -> Vc<StyledString> {
-        StyledString::String(self.message.clone()).cell()
+        StyledString::Text(self.message.clone()).cell()
     }
 }
