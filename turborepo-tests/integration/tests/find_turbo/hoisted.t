@@ -4,7 +4,8 @@ Setup
 
 Make sure we use local and do not pass --skip-infer to old binary
   $ ${TESTDIR}/set_version.sh $(pwd) "1.0.0"
-  $ ${TURBO} build --filter foo -vv
+  $ ${TURBO} build --filter foo -vv > out.log
+  $ cat -vet out.log
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)hoisted.t (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Local turbo path: .*(\/|\\)hoisted.t(\/|\\)node_modules(\/|\\)turbo-(darwin|linux|windows)-(64|arm64)(\/|\\)bin(\/|\\)(turbo|turbo\.exe) (re)
@@ -16,7 +17,8 @@ Make sure we use local and do not pass --skip-infer to old binary
 
 Make sure we use local and pass --skip-infer to newer binary
   $ ${TESTDIR}/set_version.sh $(pwd) "1.8.0"
-  $ ${TURBO} build --filter foo -vv
+  $ ${TURBO} build --filter foo -vv > out2.log
+  $ cat -vet out2.log
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Global turbo version: .* (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Repository Root: .*(\/|\\)hoisted.t (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::shim: Local turbo path: .*(\/|\\)hoisted.t(\/|\\)node_modules(\/|\\)turbo-(darwin|linux|windows)-(64|arm64)(\/|\\)bin(\/|\\)(turbo|turbo\.exe) (re)
