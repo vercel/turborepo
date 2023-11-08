@@ -6,6 +6,7 @@ mod prefixed;
 use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
 
 use console::{Style, StyledObject};
+use dialoguer::{theme::ColorfulTheme, FuzzySelect};
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use thiserror::Error;
@@ -173,6 +174,22 @@ impl UI {
         out.push(RESET.to_string());
 
         Cow::Owned(out.join(""))
+    }
+
+    /// Display a list of selectable items to the user and returns the index of
+    /// the selected item from the provided items list.
+    pub fn display_selectable_items<T: std::fmt::Display>(
+        &self,
+        prompt: &str,
+        items: &[T],
+    ) -> Result<usize, Error> {
+        let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+            .with_prompt(prompt)
+            .default(0)
+            .items(items)
+            .interact()
+            .unwrap();
+        Ok(selection)
     }
 }
 

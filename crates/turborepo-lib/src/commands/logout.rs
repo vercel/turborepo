@@ -1,38 +1,47 @@
 use tracing::error;
-use turborepo_auth::logout as auth_logout;
+use turborepo_auth::{logout as auth_logout, read_or_create_auth_file};
 
-use crate::{cli::Error, commands::CommandBase, config, rewrite_json::unset_path};
+use crate::{cli::Error, commands::CommandBase};
 
-pub fn logout(base: &mut CommandBase) -> Result<(), Error> {
-    if let Err(err) = remove_token(base) {
+// TODO(voz): Move this to auth crate, more than likely.
+pub async fn logout(base: &mut CommandBase) -> Result<(), Error> {
+    let client = base.api_client()?;
+    let auth_path = base.global_auth_path()?;
+    let config_path = base.global_config_path()?;
+
+    let mut auth_file = read_or_create_auth_file(&auth_path, &config_path, &client).await?;
+
+    // Change how tokens are displayed for logout to make it nicer to read.
+    // I am very human.
+    let items = &auth_file
+        .tokens
+        .iter()
+        .map(|t| {
+            format!(
+                "{} ({})",
+                t.friendly_api_display(),
+                t.friendly_token_display()
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let index = base
+        .ui
+        .display_selectable_items("Select api to log out of:", items)
+        .unwrap();
+
+    println!(
+        "Removing token: {}",
+        auth_file.tokens[index].friendly_token_display()
+    );
+
+    auth_file.tokens.remove(index);
+    if let Err(err) = auth_file.write_to_disk(&auth_path) {
         error!("could not logout. Something went wrong: {}", err);
-        return Err(err);
+        return Err(Error::Auth(err));
     }
 
     auth_logout(&base.ui);
 
     Ok(())
-}
-
-fn remove_token(base: &mut CommandBase) -> Result<(), Error> {
-    let global_auth_path = base.global_auth_path()?;
-    let before = global_auth_path
-        .read_existing_to_string_or(Ok("{}"))
-        .map_err(|e| {
-            Error::Config(config::Error::FailedToReadConfig {
-                config_path: global_auth_path.clone(),
-                error: e,
-            })
-        })?;
-
-    if let Some(after) = unset_path(&before, &["token"], true)? {
-        global_auth_path.create_with_contents(after).map_err(|e| {
-            Error::Config(config::Error::FailedToSetConfig {
-                config_path: global_auth_path.clone(),
-                error: e,
-            })
-        })
-    } else {
-        Ok(())
-    }
 }

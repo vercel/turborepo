@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::Client;
@@ -76,6 +78,42 @@ impl AuthToken {
     /// Validates the token by checking the expiration date and the signature.
     pub async fn validate(&self, _client: impl Client) -> bool {
         unimplemented!("validate token")
+    }
+    pub fn friendly_token_display(&self) -> String {
+        format!(
+            "{}...{}",
+            &self.token[..3],
+            &self.token[self.token.len() - 3..]
+        )
+    }
+    pub fn friendly_api_display(&self) -> String {
+        if self.api.contains("vercel.com") {
+            return "▲ Vercel Remote Cache".to_owned();
+        }
+        self.api.clone()
+    }
+}
+impl Display for AuthToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let created_at = self
+            .created_at
+            .map(|t| {
+                // This should be safe to unwrap here since we're not setting the time for
+                // 262,000 years in the future and we're not putting in more than 2s worth of
+                // nanoseconds.
+                let timestamp = chrono::NaiveDateTime::from_timestamp_opt(t as i64, 0).unwrap();
+                let dt = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(
+                    timestamp,
+                    chrono::Utc,
+                );
+                dt.format("%Y-%m-%d %H:%M:%S").to_string()
+            })
+            .unwrap_or_else(|| "unknown".to_string());
+        write!(
+            f,
+            "Token: {}\nCreated at: {}\nUser: {} ({})\nTeams: {:?}",
+            self.token, created_at, self.user.username, self.user.email, self.teams
+        )
     }
 }
 

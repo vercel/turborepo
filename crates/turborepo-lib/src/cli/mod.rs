@@ -774,7 +774,7 @@ pub async fn run(
         }
         Command::Logout { .. } => {
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
-            logout::logout(&mut base)?;
+            logout::logout(&mut base).await?;
 
             Ok(Payload::Rust(Ok(0)))
         }
