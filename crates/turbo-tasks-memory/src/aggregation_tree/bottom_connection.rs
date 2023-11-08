@@ -44,11 +44,15 @@ impl<T: IsEnabled + Eq + Hash + Clone> DistanceCountMap<T> {
 
     pub fn add_clonable(&mut self, item: &T, distance: u8) -> bool {
         match self.map.raw_entry_mut(item) {
-            RawEntry::Occupied(e) => {
-                let info = e.into_mut();
+            RawEntry::Occupied(mut e) => {
+                let info = e.get_mut();
                 info.count += 1;
-                if distance < info.distance {
-                    info.distance = distance;
+                if info.count == 0 {
+                    e.remove();
+                } else if info.count > 0 {
+                    if distance < info.distance {
+                        info.distance = distance;
+                    }
                 }
                 false
             }
