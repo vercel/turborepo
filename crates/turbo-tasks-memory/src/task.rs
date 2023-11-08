@@ -663,7 +663,7 @@ impl Task {
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         let future;
         {
-            let remove_job;
+            let mut remove_job = None;
             let mut state = self.full_state_mut();
             match state.state_type {
                 Done { .. } | InProgress { .. } | InProgressDirty { .. } => {
@@ -673,11 +673,13 @@ impl Task {
                 Scheduled { ref mut event } => {
                     let event: Event = event.take();
                     let outdated_children = take(&mut state.children);
-                    remove_job = Some(
-                        state
-                            .aggregation_leaf
-                            .remove_children_job(&aggregation_context, outdated_children),
-                    );
+                    if !outdated_children.is_empty() {
+                        remove_job = Some(
+                            state
+                                .aggregation_leaf
+                                .remove_children_job(&aggregation_context, outdated_children),
+                        );
+                    }
                     let outdated_collectibles = take(&mut state.collectibles);
                     state.state_type = InProgress {
                         event,
