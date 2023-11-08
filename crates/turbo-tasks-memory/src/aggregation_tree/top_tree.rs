@@ -1,9 +1,9 @@
-use std::{mem::transmute, ops::ControlFlow, sync::Arc};
+use std::{borrow::Cow, mem::transmute, ops::ControlFlow, sync::Arc};
 
 use parking_lot::{Mutex, MutexGuard};
 use ref_cast::RefCast;
 
-use super::{inner_refs::TopRef, leaf::top_tree, AggregationContext};
+use super::{inner_refs::TopRef, leaf::top_tree, AggregationContext, ChangesQueue};
 use crate::count_hash_set::CountHashSet;
 
 /// The top half of the aggregation tree. It can aggregate all nodes of a
@@ -37,56 +37,77 @@ impl<T> TopTree<T> {
     pub fn add_children_of_child<'a, C: AggregationContext<Info = T>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         children: impl IntoIterator<Item = &'a C::ItemRef>,
     ) where
         C::ItemRef: 'a,
     {
         for child in children {
-            top_tree(aggregation_context, child, self.depth + 1)
-                .add_upper(aggregation_context, self);
+            top_tree(aggregation_context, changes_queue, child, self.depth + 1).add_upper(
+                aggregation_context,
+                changes_queue,
+                self,
+            );
         }
     }
 
     pub fn add_child_of_child<C: AggregationContext<Info = T>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         child_of_child: &C::ItemRef,
     ) {
-        top_tree(aggregation_context, child_of_child, self.depth + 1)
-            .add_upper(aggregation_context, self);
+        top_tree(
+            aggregation_context,
+            changes_queue,
+            child_of_child,
+            self.depth + 1,
+        )
+        .add_upper(aggregation_context, changes_queue, self);
     }
 
     pub fn remove_child_of_child<C: AggregationContext<Info = T>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         child_of_child: &C::ItemRef,
     ) {
-        top_tree(aggregation_context, child_of_child, self.depth + 1)
-            .remove_upper(aggregation_context, self);
+        top_tree(
+            aggregation_context,
+            changes_queue,
+            child_of_child,
+            self.depth + 1,
+        )
+        .remove_upper(aggregation_context, changes_queue, self);
     }
 
     pub fn remove_children_of_child<'a, C: AggregationContext<Info = T>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         children: impl IntoIterator<Item = &'a C::ItemRef>,
     ) where
         C::ItemRef: 'a,
     {
         for child in children {
-            top_tree(aggregation_context, child, self.depth + 1)
-                .remove_upper(aggregation_context, self);
+            top_tree(aggregation_context, changes_queue, child, self.depth + 1).remove_upper(
+                aggregation_context,
+                changes_queue,
+                self,
+            );
         }
     }
 
     pub fn add_upper<C: AggregationContext<Info = T>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         upper: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
         if state.upper.add_clonable(TopRef::ref_cast(upper)) {
             if let Some(change) = aggregation_context.info_to_add_change(&state.data) {
-                upper.child_change(aggregation_context, &change);
+                upper.child_change(aggregation_context, changes_queue, Cow::Owned(change));
             }
         }
     }
@@ -94,24 +115,35 @@ impl<T> TopTree<T> {
     pub fn remove_upper<C: AggregationContext<Info = T>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         upper: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.lock();
         if state.upper.remove_clonable(TopRef::ref_cast(upper)) {
             if let Some(change) = aggregation_context.info_to_remove_change(&state.data) {
-                upper.child_change(aggregation_context, &change);
+                upper.child_change(aggregation_context, changes_queue, Cow::Owned(change));
             }
         }
     }
 
     pub fn child_change<C: AggregationContext<Info = T>>(
+        self: &Arc<Self>,
+        aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
+        change: Cow<'_, C::ItemChange>,
+    ) {
+        changes_queue.add_top_change(aggregation_context, TopRef::ref_cast(self), change);
+    }
+
+    pub fn apply_change<C: AggregationContext<Info = T>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         change: &C::ItemChange,
     ) {
         let mut state = self.state.lock();
         let change = aggregation_context.apply_change(&mut state.data, change);
-        propagate_change_to_upper(&state, aggregation_context, change);
+        propagate_change_to_upper(&state, aggregation_context, changes_queue, change);
     }
 
     pub fn get_root_info<C: AggregationContext<Info = T>>(
@@ -149,13 +181,14 @@ impl<T> TopTree<T> {
 fn propagate_change_to_upper<C: AggregationContext>(
     state: &MutexGuard<TopTreeState<C::Info>>,
     aggregation_context: &C,
+    changes_queue: &mut ChangesQueue<C::Info, C::ItemRef, C::ItemChange>,
     change: Option<C::ItemChange>,
 ) {
     let Some(change) = change else {
         return;
     };
     for TopRef { upper } in state.upper.iter() {
-        upper.child_change(aggregation_context, &change);
+        upper.child_change(aggregation_context, changes_queue, Cow::Borrowed(&change));
     }
 }
 

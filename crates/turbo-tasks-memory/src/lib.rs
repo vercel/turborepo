@@ -5,6 +5,7 @@
 #![feature(box_patterns)]
 #![feature(int_roundings)]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(hash_raw_entry)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
 mod aggregation_tree;

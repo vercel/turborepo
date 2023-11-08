@@ -1,4 +1,4 @@
-use std::{hash::Hash, ops::ControlFlow, sync::Arc};
+use std::{borrow::Cow, hash::Hash, ops::ControlFlow, sync::Arc};
 
 use auto_hash_map::{map::RawEntry, AutoMap};
 use nohash_hasher::{BuildNoHashHasher, IsEnabled};
@@ -6,7 +6,7 @@ use nohash_hasher::{BuildNoHashHasher, IsEnabled};
 use super::{
     bottom_tree::BottomTree,
     inner_refs::{BottomRef, ChildLocation},
-    AggregationContext, StackVec,
+    AggregationContext, ChangesQueue, StackVec,
 };
 
 struct BottomRefInfo {
@@ -151,15 +151,16 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomConnection<T, I> {
     pub fn child_change<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
-        change: &C::ItemChange,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
+        change: Cow<'_, C::ItemChange>,
     ) {
         match self {
             BottomConnection::Left(upper) => {
-                upper.child_change(aggregation_context, change);
+                upper.child_change(aggregation_context, changes_queue, change);
             }
             BottomConnection::Inner(list) => {
                 for (BottomRef { upper }, _) in list.iter() {
-                    upper.child_change(aggregation_context, change);
+                    upper.child_change(aggregation_context, changes_queue, Cow::Borrowed(&*change));
                 }
             }
         }
@@ -168,12 +169,13 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomConnection<T, I> {
     pub fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         root_info_type: &C::RootInfoType,
         mut result: C::RootInfo,
     ) -> C::RootInfo {
         match &self {
             BottomConnection::Left(upper) => {
-                let info = upper.get_root_info(aggregation_context, root_info_type);
+                let info = upper.get_root_info(aggregation_context, changes_queue, root_info_type);
                 if aggregation_context.merge_root_info(&mut result, info) == ControlFlow::Break(())
                 {
                     return result;
@@ -181,7 +183,8 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomConnection<T, I> {
             }
             BottomConnection::Inner(list) => {
                 for (BottomRef { upper }, _) in list.iter() {
-                    let info = upper.get_root_info(aggregation_context, root_info_type);
+                    let info =
+                        upper.get_root_info(aggregation_context, changes_queue, root_info_type);
                     if aggregation_context.merge_root_info(&mut result, info)
                         == ControlFlow::Break(())
                     {
@@ -203,18 +206,26 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
     pub fn add_children_of_child<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         children: impl IntoIterator<Item = &'a I> + Clone,
     ) where
         I: 'a,
     {
         match self {
             BottomUppers::Left(upper) => {
-                upper.add_children_of_child(aggregation_context, ChildLocation::Left, children, 0);
+                upper.add_children_of_child(
+                    aggregation_context,
+                    changes_queue,
+                    ChildLocation::Left,
+                    children,
+                    0,
+                );
             }
             BottomUppers::Inner(list) => {
                 for &(BottomRef { ref upper }, nesting_level) in list {
                     upper.add_children_of_child(
                         aggregation_context,
+                        changes_queue,
                         ChildLocation::Inner,
                         children.clone(),
                         nesting_level + 1,
@@ -227,12 +238,14 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
     pub fn add_child_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         child_of_child: &I,
     ) {
         match self {
             BottomUppers::Left(upper) => {
                 upper.add_child_of_child(
                     aggregation_context,
+                    changes_queue,
                     ChildLocation::Left,
                     child_of_child,
                     0,
@@ -242,6 +255,7 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
                 for &(BottomRef { ref upper }, nesting_level) in list.iter() {
                     upper.add_child_of_child(
                         aggregation_context,
+                        changes_queue,
                         ChildLocation::Inner,
                         child_of_child,
                         nesting_level + 1,
@@ -254,15 +268,16 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
     pub fn remove_child_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         child_of_child: &I,
     ) {
         match self {
             BottomUppers::Left(upper) => {
-                upper.remove_child_of_child(aggregation_context, child_of_child);
+                upper.remove_child_of_child(aggregation_context, changes_queue, child_of_child);
             }
             BottomUppers::Inner(list) => {
                 for (BottomRef { upper }, _) in list {
-                    upper.remove_child_of_child(aggregation_context, child_of_child);
+                    upper.remove_child_of_child(aggregation_context, changes_queue, child_of_child);
                 }
             }
         }
@@ -271,34 +286,22 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
     pub fn remove_children_of_child<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         children: impl IntoIterator<Item = &'a I> + Clone,
     ) where
         I: 'a,
     {
         match self {
             BottomUppers::Left(upper) => {
-                upper.remove_children_of_child(aggregation_context, children);
+                upper.remove_children_of_child(aggregation_context, changes_queue, children);
             }
             BottomUppers::Inner(list) => {
                 for (BottomRef { upper }, _) in list {
-                    upper.remove_children_of_child(aggregation_context, children.clone());
-                }
-            }
-        }
-    }
-
-    pub fn child_change<C: AggregationContext<Info = T, ItemRef = I>>(
-        &self,
-        aggregation_context: &C,
-        change: &C::ItemChange,
-    ) {
-        match self {
-            BottomUppers::Left(upper) => {
-                upper.child_change(aggregation_context, change);
-            }
-            BottomUppers::Inner(list) => {
-                for (BottomRef { upper }, _) in list {
-                    upper.child_change(aggregation_context, change);
+                    upper.remove_children_of_child(
+                        aggregation_context,
+                        changes_queue,
+                        children.clone(),
+                    );
                 }
             }
         }
@@ -307,12 +310,13 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
     pub fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         root_info_type: &C::RootInfoType,
         mut result: C::RootInfo,
     ) -> C::RootInfo {
         match &self {
             BottomUppers::Left(upper) => {
-                let info = upper.get_root_info(aggregation_context, root_info_type);
+                let info = upper.get_root_info(aggregation_context, changes_queue, root_info_type);
                 if aggregation_context.merge_root_info(&mut result, info) == ControlFlow::Break(())
                 {
                     return result;
@@ -320,7 +324,8 @@ impl<T, I: IsEnabled + Eq + Hash + Clone> BottomUppers<T, I> {
             }
             BottomUppers::Inner(list) => {
                 for (BottomRef { upper }, _) in list.iter() {
-                    let info = upper.get_root_info(aggregation_context, root_info_type);
+                    let info =
+                        upper.get_root_info(aggregation_context, changes_queue, root_info_type);
                     if aggregation_context.merge_root_info(&mut result, info)
                         == ControlFlow::Break(())
                     {

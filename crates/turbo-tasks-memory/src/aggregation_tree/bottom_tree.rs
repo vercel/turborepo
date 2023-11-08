@@ -1,4 +1,4 @@
-use std::{hash::Hash, ops::ControlFlow, sync::Arc};
+use std::{borrow::Cow, hash::Hash, ops::ControlFlow, sync::Arc};
 
 use nohash_hasher::{BuildNoHashHasher, IsEnabled};
 use parking_lot::{RwLock, RwLockWriteGuard};
@@ -12,7 +12,7 @@ use super::{
         remove_left_upper_from_item,
     },
     top_tree::TopTree,
-    AggregationContext, StackVec, CHILDREN_INNER_THRESHOLD, CONNECTIVITY_LIMIT,
+    AggregationContext, ChangesQueue, StackVec, CHILDREN_INNER_THRESHOLD, CONNECTIVITY_LIMIT,
 };
 use crate::count_hash_set::{CountHashSet, RemoveIfEntryResult};
 
@@ -20,7 +20,7 @@ use crate::count_hash_set::{CountHashSet, RemoveIfEntryResult};
 /// certain connectivity depending on the "height". Every level of the tree
 /// aggregates the previous level.
 pub struct BottomTree<T, I: IsEnabled> {
-    height: u8,
+    pub height: u8,
     item: I,
     state: RwLock<BottomTreeState<T, I>>,
 }
@@ -52,6 +52,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     pub fn add_children_of_child<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         child_location: ChildLocation,
         children: impl IntoIterator<Item = &'a I>,
         nesting_level: u8,
@@ -63,7 +64,12 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 // the left child has new children
                 // this means it's a inner child of this node
                 // We always want to aggregate over at least connectivity 1
-                self.add_children_of_child_inner(aggregation_context, children, nesting_level);
+                self.add_children_of_child_inner(
+                    aggregation_context,
+                    changes_queue,
+                    children,
+                    nesting_level,
+                );
             }
             ChildLocation::Inner => {
                 // the inner child has new children
@@ -71,12 +77,21 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 // and blue children need to propagate up
                 let mut children = children.into_iter().collect();
                 if nesting_level > CONNECTIVITY_LIMIT {
-                    self.add_children_of_child_following(aggregation_context, children);
+                    self.add_children_of_child_following(
+                        aggregation_context,
+                        changes_queue,
+                        children,
+                    );
                     return;
                 }
 
                 self.add_children_of_child_if_following(&mut children);
-                self.add_children_of_child_inner(aggregation_context, children, nesting_level);
+                self.add_children_of_child_inner(
+                    aggregation_context,
+                    changes_queue,
+                    children,
+                    nesting_level,
+                );
             }
         }
     }
@@ -89,6 +104,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     fn add_children_of_child_following<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         mut children: StackVec<&I>,
     ) {
         let mut state = self.state.write();
@@ -100,14 +116,23 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         let top_upper = state.top_upper.iter().cloned().collect::<Vec<_>>();
         drop(state);
         for TopRef { upper } in top_upper {
-            upper.add_children_of_child(aggregation_context, children.iter().copied());
+            upper.add_children_of_child(
+                aggregation_context,
+                changes_queue,
+                children.iter().copied(),
+            );
         }
-        buttom_uppers.add_children_of_child(aggregation_context, children.iter().copied());
+        buttom_uppers.add_children_of_child(
+            aggregation_context,
+            changes_queue,
+            children.iter().copied(),
+        );
     }
 
     fn add_children_of_child_inner<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         children: impl IntoIterator<Item = &'a I>,
         nesting_level: u8,
     ) where
@@ -116,29 +141,41 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         let mut following = StackVec::default();
         if self.height == 0 {
             for child in children {
-                let can_be_inner =
-                    add_inner_upper_to_item(aggregation_context, child, self, nesting_level);
+                let can_be_inner = add_inner_upper_to_item(
+                    aggregation_context,
+                    changes_queue,
+                    child,
+                    self,
+                    nesting_level,
+                );
                 if !can_be_inner {
                     following.push(child);
                 }
             }
         } else {
             for child in children {
-                let can_be_inner = bottom_tree(aggregation_context, child, self.height - 1)
-                    .add_inner_bottom_tree_upper(aggregation_context, self, nesting_level);
+                let can_be_inner =
+                    bottom_tree(aggregation_context, changes_queue, child, self.height - 1)
+                        .add_inner_bottom_tree_upper(
+                            aggregation_context,
+                            changes_queue,
+                            self,
+                            nesting_level,
+                        );
                 if !can_be_inner {
                     following.push(child);
                 }
             }
         }
         if !following.is_empty() {
-            self.add_children_of_child_following(aggregation_context, following);
+            self.add_children_of_child_following(aggregation_context, changes_queue, following);
         }
     }
 
     pub fn add_child_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         child_location: ChildLocation,
         child_of_child: &I,
         nesting_level: u8,
@@ -149,7 +186,12 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 // the left child has a new child
                 // this means it's a inner child of this node
                 // We always want to aggregate over at least connectivity 1
-                self.add_child_of_child_inner(aggregation_context, child_of_child, nesting_level);
+                self.add_child_of_child_inner(
+                    aggregation_context,
+                    changes_queue,
+                    child_of_child,
+                    nesting_level,
+                );
             }
             ChildLocation::Inner => {
                 if nesting_level <= CONNECTIVITY_LIMIT {
@@ -160,6 +202,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                     if !self.add_child_of_child_if_following(child_of_child) {
                         self.add_child_of_child_inner(
                             aggregation_context,
+                            changes_queue,
                             child_of_child,
                             nesting_level,
                         );
@@ -168,7 +211,11 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                     // the inner child has a new child
                     // this means we need to propagate the change up
                     // and store them in our own list
-                    self.add_child_of_child_following(aggregation_context, child_of_child);
+                    self.add_child_of_child_following(
+                        aggregation_context,
+                        changes_queue,
+                        child_of_child,
+                    );
                 }
             }
         }
@@ -182,6 +229,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     fn add_child_of_child_following<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         child_of_child: &I,
     ) {
         let mut state = self.state.write();
@@ -190,51 +238,84 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             return;
         }
 
-        propagate_new_following_to_uppers(state, aggregation_context, child_of_child);
+        propagate_new_following_to_uppers(
+            state,
+            aggregation_context,
+            changes_queue,
+            child_of_child,
+        );
     }
 
     fn add_child_of_child_inner<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         child_of_child: &I,
         nesting_level: u8,
     ) {
         let can_be_inner = if self.height == 0 {
-            add_inner_upper_to_item(aggregation_context, child_of_child, self, nesting_level)
+            add_inner_upper_to_item(
+                aggregation_context,
+                changes_queue,
+                child_of_child,
+                self,
+                nesting_level,
+            )
         } else {
-            bottom_tree(aggregation_context, child_of_child, self.height - 1)
-                .add_inner_bottom_tree_upper(aggregation_context, self, nesting_level)
+            bottom_tree(
+                aggregation_context,
+                changes_queue,
+                child_of_child,
+                self.height - 1,
+            )
+            .add_inner_bottom_tree_upper(
+                aggregation_context,
+                changes_queue,
+                self,
+                nesting_level,
+            )
         };
         if !can_be_inner {
-            self.add_child_of_child_following(aggregation_context, child_of_child);
+            self.add_child_of_child_following(aggregation_context, changes_queue, child_of_child);
         }
     }
 
     pub fn remove_child_of_child<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         child_of_child: &I,
     ) {
-        if !self.remove_child_of_child_if_following(aggregation_context, child_of_child) {
-            self.remove_child_of_child_inner(aggregation_context, child_of_child);
+        if !self.remove_child_of_child_if_following(
+            aggregation_context,
+            changes_queue,
+            child_of_child,
+        ) {
+            self.remove_child_of_child_inner(aggregation_context, changes_queue, child_of_child);
         }
     }
 
     pub fn remove_children_of_child<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         children: impl IntoIterator<Item = &'a I>,
     ) where
         I: 'a,
     {
         let mut children = children.into_iter().collect();
-        self.remove_children_of_child_if_following(aggregation_context, &mut children);
-        self.remove_children_of_child_inner(aggregation_context, children);
+        self.remove_children_of_child_if_following(
+            aggregation_context,
+            changes_queue,
+            &mut children,
+        );
+        self.remove_children_of_child_inner(aggregation_context, changes_queue, children);
     }
 
     fn remove_child_of_child_if_following<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         child_of_child: &I,
     ) -> bool {
         let mut state = self.state.write();
@@ -243,13 +324,19 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             RemoveIfEntryResult::NotPresent => return false,
             RemoveIfEntryResult::Removed => {}
         }
-        propagate_lost_following_to_uppers(state, aggregation_context, child_of_child);
+        propagate_lost_following_to_uppers(
+            state,
+            aggregation_context,
+            changes_queue,
+            child_of_child,
+        );
         true
     }
 
     fn remove_children_of_child_if_following<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         children: &mut Vec<&'a I>,
     ) {
         let mut state = self.state.write();
@@ -263,13 +350,14 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             }
         });
         if !removed.is_empty() {
-            propagate_lost_followings_to_uppers(state, aggregation_context, removed);
+            propagate_lost_followings_to_uppers(state, aggregation_context, changes_queue, removed);
         }
     }
 
     fn remove_child_of_child_following<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         child_of_child: &I,
     ) -> bool {
         let mut state = self.state.write();
@@ -277,39 +365,56 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             // no present, nothing to do
             return false;
         }
-        propagate_lost_following_to_uppers(state, aggregation_context, child_of_child);
+        propagate_lost_following_to_uppers(
+            state,
+            aggregation_context,
+            changes_queue,
+            child_of_child,
+        );
         true
     }
 
     fn remove_children_of_child_following<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         mut children: StackVec<&I>,
     ) {
         let mut state = self.state.write();
         children.retain(|&mut child| state.following.remove_clonable(child));
-        propagate_lost_followings_to_uppers(state, aggregation_context, children);
+        propagate_lost_followings_to_uppers(state, aggregation_context, changes_queue, children);
     }
 
     fn remove_child_of_child_inner<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         child_of_child: &I,
     ) {
         let can_remove_inner = if self.height == 0 {
-            remove_inner_upper_from_item(aggregation_context, child_of_child, self)
+            remove_inner_upper_from_item(aggregation_context, changes_queue, child_of_child, self)
         } else {
-            bottom_tree(aggregation_context, child_of_child, self.height - 1)
-                .remove_inner_bottom_tree_upper(aggregation_context, self)
+            bottom_tree(
+                aggregation_context,
+                changes_queue,
+                child_of_child,
+                self.height - 1,
+            )
+            .remove_inner_bottom_tree_upper(aggregation_context, changes_queue, self)
         };
         if !can_remove_inner {
-            self.remove_child_of_child_following(aggregation_context, child_of_child);
+            self.remove_child_of_child_following(
+                aggregation_context,
+                changes_queue,
+                child_of_child,
+            );
         }
     }
 
     fn remove_children_of_child_inner<'a, C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         children: impl IntoIterator<Item = &'a I>,
     ) where
         I: 'a,
@@ -317,25 +422,32 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         let unremoveable: StackVec<_> = if self.height == 0 {
             children
                 .into_iter()
-                .filter(|&child| !remove_inner_upper_from_item(aggregation_context, child, self))
+                .filter(|&child| {
+                    !remove_inner_upper_from_item(aggregation_context, changes_queue, child, self)
+                })
                 .collect()
         } else {
             children
                 .into_iter()
                 .filter(|&child| {
-                    !bottom_tree(aggregation_context, child, self.height - 1)
-                        .remove_inner_bottom_tree_upper(aggregation_context, self)
+                    !bottom_tree(aggregation_context, changes_queue, child, self.height - 1)
+                        .remove_inner_bottom_tree_upper(aggregation_context, changes_queue, self)
                 })
                 .collect()
         };
         if !unremoveable.is_empty() {
-            self.remove_children_of_child_following(aggregation_context, unremoveable);
+            self.remove_children_of_child_following(
+                aggregation_context,
+                changes_queue,
+                unremoveable,
+            );
         }
     }
 
     pub fn add_left_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         upper: &Arc<BottomTree<T, I>>,
     ) {
         let mut state = self.state.write();
@@ -349,11 +461,12 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
 
         drop(state);
         if let Some(change) = add_change {
-            upper.child_change(aggregation_context, &change);
+            upper.child_change(aggregation_context, changes_queue, Cow::Owned(change));
         }
         if !children.is_empty() {
             upper.add_children_of_child(
                 aggregation_context,
+                changes_queue,
                 ChildLocation::Left,
                 children.iter(),
                 1,
@@ -381,6 +494,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             let item = &self.item;
             old_upper.migrate_old_inner(
                 aggregation_context,
+                changes_queue,
                 item,
                 count,
                 &remove_change,
@@ -392,6 +506,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     pub fn migrate_old_inner<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         item: &I,
         count: isize,
         remove_change: &Option<C::ItemChange>,
@@ -401,19 +516,19 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         if count > 0 {
             // add as following
             if state.following.add_count(item.clone(), count as usize) {
-                propagate_new_following_to_uppers(state, aggregation_context, item);
+                propagate_new_following_to_uppers(state, aggregation_context, changes_queue, item);
             } else {
                 drop(state);
             }
             // remove from self
             if let Some(change) = remove_change.as_ref() {
-                self.child_change(aggregation_context, change);
+                self.child_change(aggregation_context, changes_queue, Cow::Borrowed(change));
             }
-            self.remove_children_of_child(aggregation_context, following);
+            self.remove_children_of_child(aggregation_context, changes_queue, following);
         } else {
             // remove count from following instead
             if state.following.remove_count(item.clone(), -count as usize) {
-                propagate_lost_following_to_uppers(state, aggregation_context, item);
+                propagate_lost_following_to_uppers(state, aggregation_context, changes_queue, item);
             }
         }
     }
@@ -422,6 +537,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     pub fn add_inner_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         upper: &Arc<BottomTree<T, I>>,
         nesting_level: u8,
     ) -> bool {
@@ -436,13 +552,14 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         let new = inner.add_clonable(BottomRef::ref_cast(upper), nesting_level);
         if new {
             if let Some(change) = aggregation_context.info_to_add_change(&state.data) {
-                upper.child_change(aggregation_context, &change);
+                upper.child_change(aggregation_context, changes_queue, Cow::Owned(change));
             }
             let children = state.following.iter().cloned().collect::<StackVec<_>>();
             drop(state);
             if !children.is_empty() {
                 upper.add_children_of_child(
                     aggregation_context,
+                    changes_queue,
                     ChildLocation::Inner,
                     &children,
                     nesting_level + 1,
@@ -455,27 +572,29 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     pub fn remove_left_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         upper: &Arc<BottomTree<T, I>>,
     ) {
         let mut state = self.state.write();
         state.bottom_upper.unset_left_upper(upper);
         if let Some(change) = aggregation_context.info_to_remove_change(&state.data) {
-            upper.child_change(aggregation_context, &change);
+            upper.child_change(aggregation_context, changes_queue, Cow::Owned(change));
         }
         let following = state.following.iter().cloned().collect::<StackVec<_>>();
         if state.top_upper.is_empty() {
             drop(state);
-            self.remove_self_from_lower(aggregation_context);
+            self.remove_self_from_lower(aggregation_context, changes_queue);
         } else {
             drop(state);
         }
-        upper.remove_children_of_child(aggregation_context, &following);
+        upper.remove_children_of_child(aggregation_context, changes_queue, &following);
     }
 
     #[must_use]
     pub fn remove_inner_bottom_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         upper: &Arc<BottomTree<T, I>>,
     ) -> bool {
         let mut state = self.state.write();
@@ -488,9 +607,9 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             let following = state.following.iter().cloned().collect::<StackVec<_>>();
             drop(state);
             if let Some(change) = remove_change {
-                upper.child_change(aggregation_context, &change);
+                upper.child_change(aggregation_context, changes_queue, Cow::Owned(change));
             }
-            upper.remove_children_of_child(aggregation_context, &following);
+            upper.remove_children_of_child(aggregation_context, changes_queue, &following);
         }
         true
     }
@@ -498,16 +617,17 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     pub fn add_top_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         upper: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.write();
         let new = state.top_upper.add_clonable(TopRef::ref_cast(upper));
         if new {
             if let Some(change) = aggregation_context.info_to_add_change(&state.data) {
-                upper.child_change(aggregation_context, &change);
+                upper.child_change(aggregation_context, changes_queue, Cow::Owned(change));
             }
             for following in state.following.iter() {
-                upper.add_child_of_child(aggregation_context, following);
+                upper.add_child_of_child(aggregation_context, changes_queue, following);
             }
         }
     }
@@ -516,51 +636,69 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     pub fn remove_top_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, C::ItemRef, C::ItemChange>,
         upper: &Arc<TopTree<T>>,
     ) {
         let mut state = self.state.write();
         let removed = state.top_upper.remove_clonable(TopRef::ref_cast(upper));
         if removed {
             if let Some(change) = aggregation_context.info_to_remove_change(&state.data) {
-                upper.child_change(aggregation_context, &change);
+                upper.child_change(aggregation_context, changes_queue, Cow::Owned(change));
             }
             for following in state.following.iter() {
-                upper.remove_child_of_child(aggregation_context, following);
+                upper.remove_child_of_child(aggregation_context, changes_queue, following);
             }
             if state.top_upper.is_empty()
                 && !matches!(state.bottom_upper, BottomConnection::Left(_))
             {
                 drop(state);
-                self.remove_self_from_lower(aggregation_context);
+                self.remove_self_from_lower(aggregation_context, changes_queue);
             }
         }
     }
 
-    fn remove_self_from_lower(
+    fn remove_self_from_lower<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
-        aggregation_context: &impl AggregationContext<Info = T, ItemRef = I>,
+        aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
     ) {
         if self.height == 0 {
-            remove_left_upper_from_item(aggregation_context, &self.item, self);
+            remove_left_upper_from_item(aggregation_context, changes_queue, &self.item, self);
         } else {
-            bottom_tree(aggregation_context, &self.item, self.height - 1)
-                .remove_left_bottom_tree_upper(aggregation_context, self);
+            bottom_tree(
+                aggregation_context,
+                changes_queue,
+                &self.item,
+                self.height - 1,
+            )
+            .remove_left_bottom_tree_upper(aggregation_context, changes_queue, self);
         }
     }
 
     pub fn child_change<C: AggregationContext<Info = T, ItemRef = I>>(
+        self: &Arc<Self>,
+        aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
+        change: Cow<'_, C::ItemChange>,
+    ) {
+        changes_queue.add_bottom_change(aggregation_context, BottomRef::ref_cast(self), change);
+    }
+
+    pub fn apply_change<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         change: &C::ItemChange,
     ) {
         let mut state = self.state.write();
         let change = aggregation_context.apply_change(&mut state.data, change);
-        propagate_change_to_upper(&state, aggregation_context, change);
+        propagate_change_to_upper(&state, aggregation_context, changes_queue, change);
     }
 
     pub fn get_root_info<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
+        changes_queue: &mut ChangesQueue<T, I, C::ItemChange>,
         root_info_type: &C::RootInfoType,
     ) -> C::RootInfo {
         let mut result = aggregation_context.new_root_info(root_info_type);
@@ -578,27 +716,29 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             let state = self.state.read();
             state.bottom_upper.as_cloned_uppers()
         };
-        bottom_uppers.get_root_info(aggregation_context, root_info_type, result)
+        bottom_uppers.get_root_info(aggregation_context, changes_queue, root_info_type, result)
     }
 }
 
 fn propagate_lost_following_to_uppers<C: AggregationContext>(
     state: RwLockWriteGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
     aggregation_context: &C,
+    changes_queue: &mut ChangesQueue<C::Info, C::ItemRef, C::ItemChange>,
     child_of_child: &C::ItemRef,
 ) {
     let bottom_uppers = state.bottom_upper.as_cloned_uppers();
     let top_upper = state.top_upper.iter().cloned().collect::<StackVec<_>>();
     drop(state);
     for TopRef { upper } in top_upper {
-        upper.remove_child_of_child(aggregation_context, child_of_child);
+        upper.remove_child_of_child(aggregation_context, changes_queue, child_of_child);
     }
-    bottom_uppers.remove_child_of_child(aggregation_context, child_of_child);
+    bottom_uppers.remove_child_of_child(aggregation_context, changes_queue, child_of_child);
 }
 
 fn propagate_lost_followings_to_uppers<'a, C: AggregationContext>(
     state: RwLockWriteGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
     aggregation_context: &C,
+    changes_queue: &mut ChangesQueue<C::Info, C::ItemRef, C::ItemChange>,
     children: impl IntoIterator<Item = &'a C::ItemRef> + Clone,
 ) where
     C::ItemRef: 'a,
@@ -607,28 +747,30 @@ fn propagate_lost_followings_to_uppers<'a, C: AggregationContext>(
     let top_upper = state.top_upper.iter().cloned().collect::<Vec<_>>();
     drop(state);
     for TopRef { upper } in top_upper {
-        upper.remove_children_of_child(aggregation_context, children.clone());
+        upper.remove_children_of_child(aggregation_context, changes_queue, children.clone());
     }
-    bottom_uppers.remove_children_of_child(aggregation_context, children);
+    bottom_uppers.remove_children_of_child(aggregation_context, changes_queue, children);
 }
 
 fn propagate_new_following_to_uppers<C: AggregationContext>(
     state: RwLockWriteGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
     aggregation_context: &C,
+    changes_queue: &mut ChangesQueue<C::Info, C::ItemRef, C::ItemChange>,
     child_of_child: &C::ItemRef,
 ) {
     let bottom_uppers = state.bottom_upper.as_cloned_uppers();
     let top_upper = state.top_upper.iter().cloned().collect::<Vec<_>>();
     drop(state);
     for TopRef { upper } in top_upper {
-        upper.add_child_of_child(aggregation_context, child_of_child);
+        upper.add_child_of_child(aggregation_context, changes_queue, child_of_child);
     }
-    bottom_uppers.add_child_of_child(aggregation_context, child_of_child);
+    bottom_uppers.add_child_of_child(aggregation_context, changes_queue, child_of_child);
 }
 
 fn propagate_change_to_upper<C: AggregationContext>(
     state: &RwLockWriteGuard<BottomTreeState<C::Info, C::ItemRef>>,
     aggregation_context: &C,
+    changes_queue: &mut ChangesQueue<C::Info, C::ItemRef, C::ItemChange>,
     change: Option<C::ItemChange>,
 ) {
     let Some(change) = change else {
@@ -636,9 +778,9 @@ fn propagate_change_to_upper<C: AggregationContext>(
     };
     state
         .bottom_upper
-        .child_change(aggregation_context, &change);
+        .child_change(aggregation_context, changes_queue, Cow::Borrowed(&change));
     for TopRef { upper } in state.top_upper.iter() {
-        upper.child_change(aggregation_context, &change);
+        upper.child_change(aggregation_context, changes_queue, Cow::Borrowed(&change));
     }
 }
 
@@ -646,6 +788,7 @@ fn propagate_change_to_upper<C: AggregationContext>(
 #[cfg(test)]
 fn visit_graph<C: AggregationContext>(
     aggregation_context: &C,
+    changes_queue: &mut ChangesQueue<C::Info, C::ItemRef, C::ItemChange>,
     entry: &C::ItemRef,
     height: u8,
 ) -> (usize, usize) {
@@ -656,7 +799,7 @@ fn visit_graph<C: AggregationContext>(
     queue.push_back(entry.clone());
     let mut edges = 0;
     while let Some(item) = queue.pop_front() {
-        let tree = bottom_tree(aggregation_context, &item, height);
+        let tree = bottom_tree(aggregation_context, changes_queue, &item, height);
         let state = tree.state.read();
         for next in state.following.iter() {
             edges += 1;
@@ -681,7 +824,8 @@ pub fn print_graph<C: AggregationContext>(
         collections::{HashSet, VecDeque},
         fmt::Write,
     };
-    let (nodes, edges) = visit_graph(aggregation_context, entry, height);
+    let mut changes_queue = ChangesQueue::new();
+    let (nodes, edges) = visit_graph(aggregation_context, &mut changes_queue, entry, height);
     if !color_upper {
         print!("subgraph cluster_{} {{", height);
         print!(
@@ -696,7 +840,8 @@ pub fn print_graph<C: AggregationContext>(
     visited.insert(entry.clone());
     queue.push_back(entry.clone());
     while let Some(item) = queue.pop_front() {
-        let tree = bottom_tree(aggregation_context, &item, height);
+        let tree = bottom_tree(aggregation_context, &mut changes_queue, &item, height);
+        changes_queue.apply_changes(aggregation_context);
         let name = name_fn(&item);
         let label = name.to_string();
         let state = tree.state.read();

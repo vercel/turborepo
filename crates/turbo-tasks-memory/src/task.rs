@@ -986,7 +986,7 @@ impl Task {
                         };
                         state.aggregation_leaf.change(
                             &TaskAggregationContext::new(turbo_tasks, backend),
-                            &TaskChange {
+                            TaskChange {
                                 dirty_tasks_update: vec![(self.id, -1)],
                                 ..Default::default()
                             },
@@ -1012,7 +1012,7 @@ impl Task {
                         || {
                             state.aggregation_leaf.change(
                                 &aggregation_context,
-                                &TaskChange {
+                                TaskChange {
                                     unfinished: 1,
                                     #[cfg(feature = "track_unfinished")]
                                     unfinished_tasks_update: vec![(self.id, 1)],
@@ -1024,7 +1024,7 @@ impl Task {
                             if aggregation_context.take_scheduled_dirty_task(self.id) {
                                 state.aggregation_leaf.change(
                                     &aggregation_context,
-                                    &TaskChange {
+                                    TaskChange {
                                         dirty_tasks_update: vec![(self.id, -1)],
                                         ..Default::default()
                                     },
@@ -1037,7 +1037,7 @@ impl Task {
                     if !has_set_unfinished {
                         state.aggregation_leaf.change(
                             &aggregation_context,
-                            &TaskChange {
+                            TaskChange {
                                 unfinished: 1,
                                 #[cfg(feature = "track_unfinished")]
                                 unfinished_tasks_update: vec![(self.id, 1)],
@@ -1111,7 +1111,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
-        let aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
+        let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut state = self.full_state_mut();
         if let TaskStateType::Dirty { ref mut event } = state.state_type {
             state.state_type = Scheduled {
@@ -1127,6 +1127,7 @@ impl Task {
             drop(state);
             turbo_tasks.schedule(self.id);
             job();
+            aggregation_context.apply_queued_updates();
         }
     }
 
@@ -1428,7 +1429,7 @@ impl Task {
                 state.state_type = Scheduled { event };
                 state.aggregation_leaf.change(
                     &aggregation_context,
-                    &TaskChange {
+                    TaskChange {
                         dirty_tasks_update: vec![(self.id, -1)],
                         ..Default::default()
                     },
@@ -1474,7 +1475,7 @@ impl Task {
         state.collectibles.emit(trait_type, collectible);
         state.aggregation_leaf.change(
             &aggregation_context,
-            &TaskChange {
+            TaskChange {
                 collectibles: vec![(trait_type, collectible, 1)],
                 ..Default::default()
             },
@@ -1496,7 +1497,7 @@ impl Task {
         state.collectibles.unemit(trait_type, collectible, count);
         state.aggregation_leaf.change(
             &aggregation_context,
-            &TaskChange {
+            TaskChange {
                 collectibles: vec![(trait_type, collectible, -(count as i32))],
                 ..Default::default()
             },
@@ -1823,7 +1824,7 @@ impl Task {
                 let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
                 aggregation_leaf.change(
                     &TaskAggregationContext::new(turbo_tasks, backend),
-                    &TaskChange {
+                    TaskChange {
                         unfinished: 1,
                         dirty_tasks_update: vec![(self.id, 1)],
                         ..Default::default()
@@ -1834,7 +1835,7 @@ impl Task {
                     // We need to abort the unloading, so revert changes done so far.
                     aggregation_leaf.change(
                         &TaskAggregationContext::new(turbo_tasks, backend),
-                        &TaskChange {
+                        TaskChange {
                             unfinished: -1,
                             dirty_tasks_update: vec![(self.id, -1)],
                             ..Default::default()
@@ -1880,7 +1881,7 @@ impl Task {
             gc: _,
         } = old_state.into_full().unwrap();
 
-        let aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
+        let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
 
         // Remove all children, as they will be added again when this task is executed
         // again
@@ -1895,7 +1896,7 @@ impl Task {
         if let Some(collectibles) = collectibles.into_inner() {
             aggregation_leaf.change(
                 &aggregation_context,
-                &TaskChange {
+                TaskChange {
                     collectibles: collectibles
                         .into_iter()
                         .map(|((t, r), c)| (t, r, -c))
@@ -1921,6 +1922,8 @@ impl Task {
             }));
         }
         drop(state);
+
+        aggregation_context.apply_queued_updates();
 
         // Notify everyone that is listening on our output or cells.
         // This will mark everyone as dirty and will trigger a new execution when they

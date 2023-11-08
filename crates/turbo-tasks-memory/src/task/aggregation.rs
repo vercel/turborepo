@@ -114,7 +114,7 @@ impl Aggregated {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct TaskChange {
     pub unfinished: i32,
     #[cfg(feature = "track_unfinished")]
@@ -307,6 +307,24 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         } else {
             Some(new_change)
         }
+    }
+
+    fn merge_change(&self, current: &mut TaskChange, change: Cow<'_, TaskChange>) {
+        current.unfinished += change.unfinished;
+        // TODO avoid cloning when Cow::Owned
+        #[cfg(feature = "track_unfinished")]
+        {
+            current
+                .unfinished_tasks_update
+                .extend(change.unfinished_tasks_update.iter().cloned());
+        }
+        // TODO use Maps
+        current
+            .collectibles
+            .extend(change.collectibles.iter().cloned());
+        current
+            .dirty_tasks_update
+            .extend(change.dirty_tasks_update.iter().cloned());
     }
 
     fn info_to_add_change(&self, info: &Aggregated) -> Option<Self::ItemChange> {

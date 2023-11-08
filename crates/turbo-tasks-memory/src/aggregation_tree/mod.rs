@@ -26,22 +26,25 @@
 
 mod bottom_connection;
 mod bottom_tree;
+mod changes_queue;
 mod inner_refs;
 mod leaf;
 #[cfg(test)]
 mod tests;
 mod top_tree;
+mod utils;
 
 use std::{borrow::Cow, hash::Hash, ops::ControlFlow, sync::Arc};
 
 use nohash_hasher::IsEnabled;
 use smallvec::SmallVec;
 
-use self::{leaf::top_tree, top_tree::TopTree};
 pub use self::{
+    changes_queue::ChangesQueue,
     leaf::{ensure_thresholds, AggregationTreeLeaf},
     top_tree::AggregationInfoGuard,
 };
+use self::{leaf::top_tree, top_tree::TopTree};
 
 /// The maximum connectivity of one layer of bottom tree.
 const CONNECTIVITY_LIMIT: u8 = 7;
@@ -63,7 +66,7 @@ pub trait AggregationContext {
     where
         Self: 'a;
     type Info: Default;
-    type ItemChange;
+    type ItemChange: Clone;
     type ItemRef: Eq + Hash + Clone + IsEnabled;
     type RootInfo;
     type RootInfoType;
@@ -74,11 +77,15 @@ pub trait AggregationContext {
     /// Apply a changeset to an aggregated info object. Returns a new changeset
     /// that should be applied to the next aggregation level. Might return None,
     /// if no change should be applied to the next level.
+    // TODO use Cow<ItemChange>
     fn apply_change(
         &self,
         info: &mut Self::Info,
         change: &Self::ItemChange,
     ) -> Option<Self::ItemChange>;
+
+    /// Merge a changeset into another changeset.
+    fn merge_change(&self, current: &mut Self::ItemChange, change: Cow<'_, Self::ItemChange>);
 
     /// Creates a changeset from an aggregated info object, that represents
     /// adding the aggregated node to an aggregated node of the next level.
@@ -132,9 +139,10 @@ pub fn aggregation_info<C: AggregationContext>(
     aggregation_context: &C,
     reference: &C::ItemRef,
 ) -> AggregationInfoReference<C::Info> {
-    AggregationInfoReference {
-        tree: top_tree(aggregation_context, reference, 0),
-    }
+    let mut changes_queue = ChangesQueue::new();
+    let tree = top_tree(aggregation_context, &mut changes_queue, reference, 0);
+    changes_queue.apply_changes(aggregation_context);
+    AggregationInfoReference { tree }
 }
 
 /// A reference to the root aggregated info of a node.

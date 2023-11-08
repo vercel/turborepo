@@ -1,4 +1,4 @@
-use std::{hash::Hash, sync::Arc};
+use std::{borrow::Cow, hash::Hash, sync::Arc};
 
 use auto_hash_map::AutoSet;
 use nohash_hasher::IsEnabled;
@@ -10,7 +10,8 @@ use super::{
     bottom_tree::BottomTree,
     inner_refs::{BottomRef, ChildLocation},
     top_tree::TopTree,
-    AggregationContext, AggregationItemLock, LargeStackVec, CHILDREN_INNER_THRESHOLD,
+    utils::get_or_create_in_vec,
+    AggregationContext, AggregationItemLock, ChangesQueue, LargeStackVec, CHILDREN_INNER_THRESHOLD,
 };
 
 /// The leaf of the aggregation tree. It's usually stored inside of the nodes
@@ -46,7 +47,9 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     {
         let uppers = self.upper.as_cloned_uppers();
         move || {
-            uppers.add_children_of_child(aggregation_context, &children);
+            let mut changes_queue = ChangesQueue::new();
+            uppers.add_children_of_child(aggregation_context, &mut changes_queue, &children);
+            changes_queue.apply_changes(aggregation_context);
         }
     }
 
@@ -62,7 +65,9 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     {
         let uppers = self.upper.as_cloned_uppers();
         move || {
-            uppers.add_child_of_child(aggregation_context, child);
+            let mut changes_queue = ChangesQueue::new();
+            uppers.add_child_of_child(aggregation_context, &mut changes_queue, child);
+            changes_queue.apply_changes(aggregation_context);
         }
     }
 
@@ -72,9 +77,13 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         aggregation_context: &C,
         child: &I,
     ) {
-        self.upper
-            .as_cloned_uppers()
-            .remove_child_of_child(aggregation_context, child);
+        let mut changes_queue = ChangesQueue::new();
+        self.upper.as_cloned_uppers().remove_child_of_child(
+            aggregation_context,
+            &mut changes_queue,
+            child,
+        );
+        changes_queue.apply_changes(aggregation_context);
     }
 
     /// Prepares the removal of a child. It returns a closure that should be
@@ -95,7 +104,15 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         H: 'a,
     {
         let uppers = self.upper.as_cloned_uppers();
-        move || uppers.remove_children_of_child(aggregation_context, children.iter())
+        move || {
+            let mut changes_queue = ChangesQueue::new();
+            uppers.remove_children_of_child(
+                aggregation_context,
+                &mut changes_queue,
+                children.iter(),
+            );
+            changes_queue.apply_changes(aggregation_context);
+        }
     }
 
     /// Communicates a change on the leaf to updated aggregated nodes. Prefer
@@ -103,9 +120,12 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     pub fn change<C: AggregationContext<Info = T, ItemRef = I>>(
         &self,
         aggregation_context: &C,
-        change: &C::ItemChange,
+        change: C::ItemChange,
     ) {
-        self.upper.child_change(aggregation_context, change);
+        let mut changes_queue = ChangesQueue::new();
+        self.upper
+            .child_change(aggregation_context, &mut changes_queue, Cow::Owned(change));
+        changes_queue.apply_changes(aggregation_context);
     }
 
     /// Prepares the communication of a change on the leaf to updated aggregated
@@ -120,9 +140,11 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         I: 'a,
         T: 'a,
     {
-        let uppers = self.upper.as_cloned_uppers();
+        let mut changes_queue = ChangesQueue::new();
+        self.upper
+            .child_change(aggregation_context, &mut changes_queue, Cow::Owned(change));
         move || {
-            uppers.child_change(aggregation_context, &change);
+            changes_queue.apply_changes(aggregation_context);
         }
     }
 
@@ -132,11 +154,15 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
         aggregation_context: &C,
         root_info_type: &C::RootInfoType,
     ) -> C::RootInfo {
-        self.upper.get_root_info(
+        let mut changes_queue = ChangesQueue::new();
+        let info = self.upper.get_root_info(
             aggregation_context,
+            &mut changes_queue,
             root_info_type,
             aggregation_context.new_root_info(root_info_type),
-        )
+        );
+        changes_queue.apply_changes(aggregation_context);
+        info
     }
 
     pub fn has_upper(&self) -> bool {
@@ -144,26 +170,10 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     }
 }
 
-fn get_or_create_in_vec<T>(
-    vec: &mut Vec<Option<T>>,
-    index: usize,
-    create: impl FnOnce() -> T,
-) -> (&mut T, bool) {
-    if vec.len() <= index {
-        vec.resize_with(index + 1, || None);
-    }
-    let item = &mut vec[index];
-    if item.is_none() {
-        *item = Some(create());
-        (item.as_mut().unwrap(), true)
-    } else {
-        (item.as_mut().unwrap(), false)
-    }
-}
-
-#[tracing::instrument(level = Level::TRACE, skip(aggregation_context, reference))]
+#[tracing::instrument(level = Level::TRACE, skip(aggregation_context, changes_queue, reference))]
 pub fn top_tree<C: AggregationContext>(
     aggregation_context: &C,
+    changes_queue: &mut ChangesQueue<C::Info, C::ItemRef, C::ItemChange>,
     reference: &C::ItemRef,
     depth: u8,
 ) -> Arc<TopTree<C::Info>> {
@@ -178,13 +188,14 @@ pub fn top_tree<C: AggregationContext>(
         }
         tree.clone()
     };
-    let bottom_tree = bottom_tree(aggregation_context, reference, depth + 4);
-    bottom_tree.add_top_tree_upper(aggregation_context, &new_top_tree);
+    let bottom_tree = bottom_tree(aggregation_context, changes_queue, reference, depth + 4);
+    bottom_tree.add_top_tree_upper(aggregation_context, changes_queue, &new_top_tree);
     new_top_tree
 }
 
 pub fn bottom_tree<C: AggregationContext>(
     aggregation_context: &C,
+    changes_queue: &mut ChangesQueue<C::Info, C::ItemRef, C::ItemChange>,
     reference: &C::ItemRef,
     height: u8,
 ) -> Arc<BottomTree<C::Info, C::ItemRef>> {
@@ -211,11 +222,17 @@ pub fn bottom_tree<C: AggregationContext>(
         }
     }
     if let Some(result) = result {
-        add_left_upper_to_item_step_2(aggregation_context, reference, &new_bottom_tree, result);
+        add_left_upper_to_item_step_2(
+            aggregation_context,
+            changes_queue,
+            reference,
+            &new_bottom_tree,
+            result,
+        );
     }
     if height != 0 {
-        bottom_tree(aggregation_context, reference, height - 1)
-            .add_left_bottom_tree_upper(aggregation_context, &new_bottom_tree);
+        bottom_tree(aggregation_context, changes_queue, reference, height - 1)
+            .add_left_bottom_tree_upper(aggregation_context, changes_queue, &new_bottom_tree);
     }
     new_bottom_tree
 }
@@ -223,6 +240,7 @@ pub fn bottom_tree<C: AggregationContext>(
 #[must_use]
 pub fn add_inner_upper_to_item<C: AggregationContext>(
     aggregation_context: &C,
+    changes_queue: &mut ChangesQueue<C::Info, C::ItemRef, C::ItemChange>,
     reference: &C::ItemRef,
     upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
     nesting_level: u8,
@@ -251,11 +269,12 @@ pub fn add_inner_upper_to_item<C: AggregationContext>(
         }
     };
     if let Some(change) = change {
-        upper.child_change(aggregation_context, &change);
+        upper.child_change(aggregation_context, changes_queue, Cow::Owned(change));
     }
     if !children.is_empty() {
         upper.add_children_of_child(
             aggregation_context,
+            changes_queue,
             ChildLocation::Inner,
             &children,
             nesting_level + 1,
@@ -291,6 +310,7 @@ fn add_left_upper_to_item_step_1<C: AggregationContext>(
 
 fn add_left_upper_to_item_step_2<C: AggregationContext>(
     aggregation_context: &C,
+    changes_queue: &mut ChangesQueue<C::Info, C::ItemRef, C::ItemChange>,
     reference: &C::ItemRef,
     upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
     step_1_result: AddLeftUpperIntermediateResult<C>,
@@ -298,14 +318,21 @@ fn add_left_upper_to_item_step_2<C: AggregationContext>(
     let AddLeftUpperIntermediateResult(change, children, old_inner, remove_change_for_old_inner) =
         step_1_result;
     if let Some(change) = change {
-        upper.child_change(aggregation_context, &change);
+        upper.child_change(aggregation_context, changes_queue, Cow::Owned(change));
     }
     if !children.is_empty() {
-        upper.add_children_of_child(aggregation_context, ChildLocation::Left, &children, 1)
+        upper.add_children_of_child(
+            aggregation_context,
+            changes_queue,
+            ChildLocation::Left,
+            &children,
+            1,
+        )
     }
     for (BottomRef { upper: old_upper }, count) in old_inner.into_counts() {
         old_upper.migrate_old_inner(
             aggregation_context,
+            changes_queue,
             reference,
             count,
             &remove_change_for_old_inner,
@@ -316,6 +343,7 @@ fn add_left_upper_to_item_step_2<C: AggregationContext>(
 
 pub fn remove_left_upper_from_item<C: AggregationContext>(
     aggregation_context: &C,
+    changes_queue: &mut ChangesQueue<C::Info, C::ItemRef, C::ItemChange>,
     reference: &C::ItemRef,
     upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
 ) {
@@ -326,16 +354,17 @@ pub fn remove_left_upper_from_item<C: AggregationContext>(
     let children = item.children().map(|r| r.into_owned()).collect::<Vec<_>>();
     drop(item);
     if let Some(change) = change {
-        upper.child_change(aggregation_context, &change);
+        upper.child_change(aggregation_context, changes_queue, Cow::Owned(change));
     }
     for child in children {
-        upper.remove_child_of_child(aggregation_context, &child)
+        upper.remove_child_of_child(aggregation_context, changes_queue, &child)
     }
 }
 
 #[must_use]
 pub fn remove_inner_upper_from_item<C: AggregationContext>(
     aggregation_context: &C,
+    changes_queue: &mut ChangesQueue<C::Info, C::ItemRef, C::ItemChange>,
     reference: &C::ItemRef,
     upper: &Arc<BottomTree<C::Info, C::ItemRef>>,
 ) -> bool {
@@ -355,10 +384,10 @@ pub fn remove_inner_upper_from_item<C: AggregationContext>(
     drop(item);
 
     if let Some(change) = change {
-        upper.child_change(aggregation_context, &change);
+        upper.child_change(aggregation_context, changes_queue, Cow::Owned(change));
     }
     for child in children {
-        upper.remove_child_of_child(aggregation_context, &child)
+        upper.remove_child_of_child(aggregation_context, changes_queue, &child)
     }
     true
 }
@@ -370,6 +399,7 @@ pub fn ensure_thresholds<'a, C: AggregationContext>(
     aggregation_context: &'a C,
     item: &mut C::ItemLock<'_>,
 ) -> impl FnOnce() + 'a {
+    let mut changes_queue = ChangesQueue::new();
     let mut result = None;
 
     let number_of_total_children = item.number_of_children();
@@ -389,14 +419,16 @@ pub fn ensure_thresholds<'a, C: AggregationContext>(
             ));
         }
     }
-    || {
+    move || {
         if let Some((result, reference, new_bottom_tree)) = result {
             add_left_upper_to_item_step_2(
                 aggregation_context,
+                &mut changes_queue,
                 &reference,
                 &new_bottom_tree,
                 result,
             );
         }
+        changes_queue.apply_changes(aggregation_context);
     }
 }

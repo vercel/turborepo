@@ -25,7 +25,7 @@ impl Node {
         guard.value += 10000;
         guard
             .aggregation_leaf
-            .change(aggregation_context, &Change { value: 10000 });
+            .change(aggregation_context, Change { value: 10000 });
     }
 }
 
@@ -155,6 +155,13 @@ impl<'a> AggregationContext for NodeAggregationContext<'a> {
             info.value += change.value;
         }
         Some(*change)
+    }
+
+    fn merge_change(&self, current: &mut Change, change: Cow<'_, Change>) {
+        if current.value != 0 {
+            self.additions.fetch_add(1, Ordering::SeqCst);
+        }
+        current.value += change.value;
     }
 
     fn info_to_add_change(&self, info: &Self::Info) -> Option<Self::ItemChange> {
