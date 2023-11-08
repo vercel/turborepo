@@ -4,6 +4,7 @@ use console::StyledObject;
 use tracing::{debug, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_cache::{AsyncCache, CacheHitMetadata, CacheSource};
+use turborepo_repository::package_graph::WorkspaceInfo;
 use turborepo_ui::{
     color, replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI,
 };
@@ -12,7 +13,6 @@ use crate::{
     cli::OutputLogsMode,
     daemon::{DaemonClient, DaemonConnector},
     opts::RunCacheOpts,
-    package_graph::WorkspaceInfo,
     run::task_id::TaskId,
     task_graph::{TaskDefinition, TaskOutputs},
 };

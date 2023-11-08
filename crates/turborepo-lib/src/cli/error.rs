@@ -1,11 +1,11 @@
 use std::backtrace;
 
 use thiserror::Error;
+use turborepo_repository::package_graph;
 
 use crate::{
     commands::{bin, generate, prune},
     daemon::DaemonError,
-    package_graph,
     rewrite_json::RewriteError,
     run,
 };
