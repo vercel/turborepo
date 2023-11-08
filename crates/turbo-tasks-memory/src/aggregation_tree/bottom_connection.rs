@@ -47,11 +47,19 @@ impl<T: IsEnabled + Eq + Hash + Clone> DistanceCountMap<T> {
             RawEntry::Occupied(mut e) => {
                 let info = e.get_mut();
                 info.count += 1;
-                if info.count == 0 {
-                    e.remove();
-                } else if info.count > 0 {
-                    if distance < info.distance {
-                        info.distance = distance;
+                match info.count.cmp(&0) {
+                    std::cmp::Ordering::Equal => {
+                        e.remove();
+                    }
+                    std::cmp::Ordering::Greater => {
+                        if distance < info.distance {
+                            info.distance = distance;
+                        }
+                    }
+                    std::cmp::Ordering::Less => {
+                        // We only track that for negative count tracking and no
+                        // need to update the distance, it would reset anyway
+                        // once we reach 0.
                     }
                 }
                 false
