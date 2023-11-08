@@ -6,19 +6,16 @@ use std::{
 use petgraph::visit::{depth_first_search, Reversed};
 use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
-use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
-use crate::graph;
+use crate::{package_json::PackageJson, package_manager::PackageManager};
 
-pub(crate) mod builder;
+pub mod builder;
 
 pub use builder::{Error, PackageGraphBuilder};
 
-use crate::{
-    hash::{LockFilePackages, TurboHash},
-    run::task_id::ROOT_PKG_NAME,
-};
+pub const ROOT_PKG_NAME: &str = "//";
 
 pub struct PackageGraph {
     workspace_graph: petgraph::Graph<WorkspaceNode, ()>,
@@ -50,25 +47,6 @@ impl WorkspaceInfo {
         self.package_json_path
             .parent()
             .expect("at least one segment")
-    }
-
-    pub fn get_external_deps_hash(&self) -> String {
-        let Some(transitive_dependencies) = &self.transitive_dependencies else {
-            return "".into();
-        };
-
-        let mut transitive_deps = Vec::with_capacity(transitive_dependencies.len());
-
-        for dependency in transitive_dependencies.iter() {
-            transitive_deps.push(dependency.clone());
-        }
-
-        transitive_deps.sort_by(|a, b| match a.key.cmp(&b.key) {
-            std::cmp::Ordering::Equal => a.version.cmp(&b.version),
-            other => other,
-        });
-
-        LockFilePackages(transitive_deps).hash()
     }
 }
 
@@ -136,6 +114,10 @@ impl PackageGraph {
     /// *including* the root workspace.
     pub fn len(&self) -> usize {
         self.workspaces.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.workspaces.is_empty()
     }
 
     pub fn package_manager(&self) -> &PackageManager {

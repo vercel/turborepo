@@ -3596,6 +3596,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "insta"
+version = "1.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d64600be34b2fcfc267740a243fa7744441bb4947a619ac4e5bb6507f35fbfc"
+dependencies = [
+ "console",
+ "lazy_static",
+ "linked-hash-map",
+ "serde",
+ "similar",
+ "yaml-rust",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10361,6 +10375,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-analytics"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "futures",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "turborepo-api-client",
+ "turborepo-vercel-api",
+ "uuid",
+]
+
+[[package]]
 name = "turborepo-api-client"
 version = "0.1.0"
 dependencies = [
@@ -10426,6 +10454,7 @@ dependencies = [
  "path-clean 1.0.1",
  "petgraph",
  "port_scanner",
+ "reqwest",
  "serde",
  "serde_json",
  "sha2",
@@ -10436,6 +10465,7 @@ dependencies = [
  "tokio",
  "tracing",
  "turbopath",
+ "turborepo-analytics",
  "turborepo-api-client",
  "turborepo-ui",
  "turborepo-vercel-api-mock",
@@ -10511,6 +10541,19 @@ dependencies = [
  "thiserror",
  "turbopath",
  "walkdir",
+]
+
+[[package]]
+name = "turborepo-graph-utils"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "itertools",
+ "log",
+ "petgraph",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -10597,6 +10640,7 @@ dependencies = [
  "tracing-test",
  "turbo-updater",
  "turbopath",
+ "turborepo-analytics",
  "turborepo-api-client",
  "turborepo-auth",
  "turborepo-cache",
@@ -10604,6 +10648,7 @@ dependencies = [
  "turborepo-env",
  "turborepo-filewatch",
  "turborepo-fs",
+ "turborepo-graph-utils",
  "turborepo-lockfiles",
  "turborepo-repository",
  "turborepo-scm",
@@ -10658,6 +10703,7 @@ dependencies = [
  "itertools",
  "lazy-regex",
  "node-semver",
+ "petgraph",
  "pretty_assertions",
  "regex",
  "serde",
@@ -10668,6 +10714,7 @@ dependencies = [
  "thiserror",
  "tracing",
  "turbopath",
+ "turborepo-graph-utils",
  "turborepo-lockfiles",
  "wax",
  "which",
@@ -10716,7 +10763,10 @@ name = "turborepo-vercel-api"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "insta",
  "serde",
+ "serde_json",
+ "test-case",
  "url",
 ]
 
@@ -10940,9 +10990,9 @@ checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
 [[package]]
 name = "uuid"
-version = "1.4.1"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79daa5ed5740825c40b389c5e50312b9c86df53fccd33f281df655642b43869d"
+checksum = "88ad59a7560b41a70d191093a945f0b87bc1deeda46fb237479708a1d6b6cdfc"
 dependencies = [
  "getrandom",
 ]

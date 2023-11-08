@@ -14,6 +14,7 @@ use tokio::{process::Command, sync::mpsc};
 use tracing::{debug, error, Span};
 use turbopath::AbsoluteSystemPath;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
+use turborepo_repository::package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME};
 use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
 use which::which;
 
@@ -21,13 +22,12 @@ use crate::{
     cli::EnvMode,
     engine::{Engine, ExecutionOptions, StopExecution},
     opts::Opts,
-    package_graph::{PackageGraph, WorkspaceName},
     process::{ChildExit, ProcessManager},
     run::{
         global_hash::GlobalHashableInputs,
         summary,
         summary::{GlobalHashSummary, RunTracker},
-        task_id::{self, TaskId},
+        task_id::TaskId,
         RunCache,
     },
     task_hash::{self, PackageInputsHashes, TaskHashTrackerState, TaskHasher},
@@ -152,9 +152,7 @@ impl<'a> Visitor<'a> {
                 .cloned();
 
             match command {
-                Some(cmd)
-                    if info.package() == task_id::ROOT_PKG_NAME && turbo_regex().is_match(&cmd) =>
-                {
+                Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(&cmd) => {
                     return Err(Error::RecursiveTurbo {
                         task_name: info.to_string(),
                         command: cmd.to_string(),

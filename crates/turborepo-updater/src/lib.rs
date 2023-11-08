@@ -146,7 +146,7 @@ pub fn check_for_updates(
     if let Ok(Some(version)) = informer.check_version() {
         let latest_version = version.to_string();
         // TODO: make this package manager aware
-        let update_cmd = style("npx @turbo/codemod update").cyan().bold();
+        let update_cmd = style("npx @turbo/codemod@latest update").cyan().bold();
 
         let msg = format!(
             "

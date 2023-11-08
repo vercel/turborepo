@@ -9,10 +9,10 @@ Setup
 # The first part of the file is Packages in Scope
   $ cat tmp-1.txt
   Packages in Scope
-  Name    Path             
-  another packages/another 
-  my-app  apps/my-app      
-  util    packages/util    
+  Name    Path\s* (re)
+  another packages/another\s* (re)
+  my-app  apps/my-app\s* (re)
+  util    packages/util\s* (re)
 
 # Part 2 of the logs are Global Hash INputs
   $ cat tmp-2.txt
