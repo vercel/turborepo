@@ -15,7 +15,7 @@ pub async fn logout(base: &mut CommandBase) -> Result<(), Error> {
         return Ok(());
     }
 
-    // Don't prompt when there's only one token to logout from.
+    // Don't prompt when there's only one token to logout for.
     if auth_file.tokens.len() <= 1 {
         let token = &auth_file.tokens[0];
         println!(
@@ -25,6 +25,7 @@ pub async fn logout(base: &mut CommandBase) -> Result<(), Error> {
         );
         auth_file.tokens.remove(0);
     } else {
+        // Make a friendly display for the user to select from.
         let items = &auth_file
             .tokens
             .iter()

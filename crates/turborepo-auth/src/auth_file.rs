@@ -20,14 +20,16 @@ impl AuthFile {
     pub fn write_to_disk(&self, path: &AbsoluteSystemPathBuf) -> Result<(), Error> {
         path.ensure_dir().map_err(|e| Error::PathError(e.into()))?;
 
-        path.create_with_contents(
-            serde_json::to_string_pretty(self)
-                .map_err(|e| Error::FailedToSerializeAuthFile { source: e })?,
-        )
-        .map_err(|e| crate::Error::FailedToWriteAuth {
-            auth_path: path.clone(),
-            error: e,
-        })?;
+        let mut pretty_content = serde_json::to_string_pretty(self)
+            .map_err(|e| Error::FailedToSerializeAuthFile { source: e })?;
+        // to_string_pretty doesn't add terminating line endings, so do that.
+        pretty_content.push('\n');
+
+        path.create_with_contents(pretty_content)
+            .map_err(|e| crate::Error::FailedToWriteAuth {
+                auth_path: path.clone(),
+                error: e,
+            })?;
 
         Ok(())
     }
