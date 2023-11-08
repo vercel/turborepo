@@ -6,8 +6,8 @@ Choose our custom config based on OS, since the input/output configs will be dif
   $ if [[ "$OSTYPE" == "msys" ]]; then CONFIG="abs-path-globs-win.json"; else CONFIG="abs-path-globs.json"; fi
 
 Copy config into the root of our monrepo
-  $ cp "${TESTDIR}/bad-configs/${CONFIG}" $PWD/turbo.json
   $ cp ${TESTDIR}/../_fixtures/turbo-configs/$CONFIG $PWD/turbo.json
+
 dos2unix the new file if we're on Windows
   $ if [[ "$OSTYPE" == "msys" ]]; then dos2unix --quiet "$PWD/turbo.json"; fi
   $ git commit --quiet -am "Add turbo.json with absolute path in outputs"
