@@ -74,6 +74,9 @@ pub enum RemoveIfEntryResult {
 impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
     /// Returns true, when the value has become visible from outside
     pub fn add_count(&mut self, item: T, count: usize) -> bool {
+        if count == 0 {
+            return false;
+        }
         match self.inner.entry(item) {
             Entry::Occupied(mut e) => {
                 let value = e.get_mut();
@@ -134,6 +137,9 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
 
     /// Returns true when the value is no longer visible from outside
     pub fn remove_count(&mut self, item: T, count: usize) -> bool {
+        if count == 0 {
+            return false;
+        }
         match self.inner.entry(item) {
             Entry::Occupied(mut e) => {
                 let value = e.get_mut();
@@ -169,6 +175,9 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
         match self.inner.raw_entry_mut(item) {
             RawEntry::Occupied(mut e) => {
                 let value = e.get_mut();
+                if *value < 0 {
+                    return RemoveIfEntryResult::NotPresent;
+                }
                 *value -= 1;
                 if *value == 0 {
                     // It was positive and has become zero
@@ -192,6 +201,9 @@ impl<T: Eq + Hash, H: BuildHasher + Default> CountHashSet<T, H> {
 impl<T: Eq + Hash + Clone, H: BuildHasher + Default> CountHashSet<T, H> {
     /// Returns true, when the value has become visible from outside
     pub fn add_clonable_count(&mut self, item: &T, count: usize) -> bool {
+        if count == 0 {
+            return false;
+        }
         match self.inner.raw_entry_mut(item) {
             RawEntry::Occupied(mut e) => {
                 let value = e.get_mut();
@@ -229,6 +241,9 @@ impl<T: Eq + Hash + Clone, H: BuildHasher + Default> CountHashSet<T, H> {
 
     /// Returns true when the value is no longer visible from outside
     pub fn remove_clonable_count(&mut self, item: &T, count: usize) -> bool {
+        if count == 0 {
+            return false;
+        }
         match self.inner.raw_entry_mut(item) {
             RawEntry::Occupied(mut e) => {
                 let value = e.get_mut();
