@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
 
 Expect warnings
-  $ cp ${TESTDIR}/bad-configs/turbo--abs-path-outputs.json $PWD/turbo.json
+  $ cp ${TESTDIR}/../_fixtures/turbo-configs/abs-path-globs.json $PWD/turbo.json
   $ git commit --quiet -am "Add turbo.json with absolute path in outputs"
 
   $ ${TURBO} build -v --dry > /dev/null
