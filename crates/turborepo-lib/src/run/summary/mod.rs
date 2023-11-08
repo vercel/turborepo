@@ -10,7 +10,6 @@ mod scm;
 mod spaces;
 mod task;
 mod task_factory;
-
 use std::{collections::HashSet, io, io::Write};
 
 use chrono::{DateTime, Local};
@@ -18,6 +17,7 @@ pub use execution::TaskTracker;
 pub use global_hash::GlobalHashSummary;
 use itertools::Itertools;
 use serde::Serialize;
+pub use spaces::SpacesTaskClient;
 use svix_ksuid::{Ksuid, KsuidLike};
 use tabwriter::TabWriter;
 use thiserror::Error;
@@ -299,6 +299,16 @@ impl RunTracker {
 
     pub fn track_task(&self, task_id: TaskId<'static>) -> TaskTracker<()> {
         self.execution_tracker.task_tracker(task_id)
+    }
+
+    pub fn spaces_enabled(&self) -> bool {
+        self.spaces_client_handle.is_some()
+    }
+
+    pub fn spaces_task_client(&self) -> Option<SpacesTaskClient> {
+        self.spaces_client_handle
+            .as_ref()
+            .map(|handle| handle.task_client())
     }
 }
 

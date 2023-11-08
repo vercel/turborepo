@@ -31,7 +31,7 @@ use crate::{
     process::{ChildExit, ProcessManager},
     run::{
         global_hash::GlobalHashableInputs,
-        summary::{self, GlobalHashSummary, RunTracker, TaskTracker},
+        summary::{self, GlobalHashSummary, RunTracker, SpacesTaskClient, TaskTracker},
         task_id::TaskId,
         RunCache, TaskCache,
     },
@@ -312,10 +312,11 @@ impl<'a> Visitor<'a> {
 
     fn output_client(&self) -> OutputClient<impl std::io::Write> {
         let behavior = match self.opts.run_opts.log_order {
-            // TODO once run summary is implemented, we can skip keeping an in memory buffer if it
-            // is disabled
-            crate::opts::ResolvedLogOrder::Stream => {
+            crate::opts::ResolvedLogOrder::Stream if self.run_tracker.spaces_enabled() => {
                 turborepo_ui::OutputClientBehavior::InMemoryBuffer
+            }
+            crate::opts::ResolvedLogOrder::Stream => {
+                turborepo_ui::OutputClientBehavior::Passthrough
             }
             crate::opts::ResolvedLogOrder::Grouped => turborepo_ui::OutputClientBehavior::Grouped,
         };
