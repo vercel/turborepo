@@ -40,6 +40,12 @@ pub struct SpacesClientHandle {
     tx: Sender<SpaceRequest>,
 }
 
+/// A spaces client with functionality limited to sending task information
+/// This client should only live while processing a task
+pub struct SpacesTaskClient {
+    tx: Sender<SpaceRequest>,
+}
+
 impl Debug for SpacesClientHandle {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // We can't print much more than that since handle/tx are both
@@ -49,6 +55,12 @@ impl Debug for SpacesClientHandle {
 }
 
 impl SpacesClientHandle {
+    pub fn task_client(&self) -> SpacesTaskClient {
+        SpacesTaskClient {
+            tx: self.tx.clone(),
+        }
+    }
+
     pub async fn finish_run(&self, exit_code: i32, end_time: DateTime<Local>) -> Result<(), Error> {
         Ok(self
             .tx
@@ -59,14 +71,6 @@ impl SpacesClientHandle {
             .await?)
     }
 
-    pub async fn finish_task(&self, summary: SpaceTaskSummary) -> Result<(), Error> {
-        Ok(self
-            .tx
-            .send(SpaceRequest::FinishedTask {
-                summary: Box::new(summary),
-            })
-            .await?)
-    }
     pub async fn close(self) -> SpacesClientResult {
         // Drop the transmitter to signal to the worker thread that
         // we're done sending requests
@@ -84,6 +88,17 @@ impl SpacesClientHandle {
                 run: None,
             },
         }
+    }
+}
+
+impl SpacesTaskClient {
+    pub async fn finish_task(&self, summary: SpaceTaskSummary) -> Result<(), Error> {
+        self.tx
+            .send(SpaceRequest::FinishedTask {
+                summary: Box::new(summary),
+            })
+            .await?;
+        Ok(())
     }
 }
 
@@ -257,8 +272,14 @@ mod tests {
             "rauchg".to_string(),
         ))?;
 
+        let mut join_set = tokio::task::JoinSet::new();
         for task_summary in tasks {
-            spaces_client_handle.finish_task(task_summary).await?;
+            let task_client = spaces_client_handle.task_client();
+            join_set.spawn(async move { task_client.finish_task(task_summary).await });
+        }
+
+        while let Some(result) = join_set.join_next().await {
+            result??;
         }
 
         spaces_client_handle.finish_run(0, Local::now()).await?;
