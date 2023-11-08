@@ -194,13 +194,9 @@ impl<'a> Analyzer<'a> {
         imported_symbol: ImportedSymbol,
         annotations: ImportAnnotations,
     ) -> usize {
-        let issue_source = match (span.lo.to_usize(), span.hi.to_usize()) {
-            // Certain import declarations erronously have (0, 0) byte offsets. Ignore these.
-            (0, 0) => None,
-            (lo, hi) => self
-                .source
-                .map(|s| LazyIssueSource::from_swc_offsets(s, lo, hi)),
-        };
+        let issue_source = self
+            .source
+            .map(|s| LazyIssueSource::from_swc_offsets(s, span.lo.to_usize(), span.hi.to_usize()));
 
         let r = ImportMapReference {
             module_path,
