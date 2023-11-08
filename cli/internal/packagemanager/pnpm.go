@@ -12,6 +12,8 @@ import (
 	"github.com/vercel/turbo/cli/internal/yaml"
 )
 
+const pnpmLockfile = "pnpm-lock.yaml"
+
 // PnpmWorkspaces is a representation of workspace package globs found
 // in pnpm-workspace.yaml
 type PnpmWorkspaces struct {
@@ -79,7 +81,7 @@ var nodejsPnpm = PackageManager{
 	Slug:       "pnpm",
 	Command:    "pnpm",
 	Specfile:   "package.json",
-	Lockfile:   "pnpm-lock.yaml",
+	Lockfile:   pnpmLockfile,
 	PackageDir: "node_modules",
 	// pnpm v7+ changed their handling of '--'. We no longer need to pass it to pass args to
 	// the script being run, and in fact doing so will cause the '--' to be passed through verbatim,
@@ -87,7 +89,7 @@ var nodejsPnpm = PackageManager{
 	// We are allowed to use nil here because ArgSeparator already has a type, so it's a typed nil,
 	// This could just as easily be []string{}, but the style guide says to prefer
 	// nil for empty slices.
-	ArgSeparator:               nil,
+	ArgSeparator:               func(_userArgs []string) []string { return nil },
 	WorkspaceConfigurationPath: "pnpm-workspace.yaml",
 
 	getWorkspaceGlobs: getPnpmWorkspaceGlobs,
@@ -96,6 +98,18 @@ var nodejsPnpm = PackageManager{
 
 	canPrune: func(cwd turbopath.AbsoluteSystemPath) (bool, error) {
 		return true, nil
+	},
+
+	GetLockfileName: func(_ turbopath.AbsoluteSystemPath) string {
+		return pnpmLockfile
+	},
+
+	GetLockfilePath: func(projectDirectory turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+		return projectDirectory.UntypedJoin(pnpmLockfile)
+	},
+
+	GetLockfileContents: func(projectDirectory turbopath.AbsoluteSystemPath) ([]byte, error) {
+		return projectDirectory.UntypedJoin(pnpmLockfile).ReadFile()
 	},
 
 	UnmarshalLockfile: func(_rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {

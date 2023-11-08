@@ -1,10 +1,9 @@
-import chalk from "chalk";
 import { logger } from "@turbo/utils";
 import { getCustomGenerators, runCustomGenerator } from "../utils/plop";
 import * as prompts from "../commands/run/prompts";
-import type { CustomGeneratorArguments } from "./types";
 import { GeneratorError } from "../utils/error";
 import { setupFromTemplate } from "../utils/setupFromTemplate";
+import type { CustomGeneratorArguments } from "./types";
 
 export async function generate({
   generator,
@@ -15,7 +14,7 @@ export async function generate({
   let generators = getCustomGenerators({ project, configPath: opts.config });
   if (!generators.length) {
     logger.error(`No generators found.`);
-    console.log();
+    logger.log();
 
     const { answer } = await prompts.confirm({
       message: `Would you like to add a config with a sample custom generator to ${project.name}?`,
@@ -35,10 +34,10 @@ export async function generate({
       }
 
       // make it obvious that we're done creating a generator, and now we're running it
-      console.log();
+      logger.log();
       logger.info(`Generator config successfully created!`);
       logger.info(`Loading generator config...`);
-      console.log();
+      logger.log();
 
       // fetch generators again, and continue to selection prompt
       generators = getCustomGenerators({ project, configPath: opts.config });
@@ -49,7 +48,7 @@ export async function generate({
         return;
       }
     } else {
-      console.log();
+      logger.log();
       logger.dimmed(
         "Learn more about custom Turborepo generators - https://turbo.build/repo/docs/core-concepts/monorepos/code-generation#custom-generators"
       );
@@ -85,7 +84,7 @@ export async function generate({
     });
   } finally {
     if (isOnboarding) {
-      console.log();
+      logger.log();
       logger.info(`Congrats! You just ran your first Turborepo generator`);
       logger.dimmed(
         "Learn more about custom Turborepo generators - https://turbo.build/repo/docs/core-concepts/monorepos/code-generation#custom-generators"
@@ -93,6 +92,6 @@ export async function generate({
     }
   }
 
-  console.log();
-  console.log(chalk.bold(logger.turboGradient(">>> Success!")));
+  logger.log();
+  logger.bold(logger.turboGradient(">>> Success!"));
 }

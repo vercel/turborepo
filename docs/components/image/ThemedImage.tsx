@@ -1,7 +1,7 @@
 import React from "react";
 import Image from "next/image";
 
-export interface Image {
+interface ImageAttrs {
   height: number;
   width: number;
   source: string;
@@ -9,8 +9,8 @@ export interface Image {
 
 export interface ThemedImageProps {
   title?: string;
-  dark?: Image;
-  light?: Image;
+  dark?: ImageAttrs;
+  light?: ImageAttrs;
   priority?: boolean;
 }
 
@@ -25,19 +25,19 @@ export function ThemedImage({
       <div className="block w-full dark:hidden">
         <Image
           alt={title}
-          src={light.source}
-          width={light.width}
           height={light.height}
           priority={priority}
+          src={light.source}
+          width={light.width}
         />
       </div>
       <div className="hidden w-full dark:block">
         <Image
           alt={title}
-          src={dark.source}
-          width={dark.width}
           height={dark.height}
           priority={priority}
+          src={dark.source}
+          width={dark.width}
         />
       </div>
     </>

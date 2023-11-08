@@ -34,8 +34,9 @@ jobs:
   upload_test_results:
     name: Upload test results
     needs: [next_js_integration]
-    if: ${{ github.event_name == 'schedule' }}
+    if: always()
     uses: ./.github/workflows/upload-nextjs-integration-test-results.yml
+    secrets: inherit
     with:
       is_main_branch: true
 
@@ -43,6 +44,7 @@ jobs:
     needs: [next_js_integration]
     name: Post results to Slack
     runs-on: ubuntu-latest
+    if: always()
     steps:
       - name: Download summary.md artifact
         uses: actions/download-artifact@v3

@@ -21,15 +21,15 @@ If you need loader support beyond what's built in, many webpack loaders already 
 - Only loaders that return JavaScript code are supported. Loaders that transform files like stylesheets or images are not currently supported.
 - Options passed to webpack loaders must be plain JavaScript primitives, objects, and arrays. For example, it's not possible to pass `require()`d plugin modules as option values.
 
-As of Next 13.2, configuring webpack loaders is possible for Next.js apps through an experimental option in `next.config.js`. `turbo.loaders` can be set as a mapping of file extensions to a list of package names or `{loader, options}` pairs:
+As of Next 13.2, configuring webpack loaders is possible for Next.js apps through an experimental option in `next.config.js`. `turbo.rules` can be set as a mapping of file globs to a list of package names or `{loader, options}` pairs:
 
 ```js filename="next.config.js"
 module.exports = {
   experimental: {
     turbo: {
-      loaders: {
+      rules: {
         // Option format
-        '.md': [
+        '*.md': [
           {
             loader: '@mdx-js/loader',
             options: {
@@ -38,12 +38,16 @@ module.exports = {
           },
         ],
         // Option-less format
-        '.mdx': ['@mdx-js/loader'],
+        '*.mdx': ['@mdx-js/loader'],
       },
     },
   },
 }
 ```
+
+<Callout type="info">
+  Note: Prior to Next.js version 13.4.4, `experimental.turbo.rules` was named `experimental.turbo.loaders` and only accepted file extensions like `.mdx` instead of `*.mdx`.
+</Callout>
 
 If you need to pass something like the result of importing an external package as a loader option, it's possible to wrap the webpack loader with your own, specifying options there. **This is an interim solution and should not be necessary in the future.** This loader wraps `@mdx-js/loader` and configures the `rehypePrism` rehype plugin:
 
@@ -70,8 +74,8 @@ Then, configure Next.js to load the wrapper loader:
 module.exports = {
   experimental: {
     turbo: {
-      loaders: {
-        '.mdx': ['./my-mdx-loader'],
+      rules: {
+        '*.mdx': ['./my-mdx-loader'],
       },
     },
   },

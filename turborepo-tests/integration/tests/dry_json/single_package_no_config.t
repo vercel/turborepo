@@ -11,10 +11,10 @@ Setup
     "turboVersion": "[a-z0-9\.-]+", (re)
     "monorepo": false,
     "globalCacheInputs": {
-      "rootKey": "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.",
+      "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
       "files": {
         "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-        "package.json": "185771929d92c3865ce06c863c07d357500d3364"
+        "package.json": "c38e07c8d8d5f851dec8cdbc3d103deed82bc960"
       },
       "hashOfExternalDependencies": "",
       "globalDotEnv": null,
@@ -34,11 +34,11 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "a6461c1683e4f102",
+        "hash": "db9ab850083a69be",
         "inputs": {
-          ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
+          ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-          "package.json": "185771929d92c3865ce06c863c07d357500d3364",
+          "package.json": "c38e07c8d8d5f851dec8cdbc3d103deed82bc960",
           "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
         },
         "hashOfExternalDependencies": "",
@@ -48,7 +48,7 @@ Setup
           "status": "MISS",
           "timeSaved": 0
         },
-        "command": "echo 'building' \u003e foo",
+        "command": "echo 'building' > foo.txt",
         "cliArguments": [],
         "outputs": null,
         "excludedOutputs": null,
@@ -67,7 +67,7 @@ Setup
           "dotEnv": null
         },
         "expandedOutputs": [],
-        "framework": "\u003cNO FRAMEWORK DETECTED\u003e",
+        "framework": "<NO FRAMEWORK DETECTED>",
         "envMode": "loose",
         "environmentVariables": {
           "specified": {
@@ -88,3 +88,4 @@ Setup
       "branch": ".+" (re)
     }
   }
+  

@@ -5,20 +5,32 @@ use std::os::unix::fs::symlink as symlink_dir;
 #[cfg(windows)]
 use std::os::windows::fs::{symlink_dir, symlink_file};
 use std::{
-    fmt, fs,
-    fs::{File, Metadata, OpenOptions},
-    io,
-    path::Path,
+    fmt,
+    fs::{File, Metadata, OpenOptions, Permissions},
+    io::{self, Write},
+    path::{Path, PathBuf},
 };
 
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
+use fs_err as fs;
 use path_clean::PathClean;
+use wax::CandidatePath;
 
 use crate::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPath,
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum PathRelation {
+    // e.g. /a/b vs /a/c
+    Divergent,
+    // e.g. /a vs /a/b
+    Parent,
+    // e.g. /a/b vs /a
+    Child,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct AbsoluteSystemPath(Utf8Path);
 
 impl ToOwned for AbsoluteSystemPath {
@@ -78,24 +90,23 @@ impl AbsoluteSystemPath {
     /// }
     /// ```
     pub fn new<P: AsRef<str> + ?Sized>(value: &P) -> Result<&Self, PathError> {
-        let path = value.as_ref();
-        if Path::new(path).is_relative() {
-            return Err(PathError::NotAbsolute(path.to_owned()));
-        }
-
-        Ok(Self::new_unchecked(path))
+        let path: &Utf8Path = value.as_ref().into();
+        Self::from_utf8_path(path)
     }
 
     pub fn from_std_path(path: &Path) -> Result<&Self, PathError> {
-        let path_str = path
-            .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
-
-        Self::new(path_str)
+        let path: &Utf8Path = path.try_into()?;
+        Self::from_utf8_path(path)
     }
 
-    pub(crate) fn new_unchecked<'a>(path: impl AsRef<str> + 'a) -> &'a Self {
-        let path = Utf8Path::new(path.as_ref());
+    fn from_utf8_path(path: &Utf8Path) -> Result<&Self, PathError> {
+        if path.is_relative() {
+            return Err(PathError::NotAbsolute(path.to_string()));
+        }
+        Ok(Self::new_unchecked(path))
+    }
+
+    pub(crate) fn new_unchecked(path: &Utf8Path) -> &Self {
         unsafe { &*(path as *const Utf8Path as *const Self) }
     }
 
@@ -111,12 +122,64 @@ impl AbsoluteSystemPath {
         self.0.as_str().as_bytes()
     }
 
+    pub fn exists(&self) -> bool {
+        self.0.exists()
+    }
+
     pub fn ancestors(&self) -> impl Iterator<Item = &AbsoluteSystemPath> {
         self.0.ancestors().map(Self::new_unchecked)
     }
 
+    pub fn create(&self) -> Result<File, io::Error> {
+        File::create(&self.0)
+    }
+
     pub fn create_dir_all(&self) -> Result<(), io::Error> {
         fs::create_dir_all(&self.0)
+    }
+
+    pub fn create_dir_all_with_permissions(
+        &self,
+        permissions: Permissions,
+    ) -> Result<(), io::Error> {
+        let (create, change_perms) = match fs::metadata(&self.0) {
+            Ok(info) if info.is_dir() && info.permissions() == permissions => {
+                // Directory already exists with correct permissions
+                (false, false)
+            }
+            Ok(info) if info.is_dir() => (false, true),
+            Ok(_) => {
+                // Path exists as a file
+                self.remove_file()?;
+                (true, true)
+            }
+            // If this errors then the path doesn't exist and we can create it as expected
+            Err(_) => (true, true),
+        };
+        if create {
+            self.create_dir_all()?;
+        }
+        if change_perms {
+            fs::set_permissions(&self.0, permissions)?;
+        }
+
+        Ok(())
+    }
+
+    /// create_with_contents will create or truncate a file, then write the
+    /// given contents to it
+    pub fn create_with_contents<B: AsRef<[u8]>>(&self, contents: B) -> Result<(), io::Error> {
+        let mut f = fs::File::create(&self.0)?;
+        f.write_all(contents.as_ref())?;
+        Ok(())
+    }
+
+    pub fn remove_dir_all(&self) -> Result<(), io::Error> {
+        fs::remove_dir_all(&self.0)
+    }
+
+    pub fn rename(&self, other: &Self) -> Result<(), io::Error> {
+        fs::rename(&self.0, &other.0)
     }
 
     pub fn extension(&self) -> Option<&str> {
@@ -151,11 +214,15 @@ impl AbsoluteSystemPath {
         )
     }
 
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
     pub fn join_unix_path(
         &self,
         unix_path: impl AsRef<RelativeUnixPath>,
     ) -> Result<AbsoluteSystemPathBuf, PathError> {
-        let tail = unix_path.as_ref().to_system_path_buf()?;
+        let tail = unix_path.as_ref().to_system_path_buf();
         Ok(AbsoluteSystemPathBuf(
             self.0.join(tail).as_std_path().clean().try_into()?,
         ))
@@ -202,6 +269,11 @@ impl AbsoluteSystemPath {
         Ok(AbsoluteSystemPathBuf(cleaned_path))
     }
 
+    pub fn to_realpath(&self) -> Result<AbsoluteSystemPathBuf, PathError> {
+        let realpath = dunce::canonicalize(&self.0)?;
+        Ok(AbsoluteSystemPathBuf(Utf8PathBuf::try_from(realpath)?))
+    }
+
     // note that this is *not* lstat. If this is a symlink, it
     // will return metadata for the target.
     pub fn stat(&self) -> Result<Metadata, PathError> {
@@ -220,6 +292,10 @@ impl AbsoluteSystemPath {
 
     pub fn remove_file(&self) -> Result<(), io::Error> {
         fs::remove_file(&self.0)
+    }
+
+    pub fn remove_dir(&self) -> Result<(), io::Error> {
+        fs::remove_dir(&self.0)
     }
 
     pub fn components(&self) -> Utf8Components<'_> {
@@ -254,6 +330,7 @@ impl AbsoluteSystemPath {
             .expect("collapsed path should be absolute")
     }
 
+    // TODO: consider consolidating with `relation_to_path` below
     pub fn contains(&self, other: &Self) -> bool {
         // On windows, trying to get a relative path between files on different volumes
         // is an error. We don't care about the error, it's good enough for us to say
@@ -266,6 +343,34 @@ impl AbsoluteSystemPath {
         let other = other.collapse();
         let rel = AnchoredSystemPathBuf::relative_path_between(&this, &other);
         rel.components().next() != Some(Utf8Component::ParentDir)
+    }
+
+    /// relation_to_path does a lexical comparison of path components to
+    /// determine how this path relates to the given path. In the event that
+    /// the paths are the same, we return `Parent`, much the way that `contains`
+    /// would return `true`.
+    pub fn relation_to_path(&self, other: &Self) -> PathRelation {
+        let mut self_components = self.components();
+        let mut other_components = other.components();
+        loop {
+            match (self_components.next(), other_components.next()) {
+                // Non-matching component, the paths diverge
+                (Some(self_component), Some(other_component))
+                    if self_component != other_component =>
+                {
+                    return PathRelation::Divergent
+                }
+                // A matching component, continue iterating
+                (Some(_), Some(_)) => {}
+                // We've reached the end of a possible parent without hitting a
+                // non-matching component. Return Parent.
+                (None, _) => return PathRelation::Parent,
+                // We've hit the end of the other path without hitting the
+                // end of this path. Since we haven't hit a non-matching component,
+                // our path must be a child
+                (_, None) => return PathRelation::Child,
+            }
+        }
     }
 
     pub fn parent(&self) -> Option<&AbsoluteSystemPath> {
@@ -294,9 +399,36 @@ impl AbsoluteSystemPath {
         open_options.open(&self.0)
     }
 
+    pub fn read(&self) -> Result<Vec<u8>, io::Error> {
+        std::fs::read(self.as_path())
+    }
+
+    pub fn read_to_string(&self) -> Result<String, io::Error> {
+        fs::read_to_string(&self.0)
+    }
+
+    /// Attempts to read a file, and:
+    /// If the file does not exist it returns the default value.
+    /// For all other scenarios passes through the `read_to_string` results.
+    pub fn read_existing_to_string_or<I>(
+        &self,
+        default_value: Result<I, io::Error>,
+    ) -> Result<String, io::Error>
+    where
+        I: Into<String>,
+    {
+        fs::read_to_string(&self.0).or_else(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                default_value.map(|intoable| intoable.into())
+            } else {
+                Err(e)
+            }
+        })
+    }
+
     #[cfg(unix)]
     pub fn set_mode(&self, mode: u32) -> Result<(), io::Error> {
-        use std::{fs::Permissions, os::unix::fs::PermissionsExt};
+        use std::os::unix::fs::PermissionsExt;
 
         let permissions = Permissions::from_mode(mode);
         fs::set_permissions(&self.0, permissions)?;
@@ -305,9 +437,52 @@ impl AbsoluteSystemPath {
     }
 }
 
+impl<'a> From<&'a AbsoluteSystemPath> for CandidatePath<'a> {
+    fn from(value: &'a AbsoluteSystemPath) -> Self {
+        CandidatePath::from(value.0.as_std_path())
+    }
+}
+
+impl PartialEq<AbsoluteSystemPath> for Path {
+    fn eq(&self, other: &AbsoluteSystemPath) -> bool {
+        Utf8Path::from_path(self)
+            .map(|path| &other.0 == path)
+            .unwrap_or(false)
+    }
+}
+
+impl PartialEq<AbsoluteSystemPath> for PathBuf {
+    fn eq(&self, other: &AbsoluteSystemPath) -> bool {
+        self.as_path().eq(other)
+    }
+}
+
+impl PartialEq<&AbsoluteSystemPath> for Path {
+    fn eq(&self, other: &&AbsoluteSystemPath) -> bool {
+        Utf8Path::from_path(self)
+            .map(|path| &other.0 == path)
+            .unwrap_or(false)
+    }
+}
+
+impl PartialEq<&AbsoluteSystemPath> for PathBuf {
+    fn eq(&self, other: &&AbsoluteSystemPath) -> bool {
+        self.as_path().eq(other)
+    }
+}
+
+impl<'a> TryFrom<&'a Path> for &'a AbsoluteSystemPath {
+    type Error = PathError;
+
+    fn try_from(value: &'a Path) -> Result<Self, Self::Error> {
+        AbsoluteSystemPath::from_std_path(value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
+    use tempdir::TempDir;
     use test_case::test_case;
 
     use super::*;
@@ -381,5 +556,79 @@ mod tests {
         .unwrap();
 
         assert_eq!(base.contains(&other), expected);
+    }
+
+    // Constructing a windows permissions struct is only possible by calling
+    // fs::metadata so we only run these tests on unix.
+    #[cfg(unix)]
+    mod unix {
+        use std::os::unix::fs::PermissionsExt;
+
+        use test_case::test_case;
+
+        use super::*;
+        const PERMISSION_MASK: u32 = 0o777;
+
+        #[test_case(false, None, Permissions::from_mode(0o777) ; "dir doesn't exist")]
+        #[test_case(false, Some(Permissions::from_mode(0o666)), Permissions::from_mode(0o755) ; "path exists as file")]
+        #[test_case(true, Some(Permissions::from_mode(0o755)), Permissions::from_mode(0o655) ; "dir exists with incorrect mode")]
+        #[test_case(false, Some(Permissions::from_mode(0o755)), Permissions::from_mode(0o755) ; "dir exists with correct mode")]
+        fn test_mkdir_all_with_perms(
+            is_dir: bool,
+            mode: Option<Permissions>,
+            expected: Permissions,
+        ) -> Result<()> {
+            let test_dir = TempDir::new("mkdir-all")?;
+
+            let test_path = test_dir.path().join("foo");
+
+            if let Some(perm) = mode {
+                if is_dir {
+                    fs::create_dir(&test_path)?;
+                } else {
+                    fs::File::create(&test_path)?;
+                }
+                fs::set_permissions(&test_path, perm)?;
+            }
+
+            let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
+            path.create_dir_all_with_permissions(expected.clone())?;
+
+            let actual = fs::metadata(path.as_path())?;
+
+            assert!(actual.is_dir());
+
+            assert_eq!(
+                actual.permissions().mode() & PERMISSION_MASK,
+                expected.mode()
+            );
+
+            Ok(())
+        }
+    }
+
+    #[test_case(&["a", "b"], &["a", "b"], PathRelation::Parent ; "equal paths return parent")]
+    #[test_case(&["a"], &["a", "b"], PathRelation::Parent ; "a is a parent of a/b")]
+    #[test_case(&["a", "b"], &["a"], PathRelation::Child ; "a/b is a child of a")]
+    #[test_case(&["a", "b"], &["a", "c"], PathRelation::Divergent ; "a/b and a/c are divergent")]
+    fn test_path_relation(
+        abs_path_components: &[&str],
+        other_components: &[&str],
+        expected: PathRelation,
+    ) {
+        #[cfg(windows)]
+        let root = "C:\\";
+        #[cfg(not(windows))]
+        let root = "/";
+
+        let abs_path = AbsoluteSystemPathBuf::try_from(root)
+            .unwrap()
+            .join_components(abs_path_components);
+        let other_path = AbsoluteSystemPathBuf::try_from(root)
+            .unwrap()
+            .join_components(other_components);
+
+        let relation = abs_path.relation_to_path(&other_path);
+        assert_eq!(relation, expected);
     }
 }

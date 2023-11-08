@@ -17,12 +17,12 @@ use image::{
 use mime::Mime;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr};
-use turbo_tasks::{debug::ValueDebugFormat, primitives::StringVc, trace::TraceRawVcs};
-use turbo_tasks_fs::{File, FileContent, FileContentVc, FileSystemPathVc};
+use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, Vc};
+use turbo_tasks_fs::{File, FileContent, FileSystemPath};
 use turbopack_core::{
     error::PrettyPrintError,
-    ident::AssetIdentVc,
-    issue::{Issue, IssueVc},
+    ident::AssetIdent,
+    issue::{Issue, IssueExt, IssueSeverity},
 };
 
 use self::svg::calculate;
@@ -101,16 +101,17 @@ fn extension_to_image_format(extension: &str) -> Option<ImageFormat> {
     })
 }
 
-fn result_to_issue<T>(ident: AssetIdentVc, result: Result<T>) -> Option<T> {
+fn result_to_issue<T>(ident: Vc<AssetIdent>, result: Result<T>) -> Option<T> {
     match result {
         Ok(r) => Some(r),
         Err(err) => {
             ImageProcessingIssue {
                 path: ident.path(),
-                message: StringVc::cell(format!("{}", PrettyPrintError(&err))),
+                message: Vc::cell(format!("{}", PrettyPrintError(&err))),
+                issue_severity: None,
+                title: None,
             }
             .cell()
-            .as_issue()
             .emit();
             None
         }
@@ -118,17 +119,25 @@ fn result_to_issue<T>(ident: AssetIdentVc, result: Result<T>) -> Option<T> {
 }
 
 fn load_image(
-    ident: AssetIdentVc,
+    ident: Vc<AssetIdent>,
     bytes: &[u8],
     extension: Option<&str>,
-) -> Option<(image::DynamicImage, Option<ImageFormat>)> {
-    result_to_issue(ident, load_image_internal(bytes, extension))
+) -> Option<(ImageBuffer, Option<ImageFormat>)> {
+    result_to_issue(ident, load_image_internal(ident, bytes, extension))
+}
+
+/// Type of raw image buffer read by reader from `load_image`.
+/// If the image could not be decoded, the raw bytes are returned.
+enum ImageBuffer {
+    Raw(Vec<u8>),
+    Decoded(image::DynamicImage),
 }
 
 fn load_image_internal(
+    ident: Vc<AssetIdent>,
     bytes: &[u8],
     extension: Option<&str>,
-) -> Result<(image::DynamicImage, Option<ImageFormat>)> {
+) -> Result<(ImageBuffer, Option<ImageFormat>)> {
     let reader = image::io::Reader::new(Cursor::new(&bytes));
     let mut reader = reader
         .with_guessed_format()
@@ -142,12 +151,55 @@ fn load_image_internal(
             }
         }
     }
+
+    // [NOTE]
+    // Workaround for missing codec supports in Turbopack,
+    // Instead of erroring out the whole build, emitting raw image bytes as-is
+    // (Not applying resize, not applying optimization or anything else)
+    // and expect a browser decodes it.
+    // This is a stop gap until we have proper encoding/decoding in majority of the
+    // platforms
+
+    #[cfg(not(feature = "avif"))]
+    if matches!(format, Some(ImageFormat::Avif)) {
+        ImageProcessingIssue {
+            path: ident.path(),
+            message: Vc::cell(
+                "This version of Turbopack does not support AVIF images, will emit without \
+                 optimization or encoding"
+                    .to_string(),
+            ),
+            title: Some(Vc::cell("AVIF image not supported".to_string())),
+            issue_severity: Some(IssueSeverity::Warning.into()),
+        }
+        .cell()
+        .emit();
+        return Ok((ImageBuffer::Raw(bytes.to_vec()), format));
+    }
+
+    #[cfg(not(feature = "webp"))]
+    if matches!(format, Some(ImageFormat::WebP)) {
+        ImageProcessingIssue {
+            path: ident.path(),
+            message: Vc::cell(
+                "This version of Turbopack does not support WEBP images, will emit without \
+                 optimization or encoding"
+                    .to_string(),
+            ),
+            title: Some(Vc::cell("WEBP image not supported".to_string())),
+            issue_severity: Some(IssueSeverity::Warning.into()),
+        }
+        .cell()
+        .emit();
+        return Ok((ImageBuffer::Raw(bytes.to_vec()), format));
+    }
+
     let image = reader.decode().context("unable to decode image data")?;
-    Ok((image, format))
+    Ok((ImageBuffer::Decoded(image), format))
 }
 
 fn compute_blur_data(
-    ident: AssetIdentVc,
+    ident: Vc<AssetIdent>,
     image: image::DynamicImage,
     format: ImageFormat,
     options: &BlurPlaceholderOptions,
@@ -159,10 +211,11 @@ fn compute_blur_data(
         Err(err) => {
             ImageProcessingIssue {
                 path: ident.path(),
-                message: StringVc::cell(format!("{}", PrettyPrintError(&err))),
+                message: Vc::cell(format!("{}", PrettyPrintError(&err))),
+                issue_severity: None,
+                title: None,
             }
             .cell()
-            .as_issue()
             .emit();
             Some(BlurPlaceholder::fallback())
         }
@@ -286,16 +339,16 @@ fn image_format_to_mime_type(format: ImageFormat) -> Result<Option<Mime>> {
 /// Optionally computes a blur placeholder.
 #[turbo_tasks::function]
 pub async fn get_meta_data(
-    ident: AssetIdentVc,
-    content: FileContentVc,
-    blur_placeholder: Option<BlurPlaceholderOptionsVc>,
-) -> Result<ImageMetaDataVc> {
+    ident: Vc<AssetIdent>,
+    content: Vc<FileContent>,
+    blur_placeholder: Option<Vc<BlurPlaceholderOptions>>,
+) -> Result<Vc<ImageMetaData>> {
     let FileContent::Content(content) = &*content.await? else {
-      bail!("Input image not found");
+        bail!("Input image not found");
     };
     let bytes = content.content().to_bytes()?;
     let path = ident.path().await?;
-    let extension = path.extension();
+    let extension = path.extension_ref();
     if extension == Some("svg") {
         let content = result_to_issue(
             ident,
@@ -323,95 +376,139 @@ pub async fn get_meta_data(
     let Some((image, format)) = load_image(ident, &bytes, extension) else {
         return Ok(ImageMetaData::fallback_value(None).cell());
     };
-    let (width, height) = image.dimensions();
-    let blur_placeholder = if let Some(blur_placeholder) = blur_placeholder {
-        if matches!(
-            format,
-            // list should match next/client/image.tsx
-            Some(ImageFormat::Png)
-                | Some(ImageFormat::Jpeg)
-                | Some(ImageFormat::WebP)
-                | Some(ImageFormat::Avif)
-        ) {
-            compute_blur_data(ident, image, format.unwrap(), &*blur_placeholder.await?)
-        } else {
-            None
-        }
-    } else {
-        None
-    };
 
-    Ok(ImageMetaData {
-        width,
-        height,
-        mime_type: if let Some(format) = format {
-            image_format_to_mime_type(format)?
-        } else {
-            None
-        },
-        blur_placeholder,
-        placeholder_for_future_extensions: (),
+    match image {
+        ImageBuffer::Raw(..) => Ok(ImageMetaData::fallback_value(None).cell()),
+        ImageBuffer::Decoded(image) => {
+            let (width, height) = image.dimensions();
+            let blur_placeholder = if let Some(blur_placeholder) = blur_placeholder {
+                if matches!(
+                    format,
+                    // list should match next/client/image.tsx
+                    Some(ImageFormat::Png)
+                        | Some(ImageFormat::Jpeg)
+                        | Some(ImageFormat::WebP)
+                        | Some(ImageFormat::Avif)
+                ) {
+                    compute_blur_data(ident, image, format.unwrap(), &*blur_placeholder.await?)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            Ok(ImageMetaData {
+                width,
+                height,
+                mime_type: if let Some(format) = format {
+                    image_format_to_mime_type(format)?
+                } else {
+                    None
+                },
+                blur_placeholder,
+                placeholder_for_future_extensions: (),
+            }
+            .cell())
+        }
     }
-    .cell())
 }
 
 #[turbo_tasks::function]
 pub async fn optimize(
-    ident: AssetIdentVc,
-    content: FileContentVc,
+    ident: Vc<AssetIdent>,
+    content: Vc<FileContent>,
     max_width: u32,
     max_height: u32,
     quality: u8,
-) -> Result<FileContentVc> {
+) -> Result<Vc<FileContent>> {
     let FileContent::Content(content) = &*content.await? else {
         return Ok(FileContent::NotFound.cell());
     };
     let bytes = content.content().to_bytes()?;
-    let Some((image, mut format)) = load_image(ident, &bytes, ident.path().await?.extension()) else {
+
+    let Some((image, format)) = load_image(ident, &bytes, ident.path().await?.extension_ref())
+    else {
         return Ok(FileContent::NotFound.cell());
     };
-    let (width, height) = image.dimensions();
-    let image = if width > max_width || height > max_height {
-        image.resize(max_width, max_height, FilterType::Lanczos3)
-    } else {
-        image
-    };
-    #[cfg(not(feature = "avif"))]
-    if matches!(format, Some(ImageFormat::Avif)) {
-        format = Some(ImageFormat::Jpeg);
-    }
-    #[cfg(not(feature = "webp"))]
-    if matches!(format, Some(ImageFormat::WebP)) {
-        format = Some(ImageFormat::Jpeg);
-    }
-    let format = format.unwrap_or(ImageFormat::Jpeg);
-    let (data, mime_type) = encode_image(image, format, quality)?;
+    match image {
+        ImageBuffer::Raw(buffer) => {
+            #[cfg(not(feature = "avif"))]
+            if matches!(format, Some(ImageFormat::Avif)) {
+                return Ok(FileContent::Content(
+                    File::from(buffer).with_content_type(Mime::from_str("image/avif")?),
+                )
+                .cell());
+            }
 
-    Ok(FileContent::Content(File::from(data).with_content_type(mime_type)).cell())
+            #[cfg(not(feature = "webp"))]
+            if matches!(format, Some(ImageFormat::WebP)) {
+                return Ok(FileContent::Content(
+                    File::from(buffer).with_content_type(Mime::from_str("image/webp")?),
+                )
+                .cell());
+            }
+
+            let mime_type = if let Some(format) = format {
+                image_format_to_mime_type(format)?
+            } else {
+                None
+            };
+
+            // Falls back to image/jpeg if the format is unknown, thouogh it is not
+            // technically correct
+            Ok(FileContent::Content(
+                File::from(buffer).with_content_type(mime_type.unwrap_or(mime::IMAGE_JPEG)),
+            )
+            .cell())
+        }
+        ImageBuffer::Decoded(image) => {
+            let (width, height) = image.dimensions();
+            let image = if width > max_width || height > max_height {
+                image.resize(max_width, max_height, FilterType::Lanczos3)
+            } else {
+                image
+            };
+
+            let format = format.unwrap_or(ImageFormat::Jpeg);
+            let (data, mime_type) = encode_image(image, format, quality)?;
+
+            Ok(FileContent::Content(File::from(data).with_content_type(mime_type)).cell())
+        }
+    }
 }
 
 #[turbo_tasks::value]
 struct ImageProcessingIssue {
-    path: FileSystemPathVc,
-    message: StringVc,
+    path: Vc<FileSystemPath>,
+    message: Vc<String>,
+    title: Option<Vc<String>>,
+    issue_severity: Option<Vc<IssueSeverity>>,
 }
 
 #[turbo_tasks::value_impl]
 impl Issue for ImageProcessingIssue {
     #[turbo_tasks::function]
-    fn context(&self) -> FileSystemPathVc {
+    fn severity(&self) -> Vc<IssueSeverity> {
+        self.issue_severity.unwrap_or(IssueSeverity::Error.into())
+    }
+
+    #[turbo_tasks::function]
+    fn file_path(&self) -> Vc<FileSystemPath> {
         self.path
     }
     #[turbo_tasks::function]
-    fn category(&self) -> StringVc {
-        StringVc::cell("image".to_string())
+    fn category(&self) -> Vc<String> {
+        Vc::cell("image".to_string())
     }
     #[turbo_tasks::function]
-    fn title(&self) -> StringVc {
-        StringVc::cell("Processing image failed".to_string())
+    fn title(&self) -> Vc<String> {
+        self.title
+            .unwrap_or(Vc::cell("Processing image failed".to_string()))
     }
+
     #[turbo_tasks::function]
-    fn description(&self) -> StringVc {
+    fn description(&self) -> Vc<String> {
         self.message
     }
 }

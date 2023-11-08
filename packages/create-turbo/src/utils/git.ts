@@ -1,6 +1,6 @@
-import { execSync } from "child_process";
-import path from "path";
-import rimraf from "rimraf";
+import { execSync } from "node:child_process";
+import path from "node:path";
+import { sync as rmSync } from "rimraf";
 
 export const DEFAULT_IGNORE = `
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
@@ -36,7 +36,9 @@ export function isInGitRepository(): boolean {
   try {
     execSync(GIT_REPO_COMMAND, { stdio: "ignore" });
     return true;
-  } catch (_) {}
+  } catch (_) {
+    // do nothing
+  }
   return false;
 }
 
@@ -44,7 +46,9 @@ export function isInMercurialRepository(): boolean {
   try {
     execSync(HG_REPO_COMMAND, { stdio: "ignore" });
     return true;
-  } catch (_) {}
+  } catch (_) {
+    // do nothing
+  }
   return false;
 }
 
@@ -67,8 +71,10 @@ export function tryGitInit(root: string, message: string): boolean {
   } catch (err) {
     if (didInit) {
       try {
-        rimraf.sync(path.join(root, ".git"));
-      } catch (_) {}
+        rmSync(path.join(root, ".git"));
+      } catch (_) {
+        // do nothing
+      }
     }
     return false;
   }
@@ -81,6 +87,18 @@ export function tryGitCommit(message: string): boolean {
   } catch (err) {
     return false;
   }
+}
+
+export function tryGitAdd(): void {
+  try {
+    gitAddAll();
+  } catch (err) {
+    // do nothing
+  }
+}
+
+function gitAddAll() {
+  execSync("git add -A", { stdio: "ignore" });
 }
 
 function gitCommit(message: string) {

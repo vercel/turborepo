@@ -1,8 +1,6 @@
 package lockfile
 
 import (
-	"io"
-
 	"github.com/vercel/turbo/cli/internal/ffi"
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
@@ -29,38 +27,6 @@ func (l *BerryLockfile) ResolvePackage(_workspace turbopath.AnchoredUnixPath, na
 // AllDependencies Given a lockfile key return all (dev/optional/peer) dependencies of that package
 func (l *BerryLockfile) AllDependencies(key string) (map[string]string, bool) {
 	panic("Should use Rust implementation")
-}
-
-// Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
-func (l *BerryLockfile) Subgraph(workspacePackages []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error) {
-	workspaces := make([]string, len(workspacePackages))
-	for i, workspace := range workspacePackages {
-		workspaces[i] = workspace.ToUnixPath().ToString()
-	}
-	contents, err := ffi.Subgraph("berry", l.contents, workspaces, packages, l.resolutions)
-	if err != nil {
-		return nil, err
-	}
-	return &BerryLockfile{contents: contents, resolutions: l.resolutions}, nil
-}
-
-// Encode encode the lockfile representation and write it to the given writer
-func (l *BerryLockfile) Encode(w io.Writer) error {
-	_, err := w.Write(l.contents)
-	return err
-}
-
-// Patches return a list of patches used in the lockfile
-func (l *BerryLockfile) Patches() []turbopath.AnchoredUnixPath {
-	rawPatches := ffi.Patches(l.contents, "berry")
-	if len(rawPatches) == 0 {
-		return nil
-	}
-	patches := make([]turbopath.AnchoredUnixPath, len(rawPatches))
-	for i, patch := range rawPatches {
-		patches[i] = turbopath.AnchoredUnixPath(patch)
-	}
-	return patches
 }
 
 // DecodeBerryLockfile Takes the contents of a berry lockfile and returns a struct representation

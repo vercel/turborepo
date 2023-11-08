@@ -1,13 +1,11 @@
+import fs from "node:fs";
+import path from "node:path";
 import { parse } from "dotenv";
-import fs from "fs";
-import path from "path";
 
-type DotEnvConfig = {
-  filePaths: string[];
-  hashes: {
-    [path: string]: string | null;
-  };
-};
+interface DotEnvConfig {
+  filePaths: Array<string>;
+  hashes: Record<string, string | null>;
+}
 
 export function dotEnv(
   workspacePath: string | undefined,
@@ -17,17 +15,19 @@ export function dotEnv(
     return new Set();
   }
 
-  let outputSet = new Set<string>();
+  const outputSet = new Set<string>();
   config.filePaths.forEach((filePath) => {
     try {
-      var dotEnvFileContents = fs.readFileSync(
+      const dotEnvFileContents = fs.readFileSync(
         path.join(workspacePath, filePath),
         "utf8"
       );
       Object.keys(parse(dotEnvFileContents)).forEach((envVarName) =>
         outputSet.add(envVarName)
       );
-    } catch (e) {}
+    } catch (_) {
+      // ignore
+    }
   });
 
   return outputSet;

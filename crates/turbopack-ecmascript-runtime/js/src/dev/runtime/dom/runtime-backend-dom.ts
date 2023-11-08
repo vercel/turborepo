@@ -27,6 +27,36 @@ function commonJsRequireContext(
   return commonJsRequire(sourceModule, entry.id());
 }
 
+function fetchWebAssembly(wasmChunkPath: ChunkPath) {
+  return fetch(getChunkRelativeUrl(wasmChunkPath));
+}
+
+async function loadWebAssembly(
+  _source: SourceInfo,
+  wasmChunkPath: ChunkPath,
+  importsObj: WebAssembly.Imports
+): Promise<Exports> {
+  const req = fetchWebAssembly(wasmChunkPath);
+
+  const { instance } = await WebAssembly.instantiateStreaming(req, importsObj);
+
+  return instance.exports;
+}
+
+async function loadWebAssemblyModule(
+  _source: SourceInfo,
+  wasmChunkPath: ChunkPath
+): Promise<WebAssembly.Module> {
+  const req = fetchWebAssembly(wasmChunkPath);
+
+  return await WebAssembly.compileStreaming(req);
+}
+
+// [TODO] need to match behavior as similar to UrlAssetReference
+function resolveAbsolutePath(modulePath?: string) {
+  throw new Error('resolveAbsolutePath is not implemented in the DOM runtime');
+}
+
 (() => {
   BACKEND = {
     async registerChunk(chunkPath, params) {
@@ -64,8 +94,10 @@ function commonJsRequireContext(
     unloadChunk(chunkPath) {
       deleteResolver(chunkPath);
 
+      const chunkUrl = getChunkRelativeUrl(chunkPath);
+
       if (chunkPath.endsWith(".css")) {
-        const links = document.querySelectorAll(`link[href="/${chunkPath}"]`);
+        const links = document.querySelectorAll(`link[href="${chunkUrl}"]`);
         for (const link of Array.from(links)) {
           link.remove();
         }
@@ -74,9 +106,7 @@ function commonJsRequireContext(
         // runtime once evaluated.
         // However, we still want to remove the script tag from the DOM to keep
         // the HTML somewhat consistent from the user's perspective.
-        const scripts = document.querySelectorAll(
-          `script[src="/${chunkPath}"]`
-        );
+        const scripts = document.querySelectorAll(`script[src="${chunkUrl}"]`);
         for (const script of Array.from(scripts)) {
           script.remove();
         }
@@ -97,26 +127,29 @@ function commonJsRequireContext(
           .map((p) => encodeURIComponent(p))
           .join("/");
 
-        const previousLink = document.querySelector(
-          `link[rel=stylesheet][href^="/${encodedChunkPath}"]`
+        const chunkUrl = getChunkRelativeUrl(encodedChunkPath);
+
+        const previousLinks = document.querySelectorAll(
+          `link[rel=stylesheet][href^="${chunkUrl}"]`
         );
 
-        if (previousLink == null) {
+        if (previousLinks.length == 0) {
           reject(new Error(`No link element found for chunk ${chunkPath}`));
           return;
         }
 
         const link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = `/${encodedChunkPath}`;
+        link.href = chunkUrl;
         link.onerror = () => {
           reject();
         };
         link.onload = () => {
-          // First load the new CSS, then remove the old one. This prevents visible
+          // First load the new CSS, then remove the old ones. This prevents visible
           // flickering that would happen in-between removing the previous CSS and
           // loading the new one.
-          previousLink.remove();
+          for (const previousLink of Array.from(previousLinks))
+            previousLink.remove();
 
           // CSS chunks do not register themselves, and as such must be marked as
           // loaded instantly.
@@ -125,9 +158,9 @@ function commonJsRequireContext(
 
         // Make sure to insert the new CSS right after the previous one, so that
         // its precedence is higher.
-        previousLink.parentElement!.insertBefore(
+        previousLinks[0].parentElement!.insertBefore(
           link,
-          previousLink.nextSibling
+          previousLinks[0].nextSibling
         );
       });
     },
@@ -194,10 +227,12 @@ function commonJsRequireContext(
       return resolver.promise;
     }
 
+    const chunkUrl = getChunkRelativeUrl(chunkPath);
+
     if (chunkPath.endsWith(".css")) {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = `/${chunkPath}`;
+      link.href = chunkUrl;
       link.onerror = () => {
         resolver.reject();
       };
@@ -209,7 +244,7 @@ function commonJsRequireContext(
       document.body.appendChild(link);
     } else if (chunkPath.endsWith(".js")) {
       const script = document.createElement("script");
-      script.src = `/${chunkPath}`;
+      script.src = chunkUrl;
       // We'll only mark the chunk as loaded once the script has been executed,
       // which happens in `registerChunk`. Hence the absence of `resolve()` in
       // this branch.
@@ -226,7 +261,8 @@ function commonJsRequireContext(
 })();
 
 function _eval({ code, url, map }: EcmascriptModuleEntry): ModuleFactory {
-  code += `\n\n//# sourceURL=${location.origin}${url}`;
-  if (map) code += `\n//# sourceMappingURL=${map}`;
+  code += `\n\n//# sourceURL=${location.origin}/${CHUNK_BASE_PATH}${url}`;
+  if (map)
+    code += `\n//# sourceMappingURL=${location.origin}/${CHUNK_BASE_PATH}${map}`;
   return eval(code);
 }

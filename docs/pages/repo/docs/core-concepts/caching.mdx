@@ -28,7 +28,7 @@ Let's say you run a `build` task with Turborepo using `turbo run build`:
 
 3. If Turborepo doesn't find any matching artifacts for the calculated hash, Turborepo will then **execute the task**.
 
-4. Once the task is completed, Turborepo **saves all specified outputs** (including files and logs) into a new cache artifact, addressed by the hash.
+4. Once the task is succesfully completed, Turborepo **saves all specified outputs** (including files and logs) into a new cache artifact, addressed by the hash.
 
 <Callout type="info">
   Turborepo takes a lot of information into account when creating the hash: the dependency graph, tasks it depends on, source files, environment variables, and more!

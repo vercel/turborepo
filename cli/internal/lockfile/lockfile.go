@@ -3,7 +3,6 @@ package lockfile
 
 import (
 	"fmt"
-	"io"
 	"reflect"
 	"sort"
 
@@ -19,12 +18,6 @@ type Lockfile interface {
 	ResolvePackage(workspacePath turbopath.AnchoredUnixPath, name string, version string) (Package, error)
 	// AllDependencies Given a lockfile key return all (dev/optional/peer) dependencies of that package
 	AllDependencies(key string) (map[string]string, bool)
-	// Subgraph Given a list of lockfile keys returns a Lockfile based off the original one that only contains the packages given
-	Subgraph(workspacePackages []turbopath.AnchoredSystemPath, packages []string) (Lockfile, error)
-	// Encode encode the lockfile representation and write it to the given writer
-	Encode(w io.Writer) error
-	// Patches return a list of patches used in the lockfile
-	Patches() []turbopath.AnchoredUnixPath
 	// GlobalChange checks if there are any differences between lockfiles that would completely invalidate
 	// the cache.
 	GlobalChange(other Lockfile) bool
@@ -38,11 +31,11 @@ func IsNil(l Lockfile) bool {
 // Package Structure representing a possible Pack
 type Package struct {
 	// Key used to lookup a package in the lockfile
-	Key string
+	Key string `json:"key"`
 	// The resolved version of a package as it appears in the lockfile
-	Version string
+	Version string `json:"version"`
 	// Set to true iff Key and Version are set
-	Found bool
+	Found bool `json:"-"`
 }
 
 // ByKey sort package structures by key
@@ -57,7 +50,11 @@ func (p ByKey) Swap(i, j int) {
 }
 
 func (p ByKey) Less(i, j int) bool {
-	return p[i].Key+p[i].Version < p[j].Key+p[j].Version
+	if p[i].Key == p[j].Key {
+		return p[i].Version < p[j].Version
+	}
+
+	return p[i].Key < p[j].Key
 }
 
 var _ (sort.Interface) = (*ByKey)(nil)
@@ -84,6 +81,9 @@ func AllTransitiveClosures(
 	}
 	if lf, ok := lockFile.(*YarnLockfile); ok {
 		return rustTransitiveDeps(lf.contents, "yarn", workspaces, nil)
+	}
+	if lf, ok := lockFile.(*BunLockfile); ok {
+		return rustTransitiveDeps(lf.contents, "bun", workspaces, nil)
 	}
 
 	g := new(errgroup.Group)

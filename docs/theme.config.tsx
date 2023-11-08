@@ -12,6 +12,7 @@ const SITE_ROOT = "https://turbo.build";
 const config: DocsThemeConfig = {
   sidebar: {
     defaultMenuCollapseLevel: 10000,
+    toggleButton: true,
   },
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
   useNextSeoProps: function SEO() {
@@ -58,6 +59,7 @@ const config: DocsThemeConfig = {
   },
   toc: {
     float: true,
+    backToTop: true,
     extraContent: ExtraContent,
   },
   // font: false,

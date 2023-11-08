@@ -28,3 +28,5 @@ issues:
   exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
+  exclude:
+    - "func name will be used as hash.Hash.* by other packages, and that stutters; consider calling this"

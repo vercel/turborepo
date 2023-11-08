@@ -10,6 +10,10 @@
       "dependsOn": ["cli#build", "topo", "test:setup"],
       "passThroughEnv": ["CI"]
     },
+    "test:rust-codepath": {
+      "dependsOn": ["cli#build", "topo", "test:setup"],
+      "passThroughEnv": ["CI"]
+    },
     "test:setup": {
       "cache": false
     }

@@ -20,16 +20,54 @@ type ChunkData =
     };
 
 type CommonJsRequire = (moduleId: ModuleId) => Exports;
-type CommonJsExport = (exports: Record<string, any>) => void;
-
 type EsmImport = (
   moduleId: ModuleId,
   allowExportDefault: boolean
-) => EsmNamespaceObject;
+) => EsmNamespaceObject | Promise<EsmNamespaceObject>;
 type EsmExport = (exportGetters: Record<string, () => any>) => void;
 type ExportValue = (value: any) => void;
+type ExportNamespace = (namespace: any) => void;
+type DynamicExport = (object: Record<string, any>) => void;
 
 type LoadChunk = (chunkPath: ChunkPath) => Promise<any> | undefined;
+type LoadWebAssembly = (
+  wasmChunkPath: ChunkPath,
+  imports: WebAssembly.Imports
+) => Exports;
+type LoadWebAssemblyModule = (wasmChunkPath: ChunkPath) => WebAssembly.Module;
 
 type ModuleCache = Record<ModuleId, Module>;
 type ModuleFactories = Record<ModuleId, ModuleFactory>;
+
+type ResolveAbsolutePath = (modulePath?: string) => string;
+type RelativeURL = (inputUrl: string) => void;
+
+type AsyncModule = (
+  body: (
+    handleAsyncDependencies: (
+      deps: Dep[]
+    ) => Exports[] | Promise<() => Exports[]>,
+    asyncResult: (err?: any) => void
+  ) => void,
+  hasAwait: boolean
+) => void;
+
+interface TurbopackBaseContext {
+  a: AsyncModule;
+  e: Module["exports"];
+  r: CommonJsRequire;
+  t: CommonJsRequire;
+  f: RequireContextFactory;
+  i: EsmImport;
+  s: EsmExport;
+  j: DynamicExport;
+  v: ExportValue;
+  n: ExportNamespace;
+  m: Module;
+  c: ModuleCache;
+  l: LoadChunk;
+  w: LoadWebAssembly;
+  u: LoadWebAssemblyModule;
+  g: typeof globalThis;
+  __dirname: string;
+}

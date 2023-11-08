@@ -31,7 +31,6 @@ pub fn restore_regular(
         open_options.mode(header.mode()?);
     }
 
-    println!("resolved path: {}", resolved_path);
     let mut file = open_options.open(resolved_path.as_path())?;
     io::copy(entry, &mut file)?;
 

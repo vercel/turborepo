@@ -1,36 +1,39 @@
 use std::{
     collections::{HashMap, HashSet},
     env, fs,
+    path::PathBuf,
 };
 
 use anyhow::{anyhow, bail, Context, Result};
 use once_cell::sync::Lazy;
+use regex::Regex;
 use similar::TextDiff;
-use turbo_tasks::{debug::ValueDebugStringReadRef, TryJoinIterExt, ValueToString};
+use turbo_tasks::{ReadRef, TryJoinIterExt, ValueToString, Vc};
 use turbo_tasks_fs::{
-    DirectoryContent, DirectoryEntry, DiskFileSystemVc, File, FileContent, FileSystemEntryType,
-    FileSystemPathVc,
+    DirectoryContent, DirectoryEntry, DiskFileSystem, File, FileContent, FileSystemEntryType,
+    FileSystemPath,
 };
 use turbo_tasks_hash::encode_hex;
+use turbopack_cli_utils::issue::{format_issue, LogOptions};
 use turbopack_core::{
-    asset::{AssetContent, AssetContentVc},
-    issue::PlainIssueReadRef,
+    asset::AssetContent,
+    issue::{IssueSeverity, PlainIssue},
 };
 
 // Updates the existing snapshot outputs with the actual outputs of this run.
 // e.g. `UPDATE=1 cargo test -p turbopack-tests -- test_my_pattern`
 static UPDATE: Lazy<bool> = Lazy::new(|| env::var("UPDATE").unwrap_or_default() == "1");
 
-pub async fn snapshot_issues<
-    I: IntoIterator<Item = (PlainIssueReadRef, ValueDebugStringReadRef)>,
->(
+static ANSI_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\x1b\[\d+m").unwrap());
+
+pub async fn snapshot_issues<I: IntoIterator<Item = ReadRef<PlainIssue>>>(
     captured_issues: I,
-    issues_path: FileSystemPathVc,
+    issues_path: Vc<FileSystemPath>,
     workspace_root: &str,
 ) -> Result<()> {
     let expected_issues = expected(issues_path).await?;
     let mut seen = HashSet::new();
-    for (plain_issue, debug_string) in captured_issues.into_iter() {
+    for plain_issue in captured_issues.into_iter() {
         let title = plain_issue
             .title
             .replace('/', "__")
@@ -44,22 +47,36 @@ pub async fn snapshot_issues<
         } else {
             &title
         };
-        let hash = encode_hex(plain_issue.internal_hash(true));
+        let hash = encode_hex(plain_issue.internal_hash_ref(true));
 
-        let path = issues_path.join(&format!("{title}-{}.txt", &hash[0..6]));
+        let path = issues_path.join(format!("{title}-{}.txt", &hash[0..6]));
         if !seen.insert(path) {
             continue;
         }
 
+        let formatted = format_issue(
+            &plain_issue,
+            None,
+            &LogOptions {
+                current_dir: PathBuf::new(),
+                project_dir: PathBuf::new(),
+                show_all: true,
+                log_detail: true,
+                log_level: IssueSeverity::Info,
+            },
+        );
+
         // Annoyingly, the PlainIssue.source -> PlainIssueSource.asset ->
-        // PlainAsset.path -> FileSystemPath.fs -> DiskFileSystem.root changes
+        // PlainSource.path -> FileSystemPath.fs -> DiskFileSystem.root changes
         // for everyone.
-        let content = debug_string
+        let content = formatted
             .as_str()
             .replace(workspace_root, "WORKSPACE_ROOT")
+            .replace(&*ANSI_REGEX, "")
             // Normalize syspaths from Windows. These appear in stack traces.
             .replace("\\\\", "/");
-        let asset = File::from(content).into();
+
+        let asset = AssetContent::file(File::from(content).into());
 
         diff(path, asset).await?;
     }
@@ -67,7 +84,7 @@ pub async fn snapshot_issues<
     matches_expected(expected_issues, seen).await
 }
 
-pub async fn expected(dir: FileSystemPathVc) -> Result<HashSet<FileSystemPathVc>> {
+pub async fn expected(dir: Vc<FileSystemPath>) -> Result<HashSet<Vc<FileSystemPath>>> {
     let mut expected = HashSet::new();
     let entries = dir.read_dir().await?;
     if let DirectoryContent::Entries(entries) = &*entries {
@@ -88,8 +105,8 @@ pub async fn expected(dir: FileSystemPathVc) -> Result<HashSet<FileSystemPathVc>
 }
 
 pub async fn matches_expected(
-    expected: HashSet<FileSystemPathVc>,
-    seen: HashSet<FileSystemPathVc>,
+    expected: HashSet<Vc<FileSystemPath>>,
+    seen: HashSet<Vc<FileSystemPath>>,
 ) -> Result<()> {
     for path in diff_paths(&expected, &seen).await? {
         let p = &path.await?.path;
@@ -103,9 +120,9 @@ pub async fn matches_expected(
     Ok(())
 }
 
-pub async fn diff(path: FileSystemPathVc, actual: AssetContentVc) -> Result<()> {
+pub async fn diff(path: Vc<FileSystemPath>, actual: Vc<AssetContent>) -> Result<()> {
     let path_str = &path.await?.path;
-    let expected = path.read().into();
+    let expected = AssetContent::file(path.read());
 
     let actual = get_contents(actual, path).await?;
     let expected = get_contents(expected, path).await?;
@@ -140,7 +157,7 @@ pub async fn diff(path: FileSystemPathVc, actual: AssetContentVc) -> Result<()> 
     Ok(())
 }
 
-async fn get_contents(file: AssetContentVc, path: FileSystemPathVc) -> Result<Option<String>> {
+async fn get_contents(file: Vc<AssetContent>, path: Vc<FileSystemPath>) -> Result<Option<String>> {
     Ok(
         match &*file.await.context(format!(
             "Unable to read AssetContent of {}",
@@ -163,8 +180,8 @@ async fn get_contents(file: AssetContentVc, path: FileSystemPathVc) -> Result<Op
     )
 }
 
-async fn remove_file(path: FileSystemPathVc) -> Result<()> {
-    let fs = DiskFileSystemVc::resolve_from(path.fs())
+async fn remove_file(path: Vc<FileSystemPath>) -> Result<()> {
+    let fs = Vc::try_resolve_downcast_type::<DiskFileSystem>(path.fs())
         .await?
         .context(anyhow!("unexpected fs type"))?
         .await?;
@@ -174,12 +191,12 @@ async fn remove_file(path: FileSystemPathVc) -> Result<()> {
 }
 
 /// Values in left that are not in right.
-/// FileSystemPathVc hashes as a Vc, not as the file path, so we need to get the
-/// path to properly diff.
+/// Vc<FileSystemPath> hashes as a Vc, not as the file path, so we need to get
+/// the path to properly diff.
 async fn diff_paths(
-    left: &HashSet<FileSystemPathVc>,
-    right: &HashSet<FileSystemPathVc>,
-) -> Result<HashSet<FileSystemPathVc>> {
+    left: &HashSet<Vc<FileSystemPath>>,
+    right: &HashSet<Vc<FileSystemPath>>,
+) -> Result<HashSet<Vc<FileSystemPath>>> {
     let mut map = left
         .iter()
         .map(|p| async move { Ok((p.await?.path.clone(), *p)) })

@@ -1,9 +1,9 @@
 import { json, urlencoded } from "body-parser";
-import express from "express";
+import express, { type Express } from "express";
 import morgan from "morgan";
 import cors from "cors";
 
-export const createServer = () => {
+export const createServer = (): Express => {
   const app = express();
   app
     .disable("x-powered-by")
@@ -14,7 +14,7 @@ export const createServer = () => {
     .get("/message/:name", (req, res) => {
       return res.json({ message: `hello ${req.params.name}` });
     })
-    .get("/healthz", (req, res) => {
+    .get("/status", (_, res) => {
       return res.json({ ok: true });
     });
 

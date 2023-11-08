@@ -1,6 +1,6 @@
 {
   "name": "@turbo/types",
-  "version": "1.10.7",
+  "version": "1.10.17-canary.0",
   "description": "Turborepo types",
   "homepage": "https://turbo.build/repo",
   "license": "MPL-2.0",
@@ -18,14 +18,15 @@
     "turbo-types-generate": "./src/scripts/codegen.js"
   },
   "scripts": {
-    "lint": "eslint src/**/*.ts",
+    "lint": "eslint src/",
     "lint:prettier": "prettier -c . --cache"
   },
   "dependencies": {
     "ts-json-schema-generator": "1.1.2"
   },
   "devDependencies": {
-    "@turbo/tsconfig": "workspace:^0.0.0"
+    "@turbo/eslint-config": "workspace:*",
+    "@turbo/tsconfig": "workspace:*"
   },
   "files": [
     "src"

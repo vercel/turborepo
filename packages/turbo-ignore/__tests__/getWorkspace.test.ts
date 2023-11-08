@@ -1,5 +1,5 @@
-import { getWorkspace } from "../src/getWorkspace";
 import { spyConsole, validateLogs } from "@turbo/test-utils";
+import { getWorkspace } from "../src/getWorkspace";
 
 describe("getWorkspace()", () => {
   const mockConsole = spyConsole();

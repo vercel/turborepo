@@ -4,7 +4,7 @@ Setup
 Remove linker override
   $ rm .yarnrc.yml
 Prune the project
-  $ ${TURBO} prune --scope=a
+  $ ${TURBO} prune a
   Generating pruned monorepo for a in .*out (re)
    - Added a
 

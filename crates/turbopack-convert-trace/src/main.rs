@@ -16,21 +16,28 @@
 //! - `--merged`: Shows all cpu time scaled by the concurrency.
 //! - `--threads`: Shows cpu time distributed on infinite virtual cpus/threads.
 //! - `--idle`: Adds extra info spans when cpus are idle.
+//! - `--graph`: Collapse spans with the same name into a single span per
+//!   parent.
+//! - `--collapse-names`: Collapse spans with the same type into a single span
+//!   per parent.
 //!
 //! Default is `--merged`.
+
+#![feature(iter_intersperse)]
 
 use std::{
     borrow::Cow,
     cmp::{max, min, Reverse},
     collections::{hash_map::Entry, HashMap, HashSet},
     eprintln,
+    io::{stderr, Write},
     mem::take,
     ops::Range,
+    time::Instant,
 };
 
 use indexmap::IndexMap;
 use intervaltree::{Element, IntervalTree};
-use itertools::Itertools;
 use turbopack_cli_utils::tracing::{TraceRow, TraceValue};
 
 macro_rules! pjson {
@@ -48,7 +55,10 @@ fn main() {
     let threads = args.remove("--threads");
     let idle = args.remove("--idle");
     let graph = args.remove("--graph");
-    if !single && !merged && !threads {
+    let show_count = args.remove("--count");
+    let collapse_names = args.remove("--collapse-names");
+    let collapse_min_count = 1;
+    if !single && !merged && !threads && !show_count {
         merged = true;
     }
     let arg = args
@@ -57,12 +67,18 @@ fn main() {
         .map_or(".turbopack/trace.log", String::as_str);
 
     eprint!("Reading content from {}...", arg);
+    let start = Instant::now();
 
     // Read file to string
     let file = std::fs::read(arg).unwrap();
-    eprintln!(" done ({} MiB)", file.len() / 1024 / 1024);
+    eprintln!(
+        " done ({} MiB, {:.3}s)",
+        file.len() / 1024 / 1024,
+        start.elapsed().as_secs_f32()
+    );
 
     eprint!("Parsing trace from content...");
+    let start = Instant::now();
 
     let mut trace_rows = Vec::new();
     let mut current = &file[..];
@@ -81,18 +97,28 @@ fn main() {
             }
         }
     }
-    eprintln!(" done ({} items)", trace_rows.len());
+    eprintln!(
+        " done ({} items, {:.3}s)",
+        trace_rows.len(),
+        start.elapsed().as_secs_f32()
+    );
 
-    eprint!("Analysing trace into span tree...");
+    eprint!(
+        "Analysing trace into span tree... 0 / {} (0%)",
+        trace_rows.len()
+    );
+    let start = Instant::now();
 
     let mut spans = Vec::new();
     spans.push(Span {
         parent: 0,
+        count: 1,
         name: "".into(),
         target: "".into(),
         start: 0,
         end: 0,
         self_start: None,
+        self_time: 0,
         items: Vec::new(),
         values: IndexMap::new(),
     });
@@ -107,11 +133,13 @@ fn main() {
                 entry.insert(internal_id);
                 let span = Span {
                     parent: 0,
+                    count: 1,
                     name: "".into(),
                     target: "".into(),
                     start: 0,
                     end: 0,
                     self_start: None,
+                    self_time: 0,
                     items: Vec::new(),
                     values: IndexMap::new(),
                 };
@@ -123,8 +151,54 @@ fn main() {
 
     let mut all_self_times = Vec::new();
     let mut name_counts: HashMap<Cow<'_, str>, usize> = HashMap::new();
+    let mut name_self_times: HashMap<Cow<'_, str>, u64> = HashMap::new();
+    let mut tasks = 0;
 
-    for data in trace_rows {
+    fn get_name<'a>(
+        name: &'a str,
+        values: &IndexMap<Cow<'a, str>, TraceValue<'a>>,
+        collapse_names: bool,
+    ) -> Cow<'a, str> {
+        match name {
+            "turbo_tasks::function" => {
+                if let Some(v) = values.get("name") {
+                    return format!("{v} ({name})").into();
+                }
+            }
+            "turbo_tasks::resolve_call" | "turbo_tasks::resolve_trait_call" => {
+                if let Some(v) = values.get("name") {
+                    return format!("*{v} ({name})").into();
+                }
+            }
+            _ => {}
+        }
+        if collapse_names || values.is_empty() {
+            return name.into();
+        }
+        let mut name = name.to_string();
+        name.push_str(" (");
+        for (i, (key, value)) in values.iter().enumerate() {
+            use std::fmt::Write;
+            if i > 0 {
+                name.push_str(", ");
+            }
+            write!(name, "{key}={value}").unwrap();
+        }
+        name.push(')');
+        name.into()
+    }
+
+    let number_of_trace_rows = trace_rows.len();
+    for (i, data) in trace_rows.into_iter().enumerate() {
+        if i % 131072 == 0 {
+            eprint!(
+                "\rAnalysing trace into span tree... {} / {} ({}%)",
+                i,
+                number_of_trace_rows,
+                i * 100 / number_of_trace_rows
+            );
+            let _ = stderr().flush();
+        }
         match data {
             TraceRow::Start {
                 ts,
@@ -134,18 +208,28 @@ fn main() {
                 target,
                 values,
             } => {
+                let values = values.into_iter().collect();
+                if matches!(
+                    name,
+                    "turbo_tasks::function"
+                        | "turbo_tasks::resolve_call"
+                        | "turbo_tasks::resolve_trait_call"
+                ) {
+                    tasks += 1;
+                }
+                let name = get_name(name, &values, collapse_names && parent.is_some());
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
-                spans[internal_id].name = name.into();
+                spans[internal_id].name = name.clone();
                 spans[internal_id].target = target.into();
                 spans[internal_id].start = ts;
                 spans[internal_id].end = ts;
-                spans[internal_id].values = values.into_iter().collect();
+                spans[internal_id].values = values;
                 let internal_parent =
                     parent.map_or(0, |id| ensure_span(&mut active_ids, &mut spans, id));
                 spans[internal_id].parent = internal_parent;
                 let parent = &mut spans[internal_parent];
                 parent.items.push(SpanItem::Child(internal_id));
-                *name_counts.entry(Cow::Borrowed(name)).or_default() += 1;
+                *name_counts.entry(name).or_default() += 1;
             }
             TraceRow::End { ts, id } => {
                 // id might be reused
@@ -154,31 +238,72 @@ fn main() {
                     span.end = ts;
                 }
             }
-            TraceRow::Enter {
-                ts,
-                id,
-                thread_id: _,
-            } => {
+            TraceRow::Enter { ts, id, thread_id } => {
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
+                let mut parent_id = spans[internal_id].parent;
+                let mut in_parent = 0;
+                loop {
+                    let parent = &mut spans[parent_id];
+                    if let Some(SelfTimeStarted {
+                        ts: ref mut parent_ts,
+                        thread_id: parent_thread_id,
+                        ..
+                    }) = parent.self_start
+                    {
+                        if parent_thread_id == thread_id {
+                            let ts_start = *parent_ts;
+                            *parent_ts = ts;
+                            add_self_time(
+                                ts_start,
+                                ts,
+                                internal_id,
+                                parent,
+                                &mut all_self_times,
+                                &mut name_self_times,
+                            );
+                            in_parent = parent_id;
+                            break;
+                        }
+                    }
+                    if parent_id == 0 {
+                        break;
+                    }
+                    parent_id = parent.parent;
+                }
                 let span = &mut spans[internal_id];
-                span.self_start = Some(SelfTimeStarted { ts });
+                span.self_start = Some(SelfTimeStarted {
+                    ts,
+                    thread_id,
+                    in_parent,
+                });
             }
             TraceRow::Exit { ts, id } => {
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
                 let span = &mut spans[internal_id];
-                if let Some(SelfTimeStarted { ts: ts_start }) = span.self_start {
-                    let (start, end) = if ts_start > ts {
-                        (ts, ts_start)
-                    } else {
-                        (ts_start, ts)
-                    };
-                    let duration = end.saturating_sub(start);
-                    span.items.push(SpanItem::SelfTime { start, duration });
-                    if duration > 0 {
-                        all_self_times.push(Element {
-                            range: start..end,
-                            value: internal_id,
-                        });
+                if let Some(SelfTimeStarted {
+                    ts: ts_start,
+                    in_parent,
+                    ..
+                }) = span.self_start.take()
+                {
+                    add_self_time(
+                        ts_start,
+                        ts,
+                        internal_id,
+                        span,
+                        &mut all_self_times,
+                        &mut name_self_times,
+                    );
+                    if in_parent > 0 {
+                        let parent_id = span.parent;
+                        let span = &mut spans[parent_id];
+                        if let Some(SelfTimeStarted {
+                            ts: ref mut parent_ts,
+                            ..
+                        }) = span.self_start
+                        {
+                            *parent_ts = max(ts, ts_start);
+                        }
                     }
                 }
             }
@@ -196,11 +321,13 @@ fn main() {
                 let start = ts - duration;
                 spans.push(Span {
                     parent: internal_parent,
+                    count: 1,
                     name,
                     target: "".into(),
                     start,
                     end: ts,
                     self_start: None,
+                    self_time: 0,
                     items: vec![SpanItem::SelfTime { start, duration }],
                     values,
                 });
@@ -216,15 +343,94 @@ fn main() {
         }
     }
 
-    eprintln!(" done ({} spans)", spans.len());
+    eprintln!(
+        "\rAnalysing trace into span tree... {} / {} done ({} spans, {:.3}s)",
+        number_of_trace_rows,
+        number_of_trace_rows,
+        spans.len(),
+        start.elapsed().as_secs_f64()
+    );
+
+    if !active_ids.is_empty() {
+        let active_spans = active_ids
+            .into_values()
+            .map(|id| &spans[id])
+            .filter(|span| span.end == span.start)
+            .filter(|span| {
+                !span.items.iter().any(|item| {
+                    if let &SpanItem::Child(c) = item {
+                        spans[c].end == spans[c].start
+                    } else {
+                        false
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        if !active_spans.is_empty() {
+            eprintln!("{} spans still active:", active_spans.len());
+            for span in active_spans {
+                let mut parents = Vec::new();
+                let mut current = span;
+                loop {
+                    parents.push(current);
+                    if current.parent == 0 {
+                        break;
+                    }
+                    current = &spans[current.parent];
+                }
+                let mut parents = parents
+                    .iter()
+                    .rev()
+                    .map(|span| &*span.name)
+                    .collect::<Vec<_>>();
+                if parents.len() > 10 {
+                    parents.drain(5..parents.len() - 5);
+                    parents.insert(5, "...")
+                }
+                let message = parents
+                    .into_iter()
+                    .intersperse("\n  > ")
+                    .collect::<String>();
+                eprintln!("- {}", message);
+            }
+        }
+    }
+
+    let mut name_self_times_per_execution = name_self_times
+        .iter()
+        .filter_map(|(name, time)| {
+            name_counts
+                .get(name)
+                .map(|count| (name.clone(), *time / *count as u64))
+        })
+        .collect::<Vec<_>>();
+    name_self_times_per_execution.sort_by_key(|(_, time)| Reverse(*time));
 
     let mut name_counts: Vec<(Cow<'_, str>, usize)> = name_counts.into_iter().collect();
     name_counts.sort_by_key(|(_, count)| Reverse(*count));
 
+    eprintln!("Total number of tasks: {}", tasks);
+
     eprintln!("Top 10 span names:");
     for (name, count) in name_counts.into_iter().take(10) {
-        eprintln!("{}x {}", count, name);
+        eprintln!("{} x {}", count, name);
     }
+    eprintln!();
+
+    let mut name_self_times: Vec<(Cow<'_, str>, u64)> = name_self_times.into_iter().collect();
+    name_self_times.sort_by_key(|(_, duration)| Reverse(*duration));
+
+    eprintln!("Top 10 span durations:");
+    for (name, duration) in name_self_times.into_iter().take(10) {
+        eprintln!("{}s {}", duration / 1000 / 1000, name);
+    }
+    eprintln!();
+
+    eprintln!("Top 10 span durations per execution:");
+    for (name, duration) in name_self_times_per_execution.into_iter().take(10) {
+        eprintln!("{}ms {}", duration / 1000, name);
+    }
+    eprintln!();
 
     println!("[");
     print!(r#"{{"ph":"M","pid":1,"name":"thread_name","tid":0,"args":{{"name":"Single CPU"}}}}"#);
@@ -235,6 +441,7 @@ fn main() {
 
     if threads {
         eprint!("Distributing time into virtual threads...");
+        let start = Instant::now();
         let mut virtual_threads = Vec::new();
 
         let find_thread = |virtual_threads: &mut Vec<VirtualThread>,
@@ -287,6 +494,7 @@ fn main() {
         {
             if i % 1000 == 0 {
                 eprint!("\rDistributing time into virtual threads... {i} / {busy_len}",);
+                let _ = stderr().flush();
             }
             let stack = get_stack(id);
             let thread = find_thread(&mut virtual_threads, &stack, start);
@@ -349,11 +557,29 @@ fn main() {
                 );
             }
         }
-        eprintln!(" done");
+        eprintln!(" done ({:.3}s)", start.elapsed().as_secs_f32());
     }
 
-    if single || merged {
-        eprint!("Emitting span tree...");
+    if single || merged || show_count {
+        let number_of_spans = spans.len();
+        eprint!("Emitting span tree... 0 / {} (0%)", number_of_spans);
+        let mut span_counter = 0;
+        let mut add_to_span_counter = {
+            let span_counter = &mut span_counter;
+            || {
+                *span_counter += 1;
+                if *span_counter % 16384 == 0 {
+                    eprint!(
+                        "\rEmitting span tree... {} / {} ({}%)",
+                        *span_counter,
+                        number_of_spans,
+                        *span_counter * 100 / number_of_spans
+                    );
+                    let _ = stderr().flush();
+                }
+            }
+        };
+        let start = Instant::now();
 
         const CONCURRENCY_FIXED_POINT_FACTOR: u64 = 100;
         const CONCURRENCY_FIXED_POINT_FACTOR_F: f32 = 100.0;
@@ -394,6 +620,7 @@ fn main() {
         let mut tts = 0;
         let mut merged_ts = 0;
         let mut merged_tts = 0;
+        let mut count_ts = 0;
         let mut stack = spans
             .iter()
             .enumerate()
@@ -401,6 +628,7 @@ fn main() {
             .rev()
             .filter_map(|(id, span)| {
                 if span.parent == 0 {
+                    add_to_span_counter();
                     Some(Task::Enter { id, root: true })
                 } else {
                     None
@@ -411,6 +639,107 @@ fn main() {
             match task {
                 Task::Enter { id, root } => {
                     let mut span = take(&mut spans[id]);
+                    let mut count = span.count;
+                    let mut items = take(&mut span.items);
+                    if graph && !items.is_empty() {
+                        let parent_name = &*span.name;
+                        let mut groups = IndexMap::new();
+                        let mut self_items = 0;
+                        fn add_items_to_groups<'a>(
+                            groups: &mut IndexMap<(Cow<'a, str>, usize), Vec<SpanItem>>,
+                            self_items: &mut usize,
+                            spans: &mut Vec<Span<'a>>,
+                            parent_count: &mut u32,
+                            parent_name: &str,
+                            items: Vec<SpanItem>,
+                            add_to_span_counter: &mut impl FnMut(),
+                        ) {
+                            for item in items {
+                                match item {
+                                    SpanItem::SelfTime { .. } => {
+                                        if let Some(((key, _), last)) = groups.last_mut() {
+                                            if key == &Cow::Borrowed("SELF_TIME") {
+                                                last.push(item);
+                                                continue;
+                                            }
+                                        }
+                                        groups.insert(
+                                            (Cow::Borrowed("SELF_TIME"), *self_items),
+                                            vec![item],
+                                        );
+                                        *self_items += 1;
+                                    }
+                                    SpanItem::Child(id) => {
+                                        let key = spans[id].name.clone();
+                                        if key == parent_name {
+                                            // Recursion
+                                            *parent_count += 1;
+                                            let items = take(&mut spans[id].items);
+                                            add_items_to_groups(
+                                                groups,
+                                                self_items,
+                                                spans,
+                                                parent_count,
+                                                parent_name,
+                                                items,
+                                                add_to_span_counter,
+                                            );
+                                            add_to_span_counter();
+                                        } else {
+                                            let group = groups.entry((key, 0)).or_default();
+                                            if !group.is_empty() {
+                                                add_to_span_counter();
+                                            }
+                                            group.push(item);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        add_items_to_groups(
+                            &mut groups,
+                            &mut self_items,
+                            &mut spans,
+                            &mut count,
+                            parent_name,
+                            items,
+                            &mut add_to_span_counter,
+                        );
+                        let groups = groups.into_values().collect::<Vec<_>>();
+                        let mut new_items = Vec::new();
+                        for group in groups {
+                            if group.len() >= collapse_min_count {
+                                let mut group = group.into_iter();
+                                let new_item = group.next().unwrap();
+                                match new_item {
+                                    SpanItem::SelfTime { .. } => {
+                                        new_items.push(new_item);
+                                        new_items.extend(group);
+                                    }
+                                    SpanItem::Child(new_item_id) => {
+                                        new_items.push(new_item);
+                                        let mut count = 1;
+                                        for item in group {
+                                            let SpanItem::Child(id) = item else {
+                                                unreachable!();
+                                            };
+                                            assert!(spans[id].name == spans[new_item_id].name);
+                                            let old_items = take(&mut spans[id].items);
+                                            spans[new_item_id].items.extend(old_items);
+                                            count += 1;
+                                        }
+                                        if count != 1 {
+                                            let span = &mut spans[new_item_id];
+                                            span.count = count;
+                                        }
+                                    }
+                                }
+                            } else {
+                                new_items.extend(group);
+                            }
+                        }
+                        items = new_items;
+                    }
                     if root {
                         if ts < span.start {
                             ts = span.start;
@@ -425,10 +754,10 @@ fn main() {
                             merged_tts = span.start;
                         }
                     }
-                    let name_json = if let Some(name_value) = span.values.get("name") {
-                        serde_json::to_string(&format!("{} {name_value}", span.name)).unwrap()
-                    } else {
+                    let name_json = if count == 1 {
                         serde_json::to_string(&span.name).unwrap()
+                    } else {
+                        serde_json::to_string(&format!("{count} x {}", span.name)).unwrap()
                     };
                     let target_json = serde_json::to_string(&span.target).unwrap();
                     let args_json = serde_json::to_string(&span.values).unwrap();
@@ -442,56 +771,19 @@ fn main() {
                             r#"{{"ph":"B","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":{target_json},"tid":0,"args":{args_json}}}"#,
                         );
                     }
+                    if show_count {
+                        pjson!(
+                            r#"{{"ph":"B","pid":3,"ts":{count_ts},"name":{name_json},"cat":{target_json},"tid":0,"args":{args_json}}}"#,
+                        );
+                        count_ts += count;
+                    }
                     stack.push(Task::Exit {
                         name_json,
                         target_json,
                         start: ts,
                         start_scaled: tts,
                     });
-                    let mut items = take(&mut span.items);
-                    if graph {
-                        let group_func = |item: &SpanItem| match item {
-                            SpanItem::SelfTime { .. } => (true, "", None),
-                            SpanItem::Child(id) => {
-                                let span = &spans[*id];
-                                (
-                                    false,
-                                    &*span.name,
-                                    span.values.get("name").map(|v| v.to_string()),
-                                )
-                            }
-                        };
-                        items.sort_by_cached_key(group_func);
-                        // merge childen with the same name
-                        let mut new_items = Vec::new();
-                        let grouped_by = items.into_iter().group_by(group_func);
-                        let groups = grouped_by
-                            .into_iter()
-                            .map(|(_, group)| group.collect::<Vec<_>>())
-                            .collect::<Vec<_>>();
-                        for group in groups {
-                            let mut group = group.into_iter();
-                            let new_item = group.next().unwrap();
-                            match new_item {
-                                SpanItem::SelfTime { .. } => {
-                                    new_items.push(new_item);
-                                    new_items.extend(group);
-                                }
-                                SpanItem::Child(new_item_id) => {
-                                    new_items.push(new_item);
-                                    for item in group {
-                                        let SpanItem::Child(id) = item else {
-                                            unreachable!();
-                                        };
-                                        assert!(spans[id].name == spans[new_item_id].name);
-                                        let old_items = take(&mut spans[id].items);
-                                        spans[new_item_id].items.extend(old_items);
-                                    }
-                                }
-                            }
-                        }
-                        items = new_items;
-                    }
+
                     for item in items.iter().rev() {
                         match item {
                             SpanItem::SelfTime {
@@ -523,6 +815,7 @@ fn main() {
                                 }
                             }
                             SpanItem::Child(id) => {
+                                add_to_span_counter();
                                 stack.push(Task::Enter {
                                     id: *id,
                                     root: false,
@@ -562,6 +855,11 @@ fn main() {
                                 r#"{{"ph":"E","pid":2,"ts":{merged_ts},"tts":{merged_tts},"name":{name_json},"cat":{target_json},"tid":0}}"#,
                             );
                         }
+                    }
+                    if show_count {
+                        pjson!(
+                            r#"{{"ph":"E","pid":3,"ts":{count_ts},"name":{name_json},"cat":{target_json},"tid":0}}"#,
+                        );
                     }
                 }
                 Task::SelfTime {
@@ -610,25 +908,59 @@ fn main() {
                 }
             }
         }
-        eprintln!(" done");
+        eprintln!(
+            "\rEmitting span tree... {} / {} done ({:.3}s)",
+            spans.len(),
+            spans.len(),
+            start.elapsed().as_secs_f64()
+        );
     }
     println!();
     println!("]");
 }
 
+fn add_self_time<'a>(
+    ts_start: u64,
+    ts: u64,
+    internal_id: usize,
+    span: &mut Span<'a>,
+    all_self_times: &mut Vec<Element<u64, usize>>,
+    name_self_times: &mut HashMap<Cow<'a, str>, u64>,
+) {
+    let (start, end) = if ts_start > ts {
+        (ts, ts_start)
+    } else {
+        (ts_start, ts)
+    };
+    let duration = end.saturating_sub(start);
+    span.items.push(SpanItem::SelfTime { start, duration });
+    if duration > 0 {
+        all_self_times.push(Element {
+            range: start..end,
+            value: internal_id,
+        });
+    }
+    span.self_time += duration;
+    *name_self_times.entry(span.name.clone()).or_default() += duration;
+}
+
 #[derive(Debug)]
 struct SelfTimeStarted {
     ts: u64,
+    thread_id: u64,
+    in_parent: usize,
 }
 
 #[derive(Debug, Default)]
 struct Span<'a> {
     parent: usize,
+    count: u32,
     name: Cow<'a, str>,
     target: Cow<'a, str>,
     start: u64,
     end: u64,
     self_start: Option<SelfTimeStarted>,
+    self_time: u64,
     items: Vec<SpanItem>,
     values: IndexMap<Cow<'a, str>, TraceValue<'a>>,
 }

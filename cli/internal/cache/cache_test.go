@@ -250,9 +250,7 @@ func TestNew(t *testing.T) {
 			args: args{
 				opts: Opts{
 					SkipFilesystem: true,
-					RemoteCacheOpts: fs.RemoteCacheOptions{
-						Signature: true,
-					},
+					Signature:      true,
 				},
 				recorder:       &nullRecorder{},
 				onCacheRemoved: func(Cache, error) {},
@@ -277,9 +275,7 @@ func TestNew(t *testing.T) {
 			name: "With both configured, new returns an fsCache and httpCache",
 			args: args{
 				opts: Opts{
-					RemoteCacheOpts: fs.RemoteCacheOptions{
-						Signature: true,
-					},
+					Signature: true,
 				},
 				recorder:       &nullRecorder{},
 				onCacheRemoved: func(Cache, error) {},

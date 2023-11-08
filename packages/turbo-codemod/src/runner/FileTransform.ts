@@ -1,16 +1,22 @@
+import os from "node:os";
+import path from "node:path";
+import { logger } from "@turbo/utils";
 import chalk from "chalk";
-import { diffLines, Change, diffJson } from "diff";
-import fs from "fs-extra";
-import os from "os";
-import path from "path";
-
+import type { Change } from "diff";
+import { diffLines, diffJson } from "diff";
+import {
+  readJsonSync,
+  readFileSync,
+  writeJsonSync,
+  writeFileSync,
+} from "fs-extra";
 import type { FileTransformArgs, LogFileArgs } from "./types";
 
-export default class FileTransform {
+export class FileTransform {
   filePath: string;
   rootPath: string;
   before: string | object;
-  after?: string | object;
+  after?: string | object | null;
   error?: Error;
   changes: Array<Change> = [];
 
@@ -24,9 +30,9 @@ export default class FileTransform {
     if (args.before === undefined) {
       try {
         if (path.extname(args.filePath) === ".json") {
-          this.before = fs.readJsonSync(args.filePath);
+          this.before = readJsonSync(args.filePath) as object;
         } else {
-          this.before = fs.readFileSync(args.filePath);
+          this.before = readFileSync(args.filePath);
         }
       } catch (err) {
         this.before = "";
@@ -56,9 +62,9 @@ export default class FileTransform {
   write(): void {
     if (this.after) {
       if (typeof this.after === "object") {
-        fs.writeJsonSync(this.filePath, this.after, { spaces: 2 });
+        writeJsonSync(this.filePath, this.after, { spaces: 2 });
       } else {
-        fs.writeFileSync(this.filePath, this.after);
+        writeFileSync(this.filePath, this.after);
       }
     }
   }
@@ -86,9 +92,9 @@ export default class FileTransform {
           process.stdout.write(chalk.dim(part.value));
         }
       });
-      console.log(os.EOL);
+      logger.log(os.EOL);
     } else {
-      console.log(this.after);
+      logger.log(this.after);
     }
   }
 }

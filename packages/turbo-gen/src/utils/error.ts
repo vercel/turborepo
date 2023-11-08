@@ -8,9 +8,9 @@ export type GenerateErrorType =
   // default
   | "unknown";
 
-export type GeneratorErrorOptions = {
+export interface GeneratorErrorOptions {
   type?: GenerateErrorType;
-};
+}
 
 export class GeneratorError extends Error {
   public type: GenerateErrorType;

@@ -1,9 +1,15 @@
-use std::env::current_exe;
+use std::{env::current_exe, io};
 
-use anyhow::{anyhow, Result};
+use thiserror::Error;
 
-pub fn run() -> Result<()> {
-    let path = current_exe().map_err(|e| anyhow!("could not get path to turbo binary: {}", e))?;
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("could not get path to turbo binary: {0}")]
+    NoCurrentExe(#[from] io::Error),
+}
+
+pub fn run() -> Result<(), Error> {
+    let path = current_exe()?;
     // NOTE: The Go version uses `base.UI.Output`, we should use the Rust equivalent
     // eventually.
     println!("{}", path.to_string_lossy());

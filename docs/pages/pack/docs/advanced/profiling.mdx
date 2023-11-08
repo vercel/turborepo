@@ -19,12 +19,12 @@ Make sure you have all the [prerequisites](https://github.com/cmyr/cargo-instrum
 
 ### Run the profiler
 
-By default, the next-dev CLI will keep watching for changes to your application and never exit until you manually interrupt it. However, [`cargo-instruments`] waits for your program to exit before building and opening the trace file. For this purpose, we've added a `profile` feature to `next-dev` which exits the program if no updates are detected within a given time frame and there are no pending tasks.
+By default, `turbopack-cli dev` will keep watching for changes to your application and never exit until you manually interrupt it. However, [`cargo-instruments`] waits for your program to exit before building and opening the trace file. For this purpose, we've added a `profile` feature to `turbopack-cli` which exits the program if no updates are detected within a given time frame and there are no pending tasks.
 
-To profile `next-dev`, run the following command:
+To profile `turbopack-cli`, run the following command:
 
 ```sh
-cargo instruments -t time --bin next-dev --release --features profile [-- [...args]]
+cargo instruments -t time --bin turbopack-cli --release --features profile [-- [...args]]
 ```
 
 You can also run [other templates](https://github.com/cmyr/cargo-instruments#templates) than the time profiler.
@@ -56,14 +56,14 @@ Once the program exits, the profiler will open the trace file in Instruments. Re
 sudo apt install heaptrack heaptrack_gui
 
 # Compile with debug info but without the alternative allocator:
-CARGO_PROFILE_RELEASE_DEBUG=1 cargo build --bin next-dev --release --no-default-features --features cli
+CARGO_PROFILE_RELEASE_DEBUG=1 cargo build --bin turbopack-cli --release --no-default-features --features native-tls
 
 # Run the binary with heaptrack (it will be much slower than usual)
-heaptrack target/release/next-dev [...]
+heaptrack target/release/turbopack-cli [...]
 
 # Stop it anytime
 
-# Open the GUI and open the heaptrack.next-dev.XXX.gz file
+# Open the GUI and open the heaptrack.turbopack-cli.XXX.gz file
 heaptrack_gui
 ```
 

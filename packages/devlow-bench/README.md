@@ -86,12 +86,12 @@ describe(
 import { measureTime, reportMeasurement } from "devlow-bench";
 
 // Measure a time
-measureTime("name of the timing", {
+await measureTime("name of the timing", {
   /* optional options */
 });
 
 // Report some other measurement
-reportMeasurement("name of the measurement", value, unit, {
+await reportMeasurement("name of the measurement", value, unit, {
   /* optional options */
 });
 ```
@@ -117,6 +117,10 @@ await session.reload("metric name");
 await session.softNavigationByClick("metric name", ".selector-to-click");
 await session.close();
 ```
+
+Run with `BROWSER_OUTPUT=1` to show the output of the browser.
+
+Run with `HEADLESS=false` to show the actual browser window.
 
 ## Shell operations
 
@@ -150,6 +154,8 @@ shell.output
 // Kill the process tree
 await shell.kill();
 ```
+
+Run with `SHELL_OUTPUT=1` to show the output of the shell commands.
 
 ## File operations
 

@@ -247,6 +247,28 @@ func (c *Context) resolveWorkspaceRootDeps(rootPackageJSON *fs.PackageJSON, warn
 	return nil
 }
 
+type dependencySplitter struct {
+	workspaces map[string]*fs.PackageJSON
+	pkgDir     string
+	rootPath   string
+}
+
+func (d *dependencySplitter) isInternal(name, version string) (string, bool) {
+	resolvedName := name
+	if withoutProtocol := strings.TrimPrefix(version, "workspace:"); withoutProtocol != version {
+		parts := strings.Split(withoutProtocol, "@")
+		lastIndex := len(parts) - 1
+		if len(parts) > 1 && (parts[lastIndex] == "*" || parts[lastIndex] == "^" || parts[lastIndex] == "~") {
+			resolvedName = strings.Join(parts[:lastIndex], "@")
+		}
+	}
+	item, ok := d.workspaces[resolvedName]
+	if ok && isWorkspaceReference(item.Version, version, d.pkgDir, d.rootPath) {
+		return resolvedName, true
+	}
+	return "", false
+}
+
 // populateWorkspaceGraphForPackageJSON fills in the edges for the dependencies of the given package
 // that are within the monorepo, as well as collecting and hashing the dependencies of the package
 // that are not within the monorepo. The vertexName is used to override the package name in the graph.
@@ -271,11 +293,17 @@ func (c *Context) populateWorkspaceGraphForPackageJSON(pkg *fs.PackageJSON, root
 		depMap[dep] = version
 	}
 
+	splitter := dependencySplitter{
+		workspaces: c.WorkspaceInfos.PackageJSONs,
+		pkgDir:     pkg.Dir.ToStringDuringMigration(),
+		rootPath:   rootpath,
+	}
+
 	// split out internal vs. external deps
 	for depName, depVersion := range depMap {
-		if item, ok := c.WorkspaceInfos.PackageJSONs[depName]; ok && isWorkspaceReference(item.Version, depVersion, pkg.Dir.ToStringDuringMigration(), rootpath) {
-			internalDepsSet.Add(depName)
-			c.WorkspaceGraph.Connect(dag.BasicEdge(vertexName, depName))
+		if name, internal := splitter.isInternal(depName, depVersion); internal {
+			internalDepsSet.Add(name)
+			c.WorkspaceGraph.Connect(dag.BasicEdge(vertexName, name))
 		} else {
 			externalUnresolvedDepsSet.Add(depName)
 		}

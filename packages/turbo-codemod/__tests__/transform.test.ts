@@ -1,9 +1,15 @@
-import transform from "../src/commands/transform";
-import { MigrateCommandArgument } from "../src/commands";
+import * as turboWorkspaces from "@turbo/workspaces";
+import * as turboUtils from "@turbo/utils";
 import { setupTestFixtures, spyExit } from "@turbo/test-utils";
+import { transform } from "../src/commands/transform";
 import * as checkGitStatus from "../src/utils/checkGitStatus";
-import * as getPackageManager from "../src/utils/getPackageManager";
-import * as getPackageManagerVersion from "../src/utils/getPackageManagerVersion";
+import type { MigrateCommandArgument } from "../src/commands";
+import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
+
+jest.mock("@turbo/workspaces", () => ({
+  __esModule: true,
+  ...jest.requireActual("@turbo/workspaces"),
+}));
 
 describe("transform", () => {
   const mockExit = spyExit();
@@ -22,25 +28,32 @@ describe("transform", () => {
 
     // setup mocks
     const mockedCheckGitStatus = jest
-      .spyOn(checkGitStatus, "default")
+      .spyOn(checkGitStatus, "checkGitStatus")
       .mockReturnValue(undefined);
-    const mockedGetPackageManagerVersion = jest
-      .spyOn(getPackageManagerVersion, "default")
-      .mockReturnValue(packageManagerVersion);
-    const mockedGetPackageManager = jest
-      .spyOn(getPackageManager, "default")
-      .mockReturnValue(packageManager);
+    const mockGetAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        pnpm: packageManagerVersion,
+        npm: undefined,
+        yarn: undefined,
+        bun: undefined,
+      });
 
-    await transform(
-      "add-package-manager" as MigrateCommandArgument,
-      root as MigrateCommandArgument,
-      {
-        list: false,
-        force: false,
-        dry: false,
-        print: false,
-      }
-    );
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
+
+    await transform("add-package-manager", root as MigrateCommandArgument, {
+      list: false,
+      force: false,
+      dry: false,
+      print: false,
+    });
 
     expect(readJson("package.json")).toStrictEqual({
       dependencies: {},
@@ -54,13 +67,13 @@ describe("transform", () => {
 
     // verify mocks were called
     expect(mockedCheckGitStatus).toHaveBeenCalled();
-    expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
-    expect(mockedGetPackageManager).toHaveBeenCalled();
+    expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
+    expect(mockGetWorkspaceDetails).toHaveBeenCalled();
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
-    mockedGetPackageManagerVersion.mockRestore();
-    mockedGetPackageManager.mockRestore();
+    mockGetAvailablePackageManagers.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
   });
 
   it("runs the selected transform - dry & print", async () => {
@@ -73,25 +86,32 @@ describe("transform", () => {
 
     // setup mocks
     const mockedCheckGitStatus = jest
-      .spyOn(checkGitStatus, "default")
+      .spyOn(checkGitStatus, "checkGitStatus")
       .mockReturnValue(undefined);
-    const mockedGetPackageManagerVersion = jest
-      .spyOn(getPackageManagerVersion, "default")
-      .mockReturnValue(packageManagerVersion);
-    const mockedGetPackageManager = jest
-      .spyOn(getPackageManager, "default")
-      .mockReturnValue(packageManager);
+    const mockGetAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        pnpm: packageManagerVersion,
+        npm: undefined,
+        yarn: undefined,
+        bun: undefined,
+      });
 
-    await transform(
-      "add-package-manager" as MigrateCommandArgument,
-      root as MigrateCommandArgument,
-      {
-        list: false,
-        force: false,
-        dry: true,
-        print: true,
-      }
-    );
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager,
+        })
+      );
+
+    await transform("add-package-manager", root, {
+      list: false,
+      force: false,
+      dry: true,
+      print: true,
+    });
 
     expect(readJson("package.json")).toStrictEqual({
       dependencies: {},
@@ -104,13 +124,13 @@ describe("transform", () => {
 
     // verify mocks were called
     expect(mockedCheckGitStatus).not.toHaveBeenCalled();
-    expect(mockedGetPackageManagerVersion).toHaveBeenCalled();
-    expect(mockedGetPackageManager).toHaveBeenCalled();
+    expect(mockGetAvailablePackageManagers).toHaveBeenCalled();
+    expect(mockGetWorkspaceDetails).toHaveBeenCalled();
 
     // restore mocks
     mockedCheckGitStatus.mockRestore();
-    mockedGetPackageManagerVersion.mockRestore();
-    mockedGetPackageManager.mockRestore();
+    mockGetAvailablePackageManagers.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
   });
 
   it("lists transforms", async () => {
@@ -118,16 +138,12 @@ describe("transform", () => {
       fixture: "basic",
     });
 
-    await transform(
-      "add-package-manager" as MigrateCommandArgument,
-      root as MigrateCommandArgument,
-      {
-        list: true,
-        force: false,
-        dry: false,
-        print: false,
-      }
-    );
+    await transform("add-package-manager", root, {
+      list: true,
+      force: false,
+      dry: false,
+      print: false,
+    });
 
     expect(mockExit.exit).toHaveBeenCalledWith(0);
   });
@@ -137,35 +153,27 @@ describe("transform", () => {
       fixture: "basic",
     });
 
-    await transform(
-      "not-a-real-option" as MigrateCommandArgument,
-      root as MigrateCommandArgument,
-      {
-        list: false,
-        force: false,
-        dry: false,
-        print: false,
-      }
-    );
+    await transform("not-a-real-option", root, {
+      list: false,
+      force: false,
+      dry: false,
+      print: false,
+    });
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);
   });
 
   it("exits on invalid directory", async () => {
-    const { root } = useFixture({
+    useFixture({
       fixture: "basic",
     });
 
-    await transform(
-      "add-package-manager" as MigrateCommandArgument,
-      "~/path/that/does/not/exist" as MigrateCommandArgument,
-      {
-        list: false,
-        force: false,
-        dry: false,
-        print: false,
-      }
-    );
+    await transform("add-package-manager", "~/path/that/does/not/exist", {
+      list: false,
+      force: false,
+      dry: false,
+      print: false,
+    });
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);
   });

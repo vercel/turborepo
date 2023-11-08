@@ -29,8 +29,6 @@ env:
   RUST_BACKTRACE: 0
   NEXT_TELEMETRY_DISABLED: 1
   TEST_CONCURRENCY: 6
-  # pnpm version should match to what upstream next.js uses
-  PNPM_VERSION: 7.24.3
   DATADOG_API_KEY: ${{ secrets.DD_KEY_TURBOPACK }}
   DATADOG_TRACE_NEXTJS_TEST: "true"
   DD_ENV: "ci"
@@ -57,13 +55,16 @@ jobs:
     # This job name is being used in github action to collect test results. Do not change it, or should update
     # ./.github/actions/next-integration-stat to match the new name.
     name: Next.js integration test (Development)
-    timeout-minutes: 180
+    # Currently it is possible test grouping puts large number of failing tests suites in a single group,
+    # which ends up job timeouts. Temporarily relieve the timeout until we make progresses on the failing suites.
+    # ref: https://github.com/vercel/turbo/pull/5668
+    # timeout-minutes: 180
     runs-on: ubuntu-latest-16-core-oss
     needs: [setup_nextjs]
     strategy:
       fail-fast: false
       matrix:
-        group: [1, 2, 3]
+        group: [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
     steps:
       - uses: actions/cache/restore@v3
@@ -72,61 +73,30 @@ jobs:
           path: ./*
           key: ${{ inputs.version }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt}}-${{ github.run_number }}
           fail-on-cache-miss: true
+
+      - name: Enable corepack and install yarn
+        run: |
+          corepack enable
+          corepack prepare --activate yarn@1.22.19
+
       - name: Run test/development
         run: |
           ls $NEXT_TEST_SKIP_RETRY_MANIFEST
-          npm i -g pnpm@$PNPM_VERSION && pnpm --version
-          npm i -g yarn
           sudo npx playwright install-deps && pnpm playwright install
-          NEXT_TEST_MODE=dev node run-tests.js -g ${{ matrix.group }}/3 -c ${TEST_CONCURRENCY} --test-pattern '^(development|e2e|unit)/.*\.test\.(js|jsx|ts|tsx)$'
-          ls test
+          NEXT_TEST_MODE=dev TURBOPACK=1 node run-tests.js -g ${{ matrix.group }}/9 -c ${TEST_CONCURRENCY} --type development
           ls test/turbopack-test-junit-report
         # It is currently expected to fail some of next.js integration test, do not fail CI check.
         continue-on-error: true
         env:
           # marker to parse log output, do not delete / change.
           NEXT_INTEGRATION_TEST: true
+
       - name: Upload test reports artifact
         uses: actions/upload-artifact@v3
         with:
           name: Test trace reports
           path: |
             test/turbopack-test-junit-report
-          if-no-files-found: ignore
-
-  test-prod:
-    name: Next.js integration test (Production)
-    needs: [setup_nextjs]
-    runs-on: ubuntu-latest-16-core-oss
-    timeout-minutes: 180
-    strategy:
-      fail-fast: false
-      matrix:
-        group: [1, 2, 3]
-
-    steps:
-      - uses: actions/cache/restore@v3
-        id: restore-build
-        with:
-          path: ./*
-          key: ${{ inputs.version }}-${{ github.sha }}
-          fail-on-cache-miss: true
-      - name: Run test/production
-        run: |
-          npm i -g pnpm@$PNPM_VERSION && pnpm --version
-          npm i -g yarn
-          sudo npx playwright install-deps && pnpm playwright install
-          NEXT_TEST_MODE=start node run-tests.js -g ${{ matrix.group }}/3 -c ${TEST_CONCURRENCY} --test-pattern '^(production|e2e)/.*\.test\.(js|jsx|ts|tsx)$'
-        continue-on-error: true
-        env:
-          NEXT_INTEGRATION_TEST: true
-      - name: Upload test reports artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: Test trace reports
-          path: |
-            test/turbopack-test-junit-report
-          if-no-files-found: ignore
 
   test-integration:
     name: Next.js integration test (Integration)
@@ -136,7 +106,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [1, 2, 3, 4, 5, 6]
+        group: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
     steps:
       - uses: actions/cache/restore@v3
@@ -145,29 +115,35 @@ jobs:
           path: ./*
           key: ${{ inputs.version }}-${{ github.sha }}
           fail-on-cache-miss: true
+
+      - name: Enable corepack and install yarn
+        run: |
+          corepack enable
+          corepack prepare --activate yarn@1.22.19
+
       - name: Run test/integration
         run: |
-          npm i -g pnpm@$PNPM_VERSION && pnpm --version
-          npm i -g yarn
           sudo npx playwright install-deps && pnpm playwright install
-          node run-tests.js -g ${{ matrix.group }}/6 -c ${TEST_CONCURRENCY} --test-pattern '^(integration)/.*\.test\.(js|jsx|ts|tsx)$'
+          TURBOPACK=1 node run-tests.js -g ${{ matrix.group }}/12 -c ${TEST_CONCURRENCY} --type integration
+          ls test/turbopack-test-junit-report
         continue-on-error: true
         env:
           NEXT_INTEGRATION_TEST: true
+
       - name: Upload test reports artifact
         uses: actions/upload-artifact@v3
         with:
           name: Test trace reports
           path: |
             test/turbopack-test-junit-report
-          if-no-files-found: ignore
 
   # Collect integration test results from execute_tests,
   # Store it as github artifact for next step to consume.
   collect_nextjs_integration_stat:
-    needs: [test-dev, test-prod, test-integration]
+    needs: [test-dev, test-integration]
     name: Next.js integration test status report
     runs-on: ubuntu-latest-8-core-oss
+    if: always()
     permissions:
       pull-requests: write
     steps:
@@ -189,27 +165,36 @@ jobs:
           path: |
             nextjs-test-results.json
             failed-test-path-list.json
+            passed-test-path-list.json
             slack-payload.json
 
   upload_test_trace:
-    needs: [test-dev, test-prod, test-integration]
+    needs: [test-dev, test-integration]
     name: Upload test trace to datadog
     runs-on: ubuntu-latest-8-core-oss
+    if: always()
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Download test reports artifact
         id: download-test-reports
         uses: actions/download-artifact@v3
-        continue-on-error: true
         with:
           name: Test trace reports
           path: test
       - name: Upload test trace to datadog
-        continue-on-error: true
         run: |
-          npm install -g junit-report-merger@6.0.2 @datadog/datadog-ci@2.14.0
-          jrm ./nextjs-test-result-junit.xml "test/**/*.xml"
-          ls -al ./*.xml
+          npm install -g @datadog/datadog-ci@2.18.1
+          ls -al ./test/*.xml
           # We'll tag this to the Turbopack service, not the next.js
-          DD_ENV=ci datadog-ci junit upload --tags test.type:turbopack.daily --service Turbopack ./nextjs-test-result-junit.xml
+          DD_ENV=ci datadog-ci junit upload --tags test.type:turbopack.daily --service Turbopack test
+
+      # For the debugging purpose, upload the test trace to github artifact.
+      # So we can manually analyze test reports.
+      - name: Upload test reports artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: Merged test trace reports
+          path: |
+            nextjs-test-result-junit.xml
+            ./**/*.xml

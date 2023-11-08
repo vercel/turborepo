@@ -1,3 +1,8 @@
+#![feature(panic_info_message)]
+#![deny(clippy::all)]
+
+mod panic_handler;
+
 use std::{
     env::{consts, current_exe},
     process,
@@ -8,6 +13,8 @@ use anyhow::Result;
 use dunce::canonicalize as fs_canonicalize;
 use tracing::{debug, error, trace};
 use turborepo_lib::{spawn_child, ExecutionState, Payload};
+
+use crate::panic_handler::panic_handler;
 
 fn run_go_binary(execution_state: ExecutionState) -> Result<i32> {
     // canonicalize the binary path to ensure we can find go-turbo
@@ -64,9 +71,14 @@ fn run_go_binary(execution_state: ExecutionState) -> Result<i32> {
 // This function should not expanded. Please add any logic to
 // `turborepo_lib::main` instead
 fn main() -> Result<()> {
+    std::panic::set_hook(Box::new(panic_handler));
+
     let exit_code = match turborepo_lib::main() {
         Payload::Rust(res) => res.unwrap_or(1),
-        Payload::Go(base) => run_go_binary((&*base).try_into()?)?,
+        Payload::Go(base) => {
+            let execution_state = (&*base).try_into()?;
+            run_go_binary(execution_state)?
+        }
     };
 
     process::exit(exit_code)

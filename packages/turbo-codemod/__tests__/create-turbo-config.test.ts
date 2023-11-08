@@ -1,6 +1,6 @@
-import { transformer } from "../src/transforms/create-turbo-config";
 import { setupTestFixtures } from "@turbo/test-utils";
 import fs from "fs-extra";
+import { transformer } from "../src/transforms/create-turbo-config";
 
 describe("create-turbo-config", () => {
   const { useFixture } = setupTestFixtures({

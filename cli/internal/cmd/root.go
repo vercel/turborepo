@@ -12,7 +12,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/cmdutil"
 	"github.com/vercel/turbo/cli/internal/daemon"
 	"github.com/vercel/turbo/cli/internal/process"
-	"github.com/vercel/turbo/cli/internal/prune"
 	"github.com/vercel/turbo/cli/internal/run"
 	"github.com/vercel/turbo/cli/internal/signals"
 	"github.com/vercel/turbo/cli/internal/turbostate"
@@ -66,8 +65,6 @@ func RunWithExecutionState(executionState *turbostate.ExecutionState, turboVersi
 		command := executionState.CLIArgs.Command
 		if command.Daemon != nil {
 			execErr = daemon.ExecuteDaemon(ctx, helper, signalWatcher, executionState)
-		} else if command.Prune != nil {
-			execErr = prune.ExecutePrune(helper, executionState)
 		} else if command.Run != nil {
 			execErr = run.ExecuteRun(ctx, helper, signalWatcher, executionState)
 		} else {

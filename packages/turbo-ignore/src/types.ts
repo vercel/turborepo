@@ -2,16 +2,18 @@ export type NonFatalErrorKey =
   | "MISSING_LOCKFILE"
   | "NO_PACKAGE_MANAGER"
   | "UNREACHABLE_PARENT"
-  | "UNREACHABLE_COMMIT";
+  | "INVALID_COMPARISON";
 
 export interface NonFatalError {
-  regex: RegExp;
+  regex: Array<RegExp>;
   message: string;
 }
 
 export type NonFatalErrors = Record<NonFatalErrorKey, NonFatalError>;
 
-export interface TurboIgnoreArgs {
+export type TurboIgnoreArg = string | undefined;
+
+export interface TurboIgnoreOptions {
   // the working directory to use when looking for a workspace
   directory?: string;
   // the workspace to check for changes
@@ -20,4 +22,6 @@ export interface TurboIgnoreArgs {
   task?: string;
   // A ref/head to compare against if no previously deployed SHA is available
   fallback?: string;
+  // The maxBuffer for the child process in KB
+  maxBuffer?: number;
 }

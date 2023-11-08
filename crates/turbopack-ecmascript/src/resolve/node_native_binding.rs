@@ -3,24 +3,26 @@ use indexmap::IndexSet;
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::{
-    glob::GlobVc, json::parse_json_rope_with_source_context, DirectoryEntry, FileContent,
-    FileSystemPathVc,
+    glob::Glob, json::parse_json_rope_with_source_context, DirectoryEntry, FileContent,
+    FileSystemPath,
 };
 use turbopack_core::{
-    asset::{Asset, AssetContent, AssetVc},
-    reference::{AssetReference, AssetReferenceVc},
+    asset::{Asset, AssetContent},
+    file_source::FileSource,
+    module::Module,
+    raw_module::RawModule,
+    reference::ModuleReference,
     resolve::{
-        pattern::{Pattern, PatternVc},
-        resolve_raw, AffectingResolvingAssetReferenceVc, PrimaryResolveResult, ResolveResult,
-        ResolveResultVc,
+        pattern::Pattern, resolve_raw, AffectingResolvingAssetReference, ModuleResolveResult,
+        ResolveResultItem,
     },
-    source_asset::SourceAssetVc,
-    target::{CompileTargetVc, Platform},
+    source::Source,
+    target::{CompileTarget, Platform},
 };
 
-use crate::references::raw::SourceAssetReferenceVc;
+use crate::references::raw::FileSourceReference;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct NodePreGypConfigJson {
@@ -37,21 +39,21 @@ struct NodePreGypConfig {
 #[turbo_tasks::value]
 #[derive(Hash, Clone, Debug)]
 pub struct NodePreGypConfigReference {
-    pub context: FileSystemPathVc,
-    pub config_file_pattern: PatternVc,
-    pub compile_target: CompileTargetVc,
+    pub context_dir: Vc<FileSystemPath>,
+    pub config_file_pattern: Vc<Pattern>,
+    pub compile_target: Vc<CompileTarget>,
 }
 
 #[turbo_tasks::value_impl]
-impl NodePreGypConfigReferenceVc {
+impl NodePreGypConfigReference {
     #[turbo_tasks::function]
     pub fn new(
-        context: FileSystemPathVc,
-        config_file_pattern: PatternVc,
-        compile_target: CompileTargetVc,
-    ) -> Self {
+        context_dir: Vc<FileSystemPath>,
+        config_file_pattern: Vc<Pattern>,
+        compile_target: Vc<CompileTarget>,
+    ) -> Vc<Self> {
         Self::cell(NodePreGypConfigReference {
-            context,
+            context_dir,
             config_file_pattern,
             compile_target,
         })
@@ -59,20 +61,24 @@ impl NodePreGypConfigReferenceVc {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for NodePreGypConfigReference {
+impl ModuleReference for NodePreGypConfigReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
-        resolve_node_pre_gyp_files(self.context, self.config_file_pattern, self.compile_target)
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        resolve_node_pre_gyp_files(
+            self.context_dir,
+            self.config_file_pattern,
+            self.compile_target,
+        )
     }
 }
 
 #[turbo_tasks::value_impl]
 impl ValueToString for NodePreGypConfigReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "node-gyp in {} with {} for {}",
-            self.context.to_string().await?,
+            self.context_dir.to_string().await?,
             self.config_file_pattern.to_string().await?,
             self.compile_target.await?
         )))
@@ -81,10 +87,10 @@ impl ValueToString for NodePreGypConfigReference {
 
 #[turbo_tasks::function]
 pub async fn resolve_node_pre_gyp_files(
-    context: FileSystemPathVc,
-    config_file_pattern: PatternVc,
-    compile_target: CompileTargetVc,
-) -> Result<ResolveResultVc> {
+    context_dir: Vc<FileSystemPath>,
+    config_file_pattern: Vc<Pattern>,
+    compile_target: Vc<CompileTarget>,
+) -> Result<Vc<ModuleResolveResult>> {
     lazy_static! {
         static ref NAPI_VERSION_TEMPLATE: Regex =
             Regex::new(r"\{(napi_build_version|node_napi_label)\}")
@@ -96,8 +102,8 @@ pub async fn resolve_node_pre_gyp_files(
         static ref LIBC_TEMPLATE: Regex =
             Regex::new(r"\{libc\}").expect("create node_libc regex failed");
     }
-    let config = resolve_raw(context, config_file_pattern, true)
-        .first_asset()
+    let config = resolve_raw(context_dir, config_file_pattern, true)
+        .first_source()
         .await?;
     let compile_target = compile_target.await?;
     if let Some(config_asset) = *config {
@@ -107,7 +113,7 @@ pub async fn resolve_node_pre_gyp_files(
                 let config_file_dir = config_file_path.parent();
                 let node_pre_gyp_config: NodePreGypConfigJson =
                     parse_json_rope_with_source_context(config_file.content())?;
-                let mut assets: IndexSet<AssetVc> = IndexSet::new();
+                let mut sources: IndexSet<Vc<Box<dyn Source>>> = IndexSet::new();
                 for version in node_pre_gyp_config.binary.napi_versions.iter() {
                     let native_binding_path = NAPI_VERSION_TEMPLATE.replace(
                         node_pre_gyp_config.binary.module_path.as_str(),
@@ -127,29 +133,27 @@ pub async fn resolve_node_pre_gyp_files(
                             "unknown"
                         },
                     );
-                    let resolved_file_vc = config_file_dir.join(
-                        format!(
-                            "{}/{}.node",
-                            native_binding_path, node_pre_gyp_config.binary.module_name
-                        )
-                        .as_str(),
-                    );
+                    let resolved_file_vc = config_file_dir.join(format!(
+                        "{}/{}.node",
+                        native_binding_path, node_pre_gyp_config.binary.module_name
+                    ));
                     for (_, entry) in config_file_dir
-                        .join(native_binding_path.as_ref())
+                        .join(native_binding_path.to_string())
                         .read_glob(
-                            GlobVc::new(format!("*.{}", compile_target.dylib_ext()).as_str()),
+                            Glob::new(format!("*.{}", compile_target.dylib_ext())),
                             false,
                         )
                         .await?
                         .results
                         .iter()
                     {
-                        if let DirectoryEntry::File(dylib) | DirectoryEntry::Symlink(dylib) = entry
+                        if let &DirectoryEntry::File(dylib) | &DirectoryEntry::Symlink(dylib) =
+                            entry
                         {
-                            assets.insert(SourceAssetVc::new(*dylib).into());
+                            sources.insert(Vc::upcast(FileSource::new(dylib)));
                         }
                     }
-                    assets.insert(SourceAssetVc::new(resolved_file_vc).into());
+                    sources.insert(Vc::upcast(FileSource::new(resolved_file_vc)));
                 }
                 for entry in config_asset
                     .ident()
@@ -157,70 +161,75 @@ pub async fn resolve_node_pre_gyp_files(
                     .parent()
                     // TODO
                     // read the dependencies path from `bindings.gyp`
-                    .join("deps/lib")
-                    .read_glob(GlobVc::new("*".to_string().as_str()), false)
+                    .join("deps/lib".to_string())
+                    .read_glob(Glob::new("*".to_string()), false)
                     .await?
                     .results
                     .values()
                 {
-                    match entry {
+                    match *entry {
                         DirectoryEntry::File(dylib) => {
-                            assets.insert(SourceAssetVc::new(*dylib).into());
+                            sources.insert(Vc::upcast(FileSource::new(dylib)));
                         }
                         DirectoryEntry::Symlink(dylib) => {
                             let realpath_with_links = dylib.realpath_with_links().await?;
                             for symlink in realpath_with_links.symlinks.iter() {
-                                assets.insert(SourceAssetVc::new(*symlink).into());
+                                sources.insert(Vc::upcast(FileSource::new(*symlink)));
                             }
-                            assets.insert(SourceAssetVc::new(*dylib).into());
+                            sources.insert(Vc::upcast(FileSource::new(dylib)));
                         }
                         _ => {}
                     }
                 }
-                return Ok(ResolveResult::assets_with_references(
-                    assets.into_iter().collect(),
-                    vec![AffectingResolvingAssetReferenceVc::new(config_file_path).into()],
+                return Ok(ModuleResolveResult::modules_with_references(
+                    sources
+                        .into_iter()
+                        .map(|source| Vc::upcast(RawModule::new(source)))
+                        .collect(),
+                    vec![Vc::upcast(AffectingResolvingAssetReference::new(
+                        Vc::upcast(FileSource::new(config_file_path)),
+                    ))],
                 )
                 .into());
             }
         };
     }
-    Ok(ResolveResult::unresolveable().into())
+    Ok(ModuleResolveResult::unresolveable().into())
 }
 
 #[turbo_tasks::value]
 #[derive(Hash, Clone, Debug)]
 pub struct NodeGypBuildReference {
-    pub context: FileSystemPathVc,
-    pub compile_target: CompileTargetVc,
+    pub context_dir: Vc<FileSystemPath>,
+    pub compile_target: Vc<CompileTarget>,
 }
 
 #[turbo_tasks::value_impl]
-impl NodeGypBuildReferenceVc {
+impl NodeGypBuildReference {
     #[turbo_tasks::function]
-    pub fn new(context: FileSystemPathVc, target: CompileTargetVc) -> Self {
+    pub fn new(context_dir: Vc<FileSystemPath>, target: Vc<CompileTarget>) -> Vc<Self> {
         Self::cell(NodeGypBuildReference {
-            context,
+            context_dir,
             compile_target: target,
         })
     }
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for NodeGypBuildReference {
+impl ModuleReference for NodeGypBuildReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
-        resolve_node_gyp_build_files(self.context, self.compile_target)
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        resolve_node_gyp_build_files(self.context_dir, self.compile_target)
     }
 }
 
 #[turbo_tasks::value_impl]
 impl ValueToString for NodeGypBuildReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "node-gyp in {} for {}",
-            self.context.to_string().await?,
+            self.context_dir.to_string().await?,
             self.compile_target.await?
         )))
     }
@@ -228,43 +237,57 @@ impl ValueToString for NodeGypBuildReference {
 
 #[turbo_tasks::function]
 pub async fn resolve_node_gyp_build_files(
-    context: FileSystemPathVc,
-    compile_target: CompileTargetVc,
-) -> Result<ResolveResultVc> {
+    context_dir: Vc<FileSystemPath>,
+    compile_target: Vc<CompileTarget>,
+) -> Result<Vc<ModuleResolveResult>> {
     lazy_static! {
         static ref GYP_BUILD_TARGET_NAME: Regex =
             Regex::new(r#"['"]target_name['"]\s*:\s*(?:"(.*?)"|'(.*?)')"#)
                 .expect("create napi_build_version regex failed");
     }
-    let binding_gyp_pat = PatternVc::new(Pattern::Constant("binding.gyp".to_owned()));
-    let gyp_file = resolve_raw(context, binding_gyp_pat, true).await?;
-    if let [PrimaryResolveResult::Asset(binding_gyp)] = &gyp_file.primary[..] {
-        let mut merged_references = gyp_file.references.clone();
+    let binding_gyp_pat = Pattern::new(Pattern::Constant("binding.gyp".to_owned()));
+    let gyp_file = resolve_raw(context_dir, binding_gyp_pat, true);
+    if let [binding_gyp] = &gyp_file.primary_sources().await?[..] {
+        let mut merged_references = gyp_file
+            .await?
+            .get_affecting_sources()
+            .iter()
+            .map(|&r| Vc::upcast(AffectingResolvingAssetReference::new(r)))
+            .collect::<Vec<_>>();
         if let AssetContent::File(file) = &*binding_gyp.content().await? {
             if let FileContent::Content(config_file) = &*file.await? {
                 if let Some(captured) =
                     GYP_BUILD_TARGET_NAME.captures(&config_file.content().to_str()?)
                 {
-                    let mut resolved: IndexSet<AssetVc> = IndexSet::with_capacity(captured.len());
+                    let mut resolved: IndexSet<Vc<Box<dyn Source>>> =
+                        IndexSet::with_capacity(captured.len());
                     for found in captured.iter().skip(1).flatten() {
                         let name = found.as_str();
-                        let target_path = context.join("build").join("Release");
+                        let target_path = context_dir.join("build/Release".to_string());
                         let resolved_prebuilt_file = resolve_raw(
                             target_path,
-                            PatternVc::new(Pattern::Constant(format!("{}.node", name))),
+                            Pattern::new(Pattern::Constant(format!("{}.node", name))),
                             true,
                         )
                         .await?;
-                        if let [PrimaryResolveResult::Asset(asset)] =
+                        if let &[ResolveResultItem::Source(source)] =
                             &resolved_prebuilt_file.primary[..]
                         {
-                            resolved.insert(asset.resolve().await?);
-                            merged_references.extend_from_slice(&resolved_prebuilt_file.references);
+                            resolved.insert(source.resolve().await?);
+                            merged_references.extend(
+                                resolved_prebuilt_file
+                                    .affecting_sources
+                                    .iter()
+                                    .map(|&r| Vc::upcast(AffectingResolvingAssetReference::new(r))),
+                            );
                         }
                     }
                     if !resolved.is_empty() {
-                        return Ok(ResolveResult::assets_with_references(
-                            resolved.into_iter().collect(),
+                        return Ok(ModuleResolveResult::modules_with_references(
+                            resolved
+                                .into_iter()
+                                .map(|source| Vc::upcast(RawModule::new(source)))
+                                .collect(),
                             merged_references,
                         )
                         .into());
@@ -278,7 +301,7 @@ pub async fn resolve_node_gyp_build_files(
     let platform = compile_target.platform;
     let prebuilt_dir = format!("{}-{}", platform, arch);
     Ok(resolve_raw(
-        context,
+        context_dir,
         Pattern::Concatenation(vec![
             Pattern::Constant(format!("prebuilds/{}/", prebuilt_dir)),
             Pattern::Dynamic,
@@ -286,48 +309,52 @@ pub async fn resolve_node_gyp_build_files(
         ])
         .into(),
         true,
-    ))
+    )
+    .as_raw_module_result())
 }
 
 #[turbo_tasks::value]
 #[derive(Hash, Clone, Debug)]
 pub struct NodeBindingsReference {
-    pub context: FileSystemPathVc,
+    pub context_dir: Vc<FileSystemPath>,
     pub file_name: String,
 }
 
 #[turbo_tasks::value_impl]
-impl NodeBindingsReferenceVc {
+impl NodeBindingsReference {
     #[turbo_tasks::function]
-    pub fn new(context: FileSystemPathVc, file_name: String) -> Self {
-        Self::cell(NodeBindingsReference { context, file_name })
+    pub fn new(context_dir: Vc<FileSystemPath>, file_name: String) -> Vc<Self> {
+        Self::cell(NodeBindingsReference {
+            context_dir,
+            file_name,
+        })
     }
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for NodeBindingsReference {
+impl ModuleReference for NodeBindingsReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
-        resolve_node_bindings_files(self.context, self.file_name.clone())
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        resolve_node_bindings_files(self.context_dir, self.file_name.clone())
     }
 }
 
 #[turbo_tasks::value_impl]
 impl ValueToString for NodeBindingsReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "bindings in {}",
-            self.context.to_string().await?,
+            self.context_dir.to_string().await?,
         )))
     }
 }
 
 #[turbo_tasks::function]
 pub async fn resolve_node_bindings_files(
-    context: FileSystemPathVc,
+    context_dir: Vc<FileSystemPath>,
     file_name: String,
-) -> Result<ResolveResultVc> {
+) -> Result<Vc<ModuleResolveResult>> {
     lazy_static! {
         static ref BINDINGS_TRY: [&'static str; 5] = [
             "build/bindings",
@@ -337,14 +364,14 @@ pub async fn resolve_node_bindings_files(
             "Release/bindings",
         ];
     }
-    let mut root_context = context;
+    let mut root_context_dir = context_dir;
     loop {
         let resolved = resolve_raw(
-            root_context,
+            root_context_dir,
             Pattern::Constant("package.json".to_owned()).into(),
             true,
         )
-        .first_asset()
+        .first_source()
         .await?;
         if let Some(asset) = *resolved {
             if let AssetContent::File(file) = &*asset.content().await? {
@@ -353,28 +380,29 @@ pub async fn resolve_node_bindings_files(
                 }
             }
         };
-        let current_context = root_context.await?;
-        let parent = root_context.parent();
+        let current_context = root_context_dir.await?;
+        let parent = root_context_dir.parent();
         let parent_context = parent.await?;
         if parent_context.path == current_context.path {
             break;
         }
-        root_context = parent;
+        root_context_dir = parent;
     }
-    let bindings_try: Vec<AssetVc> = BINDINGS_TRY
+    let bindings_try: Vec<Vc<Box<dyn Module>>> = BINDINGS_TRY
         .iter()
         .map(|try_dir| {
-            SourceAssetVc::new(root_context.join(&format!("{}/{}", try_dir, &file_name))).into()
+            Vc::upcast(RawModule::new(Vc::upcast(FileSource::new(
+                root_context_dir.join(format!("{}/{}", try_dir, &file_name)),
+            ))))
         })
         .collect();
 
-    Ok(ResolveResult::assets_with_references(
+    Ok(ModuleResolveResult::modules_with_references(
         bindings_try,
-        vec![SourceAssetReferenceVc::new(
-            SourceAssetVc::new(root_context).into(),
+        vec![Vc::upcast(FileSourceReference::new(
+            Vc::upcast(FileSource::new(root_context_dir)),
             Pattern::Concatenation(vec![Pattern::Dynamic, Pattern::Constant(file_name)]).into(),
-        )
-        .into()],
+        ))],
     )
-    .into())
+    .cell())
 }

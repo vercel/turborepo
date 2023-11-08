@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/vercel/turbo/cli/internal/env"
 	"github.com/vercel/turbo/cli/internal/fs"
+	"github.com/vercel/turbo/cli/internal/fs/hash"
 	"github.com/vercel/turbo/cli/internal/globby"
 	"github.com/vercel/turbo/cli/internal/hashing"
 	"github.com/vercel/turbo/cli/internal/lockfile"
@@ -15,7 +16,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/util"
 )
 
-const _globalCacheKey = "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am."
+const _globalCacheKey = "HEY STELLLLLLLAAAAAAAAAAAAA"
 
 // Variables that we always include
 var _defaultEnvVars = []string{
@@ -39,7 +40,7 @@ type GlobalHashableInputs struct {
 // It's used for the situations where we have an `EnvMode` specified
 // as that is not compatible with existing global hashes.
 func calculateGlobalHash(full GlobalHashableInputs) (string, error) {
-	return fs.HashGlobal(fs.GlobalHashable{
+	return fs.HashGlobal(hash.GlobalHashable{
 		GlobalCacheKey:       full.globalCacheKey,
 		GlobalFileHashMap:    full.globalFileHashMap,
 		RootExternalDepsHash: full.rootExternalDepsHash,
@@ -121,8 +122,9 @@ func getGlobalHashInputs(
 	if lockFile == nil {
 		// If we don't have lockfile information available, add the specfile and lockfile to global deps
 		globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Specfile))
-		if rootpath.UntypedJoin(packageManager.Lockfile).Exists() {
-			globalDeps.Add(filepath.Join(rootpath.ToStringDuringMigration(), packageManager.Lockfile))
+		lockfilePath := packageManager.GetLockfilePath(rootpath)
+		if lockfilePath.Exists() {
+			globalDeps.Add(lockfilePath.ToString())
 		}
 	}
 

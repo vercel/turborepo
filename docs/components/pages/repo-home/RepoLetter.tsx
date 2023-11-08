@@ -1,10 +1,10 @@
-import { HeroText } from "../home-shared/Headings";
 import Image from "next/image";
 import cn from "classnames";
+import Link from "next/link";
+import { HeroText } from "../home-shared/Headings";
 import gradients from "../home-shared/gradients.module.css";
 import { FadeIn } from "../home-shared/FadeIn";
 import { CTAButton } from "../home-shared/CTAButton";
-import Link from "next/link";
 import { Gradient } from "../home-shared/Gradient";
 
 export function RepoLetter() {
@@ -36,7 +36,7 @@ export function RepoLetter() {
           </p>
           <br />
           <p>We need something else.</p>
-          <br></br>
+          <br />
           <p>
             A fresh take on the whole setup. Designed to glue everything
             together. A toolchain that works for you and not against you. With
@@ -54,7 +54,7 @@ export function RepoLetter() {
             development environment, without the maintenance burden.
           </p>
         </FadeIn>
-        <FadeIn noVertical viewTriggerOffset className="relative h-2 md:h-12">
+        <FadeIn className="relative h-2 md:h-12" noVertical viewTriggerOffset>
           <span
             className={cn(
               "w-full h-[1px] -bottom-8 md:-bottom-4 lg:-bottom-4 absolute",
@@ -63,33 +63,33 @@ export function RepoLetter() {
           />
         </FadeIn>
         <FadeIn
-          viewTriggerOffset
-          noVertical
           className="flex items-end justify-center gap-3  md:self-start md:-ml-4 lg:self-start lg:-ml-4 min-w-[300px]"
+          noVertical
+          viewTriggerOffset
         >
           <div className="w-24 h-24 min-w-[96px] min-h-[96px] rounded-full border dark:border-white/10 border-black/10 flex items-center justify-center ">
             <Image
               alt="Image of Jared Palmer"
+              className="rounded-full grayscale"
+              height={64}
               src="/images/people/jaredpalmer.jpeg"
               width={64}
-              height={64}
-              className="rounded-full grayscale"
             />
           </div>
           <div className="flex flex-col">
             <Image
               alt="Jared Palmer's hand written signature"
+              className="block mt-3 mb-4 ml-3 dark:hidden"
+              height={90}
               src="/images/docs/repo/jared-signature-light.svg"
               width={190}
-              height={90}
-              className="block mt-3 mb-4 ml-3 dark:hidden"
             />
             <Image
               alt="Jared Palmer's hand written signature"
+              className="hidden -mt-2 dark:block"
+              height={116}
               src="/images/docs/repo/jared-signature-dark.svg"
               width={209}
-              height={116}
-              className="hidden -mt-2 dark:block"
             />
             <div className="flex gap-2 flex-wrap text-sm leading-none text-[#888888] max-w-[156px] md:max-w-xl lg:max-w-xl">
               <p className="font-bold">Jared Palmer</p>
@@ -98,19 +98,19 @@ export function RepoLetter() {
           </div>
         </FadeIn>
       </div>
-      <FadeIn noVertical className="relative flex justify-center w-full mt-16">
+      <FadeIn className="relative flex justify-center w-full mt-16" noVertical>
         <div className="max-w-[180px] w-full">
           <CTAButton>
-            <Link href="/repo/docs" className="block py-3 font-sans">
+            <Link className="block py-3 font-sans" href="/repo/docs">
               Start Building
             </Link>
           </CTAButton>
         </div>
         <Gradient
-          width={1200}
-          height={300}
           className="bottom-[-200px] -z-10 opacity-20"
           conic
+          height={300}
+          width={1200}
         />
       </FadeIn>
     </section>

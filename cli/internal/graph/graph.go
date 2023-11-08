@@ -123,15 +123,6 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 		expandedInputs := g.TaskHashTracker.GetExpandedInputs(packageTask)
 		framework := g.TaskHashTracker.GetFramework(taskID)
 
-		logFileAbsolutePath := taskLogFile(g.RepoRoot, pkgDir, taskName)
-
-		var logFileRelativePath string
-		if logRelative, err := logFileAbsolutePath.RelativeTo(g.RepoRoot); err == nil {
-			logFileRelativePath = logRelative.ToString()
-		}
-
-		// Give packageTask a string version of the logFile relative to root.
-		packageTask.LogFile = logFileRelativePath
 		packageTask.Command = command
 
 		envVarPassThroughMap, err := g.TaskHashTracker.EnvAtExecutionStart.FromWildcards(taskDefinition.PassThroughEnv)
@@ -152,7 +143,7 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 			Dir:                    pkgDir.ToString(),
 			Outputs:                taskDefinition.Outputs.Inclusions,
 			ExcludedOutputs:        taskDefinition.Outputs.Exclusions,
-			LogFileRelativePath:    logFileRelativePath,
+			LogFileRelativePath:    packageTask.RepoRelativeSystemLogFile(),
 			ResolvedTaskDefinition: taskDefinition,
 			ExpandedInputs:         expandedInputs,
 			ExpandedOutputs:        []turbopath.AnchoredSystemPath{},
@@ -233,12 +224,6 @@ func (g *CompleteGraph) GetPackageJSONFromWorkspace(workspaceName string) (*fs.P
 	}
 
 	return nil, fmt.Errorf("No package.json for %s", workspaceName)
-}
-
-// taskLogFile returns the path to the log file for this task execution as an absolute path
-func taskLogFile(root turbopath.AbsoluteSystemPath, dir turbopath.AnchoredSystemPath, taskName string) turbopath.AbsoluteSystemPath {
-	pkgDir := dir.RestoreAnchor(root)
-	return pkgDir.UntypedJoin(".turbo", fmt.Sprintf("turbo-%v.log", taskName))
 }
 
 // getTaskGraphAncestors gets all the ancestors for a given task in the graph.

@@ -1,15 +1,14 @@
-import fs from "fs-extra";
+import path from "node:path";
+import { writeJSONSync } from "fs-extra";
 import chalk from "chalk";
-import path from "path";
-import {
+import type { DependencyList, DependencyGroups } from "@turbo/utils";
+import type {
   Project,
   Workspace,
-  DependencyList,
-  PackageManagerDetails,
+  AvailablePackageManagerDetails,
   Options,
-  PackageJsonDependencies,
 } from "./types";
-import { Logger } from "./logger";
+import type { Logger } from "./logger";
 import { getPackageJson } from "./utils";
 
 function updateDependencyList({
@@ -19,7 +18,7 @@ function updateDependencyList({
 }: {
   dependencyList: DependencyList;
   project: Project;
-  to: PackageManagerDetails;
+  to: AvailablePackageManagerDetails;
 }): { dependencyList: DependencyList; updated: Array<string> } {
   const updated: Array<string> = [];
   project.workspaceData.workspaces.forEach((workspace) => {
@@ -38,7 +37,11 @@ function updateDependencyList({
   return { dependencyList, updated };
 }
 
-export default function updateDependencies({
+/**
+ * Convert workspace dependencies to the format that `to` requires. Only needed when pnpm is involved as
+ * it requires `workspace:*` and all the rest support `*`
+ */
+export function updateDependencies({
   project,
   workspace,
   to,
@@ -47,14 +50,14 @@ export default function updateDependencies({
 }: {
   workspace: Workspace;
   project: Project;
-  to: PackageManagerDetails;
+  to: AvailablePackageManagerDetails;
   logger: Logger;
   options?: Options;
 }): void {
-  // this step isn't required if moving between yarn / npm
+  // this step isn't required if moving between yarn / npm / bun
   if (
-    ["yarn", "npm"].includes(to.name) &&
-    ["yarn", "npm"].includes(project.packageManager)
+    ["yarn", "npm", "bun"].includes(to.name) &&
+    ["yarn", "npm", "bun"].includes(project.packageManager)
   ) {
     return;
   }
@@ -65,14 +68,14 @@ export default function updateDependencies({
   });
 
   // collect stats as we go for consolidated output at the end
-  const stats: Record<keyof PackageJsonDependencies, Array<string>> = {
+  const stats: Record<keyof DependencyGroups, Array<string>> = {
     dependencies: [],
     devDependencies: [],
     peerDependencies: [],
     optionalDependencies: [],
   };
 
-  const allDependencyKeys: Array<keyof PackageJsonDependencies> = [
+  const allDependencyKeys: Array<keyof DependencyGroups> = [
     "dependencies",
     "devDependencies",
     "peerDependencies",
@@ -93,7 +96,7 @@ export default function updateDependencies({
     }
   });
 
-  const toLog = (key: keyof PackageJsonDependencies) => {
+  const toLog = (key: keyof DependencyGroups) => {
     const total = stats[key].length;
     if (total > 0) {
       return `${chalk.green(total.toString())} ${key}`;
@@ -101,7 +104,9 @@ export default function updateDependencies({
     return undefined;
   };
 
-  const allChanges = allDependencyKeys.map(toLog).filter(Boolean);
+  const allChanges = allDependencyKeys
+    .map(toLog)
+    .filter(Boolean) as Array<string>;
   const workspaceLocation = `./${path.relative(
     project.paths.root,
     workspace.paths.packageJson
@@ -111,12 +116,10 @@ export default function updateDependencies({
     allChanges.forEach((stat, idx) => {
       if (allChanges.length === 1) {
         logLine += ` ${stat} in ${workspaceLocation}`;
+      } else if (idx === allChanges.length - 1) {
+        logLine += `and ${stat} in ${workspaceLocation}`;
       } else {
-        if (idx === allChanges.length - 1) {
-          logLine += `and ${stat} in ${workspaceLocation}`;
-        } else {
-          logLine += ` ${stat}, `;
-        }
+        logLine += ` ${stat}, `;
       }
     });
 
@@ -128,7 +131,7 @@ export default function updateDependencies({
   }
 
   if (!options?.dry) {
-    fs.writeJSONSync(workspace.paths.packageJson, workspacePackageJson, {
+    writeJSONSync(workspace.paths.packageJson, workspacePackageJson, {
       spaces: 2,
     });
   }

@@ -1,4 +1,3 @@
 module.exports = {
-  root: true,
-  extends: ["acme"],
+  extends: ["custom/storybook"],
 };

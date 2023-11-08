@@ -8,14 +8,16 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
+const npmLockfile = "package-lock.json"
+
 var nodejsNpm = PackageManager{
 	Name:         "nodejs-npm",
 	Slug:         "npm",
 	Command:      "npm",
 	Specfile:     "package.json",
-	Lockfile:     "package-lock.json",
+	Lockfile:     npmLockfile,
 	PackageDir:   "node_modules",
-	ArgSeparator: []string{"--"},
+	ArgSeparator: func(_userArgs []string) []string { return []string{"--"} },
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(rootpath.UntypedJoin("package.json"))
@@ -40,6 +42,18 @@ var nodejsNpm = PackageManager{
 
 	canPrune: func(cwd turbopath.AbsoluteSystemPath) (bool, error) {
 		return true, nil
+	},
+
+	GetLockfileName: func(_ turbopath.AbsoluteSystemPath) string {
+		return npmLockfile
+	},
+
+	GetLockfilePath: func(projectDirectory turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+		return projectDirectory.UntypedJoin(npmLockfile)
+	},
+
+	GetLockfileContents: func(projectDirectory turbopath.AbsoluteSystemPath) ([]byte, error) {
+		return projectDirectory.UntypedJoin(npmLockfile).ReadFile()
 	},
 
 	UnmarshalLockfile: func(_rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {

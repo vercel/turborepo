@@ -6,6 +6,7 @@ members = [
   "crates/turbo-tasks*",
   "crates/turbopack*",
   "crates/turborepo*",
+  "packages/turbo-repository/rust/",
   "xtask",
 ]
 
@@ -19,7 +20,6 @@ default-members = [
   "crates/turbo-tasks-fetch",
   "crates/turbo-tasks-fs",
   "crates/turbo-tasks-hash",
-  "crates/turbo-tasks-macros",
   "crates/turbo-tasks-macros-shared",
   "crates/turbo-tasks-macros-tests",
   "crates/turbo-tasks-malloc",
@@ -46,6 +46,7 @@ default-members = [
   "crates/turbopack-swc-utils",
   "crates/turbopack-test-utils",
   "crates/turbopack-tests",
+  "crates/turbopack-wasm",
   "xtask",
 ]
 
@@ -73,16 +74,21 @@ lto = "off"
 # Declare dependencies used across workspace packages requires single version bump.
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
 [workspace.dependencies]
+async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.12.2" }
-mdxjs = { version = "0.1.14" }
-modularize_imports = { version = "0.32.0" }
-styled_components = { version = "0.59.0" }
-styled_jsx = { version = "0.36.0" }
-swc_core = { version = "0.79.13" }
-swc_emotion = { version = "0.35.0" }
-swc_relay = { version = "0.7.0" }
-testing = { version = "0.33.20" }
+
+mdxjs = "0.1.19"
+modularize_imports = { version = "0.55.0" }
+styled_components = { version = "0.82.0" }
+styled_jsx = { version = "0.59.0" }
+swc_core = { version = "0.86.40", features = [
+  "ecma_loader_lru",
+  "ecma_loader_parking_lot",
+] }
+swc_emotion = { version = "0.58.0" }
+swc_relay = { version = "0.30.0" }
+testing = { version = "0.35.7" }
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
@@ -117,6 +123,7 @@ turbopack-dev-server = { path = "crates/turbopack-dev-server" }
 turbopack-ecmascript = { path = "crates/turbopack-ecmascript" }
 turbopack-ecmascript-plugins = { path = "crates/turbopack-ecmascript-plugins", default-features = false }
 turbopack-ecmascript-runtime = { path = "crates/turbopack-ecmascript-runtime" }
+turbopack-ecmascript-hmr-protocol = { path = "crates/turbopack-ecmascript-hmr-protocol" }
 turbopack-env = { path = "crates/turbopack-env" }
 turbopack-image = { path = "crates/turbopack-image" }
 turbopack-json = { path = "crates/turbopack-json" }
@@ -126,18 +133,24 @@ turbopack-static = { path = "crates/turbopack-static" }
 turbopack-swc-utils = { path = "crates/turbopack-swc-utils" }
 turbopack-test-utils = { path = "crates/turbopack-test-utils" }
 turbopack-tests = { path = "crates/turbopack-tests" }
+turbopack-wasm = { path = "crates/turbopack-wasm" }
 turbopath = { path = "crates/turborepo-paths" }
 turborepo = { path = "crates/turborepo" }
+turborepo-analytics = { path = "crates/turborepo-analytics" }
 turborepo-api-client = { path = "crates/turborepo-api-client" }
 turborepo-cache = { path = "crates/turborepo-cache" }
+turborepo-ci = { path = "crates/turborepo-ci" }
 turborepo-env = { path = "crates/turborepo-env" }
 turborepo-ffi = { path = "crates/turborepo-ffi" }
 turborepo-fs = { path = "crates/turborepo-fs" }
-turborepo-lib = { path = "crates/turborepo-lib" }
+turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
+turborepo-repository = { path = "crates/turborepo-repository" }
+turborepo-ui = { path = "crates/turborepo-ui" }
 turborepo-scm = { path = "crates/turborepo-scm" }
 wax = { path = "crates/turborepo-wax" }
-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
+turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
+turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 
 # Be careful when selecting tls backend, including change default tls backend.
 # If you changed, must verify with ALL build targets with next-swc to ensure
@@ -178,7 +191,7 @@ dunce = "1.0.3"
 futures = "0.3.26"
 futures-retry = "0.6.0"
 hex = "0.4.3"
-httpmock = { version = "0.6.7", default-features = false }
+httpmock = { version = "0.6.8", default-features = false }
 image = { version = "0.24.6", default-features = false }
 indexmap = "1.9.2"
 indicatif = "0.17.3"
@@ -212,10 +225,17 @@ serde_qs = "0.11.0"
 serde_with = "2.3.2"
 serde_yaml = "0.9.17"
 sha2 = "0.10.6"
+smallvec = { version = "1.11.1", features = [
+  "serde",
+  "const_generics",
+  "union",
+  "const_new",
+] }
+sourcemap = "6.0.2"
 syn = "1.0.107"
 tempfile = "3.3.0"
 test-case = "3.0.0"
-thiserror = "1.0.38"
+thiserror = "1.0.48"
 tiny-gradient = "0.1.0"
 tokio = "1.25.0"
 tokio-util = { version = "0.7.7", features = ["io"] }

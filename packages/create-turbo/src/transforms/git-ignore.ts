@@ -1,13 +1,14 @@
-import path from "path";
+import path from "node:path";
 import fs from "fs-extra";
 import { DEFAULT_IGNORE } from "../utils/git";
-import { TransformInput, TransformResult } from "./types";
+import type { TransformInput, TransformResult } from "./types";
 import { TransformError } from "./errors";
 
 const meta = {
   name: "git-ignore",
 };
 
+// eslint-disable-next-line @typescript-eslint/require-await -- must match transform function signature
 export async function transform(args: TransformInput): TransformResult {
   const { prompts } = args;
   const ignorePath = path.join(prompts.root, ".gitignore");

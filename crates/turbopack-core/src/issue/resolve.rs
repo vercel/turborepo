@@ -1,62 +1,62 @@
 use std::fmt::Write;
 
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, ValueToString};
-use turbo_tasks_fs::FileSystemPathVc;
+use turbo_tasks::{ValueToString, Vc};
+use turbo_tasks_fs::FileSystemPath;
 
-use super::{Issue, IssueVc};
+use super::{Issue, OptionIssueSource};
 use crate::{
     error::PrettyPrintError,
-    issue::{IssueSeverityVc, OptionIssueSourceVc},
-    resolve::{options::ResolveOptionsVc, parse::RequestVc},
+    issue::{IssueSeverity, LazyIssueSource},
+    resolve::{options::ResolveOptions, parse::Request},
 };
 
 #[turbo_tasks::value(shared)]
 pub struct ResolvingIssue {
-    pub severity: IssueSeverityVc,
+    pub severity: Vc<IssueSeverity>,
     pub request_type: String,
-    pub request: RequestVc,
-    pub context: FileSystemPathVc,
-    pub resolve_options: ResolveOptionsVc,
+    pub request: Vc<Request>,
+    pub file_path: Vc<FileSystemPath>,
+    pub resolve_options: Vc<ResolveOptions>,
     pub error_message: Option<String>,
-    pub source: OptionIssueSourceVc,
+    pub source: Option<Vc<LazyIssueSource>>,
 }
 
 #[turbo_tasks::value_impl]
 impl Issue for ResolvingIssue {
     #[turbo_tasks::function]
-    fn severity(&self) -> IssueSeverityVc {
+    fn severity(&self) -> Vc<IssueSeverity> {
         self.severity
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> StringVc {
-        StringVc::cell(format!(
+    fn title(&self) -> Vc<String> {
+        Vc::cell(format!(
             "Error resolving {request_type}",
             request_type = self.request_type,
         ))
     }
 
     #[turbo_tasks::function]
-    fn category(&self) -> StringVc {
-        StringVc::cell("resolve".to_string())
+    fn category(&self) -> Vc<String> {
+        Vc::cell("resolve".to_string())
     }
 
     #[turbo_tasks::function]
-    fn context(&self) -> FileSystemPathVc {
-        self.context
+    fn file_path(&self) -> Vc<FileSystemPath> {
+        self.file_path
     }
 
     #[turbo_tasks::function]
-    async fn description(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn description(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "unable to resolve {module_name}",
             module_name = self.request.to_string().await?
         )))
     }
 
     #[turbo_tasks::function]
-    async fn detail(&self) -> Result<StringVc> {
+    async fn detail(&self) -> Result<Vc<String>> {
         let mut detail = String::new();
 
         if let Some(error_message) = &self.error_message {
@@ -73,7 +73,7 @@ impl Issue for ResolvingIssue {
         writeln!(
             detail,
             "Path where resolving has started: {context}",
-            context = self.context.to_string().await?
+            context = self.file_path.to_string().await?
         )?;
         writeln!(
             detail,
@@ -81,9 +81,12 @@ impl Issue for ResolvingIssue {
             request_type = self.request_type,
         )?;
         if let Some(import_map) = &self.resolve_options.await?.import_map {
-            let result = import_map.lookup(self.context, self.request);
+            let result = import_map
+                .await?
+                .lookup(self.file_path, self.request)
+                .await?;
 
-            match result.to_string().await {
+            match result.cell().to_string().await {
                 Ok(str) => writeln!(detail, "Import map: {}", str)?,
                 Err(err) => {
                     writeln!(
@@ -94,12 +97,12 @@ impl Issue for ResolvingIssue {
                 }
             }
         }
-        Ok(StringVc::cell(detail))
+        Ok(Vc::cell(detail))
     }
 
     #[turbo_tasks::function]
-    fn source(&self) -> OptionIssueSourceVc {
-        self.source
+    fn source(&self) -> Vc<OptionIssueSource> {
+        Vc::cell(self.source.map(|s| s.to_issue_source()))
     }
 
     // TODO add sub_issue for a description of resolve_options

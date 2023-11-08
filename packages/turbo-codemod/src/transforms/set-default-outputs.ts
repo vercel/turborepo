@@ -1,11 +1,10 @@
-import path from "path";
-import fs from "fs-extra";
-import { getTurboConfigs } from "@turbo/utils";
+import path from "node:path";
+import { readJsonSync, existsSync } from "fs-extra";
+import { type PackageJson, getTurboConfigs } from "@turbo/utils";
 import type { Schema as TurboJsonSchema } from "@turbo/types";
-
 import type { TransformerArgs } from "../types";
-import getTransformerHelpers from "../utils/getTransformerHelpers";
-import { TransformerResults } from "../runner";
+import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import type { TransformerResults } from "../runner";
 
 const DEFAULT_OUTPUTS = ["dist/**", "build/**"];
 
@@ -48,7 +47,7 @@ export function transformer({
   let packageJSON = {};
 
   try {
-    packageJSON = fs.readJSONSync(packageJsonPath);
+    packageJSON = readJsonSync(packageJsonPath) as PackageJson;
   } catch (e) {
     // readJSONSync probably failed because the file doesn't exist
   }
@@ -62,13 +61,13 @@ export function transformer({
 
   log.info(`Adding default \`outputs\` key into tasks if it doesn't exist`);
   const turboConfigPath = path.join(root, "turbo.json");
-  if (!fs.existsSync(turboConfigPath)) {
+  if (!existsSync(turboConfigPath)) {
     return runner.abortTransform({
       reason: `No turbo.json found at ${root}. Is the path correct?`,
     });
   }
 
-  const turboJson: TurboJsonSchema = fs.readJsonSync(turboConfigPath);
+  const turboJson = readJsonSync(turboConfigPath) as TurboJsonSchema;
   runner.modifyFile({
     filePath: turboConfigPath,
     after: migrateConfig(turboJson),
@@ -77,9 +76,9 @@ export function transformer({
   // find and migrate any workspace configs
   const workspaceConfigs = getTurboConfigs(root);
   workspaceConfigs.forEach((workspaceConfig) => {
-    const { config, turboConfigPath } = workspaceConfig;
+    const { config, turboConfigPath: filePath } = workspaceConfig;
     runner.modifyFile({
-      filePath: turboConfigPath,
+      filePath,
       after: migrateConfig(config),
     });
   });
@@ -88,10 +87,11 @@ export function transformer({
 }
 
 const transformerMeta = {
-  name: `${TRANSFORMER}: ${DESCRIPTION}`,
-  value: TRANSFORMER,
+  name: TRANSFORMER,
+  description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
   transformer,
 };
 
+// eslint-disable-next-line import/no-default-export -- transforms require default export
 export default transformerMeta;

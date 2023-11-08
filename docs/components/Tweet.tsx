@@ -3,10 +3,10 @@ import Image from "next/image";
 function TweetLink({ href, children }) {
   return (
     <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
       className="inline-block text-[#35ACDF]"
+      href={href}
+      rel="noopener noreferrer"
+      target="_blank"
     >
       {children}
     </a>
@@ -15,22 +15,22 @@ function TweetLink({ href, children }) {
 
 export function Mention({ children }) {
   return (
-    <TweetLink href={`https://twitter.com/${children.replace("@", "")}`}>
+    <TweetLink href={`https://x.com/${children.replace("@", "")}`}>
       {children}
     </TweetLink>
   );
 }
 
-export default function Tweet({ url, username, name, avatar, date, children }) {
+export default function Tweet({ username, name, avatar, date, children }) {
   return (
     <div className="flex p-4 bg-white rounded-md shadow-xl dark:bg-opacity-10">
       <div className="flex-shrink-0 mr-4">
         <Image
+          alt={`${name} X avatar`}
           className="w-12 h-12 rounded-full"
-          width={42}
           height={42}
           src={avatar}
-          alt={`${name} twitter avatar`}
+          width={42}
         />
       </div>
       <div>

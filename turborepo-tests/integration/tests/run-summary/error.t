@@ -33,12 +33,12 @@ Validate that we got a full task summary for the failed task with an error in .e
     "taskId": "my-app#maybefails",
     "task": "maybefails",
     "package": "my-app",
-    "hash": "7d733e4a2348bbc9",
+    "hash": "b55c6f27415ae745",
     "inputs": {
       ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
       "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
     },
-    "hashOfExternalDependencies": "ccab0b28617f1f56",
+    "hashOfExternalDependencies": "459c029558afe716",
     "cache": {
       "local": false,
       "remote": false,

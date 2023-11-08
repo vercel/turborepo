@@ -9,17 +9,17 @@ Setup
 # The first part of the file is Packages in Scope
   $ cat tmp-1.txt
   Packages in Scope
-  Name    Path             
-  another packages/another 
-  my-app  apps/my-app      
-  util    packages/util    
+  Name    Path\s* (re)
+  another packages/another\s* (re)
+  my-app  apps/my-app\s* (re)
+  util    packages/util\s* (re)
 
 # Part 2 of the logs are Global Hash INputs
   $ cat tmp-2.txt
   Global Hash Inputs
     Global Files                          = 1
-    External Dependencies Hash            = ccab0b28617f1f56
-    Global Cache Key                      = You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.
+    External Dependencies Hash            = 459c029558afe716
+    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
     Global .env Files Considered          = 0
     Global Env Vars                       = SOME_ENV_VAR
     Global Env Vars Values                = 
@@ -32,7 +32,7 @@ Setup
   my-app#build
     Task                           = build                                                                                                                                                                         
     Package                        = my-app                                                                                                                                                                        
-    Hash                           = 0d1e6ee2c143211c                                                                                                                                                              
+    Hash                           = b42768856d16033a                                                                                                                                                              
     Cached (Local)                 = false                                                                                                                                                                         
     Cached (Remote)                = false                                                                                                                                                                         
     Directory                      = apps/my-app                                                                                                                                                                   
@@ -53,7 +53,7 @@ Setup
   util#build
     Task                           = build                                                                                                                                                
     Package                        = util                                                                                                                                                 
-    Hash                           = 76ab904c7ecb2d51                                                                                                                                     
+    Hash                           = 9b9969f14caa05a4                                                                                                                                     
     Cached (Local)                 = false                                                                                                                                                
     Cached (Remote)                = false                                                                                                                                                
     Directory                      = packages/util                                                                                                                                        

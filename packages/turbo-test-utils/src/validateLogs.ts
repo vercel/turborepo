@@ -1,8 +1,8 @@
-import { SpyConsole } from "./spyConsole";
+import type { Spy } from "./spyConsole";
 
-export default function validateLogs(
-  logs: Array<string | (() => boolean | Array<any>)>,
-  mockConsole: SpyConsole["log"] | SpyConsole["error"],
+export function validateLogs(
+  logs: Array<string | (() => boolean | Array<string>)>,
+  mockConsole: Spy,
   options: { prefix?: string } = {}
 ) {
   logs.forEach((log, idx) => {
@@ -12,16 +12,10 @@ export default function validateLogs(
         idx + 1,
         ...(Array.isArray(expected) ? expected : [expected])
       );
+    } else if (options.prefix) {
+      expect(mockConsole).toHaveBeenNthCalledWith(idx + 1, options.prefix, log);
     } else {
-      if (options.prefix) {
-        expect(mockConsole).toHaveBeenNthCalledWith(
-          idx + 1,
-          options.prefix,
-          log
-        );
-      } else {
-        expect(mockConsole).toHaveBeenNthCalledWith(idx + 1, log);
-      }
+      expect(mockConsole).toHaveBeenNthCalledWith(idx + 1, log);
     }
   });
 }

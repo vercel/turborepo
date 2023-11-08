@@ -1,5 +1,5 @@
 import path from "path";
-import { PackageManager } from "@turbo/workspaces";
+import type { PackageManager } from "@turbo/utils";
 
 export function getWorkspaceDetailsMockReturnValue({
   root,

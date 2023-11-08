@@ -29,7 +29,7 @@ pub fn wrap_html(table_html: &str) -> String {
         script = r#"// https://github.com/tofsjonas/sortable
 document.addEventListener("click",function(b){try{var p=function(a){return v&&a.getAttribute("data-sort-alt")||a.getAttribute("data-sort")||a.innerText},q=function(a,c){a.className=a.className.replace(w,"")+c},e=function(a,c){return a.nodeName===c?a:e(a.parentNode,c)},w=/ dir-(u|d) /,v=b.shiftKey||b.altKey,f=e(b.target,"TH"),r=e(f,"TR"),g=e(r,"TABLE");if(/\bsortable\b/.test(g.className)){var h,d=r.cells;for(b=0;b<d.length;b++)d[b]===f?h=b:q(d[b],"");d=" dir-d ";-1!==f.className.indexOf(" dir-d ")&&
 (d=" dir-u ");q(f,d);var k=g.tBodies[0],l=[].slice.call(k.rows,0),t=" dir-u "===d;l.sort(function(a,c){var m=p((t?a:c).cells[h]),n=p((t?c:a).cells[h]);return isNaN(m-n)?m.localeCompare(n):m-n});for(var u=k.cloneNode();l.length;)u.appendChild(l.splice(0,1)[0]);g.replaceChild(u,k)}}catch(a){}});"#,
-        style = r#"body{margin:0;font-family:monospace;}.sortable thead{position:sticky;top:0}.sortable{border-spacing:0}.sortable td,.sortable th{padding:10px}.sortable th{background:gray;color:#fff;cursor:pointer;font-weight:normal;text-align:left;text-transform:capitalize;vertical-align:baseline;white-space:nowrap}.sortable th:hover{color:#000}.sortable th:hover::after{color:inherit;font-size:1.2em;content:' \025B8'}.sortable th::after{font-size:1.2em;color:transparent;content:' \025B8'}.sortable th.dir-d{color:#000}.sortable th.dir-d::after{color:inherit;content:' \025BE'}.sortable th.dir-u{color:#000}.sortable th.dir-u::after{color:inherit;content:' \025B4'}"#
+        style = r"body{margin:0;font-family:monospace;}.sortable thead{position:sticky;top:0}.sortable{border-spacing:0}.sortable td,.sortable th{padding:10px}.sortable th{background:gray;color:#fff;cursor:pointer;font-weight:normal;text-align:left;text-transform:capitalize;vertical-align:baseline;white-space:nowrap}.sortable th:hover{color:#000}.sortable th:hover::after{color:inherit;font-size:1.2em;content:' \025B8'}.sortable th::after{font-size:1.2em;color:transparent;content:' \025B8'}.sortable th.dir-d{color:#000}.sortable th.dir-d::after{color:inherit;content:' \025BE'}.sortable th.dir-u{color:#000}.sortable th.dir-u::after{color:inherit;content:' \025B4'}"
     )
 }
 
@@ -42,7 +42,6 @@ pub fn create_table(root: GroupTree, stats_type: StatsType) -> String {
     out += r#"<table class="sortable"><thead><tr>"#;
     out += r#"<th>function</th>"#;
     out += r#"<th>count</th>"#;
-    out += r#"<th>active</th>"#;
     out += r#"<th>unloaded</th>"#;
     out += r#"<th>reexecutions</th>"#;
     out += r#"<th>total duration</th>"#;
@@ -50,8 +49,6 @@ pub fn create_table(root: GroupTree, stats_type: StatsType) -> String {
     out += r#"<th>total update duration</th>"#;
     out += r#"<th>avg duration</th>"#;
     out += r#"<th>max duration</th>"#;
-    out += r#"<th>root scopes</th>"#;
-    out += r#"<th>avg scopes</th>"#;
     out += r#"<th>avg dependencies</th>"#;
     out += r#"<th>avg children</th>"#;
     out += r#"<th>depth</th>"#;
@@ -82,13 +79,6 @@ pub fn create_table(root: GroupTree, stats_type: StatsType) -> String {
             "<td bgcolor=\"{}\">{}</td>",
             as_frac_color(stats.count, max_values.count),
             stats.count
-        )?;
-        // active
-        write!(
-            out,
-            "<td bgcolor=\"{}\">{}</td>",
-            as_frac_color(stats.active_count, max_values.active_count),
-            stats.active_count
         )?;
         // unloaded
         write!(
@@ -188,24 +178,6 @@ pub fn create_table(root: GroupTree, stats_type: StatsType) -> String {
             ),
             stats.max_duration.as_micros(),
             FormatDuration(stats.max_duration)
-        )?;
-        // root scopes
-        write!(
-            out,
-            "<td bgcolor=\"{}\">{}</td>",
-            as_frac_color(stats.roots, max_values.roots),
-            stats.roots
-        )?;
-        // avg scopes
-        let max_scopes = max_values.scopes.saturating_sub(100);
-        write!(
-            out,
-            "<td bgcolor=\"{}\">{}</td>",
-            as_frac_color(
-                (100 * stats.scopes / stats.count).saturating_sub(100),
-                max_scopes
-            ),
-            (100 * stats.scopes / stats.count) as f32 / 100.0
         )?;
         // avg dependencies
         let dependencies = get_avg_dependencies_count_times_100(stats);

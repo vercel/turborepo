@@ -1,6 +1,7 @@
 package runsummary
 
 import (
+	"bytes"
 	"encoding/json"
 	"sort"
 
@@ -13,19 +14,24 @@ import (
 func (rsm *Meta) FormatJSON() ([]byte, error) {
 	rsm.normalize() // normalize data
 
-	var bytes []byte
 	var err error
+	var buffer bytes.Buffer
+
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
 
 	if rsm.singlePackage {
-		bytes, err = json.MarshalIndent(nonMonorepoRunSummary(*rsm.RunSummary), "", "  ")
+		err = encoder.Encode(nonMonorepoRunSummary(*rsm.RunSummary))
 	} else {
-		bytes, err = json.MarshalIndent(rsm.RunSummary, "", "  ")
+		err = encoder.Encode(rsm.RunSummary)
 	}
 
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to render JSON")
 	}
-	return bytes, nil
+
+	return buffer.Bytes(), nil
 }
 
 func (rsm *Meta) normalize() {

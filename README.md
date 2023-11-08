@@ -51,18 +51,18 @@ Turbo is used by the world's leading companies. Check out the [Turbo Showcase](h
 
 ## Updates
 
-Follow [@turborepo](https://twitter.com/turborepo) on Twitter and for project updates.
+Follow [@turborepo](https://x.com/turborepo) on X and for project updates.
 
 ## Authors
 
 **Turborepo**
 
-- Jared Palmer ([@jaredpalmer](https://twitter.com/jaredpalmer))
+- Jared Palmer ([@jaredpalmer](https://x.com/jaredpalmer))
 
 **Turbopack and the Turbo engine**
 
-- Tobias Koppers ([@wSokra](https://twitter.com/wSokra))
-- Maia Teegarden ([@padmaia](https://twitter.com/padmaia))
+- Tobias Koppers ([@wSokra](https://x.com/wSokra))
+- Maia Teegarden ([@padmaia](https://x.com/padmaia))
 
 ## Security
 

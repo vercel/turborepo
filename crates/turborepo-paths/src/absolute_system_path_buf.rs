@@ -1,12 +1,12 @@
 use std::{
     borrow::Borrow,
-    fmt, fs,
-    io::{self, Write},
+    fmt, io,
     ops::Deref,
     path::{Path, PathBuf},
 };
 
 use camino::{Utf8Components, Utf8Path, Utf8PathBuf};
+use fs_err as fs;
 use path_clean::PathClean;
 use serde::Serialize;
 
@@ -97,6 +97,7 @@ impl AbsoluteSystemPathBuf {
     }
 
     pub fn cwd() -> Result<Self, PathError> {
+        // TODO(errors): Unwrap current_dir()
         Ok(Self(Utf8PathBuf::try_from(std::env::current_dir()?)?))
     }
 
@@ -134,36 +135,6 @@ impl AbsoluteSystemPathBuf {
         path: impl AsRef<AbsoluteSystemPath>,
     ) -> Result<AnchoredSystemPathBuf, PathError> {
         AnchoredSystemPathBuf::new(self, path)
-    }
-
-    /// Resolves `path` with `self` as anchor.
-    ///
-    /// # Arguments
-    ///
-    /// * `path`: The path to be anchored at `self`
-    ///
-    /// returns: AbsoluteSystemPathBuf
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::path::Path;
-    /// use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-    /// #[cfg(not(windows))]
-    /// let absolute_path = AbsoluteSystemPathBuf::new("/Users/user").unwrap();
-    /// #[cfg(windows)]
-    /// let absolute_path = AbsoluteSystemPathBuf::new("C:\\Users\\user").unwrap();
-    ///
-    /// let anchored_path = Path::new("Documents").try_into().unwrap();
-    /// let resolved_path = absolute_path.resolve(&anchored_path);
-    ///
-    /// #[cfg(not(windows))]
-    /// assert_eq!(resolved_path.as_str(), "/Users/user/Documents");
-    /// #[cfg(windows)]
-    /// assert_eq!(resolved_path.as_str(), "C:\\Users\\user\\Documents");
-    /// ```
-    pub fn resolve(&self, path: &AnchoredSystemPathBuf) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf(self.0.join(path))
     }
 
     pub fn as_path(&self) -> &Utf8Path {
@@ -214,12 +185,6 @@ impl AbsoluteSystemPathBuf {
         Ok(self.0.symlink_metadata()?.permissions().readonly())
     }
 
-    pub fn create_with_contents(&self, contents: &str) -> Result<(), io::Error> {
-        let mut f = fs::File::create(self.0.as_path())?;
-        write!(f, "{}", contents)?;
-        Ok(())
-    }
-
     pub fn as_str(&self) -> &str {
         self.0.as_str()
     }
@@ -228,21 +193,13 @@ impl AbsoluteSystemPathBuf {
         self.0.file_name()
     }
 
-    pub fn exists(&self) -> bool {
-        self.0.exists()
-    }
-
     pub fn try_exists(&self) -> Result<bool, PathError> {
-        Ok(fs::try_exists(&self.0)?)
+        // try_exists is an experimental API and not yet in fs_err
+        Ok(std::fs::try_exists(&self.0)?)
     }
 
     pub fn extension(&self) -> Option<&str> {
         self.0.extension()
-    }
-
-    pub fn to_realpath(&self) -> Result<Self, PathError> {
-        let realpath = dunce::canonicalize(&self.0)?;
-        Ok(Self(Utf8PathBuf::try_from(realpath)?))
     }
 }
 
@@ -250,11 +207,7 @@ impl TryFrom<PathBuf> for AbsoluteSystemPathBuf {
     type Error = PathError;
 
     fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
-        let path_str = path
-            .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
-
-        Self::new(Utf8PathBuf::from(path_str))
+        Self::new(Utf8PathBuf::try_from(path)?)
     }
 }
 
@@ -262,11 +215,16 @@ impl TryFrom<&Path> for AbsoluteSystemPathBuf {
     type Error = PathError;
 
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
-        let path_str = path
-            .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
+        let utf8_path: &Utf8Path = path.try_into()?;
+        Self::new(utf8_path.to_owned())
+    }
+}
 
-        Self::new(Utf8PathBuf::from(path_str))
+impl TryFrom<&str> for AbsoluteSystemPathBuf {
+    type Error = PathError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new(Utf8PathBuf::from(value))
     }
 }
 

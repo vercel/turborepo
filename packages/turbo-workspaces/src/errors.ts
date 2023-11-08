@@ -4,8 +4,10 @@ export type ConvertErrorType =
   | "package_manager-already_in_use"
   | "package_manager-unable_to_detect"
   | "package_manager-unsupported_version"
+  | "package_manager-could_not_be_found"
   // package manager specific
   | "pnpm-workspace_parse_error"
+  | "bun-workspace_glob_error"
   // package.json
   | "package_json-parse_error"
   | "package_json-missing"
@@ -15,9 +17,9 @@ export type ConvertErrorType =
   // default
   | "unknown";
 
-export type ConvertErrorOptions = {
+export interface ConvertErrorOptions {
   type?: ConvertErrorType;
-};
+}
 
 export class ConvertError extends Error {
   public type: ConvertErrorType;

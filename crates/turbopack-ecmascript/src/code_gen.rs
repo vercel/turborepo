@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use swc_core::ecma::visit::{AstParentKind, VisitMut};
-use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, Value};
-use turbopack_core::chunk::availability_info::AvailabilityInfo;
+use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, Vc};
+use turbopack_core::chunk::AsyncModuleInfo;
 
-use crate::chunk::EcmascriptChunkingContextVc;
+use crate::chunk::EcmascriptChunkingContext;
 
-/// impl of code generation inferred from a AssetReference.
+/// impl of code generation inferred from a ModuleReference.
 /// This is rust only and can't be implemented by non-rust plugins.
 #[turbo_tasks::value(
     shared,
@@ -26,22 +26,25 @@ pub trait VisitorFactory: Send + Sync {
 
 #[turbo_tasks::value_trait]
 pub trait CodeGenerateable {
-    fn code_generation(&self, context: EcmascriptChunkingContextVc) -> CodeGenerationVc;
+    fn code_generation(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    ) -> Vc<CodeGeneration>;
 }
 
 #[turbo_tasks::value_trait]
-pub trait CodeGenerateableWithAvailabilityInfo {
+pub trait CodeGenerateableWithAsyncModuleInfo {
     fn code_generation(
-        &self,
-        context: EcmascriptChunkingContextVc,
-        availability_info: Value<AvailabilityInfo>,
-    ) -> CodeGenerationVc;
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
+    ) -> Vc<CodeGeneration>;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs, ValueDebugFormat)]
 pub enum CodeGen {
-    CodeGenerateable(CodeGenerateableVc),
-    CodeGenerateableWithAvailabilityInfo(CodeGenerateableWithAvailabilityInfoVc),
+    CodeGenerateable(Vc<Box<dyn CodeGenerateable>>),
+    CodeGenerateableWithAsyncModuleInfo(Vc<Box<dyn CodeGenerateableWithAsyncModuleInfo>>),
 }
 
 #[turbo_tasks::value(transparent)]
@@ -70,6 +73,37 @@ pub fn path_to(
 /// possible visit methods.
 #[macro_export]
 macro_rules! create_visitor {
+    // This rule needs to be first, otherwise we run into the following error:
+    // expected one of `!`, `)`, `,`, `.`, `::`, `?`, `{`, or an operator, found `:`
+    // This is a regression on nightly.
+    (visit_mut_program($arg:ident: &mut Program) $b:block) => {{
+        struct Visitor<T: Fn(&mut swc_core::ecma::ast::Program) + Send + Sync> {
+            visit_mut_program: T,
+        }
+
+        impl<T: Fn(&mut swc_core::ecma::ast::Program) + Send + Sync> $crate::code_gen::VisitorFactory
+            for Box<Visitor<T>>
+        {
+            fn create<'a>(&'a self) -> Box<dyn swc_core::ecma::visit::VisitMut + Send + Sync + 'a> {
+                Box::new(&**self)
+            }
+        }
+
+        impl<'a, T: Fn(&mut swc_core::ecma::ast::Program) + Send + Sync> swc_core::ecma::visit::VisitMut
+            for &'a Visitor<T>
+        {
+            fn visit_mut_program(&mut self, $arg: &mut swc_core::ecma::ast::Program) {
+                (self.visit_mut_program)($arg);
+            }
+        }
+
+        (
+            Vec::new(),
+            Box::new(Box::new(Visitor {
+                visit_mut_program: move |$arg: &mut swc_core::ecma::ast::Program| $b,
+            })) as Box<dyn $crate::code_gen::VisitorFactory>,
+        )
+    }};
     (exact $ast_path:expr, $name:ident($arg:ident: &mut $ty:ident) $b:block) => {
         $crate::create_visitor!(__ $ast_path.to_vec(), $name($arg: &mut $ty) $b)
     };
@@ -103,34 +137,6 @@ macro_rules! create_visitor {
             $ast_path,
             Box::new(Box::new(Visitor {
                 $name: move |$arg: &mut swc_core::ecma::ast::$ty| $b,
-            })) as Box<dyn $crate::code_gen::VisitorFactory>,
-        )
-    }};
-    (visit_mut_program($arg:ident: &mut Program) $b:block) => {{
-        struct Visitor<T: Fn(&mut swc_core::ecma::ast::Program) + Send + Sync> {
-            visit_mut_program: T,
-        }
-
-        impl<T: Fn(&mut swc_core::ecma::ast::Program) + Send + Sync> $crate::code_gen::VisitorFactory
-            for Box<Visitor<T>>
-        {
-            fn create<'a>(&'a self) -> Box<dyn swc_core::ecma::visit::VisitMut + Send + Sync + 'a> {
-                Box::new(&**self)
-            }
-        }
-
-        impl<'a, T: Fn(&mut swc_core::ecma::ast::Program) + Send + Sync> swc_core::ecma::visit::VisitMut
-            for &'a Visitor<T>
-        {
-            fn visit_mut_program(&mut self, $arg: &mut swc_core::ecma::ast::Program) {
-                (self.visit_mut_program)($arg);
-            }
-        }
-
-        (
-            Vec::new(),
-            Box::new(Box::new(Visitor {
-                visit_mut_program: move |$arg: &mut swc_core::ecma::ast::Program| $b,
             })) as Box<dyn $crate::code_gen::VisitorFactory>,
         )
     }};

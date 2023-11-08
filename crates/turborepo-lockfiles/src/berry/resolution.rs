@@ -29,17 +29,17 @@ pub enum Error {
 /// A resolution that can appear in the resolutions field of the top level
 /// package.json
 #[derive(Debug, PartialEq, Clone, Eq, PartialOrd, Ord, Hash)]
-pub struct Resolution<'a> {
-    from: Option<Specifier<'a>>,
-    descriptor: Specifier<'a>,
+pub struct Resolution {
+    from: Option<Specifier>,
+    descriptor: Specifier,
 }
 
 // This is essentially an Ident with an optional semver range
 #[derive(Debug, PartialEq, Clone, Eq, PartialOrd, Ord, Hash)]
-struct Specifier<'a> {
-    full_name: &'a str,
-    description: Option<&'a str>,
-    ident: Ident<'a>,
+struct Specifier {
+    full_name: String,
+    description: Option<String>,
+    ident: Ident<'static>,
 }
 
 #[derive(Parser)]
@@ -93,7 +93,7 @@ fn parse_specifier(specifier: Pair<'_, Rule>) -> Result<Option<Specifier>, Error
     }
 }
 
-impl<'a> Resolution<'a> {
+impl Resolution {
     /// Returns a new descriptor if an override is applicable
     // reference: version that this resolution resolves to
     // locator: package that depends on the dependency
@@ -116,7 +116,7 @@ impl<'a> Resolution<'a> {
             // Since we have already checked the ident portion of the locator for equality
             // we can avoid an allocation caused by constructing a locator by just checking
             // the reference portion.
-            if let Some(desc) = from.description {
+            if let Some(desc) = &from.description {
                 if !Self::eq_with_protocol(&locator.reference, desc, "npm:") {
                     return None;
                 }
@@ -129,8 +129,8 @@ impl<'a> Resolution<'a> {
             return None;
         }
 
-        if let Some(resolution_range) = self.descriptor.description {
-            if resolution_range != dependency.range {
+        if let Some(resolution_range) = &self.descriptor.description {
+            if resolution_range != &dependency.range {
                 return None;
             }
         }
@@ -185,23 +185,23 @@ impl<'a> Resolution<'a> {
     }
 }
 
-impl<'a> Specifier<'a> {
-    pub fn new(full_name: &'a str, description: Option<&'a str>) -> Result<Specifier<'a>, Error> {
-        let ident = Ident::try_from(full_name)?;
+impl Specifier {
+    pub fn new(full_name: &str, description: Option<&str>) -> Result<Specifier, Error> {
+        let ident = Ident::try_from(full_name)?.to_owned();
 
         Ok(Specifier {
-            full_name,
-            description,
+            full_name: full_name.to_string(),
+            description: description.map(|s| s.to_string()),
             ident,
         })
     }
 
-    pub fn ident(&self) -> &Ident<'a> {
+    pub fn ident(&self) -> &Ident<'static> {
         &self.ident
     }
 }
 
-impl fmt::Display for Resolution<'_> {
+impl fmt::Display for Resolution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(from) = &self.from {
             f.write_fmt(format_args!("{from}/"))?;
@@ -211,10 +211,10 @@ impl fmt::Display for Resolution<'_> {
     }
 }
 
-impl fmt::Display for Specifier<'_> {
+impl fmt::Display for Specifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.full_name)?;
-        if let Some(descriptor) = self.description {
+        f.write_str(&self.full_name)?;
+        if let Some(descriptor) = &self.description {
             f.write_fmt(format_args!("@{descriptor}"))?;
         }
         Ok(())

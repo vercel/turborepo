@@ -1,4 +1,4 @@
-import path from "path";
+import path from "node:path";
 import type { Project, Workspace } from "@turbo/workspaces";
 import { getWorkspaceRoots } from "./workspaceRoots";
 
@@ -41,7 +41,7 @@ export function getWorkspaceStructure({
     }
 
     // add to group
-    if (!workspacesByGroup[group]) {
+    if (!(group in workspacesByGroup)) {
       workspacesByGroup[group] = [];
     }
     workspacesByGroup[group].push(w);

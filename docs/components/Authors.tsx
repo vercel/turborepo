@@ -1,9 +1,9 @@
-import { Avatar } from "./Avatar";
 import cn from "classnames";
 import TURBO_TEAM from "../content/team";
 import type { Author } from "../content/team";
+import { Avatar } from "./Avatar";
 
-export function Authors({ authors }: { authors: Array<Author> }) {
+export function Authors({ authors }: { authors: Author[] }) {
   const validAuthors = authors.filter((author) => TURBO_TEAM[author]);
   return (
     <div className="w-full border-b border-gray-400 authors border-opacity-20">

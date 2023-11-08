@@ -31,7 +31,7 @@ export function isFolderEmpty(root: string): {
     .readdirSync(root)
     .filter((file) => !VALID_FILES.includes(file))
     // Support IntelliJ IDEA-based editors
-    .filter((file) => !/\.iml$/.test(file));
+    .filter((file) => !file.endsWith(".iml"));
 
   return { isEmpty: conflicts.length === 0, conflicts };
 }

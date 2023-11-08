@@ -141,8 +141,8 @@ Here's a checklist of testing strategies to cover:
 
 - Test `login`, `logout`, `login --sso-team`, `link`, `unlink`
 - Test `prune` (Note `turbo` here is the unreleased turbo binary)
-  - `npx create-turbo --use-pnpm prune-test && cd prune-test`
-  - `turbo --skip-infer prune --scope=docs && cd out && pnpm install --frozen-lockfile`
+  - `pnpm dlx create-turbo@latest prune-test --package-manager pnpm && cd prune-test`
+  - `turbo --skip-infer prune docs && cd out && pnpm install --frozen-lockfile`
   - `turbo --skip-infer build`
 - Test `--dry-run` and `--graph`.
 - Test with and without daemon.
@@ -258,7 +258,7 @@ Finally, the crate must be added to the Turborepo section of CODEOWNERS:
 
 Turbopack uses [Cargo workspaces][workspaces] in the Turbo monorepo. You'll find
 several workspaces inside the `crates/` directory. In order to run a particular
-crate, you can use the `cargo run -p [CRATE_NAME]` command. For example, to test the Next.js development server, run `cargo run -p next-dev`.
+crate, you can use the `cargo run -p [CRATE_NAME]` command.
 
 ### Turbopack Architecture
 
@@ -287,10 +287,6 @@ You can also create a little demo app and run
 ```shell
 cargo run -p node-file-trace -- print demo/index.js
 ```
-
-### Benchmarking Turbopack
-
-See [the benchmarking README for Turbopack](crates/next-dev/benches/README.md) for details.
 
 ### Profiling Turbopack
 

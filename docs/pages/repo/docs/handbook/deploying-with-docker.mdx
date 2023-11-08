@@ -71,7 +71,7 @@ In a large monorepo, this can result in a huge amount of lost time, as any chang
 The solution is to prune the inputs to the Dockerfile to only what is strictly necessary. Turborepo provides a simple solution - `turbo prune`.
 
 ```bash
-turbo prune --scope="docs" --docker
+turbo prune docs --docker
 ```
 
 Running this command creates a **pruned version of your monorepo** inside an `./out` directory. It only includes workspaces which `docs` depends on.
@@ -113,6 +113,10 @@ Splitting up **dependencies** and **source files** in this way lets us **only ru
 
 Our detailed [`with-docker` example](https://github.com/vercel/turbo/tree/main/examples/with-docker) goes into depth on how to utilise `prune` to its full potential. Here's the Dockerfile, copied over for convenience.
 
+<Callout type="info">
+  This Dockerfile is written for a [Next.js](https://nextjs.org/) app that is using the `standalone` [output mode](https://nextjs.org/docs/pages/api-reference/next-config-js/output).
+</Callout>
+
 ```docker
 FROM node:18-alpine AS base
 
@@ -123,7 +127,7 @@ RUN apk update
 WORKDIR /app
 RUN yarn global add turbo
 COPY . .
-RUN turbo prune --scope=web --docker
+RUN turbo prune web --docker
 
 # Add lockfile and package.json's of isolated subworkspace
 FROM base AS installer

@@ -6,6 +6,7 @@
  */
 
 /// <reference path="../base/runtime-base.ts" />
+/// <reference path="../../../shared-node/node-utils.ts" />
 
 interface RequireContextEntry {
   // Only the Node.js backend has this flag.
@@ -13,56 +14,54 @@ interface RequireContextEntry {
 }
 
 type ExternalRequire = (id: ModuleId) => Exports | EsmNamespaceObject;
+type ExternalImport = (id: ModuleId) => Promise<Exports | EsmNamespaceObject>;
 
-interface TurbopackDevContext {
+interface TurbopackDevContext extends TurbopackDevBaseContext {
   x: ExternalRequire;
+  y: ExternalImport;
 }
-
-function commonJsRequireContext(
-  entry: RequireContextEntry,
-  sourceModule: Module
-): Exports {
-  return entry.external
-    ? externalRequire(entry.id(), false)
-    : commonJsRequire(sourceModule, entry.id());
-}
-
-function externalRequire(
-  id: ModuleId,
-  esm: boolean = false
-): Exports | EsmNamespaceObject {
-  let raw;
-  try {
-    raw = require(id);
-  } catch (err) {
-    // TODO(alexkirsz) This can happen when a client-side module tries to load
-    // an external module we don't provide a shim for (e.g. querystring, url).
-    // For now, we fail semi-silently, but in the future this should be a
-    // compilation error.
-    throw new Error(`Failed to load external module ${id}: ${err}`);
-  }
-  if (!esm) {
-    return raw;
-  }
-  const ns = {};
-  interopEsm(raw, ns, raw.__esModule);
-  return ns;
-}
-externalRequire.resolve = (
-  id: string,
-  options?:
-    | {
-        paths?: string[] | undefined;
-      }
-    | undefined
-) => {
-  return require.resolve(id, options);
-};
 
 function augmentContext(context: TurbopackDevBaseContext): TurbopackDevContext {
   const nodejsContext = context as TurbopackDevContext;
   nodejsContext.x = externalRequire;
+  nodejsContext.y = externalImport;
   return nodejsContext;
+}
+
+function resolveChunkPath(chunkPath: ChunkPath, source: SourceInfo) {
+  let fromChunkPath = undefined;
+  switch (source.type) {
+    case SourceType.Runtime:
+      fromChunkPath = source.chunkPath;
+      break;
+    case SourceType.Parent:
+      fromChunkPath = getFirstModuleChunk(source.parentId);
+      break;
+    case SourceType.Update:
+      break;
+  }
+
+  const path = require("node:path");
+  return path.resolve(
+    __dirname,
+    path.posix.relative(path.dirname(fromChunkPath), chunkPath)
+  );
+}
+
+function loadWebAssembly(
+  source: SourceInfo,
+  chunkPath: ChunkPath,
+  imports: WebAssembly.Imports
+) {
+  const resolved = resolveChunkPath(chunkPath, source);
+
+  return instantiateWebAssemblyFromPath(resolved, imports);
+}
+
+function loadWebAssemblyModule(source: SourceInfo, chunkPath: ChunkPath) {
+  const resolved = resolveChunkPath(chunkPath, source);
+
+  return compileWebAssemblyFromPath(resolved);
 }
 
 let BACKEND: RuntimeBackend;
@@ -104,29 +103,14 @@ let BACKEND: RuntimeBackend;
       return;
     }
 
-    let fromChunkPath = undefined;
-    switch (source.type) {
-      case SourceType.Runtime:
-        fromChunkPath = source.chunkPath;
-        break;
-      case SourceType.Parent:
-        fromChunkPath = getFirstModuleChunk(source.parentId);
-        break;
-      case SourceType.Update:
-        break;
-    }
-
     // We'll only mark the chunk as loaded once the script has been executed,
     // which happens in `registerChunk`. Hence the absence of `resolve()`.
-    const path = require("path");
-    const resolved = require.resolve(
-      "./" + path.relative(path.dirname(fromChunkPath), chunkPath)
-    );
-    delete require.cache[resolved];
+    const resolved = resolveChunkPath(chunkPath, source);
+
     require(resolved);
   }
 })();
 
-function _eval({ code, url, map }: EcmascriptModuleEntry): ModuleFactory {
+function _eval(_: EcmascriptModuleEntry): ModuleFactory {
   throw new Error("HMR evaluation is not implemented on this backend");
 }

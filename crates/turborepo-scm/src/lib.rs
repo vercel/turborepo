@@ -1,6 +1,7 @@
 #![feature(error_generic_member_access)]
-#![feature(provide_any)]
+#![feature(io_error_more)]
 #![feature(assert_matches)]
+#![deny(clippy::all)]
 
 use std::{
     backtrace::{self, Backtrace},
@@ -23,7 +24,11 @@ mod status;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("git error on {1}: {0}")]
-    Git2(git2::Error, String, #[backtrace] backtrace::Backtrace),
+    Git2(
+        #[source] git2::Error,
+        String,
+        #[backtrace] backtrace::Backtrace,
+    ),
     #[error("git error: {0}")]
     Git(String, #[backtrace] backtrace::Backtrace),
     #[error(
@@ -31,6 +36,10 @@ pub enum Error {
          control"
     )]
     GitRequired(AbsoluteSystemPathBuf),
+    #[error(
+        "git command failed due to unsupported git version. Upgrade to git 2.18 or newer: {0}"
+    )]
+    GitVersion(String),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
     #[error("path error: {0}")]
@@ -45,7 +54,7 @@ pub enum Error {
     #[error("package traversal error: {0}")]
     Ignore(#[from] ignore::Error, #[backtrace] backtrace::Backtrace),
     #[error("invalid glob: {0}")]
-    Glob(Box<wax::BuildError>, backtrace::Backtrace),
+    Glob(#[source] Box<wax::BuildError>, backtrace::Backtrace),
     #[error(transparent)]
     Walk(#[from] globwalk::WalkError),
 }
@@ -61,8 +70,8 @@ impl Error {
         Error::Git(s.into(), Backtrace::capture())
     }
 
-    pub(crate) fn git2_error_context(error: git2::Error, context: String) -> Self {
-        Error::Git2(error, context, Backtrace::capture())
+    pub(crate) fn git2_error_context(error: git2::Error, error_context: String) -> Self {
+        Error::Git2(error, error_context, Backtrace::capture())
     }
 }
 
@@ -92,6 +101,9 @@ pub(crate) fn wait_for_success<R: Read, T>(
     let stderr_text = stderr_output
         .map(|stderr| format!(" stderr: {}", stderr))
         .unwrap_or_default();
+    if matches!(exit_status.code(), Some(129)) {
+        return Err(Error::GitVersion(stderr_text));
+    }
     let exit_text = if exit_status.success() {
         "".to_string()
     } else {
@@ -134,10 +146,12 @@ impl Git {
         // If which produces an invalid absolute path, it's not an execution error, it's
         // a programming error. We expect it to always give us an absolute path
         // if it gives us any path. If that's not the case, we should crash.
-        let bin = AbsoluteSystemPathBuf::try_from(bin.as_path()).expect(&format!(
-            "which git produced an invalid absolute path {}",
-            bin.display()
-        ));
+        let bin = AbsoluteSystemPathBuf::try_from(bin.as_path()).unwrap_or_else(|_| {
+            panic!(
+                "which git produced an invalid absolute path {}",
+                bin.display()
+            )
+        });
         let root =
             find_git_root(path_in_repo).map_err(|e| GitError::Root(path_in_repo.to_owned(), e))?;
         Ok(Self { root, bin })
@@ -178,11 +192,16 @@ pub enum SCM {
 }
 
 impl SCM {
+    #[tracing::instrument]
     pub fn new(path_in_repo: &AbsoluteSystemPath) -> SCM {
         Git::find(path_in_repo).map(SCM::Git).unwrap_or_else(|e| {
             debug!("{}, continuing with manual hashing", e);
             SCM::Manual
         })
+    }
+
+    pub fn is_manual(&self) -> bool {
+        matches!(self, SCM::Manual)
     }
 }
 

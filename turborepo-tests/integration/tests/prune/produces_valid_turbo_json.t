@@ -3,7 +3,7 @@ Setup
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) monorepo_with_root_dep
 
 Make sure that the internal util package is part of the prune output
-  $ ${TURBO} prune --scope=docs
+  $ ${TURBO} prune docs
   Generating pruned monorepo for docs in .*/out (re)
    - Added docs
    - Added shared
@@ -12,23 +12,11 @@ Make sure that the internal util package is part of the prune output
 Make sure we prune tasks that reference a pruned workspace
   $ cat out/turbo.json | jq
   {
-    "globalPassThroughEnv": null,
-    "globalDotEnv": null,
+    "$schema": "https://turbo.build/schema.json",
     "pipeline": {
       "build": {
-        "outputs": [],
-        "cache": true,
-        "dependsOn": [],
-        "inputs": [],
-        "outputMode": "full",
-        "persistent": false,
-        "env": [],
-        "passThroughEnv": null,
-        "dotEnv": null
+        "outputs": []
       }
-    },
-    "remoteCache": {
-      "enabled": true
     }
   }
 
@@ -40,3 +28,43 @@ Verify turbo can read the produced turbo.json
     "shared",
     "util"
   ]
+
+Modify turbo.json to add a remoteCache.enabled field set to true
+  $ rm -rf out
+  $ cat turbo.json | jq '.remoteCache.enabled = true' > turbo.json.tmp
+  $ mv turbo.json.tmp turbo.json
+  $ ${TURBO} prune docs > /dev/null
+  $ cat out/turbo.json | jq '.remoteCache | keys'
+  [
+    "apiUrl",
+    "enabled",
+    "loginUrl",
+    "preflight",
+    "signature",
+    "teamId",
+    "teamSlug",
+    "timeout",
+    "token"
+  ]
+  $ cat out/turbo.json | jq '.remoteCache.enabled'
+  true
+
+Modify turbo.json to add a remoteCache.enabled field set to false
+  $ rm -rf out
+  $ cat turbo.json | jq '.remoteCache.enabled = false' > turbo.json.tmp
+  $ mv turbo.json.tmp turbo.json
+  $ ${TURBO} prune docs > /dev/null
+  $ cat out/turbo.json | jq '.remoteCache | keys'
+  [
+    "apiUrl",
+    "enabled",
+    "loginUrl",
+    "preflight",
+    "signature",
+    "teamId",
+    "teamSlug",
+    "timeout",
+    "token"
+  ]
+  $ cat out/turbo.json | jq '.remoteCache.enabled'
+  false

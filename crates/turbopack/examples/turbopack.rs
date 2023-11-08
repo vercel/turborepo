@@ -1,6 +1,4 @@
 #![feature(trivial_bounds)]
-#![feature(once_cell)]
-#![feature(min_specialization)]
 
 use std::{
     collections::HashMap,
@@ -11,24 +9,22 @@ use std::{
 
 use anyhow::Result;
 use tokio::{spawn, time::sleep};
-use turbo_tasks::{
-    util::FormatDuration, NothingVc, TurboTasks, TurboTasksBackendApi, UpdateInfo, Value,
-};
-use turbo_tasks_fs::{DiskFileSystemVc, FileSystem, FileSystemVc};
+use turbo_tasks::{util::FormatDuration, TurboTasks, TurboTasksBackendApi, UpdateInfo, Value, Vc};
+use turbo_tasks_fs::{DiskFileSystem, FileSystem};
 use turbo_tasks_memory::{
     stats::{ReferenceType, Stats},
     viz::graph::{visualize_stats_tree, wrap_html},
     MemoryBackend,
 };
 use turbopack::{
-    emit_with_completion, rebase::RebasedAssetVc, register,
-    resolve_options_context::ResolveOptionsContext, transition::TransitionsByNameVc,
+    emit_with_completion, rebase::RebasedAsset, register,
+    resolve_options_context::ResolveOptionsContext,
 };
 use turbopack_core::{
-    compile_time_info::CompileTimeInfoVc,
+    compile_time_info::CompileTimeInfo,
     context::AssetContext,
-    environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
-    source_asset::SourceAssetVc,
+    environment::{Environment, ExecutionEnvironment, NodeJsEnvironment},
+    file_source::FileSource,
     PROJECT_FILESYSTEM_NAME,
 };
 
@@ -42,19 +38,19 @@ async fn main() -> Result<()> {
     let task = tt.spawn_root_task(|| {
         Box::pin(async {
             let root = current_dir().unwrap().to_str().unwrap().to_string();
-            let disk_fs = DiskFileSystemVc::new(PROJECT_FILESYSTEM_NAME.to_string(), root);
+            let disk_fs = DiskFileSystem::new(PROJECT_FILESYSTEM_NAME.to_string(), root);
             disk_fs.await?.start_watching()?;
 
             // Smart Pointer cast
-            let fs: FileSystemVc = disk_fs.into();
-            let input = fs.root().join("demo");
-            let output = fs.root().join("out");
-            let entry = fs.root().join("demo/index.js");
+            let fs: Vc<Box<dyn FileSystem>> = Vc::upcast(disk_fs);
+            let input = fs.root().join("demo".to_string());
+            let output = fs.root().join("out".to_string());
+            let entry = fs.root().join("demo/index.js".to_string());
 
-            let source = SourceAssetVc::new(entry);
-            let context = turbopack::ModuleAssetContextVc::new(
-                TransitionsByNameVc::cell(HashMap::new()),
-                CompileTimeInfoVc::new(EnvironmentVc::new(Value::new(
+            let source = FileSource::new(entry);
+            let module_asset_context = turbopack::ModuleAssetContext::new(
+                Vc::cell(HashMap::new()),
+                CompileTimeInfo::new(Environment::new(Value::new(
                     ExecutionEnvironment::NodeJsLambda(NodeJsEnvironment::default().into()),
                 ))),
                 Default::default(),
@@ -66,15 +62,16 @@ async fn main() -> Result<()> {
                     ..Default::default()
                 }
                 .cell(),
+                Vc::cell("default".to_string()),
             );
-            let module = context.process(
-                source.into(),
+            let module = module_asset_context.process(
+                Vc::upcast(source),
                 Value::new(turbopack_core::reference_type::ReferenceType::Undefined),
             );
-            let rebased = RebasedAssetVc::new(module, input, output);
-            emit_with_completion(rebased.into(), output).await?;
+            let rebased = RebasedAsset::new(module, input, output);
+            emit_with_completion(Vc::upcast(rebased), output).await?;
 
-            Ok(NothingVc::new().into())
+            Ok::<Vc<()>, _>(Default::default())
         })
     });
     spawn({

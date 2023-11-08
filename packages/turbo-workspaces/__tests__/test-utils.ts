@@ -1,7 +1,10 @@
-import { PackageManager } from "../src/types";
+import type { PackageManager } from "@turbo/utils";
 
-const PACKAGE_MANAGERS: Array<PackageManager> = ["pnpm", "npm", "yarn"];
-const REPO_TYPES = ["monorepo", "non-monorepo"];
+const PACKAGE_MANAGERS: Array<PackageManager> = ["pnpm", "npm", "yarn", "bun"];
+const REPO_TYPES: Array<"monorepo" | "non-monorepo"> = [
+  "monorepo",
+  "non-monorepo",
+];
 const BOOLEAN_OPTIONS = [true, false];
 
 export function generateConvertMatrix() {

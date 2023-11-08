@@ -1,33 +1,53 @@
-import { exec } from "child_process";
-import path from "path";
+import { exec } from "node:child_process";
+import path from "node:path";
+import { existsSync } from "node:fs";
 import { getTurboRoot } from "@turbo/utils";
+import type { DryRun } from "@turbo/types";
 import { getComparison } from "./getComparison";
 import { getTask } from "./getTask";
 import { getWorkspace } from "./getWorkspace";
-import { info, warn, error } from "./logger";
+import { log, info, warn, error } from "./logger";
 import { shouldWarn } from "./errors";
-import { TurboIgnoreArgs } from "./types";
+import type { TurboIgnoreArg, TurboIgnoreOptions } from "./types";
 import { checkCommit } from "./checkCommit";
 
 function ignoreBuild() {
-  console.log("⏭ Ignoring the change");
+  log("⏭ Ignoring the change");
   return process.exit(0);
 }
 
 function continueBuild() {
-  console.log("✓ Proceeding with deployment");
+  log("✓ Proceeding with deployment");
   return process.exit(1);
 }
 
-export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
+export function turboIgnore(
+  workspaceArg: TurboIgnoreArg,
+  opts: TurboIgnoreOptions
+) {
+  const inputs = {
+    workspace: workspaceArg,
+    ...opts,
+  };
+
   info(
     `Using Turborepo to determine if this project is affected by the commit...\n`
   );
 
   // set default directory
-  args.directory = args.directory
-    ? path.resolve(args.directory)
-    : process.cwd();
+  if (opts.directory) {
+    const directory = path.resolve(opts.directory);
+    if (existsSync(directory)) {
+      inputs.directory = directory;
+    } else {
+      warn(
+        `Directory "${opts.directory}" does not exist, using current directory`
+      );
+      inputs.directory = process.cwd();
+    }
+  } else {
+    inputs.directory = process.cwd();
+  }
 
   // check for TURBO_FORCE and bail early if it's set
   if (process.env.TURBO_FORCE === "true") {
@@ -36,20 +56,20 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
   }
 
   // find the monorepo root
-  const root = getTurboRoot(args.directory);
+  const root = getTurboRoot(inputs.directory);
   if (!root) {
     error("Monorepo root not found. turbo-ignore inferencing failed");
     return continueBuild();
   }
 
   // Find the workspace from the command-line args, or the package.json at the current directory
-  const workspace = getWorkspace(args);
+  const workspace = getWorkspace(inputs);
   if (!workspace) {
     return continueBuild();
   }
 
   // Identify which task to execute from the command-line args
-  let task = getTask(args);
+  const task = getTask(inputs);
 
   // check the commit message
   const parsedCommit = checkCommit({ workspace });
@@ -66,60 +86,62 @@ export default function turboIgnore({ args }: { args: TurboIgnoreArgs }) {
   }
 
   // Get the start of the comparison (previous deployment when available, or previous commit by default)
-  const comparison = getComparison({ workspace, fallback: args.fallback });
+  const comparison = getComparison({ workspace, fallback: inputs.fallback });
   if (!comparison) {
     // This is either the first deploy of the project, or the first deploy for the branch, either way - build it.
     return continueBuild();
   }
 
   // Build, and execute the command
-  const command = `npx turbo run ${task} --filter=${workspace}...[${comparison.ref}] --dry=json`;
+  const command = `npx turbo run ${task} --filter="${workspace}...[${comparison.ref}]" --dry=json`;
   info(`Analyzing results of \`${command}\``);
-  exec(
-    command,
-    {
-      cwd: root,
-    },
-    (err, stdout) => {
-      if (err) {
-        const { level, code, message } = shouldWarn({ err: err.message });
-        if (level === "warn") {
-          warn(message);
-        } else {
-          error(`${code}: ${err}`);
-        }
-        return continueBuild();
-      }
 
-      try {
-        const parsed = JSON.parse(stdout);
-        if (parsed == null) {
-          error(`Failed to parse JSON output from \`${command}\`.`);
-          return continueBuild();
-        }
-        const { packages } = parsed;
-        if (packages && packages.length > 0) {
-          if (packages.length === 1) {
-            info(`This commit affects "${workspace}"`);
-          } else {
-            // subtract 1 because the first package is the workspace itself
-            info(
-              `This commit affects "${workspace}" and ${packages.length - 1} ${
-                packages.length - 1 === 1 ? "dependency" : "dependencies"
-              } (${packages.slice(1).join(", ")})`
-            );
-          }
+  const execOptions: { cwd: string; maxBuffer?: number } = {
+    cwd: root,
+  };
 
-          return continueBuild();
-        } else {
-          info(`This project and its dependencies are not affected`);
-          return ignoreBuild();
-        }
-      } catch (e) {
-        error(`Failed to parse JSON output from \`${command}\`.`);
-        error(e);
-        return continueBuild();
+  if (opts.maxBuffer) {
+    execOptions.maxBuffer = opts.maxBuffer;
+  }
+
+  exec(command, execOptions, (err, stdout) => {
+    if (err) {
+      const { level, code, message } = shouldWarn({ err: err.message });
+      if (level === "warn") {
+        warn(message);
+      } else {
+        error(`${code}: ${err.message}`);
       }
+      return continueBuild();
     }
-  );
+
+    try {
+      const parsed = JSON.parse(stdout) as DryRun | null;
+      if (parsed === null) {
+        error(`Failed to parse JSON output from \`${command}\`.`);
+        return continueBuild();
+      }
+      const { packages } = parsed;
+      if (packages.length > 0) {
+        if (packages.length === 1) {
+          info(`This commit affects "${workspace}"`);
+        } else {
+          // subtract 1 because the first package is the workspace itself
+          info(
+            `This commit affects "${workspace}" and ${packages.length - 1} ${
+              packages.length - 1 === 1 ? "dependency" : "dependencies"
+            } (${packages.slice(1).join(", ")})`
+          );
+        }
+
+        return continueBuild();
+      }
+      info(`This project and its dependencies are not affected`);
+      return ignoreBuild();
+    } catch (e) {
+      error(`Failed to parse JSON output from \`${command}\`.`);
+      error(e);
+      return continueBuild();
+    }
+  });
 }

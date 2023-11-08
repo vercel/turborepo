@@ -11,6 +11,30 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
   valid: [
     {
       code: `
+        const env2 = process.env['ENV_2'];
+      `,
+      options: [
+        { cwd: path.join(__dirname, "../../__fixtures__/workspace-configs") },
+      ],
+      filename: path.join(
+        __dirname,
+        "../../__fixtures__/workspace-configs/apps/web/index.js"
+      ),
+    },
+    {
+      code: `
+        const env2 = process.env["ENV_2"];
+      `,
+      options: [
+        { cwd: path.join(__dirname, "../../__fixtures__/workspace-configs") },
+      ],
+      filename: path.join(
+        __dirname,
+        "../../__fixtures__/workspace-configs/apps/web/index.js"
+      ),
+    },
+    {
+      code: `
         const { ENV_2 } = process.env;
       `,
       options: [
@@ -254,6 +278,42 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
   ],
 
   invalid: [
+    {
+      code: `
+        const env2 = process.env['ENV_3'];
+      `,
+      options: [
+        { cwd: path.join(__dirname, "../../__fixtures__/workspace-configs") },
+      ],
+      filename: path.join(
+        __dirname,
+        "../../__fixtures__/workspace-configs/apps/web/index.js"
+      ),
+      errors: [
+        {
+          message:
+            "ENV_3 is not listed as a dependency in the root turbo.json or workspace (apps/web) turbo.json",
+        },
+      ],
+    },
+    {
+      code: `
+        const env2 = process.env["ENV_3"];
+      `,
+      options: [
+        { cwd: path.join(__dirname, "../../__fixtures__/workspace-configs") },
+      ],
+      filename: path.join(
+        __dirname,
+        "../../__fixtures__/workspace-configs/apps/web/index.js"
+      ),
+      errors: [
+        {
+          message:
+            "ENV_3 is not listed as a dependency in the root turbo.json or workspace (apps/web) turbo.json",
+        },
+      ],
+    },
     {
       code: `
         const { ENV_2 } = process.env;

@@ -1,18 +1,16 @@
 import React from "react";
-import Head from "next/head";
 import cn from "classnames";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Clients } from "../../clients/Clients";
-import { Marquee } from "../../clients/Marquee";
+import { FadeIn } from "../home-shared/FadeIn";
+import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
+import PackLogo from "../../logos/PackLogo";
+import RepoLogo from "../../logos/RepoLogo";
 import { TurboheroBackground } from "./TurboHeroBackground";
 import { Turborepo } from "./Turborepo";
 import { Turbopack } from "./Turbopack";
-import { FadeIn } from "../home-shared/FadeIn";
-import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
 import styles from "./index.module.css";
-import PackLogo from "../../logos/PackLogo";
-import RepoLogo from "../../logos/RepoLogo";
 
 function Background() {
   return (
@@ -68,20 +66,24 @@ function Card({
   const [hovering, setHovering] = React.useState(false);
   return (
     <Link
-      href={href}
       className={cn(
         styles["counter-border"],
         "w-[calc(100%_-_0px)] h-[304]px sm:!w-[488px] sm:h-[352px]"
       )}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
+      href={href}
+      onMouseEnter={() => {
+        setHovering(true);
+      }}
+      onMouseLeave={() => {
+        setHovering(false);
+      }}
     >
       <motion.i
-        initial="hidden"
         animate={hovering ? "active" : "hidden"}
-        variants={variants}
         aria-hidden="true"
-      ></motion.i>
+        initial="hidden"
+        variants={variants}
+      />
       <div
         className={cn(
           "relative w-full h-full max-w-full !pb-12 pt-8 md:!pb-4 md:!pt-4 p-3 rounded-xl overflow-hidden flex flex-col items-center justify-center border border-[rgba(255,255,255,0.05)]",
@@ -93,7 +95,7 @@ function Card({
         </div>
 
         <div className="flex flex-col items-center flex-1">
-          {title == "pack" ? (
+          {title === "pack" ? (
             <PackLogo
               alt={alt}
               className="w-[160px] md:w-[220px] mb-3 fill-black dark:fill-white"
@@ -116,11 +118,11 @@ function SiteCards() {
     <div className="flex w-full container items-center justify-center gap-6 px-6 sm:mx-0 mt-8 md:!mt-14 lg:!mt-15 md:mb-0 flex-col lg:!flex-row z-10 lg:!translate-y-0">
       <FadeIn delay={0.1}>
         <Card
-          title="repo"
           alt="Turborepo"
-          icon={Turborepo}
-          href="/repo"
           className="turborepoCardBg"
+          href="/repo"
+          icon={Turborepo}
+          title="repo"
         >
           <p className="text-lg !w-[280px] md:!w-[340px] font-space-grotesk text-center opacity-50 dark:opacity-70">
             High-performance build system for JavaScript and TypeScript
@@ -130,11 +132,11 @@ function SiteCards() {
       </FadeIn>
       <FadeIn delay={0.2}>
         <Card
-          title="pack"
           alt="Turbopack"
-          icon={Turbopack}
-          href="/pack"
           className="turbopackCardBg"
+          href="/pack"
+          icon={Turbopack}
+          title="pack"
         >
           <div className="absolute top-3 left-3">
             <CardBadge>beta</CardBadge>
@@ -179,7 +181,7 @@ function LandingPage() {
       <main className="relative flex flex-col items-center justify-center w-full h-full  overflow-hidden [--geist-foreground:#fff] dark:[--geist-foreground:#000] [--gradient-stop-1:0px] [--gradient-stop-2:120px] sm:[--gradient-stop-1:0px] sm:[--gradient-stop-2:120px]">
         <Background />
         <FadeIn className="z-10 flex flex-col items-center justify-center w-full h-full">
-          <h1 className="mt-12 lg:!mt-20 mx-6 w-[300px] md:!w-full font-extrabold text-5xl lg:text-6xl  leading-tight xl:leading-snug text-center mb-4 bg-clip-text text-transparent bg-gradient-to-b from-black/80 to-black dark:from-white dark:to-[#AAAAAA]">
+          <h1 className="mt-12 lg:!mt-20 mx-6 w-[300px] md:!w-full font-extrabold text-5xl lg:text-6xl  leading-tight xl:leading-snug text-center pb-4 bg-clip-text text-transparent bg-gradient-to-b from-black/80 to-black dark:from-white dark:to-[#AAAAAA]">
             Make Ship Happen
           </h1>
           <p className="mx-6 text-xl max-h-[112px] md:max-h-[96px] w-[315px] md:w-[660px] md:text-2xl font-space-grotesk text-center text-[#666666] dark:text-[#888888]">
@@ -188,7 +190,7 @@ function LandingPage() {
           </p>
         </FadeIn>
         <SiteCards />
-        <FadeIn delay={0.3} className="z-10 py-16">
+        <FadeIn className="z-10 py-16" delay={0.3}>
           <Teams />
         </FadeIn>
       </main>

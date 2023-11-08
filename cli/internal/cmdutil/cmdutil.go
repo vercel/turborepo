@@ -155,6 +155,7 @@ func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase
 		return nil, err
 	}
 	apiClientConfig := executionState.APIClientConfig
+	spacesAPIClientConfig := executionState.SpacesAPIClientConfig
 
 	apiClient := client.NewClient(
 		apiClientConfig,
@@ -162,24 +163,34 @@ func (h *Helper) GetCmdBase(executionState *turbostate.ExecutionState) (*CmdBase
 		h.TurboVersion,
 	)
 
+	spacesClient := client.NewClient(
+		spacesAPIClientConfig,
+		logger,
+		h.TurboVersion,
+	)
+
 	return &CmdBase{
-		UI:           terminal,
-		UIFactory:    uiFactory,
-		Logger:       logger,
-		RepoRoot:     repoRoot,
-		APIClient:    apiClient,
-		TurboVersion: h.TurboVersion,
+		UI:              terminal,
+		UIFactory:       uiFactory,
+		Logger:          logger,
+		RepoRoot:        repoRoot,
+		Config:          executionState.Config,
+		APIClient:       apiClient,
+		SpacesAPIClient: spacesClient,
+		TurboVersion:    h.TurboVersion,
 	}, nil
 }
 
 // CmdBase encompasses configured components common to all turbo commands.
 type CmdBase struct {
-	UI           cli.Ui
-	UIFactory    ui.Factory
-	Logger       hclog.Logger
-	RepoRoot     turbopath.AbsoluteSystemPath
-	APIClient    *client.APIClient
-	TurboVersion string
+	UI              cli.Ui
+	UIFactory       ui.Factory
+	Logger          hclog.Logger
+	RepoRoot        turbopath.AbsoluteSystemPath
+	Config          turbostate.Config
+	APIClient       *client.APIClient
+	SpacesAPIClient *client.APIClient
+	TurboVersion    string
 }
 
 // LogError prints an error to the UI

@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, sync::Mutex};
+use std::{marker::PhantomData, path::Path, sync::Mutex};
 
 use chrono::Local;
 use owo_colors::{
@@ -6,51 +6,72 @@ use owo_colors::{
     Color, OwoColorize,
 };
 use tracing::{field::Visit, metadata::LevelFilter, trace, Event, Level, Subscriber};
-use tracing_appender::{
-    non_blocking::{NonBlocking, WorkerGuard},
-    rolling::RollingFileAppender,
-};
+use tracing_appender::{non_blocking::NonBlocking, rolling::RollingFileAppender};
+use tracing_chrome::ChromeLayer;
+pub use tracing_subscriber::reload::Error;
 use tracing_subscriber::{
-    filter::Filtered,
+    filter::{Filtered, Targets},
     fmt::{
         self,
         format::{DefaultFields, Writer},
         FmtContext, FormatEvent, FormatFields,
     },
+    layer,
     prelude::*,
     registry::LookupSpan,
-    reload::{self, Error, Handle},
+    reload::{self, Handle},
     EnvFilter, Layer, Registry,
 };
+use turborepo_ui::UI;
 
-use crate::ui::UI;
+// a lot of types to make sure we record the right relationships
 
-type StdOutLog = Filtered<
-    tracing_subscriber::fmt::Layer<Registry, DefaultFields, TurboFormatter>,
-    EnvFilter,
-    Registry,
->;
+/// A basic logger that logs to stdout using the TurboFormatter.
+/// The first generic parameter refers to the previous layer, which
+/// is in this case the default layer (`Registry`).
+type StdOutLog = fmt::Layer<Registry, DefaultFields, TurboFormatter>;
+/// We filter this using an EnvFilter.
+type StdOutLogFiltered = Filtered<StdOutLog, EnvFilter, Registry>;
+/// When the `StdOutLogFiltered` is applied to the `Registry`, we get a
+/// `StdOutLogLayered`, which forms the base for the next layer.
+type StdOutLogLayered = layer::Layered<StdOutLogFiltered, Registry>;
 
-type DaemonLog = tracing_subscriber::fmt::Layer<
-    Layered,
-    DefaultFields,
-    tracing_subscriber::fmt::format::Format,
-    NonBlocking,
->;
+/// A logger that spits lines into a file, using the standard formatter.
+/// It is applied on top of the `StdOutLogLayered` layer.
+type DaemonLog = fmt::Layer<StdOutLogLayered, DefaultFields, fmt::format::Format, NonBlocking>;
+/// This layer can be reloaded. `None` means the layer is disabled.
+type DaemonReload = reload::Layer<Option<DaemonLog>, StdOutLogLayered>;
+/// We filter this using a custom filter that only logs events
+/// - with evel `TRACE` or higher for the `turborepo` target
+/// - with level `INFO` or higher for all other targets
+type DaemonLogFiltered = Filtered<DaemonReload, Targets, StdOutLogLayered>;
+/// When the `DaemonLogFiltered` is applied to the `StdOutLogLayered`, we get a
+/// `DaemonLogLayered`, which forms the base for the next layer.
+type DaemonLogLayered = layer::Layered<DaemonLogFiltered, StdOutLogLayered>;
 
-type Layered = tracing_subscriber::layer::Layered<StdOutLog, Registry>;
+/// A logger that converts events to chrome tracing format and writes them
+/// to a file. It is applied on top of the `DaemonLogLayered` layer.
+type ChromeLog = ChromeLayer<DaemonLogLayered>;
+/// This layer can be reloaded. `None` means the layer is disabled.
+type ChromeReload = reload::Layer<Option<ChromeLog>, DaemonLogLayered>;
+/// We filter this using an EnvFilter.
+type ChromeLogFiltered = Filtered<ChromeReload, EnvFilter, DaemonLogLayered>;
+/// When the `ChromeLogFiltered` is applied to the `DaemonLogLayered`, we get a
+/// `ChromeLogLayered`, which forms the base for the next layer.
+type ChromeLogLayered = layer::Layered<ChromeLogFiltered, DaemonLogLayered>;
 
 pub struct TurboSubscriber {
-    #[allow(dead_code)]
-    update: Handle<Option<DaemonLog>, Layered>,
+    daemon_update: Handle<Option<DaemonLog>, StdOutLogLayered>,
 
     /// The non-blocking file logger only continues to log while this guard is
     /// held. We keep it here so that it doesn't get dropped.
-    #[allow(dead_code)]
-    guard: Mutex<Option<WorkerGuard>>,
+    daemon_guard: Mutex<Option<tracing_appender::non_blocking::WorkerGuard>>,
 
-    #[cfg(feature = "tracing-chrome")]
-    chrome_guard: tracing_chrome::FlushGuard,
+    chrome_update: Handle<Option<ChromeLog>, DaemonLogLayered>,
+    chrome_guard: Mutex<Option<tracing_chrome::FlushGuard>>,
+
+    #[cfg(feature = "pprof")]
+    pprof_guard: pprof::ProfilerGuard<'static>,
 }
 
 impl TurboSubscriber {
@@ -66,9 +87,11 @@ impl TurboSubscriber {
     ///   it overrides the default global log level. This means it overrides the
     ///   `TURBO_LOG_VERBOSITY` global setting, but not per-module settings.
     ///
-    /// Returns a `reload::Handle` that can be used to reload the subscriber.
-    /// This allows us to register additional layers after setup, for example
-    /// when configuring logrotation in the daemon.
+    /// `TurboSubscriber` has optional loggers that can be enabled later:
+    /// - `set_daemon_logger` enables logging to a file, using the standard
+    ///  formatter.
+    /// - `enable_chrome_tracing` enables logging to a file, using the chrome
+    ///  tracing formatter.
     pub fn new_with_verbosity(verbosity: usize, ui: &UI) -> Self {
         let level_override = match verbosity {
             0 => None,
@@ -77,60 +100,124 @@ impl TurboSubscriber {
             _ => Some(LevelFilter::TRACE),
         };
 
-        let filter = EnvFilter::builder()
-            .with_default_directive(LevelFilter::WARN.into())
-            .with_env_var("TURBO_LOG_VERBOSITY")
-            .from_env_lossy();
+        // we can't clone so make a new one as needed
+        let env_filter = || {
+            let filter = EnvFilter::builder()
+                .with_default_directive(LevelFilter::WARN.into())
+                .with_env_var("TURBO_LOG_VERBOSITY")
+                .from_env_lossy();
 
-        let filter = if let Some(max_level) = level_override {
-            filter.add_directive(max_level.into())
-        } else {
-            filter
+            if let Some(max_level) = level_override {
+                filter.add_directive(max_level.into())
+            } else {
+                filter
+            }
         };
+
+        let daemon_filter = tracing_subscriber::filter::targets::Targets::new()
+            .with_default(Level::INFO)
+            .with_target("turborepo", Level::TRACE);
 
         let stdout = fmt::layer()
             .event_format(TurboFormatter::new_with_ansi(!ui.should_strip_ansi))
-            .with_filter(filter);
+            .with_filter(env_filter());
 
         // we set this layer to None to start with, effectively disabling it
-        let (logrotate, update) = reload::Layer::new(Option::<DaemonLog>::None);
+        let (logrotate, daemon_update) = reload::Layer::new(Option::<DaemonLog>::None);
+        let logrotate: DaemonLogFiltered = logrotate.with_filter(daemon_filter);
 
-        let registry = Registry::default().with(stdout).with(logrotate);
+        let (chrome, chrome_update) = reload::Layer::new(Option::<ChromeLog>::None);
+        let chrome: ChromeLogFiltered = chrome.with_filter(env_filter());
 
-        #[cfg(feature = "tracing-chrome")]
-        let (registry, chrome_guard) = {
-            let (chrome_layer, guard) = tracing_chrome::ChromeLayerBuilder::new()
-                .file("./tracing.json")
-                .build();
-            (registry.with(chrome_layer), guard)
-        };
+        let registry = Registry::default()
+            .with(stdout)
+            .with(logrotate)
+            .with(chrome);
+
+        #[cfg(feature = "pprof")]
+        let pprof_guard = pprof::ProfilerGuardBuilder::default()
+            .frequency(1000)
+            .blocklist(&["libc", "libgcc", "pthread", "vdso"])
+            .build()
+            .unwrap();
 
         registry.init();
 
         Self {
-            update,
-            guard: Mutex::new(None),
-            #[cfg(feature = "tracing-chrome")]
-            chrome_guard,
+            daemon_update,
+            daemon_guard: Mutex::new(None),
+            chrome_update,
+            chrome_guard: Mutex::new(None),
+            #[cfg(feature = "pprof")]
+            pprof_guard,
         }
     }
 
     /// Enables daemon logging with the specified rotation settings.
     ///
     /// Daemon logging uses the standard tracing formatter.
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, appender))]
     pub fn set_daemon_logger(&self, appender: RollingFileAppender) -> Result<(), Error> {
         let (file_writer, guard) = tracing_appender::non_blocking(appender);
         trace!("created non-blocking file writer");
 
-        let layer = tracing_subscriber::fmt::layer()
+        let layer: DaemonLog = tracing_subscriber::fmt::layer()
             .with_writer(file_writer)
             .with_ansi(false);
 
-        self.update.reload(Some(layer))?;
-        self.guard.lock().expect("not poisoned").replace(guard);
+        self.daemon_update.reload(Some(layer))?;
+        self.daemon_guard
+            .lock()
+            .expect("not poisoned")
+            .replace(guard);
 
         Ok(())
+    }
+
+    /// Enables chrome tracing.
+    #[tracing::instrument(skip(self, to_file))]
+    pub fn enable_chrome_tracing<P: AsRef<Path>>(&self, to_file: P) -> Result<(), Error> {
+        let (layer, guard) = tracing_chrome::ChromeLayerBuilder::new()
+            .file(to_file)
+            .include_args(true)
+            .include_locations(true)
+            .build();
+
+        self.chrome_update.reload(Some(layer))?;
+        self.chrome_guard
+            .lock()
+            .expect("not poisoned")
+            .replace(guard);
+
+        Ok(())
+    }
+}
+
+impl Drop for TurboSubscriber {
+    fn drop(&mut self) {
+        // drop the guard so that the non-blocking file writer stops
+        #[cfg(feature = "pprof")]
+        if let Ok(report) = self.pprof_guard.report().build() {
+            use std::io::Write; // only import trait if we need it
+
+            use prost::Message;
+
+            let mut file = std::fs::File::create("pprof.pb").unwrap();
+            let mut content = Vec::new();
+
+            let Ok(profile) = report.pprof() else {
+                tracing::error!("failed to generate pprof report");
+                return;
+            };
+            if let Err(e) = profile.encode(&mut content) {
+                tracing::error!("failed to encode pprof profile: {}", e);
+            };
+            if let Err(e) = file.write_all(&content) {
+                tracing::error!("failed to write pprof profile: {}", e)
+            };
+        } else {
+            tracing::error!("failed to generate pprof report")
+        }
     }
 }
 
@@ -171,11 +258,13 @@ where
 
         match *level {
             Level::ERROR => {
-                write_string::<Red, Black>(writer.by_ref(), self.is_ansi, level.as_str())
+                // The padding spaces are necessary to match the formatting of Go
+                write_string::<Red, Black>(writer.by_ref(), self.is_ansi, " ERROR ")
                     .and_then(|_| write_message::<Red, Default>(writer, self.is_ansi, event))
             }
             Level::WARN => {
-                write_string::<Yellow, Black>(writer.by_ref(), self.is_ansi, level.as_str())
+                // The padding spaces are necessary to match the formatting of Go
+                write_string::<Yellow, Black>(writer.by_ref(), self.is_ansi, " WARNING ")
                     .and_then(|_| write_message::<Yellow, Default>(writer, self.is_ansi, event))
             }
             Level::INFO => write_message::<Default, Default>(writer, self.is_ansi, event),

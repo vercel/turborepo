@@ -1,7 +1,9 @@
+#![allow(clippy::redundant_closure_call)]
+
 use std::{
     borrow::Cow,
     cmp::Ordering,
-    fmt::Display,
+    fmt::{Display, Write},
     future::Future,
     hash::{Hash, Hasher},
     mem::take,
@@ -22,12 +24,13 @@ use swc_core::{
         atoms::{Atom, JsWord},
     },
 };
+use turbo_tasks::Vc;
 use turbopack_core::compile_time_info::CompileTimeDefineValue;
 use url::Url;
 
 use self::imports::ImportAnnotations;
 pub(crate) use self::imports::ImportMap;
-use crate::{references::require_context::RequireContextMapVc, utils::StringifyJs};
+use crate::{references::require_context::RequireContextMap, utils::StringifyJs};
 
 pub mod builtin;
 pub mod graph;
@@ -127,12 +130,6 @@ impl Hash for ConstantString {
 impl Display for ConstantString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.as_str().fmt(f)
-    }
-}
-
-impl From<JsWord> for ConstantString {
-    fn from(v: JsWord) -> Self {
-        ConstantString::Word(v)
     }
 }
 
@@ -452,12 +449,6 @@ impl From<&'_ str> for JsValue {
     }
 }
 
-impl From<JsWord> for JsValue {
-    fn from(v: JsWord) -> Self {
-        ConstantValue::Str(ConstantString::Word(v)).into()
-    }
-}
-
 impl From<Atom> for JsValue {
     fn from(v: Atom) -> Self {
         ConstantValue::Str(ConstantString::Atom(v)).into()
@@ -499,6 +490,7 @@ impl From<&CompileTimeDefineValue> for JsValue {
         match v {
             CompileTimeDefineValue::String(s) => JsValue::Constant(s.as_str().into()),
             CompileTimeDefineValue::Bool(b) => JsValue::Constant((*b).into()),
+            CompileTimeDefineValue::JSON(_) => JsValue::unknown_empty("compile time injected JSON"),
         }
     }
 }
@@ -1040,10 +1032,10 @@ impl JsValue {
         let explainer = pretty_join(&args, 0, ", ", ",", "");
         (
             explainer,
-            hints
-                .into_iter()
-                .map(|h| format!("\n{h}"))
-                .collect::<String>(),
+            hints.into_iter().fold(String::new(), |mut out, h| {
+                let _ = write!(out, "\n{h}");
+                out
+            }),
         )
     }
 
@@ -1052,10 +1044,10 @@ impl JsValue {
         let explainer = self.explain_internal(&mut hints, 0, depth, unknown_depth);
         (
             explainer,
-            hints
-                .into_iter()
-                .map(|h| format!("\n{h}"))
-                .collect::<String>(),
+            hints.into_iter().fold(String::new(), |mut out, h| {
+                let _ = write!(out, "\n{h}");
+                out
+            }),
         )
     }
 
@@ -1365,6 +1357,10 @@ impl JsValue {
                     WellKnownObjectKind::NodeProcess => (
                         "process",
                         "The Node.js process module: https://nodejs.org/api/process.html",
+                    ),
+                    WellKnownObjectKind::NodeProcessArgv => (
+                        "process.argv",
+                        "The Node.js process.argv property: https://nodejs.org/api/process.html#processargv",
                     ),
                     WellKnownObjectKind::NodeProcessEnv => (
                         "process.env",
@@ -2956,6 +2952,7 @@ pub enum WellKnownObjectKind {
     OsModule,
     OsModuleDefault,
     NodeProcess,
+    NodeProcessArgv,
     NodeProcessEnv,
     NodePreGyp,
     NodeExpressApp,
@@ -2974,6 +2971,7 @@ impl WellKnownObjectKind {
             Self::ChildProcess => Some(&["child_process"]),
             Self::OsModule => Some(&["os"]),
             Self::NodeProcess => Some(&["process"]),
+            Self::NodeProcessArgv => Some(&["process", "argv"]),
             Self::NodeProcessEnv => Some(&["process", "env"]),
             Self::NodeBuffer => Some(&["Buffer"]),
             Self::RequireCache => Some(&["require", "cache"]),
@@ -3076,22 +3074,16 @@ pub fn parse_require_context(args: &Vec<JsValue>) -> Result<RequireContextOption
 pub struct RequireContextValue(IndexMap<String, String>);
 
 #[turbo_tasks::value_impl]
-impl RequireContextValueVc {
+impl RequireContextValue {
     #[turbo_tasks::function]
-    pub async fn from_context_map(map: RequireContextMapVc) -> Result<Self> {
+    pub async fn from_context_map(map: Vc<RequireContextMap>) -> Result<Vc<Self>> {
         let mut context_map = IndexMap::new();
 
         for (key, entry) in map.await?.iter() {
             context_map.insert(key.clone(), entry.origin_relative.clone());
         }
 
-        Ok(Self::cell(context_map))
-    }
-}
-
-impl From<RequireContextMapVc> for RequireContextValueVc {
-    fn from(map: RequireContextMapVc) -> Self {
-        Self::from_context_map(map)
+        Ok(Vc::cell(context_map))
     }
 }
 
@@ -3118,9 +3110,9 @@ pub enum WellKnownFunctionKind {
     Require,
     RequireResolve,
     RequireContext,
-    RequireContextRequire(RequireContextValueVc),
-    RequireContextRequireKeys(RequireContextValueVc),
-    RequireContextRequireResolve(RequireContextValueVc),
+    RequireContextRequire(Vc<RequireContextValue>),
+    RequireContextRequireKeys(Vc<RequireContextValue>),
+    RequireContextRequireResolve(Vc<RequireContextValue>),
     Define,
     FsReadMethod(JsWord),
     PathToFileUrl,
@@ -3162,13 +3154,16 @@ fn is_unresolved(i: &Ident, unresolved_mark: Mark) -> bool {
 pub mod test_utils {
     use anyhow::Result;
     use indexmap::IndexMap;
-    use turbopack_core::{compile_time_info::CompileTimeInfoVc, error::PrettyPrintError};
+    use turbo_tasks::Vc;
+    use turbopack_core::{compile_time_info::CompileTimeInfo, error::PrettyPrintError};
 
     use super::{
         builtin::early_replace_builtin, well_known::replace_well_known, JsValue, ModuleValue,
         WellKnownFunctionKind, WellKnownObjectKind,
     };
-    use crate::analyzer::{builtin::replace_builtin, parse_require_context, RequireContextValueVc};
+    use crate::analyzer::{
+        builtin::replace_builtin, imports::ImportAnnotations, parse_require_context,
+    };
 
     pub async fn early_visitor(mut v: JsValue) -> Result<(JsValue, bool)> {
         let m = early_replace_builtin(&mut v);
@@ -3177,9 +3172,20 @@ pub mod test_utils {
 
     pub async fn visitor(
         v: JsValue,
-        compile_time_info: CompileTimeInfoVc,
+        compile_time_info: Vc<CompileTimeInfo>,
     ) -> Result<(JsValue, bool)> {
         let mut new_value = match v {
+            JsValue::Call(
+                _,
+                box JsValue::WellKnownFunction(WellKnownFunctionKind::Import),
+                ref args,
+            ) => match &args[0] {
+                JsValue::Constant(v) => JsValue::Module(ModuleValue {
+                    module: v.to_string().into(),
+                    annotations: ImportAnnotations::default(),
+                }),
+                _ => v.into_unknown("import() non constant"),
+            },
             JsValue::Call(
                 _,
                 box JsValue::WellKnownFunction(WellKnownFunctionKind::RequireResolve),
@@ -3201,12 +3207,13 @@ pub mod test_utils {
                     map.insert("./c".into(), format!("[context: {}]/c", options.dir));
 
                     JsValue::WellKnownFunction(WellKnownFunctionKind::RequireContextRequire(
-                        RequireContextValueVc::cell(map),
+                        Vc::cell(map),
                     ))
                 }
                 Err(err) => v.into_unknown(PrettyPrintError(&err).to_string()),
             },
             JsValue::FreeVar(ref var) => match &**var {
+                "import" => JsValue::WellKnownFunction(WellKnownFunctionKind::Import),
                 "require" => JsValue::WellKnownFunction(WellKnownFunctionKind::Require),
                 "define" => JsValue::WellKnownFunction(WellKnownFunctionKind::Define),
                 "__dirname" => "__dirname".into(),
@@ -3251,7 +3258,7 @@ mod tests {
     use turbo_tasks::{util::FormatDuration, Value};
     use turbopack_core::{
         compile_time_info::CompileTimeInfo,
-        environment::{EnvironmentVc, ExecutionEnvironment, NodeJsEnvironment},
+        environment::{Environment, ExecutionEnvironment, NodeJsEnvironment},
         target::{Arch, CompileTarget, Endianness, Libc, Platform},
     };
 
@@ -3514,7 +3521,7 @@ mod tests {
 
     async fn resolve(var_graph: &VarGraph, val: JsValue) -> JsValue {
         turbo_tasks_testing::VcStorage::with(async {
-            let compile_time_info = CompileTimeInfo::builder(EnvironmentVc::new(Value::new(
+            let compile_time_info = CompileTimeInfo::builder(Environment::new(Value::new(
                 ExecutionEnvironment::NodeJsLambda(
                     NodeJsEnvironment {
                         compile_target: CompileTarget {

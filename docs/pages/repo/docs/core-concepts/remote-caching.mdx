@@ -11,7 +11,6 @@ import { Tabs, Tab } from "../../../../components/Tabs";
 Turborepo's [task cache](/repo/docs/core-concepts/caching) can save a lot of time by never doing the same work twice.
 
 But there's an issue - the **cache is local to your machine**. When you're working with a CI, this can result in a lot of duplicated work:
-
 ![](/images/docs/local-caching.png)
 
 Since Turborepo only caches to the local filesystem by default, the same task (`turbo run build`) must be **re-executed on each machine** (by you, by your teammates, by your CI, by your PaaS, etc.) even when all of the task inputs are identical — which **wastes time and resources**.
@@ -79,7 +78,7 @@ Then run the same build again. If things are working properly, `turbo` should no
 
 If you are building and hosting your apps on Vercel, Remote Caching will be automatically set up on your behalf once you use `turbo`. You need to update your [build settings](https://vercel.com/docs/concepts/deployments/configure-a-build) to build with `turbo`.
 
-Please refer to the [Vercel documentation](https://vercel.com/docs/concepts/git/monorepos#turborepo?utm_source=turbo.build&utm_medium=referral&utm_campaign=docs-link) for instructions.
+Please refer to the [Vercel documentation](https://vercel.com/docs/concepts/monorepos/remote-caching?utm_source=turbo.build&utm_medium=referral&utm_campaign=docs-link) for more information.
 
 ### Artifact Integrity and Authenticity Verification
 

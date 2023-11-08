@@ -1,5 +1,5 @@
 [package]
-name = "vercel-api-mock"
+name = "turborepo-vercel-api-mock"
 version = "0.1.0"
 edition = "2021"
 license = "MPL-2.0"
@@ -9,7 +9,10 @@ license = "MPL-2.0"
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true }
+axum-macros = "0.3.7"
 axum-server = "0.4.7"
+futures-util = "0.3.28"
 port_scanner = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-turborepo-api-client = { workspace = true }
+turborepo-vercel-api = { workspace = true }

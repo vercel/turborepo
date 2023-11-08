@@ -1,46 +1,44 @@
 use anyhow::Result;
-use turbo_tasks::{primitives::StringVc, ValueToString, ValueToStringVc};
+use turbo_tasks::{ValueToString, Vc};
 use turbopack_core::{
-    asset::{Asset, AssetVc},
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
-    reference::{AssetReference, AssetReferenceVc},
-    resolve::{ResolveResult, ResolveResultVc},
+    chunk::ChunkableModuleReference, module::Module, reference::ModuleReference,
+    resolve::ModuleResolveResult,
 };
 
 /// A reference to an internal CSS asset.
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct InternalCssAssetReference {
-    asset: AssetVc,
+    module: Vc<Box<dyn Module>>,
 }
 
 #[turbo_tasks::value_impl]
-impl InternalCssAssetReferenceVc {
-    /// Creates a new [`InternalCssAssetReferenceVc`].
+impl InternalCssAssetReference {
+    /// Creates a new [`Vc<InternalCssAssetReference>`].
     #[turbo_tasks::function]
-    pub fn new(asset: AssetVc) -> Self {
-        Self::cell(InternalCssAssetReference { asset })
+    pub fn new(module: Vc<Box<dyn Module>>) -> Vc<Self> {
+        Self::cell(InternalCssAssetReference { module })
     }
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for InternalCssAssetReference {
+impl ModuleReference for InternalCssAssetReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
-        ResolveResult::asset(self.asset).cell()
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
+        ModuleResolveResult::module(self.module).cell()
     }
 }
 
 #[turbo_tasks::value_impl]
 impl ValueToString for InternalCssAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "internal css {}",
-            self.asset.ident().to_string().await?
+            self.module.ident().to_string().await?
         )))
     }
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAssetReference for InternalCssAssetReference {}
+impl ChunkableModuleReference for InternalCssAssetReference {}

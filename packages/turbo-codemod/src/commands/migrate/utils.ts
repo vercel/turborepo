@@ -1,4 +1,5 @@
-import { execSync, ExecSyncOptions } from "child_process";
+import type { ExecSyncOptions } from "node:child_process";
+import { execSync } from "node:child_process";
 
 function exec(
   command: string,
@@ -6,7 +7,7 @@ function exec(
   fallback?: string
 ): string | undefined {
   try {
-    const rawResult = execSync(command, opts);
+    const rawResult = execSync(command, { stdio: "pipe", ...opts });
     return rawResult.toString("utf8").trim();
   } catch (err) {
     return fallback || undefined;

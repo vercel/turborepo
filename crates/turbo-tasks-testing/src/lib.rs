@@ -13,12 +13,11 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use auto_hash_map::AutoSet;
+use auto_hash_map::AutoMap;
 use futures::FutureExt;
 use turbo_tasks::{
     backend::CellContent,
     event::{Event, EventListener},
-    primitives::RawVcSetVc,
     registry,
     test_helpers::with_turbo_tasks_for_testing,
     util::{SharedError, StaticOrArc},
@@ -41,7 +40,7 @@ impl TurboTasksCallApi for VcStorage {
     fn dynamic_call(
         &self,
         func: turbo_tasks::FunctionId,
-        inputs: Vec<turbo_tasks::TaskInput>,
+        inputs: Vec<turbo_tasks::ConcreteTaskInput>,
     ) -> RawVc {
         let this = self.this.upgrade().unwrap();
         let func = registry::get_function(func).bind(&inputs);
@@ -55,37 +54,34 @@ impl TurboTasksCallApi for VcStorage {
             })));
             i
         };
-        handle.spawn(with_turbo_tasks_for_testing(
-            this.clone(),
-            TaskId::from(i),
-            async move {
-                let result = AssertUnwindSafe(future).catch_unwind().await;
+        let id = TaskId::from(i + 1);
+        handle.spawn(with_turbo_tasks_for_testing(this.clone(), id, async move {
+            let result = AssertUnwindSafe(future).catch_unwind().await;
 
-                // Convert the unwind panic to an anyhow error that can be cloned.
-                let result = result
-                    .map_err(|any| match any.downcast::<String>() {
-                        Ok(owned) => anyhow!(owned),
-                        Err(any) => match any.downcast::<&'static str>() {
-                            Ok(str) => anyhow!(str),
-                            Err(_) => anyhow!("unknown panic"),
-                        },
-                    })
-                    .and_then(|r| r)
-                    .map_err(SharedError::new);
+            // Convert the unwind panic to an anyhow error that can be cloned.
+            let result = result
+                .map_err(|any| match any.downcast::<String>() {
+                    Ok(owned) => anyhow!(owned),
+                    Err(any) => match any.downcast::<&'static str>() {
+                        Ok(str) => anyhow!(str),
+                        Err(_) => anyhow!("unknown panic"),
+                    },
+                })
+                .and_then(|r| r)
+                .map_err(SharedError::new);
 
-                let mut tasks = this.tasks.lock().unwrap();
-                if let Task::Spawned(event) = replace(&mut tasks[i], Task::Finished(result)) {
-                    event.notify(usize::MAX);
-                }
-            },
-        ));
-        RawVc::TaskOutput(i.into())
+            let mut tasks = this.tasks.lock().unwrap();
+            if let Task::Spawned(event) = replace(&mut tasks[i], Task::Finished(result)) {
+                event.notify(usize::MAX);
+            }
+        }));
+        RawVc::TaskOutput(id)
     }
 
     fn native_call(
         &self,
         _func: turbo_tasks::FunctionId,
-        _inputs: Vec<turbo_tasks::TaskInput>,
+        _inputs: Vec<turbo_tasks::ConcreteTaskInput>,
     ) -> RawVc {
         unreachable!()
     }
@@ -94,7 +90,7 @@ impl TurboTasksCallApi for VcStorage {
         &self,
         _trait_type: turbo_tasks::TraitTypeId,
         _trait_fn_name: Cow<'static, str>,
-        _inputs: Vec<turbo_tasks::TaskInput>,
+        _inputs: Vec<turbo_tasks::ConcreteTaskInput>,
     ) -> RawVc {
         unreachable!()
     }
@@ -123,6 +119,10 @@ impl TurboTasksCallApi for VcStorage {
 }
 
 impl TurboTasksApi for VcStorage {
+    fn pin(&self) -> Arc<dyn TurboTasksApi> {
+        self.this.upgrade().unwrap()
+    }
+
     fn invalidate(&self, _task: TaskId) {
         unreachable!()
     }
@@ -141,11 +141,12 @@ impl TurboTasksApi for VcStorage {
 
     fn try_read_task_output(
         &self,
-        task: TaskId,
+        id: TaskId,
         _strongly_consistent: bool,
     ) -> Result<Result<RawVc, EventListener>> {
         let tasks = self.tasks.lock().unwrap();
-        let task = tasks.get(*task).unwrap();
+        let i = *id - 1;
+        let task = tasks.get(i).unwrap();
         match task {
             Task::Spawned(event) => Ok(Err(event.listen())),
             Task::Finished(result) => match result {
@@ -201,19 +202,24 @@ impl TurboTasksApi for VcStorage {
         unimplemented!()
     }
 
-    fn unemit_collectible(&self, _trait_type: turbo_tasks::TraitTypeId, _collectible: RawVc) {
+    fn unemit_collectible(
+        &self,
+        _trait_type: turbo_tasks::TraitTypeId,
+        _collectible: RawVc,
+        _count: u32,
+    ) {
         unimplemented!()
     }
 
     fn unemit_collectibles(
         &self,
         _trait_type: turbo_tasks::TraitTypeId,
-        _collectibles: &AutoSet<RawVc>,
+        _collectibles: &AutoMap<RawVc, i32>,
     ) {
         unimplemented!()
     }
 
-    fn read_task_collectibles(&self, _task: TaskId, _trait_id: TraitTypeId) -> RawVcSetVc {
+    fn read_task_collectibles(&self, _task: TaskId, _trait_id: TraitTypeId) -> AutoMap<RawVc, i32> {
         unimplemented!()
     }
 

@@ -9,13 +9,16 @@ import (
 	"github.com/vercel/turbo/cli/internal/turbopath"
 )
 
+const berryLockfile = "yarn.lock"
+
 var nodejsBerry = PackageManager{
-	Name:       "nodejs-berry",
-	Slug:       "yarn",
-	Command:    "yarn",
-	Specfile:   "package.json",
-	Lockfile:   "yarn.lock",
-	PackageDir: "node_modules",
+	Name:         "nodejs-berry",
+	Slug:         "yarn",
+	Command:      "yarn",
+	Specfile:     "package.json",
+	Lockfile:     berryLockfile,
+	PackageDir:   "node_modules",
+	ArgSeparator: func(_userArgs []string) []string { return nil },
 
 	getWorkspaceGlobs: func(rootpath turbopath.AbsoluteSystemPath) ([]string, error) {
 		pkg, err := fs.ReadPackageJSON(rootpath.UntypedJoin("package.json"))
@@ -40,6 +43,18 @@ var nodejsBerry = PackageManager{
 
 	canPrune: func(cwd turbopath.AbsoluteSystemPath) (bool, error) {
 		return true, nil
+	},
+
+	GetLockfileName: func(_ turbopath.AbsoluteSystemPath) string {
+		return berryLockfile
+	},
+
+	GetLockfilePath: func(projectDirectory turbopath.AbsoluteSystemPath) turbopath.AbsoluteSystemPath {
+		return projectDirectory.UntypedJoin(berryLockfile)
+	},
+
+	GetLockfileContents: func(projectDirectory turbopath.AbsoluteSystemPath) ([]byte, error) {
+		return projectDirectory.UntypedJoin(berryLockfile).ReadFile()
 	},
 
 	UnmarshalLockfile: func(rootPackageJSON *fs.PackageJSON, contents []byte) (lockfile.Lockfile, error) {

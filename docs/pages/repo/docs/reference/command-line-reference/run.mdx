@@ -190,7 +190,7 @@ You can also specify these in your `turbo` configuration as `globalDependencies`
 
 `type: bool`
 
-Specify whether or not to do framework inference for tasks. Defaults to `true`, can be configured to be `false` which skips framework inference for tasks. This disables [automatic environment variable inclusion](../core-concepts/caching/environment-variable-inputs#framework-inference).
+Specify whether or not to do framework inference for tasks. Defaults to `true`, can be configured to be `false` which skips framework inference for tasks. This disables [automatic environment variable inclusion](/repo/docs/core-concepts/caching/environment-variable-inputs#framework-inference).
 
 ```sh
 turbo run build --framework-inference=false
@@ -224,6 +224,32 @@ Just a quick overview.
 - `{}` allows for a comma-separated list of "or" expressions
 - `!` at the beginning of a pattern will negate the match
 
+### `--log-order`
+
+`type: string`
+
+Set type of task output order. Defaults to "auto" which lets
+`turbo` detect if it's running in CI and group logs in that environment while streaming in others.
+
+| option  | description                               |
+| ------- | ----------------------------------------- |
+| auto    | Turbo decides based on its own heuristics |
+| stream  | show output as soon as it is available    |
+| grouped | Show output grouped by task               |
+
+**Example**
+
+```shell
+turbo run build --log-order=stream
+turbo run build --log-order=grouped
+```
+
+<Callout type="info">
+  If log order is set to auto and `turbo` detects that it is running on GitHub Actions, then `turbo` will
+  create [grouped logs](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#grouping-log-lines).
+  You can opt out of this behavior by setting a log order of your own.
+</Callout>
+
 ### `--no-cache`
 
 Default `false`. Do not cache results of the task. This is useful for watch commands like `next dev` or `react-scripts start`.
@@ -243,7 +269,7 @@ Passing `--no-daemon` instructs `turbo` to avoid using or creating the standalon
 
 `type: string`
 
-Set type of output logging. Defaults to "outputMode" for the task in `turbo.json`.
+Set type of output logging. This will override [`outputMode`](/repo/docs/reference/configuration#outputmode) if defined in `turbo.json`.
 
 <OuputModeTable />
 
@@ -295,6 +321,15 @@ Default `false`. Run commands in parallel across workspaces and ignore the task 
 ```sh
 turbo run lint --parallel --no-cache
 turbo run dev --parallel --no-cache
+```
+
+### `--profile`
+
+Generates a trace of the run in Chrome Tracing format that you can use to analyze performance.
+The profile can be viewed in [Perfetto](https://ui.perfetto.dev/).
+
+```sh
+turbo run build --profile=profile.json
 ```
 
 ### `--remote-only`

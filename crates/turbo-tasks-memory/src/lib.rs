@@ -1,12 +1,13 @@
-#![feature(hash_drain_filter)]
+#![feature(hash_extract_if)]
 #![feature(option_get_or_insert_default)]
 #![feature(type_alias_impl_trait)]
 #![feature(lint_reasons)]
 #![feature(box_patterns)]
 #![feature(int_roundings)]
+#![feature(impl_trait_in_assoc_type)]
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(clippy::too_many_arguments)]
 
+mod aggregation_tree;
 mod cell;
 mod concurrent_priority_queue;
 mod count_hash_set;
@@ -15,8 +16,6 @@ mod map_guard;
 mod memory_backend;
 mod memory_backend_with_pg;
 mod output;
-mod priority_pair;
-pub mod scope;
 pub mod stats;
 mod task;
 pub mod viz;

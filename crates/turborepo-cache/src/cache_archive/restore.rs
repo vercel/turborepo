@@ -1,7 +1,7 @@
 use std::{backtrace::Backtrace, collections::HashMap, io::Read};
 
 use petgraph::graph::DiGraph;
-use ring::digest::{Context, SHA512};
+use sha2::{Digest, Sha512};
 use tar::Entry;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
@@ -16,13 +16,12 @@ use crate::{
     CacheError,
 };
 
-pub struct CacheReader {
-    reader: Box<dyn Read>,
+pub struct CacheReader<'a> {
+    reader: Box<dyn Read + 'a>,
 }
 
-impl CacheReader {
-    #[cfg(test)]
-    pub fn new(reader: impl Read + 'static, is_compressed: bool) -> Result<Self, CacheError> {
+impl<'a> CacheReader<'a> {
+    pub fn from_reader(reader: impl Read + 'a, is_compressed: bool) -> Result<Self, CacheError> {
         let reader: Box<dyn Read> = if is_compressed {
             Box::new(zstd::Decoder::new(reader)?)
         } else {
@@ -46,17 +45,17 @@ impl CacheReader {
     }
 
     pub fn get_sha(mut self) -> Result<Vec<u8>, CacheError> {
-        let mut context = Context::new(&SHA512);
+        let mut hasher = Sha512::new();
         let mut buffer = [0; 8192];
         loop {
             let n = self.reader.read(&mut buffer)?;
             if n == 0 {
                 break;
             }
-            context.update(&buffer[..n]);
+            hasher.update(&buffer[..n]);
         }
 
-        Ok(context.finish().as_ref().to_vec())
+        Ok(hasher.finalize().to_vec())
     }
 
     pub fn restore(
@@ -155,7 +154,7 @@ impl CacheReader {
             let key = &graph[node];
 
             let Some(header) = header_lookup.get(key) else {
-                continue
+                continue;
             };
             let file = restore_symlink_allow_missing_target(dir_cache, anchor, header)?;
             restored.push(file);
@@ -342,7 +341,7 @@ mod tests {
         for (tar_bytes, is_compressed) in
             [(&uncompressed_tar[..], false), (&compressed_tar[..], true)]
         {
-            let mut cache_reader = CacheReader::new(&tar_bytes[..], is_compressed)?;
+            let mut cache_reader = CacheReader::from_reader(tar_bytes, is_compressed)?;
             let output_dir = tempdir()?;
             let output_dir_path = output_dir.path().to_string_lossy();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
@@ -365,7 +364,7 @@ mod tests {
         for (tar_bytes, is_compressed) in
             [(&uncompressed_tar[..], false), (&compressed_tar[..], true)]
         {
-            let mut cache_reader = CacheReader::new(&tar_bytes[..], is_compressed)?;
+            let mut cache_reader = CacheReader::from_reader(tar_bytes, is_compressed)?;
             let output_dir = tempdir()?;
             let output_dir_path = output_dir.path().to_string_lossy();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;

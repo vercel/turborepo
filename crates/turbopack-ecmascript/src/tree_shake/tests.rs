@@ -17,7 +17,9 @@ use swc_core::{
         codegen::text_writer::JsWriter,
         parser::parse_file_as_module,
     },
-    testing::{self, fixture, NormalizedOutput},
+    testing::{
+        fixture, NormalizedOutput, {self},
+    },
 };
 
 use super::{
@@ -263,7 +265,8 @@ fn print<N: swc_core::ecma::codegen::Node>(cm: &Arc<SourceMap>, nodes: &[&N]) ->
 
     {
         let mut emitter = swc_core::ecma::codegen::Emitter {
-            cfg: Default::default(),
+            cfg: swc_core::ecma::codegen::Config::default()
+                .with_emit_assert_for_import_attributes(true),
             cm: cm.clone(),
             comments: None,
             wr: Box::new(JsWriter::new(cm.clone(), "\n", &mut buf, None)),

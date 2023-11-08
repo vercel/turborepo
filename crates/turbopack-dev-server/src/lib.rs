@@ -3,6 +3,8 @@
 #![feature(array_chunks)]
 #![feature(iter_intersperse)]
 #![feature(str_split_remainder)]
+#![feature(arbitrary_self_types)]
+#![feature(async_fn_in_trait)]
 
 pub mod html;
 mod http;
@@ -20,7 +22,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use hyper::{
     server::{conn::AddrIncoming, Builder},
     service::{make_service_fn, service_fn},
@@ -31,15 +33,14 @@ use socket2::{Domain, Protocol, Socket, Type};
 use tokio::task::JoinHandle;
 use tracing::{event, info_span, Instrument, Level, Span};
 use turbo_tasks::{
-    run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, CollectiblesSource, RawVc,
-    TransientInstance, TransientValue, TurboTasksApi,
+    run_once_with_reason, trace::TraceRawVcs, util::FormatDuration, TurboTasksApi, Vc,
 };
 use turbopack_core::{
     error::PrettyPrintError,
-    issue::{IssueReporter, IssueReporterVc, IssueVc},
+    issue::{handle_issues, IssueReporter, IssueSeverity},
 };
 
-use self::{source::ContentSourceVc, update::UpdateServer};
+use self::{source::ContentSource, update::UpdateServer};
 use crate::{
     invalidation::{ServerRequest, ServerRequestSideEffects},
     source::ContentSourceSideEffect,
@@ -47,14 +48,14 @@ use crate::{
 
 pub trait SourceProvider: Send + Clone + 'static {
     /// must call a turbo-tasks function internally
-    fn get_source(&self) -> ContentSourceVc;
+    fn get_source(&self) -> Vc<Box<dyn ContentSource>>;
 }
 
 impl<T> SourceProvider for T
 where
-    T: Fn() -> ContentSourceVc + Send + Clone + 'static,
+    T: Fn() -> Vc<Box<dyn ContentSource>> + Send + Clone + 'static,
 {
-    fn get_source(&self) -> ContentSourceVc {
+    fn get_source(&self) -> Vc<Box<dyn ContentSource>> {
         self()
     }
 }
@@ -73,29 +74,6 @@ pub struct DevServer {
     pub addr: SocketAddr,
     #[turbo_tasks(trace_ignore)]
     pub future: Pin<Box<dyn Future<Output = Result<()>> + Send + 'static>>,
-}
-
-async fn handle_issues<T: Into<RawVc> + CollectiblesSource + Copy>(
-    source: T,
-    path: &str,
-    operation: &str,
-    issue_reporter: IssueReporterVc,
-) -> Result<()> {
-    let issues = IssueVc::peek_issues_with_path(source)
-        .await?
-        .strongly_consistent()
-        .await?;
-
-    let has_fatal = issue_reporter.report_issues(
-        TransientInstance::new(issues.clone()),
-        TransientValue::new(source.into()),
-    );
-
-    if *has_fatal.await? {
-        Err(anyhow!("Fatal issue(s) occurred in {path} ({operation})"))
-    } else {
-        Ok(())
-    }
 }
 
 impl DevServer {
@@ -138,7 +116,7 @@ impl DevServerBuilder {
         self,
         turbo_tasks: Arc<dyn TurboTasksApi>,
         source_provider: impl SourceProvider + Clone + Send + Sync,
-        get_issue_reporter: Arc<dyn Fn() -> IssueReporterVc + Send + Sync>,
+        get_issue_reporter: Arc<dyn Fn() -> Vc<Box<dyn IssueReporter>> + Send + Sync>,
     ) -> DevServer {
         let ongoing_side_effects = Arc::new(Mutex::new(VecDeque::<
             Arc<tokio::sync::Mutex<Option<JoinHandle<Result<()>>>>>,
@@ -232,8 +210,15 @@ impl DevServerBuilder {
                             let uri = request.uri();
                             let path = uri.path().to_string();
                             let source = source_provider.get_source();
-                            handle_issues(source, &path, "get source", issue_reporter).await?;
                             let resolved_source = source.resolve_strongly_consistent().await?;
+                            handle_issues(
+                                source,
+                                issue_reporter,
+                                IssueSeverity::Fatal.cell(),
+                                Some(&path),
+                                Some("get source"),
+                            )
+                            .await?;
                             let (response, side_effects) =
                                 http::process_request_with_content_source(
                                     resolved_source,

@@ -8,12 +8,10 @@ use std::{
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    check_path, AbsoluteSystemPath, AnchoredSystemPath, PathError, PathValidation,
-    RelativeUnixPathBuf,
-};
+use crate::{check_path, AbsoluteSystemPath, AnchoredSystemPath, PathError, PathValidation};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct AnchoredSystemPathBuf(pub(crate) Utf8PathBuf);
 
 impl TryFrom<&str> for AnchoredSystemPathBuf {
@@ -192,25 +190,16 @@ impl AnchoredSystemPathBuf {
         self.0.as_std_path()
     }
 
-    pub fn to_unix(&self) -> Result<RelativeUnixPathBuf, PathError> {
-        #[cfg(unix)]
-        {
-            return RelativeUnixPathBuf::new(self.0.as_str());
-        }
-        #[cfg(not(unix))]
-        {
-            use crate::IntoUnix;
-            let unix_buf = self.0.as_path().into_unix();
-            RelativeUnixPathBuf::new(unix_buf)
-        }
-    }
-
     pub fn push(&mut self, path: impl AsRef<Utf8Path>) {
         self.0.push(path.as_ref());
     }
 
     pub fn components(&self) -> Utf8Components {
         self.0.components()
+    }
+
+    pub fn join(&self, other: &AnchoredSystemPath) -> AnchoredSystemPathBuf {
+        Self(self.0.join(other))
     }
 }
 

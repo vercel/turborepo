@@ -3,10 +3,10 @@ import type { TurboGeneratorCLIOptions } from "../commands/workspace";
 import type { CustomGeneratorCLIOptions } from "../commands/run";
 
 export type WorkspaceType = "app" | "package";
-export type CopyData = {
+export interface CopyData {
   type: "internal" | "external";
   source: string;
-};
+}
 
 export type TurboGeneratorOptions = Omit<
   TurboGeneratorCLIOptions,

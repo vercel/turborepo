@@ -1,6 +1,7 @@
-use std::borrow::Cow;
+use std::{any::Any, borrow::Cow, collections::BTreeMap};
 
 use serde::{Deserialize, Serialize};
+use turbopath::RelativeUnixPathBuf;
 
 use super::{dep_path::DepPath, Error, LockfileVersion};
 
@@ -31,6 +32,8 @@ pub struct PnpmLockfile {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct PatchFile {
+    // This should be a RelativeUnixPathBuf, but since that might cause unnecessary
+    // parse failures we wait until access to validate.
     path: String,
     hash: String,
 }
@@ -80,7 +83,6 @@ pub struct Dependency {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageSnapshot {
-    // can we make this flow?/is it necessary?
     resolution: PackageResolution,
     #[serde(skip_serializing_if = "Option::is_none")]
     id: Option<String>,
@@ -113,14 +115,21 @@ pub struct DependenciesMeta {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct PackageResolution {
+    // Type field, cannot use serde(tag) due to tarball having an empty type field
+    // tarball -> none
+    // directory -> 'directory'
+    // git repository -> 'git'
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     type_field: Option<String>,
+    // Tarball fields
     #[serde(skip_serializing_if = "Option::is_none")]
     integrity: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tarball: Option<String>,
+    // Directory fields
     #[serde(skip_serializing_if = "Option::is_none")]
-    dir: Option<String>,
+    directory: Option<String>,
+    // Git repository fields
     #[serde(skip_serializing_if = "Option::is_none")]
     repo: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -138,17 +147,6 @@ impl PnpmLockfile {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
         let this = serde_yaml::from_slice(bytes)?;
         Ok(this)
-    }
-
-    pub fn patches(&self) -> Vec<String> {
-        let mut patches = self
-            .patched_dependencies
-            .iter()
-            .flatten()
-            .map(|(_, patch)| patch.path.clone())
-            .collect::<Vec<_>>();
-        patches.sort();
-        patches
     }
 
     fn get_packages(&self, key: &str) -> Option<&PackageSnapshot> {
@@ -214,16 +212,13 @@ impl PnpmLockfile {
     ) -> Result<Option<&'a str>, crate::Error> {
         let importer = self.get_workspace(workspace_path)?;
 
-        let Some((resolved_specifier, resolved_version)) = importer.dependencies.find_resolution(name) else {
+        let Some((resolved_specifier, resolved_version)) =
+            importer.dependencies.find_resolution(name)
+        else {
             // Check if the specifier is already an exact version
-            return match self.get_packages(&self.format_key(name, specifier)) {
-                Some(_) => Ok(Some(specifier)),
-                None => Err(Error::MissingResolvedVersion{
-                    name: name.into(),
-                    specifier: specifier.into(),
-                    workspace: workspace_path.into(),
-                }.into()),
-            }
+            return Ok(self
+                .get_packages(&self.format_key(name, specifier))
+                .and(Some(specifier)));
         };
 
         let override_specifier = self.apply_overrides(name, specifier);
@@ -239,15 +234,120 @@ impl PnpmLockfile {
         }
     }
 
-    pub fn subgraph(
+    fn prune_patches(
+        patches: &Map<String, PatchFile>,
+        pruned_packages: &Map<String, PackageSnapshot>,
+    ) -> Result<Map<String, PatchFile>, Error> {
+        let mut pruned_patches = Map::new();
+        for dependency in pruned_packages.keys() {
+            let dp = DepPath::try_from(dependency.as_str())?;
+            let patch_key = format!("{}@{}", dp.name, dp.version);
+            if let Some(patch) = patches
+                .get(&patch_key)
+                .filter(|patch| dp.patch_hash() == Some(&patch.hash))
+            {
+                pruned_patches.insert(patch_key, patch.clone());
+            }
+        }
+        Ok(pruned_patches)
+    }
+
+    // Create a projection of all fields in the lockfile that could affect all
+    // workspaces
+    fn global_fields(&self) -> GlobalFields {
+        GlobalFields {
+            version: &self.lockfile_version.version,
+            checksum: self.package_extensions_checksum.as_deref(),
+            overrides: self.overrides.as_ref(),
+            patched_dependencies: self.patched_dependencies.as_ref(),
+            settings: self.settings.as_ref(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct GlobalFields<'a> {
+    version: &'a str,
+    checksum: Option<&'a str>,
+    overrides: Option<&'a BTreeMap<String, String>>,
+    patched_dependencies: Option<&'a BTreeMap<String, PatchFile>>,
+    settings: Option<&'a LockfileSettings>,
+}
+
+impl crate::Lockfile for PnpmLockfile {
+    fn resolve_package(
         &self,
-        workspace_paths: &[String],
+        workspace_path: &str,
+        name: &str,
+        version: &str,
+    ) -> Result<Option<crate::Package>, crate::Error> {
+        // Check if version is a key
+        if self.get_packages(version).is_some() {
+            let extracted_version = self.extract_version(version)?;
+            return Ok(Some(crate::Package {
+                key: version.into(),
+                version: extracted_version.into(),
+            }));
+        }
+
+        let Some(resolved_version) = self.resolve_specifier(workspace_path, name, version)? else {
+            return Ok(None);
+        };
+
+        let key = self.format_key(name, resolved_version);
+
+        if let Some(pkg) = self.get_packages(&key) {
+            Ok(Some(crate::Package {
+                key,
+                version: pkg
+                    .version
+                    .clone()
+                    .unwrap_or_else(|| resolved_version.to_string()),
+            }))
+        } else if let Some(pkg) = self.get_packages(resolved_version) {
+            let version = pkg.version.clone().map_or_else(
+                || {
+                    self.extract_version(resolved_version)
+                        .map(|s| s.to_string())
+                },
+                Ok,
+            )?;
+            Ok(Some(crate::Package {
+                key: resolved_version.to_string(),
+                version,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn all_dependencies(
+        &self,
+        key: &str,
+    ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
+        let Some(entry) = self.packages.as_ref().and_then(|pkgs| pkgs.get(key)) else {
+            return Ok(None);
+        };
+        Ok(Some(
+            entry
+                .dependencies
+                .iter()
+                .flatten()
+                .chain(entry.optional_dependencies.iter().flatten())
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+        ))
+    }
+
+    fn subgraph(
+        &self,
+        workspace_packages: &[String],
         packages: &[String],
-    ) -> Result<Self, crate::Error> {
+    ) -> Result<Box<dyn crate::Lockfile>, crate::Error> {
         let importers = self
             .importers
             .iter()
-            .filter(|(key, _)| key.as_str() == "." || workspace_paths.contains(key))
+            .filter(|(key, _)| key.as_str() == "." || workspace_packages.contains(key))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect::<Map<_, _>>();
 
@@ -289,7 +389,7 @@ impl PnpmLockfile {
             .map(|patches| Self::prune_patches(patches, &pruned_packages))
             .transpose()?;
 
-        Ok(Self {
+        Ok(Box::new(Self {
             importers,
             packages: match pruned_packages.is_empty() {
                 false => Some(pruned_packages),
@@ -303,91 +403,31 @@ impl PnpmLockfile {
             patched_dependencies: patches,
             time: None,
             settings: self.settings.clone(),
-        })
+        }))
     }
 
-    fn prune_patches(
-        patches: &Map<String, PatchFile>,
-        pruned_packages: &Map<String, PackageSnapshot>,
-    ) -> Result<Map<String, PatchFile>, Error> {
-        let mut pruned_patches = Map::new();
-        for dependency in pruned_packages.keys() {
-            let dp = DepPath::try_from(dependency.as_str())?;
-            let patch_key = format!("{}@{}", dp.name, dp.version);
-            if let Some(patch) = patches
-                .get(&patch_key)
-                .filter(|patch| dp.patch_hash() == Some(&patch.hash))
-            {
-                pruned_patches.insert(patch_key, patch.clone());
-            }
-        }
-        Ok(pruned_patches)
+    fn encode(&self) -> Result<Vec<u8>, crate::Error> {
+        Ok(serde_yaml::to_string(&self)?.into_bytes())
     }
-}
 
-impl crate::Lockfile for PnpmLockfile {
-    fn resolve_package(
-        &self,
-        workspace_path: &str,
-        name: &str,
-        version: &str,
-    ) -> Result<Option<crate::Package>, crate::Error> {
-        // Check if version is a key
-        if self.get_packages(version).is_some() {
-            let extracted_version = self.extract_version(version)?;
-            return Ok(Some(crate::Package {
-                key: version.into(),
-                version: extracted_version.into(),
-            }));
-        }
+    fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, crate::Error> {
+        let mut patches = self
+            .patched_dependencies
+            .iter()
+            .flatten()
+            .map(|(_, patch)| RelativeUnixPathBuf::new(&patch.path))
+            .collect::<Result<Vec<_>, turbopath::PathError>>()?;
+        patches.sort();
+        Ok(patches)
+    }
 
-        let Some(resolved_version) = self.resolve_specifier(workspace_path, name, version)? else {
-            return Ok(None)
-        };
-
-        let key = self.format_key(name, resolved_version);
-
-        if let Some(pkg) = self.get_packages(&key) {
-            Ok(Some(crate::Package {
-                key,
-                version: pkg
-                    .version
-                    .clone()
-                    .unwrap_or_else(|| resolved_version.to_string()),
-            }))
-        } else if let Some(pkg) = self.get_packages(resolved_version) {
-            let version = pkg.version.clone().map_or_else(
-                || {
-                    self.extract_version(resolved_version)
-                        .map(|s| s.to_string())
-                },
-                Ok,
-            )?;
-            Ok(Some(crate::Package {
-                key: resolved_version.to_string(),
-                version,
-            }))
+    fn global_change(&self, other: &dyn crate::Lockfile) -> bool {
+        let any_other = other as &dyn Any;
+        if let Some(other) = any_other.downcast_ref::<Self>() {
+            self.global_fields() != other.global_fields()
         } else {
-            Ok(None)
+            true
         }
-    }
-
-    fn all_dependencies(
-        &self,
-        key: &str,
-    ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
-        let Some(entry) = self.packages.as_ref().and_then(|pkgs| pkgs.get(key)) else {
-            return Ok(None)
-        };
-        Ok(Some(
-            entry
-                .dependencies
-                .iter()
-                .flatten()
-                .chain(entry.optional_dependencies.iter().flatten())
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
-        ))
     }
 }
 
@@ -482,11 +522,11 @@ mod tests {
         let lockfile =
             PnpmLockfile::from_bytes(include_bytes!("../../fixtures/pnpm-patch.yaml")).unwrap();
         assert_eq!(
-            lockfile.patches(),
+            lockfile.patches().unwrap(),
             vec![
-                "patches/@babel__core@7.20.12.patch".to_string(),
-                "patches/is-odd@3.0.1.patch".to_string(),
-                "patches/moleculer@0.14.28.patch".to_string(),
+                RelativeUnixPathBuf::new("patches/@babel__core@7.20.12.patch").unwrap(),
+                RelativeUnixPathBuf::new("patches/is-odd@3.0.1.patch").unwrap(),
+                RelativeUnixPathBuf::new("patches/moleculer@0.14.28.patch").unwrap(),
             ]
         );
     }
@@ -576,7 +616,7 @@ mod tests {
         "packages/b",
         "is-odd",
         "^3.0.1",
-        Err("Unable to find resolved version for is-odd@^3.0.1 in packages/b")
+        Ok(None)
         ; "v6 missing"
     )]
     #[test_case(
@@ -716,11 +756,11 @@ mod tests {
             )
             .unwrap();
         assert_eq!(
-            pruned.patches(),
+            pruned.patches().unwrap(),
             vec![
-                "patches/@babel__core@7.20.12.patch",
-                "patches/is-odd@3.0.1.patch",
-                "patches/moleculer@0.14.28.patch",
+                RelativeUnixPathBuf::new("patches/@babel__core@7.20.12.patch").unwrap(),
+                RelativeUnixPathBuf::new("patches/is-odd@3.0.1.patch").unwrap(),
+                RelativeUnixPathBuf::new("patches/moleculer@0.14.28.patch").unwrap(),
             ]
         )
     }
@@ -734,7 +774,10 @@ mod tests {
                 &["/lodash@4.17.21(patch_hash=lgum37zgng4nfkynzh3cs7wdeq)".into()],
             )
             .unwrap();
-        assert_eq!(pruned.patches(), vec!["patches/lodash@4.17.21.patch"]);
+        assert_eq!(
+            pruned.patches().unwrap(),
+            vec![RelativeUnixPathBuf::new("patches/lodash@4.17.21.patch").unwrap()]
+        );
 
         let pruned =
             lockfile
@@ -746,8 +789,11 @@ mod tests {
                 )
                 .unwrap();
         assert_eq!(
-            pruned.patches(),
-            vec!["patches/@babel__helper-string-parser@7.19.4.patch"]
+            pruned.patches().unwrap(),
+            vec![
+                RelativeUnixPathBuf::new("patches/@babel__helper-string-parser@7.19.4.patch")
+                    .unwrap()
+            ]
         )
     }
 
@@ -788,5 +834,74 @@ mod tests {
                 Package::new("/foo/1.0.0", "1.0.0"),
             ],
         );
+    }
+
+    #[test]
+    fn test_injected_package_round_trip() {
+        let original_contents = "a:
+  resolution:
+    type: directory,
+    directory: packages/ui,
+  name: ui
+  version: 0.0.0
+  dev: false
+b:
+  resolution:
+    integrity: deadbeef,
+    tarball: path/to/tarball.tar.gz,
+  name: tar
+  version: 0.0.0
+  dev: false
+c:
+  resolution:
+    repo: great-repo.git,
+    commit: greatcommit,
+  name: git
+  version: 0.0.0
+  dev: false
+";
+        let original_parsed: Map<String, PackageSnapshot> =
+            serde_yaml::from_str(original_contents).unwrap();
+        let contents = serde_yaml::to_string(&original_parsed).unwrap();
+        assert_eq!(original_contents, &contents);
+    }
+
+    #[test]
+    fn test_missing_specifier() {
+        // When comparing across git commits the `package.json` might list a
+        // dependency that isn't in a previous lockfile. We must not error in
+        // this case.
+        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
+        let closures = crate::all_transitive_closures(
+            &lockfile,
+            vec![(
+                "packages/a".to_string(),
+                vec![
+                    ("is-odd".to_string(), "^3.0.1".to_string()),
+                    ("pad-left".to_string(), "^1.0.0".to_string()),
+                ]
+                .into_iter()
+                .collect(),
+            )]
+            .into_iter()
+            .collect(),
+        )
+        .unwrap();
+
+        let mut a_closure = closures
+            .get("packages/a")
+            .unwrap()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
+        a_closure.sort();
+
+        assert_eq!(
+            a_closure,
+            vec![
+                Package::new("/is-number@6.0.0", "6.0.0"),
+                Package::new("/is-odd@3.0.1", "3.0.1"),
+            ]
+        )
     }
 }

@@ -33,16 +33,16 @@ export function FadeIn({
 
   return (
     <motion.div
-      ref={ref}
       animate={inView ? "animate" : "initial"}
-      variants={fadeUpVariants}
       className={className}
       initial={false}
+      ref={ref}
       transition={{
         duration: 1,
         delay: delay || 0,
         ease: [0.21, 0.47, 0.32, 0.98],
       }}
+      variants={fadeUpVariants}
     >
       {children}
     </motion.div>

@@ -1,17 +1,32 @@
 use std::collections::HashMap;
 
 use itertools::{Either, Itertools};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
+use tracing::debug;
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError, RelativeUnixPathBuf};
 
 use crate::{hash_object::hash_objects, Error, Git, SCM};
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
 
 impl SCM {
+    pub fn get_hashes_for_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        files: &[impl AsRef<AnchoredSystemPath>],
+        allow_missing: bool,
+    ) -> Result<GitHashes, Error> {
+        if allow_missing {
+            self.hash_existing_of(turbo_root, files.iter())
+        } else {
+            self.hash_files(turbo_root, files.iter())
+        }
+    }
+
+    #[tracing::instrument(skip(self, turbo_root, package_path, inputs))]
     pub fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        package_path: &AnchoredSystemPathBuf,
+        package_path: &AnchoredSystemPath,
         inputs: &[S],
     ) -> Result<GitHashes, Error> {
         match self {
@@ -20,14 +35,26 @@ impl SCM {
                 package_path,
                 inputs,
             ),
-            SCM::Git(git) => git.get_package_file_hashes(turbo_root, package_path, inputs),
+            SCM::Git(git) => git
+                .get_package_file_hashes(turbo_root, package_path, inputs)
+                .or_else(|e| {
+                    debug!(
+                        "failed to use git to hash files: {}. Falling back to manual",
+                        e
+                    );
+                    crate::manual::get_package_file_hashes_from_processing_gitignore(
+                        turbo_root,
+                        package_path,
+                        inputs,
+                    )
+                }),
         }
     }
 
     pub fn hash_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        files: impl Iterator<Item = AnchoredSystemPathBuf>,
+        files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
         match self {
             SCM::Manual => crate::manual::hash_files(turbo_root, files, false),
@@ -41,7 +68,7 @@ impl SCM {
     pub fn hash_existing_of(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        files: impl Iterator<Item = AnchoredSystemPathBuf>,
+        files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
         crate::manual::hash_files(turbo_root, files, true)
     }
@@ -51,7 +78,7 @@ impl Git {
     fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        package_path: &AnchoredSystemPathBuf,
+        package_path: &AnchoredSystemPath,
         inputs: &[S],
     ) -> Result<GitHashes, Error> {
         if inputs.is_empty() {
@@ -61,14 +88,15 @@ impl Git {
         }
     }
 
+    #[tracing::instrument(skip(self, turbo_root))]
     fn get_package_file_hashes_from_index(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        package_path: &AnchoredSystemPathBuf,
+        package_path: &AnchoredSystemPath,
     ) -> Result<GitHashes, Error> {
         let full_pkg_path = turbo_root.resolve(package_path);
         let git_to_pkg_path = self.root.anchor(&full_pkg_path)?;
-        let pkg_prefix = git_to_pkg_path.to_unix()?;
+        let pkg_prefix = git_to_pkg_path.to_unix();
         let mut hashes = self.git_ls_tree(&full_pkg_path)?;
         // Note: to_hash is *git repo relative*
         let to_hash = self.append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
@@ -79,25 +107,31 @@ impl Git {
     fn hash_files(
         &self,
         process_relative_to: &AbsoluteSystemPath,
-        files: impl Iterator<Item = AnchoredSystemPathBuf>,
+        files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
         let mut hashes = GitHashes::new();
         let to_hash = files
-            .map(|f| self.root.anchor(process_relative_to.resolve(&f))?.to_unix())
+            .map(|f| {
+                Ok(self
+                    .root
+                    .anchor(process_relative_to.resolve(f.as_ref()))?
+                    .to_unix())
+            })
             .collect::<Result<Vec<_>, PathError>>()?;
         // Note: to_hash is *git repo relative*
         hash_objects(&self.root, process_relative_to, to_hash, &mut hashes)?;
         Ok(hashes)
     }
 
+    #[tracing::instrument(skip(self, turbo_root, inputs))]
     fn get_package_file_hashes_from_inputs<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
-        package_path: &AnchoredSystemPathBuf,
+        package_path: &AnchoredSystemPath,
         inputs: &[S],
     ) -> Result<GitHashes, Error> {
         let full_pkg_path = turbo_root.resolve(package_path);
-        let package_unix_path_buf = package_path.to_unix()?;
+        let package_unix_path_buf = package_path.to_unix();
         let package_unix_path = package_unix_path_buf.as_str();
 
         let mut inputs = inputs
@@ -143,7 +177,7 @@ impl Git {
         let to_hash = files
             .iter()
             .map(|entry| {
-                let path = self.root.anchor(entry)?.to_unix()?;
+                let path = self.root.anchor(entry)?.to_unix();
                 Ok(path)
             })
             .collect::<Result<Vec<_>, Error>>()?;
@@ -155,9 +189,9 @@ impl Git {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, process::Command};
+    use std::{assert_matches::assert_matches, collections::HashMap, process::Command};
 
-    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
     use super::*;
     use crate::{manual::get_package_file_hashes_from_processing_gitignore, SCM};
@@ -216,6 +250,36 @@ mod tests {
             get_package_file_hashes_from_processing_gitignore(&git_root, &pkg_path, &["l*"])
                 .unwrap();
         assert!(manual_hashes.is_empty());
+    }
+
+    #[test]
+    fn test_get_package_deps_fallback() {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let my_pkg_dir = repo_root.join_component("my-pkg");
+        my_pkg_dir.create_dir_all().unwrap();
+
+        // create file 1
+        let committed_file_path = my_pkg_dir.join_component("committed-file");
+        committed_file_path
+            .create_with_contents("committed bytes")
+            .unwrap();
+
+        setup_repository(&repo_root);
+        commit_all(&repo_root);
+        let git = SCM::new(&repo_root);
+        assert_matches!(git, SCM::Git(_));
+        // Remove the .git directory to trigger an error in git hashing
+        repo_root.join_component(".git").remove_dir_all().unwrap();
+        let pkg_path = repo_root.anchor(&my_pkg_dir).unwrap();
+        let hashes = git
+            .get_package_file_hashes::<&str>(&repo_root, &pkg_path, &[])
+            .unwrap();
+        let mut expected = GitHashes::new();
+        expected.insert(
+            RelativeUnixPathBuf::new("committed-file").unwrap(),
+            "3a29e62ea9ba15c4a4009d1f605d391cdd262033".to_string(),
+        );
+        assert_eq!(hashes, expected);
     }
 
     #[test]
@@ -328,13 +392,13 @@ mod tests {
             ),
         ];
         for (inputs, expected_files) in input_tests {
-            let expected: GitHashes = HashMap::from_iter(expected_files.into_iter().map(|key| {
+            let expected: GitHashes = HashMap::from_iter(expected_files.iter().map(|key| {
                 let key = RelativeUnixPathBuf::new(*key).unwrap();
                 let value = all_expected.get(&key).unwrap().clone();
                 (key, value)
             }));
             let hashes = git
-                .get_package_file_hashes(&repo_root, &package_path, &inputs)
+                .get_package_file_hashes(&repo_root, &package_path, inputs)
                 .unwrap();
             assert_eq!(hashes, expected);
         }
@@ -344,7 +408,7 @@ mod tests {
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
         HashMap::from_iter(
             pairs
-                .into_iter()
+                .iter()
                 .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
         )
     }

@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 camino = { workspace = true }
 dunce = { workspace = true }
+fs-err = "2.9.0"
 path-clean = "1.0.1"
 # TODO: Make this a crate feature
 serde = { workspace = true }
@@ -17,4 +18,6 @@ wax = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+serde_json = { workspace = true }
+tempdir = "0.3.7"
 test-case = { workspace = true }

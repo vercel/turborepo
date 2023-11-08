@@ -1,16 +1,22 @@
 use std::{env, fs, path::PathBuf, process::Command};
 
 fn main() {
+    println!("cargo:rerun-if-changed=../../cli");
     let profile = env::var("PROFILE").unwrap();
     let is_ci_release =
         &profile == "release" && matches!(env::var("RELEASE_TURBO_CLI"), Ok(v) if v == "true");
 
-    if !is_ci_release {
+    let invocation = std::env::var("RUSTC_WRAPPER").unwrap_or_default();
+    if !is_ci_release && !invocation.ends_with("rust-analyzer") {
         build_local_go_binary(profile);
     }
 }
 
-fn build_local_go_binary(profile: String) -> PathBuf {
+#[cfg(not(feature = "go-binary"))]
+fn build_local_go_binary(_: String) {}
+
+#[cfg(feature = "go-binary")]
+fn build_local_go_binary(profile: String) {
     let cli_path = cli_path();
     let target = build_target::target().unwrap();
 
@@ -56,7 +62,6 @@ fn build_local_go_binary(profile: String) -> PathBuf {
         .join(go_binary_name);
 
     fs::rename(go_binary_path, new_go_binary_path).unwrap();
-    cli_path
 }
 
 fn cli_path() -> PathBuf {

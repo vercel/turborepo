@@ -1,3 +1,5 @@
+#![deny(clippy::all)]
+
 use std::{
     collections::HashMap,
     env,
@@ -7,9 +9,17 @@ use std::{
 
 use regex::Regex;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 const DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
+
+/// Environment mode after we've resolved the `Infer` variant
+#[derive(Debug, Clone, Copy)]
+pub enum ResolvedEnvMode {
+    Loose,
+    Strict,
+}
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
@@ -22,8 +32,48 @@ pub enum Error {
 #[serde(transparent)]
 pub struct EnvironmentVariableMap(HashMap<String, String>);
 
+impl EnvironmentVariableMap {
+    // Returns a deterministically sorted set of EnvironmentVariablePairs
+    // from an EnvironmentVariableMap.
+    // This is the value that is used upstream as a task hash input,
+    // so we need it to be deterministic
+    pub fn to_hashable(&self) -> EnvironmentVariablePairs {
+        let mut list: Vec<_> = self.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
+        list.sort();
+
+        list
+    }
+
+    pub fn names(&self) -> Vec<String> {
+        let mut names: Vec<_> = self.keys().cloned().collect();
+        names.sort();
+
+        names
+    }
+
+    // Returns a deterministically sorted set of EnvironmentVariablePairs
+    // from an EnvironmentVariableMap
+    // This is the value used to print out the task hash input,
+    // so the values are cryptographically hashed
+    pub fn to_secret_hashable(&self) -> EnvironmentVariablePairs {
+        self.iter()
+            .map(|(k, v)| {
+                if !v.is_empty() {
+                    let mut hasher = Sha256::new();
+                    hasher.update(v.as_bytes());
+                    let hash = hasher.finalize();
+                    let hexed_hash = hex::encode(hash);
+                    format!("{k}={hexed_hash}")
+                } else {
+                    format!("{k}=")
+                }
+            })
+            .collect()
+    }
+}
+
 // BySource contains a map of environment variables broken down by the source
-#[derive(Debug, Serialize)]
+#[derive(Debug, Default, Serialize, Clone)]
 pub struct BySource {
     pub explicit: EnvironmentVariableMap,
     pub matching: EnvironmentVariableMap,
@@ -32,11 +82,14 @@ pub struct BySource {
 // DetailedMap contains the composite and the detailed maps of environment
 // variables All is used as a taskhash input (taskhash.CalculateTaskHash)
 // BySource is used by dry runs and run summaries
-#[derive(Debug, Serialize)]
+#[derive(Debug, Default, Serialize, Clone)]
 pub struct DetailedMap {
     pub all: EnvironmentVariableMap,
     pub by_source: BySource,
 }
+
+// A list of "k=v" strings for env variables and their values
+pub type EnvironmentVariablePairs = Vec<String>;
 
 // WildcardMaps is a pair of EnvironmentVariableMaps.
 #[derive(Debug)]
@@ -103,7 +156,7 @@ impl EnvironmentVariableMap {
     fn wildcard_map_from_wildcards(
         &self,
         wildcard_patterns: &[impl AsRef<str>],
-    ) -> Result<WildcardMaps, regex::Error> {
+    ) -> Result<WildcardMaps, Error> {
         let mut output = WildcardMaps {
             inclusions: EnvironmentVariableMap::default(),
             exclusions: EnvironmentVariableMap::default(),
@@ -148,7 +201,7 @@ impl EnvironmentVariableMap {
     pub fn from_wildcards(
         &self,
         wildcard_patterns: &[impl AsRef<str>],
-    ) -> Result<EnvironmentVariableMap, regex::Error> {
+    ) -> Result<EnvironmentVariableMap, Error> {
         if wildcard_patterns.is_empty() {
             return Ok(EnvironmentVariableMap::default());
         }
@@ -163,7 +216,7 @@ impl EnvironmentVariableMap {
     pub fn wildcard_map_from_wildcards_unresolved(
         &self,
         wildcard_patterns: &[String],
-    ) -> Result<WildcardMaps, regex::Error> {
+    ) -> Result<WildcardMaps, Error> {
         if wildcard_patterns.is_empty() {
             return Ok(WildcardMaps {
                 inclusions: EnvironmentVariableMap::default(),
@@ -219,7 +272,7 @@ fn wildcard_to_regex_pattern(pattern: &str) -> String {
 }
 
 pub fn get_global_hashable_env_vars(
-    env_at_execution_start: EnvironmentVariableMap,
+    env_at_execution_start: &EnvironmentVariableMap,
     global_env: &[String],
 ) -> Result<DetailedMap, Error> {
     let default_env_var_map = env_at_execution_start.from_wildcards(&DEFAULT_ENV_VARS[..])?;

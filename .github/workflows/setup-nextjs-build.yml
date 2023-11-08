@@ -15,9 +15,6 @@ jobs:
     runs-on: ubuntu-latest-16-core-oss
     outputs:
       output1: ${{ steps.build-next-swc-turbopack-patch.outputs.success }}
-    env:
-      # pnpm version should match to what upstream next.js uses
-      PNPM_VERSION: 7.24.3
     steps:
       - name: Get number of CPU cores
         uses: SimenB/github-actions-cpu-cores@v1
@@ -76,7 +73,7 @@ jobs:
         run: |
           wget https://github.com/sharkdp/hyperfine/releases/download/v1.16.1/hyperfine_1.16.1_amd64.deb
           sudo dpkg -i hyperfine_1.16.1_amd64.deb
-          npm i -g pnpm@$PNPM_VERSION && pnpm --version
+          corepack enable
           pnpm install --loglevel error
 
       - name: Build next-swc with latest turbopack
@@ -88,18 +85,17 @@ jobs:
           # Basic recipe to apply patch to cargo via cli looks like this:
           # cargo check --config 'patch."https://github.com/vercel/turbo".$PKG_NAME.git="https://github.com/vercel/turbo.git?rev=$SHA"'
           # Careful to preserve quote to allow dot expression can access git url based property key.
-          export BINDING=$(printf 'patch.\\"%s\\".%s.git=\\"%s?rev=%s\\"' "$TURBOPACK_REMOTE" "turbo-binding" "$TURBOPACK_REMOTE" "$GITHUB_SHA")
+          export BINDING=$(printf 'patch.\\"%s\\".%s.git=\\"%s?rev=%s\\"' "$TURBOPACK_REMOTE" "turbopack-binding" "$TURBOPACK_REMOTE" "$GITHUB_SHA")
           export TASKS=$(printf 'patch.\\"%s\\".%s.git=\\"%s?rev=%s\\"' "$TURBOPACK_REMOTE" "turbo-tasks" "$TURBOPACK_REMOTE" "$GITHUB_SHA")
           export TASKS_FS=$(printf 'patch.\\"%s\\".%s.git=\\"%s?rev=%s\\"' "$TURBOPACK_REMOTE" "turbo-tasks-fs" "$TURBOPACK_REMOTE" "$GITHUB_SHA")
 
           echo "Trying to build next-swc with turbopack $GITHUB_SHA"
-          echo "success=false" >> $GITHUB_OUTPUT
           hyperfine --min-runs 1 --show-output 'pnpm run --filter=@next/swc build-native --features plugin,rustls-tls --release --cargo-flags="--config $BINDING --config $TASKS --config $TASKS_FS"'
-          echo "success=true" >> $GITHUB_OUTPUT
+          echo "built=pass" >> $GITHUB_OUTPUT
           echo "Successfully built next-swc with turbopack $GITHUB_SHA"
 
       - name: Build next-swc
-        if: steps.build-next-swc-turbopack-patch.outputs.success != true
+        if: steps.build-next-swc-turbopack-patch.outputs.built != 'pass'
         run: |
           echo "Looks like we could not apply latest turbopack to next-swc. Trying to build next-swc with published turbopack. This might happen when there is a breaking changes in turbopack, and next.js is not yet updated."
           hyperfine --min-runs 1 --show-output 'pnpm run --filter=@next/swc build-native --features plugin,rustls-tls --release'
@@ -130,7 +126,7 @@ jobs:
       # Note that we do not use upload / download artifacts for this -
       # it is too heavyweight for the purpose since we do not need to persist
       # the cache across multiple runs.
-      - name: Store next.js build cache with next-dev binary
+      - name: Store next.js build cache with next-swc
         uses: actions/cache/save@v3
         id: cache-build
         with:

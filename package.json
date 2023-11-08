@@ -21,9 +21,7 @@
   "devDependencies": {
     "@taplo/cli": "^0.5.2",
     "@types/react": "18.2.0",
-    "eslint": "^8.29.0",
-    "eslint-config-next": "^13.0.6",
-    "eslint-config-prettier": "^8.5.0",
+    "eslint": "^8.48.0",
     "husky": "^8.0.0",
     "lint-staged": "^13.1.0",
     "next": "^13.0.6",
@@ -34,7 +32,6 @@
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
-      "eslint --ext js,jsx,ts,tsx --quiet --fix --",
       "prettier --write"
     ],
     "*.{md,mdx,mjs,yml,yaml,css}": [
@@ -52,12 +49,11 @@
   },
   "pnpm": {
     "overrides": {
-      "next@latest": "13.0.6"
+      "next": "^13.4.12"
     }
   },
-  "packageManager": "pnpm@7.18.2",
+  "packageManager": "pnpm@8.9.0",
   "engines": {
-    "node": "18.x",
-    "pnpm": "7"
+    "node": "18.x"
   }
 }

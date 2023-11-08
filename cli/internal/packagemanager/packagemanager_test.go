@@ -26,6 +26,7 @@ func Test_GetWorkspaces(t *testing.T) {
 	repoRoot, err := fs.GetCwd(cwd)
 	assert.NilError(t, err, "GetCwd")
 	rootPath := map[string]turbopath.AbsoluteSystemPath{
+		"nodejs-bun":   repoRoot.UntypedJoin("../../../examples/with-yarn"),
 		"nodejs-npm":   repoRoot.UntypedJoin("../../../examples/with-yarn"),
 		"nodejs-berry": repoRoot.UntypedJoin("../../../examples/with-yarn"),
 		"nodejs-yarn":  repoRoot.UntypedJoin("../../../examples/with-yarn"),
@@ -34,6 +35,13 @@ func Test_GetWorkspaces(t *testing.T) {
 	}
 
 	want := map[string][]string{
+		"nodejs-bun": {
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/apps/docs/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/apps/web/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/packages/eslint-config-custom/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/packages/tsconfig/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/packages/ui/package.json")),
+		},
 		"nodejs-npm": {
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/apps/docs/package.json")),
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/with-yarn/apps/web/package.json")),
@@ -117,6 +125,7 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 	cwd, err := fs.GetCwd(cwdRaw)
 	assert.NilError(t, err, "GetCwd")
 	want := map[string][]string{
+		"nodejs-bun":   {"**/node_modules", "**/.git"},
 		"nodejs-npm":   {"**/node_modules/**"},
 		"nodejs-berry": {"**/node_modules", "**/.git", "**/.yarn"},
 		"nodejs-yarn":  {"apps/*/node_modules/**", "packages/*/node_modules/**"},
@@ -150,58 +159,6 @@ func Test_GetWorkspaceIgnores(t *testing.T) {
 			}
 			if !reflect.DeepEqual(gotToSlash, tt.want) {
 				t.Errorf("GetWorkspaceIgnores() = %v, want %v", gotToSlash, tt.want)
-			}
-		})
-	}
-}
-
-func Test_CanPrune(t *testing.T) {
-	type test struct {
-		name     string
-		pm       PackageManager
-		rootPath turbopath.AbsoluteSystemPath
-		want     bool
-		wantErr  bool
-	}
-
-	type want struct {
-		want    bool
-		wantErr bool
-	}
-
-	cwdRaw, err := os.Getwd()
-	assert.NilError(t, err, "os.Getwd")
-	cwd, err := fs.GetCwd(cwdRaw)
-	assert.NilError(t, err, "GetCwd")
-	wants := map[string]want{
-		"nodejs-npm":   {true, false},
-		"nodejs-berry": {true, false},
-		"nodejs-yarn":  {true, false},
-		"nodejs-pnpm":  {true, false},
-		"nodejs-pnpm6": {true, false},
-	}
-
-	tests := make([]test, len(packageManagers))
-	for i, packageManager := range packageManagers {
-		tests[i] = test{
-			name:     packageManager.Name,
-			pm:       packageManager,
-			rootPath: cwd.UntypedJoin("../../../examples/with-yarn"),
-			want:     wants[packageManager.Name].want,
-			wantErr:  wants[packageManager.Name].wantErr,
-		}
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			canPrune, err := tt.pm.CanPrune(tt.rootPath)
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("CanPrune() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if canPrune != tt.want {
-				t.Errorf("CanPrune() = %v, want %v", canPrune, tt.want)
 			}
 		})
 	}

@@ -190,12 +190,11 @@ mod test {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::berry::SemverString;
 
     #[test]
     fn test_metadata_display() {
         let metadata = Metadata {
-            version: 6,
+            version: "6".into(),
             cache_key: Some("8c0".to_string()),
         };
         assert_eq!(
@@ -224,13 +223,13 @@ mod test {
         let long_key = "a".repeat(1025);
         let lockfile = LockfileData {
             metadata: Metadata {
-                version: 6,
+                version: "6".into(),
                 cache_key: Some("8".into()),
             },
             packages: [(
                 long_key.clone(),
                 BerryPackage {
-                    version: SemverString("1.2.3".to_string()),
+                    version: "1.2.3".to_string(),
                     ..Default::default()
                 },
             )]

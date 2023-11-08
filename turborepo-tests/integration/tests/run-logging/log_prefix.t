@@ -7,7 +7,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  cache miss, executing 906851cd5c1e12d4
+  cache miss, executing 724fbf5201e1b2c8
   
   \> build (re)
   \> echo 'build app-a' (re)
@@ -31,7 +31,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  cache hit, replaying logs 906851cd5c1e12d4
+  cache hit, replaying logs 724fbf5201e1b2c8
   
   \> build (re)
   \> echo 'build app-a' (re)
@@ -47,7 +47,7 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  app-a:build: cache hit, replaying logs 906851cd5c1e12d4
+  app-a:build: cache hit, replaying logs 724fbf5201e1b2c8
   app-a:build: 
   app-a:build: > build
   app-a:build: > echo 'build app-a'
@@ -61,7 +61,7 @@ Setup
 
 # Running with bogus option
   $ ${TURBO} run build --log-prefix=blah
-  ERROR invalid value 'blah' for '--log-prefix <LOG_PREFIX>'
+   ERROR  invalid value 'blah' for '--log-prefix <LOG_PREFIX>'
     [possible values: auto, none, task]
   
   For more information, try '--help'.
@@ -70,7 +70,7 @@ Setup
 
 # Running with missing value for option
   $ ${TURBO} run build --log-prefix
-  ERROR a value is required for '--log-prefix <LOG_PREFIX>' but none was supplied
+   ERROR  a value is required for '--log-prefix <LOG_PREFIX>' but none was supplied
     [possible values: auto, none, task]
   
   For more information, try '--help'.

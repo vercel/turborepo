@@ -1,15 +1,17 @@
 use std::{
     borrow::Borrow,
     fmt,
-    fmt::{Debug, Display, Formatter},
+    fmt::{Display, Formatter},
     ops::Deref,
 };
 
 use camino::Utf8Path;
+use serde::{Deserialize, Serialize};
 
-use crate::{IntoUnix, PathError, RelativeUnixPath};
-
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+use crate::{PathError, RelativeUnixPath};
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+// This is necessary to perform validation on the string during deserialization
+#[serde(try_from = "String", into = "String")]
 pub struct RelativeUnixPathBuf(pub(crate) String);
 
 impl Display for RelativeUnixPathBuf {
@@ -25,9 +27,7 @@ impl RelativeUnixPathBuf {
             return Err(PathError::NotRelative(path_string));
         }
 
-        let unix_path = path_string.into_unix();
-
-        Ok(Self(unix_path.into()))
+        Ok(Self(path_string))
     }
 
     pub fn into_inner(self) -> String {
@@ -114,8 +114,27 @@ impl Deref for RelativeUnixPathBuf {
     }
 }
 
+impl TryFrom<String> for RelativeUnixPathBuf {
+    type Error = PathError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+// From<String> should not be implemented for RelativeUnixPathBuf as validation
+// may fail
+#[allow(clippy::from_over_into)]
+impl Into<String> for RelativeUnixPathBuf {
+    fn into(self) -> String {
+        self.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     #[test]
@@ -172,5 +191,28 @@ mod tests {
         // #[cfg(windows)]
         // assert!(RelativeUnixPathBuf::new(PathBuf::from("C:\\foo\\bar")).
         // is_err());
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    struct TestSchema {
+        field: RelativeUnixPathBuf,
+    }
+
+    #[test]
+    fn test_roundtrip() {
+        let path = "relative/unix/path\\evil";
+        let value = json!({ "field": path });
+        let foo: TestSchema = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(foo.field.deref(), RelativeUnixPath::new(path).unwrap());
+        assert_eq!(serde_json::to_value(foo).unwrap(), value);
+    }
+
+    #[test]
+    fn test_deserialization_fails_on_absolute() {
+        let foo: Result<TestSchema, _> = serde_json::from_value(json!({"field": "/absolute/path"}));
+        let Err(e) = foo else {
+            panic!("expected absolute path deserialization to fail")
+        };
+        assert_eq!(e.to_string(), "Path is not relative: /absolute/path");
     }
 }

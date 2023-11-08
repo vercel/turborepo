@@ -11,11 +11,11 @@ Setup
 
   $ cat tmpjson.log | jq .globalCacheInputs
   {
-    "rootKey": "You don't understand! I coulda had class. I coulda been a contender. I could've been somebody, instead of a bum, which is what I am.",
+    "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
     "files": {
       "foo.txt": "eebae5f3ca7b5831e429e947b7d61edd0de69236"
     },
-    "hashOfExternalDependencies": "ccab0b28617f1f56",
+    "hashOfExternalDependencies": "459c029558afe716",
     "globalDotEnv": null,
     "environmentVariables": {
       "specified": {
@@ -51,12 +51,12 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "0d1e6ee2c143211c",
+    "hash": "b42768856d16033a",
     "inputs": {
       ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
       "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
     },
-    "hashOfExternalDependencies": "ccab0b28617f1f56",
+    "hashOfExternalDependencies": "459c029558afe716",
     "cache": {
       "local": false,
       "remote": false,
@@ -113,11 +113,11 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "76ab904c7ecb2d51",
+    "hash": "9b9969f14caa05a4",
     "inputs": {
       "package.json": "4d57bb28c9967640d812981198a743b3188f713e"
     },
-    "hashOfExternalDependencies": "ccab0b28617f1f56",
+    "hashOfExternalDependencies": "459c029558afe716",
     "cache": {
       "local": false,
       "remote": false,
@@ -180,6 +180,5 @@ Run again with NODE_ENV set and see the value in the summary. --filter=util work
 
 Tasks that don't exist throw an error
   $ ${TURBO} run doesnotexist --dry=json
-   ERROR  run failed: error preparing engine: Could not find the following tasks in project: doesnotexist
-  Turbo error: error preparing engine: Could not find the following tasks in project: doesnotexist
+  Error: Could not find the following tasks in project: doesnotexist
   [1]

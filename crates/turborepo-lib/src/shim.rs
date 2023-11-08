@@ -1,27 +1,50 @@
 use std::{
+    backtrace::Backtrace,
     env,
     fs::{self},
-    path::{Path, PathBuf},
+    path::PathBuf,
     process,
     process::Stdio,
     time::Duration,
 };
 
-use anyhow::{anyhow, Result};
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
 use semver::Version;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use thiserror::Error;
 use tiny_gradient::{GradientStr, RGB};
 use tracing::debug;
 use turbo_updater::check_for_updates;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-
-use crate::{
-    cli, get_version, package_manager::WorkspaceGlobs, spawn_child, tracing::TurboSubscriber,
-    ui::UI, PackageManager, Payload,
+use turborepo_repository::{
+    inference::{RepoMode, RepoState},
+    package_json::PackageJson,
 };
+use turborepo_ui::UI;
+
+use crate::{cli, get_version, spawn_child, tracing::TurboSubscriber, Payload};
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("cannot have multiple `--cwd` flags in command")]
+    MultipleCwd(#[backtrace] Backtrace),
+    #[error("No value assigned to `--cwd` argument")]
+    EmptyCwd(#[backtrace] Backtrace),
+    #[error(transparent)]
+    Cli(#[from] cli::Error),
+    #[error(transparent)]
+    Inference(#[from] turborepo_repository::inference::Error),
+    #[error("failed to execute local turbo process")]
+    LocalTurboProcess(#[source] std::io::Error),
+    #[error("failed to resolve local turbo path: {0}")]
+    LocalTurboPath(String),
+    #[error("failed to resolve repository root: {0}")]
+    RepoRootPath(AbsoluteSystemPathBuf),
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
+}
 
 // all arguments that result in a stdout that much be directly parsable and
 // should not be paired with additional output (from the update notifier for
@@ -62,7 +85,7 @@ struct ShimArgs {
 }
 
 impl ShimArgs {
-    pub fn parse() -> Result<Self> {
+    pub fn parse() -> Result<Self, Error> {
         let mut found_cwd_flag = false;
         let mut cwd: Option<AbsoluteSystemPathBuf> = None;
         let mut skip_infer = false;
@@ -88,6 +111,7 @@ impl ShimArgs {
                 is_forwarded_args = true;
             } else if arg == "--verbosity" {
                 // If we see `--verbosity` we expect the next arg to be a number.
+                remaining_turbo_args.push(arg);
                 found_verbosity_flag = true
             } else if arg.starts_with("--verbosity=") || found_verbosity_flag {
                 let verbosity_count = if found_verbosity_flag {
@@ -98,8 +122,10 @@ impl ShimArgs {
                 };
 
                 verbosity = verbosity_count.parse::<usize>().unwrap_or(0);
+                remaining_turbo_args.push(arg);
             } else if arg == "-v" || arg.starts_with("-vv") {
                 verbosity = arg[1..].len();
+                remaining_turbo_args.push(arg);
             } else if found_cwd_flag {
                 // We've seen a `--cwd` and therefore set the cwd to this arg.
                 //cwd = Some(arg.into());
@@ -107,7 +133,7 @@ impl ShimArgs {
                 found_cwd_flag = false;
             } else if arg == "--cwd" {
                 if cwd.is_some() {
-                    return Err(anyhow!("cannot have multiple `--cwd` flags in command"));
+                    return Err(Error::MultipleCwd(Backtrace::capture()));
                 }
                 // If we see a `--cwd` we expect the next arg to be a path.
                 found_cwd_flag = true
@@ -115,7 +141,7 @@ impl ShimArgs {
                 // In the case where `--cwd` is passed as `--cwd=./path/to/foo`, that
                 // entire chunk is a single arg, so we need to split it up.
                 if cwd.is_some() {
-                    return Err(anyhow!("cannot have multiple `--cwd` flags in command"));
+                    return Err(Error::MultipleCwd(Backtrace::capture()));
                 }
                 cwd = Some(AbsoluteSystemPathBuf::from_cwd(cwd_arg)?);
             } else if arg == "--color" {
@@ -128,7 +154,7 @@ impl ShimArgs {
         }
 
         if found_cwd_flag {
-            Err(anyhow!("No value assigned to `--cwd` argument"))
+            Err(Error::EmptyCwd(Backtrace::capture()))
         } else {
             let invocation_dir = AbsoluteSystemPathBuf::cwd()?;
             let cwd = cwd.unwrap_or_else(|| invocation_dir.clone());
@@ -184,18 +210,7 @@ impl ShimArgs {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum RepoMode {
-    SinglePackage,
-    MultiPackage,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct PackageJson {
-    version: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct YarnRc {
     pnp_unplugged_folder: Utf8PathBuf,
@@ -209,7 +224,7 @@ impl Default for YarnRc {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug)]
 pub struct TurboState {
     bin_path: Option<PathBuf>,
     version: &'static str,
@@ -227,7 +242,7 @@ impl Default for TurboState {
 }
 
 impl TurboState {
-    pub fn platform_package_name() -> &'static str {
+    pub const fn platform_name() -> &'static str {
         const ARCH: &str = {
             #[cfg(target_arch = "x86_64")]
             {
@@ -262,10 +277,14 @@ impl TurboState {
             }
         };
 
-        formatcp!("turbo-{}-{}", OS, ARCH)
+        formatcp!("{}-{}", OS, ARCH)
     }
 
-    pub fn binary_name() -> &'static str {
+    pub const fn platform_package_name() -> &'static str {
+        formatcp!("turbo-{}", TurboState::platform_name())
+    }
+
+    pub const fn binary_name() -> &'static str {
         {
             #[cfg(windows)]
             {
@@ -287,7 +306,7 @@ impl TurboState {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct LocalTurboState {
     bin_path: PathBuf,
     version: String,
@@ -295,54 +314,56 @@ pub struct LocalTurboState {
 
 impl LocalTurboState {
     // Hoisted strategy:
+    // - `bun install`
     // - `npm install`
     // - `yarn`
     // - `yarn install --flat`
     // - berry (nodeLinker: "node-modules")
     //
     // This also supports people directly depending upon the platform version.
-    fn generate_hoisted_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
-        Some(root_path.join("node_modules"))
+    fn generate_hoisted_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+        Some(root_path.join_component("node_modules"))
     }
 
     // Nested strategy:
     // - `npm install --install-strategy=shallow` (`npm install --global-style`)
     // - `npm install --install-strategy=nested` (`npm install --legacy-bundling`)
     // - berry (nodeLinker: "pnpm")
-    fn generate_nested_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
-        Some(
-            root_path
-                .join("node_modules")
-                .join("turbo")
-                .join("node_modules"),
-        )
+    fn generate_nested_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+        Some(root_path.join_components(&["node_modules", "turbo", "node_modules"]))
     }
 
     // Linked strategy:
     // - `pnpm install`
     // - `npm install --install-strategy=linked`
-    fn generate_linked_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
-        let canonical_path =
-            fs_canonicalize(root_path.join("node_modules").join("turbo").join("..")).ok()?;
+    fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+        let canonical_path = fs_canonicalize(
+            root_path
+                .as_path()
+                .join("node_modules")
+                .join("turbo")
+                .join(".."),
+        )
+        .ok()?;
 
-        Utf8PathBuf::try_from(canonical_path).ok()
+        AbsoluteSystemPathBuf::try_from(canonical_path).ok()
     }
 
     // The unplugged directory doesn't have a fixed path.
-    fn get_unplugged_base_path(root_path: &Utf8Path) -> Utf8PathBuf {
+    fn get_unplugged_base_path(root_path: &AbsoluteSystemPath) -> Utf8PathBuf {
         let yarn_rc_filename =
             env::var("YARN_RC_FILENAME").unwrap_or_else(|_| String::from(".yarnrc.yml"));
-        let yarn_rc_filepath = root_path.join(yarn_rc_filename);
+        let yarn_rc_filepath = root_path.as_path().join(yarn_rc_filename);
 
         let yarn_rc_yaml_string = fs::read_to_string(yarn_rc_filepath).unwrap_or_default();
         let yarn_rc: YarnRc = serde_yaml::from_str(&yarn_rc_yaml_string).unwrap_or_default();
 
-        root_path.join(yarn_rc.pnp_unplugged_folder)
+        root_path.as_path().join(yarn_rc.pnp_unplugged_folder)
     }
 
     // Unplugged strategy:
     // - berry 2.1+
-    fn generate_unplugged_path(root_path: &Utf8Path) -> Option<Utf8PathBuf> {
+    fn generate_unplugged_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
         let platform_package_name = TurboState::platform_package_name();
         let unplugged_base_path = Self::get_unplugged_base_path(root_path);
 
@@ -356,7 +377,10 @@ impl LocalTurboState {
                     Ok(entry) => {
                         let file_name = entry.file_name();
                         if file_name.starts_with(platform_package_name) {
-                            Some(unplugged_base_path.join(file_name).join("node_modules"))
+                            AbsoluteSystemPathBuf::new(
+                                unplugged_base_path.join(file_name).join("node_modules"),
+                            )
+                            .ok()
                         } else {
                             None
                         }
@@ -373,14 +397,13 @@ impl LocalTurboState {
     //
     // In spite of that, the only known unsupported local invocation is Yarn/Berry <
     // 2.1 PnP
-    pub fn infer(root_path: &Utf8Path) -> Option<Self> {
+    pub fn infer(root_path: &AbsoluteSystemPath) -> Option<Self> {
         let platform_package_name = TurboState::platform_package_name();
         let binary_name = TurboState::binary_name();
 
-        let platform_package_json_path: Utf8PathBuf =
-            [platform_package_name, "package.json"].iter().collect();
-        let platform_package_executable_path: Utf8PathBuf =
-            [platform_package_name, "bin", binary_name].iter().collect();
+        let platform_package_json_path_components = [platform_package_name, "package.json"];
+        let platform_package_executable_path_components =
+            [platform_package_name, "bin", binary_name];
 
         // These are lazy because the last two are more expensive.
         let search_functions = [
@@ -398,20 +421,20 @@ impl LocalTurboState {
         {
             // Needs borrow because of the loop.
             #[allow(clippy::needless_borrow)]
-            let bin_path = root.join(&platform_package_executable_path);
+            let bin_path = root.join_components(&platform_package_executable_path_components);
             match fs_canonicalize(&bin_path) {
                 Ok(bin_path) => {
-                    let resolved_package_json_path = root.join(platform_package_json_path);
-                    let platform_package_json_string =
-                        fs::read_to_string(resolved_package_json_path).ok()?;
-                    let platform_package_json: PackageJson =
-                        serde_json::from_str(&platform_package_json_string).ok()?;
+                    let resolved_package_json_path =
+                        root.join_components(&platform_package_json_path_components);
+                    let platform_package_json =
+                        PackageJson::load(&resolved_package_json_path).ok()?;
+                    let local_version = platform_package_json.version?;
 
                     debug!("Local turbo path: {}", bin_path.display());
-                    debug!("Local turbo version: {}", platform_package_json.version);
+                    debug!("Local turbo version: {}", &local_version);
                     return Some(Self {
                         bin_path,
-                        version: platform_package_json.version,
+                        version: local_version,
                     });
                 }
                 Err(_) => debug!("No local turbo binary found at: {}", bin_path),
@@ -420,288 +443,147 @@ impl LocalTurboState {
 
         None
     }
-}
 
-#[derive(Debug, Clone, Serialize)]
-pub struct RepoState {
-    pub root: AbsoluteSystemPathBuf,
-    pub mode: RepoMode,
-    pub local_turbo_state: Option<LocalTurboState>,
-}
-
-#[derive(Debug)]
-struct InferInfo {
-    path: AbsoluteSystemPathBuf,
-    has_package_json: bool,
-    has_turbo_json: bool,
-    workspace_globs: Option<WorkspaceGlobs>,
-}
-
-impl InferInfo {
-    pub fn has_package_json(info: &'_ &InferInfo) -> bool {
-        info.has_package_json
-    }
-    pub fn has_turbo_json(info: &'_ &InferInfo) -> bool {
-        info.has_turbo_json
+    fn supports_skip_infer_and_single_package(&self) -> bool {
+        turbo_version_has_shim(&self.version)
     }
 
-    pub fn is_workspace_root_of(&self, target_path: &AbsoluteSystemPath) -> bool {
-        match &self.workspace_globs {
-            Some(globs) => globs
-                .target_is_workspace(&self.path, target_path)
-                .unwrap_or(false),
-            None => false,
-        }
+    /// Check to see if the detected local executable is the one currently
+    /// running.
+    fn local_is_self(&self) -> bool {
+        std::env::current_exe().is_ok_and(|current_exe| {
+            fs_canonicalize(current_exe)
+                .is_ok_and(|canonical_current_exe| canonical_current_exe == self.bin_path)
+        })
     }
 }
 
-impl RepoState {
-    fn generate_potential_turbo_roots(reference_dir: &AbsoluteSystemPath) -> Vec<InferInfo> {
-        // Find all directories that contain a `package.json` or a `turbo.json`.
-        // Gather a bit of additional metadata about them.
-        let potential_turbo_roots = reference_dir
-            .ancestors()
-            .filter_map(|path| {
-                let has_package_json = path.join_component("package.json").exists();
-                let has_turbo_json = path.join_component("turbo.json").exists();
+/// Attempts to run correct turbo by finding nearest package.json,
+/// then finding local turbo installation. If the current binary is the
+/// local turbo installation, then we run current turbo. Otherwise we
+/// kick over to the local turbo installation.
+///
+/// # Arguments
+///
+/// * `turbo_state`: state for current execution
+///
+/// returns: Result<i32, Error>
+fn run_correct_turbo(
+    repo_state: RepoState,
+    shim_args: ShimArgs,
+    subscriber: &TurboSubscriber,
+    ui: UI,
+) -> Result<Payload, Error> {
+    if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
+        try_check_for_updates(&shim_args, &turbo_state.version);
 
-                if !has_package_json && !has_turbo_json {
-                    return None;
-                }
-
-                // FIXME: We should save this package manager that we detected
-                let workspace_globs = PackageManager::get_package_manager(path, None)
-                    .and_then(|mgr| mgr.get_workspace_globs(path))
-                    .ok();
-
-                Some(InferInfo {
-                    path: path.to_owned(),
-                    has_package_json,
-                    has_turbo_json,
-                    workspace_globs,
-                })
-            })
-            .collect();
-
-        potential_turbo_roots
-    }
-
-    fn process_potential_turbo_roots(potential_turbo_roots: Vec<InferInfo>) -> Result<Self> {
-        // Potential improvements:
-        // - Detect invalid configuration where turbo.json isn't peer to package.json.
-        // - There are a couple of possible early exits to prevent traversing all the
-        //   way to root at significant code complexity increase.
-        //
-        //   1. [0].has_turbo_json && [0].workspace_globs.is_some()
-        //   2. [0].has_turbo_json && [n].has_turbo_json && [n].is_workspace_root_of(0)
-        //
-        // If we elect to make any of the changes for early exits we need to expand test
-        // suite which presently relies on the fact that the selection runs in a loop to
-        // avoid creating those test cases.
-
-        // We need to perform the same search strategy for _both_ turbo.json and _then_
-        // package.json.
-        let search_locations = [InferInfo::has_turbo_json, InferInfo::has_package_json];
-
-        for check_set_comparator in search_locations {
-            let mut check_roots = potential_turbo_roots
-                .iter()
-                .filter(check_set_comparator)
-                .peekable();
-
-            let current_option = check_roots.next();
-
-            // No potential roots checking by this comparator.
-            if current_option.is_none() {
-                continue;
-            }
-
-            let current = current_option.unwrap();
-
-            // If there is only one potential root, that's the winner.
-            if check_roots.peek().is_none() {
-                let local_turbo_state = LocalTurboState::infer(current.path.as_path());
-                return Ok(Self {
-                    root: current.path.clone(),
-                    mode: if current.workspace_globs.is_some() {
-                        RepoMode::MultiPackage
-                    } else {
-                        RepoMode::SinglePackage
-                    },
-                    local_turbo_state,
-                });
-
-            // More than one potential root. See if we can stop at the first.
-            // This is a performance optimization. We could remove this case,
-            // and set the mode properly in the else and it would still work.
-            } else if current.workspace_globs.is_some() {
-                // If the closest one has workspaces then we stop there.
-                let local_turbo_state = LocalTurboState::infer(current.path.as_path());
-                return Ok(Self {
-                    root: current.path.clone(),
-                    mode: RepoMode::MultiPackage,
-                    local_turbo_state,
-                });
-
-            // More than one potential root.
-            // Closest is not RepoMode::MultiPackage
-            // We attempt to prove that the closest is a workspace of a parent.
-            // Failing that we just choose the closest.
-            } else {
-                for ancestor_infer in check_roots {
-                    if ancestor_infer.is_workspace_root_of(&current.path) {
-                        let local_turbo_state =
-                            LocalTurboState::infer(ancestor_infer.path.as_path());
-                        return Ok(Self {
-                            root: ancestor_infer.path.clone(),
-                            mode: RepoMode::MultiPackage,
-                            local_turbo_state,
-                        });
-                    }
-                }
-
-                // We have eliminated RepoMode::MultiPackage as an option.
-                // We must exhaustively check before this becomes the answer.
-                let local_turbo_state = LocalTurboState::infer(current.path.as_path());
-                return Ok(Self {
-                    root: current.path.clone(),
-                    mode: RepoMode::SinglePackage,
-                    local_turbo_state,
-                });
-            }
-        }
-
-        // If we're here we didn't find a valid root.
-        Err(anyhow!("Root could not be inferred."))
-    }
-
-    /// Infers `RepoState` from current directory.
-    ///
-    /// # Arguments
-    ///
-    /// * `current_dir`: Current working directory
-    ///
-    /// returns: Result<RepoState, Error>
-    pub fn infer(reference_dir: &AbsoluteSystemPath) -> Result<Self> {
-        let potential_turbo_roots = RepoState::generate_potential_turbo_roots(reference_dir);
-        RepoState::process_potential_turbo_roots(potential_turbo_roots)
-    }
-
-    /// Attempts to run correct turbo by finding nearest package.json,
-    /// then finding local turbo installation. If the current binary is the
-    /// local turbo installation, then we run current turbo. Otherwise we
-    /// kick over to the local turbo installation.
-    ///
-    /// # Arguments
-    ///
-    /// * `turbo_state`: state for current execution
-    ///
-    /// returns: Result<i32, Error>
-    fn run_correct_turbo(
-        self,
-        shim_args: ShimArgs,
-        subscriber: &TurboSubscriber,
-        ui: UI,
-    ) -> Result<Payload> {
-        if let Some(LocalTurboState { bin_path, version }) = &self.local_turbo_state {
-            try_check_for_updates(&shim_args, version);
-            let canonical_local_turbo = fs_canonicalize(bin_path)?;
-            Ok(Payload::Rust(
-                self.spawn_local_turbo(&canonical_local_turbo, shim_args),
-            ))
-        } else {
-            try_check_for_updates(&shim_args, get_version());
-            // cli::run checks for this env var, rather than an arg, so that we can support
-            // calling old versions without passing unknown flags.
+        if turbo_state.local_is_self() {
             env::set_var(
                 cli::INVOCATION_DIR_ENV_VAR,
                 shim_args.invocation_dir.as_path(),
             );
-            debug!("Running command as global turbo");
-            cli::run(Some(self), subscriber, ui)
-        }
-    }
-
-    fn local_turbo_supports_skip_infer_and_single_package(&self) -> Result<bool> {
-        if let Some(LocalTurboState { version, .. }) = &self.local_turbo_state {
-            Ok(turbo_version_has_shim(version))
+            debug!("Currently running turbo is local turbo.");
+            Ok(cli::run(Some(repo_state), subscriber, ui)?)
         } else {
-            Ok(false)
+            Ok(Payload::Rust(spawn_local_turbo(
+                &repo_state,
+                turbo_state,
+                shim_args,
+            )))
         }
+    } else {
+        try_check_for_updates(&shim_args, get_version());
+        // cli::run checks for this env var, rather than an arg, so that we can support
+        // calling old versions without passing unknown flags.
+        env::set_var(
+            cli::INVOCATION_DIR_ENV_VAR,
+            shim_args.invocation_dir.as_path(),
+        );
+        debug!("Running command as global turbo");
+        Ok(cli::run(Some(repo_state), subscriber, ui)?)
+    }
+}
+
+fn spawn_local_turbo(
+    repo_state: &RepoState,
+    local_turbo_state: LocalTurboState,
+    mut shim_args: ShimArgs,
+) -> Result<i32, Error> {
+    let local_turbo_path = fs_canonicalize(&local_turbo_state.bin_path).map_err(|_| {
+        Error::LocalTurboPath(local_turbo_state.bin_path.to_string_lossy().to_string())
+    })?;
+    debug!(
+        "Running local turbo binary in {}\n",
+        local_turbo_path.display()
+    );
+
+    let supports_skip_infer_and_single_package =
+        local_turbo_state.supports_skip_infer_and_single_package();
+    let already_has_single_package_flag = shim_args
+        .remaining_turbo_args
+        .contains(&"--single-package".to_string());
+    let should_add_single_package_flag = repo_state.mode == RepoMode::SinglePackage
+        && !already_has_single_package_flag
+        && supports_skip_infer_and_single_package;
+
+    debug!(
+        "supports_skip_infer_and_single_package {:?}",
+        supports_skip_infer_and_single_package
+    );
+    let cwd = fs_canonicalize(&repo_state.root)
+        .map_err(|_| Error::RepoRootPath(repo_state.root.clone()))?;
+
+    let mut raw_args: Vec<_> = if supports_skip_infer_and_single_package {
+        vec!["--skip-infer".to_string()]
+    } else {
+        Vec::new()
+    };
+
+    raw_args.append(&mut shim_args.remaining_turbo_args);
+
+    // We add this flag after the raw args to avoid accidentally passing it
+    // as a global flag instead of as a run flag.
+    if should_add_single_package_flag {
+        raw_args.push("--single-package".to_string());
     }
 
-    fn spawn_local_turbo(&self, local_turbo_path: &Path, mut shim_args: ShimArgs) -> Result<i32> {
-        debug!(
-            "Running local turbo binary in {}\n",
-            local_turbo_path.display()
-        );
+    raw_args.push("--".to_string());
+    raw_args.append(&mut shim_args.forwarded_args);
 
-        let supports_skip_infer_and_single_package =
-            self.local_turbo_supports_skip_infer_and_single_package()?;
-        let already_has_single_package_flag = shim_args
-            .remaining_turbo_args
-            .contains(&"--single-package".to_string());
-        let should_add_single_package_flag = self.mode == RepoMode::SinglePackage
-            && !already_has_single_package_flag
-            && supports_skip_infer_and_single_package;
+    // We spawn a process that executes the local turbo
+    // that we've found in node_modules/.bin/turbo.
+    let mut command = process::Command::new(local_turbo_path);
+    command
+        .args(&raw_args)
+        // rather than passing an argument that local turbo might not understand, set
+        // an environment variable that can be optionally used
+        .env(
+            cli::INVOCATION_DIR_ENV_VAR,
+            shim_args.invocation_dir.as_path(),
+        )
+        .current_dir(cwd)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
 
-        debug!(
-            "supports_skip_infer_and_single_package {:?}",
-            supports_skip_infer_and_single_package
-        );
-        let cwd = fs_canonicalize(&self.root)?;
-        let mut raw_args: Vec<_> = if supports_skip_infer_and_single_package {
-            vec!["--skip-infer".to_string()]
-        } else {
-            Vec::new()
-        };
+    let child = spawn_child(command).map_err(Error::LocalTurboProcess)?;
 
-        raw_args.append(&mut shim_args.remaining_turbo_args);
-
-        // We add this flag after the raw args to avoid accidentally passing it
-        // as a global flag instead of as a run flag.
-        if should_add_single_package_flag {
-            raw_args.push("--single-package".to_string());
+    let exit_status = child.wait().map_err(Error::LocalTurboProcess)?;
+    let exit_code = exit_status.code().unwrap_or_else(|| {
+        debug!("go-turbo failed to report exit code");
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            let signal = exit_status.signal();
+            let core_dumped = exit_status.core_dumped();
+            debug!(
+                "go-turbo caught signal {:?}. Core dumped? {}",
+                signal, core_dumped
+            );
         }
+        2
+    });
 
-        raw_args.push("--".to_string());
-        raw_args.append(&mut shim_args.forwarded_args);
-
-        // We spawn a process that executes the local turbo
-        // that we've found in node_modules/.bin/turbo.
-        let mut command = process::Command::new(local_turbo_path);
-        command
-            .args(&raw_args)
-            // rather than passing an argument that local turbo might not understand, set
-            // an environment variable that can be optionally used
-            .env(
-                cli::INVOCATION_DIR_ENV_VAR,
-                shim_args.invocation_dir.as_path(),
-            )
-            .current_dir(cwd)
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit());
-
-        let child = spawn_child(command)?;
-
-        let exit_status = child.wait()?;
-        let exit_code = exit_status.code().unwrap_or_else(|| {
-            debug!("go-turbo failed to report exit code");
-            #[cfg(unix)]
-            {
-                use std::os::unix::process::ExitStatusExt;
-                let signal = exit_status.signal();
-                let core_dumped = exit_status.core_dumped();
-                debug!(
-                    "go-turbo caught signal {:?}. Core dumped? {}",
-                    signal, core_dumped
-                );
-            }
-            2
-        });
-
-        Ok(exit_code)
-    }
+    Ok(exit_code)
 }
 
 /// Checks for `TURBO_BINARY_PATH` variable. If it is set,
@@ -720,7 +602,7 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
         let footer = format!(
             "Follow {username} for updates: {url}",
             username = "@turborepo".gradient([RGB::new(0, 153, 247), RGB::new(241, 23, 18)]),
-            url = "https://twitter.com/turborepo"
+            url = "https://x.com/turborepo"
         );
 
         let interval = if args.force_update_check {
@@ -743,7 +625,7 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
     }
 }
 
-pub fn run() -> Result<Payload> {
+pub fn run() -> Result<Payload, Error> {
     let args = ShimArgs::parse()?;
     let ui = args.ui();
     let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &ui);
@@ -754,7 +636,7 @@ pub fn run() -> Result<Payload> {
     // global turbo having handled the inference. We can run without any
     // concerns.
     if args.skip_infer {
-        return cli::run(None, &subscriber, ui);
+        return Ok(cli::run(None, &subscriber, ui)?);
     }
 
     // If the TURBO_BINARY_PATH is set, we do inference but we do not use
@@ -763,340 +645,27 @@ pub fn run() -> Result<Payload> {
     if is_turbo_binary_path_set() {
         let repo_state = RepoState::infer(&args.cwd)?;
         debug!("Repository Root: {}", repo_state.root);
-        return cli::run(Some(repo_state), &subscriber, ui);
+        return Ok(cli::run(Some(repo_state), &subscriber, ui)?);
     }
 
     match RepoState::infer(&args.cwd) {
         Ok(repo_state) => {
             debug!("Repository Root: {}", repo_state.root);
-            repo_state.run_correct_turbo(args, &subscriber, ui)
+            run_correct_turbo(repo_state, args, &subscriber, ui)
         }
         Err(err) => {
             // If we cannot infer, we still run global turbo. This allows for global
             // commands like login/logout/link/unlink to still work
             debug!("Repository inference failed: {}", err);
             debug!("Running command as global turbo");
-            cli::run(None, &subscriber, ui)
+            Ok(cli::run(None, &subscriber, ui)?)
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
-
-    fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
-        let tmp_dir = tempfile::tempdir().unwrap();
-        let dir = AbsoluteSystemPathBuf::try_from(tmp_dir.path())
-            .unwrap()
-            .to_realpath()
-            .unwrap();
-        (tmp_dir, dir)
-    }
-
-    #[test]
-    fn test_process_potential_turbo_roots() {
-        struct TestCase {
-            description: &'static str,
-            infer_infos: Vec<InferInfo>,
-            output: Result<AbsoluteSystemPathBuf>,
-        }
-
-        let (_tmp, root) = tmp_dir();
-        let root_one = root.join_components(&["..", "root-one"]);
-        let root_two = root_one.join_component("root-two");
-        let project_one = root.join_components(&["..", "project-one"]);
-        let project_two = project_one.join_component("project-two");
-
-        let tests = [
-            // Test for zero, exhaustive.
-            TestCase {
-                description: "No matches found.",
-                infer_infos: vec![],
-                output: Err(anyhow!("Root could not be inferred.")),
-            },
-            // Test for one, exhaustive.
-            TestCase {
-                description: "Only one, is monorepo with turbo.json.",
-                infer_infos: vec![InferInfo {
-                    path: root.clone(),
-                    has_package_json: true,
-                    has_turbo_json: true,
-                    workspace_globs: Some(WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap()),
-                }],
-                output: Ok(root.clone()),
-            },
-            TestCase {
-                description: "Only one, is non-monorepo with turbo.json.",
-                infer_infos: vec![InferInfo {
-                    path: root.clone(),
-                    has_package_json: true,
-                    has_turbo_json: true,
-                    workspace_globs: None,
-                }],
-                output: Ok(root.clone()),
-            },
-            TestCase {
-                description: "Only one, is monorepo without turbo.json.",
-                infer_infos: vec![InferInfo {
-                    path: root.clone(),
-                    has_package_json: true,
-                    has_turbo_json: false,
-                    workspace_globs: Some(WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap()),
-                }],
-                output: Ok(root.clone()),
-            },
-            TestCase {
-                description: "Only one, is non-monorepo without turbo.json.",
-                infer_infos: vec![InferInfo {
-                    path: root.clone(),
-                    has_package_json: true,
-                    has_turbo_json: false,
-                    workspace_globs: None,
-                }],
-                output: Ok(root.clone()),
-            },
-            // Tests for how to choose what is closest.
-            TestCase {
-                description: "Execution in a workspace.",
-                infer_infos: vec![
-                    InferInfo {
-                        path: root.join_components(&["packages", "ui-library"]),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: None,
-                    },
-                    InferInfo {
-                        path: root.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: Some(
-                            WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
-                        ),
-                    },
-                ],
-                output: Ok(root.clone()),
-            },
-            TestCase {
-                description: "Execution in a workspace, weird package layout.",
-                infer_infos: vec![
-                    InferInfo {
-                        path: root.join_components(&["packages", "ui-library", "css"]),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: None,
-                    },
-                    InferInfo {
-                        path: root.join_components(&["packages", "ui-library"]),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: None,
-                    },
-                    InferInfo {
-                        path: root.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: Some(
-                            WorkspaceGlobs::new(
-                                // This `**` is important:
-                                vec!["packages/**"],
-                                vec![],
-                            )
-                            .unwrap(),
-                        ),
-                    },
-                ],
-                output: Ok(root.clone()),
-            },
-            TestCase {
-                description: "Nested disjoint monorepo roots.",
-                infer_infos: vec![
-                    InferInfo {
-                        path: root_two.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: Some(
-                            WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
-                        ),
-                    },
-                    InferInfo {
-                        path: root_one.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: Some(
-                            WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
-                        ),
-                    },
-                ],
-                output: Ok(root_two.clone()),
-            },
-            TestCase {
-                description: "Nested disjoint monorepo roots, execution in a workspace of the \
-                              closer root.",
-                infer_infos: vec![
-                    InferInfo {
-                        path: root_two.join_components(&["root-two-packages", "ui-library"]),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: None,
-                    },
-                    InferInfo {
-                        path: root_two.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: Some(
-                            WorkspaceGlobs::new(vec!["root-two-packages/*"], vec![]).unwrap(),
-                        ),
-                    },
-                    InferInfo {
-                        path: root_one.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: Some(
-                            WorkspaceGlobs::new(vec!["root-two/root-one-packages/*"], vec![])
-                                .unwrap(),
-                        ),
-                    },
-                ],
-                output: Ok(root_two.clone()),
-            },
-            TestCase {
-                description: "Nested disjoint monorepo roots, execution in a workspace of the \
-                              farther root.",
-                infer_infos: vec![
-                    InferInfo {
-                        path: root_two.join_components(&["root-one-packages", "ui-library"]),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: None,
-                    },
-                    InferInfo {
-                        path: root_two.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: Some(
-                            WorkspaceGlobs::new(vec!["root-two-packages/*"], vec![]).unwrap(),
-                        ),
-                    },
-                    InferInfo {
-                        path: root_one.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: Some(
-                            WorkspaceGlobs::new(vec!["root-two/root-one-packages/*"], vec![])
-                                .unwrap(),
-                        ),
-                    },
-                ],
-                output: Ok(root_one.clone()),
-            },
-            TestCase {
-                description: "Disjoint package.",
-                infer_infos: vec![
-                    InferInfo {
-                        path: root.join_component("some-other-project"),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: None,
-                    },
-                    InferInfo {
-                        path: root.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: Some(
-                            WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
-                        ),
-                    },
-                ],
-                output: Ok(root.join_component("some-other-project")),
-            },
-            TestCase {
-                description: "Monorepo trying to point to a monorepo. We choose the closer one \
-                              and ignore the problem.",
-                infer_infos: vec![
-                    InferInfo {
-                        path: root_two.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: Some(
-                            WorkspaceGlobs::new(vec!["packages/*"], vec![]).unwrap(),
-                        ),
-                    },
-                    InferInfo {
-                        path: root_one,
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: Some(
-                            WorkspaceGlobs::new(vec!["root-two"], vec![]).unwrap(),
-                        ),
-                    },
-                ],
-                output: Ok(root_two.clone()),
-            },
-            TestCase {
-                description: "Nested non-monorepo packages.",
-                infer_infos: vec![
-                    InferInfo {
-                        path: project_two.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: None,
-                    },
-                    InferInfo {
-                        path: project_one.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: None,
-                    },
-                ],
-                output: Ok(project_two.clone()),
-            },
-            // The below test ensures that we privilege a valid `turbo.json` structure prior to
-            // evaluation of a valid `package.json` structure. If you include `turbo.json` you are
-            // able to "skip" deeper into the resolution by disregarding anything that does _not_
-            // have a `turbo.json`. This will matter _far_ more in a multi-language environment.
-
-            // Just one example test proves that the entire alternative chain construction works.
-            // The selection logic from within this set is identical. If we attempt to optimize the
-            // number of file system reads by early-exiting for matching we should expand this test
-            // set to mirror the above section.
-            TestCase {
-                description: "Nested non-monorepo packages, turbo.json primacy.",
-                infer_infos: vec![
-                    InferInfo {
-                        path: project_two,
-                        has_package_json: true,
-                        has_turbo_json: false,
-                        workspace_globs: None,
-                    },
-                    InferInfo {
-                        path: project_one.clone(),
-                        has_package_json: true,
-                        has_turbo_json: true,
-                        workspace_globs: None,
-                    },
-                ],
-                output: Ok(project_one),
-            },
-        ];
-
-        for test in tests {
-            match RepoState::process_potential_turbo_roots(test.infer_infos) {
-                Ok(repo_state) => assert_eq!(
-                    repo_state.root,
-                    test.output.unwrap(),
-                    "{}",
-                    test.description
-                ),
-                Err(err) => assert_eq!(
-                    err.to_string(),
-                    test.output.unwrap_err().to_string(),
-                    "{}",
-                    test.description
-                ),
-            };
-        }
-    }
+    use super::turbo_version_has_shim;
 
     #[test]
     fn test_skip_infer_version_constraint() {

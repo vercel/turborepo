@@ -17,13 +17,14 @@ export class Logger {
     this.step = 1;
   }
 
-  logger(...args: any[]) {
+  logger(...args: Array<unknown>) {
     if (this.interactive) {
+      // eslint-disable-next-line no-console -- logger
       console.log(...args);
     }
   }
 
-  indented(level: number, ...args: any[]) {
+  indented(level: number, ...args: Array<unknown>) {
     this.logger(" ".repeat(INDENTATION * level), ...args);
   }
 
@@ -48,7 +49,7 @@ export class Logger {
     this.logger(chalk.bold(this.gradient(`\n>>> TURBOREPO\n`)));
   }
 
-  info(...args: any[]) {
+  info(...args: Array<unknown>) {
     this.logger(...args);
   }
 
@@ -58,7 +59,7 @@ export class Logger {
     this.step += 1;
   }
 
-  subStep(...args: any[]) {
+  subStep(...args: Array<unknown>) {
     this.logger(
       " ".repeat(INDENTATION),
       `-`,
@@ -67,7 +68,7 @@ export class Logger {
     );
   }
 
-  subStepFailure(...args: any[]) {
+  subStepFailure(...args: Array<unknown>) {
     this.logger(" ".repeat(INDENTATION), `-`, chalk.red("ERROR |"), ...args);
   }
 
@@ -76,7 +77,7 @@ export class Logger {
     this.indented(2, "Root:");
   }
 
-  rootStep(...args: any[]) {
+  rootStep(...args: Array<unknown>) {
     this.logger(
       " ".repeat(INDENTATION * 3),
       `-`,
@@ -90,7 +91,7 @@ export class Logger {
     this.indented(2, "Workspaces:");
   }
 
-  workspaceStep(...args: any[]) {
+  workspaceStep(...args: Array<unknown>) {
     this.logger(
       " ".repeat(INDENTATION * 3),
       `-`,
@@ -103,7 +104,8 @@ export class Logger {
     this.logger();
   }
 
-  error(...args: any[]) {
+  error(...args: Array<unknown>) {
+    // eslint-disable-next-line no-console -- logger
     console.error(...args);
   }
 }

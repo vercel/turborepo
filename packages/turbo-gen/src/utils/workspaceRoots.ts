@@ -1,4 +1,4 @@
-import path from "path";
+import path from "node:path";
 import type { Project } from "@turbo/workspaces";
 
 // This function is not perfect and could be improved to be more accurate.
@@ -18,9 +18,9 @@ export function getWorkspaceRoots({
   const workspaceRoots = new Set<string>();
   project.workspaceData.globs.forEach((glob) => {
     if (allWorkspacePaths.includes(glob)) {
-      return;
+      // do nothing
     } else if (glob.startsWith("!")) {
-      return;
+      // do nothing
     } else {
       const globParts = glob.split("/");
       const globRoot = globParts[0];

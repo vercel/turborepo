@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/pyr-sh/dag"
 	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/turbopath"
@@ -297,6 +298,7 @@ func Test_filter(t *testing.T) {
 				WorkspaceInfos: workspaceInfos,
 				Cwd:            root,
 				Inference:      tc.PackageInference,
+				Logger:         hclog.Default(),
 			}
 			pkgs, err := r.getFilteredPackages(tc.Selectors)
 			if err != nil {
@@ -311,6 +313,7 @@ func Test_filter(t *testing.T) {
 			Graph:          graph,
 			WorkspaceInfos: workspaceInfos,
 			Cwd:            root,
+			Logger:         hclog.Default(),
 		}
 		pkgs, err := r.getFilteredPackages([]*TargetSelector{
 			{
@@ -355,6 +358,7 @@ func Test_matchScopedPackage(t *testing.T) {
 		Graph:          graph,
 		WorkspaceInfos: workspaceInfos,
 		Cwd:            root,
+		Logger:         hclog.Default(),
 	}
 	pkgs, err := r.getFilteredPackages([]*TargetSelector{
 		{
@@ -396,6 +400,7 @@ func Test_matchExactPackages(t *testing.T) {
 		Graph:          graph,
 		WorkspaceInfos: workspaceInfos,
 		Cwd:            root,
+		Logger:         hclog.Default(),
 	}
 	pkgs, err := r.getFilteredPackages([]*TargetSelector{
 		{
@@ -437,6 +442,7 @@ func Test_matchMultipleScopedPackages(t *testing.T) {
 		Graph:          graph,
 		WorkspaceInfos: workspaceInfos,
 		Cwd:            root,
+		Logger:         hclog.Default(),
 	}
 	pkgs, err := r.getFilteredPackages([]*TargetSelector{
 		{
@@ -510,6 +516,7 @@ func Test_SCM(t *testing.T) {
 			}
 			panic(fmt.Sprintf("unsupported commit range %v...%v", fromRef, toRef))
 		},
+		Logger: hclog.Default(),
 	}
 
 	testCases := []struct {

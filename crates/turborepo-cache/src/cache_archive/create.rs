@@ -7,15 +7,15 @@ use std::{
 };
 
 use tar::{EntryType, Header};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 
 use crate::CacheError;
 
-struct CacheWriter {
-    builder: tar::Builder<Box<dyn Write>>,
+pub struct CacheWriter<'a> {
+    builder: tar::Builder<Box<dyn Write + 'a>>,
 }
 
-impl CacheWriter {
+impl<'a> CacheWriter<'a> {
     // Appends data to tar builder.
     fn append_data(
         &mut self,
@@ -30,10 +30,23 @@ impl CacheWriter {
         Ok(self.builder.finish()?)
     }
 
+    pub fn from_writer(writer: impl Write + 'a, use_compression: bool) -> Result<Self, CacheError> {
+        if use_compression {
+            let zw = zstd::Encoder::new(writer, 0)?.auto_finish();
+            Ok(CacheWriter {
+                builder: tar::Builder::new(Box::new(zw)),
+            })
+        } else {
+            Ok(CacheWriter {
+                builder: tar::Builder::new(Box::new(writer)),
+            })
+        }
+    }
+
     // Makes a new CacheArchive at the specified path
     // Wires up the chain of writers:
     // tar::Builder -> zstd::Encoder (optional) -> BufWriter -> File
-    fn create(path: &AbsoluteSystemPath) -> Result<Self, CacheError> {
+    pub fn create(path: &AbsoluteSystemPath) -> Result<Self, CacheError> {
         let mut options = OpenOptions::new();
         options.write(true).create(true).truncate(true);
 
@@ -58,7 +71,7 @@ impl CacheWriter {
     }
 
     // Adds a user-cached item to the tar
-    fn add_file(
+    pub(crate) fn add_file(
         &mut self,
         anchor: &AbsoluteSystemPath,
         file_path: &AnchoredSystemPath,
@@ -70,7 +83,7 @@ impl CacheWriter {
         let file_info = source_path.symlink_metadata()?;
 
         // Normalize the path within the cache
-        let mut file_path = RelativeUnixPathBuf::new(file_path.as_str())?;
+        let mut file_path = file_path.to_unix();
         file_path.make_canonical_for_tar(file_info.is_dir());
 
         let mut header = Self::create_header(&source_path, &file_info)?;
@@ -111,9 +124,11 @@ impl CacheWriter {
             header.set_link_name(link)?;
             header.set_entry_type(EntryType::Symlink);
         } else if file_info.is_dir() {
+            header.set_size(0);
             header.set_entry_type(EntryType::Directory);
         } else if file_info.is_file() {
             header.set_entry_type(EntryType::Regular);
+            header.set_size(file_info.len());
         } else {
             // Throw an error if trying to create a cache that contains a type we don't
             // support.
@@ -161,7 +176,7 @@ mod tests {
     fn create_entry(anchor: &AbsoluteSystemPath, file: &CreateFileDefinition) -> Result<()> {
         match &file.file_type {
             FileType::Dir => create_dir(anchor, file),
-            FileType::Symlink { linkname } => create_symlink(anchor, file, &linkname),
+            FileType::Symlink { linkname } => create_symlink(anchor, file, linkname),
             FileType::Fifo => create_fifo(anchor, file),
             FileType::File => create_file(anchor, file),
         }
@@ -185,7 +200,7 @@ mod tests {
         linkname: &str,
     ) -> Result<()> {
         let path = anchor.resolve(&file.path);
-        path.symlink_to_file(&linkname)?;
+        path.symlink_to_file(linkname)?;
 
         Ok(())
     }
@@ -228,10 +243,11 @@ mod tests {
            file_type: FileType::File,
          }
       ],
-      "db05810ef8714bc849a27d2b78a267c03862cd5259a5c7fb916e92a1ef912da68a4c92032d8e984e241e12fb85a4b41574009922d740c7e66faf50a00682003c",
-      "db05810ef8714bc849a27d2b78a267c03862cd5259a5c7fb916e92a1ef912da68a4c92032d8e984e241e12fb85a4b41574009922d740c7e66faf50a00682003c",
-      "224fda5e3b1db1e4a7ede1024e09ea70add3243ce1227d28b3f8fc40bca98e14d381efe4e8affc4fef8eb21b4ff42753f9923aac60038680602c117b15748ca1",
+      "bf0b4bf722f8d845dce7627606ab8af30bb6454d7c0379219e4c036a484960fe78e3d98e29ca0bac9b69b858d446b89d2d691c524e2884389032be799b6699f6",
+      "bf0b4bf722f8d845dce7627606ab8af30bb6454d7c0379219e4c036a484960fe78e3d98e29ca0bac9b69b858d446b89d2d691c524e2884389032be799b6699f6",
+      "4f1357753cceec5df1c8a36110ce256f3e8c5c1f62cab3283013b6266d6e97b3884711ccdd45462a4607bee7ac7a8e414d0acea4672a9f0306bcf364281edc2f",
       None
+      ; "create regular file"
     )]
     #[test_case(
         vec![
@@ -256,10 +272,11 @@ mod tests {
                 file_type: FileType::File,
             }
         ],
-        "7cb91627c62368cfa15160f9f018de3320ee0cf267625d37265d162ae3b0dea64b8126aac9769922796e3eb864189efd7c5555c4eea8999c91cbbbe695852111",
-        "04f27e900a4a189cf60ce21e1864ac3f77c3bc9276026a94329a5314e20a3f2671e2ac949025840f46dc9fe72f9f566f1f2c0848a3f203ba77564fae204e886c",
-        "1a618c123f9f09bbca9052121d13eea3192fa3addc61eb11f6dcb794f1093abba204510d126ca1f974d5db9a6e728c1e5d3b7c099faf904e494476277178d657",
+        "2e6febdd2e8180f91f481ae58510e4afd3f071e66b7b64d82616ebb2d2d560b9a8a814e41f723cdaa5faec90405818421d590fcf8e617df0aabaa6fc61427d4f",
+        "0ece16efdb0b7e2a087e622ed52f29f21a4c080d77c31c4ed940b57dcdcb1f60b910d15232c0a2747325c22dadbfd069f15de969626dc49746be2d4b9b22e239",
+        "2e8ad9651964faa76082306dc95bff86fa0db821681e7a8acb982244ce0a9375417e867c3a9cb82f70bc6f03c7fb085e402712d3e9f27b980d5a0c22e086f4e2",
         None
+        ; "create symlinks"
     )]
     #[test_case(
         vec![
@@ -274,10 +291,11 @@ mod tests {
                 file_type: FileType::File,
             },
         ],
-        "919de777e4d43eb072939d2e0664f9df533bd24ec357eacab83dcb8a64e2723f3ee5ecb277d1cf24538339fe06d210563188052d08dab146a8463fdb6898d655",
-        "919de777e4d43eb072939d2e0664f9df533bd24ec357eacab83dcb8a64e2723f3ee5ecb277d1cf24538339fe06d210563188052d08dab146a8463fdb6898d655",
-        "f12ff4c12722f2c901885c67d232c325b604d54e5b67c35da01ab133fd36e637bf8d2501b463ffb6e4438efaf2a59526a85218e00c0f6b7b5594c8f4154c1ece",
+        "973c16d7e8662d3483ff0679b5337d7b9ba2001dbe863604fc8cc60254305750616312b9f988112db918d50fd087d89444d43a64beb4e8102109c5c628510131",
+        "973c16d7e8662d3483ff0679b5337d7b9ba2001dbe863604fc8cc60254305750616312b9f988112db918d50fd087d89444d43a64beb4e8102109c5c628510131",
+        "b8d51875d79a3cd56938e2ca8c3cad8eed6c96f7c38e152669ddfa7d7a1c44f62e4c3a13b299a30a895156c62b07ddbc46fdbf07a01870b965050359c19a9e06",
         None
+        ; "create directory"
     )]
     #[test_case(
         vec![
@@ -291,6 +309,7 @@ mod tests {
         "c113763393a9fb498cc676e1fe4843206cda665afe2144829fe7434da9e81f0cf6d11386fa79877d3c514d108f9696740256af952b57d32216fbed2eb2fb049d",
         "fe692a000551a60da6cc303a9552a16d7ed5c462e33153a96824e96596da6d642fc671448f06f34e9685a13fe5bbb4220f59db73a856626b8a0962916a8f5ea3",
         None
+        ; "create broken symlink"
     )]
     #[test_case(
         vec![
@@ -304,6 +323,7 @@ mod tests {
         "",
         "",
         Some("attempted to create unsupported file type")
+        ; "create unsupported"
     )]
     fn test_create(
         files: Vec<CreateFileDefinition>,
@@ -407,7 +427,7 @@ mod tests {
     fn test_compression() -> Result<()> {
         let mut buffer = Vec::new();
         let mut encoder = zstd::Encoder::new(&mut buffer, 0)?.auto_finish();
-        encoder.write(b"hello world")?;
+        encoder.write_all(b"hello world")?;
         // Should finish encoding on drop
         drop(encoder);
 

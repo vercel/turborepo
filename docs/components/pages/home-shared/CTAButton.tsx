@@ -1,5 +1,5 @@
 import cn from "classnames";
-import { MouseEventHandler } from "react";
+import type { MouseEventHandler } from "react";
 import gradients from "./gradients.module.css";
 
 export function CTAButton({
@@ -21,12 +21,12 @@ export function CTAButton({
   return (
     <div className="relative w-full group">
       <button
-        onClick={onClick}
         className={`w-full min-w-[120px] text-base font-medium no-underline ${
           outline ? outlineClasses : filledClasses
         } rounded md:leading-6 transition-all duration-300 ${
           monospace ? "font-mono" : ""
         }`}
+        onClick={onClick}
       >
         {children}
       </button>

@@ -1,14 +1,14 @@
-import { CSSProperties } from "react";
+import type { CSSProperties } from "react";
 
-export type TurboUser = {
+export interface TurboUser {
   caption: string;
   image: string;
   infoLink: string;
   pinned?: boolean;
   style?: CSSProperties;
-};
+}
 
-export const users: Array<TurboUser> = [
+export const users: TurboUser[] = [
   {
     caption: "Vercel",
     image: "/images/logos/vercel.svg",
@@ -338,28 +338,10 @@ export const users: Array<TurboUser> = [
     },
   },
   {
-    caption: "Stedi",
-    image: "/images/logos/stedi.svg",
-    infoLink: "https://www.stedi.com/",
-    pinned: true,
-    style: {
-      width: 75,
-    },
-  },
-  {
     caption: "Framer",
     image: "/images/logos/framer.svg",
     infoLink: "https://www.framer.com/",
     pinned: true,
-  },
-  {
-    caption: "Maze",
-    image: "/images/logos/maze.svg",
-    infoLink: "https://maze.co/",
-    pinned: true,
-    style: {
-      width: 125,
-    },
   },
   {
     caption: "Builder.io",
@@ -416,15 +398,6 @@ export const users: Array<TurboUser> = [
     pinned: true,
   },
   {
-    caption: "TeeSpring",
-    image: "/images/logos/teespring.svg",
-    infoLink: "https://www.spri.ng/",
-    pinned: true,
-    style: {
-      width: 150,
-    },
-  },
-  {
     caption: "Endear",
     image: "/images/logos/endear.svg",
     infoLink: "https://endearhq.com/",
@@ -434,129 +407,6 @@ export const users: Array<TurboUser> = [
     caption: "Makeswift",
     image: "/images/logos/makeswift.svg",
     infoLink: "https://www.makeswift.com/",
-    pinned: true,
-  },
-  {
-    caption: "Fandom",
-    image: "/images/logos/fandom.svg",
-    infoLink: "https://www.fandom.com/",
-    pinned: true,
-  },
-  {
-    caption: "Waggel",
-    image: "/images/logos/waggel.svg",
-    infoLink: "https://www.waggel.co.uk/",
-    pinned: true,
-  },
-  {
-    caption: "n8n",
-    image: "/images/logos/n8n.svg",
-    infoLink: "https://n8n.io/",
-    pinned: true,
-  },
-  {
-    caption: "React Flow",
-    image: "/images/logos/reactflow.svg",
-    infoLink: "https://reactflow.dev/",
-    pinned: true,
-  },
-  {
-    caption: "Agrotoken",
-    image: "/images/logos/agrotoken.svg",
-    infoLink: "https://agrotoken.io/",
-    pinned: true,
-  },
-  {
-    caption: "Rocket.Chat",
-    image: "/images/logos/rocketchat.svg",
-    infoLink: "https://www.rocket.chat/",
-    pinned: true,
-  },
-  {
-    caption: "Backpack",
-    image: "/images/logos/backpack.svg",
-    infoLink: "https://www.backpack.app/",
-    pinned: true,
-  },
-  {
-    caption: "Supernova.io",
-    image: "/images/logos/supernova.svg",
-    infoLink: "https://www.supernova.io/",
-    pinned: true,
-    style: {
-      width: 150,
-    },
-  },
-  {
-    caption: "BuildPass",
-    image: "/images/logos/buildpass.svg",
-    infoLink: "https://www.buildpass.com.au/",
-    pinned: true,
-    style: {
-      width: 175,
-    },
-  },
-  {
-    caption: "SolanaFM",
-    image: "/images/logos/solanafm.svg",
-    infoLink: "https://solana.fm/",
-    pinned: true,
-  },
-  {
-    caption: "Authdog",
-    image: "/images/logos/authdog.svg",
-    infoLink: "https://www.authdog.com/",
-    pinned: true,
-    style: {
-      width: 175,
-    },
-  },
-  {
-    caption: "Nhost",
-    image: "/images/logos/nhost.svg",
-    infoLink: "https://nhost.io/",
-    pinned: true,
-  },
-  {
-    caption: "LG U+",
-    image: "/images/logos/lguplus.svg",
-    infoLink: "https://www.lguplus.com/about/en",
-    pinned: true,
-    style: {
-      width: 150,
-    },
-  },
-  {
-    caption: "Comparastore",
-    image: "/images/logos/comparastore.svg",
-    infoLink: "https://www.comparastore.com",
-    pinned: true,
-    style: {
-      width: 175,
-    },
-  },
-  {
-    caption: "Block Protocol",
-    image: "/images/logos/blockprotocol.svg",
-    infoLink: "https://blockprotocol.org/",
-    pinned: true,
-  },
-  {
-    caption: "HASH",
-    image: "/images/logos/hash.svg",
-    infoLink: "https://hash.dev/",
-    pinned: true,
-  },
-  {
-    caption: "Chợ Tốt",
-    image: "/images/logos/chotot.svg",
-    infoLink: "https://chotot.com/",
-    pinned: true,
-  },
-  {
-    caption: "SLIIT FOSS",
-    image: "/images/logos/sliit-foss.svg",
-    infoLink: "https://sliitfoss.org",
     pinned: true,
   },
 ];

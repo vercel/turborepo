@@ -7,13 +7,13 @@ package ffi
 
 // #include "bindings.h"
 //
-// #cgo darwin,arm64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_arm64  -lz -liconv -framework Security
-// #cgo darwin,amd64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_amd64  -lz -liconv -framework Security
-// #cgo linux,arm64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lunwind
-// #cgo linux,amd64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lunwind
-// #cgo linux,arm64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lz
-// #cgo linux,amd64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lz
-// #cgo windows,amd64 LDFLAGS: -L${SRCDIR} -lturborepo_ffi_windows_amd64 -lole32 -lbcrypt -lws2_32 -luserenv
+// #cgo darwin,arm64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_arm64  -lz -liconv -framework Security -framework CoreFoundation
+// #cgo darwin,amd64 LDFLAGS:  -L${SRCDIR} -lturborepo_ffi_darwin_amd64  -lz -liconv -framework Security -framework CoreFoundation
+// #cgo linux,arm64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lunwind -lm
+// #cgo linux,amd64,staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lunwind -lm
+// #cgo linux,arm64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_arm64 -lz -lm
+// #cgo linux,amd64,!staticbinary LDFLAGS:   -L${SRCDIR} -lturborepo_ffi_linux_amd64 -lz -lm
+// #cgo windows,amd64 LDFLAGS: -L${SRCDIR} -lturborepo_ffi_windows_amd64 -lole32 -lbcrypt -lws2_32 -luserenv -lntdll
 import "C"
 
 import (
@@ -220,82 +220,11 @@ func toPackageManager(packageManager string) ffi_proto.PackageManager {
 		return ffi_proto.PackageManager_PNPM
 	case "yarn":
 		return ffi_proto.PackageManager_YARN
+	case "bun":
+		return ffi_proto.PackageManager_BUN
 	default:
 		panic(fmt.Sprintf("Invalid package manager string: %s", packageManager))
 	}
-}
-
-// Subgraph returns the contents of a lockfile subgraph
-func Subgraph(packageManager string, content []byte, workspaces []string, packages []string, resolutions map[string]string) ([]byte, error) {
-	var additionalData *ffi_proto.AdditionalBerryData
-	if resolutions != nil {
-		additionalData = &ffi_proto.AdditionalBerryData{Resolutions: resolutions}
-	}
-	req := ffi_proto.SubgraphRequest{
-		Contents:       content,
-		Workspaces:     workspaces,
-		Packages:       packages,
-		PackageManager: toPackageManager(packageManager),
-		Resolutions:    additionalData,
-	}
-	reqBuf := Marshal(&req)
-	resBuf := C.subgraph(reqBuf)
-	reqBuf.Free()
-
-	resp := ffi_proto.SubgraphResponse{}
-	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
-		panic(err)
-	}
-
-	if err := resp.GetError(); err != "" {
-		return nil, errors.New(err)
-	}
-
-	return resp.GetContents(), nil
-}
-
-// Patches returns all patch files referenced in the lockfile
-func Patches(content []byte, packageManager string) []string {
-	req := ffi_proto.PatchesRequest{
-		Contents:       content,
-		PackageManager: toPackageManager(packageManager),
-	}
-	reqBuf := Marshal(&req)
-	resBuf := C.patches(reqBuf)
-	reqBuf.Free()
-
-	resp := ffi_proto.PatchesResponse{}
-	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
-		panic(err)
-	}
-	if err := resp.GetError(); err != "" {
-		panic(err)
-	}
-
-	return resp.GetPatches().GetPatches()
-}
-
-// RecursiveCopy copies src and its contents to dst
-func RecursiveCopy(src string, dst string) error {
-	req := ffi_proto.RecursiveCopyRequest{
-		Src: src,
-		Dst: dst,
-	}
-	reqBuf := Marshal(&req)
-	resBuf := C.recursive_copy(reqBuf)
-	reqBuf.Free()
-
-	resp := ffi_proto.RecursiveCopyResponse{}
-	if err := Unmarshal(resBuf, resp.ProtoReflect().Interface()); err != nil {
-		panic(err)
-	}
-	// Error is optional, so a nil value means no error was set
-	// GetError() papers over the difference and returns the zero
-	// value if it isn't set, so we need to check the value directly.
-	if resp.Error != nil {
-		return errors.New(*resp.Error)
-	}
-	return nil
 }
 
 // GlobalChange checks if there are any differences between lockfiles that would completely invalidate
@@ -307,7 +236,7 @@ func GlobalChange(packageManager string, prevContents []byte, currContents []byt
 		CurrContents:   currContents,
 	}
 	reqBuf := Marshal(&req)
-	resBuf := C.patches(reqBuf)
+	resBuf := C.global_change(reqBuf)
 	reqBuf.Free()
 
 	resp := ffi_proto.GlobalChangeResponse{}

@@ -1,14 +1,16 @@
+import type { Schema } from "@turbo/types";
 import { findRootSync } from "@manypkg/find-root";
+import json5 from "json5";
 import { searchUp } from "./searchUp";
-import JSON5 from "json5";
 
 interface Options {
   cache?: boolean;
 }
 
 function contentCheck(content: string): boolean {
-  const result = JSON5.parse(content);
-  return !result.extends;
+  // eslint-disable-next-line import/no-named-as-default-member -- json5 exports different objects depending on if you're using esm or cjs (https://github.com/json5/json5/issues/240)
+  const result: Schema | undefined = json5.parse(content);
+  return !(result && "extends" in result);
 }
 
 const configCache: Record<string, string> = {};

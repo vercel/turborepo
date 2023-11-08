@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -21,7 +22,6 @@ import (
 	"github.com/vercel/turbo/cli/internal/colorcache"
 	"github.com/vercel/turbo/cli/internal/core"
 	"github.com/vercel/turbo/cli/internal/env"
-	"github.com/vercel/turbo/cli/internal/fs"
 	"github.com/vercel/turbo/cli/internal/graph"
 	"github.com/vercel/turbo/cli/internal/logstreamer"
 	"github.com/vercel/turbo/cli/internal/nodes"
@@ -32,6 +32,7 @@ import (
 	"github.com/vercel/turbo/cli/internal/spinner"
 	"github.com/vercel/turbo/cli/internal/taskhash"
 	"github.com/vercel/turbo/cli/internal/turbopath"
+	"github.com/vercel/turbo/cli/internal/turbostate"
 	"github.com/vercel/turbo/cli/internal/ui"
 	"github.com/vercel/turbo/cli/internal/util"
 )
@@ -55,6 +56,72 @@ func (tsob *threadsafeOutputBuffer) Bytes() []byte {
 	return tsob.buf.Bytes()
 }
 
+type logLine struct {
+	isStdout bool
+	line     []byte
+}
+
+// logBuffer holds the log lines for a task, tagged to stdout or stderr
+type logBuffer struct {
+	mu    sync.Mutex
+	lines []logLine
+}
+
+// LogLine appends a log line to the log buffer
+func (lb *logBuffer) LogLine(line []byte, isStdout bool) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	lb.lines = append(lb.lines, logLine{isStdout, line})
+}
+
+// Drain writes the contents of the logBuffer to the appropriate output stream
+func (lb *logBuffer) Drain(stdout io.Writer, stderr io.Writer) error {
+	for _, line := range lb.lines {
+		if line.isStdout {
+			if _, err := stdout.Write(line.line); err != nil {
+				return err
+			}
+		} else {
+			if _, err := stderr.Write(line.line); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// StdoutWriter returns a writer tagged to stdout
+func (lb *logBuffer) StdoutWriter() *logBufferWriter {
+	return &logBufferWriter{
+		isStdout:  true,
+		logBuffer: lb,
+	}
+}
+
+// StderrWriter returns a writer tagged to stderr
+func (lb *logBuffer) StderrWriter() *logBufferWriter {
+	return &logBufferWriter{
+		isStdout:  false,
+		logBuffer: lb,
+	}
+}
+
+type logBufferWriter struct {
+	isStdout  bool
+	logBuffer *logBuffer
+}
+
+// Write implements io.Writer.Write for logBufferWriter
+func (lbw *logBufferWriter) Write(bytes []byte) (int, error) {
+	n := len(bytes)
+	// The io.Writer contract states that we cannot retain the bytes we are passed,
+	// so we need to make a copy of them
+	cpy := make([]byte, n)
+	copy(cpy, bytes)
+	lbw.logBuffer.LogLine(cpy, lbw.isStdout)
+	return n, nil
+}
+
 // RealRun executes a set of tasks
 func RealRun(
 	ctx gocontext.Context,
@@ -63,7 +130,6 @@ func RealRun(
 	engine *core.Engine,
 	taskHashTracker *taskhash.Tracker,
 	turboCache cache.Cache,
-	turboJSON *fs.TurboJSON,
 	globalEnvMode util.EnvMode,
 	globalEnv env.EnvironmentVariableMap,
 	globalPassThroughEnv env.EnvironmentVariableMap,
@@ -72,6 +138,7 @@ func RealRun(
 	runSummary runsummary.Meta,
 	packageManager *packagemanager.PackageManager,
 	processes *process.Manager,
+	executionState *turbostate.ExecutionState,
 ) error {
 	singlePackage := rs.Opts.runOpts.SinglePackage
 
@@ -91,7 +158,7 @@ func RealRun(
 	}
 
 	defer func() {
-		_ = spinner.WaitFor(ctx, turboCache.Shutdown, base.UI, "...writing to cache...", 1500*time.Millisecond)
+		_ = spinner.WaitFor(ctx, turboCache.Shutdown, base.UI, "...Finishing writing to cache...", 1500*time.Millisecond)
 	}()
 	colorCache := colorcache.New()
 
@@ -124,25 +191,19 @@ func RealRun(
 	}
 
 	taskCount := len(engine.TaskGraph.Vertices())
-	logChan := make(chan taskLogContext, taskCount)
+	logChan := make(chan *logBuffer, taskCount)
 	logWaitGroup := sync.WaitGroup{}
 	isGrouped := rs.Opts.runOpts.LogOrder == "grouped"
 
 	if isGrouped {
 		logWaitGroup.Add(1)
 		go func() {
-			for logContext := range logChan {
+			for logBuffer := range logChan {
 
-				outBytes := logContext.outBuf.Bytes()
-				errBytes := logContext.errBuf.Bytes()
-
-				_, errOut := os.Stdout.Write(outBytes)
-				_, errErr := os.Stderr.Write(errBytes)
-
-				if errOut != nil || errErr != nil {
-					ec.ui.Error("Failed to output some of the logs.")
+				err := logBuffer.Drain(os.Stdout, os.Stderr)
+				if err != nil {
+					ec.ui.Error(fmt.Sprintf("Failed to output some of the logs: %v", err))
 				}
-
 			}
 			logWaitGroup.Done()
 		}()
@@ -151,15 +212,20 @@ func RealRun(
 	taskSummaryMutex := sync.Mutex{}
 	taskSummaries := []*runsummary.TaskSummary{}
 	execFunc := func(ctx gocontext.Context, packageTask *nodes.PackageTask, taskSummary *runsummary.TaskSummary) error {
-		outBuf := &bytes.Buffer{}
-		errBuf := &bytes.Buffer{}
-
 		var outWriter io.Writer = os.Stdout
 		var errWriter io.Writer = os.Stderr
 
+		logBuffer := &logBuffer{}
+
 		if isGrouped {
-			outWriter = outBuf
-			errWriter = errBuf
+			outWriter = logBuffer.StdoutWriter()
+			if rs.Opts.runOpts.IsGithubActions {
+				// If we're running on Github Actions, force everything to stdout
+				// so as not to have out-of-order log lines
+				errWriter = outWriter
+			} else {
+				errWriter = logBuffer.StderrWriter()
+			}
 		}
 
 		var spacesLogBuffer *threadsafeOutputBuffer
@@ -194,10 +260,7 @@ func RealRun(
 			runSummary.CloseTask(taskSummary, logBytes)
 		}
 		if isGrouped {
-			logChan <- taskLogContext{
-				outBuf: outBuf,
-				errBuf: errBuf,
-			}
+			logChan <- logBuffer
 		}
 
 		// Return the error when there is one
@@ -214,6 +277,30 @@ func RealRun(
 
 	visitorFn := g.GetPackageTaskVisitor(ctx, engine.TaskGraph, rs.Opts.runOpts.FrameworkInference, globalEnvMode, getArgs, base.Logger, execFunc)
 	errs := engine.Execute(visitorFn, execOpts)
+	if isGrouped {
+		close(logChan)
+		logWaitGroup.Wait()
+	}
+
+	if executionState.TaskHashTracker != nil {
+		expectedTaskHashes := taskHashTracker.GetTaskHashes()
+		// If we have errors, not all the Go hashes may be calculated.
+		// We just check the ones that have been calculated
+		if len(errs) > 0 {
+			for task, expectedHash := range expectedTaskHashes {
+				hash, ok := executionState.TaskHashTracker.PackageTaskHashes[task]
+				if !ok {
+					return fmt.Errorf("task %s not found in Rust hash tracker", task)
+				}
+				if hash != expectedHash {
+					return fmt.Errorf("task %s hash differs between Rust and Go: rust %s go %s", task, hash, expectedHash)
+				}
+			}
+		} else if !reflect.DeepEqual(executionState.TaskHashTracker.PackageTaskHashes, expectedTaskHashes) {
+			return fmt.Errorf("task hashes differ between Rust and Go: rust %v go %v", executionState.TaskHashTracker.PackageTaskHashes, expectedTaskHashes)
+		}
+		base.Logger.Debug("task hashes match")
+	}
 
 	// Track if we saw any child with a non-zero exit code
 	exitCode := 0
@@ -222,6 +309,14 @@ func RealRun(
 	// Assign tasks after execution
 	runSummary.RunSummary.Tasks = taskSummaries
 
+	terminal := base.UI
+	if rs.Opts.runOpts.IsGithubActions {
+		terminal = &cli.PrefixedUi{
+			Ui:          terminal,
+			ErrorPrefix: "::error::",
+			WarnPrefix:  "::warn::",
+		}
+	}
 	for _, err := range errs {
 		if errors.As(err, &exitCodeErr) {
 			// If a process gets killed via a signal, Go reports it's exit code as -1.
@@ -238,7 +333,7 @@ func RealRun(
 			// We hit some error, it shouldn't be exit code 0
 			exitCode = 1
 		}
-		base.UI.Error(err.Error())
+		terminal.Error(err.Error())
 	}
 
 	// When continue on error is enabled don't register failed tasks as errors
@@ -257,11 +352,6 @@ func RealRun(
 		}
 	}
 
-	if isGrouped {
-		close(logChan)
-		logWaitGroup.Wait()
-	}
-
 	if err := runSummary.Close(ctx, exitCode, g.WorkspaceInfos, base.UI); err != nil {
 		// We don't need to throw an error, but we can warn on this.
 		// Note: this method doesn't actually return an error for Real Runs at the time of writing.
@@ -274,11 +364,6 @@ func RealRun(
 		}
 	}
 	return nil
-}
-
-type taskLogContext struct {
-	outBuf *bytes.Buffer
-	errBuf *bytes.Buffer
 }
 
 type execContext struct {
@@ -351,12 +436,19 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 		Ui:           ui,
 		OutputPrefix: prettyPrefix,
 		InfoPrefix:   prettyPrefix,
-		ErrorPrefix:  prettyPrefix,
+		ErrorPrefix:  prettyPrefix + "ERROR: ",
 		WarnPrefix:   prettyPrefix,
 	}
 
 	if ec.rs.Opts.runOpts.IsGithubActions {
 		ui.Output(fmt.Sprintf("::group::%s", packageTask.OutputPrefix(ec.isSinglePackage)))
+		prefixedUI.WarnPrefix = "[WARN] "
+		prefixedUI.ErrorPrefix = "[ERROR] "
+		defer func() {
+			// We don't use the prefixedUI here because the prefix in this case would include
+			// the ::group::<taskID>, and we explicitly want to close the github group
+			ui.Output("::endgroup::")
+		}()
 	}
 
 	cacheStatus, err := taskCache.RestoreOutputs(ctx, prefixedUI, progressLogger)
@@ -382,7 +474,7 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	argsactual := append([]string{"run"}, packageTask.Task)
 	if len(passThroughArgs) > 0 {
 		// This will be either '--' or a typed nil
-		argsactual = append(argsactual, ec.packageManager.ArgSeparator...)
+		argsactual = append(argsactual, ec.packageManager.ArgSeparator(passThroughArgs)...)
 		argsactual = append(argsactual, passThroughArgs...)
 	}
 
@@ -447,11 +539,6 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	closeOutputs := func() error {
 		var closeErrors []error
-		if ec.rs.Opts.runOpts.IsGithubActions {
-			// We don't use the prefixedUI here because the prefix in this case would include
-			// the ::group::<taskID>, and we explicitly want to close the github group
-			ui.Output("::endgroup::")
-		}
 
 		if err := logStreamerOut.Close(); err != nil {
 			closeErrors = append(closeErrors, errors.Wrap(err, "log stdout"))
@@ -475,7 +562,9 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 
 	// Run the command
 	if err := ec.processes.Exec(cmd); err != nil {
-		// close off our outputs. We errored, so we mostly don't care if we fail to close
+		// ensure we close off our outputs. We errored, so we mostly don't care if we fail to close
+		// We don't close them directly because we're potentially going to output some errors or
+		// warnings that we want grouped with the task output.
 		_ = closeOutputs()
 		// if we already know we're in the process of exiting,
 		// we don't need to record an error to that effect.
@@ -492,17 +581,25 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 			// If it wasn't a ChildExit, and something else went wrong, we don't have an exitCode
 			tracer(runsummary.TargetBuildFailed, err, nil)
 		}
-
+		taskIDDisplay := packageTask.TaskID
+		if ec.isSinglePackage {
+			taskIDDisplay = packageTask.Task
+		}
+		taskErr := &TaskError{
+			cause:         err,
+			taskIDDisplay: taskIDDisplay,
+		}
 		// If there was an error, flush the buffered output
 		taskCache.OnError(prefixedUI, progressLogger)
 		progressLogger.Error(fmt.Sprintf("Error: command finished with error: %v", err))
 		if !ec.rs.Opts.runOpts.ContinueOnError {
-			prefixedUI.Error(fmt.Sprintf("ERROR: command finished with error: %s", err))
+			prefixedUI.Error(fmt.Sprintf("command finished with error: %s", err))
 			ec.processes.Close()
 			// We're not continuing, stop graph traversal
-			err = core.StopExecution(err)
+			err = core.StopExecution(taskErr)
 		} else {
 			prefixedUI.Warn("command finished with error, but continuing...")
+			err = taskErr
 		}
 
 		return taskExecutionSummary, err
@@ -527,4 +624,17 @@ func (ec *execContext) exec(ctx gocontext.Context, packageTask *nodes.PackageTas
 	tracer(runsummary.TargetBuilt, nil, &successExitCode)
 	progressLogger.Debug("done", "status", "complete", "duration", taskExecutionSummary.Duration)
 	return taskExecutionSummary, nil
+}
+
+// TaskError wraps an error encountered running the given task
+type TaskError struct {
+	cause         error
+	taskIDDisplay string
+}
+
+// Unwrap allows for interoperation with standard library error wrapping
+func (te *TaskError) Unwrap() error { return te.cause }
+
+func (te *TaskError) Error() string {
+	return fmt.Sprintf("%v: %v", te.taskIDDisplay, te.cause)
 }

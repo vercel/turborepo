@@ -3,41 +3,41 @@ use swc_core::{
     common::DUMMY_SP,
     ecma::ast::{Callee, Expr, ExprOrSpread, Ident, ObjectLit},
 };
-use turbo_tasks::{primitives::StringVc, Value, ValueToString, ValueToStringVc};
+use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
-    chunk::{ChunkableAssetReference, ChunkableAssetReferenceVc},
-    issue::{IssueSourceVc, OptionIssueSourceVc},
-    reference::{AssetReference, AssetReferenceVc},
-    resolve::{origin::ResolveOriginVc, parse::RequestVc, ResolveResultVc},
+    chunk::ChunkableModuleReference,
+    issue::LazyIssueSource,
+    reference::ModuleReference,
+    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
 
-use super::pattern_mapping::{PatternMapping, PatternMappingVc, ResolveType::Cjs};
+use super::pattern_mapping::{PatternMapping, ResolveType::Cjs};
 use crate::{
-    chunk::EcmascriptChunkingContextVc,
-    code_gen::{CodeGenerateable, CodeGenerateableVc, CodeGeneration, CodeGenerationVc},
+    chunk::EcmascriptChunkingContext,
+    code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
-    references::{util::throw_module_not_found_expr, AstPathVc},
+    references::{util::throw_module_not_found_expr, AstPath},
     resolve::{cjs_resolve, try_to_severity},
 };
 
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct CjsAssetReference {
-    pub origin: ResolveOriginVc,
-    pub request: RequestVc,
-    pub issue_source: IssueSourceVc,
+    pub origin: Vc<Box<dyn ResolveOrigin>>,
+    pub request: Vc<Request>,
+    pub issue_source: Vc<LazyIssueSource>,
     pub in_try: bool,
 }
 
 #[turbo_tasks::value_impl]
-impl CjsAssetReferenceVc {
+impl CjsAssetReference {
     #[turbo_tasks::function]
     pub fn new(
-        origin: ResolveOriginVc,
-        request: RequestVc,
-        issue_source: IssueSourceVc,
+        origin: Vc<Box<dyn ResolveOrigin>>,
+        request: Vc<Request>,
+        issue_source: Vc<LazyIssueSource>,
         in_try: bool,
-    ) -> Self {
+    ) -> Vc<Self> {
         Self::cell(CjsAssetReference {
             origin,
             request,
@@ -48,13 +48,13 @@ impl CjsAssetReferenceVc {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for CjsAssetReference {
+impl ModuleReference for CjsAssetReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         cjs_resolve(
             self.origin,
             self.request,
-            OptionIssueSourceVc::some(self.issue_source),
+            Some(self.issue_source),
             try_to_severity(self.in_try),
         )
     }
@@ -63,8 +63,8 @@ impl AssetReference for CjsAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for CjsAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "generic commonjs {}",
             self.request.to_string().await?,
         )))
@@ -72,28 +72,28 @@ impl ValueToString for CjsAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAssetReference for CjsAssetReference {}
+impl ChunkableModuleReference for CjsAssetReference {}
 
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct CjsRequireAssetReference {
-    pub origin: ResolveOriginVc,
-    pub request: RequestVc,
-    pub path: AstPathVc,
-    pub issue_source: IssueSourceVc,
+    pub origin: Vc<Box<dyn ResolveOrigin>>,
+    pub request: Vc<Request>,
+    pub path: Vc<AstPath>,
+    pub issue_source: Vc<LazyIssueSource>,
     pub in_try: bool,
 }
 
 #[turbo_tasks::value_impl]
-impl CjsRequireAssetReferenceVc {
+impl CjsRequireAssetReference {
     #[turbo_tasks::function]
     pub fn new(
-        origin: ResolveOriginVc,
-        request: RequestVc,
-        path: AstPathVc,
-        issue_source: IssueSourceVc,
+        origin: Vc<Box<dyn ResolveOrigin>>,
+        request: Vc<Request>,
+        path: Vc<AstPath>,
+        issue_source: Vc<LazyIssueSource>,
         in_try: bool,
-    ) -> Self {
+    ) -> Vc<Self> {
         Self::cell(CjsRequireAssetReference {
             origin,
             request,
@@ -105,13 +105,13 @@ impl CjsRequireAssetReferenceVc {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for CjsRequireAssetReference {
+impl ModuleReference for CjsRequireAssetReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         cjs_resolve(
             self.origin,
             self.request,
-            OptionIssueSourceVc::some(self.issue_source),
+            Some(self.issue_source),
             try_to_severity(self.in_try),
         )
     }
@@ -120,8 +120,8 @@ impl AssetReference for CjsRequireAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for CjsRequireAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "require {}",
             self.request.to_string().await?,
         )))
@@ -129,23 +129,23 @@ impl ValueToString for CjsRequireAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAssetReference for CjsRequireAssetReference {}
+impl ChunkableModuleReference for CjsRequireAssetReference {}
 
 #[turbo_tasks::value_impl]
 impl CodeGenerateable for CjsRequireAssetReference {
     #[turbo_tasks::function]
     async fn code_generation(
         &self,
-        context: EcmascriptChunkingContextVc,
-    ) -> Result<CodeGenerationVc> {
-        let pm = PatternMappingVc::resolve_request(
+        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    ) -> Result<Vc<CodeGeneration>> {
+        let pm = PatternMapping::resolve_request(
             self.request,
             self.origin,
-            context.into(),
+            Vc::upcast(chunking_context),
             cjs_resolve(
                 self.origin,
                 self.request,
-                OptionIssueSourceVc::some(self.issue_source),
+                Some(self.issue_source),
                 try_to_severity(self.in_try),
             ),
             Value::new(Cjs),
@@ -201,23 +201,23 @@ impl CodeGenerateable for CjsRequireAssetReference {
 #[turbo_tasks::value]
 #[derive(Hash, Debug)]
 pub struct CjsRequireResolveAssetReference {
-    pub origin: ResolveOriginVc,
-    pub request: RequestVc,
-    pub path: AstPathVc,
-    pub issue_source: IssueSourceVc,
+    pub origin: Vc<Box<dyn ResolveOrigin>>,
+    pub request: Vc<Request>,
+    pub path: Vc<AstPath>,
+    pub issue_source: Vc<LazyIssueSource>,
     pub in_try: bool,
 }
 
 #[turbo_tasks::value_impl]
-impl CjsRequireResolveAssetReferenceVc {
+impl CjsRequireResolveAssetReference {
     #[turbo_tasks::function]
     pub fn new(
-        origin: ResolveOriginVc,
-        request: RequestVc,
-        path: AstPathVc,
-        issue_source: IssueSourceVc,
+        origin: Vc<Box<dyn ResolveOrigin>>,
+        request: Vc<Request>,
+        path: Vc<AstPath>,
+        issue_source: Vc<LazyIssueSource>,
         in_try: bool,
-    ) -> Self {
+    ) -> Vc<Self> {
         Self::cell(CjsRequireResolveAssetReference {
             origin,
             request,
@@ -229,13 +229,13 @@ impl CjsRequireResolveAssetReferenceVc {
 }
 
 #[turbo_tasks::value_impl]
-impl AssetReference for CjsRequireResolveAssetReference {
+impl ModuleReference for CjsRequireResolveAssetReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> ResolveResultVc {
+    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         cjs_resolve(
             self.origin,
             self.request,
-            OptionIssueSourceVc::some(self.issue_source),
+            Some(self.issue_source),
             try_to_severity(self.in_try),
         )
     }
@@ -244,8 +244,8 @@ impl AssetReference for CjsRequireResolveAssetReference {
 #[turbo_tasks::value_impl]
 impl ValueToString for CjsRequireResolveAssetReference {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(format!(
             "require.resolve {}",
             self.request.to_string().await?,
         )))
@@ -253,23 +253,23 @@ impl ValueToString for CjsRequireResolveAssetReference {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableAssetReference for CjsRequireResolveAssetReference {}
+impl ChunkableModuleReference for CjsRequireResolveAssetReference {}
 
 #[turbo_tasks::value_impl]
 impl CodeGenerateable for CjsRequireResolveAssetReference {
     #[turbo_tasks::function]
     async fn code_generation(
         &self,
-        context: EcmascriptChunkingContextVc,
-    ) -> Result<CodeGenerationVc> {
-        let pm = PatternMappingVc::resolve_request(
+        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    ) -> Result<Vc<CodeGeneration>> {
+        let pm = PatternMapping::resolve_request(
             self.request,
             self.origin,
-            context.into(),
+            Vc::upcast(chunking_context),
             cjs_resolve(
                 self.origin,
                 self.request,
-                OptionIssueSourceVc::some(self.issue_source),
+                Some(self.issue_source),
                 try_to_severity(self.in_try),
             ),
             Value::new(Cjs),
@@ -307,7 +307,7 @@ impl CodeGenerateable for CjsRequireResolveAssetReference {
 #[turbo_tasks::value(shared)]
 #[derive(Hash, Debug)]
 pub struct CjsRequireCacheAccess {
-    pub path: AstPathVc,
+    pub path: Vc<AstPath>,
 }
 
 #[turbo_tasks::value_impl]
@@ -315,8 +315,8 @@ impl CodeGenerateable for CjsRequireCacheAccess {
     #[turbo_tasks::function]
     async fn code_generation(
         &self,
-        _context: EcmascriptChunkingContextVc,
-    ) -> Result<CodeGenerationVc> {
+        _context: Vc<Box<dyn EcmascriptChunkingContext>>,
+    ) -> Result<Vc<CodeGeneration>> {
         let mut visitors = Vec::new();
 
         let path = &self.path.await?;

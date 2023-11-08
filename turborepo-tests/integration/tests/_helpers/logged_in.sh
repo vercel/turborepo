@@ -6,9 +6,17 @@ read -r -d '' CONFIG <<- EOF
 }
 EOF
 
-USER_CONFIG_HOME=$(mktemp -d -t turbo-XXXXXXXXXX)
-# duplicate over to XDG var so that turbo picks it up
-export XDG_CONFIG_HOME=$USER_CONFIG_HOME
+TMP_DIR=$(mktemp -d -t turbo-XXXXXXXXXX)
 
-mkdir -p $USER_CONFIG_HOME/turborepo
-echo $CONFIG > $USER_CONFIG_HOME/turborepo/config.json
+# duplicate over to XDG var so that turbo picks it up
+export XDG_CONFIG_HOME=$TMP_DIR
+export HOME=$TMP_DIR
+
+# For Linux
+mkdir -p "$TMP_DIR/turborepo"
+echo $CONFIG > "$TMP_DIR/turborepo/config.json"
+
+# For macOS
+MACOS_DIR="$TMP_DIR/Library/Application Support"
+mkdir -p "$MACOS_DIR/turborepo"
+echo "$CONFIG" > "$MACOS_DIR/turborepo/config.json"

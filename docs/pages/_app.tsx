@@ -15,7 +15,9 @@ type NextraAppProps = AppProps & {
 // Shim requestIdleCallback in Safari
 if (typeof window !== "undefined" && !("requestIdleCallback" in window)) {
   window.requestIdleCallback = (fn) => setTimeout(fn, 1);
-  window.cancelIdleCallback = (e) => clearTimeout(e);
+  window.cancelIdleCallback = (e) => {
+    clearTimeout(e);
+  };
 }
 
 export default function Nextra({ Component, pageProps }: NextraAppProps) {
@@ -30,8 +32,8 @@ export default function Nextra({ Component, pageProps }: NextraAppProps) {
             <linearGradient
               id="pink-gradient"
               x1="0%"
-              y1="0%"
               x2="100%"
+              y1="0%"
               y2="100%"
             >
               <stop offset="0%" stopColor="rgba(156, 81, 161, 1)" />

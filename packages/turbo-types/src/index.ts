@@ -4,3 +4,5 @@ export type {
   Pipeline,
   RemoteCache,
 } from "./types/config";
+
+export type { DryRun } from "./types/dry";

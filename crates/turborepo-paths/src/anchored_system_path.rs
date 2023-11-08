@@ -1,9 +1,12 @@
 use std::{fmt, path::Path};
 
 use camino::{Utf8Component, Utf8Path};
+use serde::Serialize;
 
-use crate::{AnchoredSystemPathBuf, PathError};
+use crate::{AnchoredSystemPathBuf, PathError, RelativeUnixPathBuf};
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(transparent)]
 pub struct AnchoredSystemPath(Utf8Path);
 
 impl ToOwned for AnchoredSystemPath {
@@ -38,6 +41,8 @@ impl AsRef<Path> for AnchoredSystemPath {
     }
 }
 
+const EMPTY: &str = "";
+
 impl AnchoredSystemPath {
     pub(crate) unsafe fn new_unchecked<'a>(path: impl AsRef<Path> + 'a) -> &'a Self {
         let path = path.as_ref();
@@ -52,6 +57,10 @@ impl AnchoredSystemPath {
         }
 
         Ok(unsafe { &*(path as *const Path as *const Self) })
+    }
+
+    pub fn empty() -> &'static Self {
+        unsafe { Self::new_unchecked(EMPTY) }
     }
 
     pub fn as_str(&self) -> &str {
@@ -70,5 +79,24 @@ impl AnchoredSystemPath {
 
     pub fn as_path(&self) -> &Path {
         self.0.as_std_path()
+    }
+
+    pub fn to_unix(&self) -> RelativeUnixPathBuf {
+        #[cfg(unix)]
+        let buf = RelativeUnixPathBuf::new(self.0.as_str());
+
+        #[cfg(not(unix))]
+        let buf = {
+            use crate::IntoUnix;
+            let unix_buf = self.0.into_unix();
+            RelativeUnixPathBuf::new(unix_buf)
+        };
+
+        buf.unwrap_or_else(|_| panic!("anchored system path is relative: {}", self.0.as_str()))
+    }
+
+    pub fn join_component(&self, segment: &str) -> AnchoredSystemPathBuf {
+        debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
+        AnchoredSystemPathBuf(self.0.join(segment))
     }
 }

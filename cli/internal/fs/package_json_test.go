@@ -164,7 +164,7 @@ func Test_SetExternalDepsWithEmptySet(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Assert(t, pkg.TransitiveDeps != nil)
 	assert.Equal(t, len(pkg.TransitiveDeps), 0)
-	assert.DeepEqual(t, pkg.ExternalDepsHash, "ccab0b28617f1f56")
+	assert.DeepEqual(t, pkg.ExternalDepsHash, "459c029558afe716")
 }
 
 // Asserts that the data section of two PackageJSON structs are equal

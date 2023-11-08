@@ -1,4 +1,4 @@
-import { Change } from "diff";
+import type { Change } from "diff";
 
 export interface FileResult {
   action: "skipped" | "modified" | "unchanged" | "error";
@@ -13,8 +13,8 @@ export interface FileTransformArgs extends ModifyFileArgs {
 
 export interface ModifyFileArgs {
   filePath: string;
-  before?: string | object;
-  after?: string | object;
+  before?: string | object | null;
+  after?: string | object | null;
   error?: Error;
 }
 

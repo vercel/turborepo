@@ -1,41 +1,38 @@
-import fs from "fs";
-import path from "path";
-import { getTurboRoot } from "./getTurboRoot";
+import fs from "node:fs";
+import path from "node:path";
 import yaml from "js-yaml";
 import { sync } from "fast-glob";
-import { Schema } from "@turbo/types";
+import type { Schema } from "@turbo/types";
 import JSON5 from "json5";
+import * as logger from "./logger";
+import { getTurboRoot } from "./getTurboRoot";
+import type { PackageJson, PNPMWorkspaceConfig } from "./types";
 
 const ROOT_GLOB = "turbo.json";
 const ROOT_WORKSPACE_GLOB = "package.json";
 
-export type WorkspaceConfig = {
+export interface WorkspaceConfig {
   workspaceName: string;
   workspacePath: string;
   isWorkspaceRoot: boolean;
   turboConfig?: Schema;
-};
+}
 
-export type TurboConfig = {
+export interface TurboConfig {
   config: Schema;
   turboConfigPath: string;
   workspacePath: string;
   isRootConfig: boolean;
-};
+}
 
 export type TurboConfigs = Array<TurboConfig>;
-
-interface PackageJson {
-  turbo?: Schema;
-  workspaces?: { packages: Array<string> } | Array<string>;
-}
 
 interface Options {
   cache?: boolean;
 }
 
 const turboConfigsCache: Record<string, TurboConfigs> = {};
-const workspaceConfigCache: Record<string, WorkspaceConfig[]> = {};
+const workspaceConfigCache: Record<string, Array<WorkspaceConfig>> = {};
 
 // A quick and dirty workspace parser
 // TODO: after @turbo/workspace-convert is merged, we can leverage those utils here
@@ -44,22 +41,24 @@ function getWorkspaceGlobs(root: string): Array<string> {
     if (fs.existsSync(path.join(root, "pnpm-workspace.yaml"))) {
       const workspaceConfig = yaml.load(
         fs.readFileSync(path.join(root, "pnpm-workspace.yaml"), "utf8")
-      ) as Record<"packages", Array<string>>;
+      ) as PNPMWorkspaceConfig;
 
-      return workspaceConfig?.packages || [];
-    } else {
-      const packageJson = JSON.parse(
-        fs.readFileSync(path.join(root, "package.json"), "utf8")
-      ) as PackageJson;
-      if (packageJson?.workspaces) {
-        // support nested packages workspace format
-        if ("packages" in packageJson?.workspaces) {
-          return packageJson.workspaces.packages || [];
-        }
-        return packageJson?.workspaces || [];
-      }
-      return [];
+      return workspaceConfig.packages || [];
     }
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(root, "package.json"), "utf8")
+    ) as PackageJson;
+    if (packageJson.workspaces) {
+      // support nested packages workspace format
+      if ("packages" in packageJson.workspaces) {
+        return packageJson.workspaces.packages || [];
+      }
+
+      if (Array.isArray(packageJson.workspaces)) {
+        return packageJson.workspaces;
+      }
+    }
+    return [];
   } catch (e) {
     return [];
   }
@@ -70,7 +69,7 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
   const configs: TurboConfigs = [];
 
   const cacheEnabled = opts?.cache ?? true;
-  if (cacheEnabled && cwd && turboConfigsCache[cwd]) {
+  if (cacheEnabled && cwd && cwd in turboConfigsCache) {
     return turboConfigsCache[cwd];
   }
 
@@ -92,19 +91,18 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
     configPaths.forEach((configPath) => {
       try {
         const raw = fs.readFileSync(configPath, "utf8");
+        // eslint-disable-next-line import/no-named-as-default-member -- json5 exports different objects depending on if you're using esm or cjs (https://github.com/json5/json5/issues/240)
         const turboJsonContent: Schema = JSON5.parse(raw);
         // basic config validation
-        let isRootConfig = path.dirname(configPath) === turboRoot;
+        const isRootConfig = path.dirname(configPath) === turboRoot;
         if (isRootConfig) {
           // invalid - root config with extends
           if ("extends" in turboJsonContent) {
             return;
           }
-        } else {
+        } else if (!("extends" in turboJsonContent)) {
           // invalid - workspace config with no extends
-          if (!("extends" in turboJsonContent)) {
-            return;
-          }
+          return;
         }
         configs.push({
           config: turboJsonContent,
@@ -114,7 +112,7 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
         });
       } catch (e) {
         // if we can't read or parse the config, just ignore it with a warning
-        console.warn(e);
+        logger.warn(e);
       }
     });
   }
@@ -129,12 +127,12 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
 export function getWorkspaceConfigs(
   cwd?: string,
   opts?: Options
-): WorkspaceConfig[] {
+): Array<WorkspaceConfig> {
   const turboRoot = getTurboRoot(cwd, opts);
-  const configs: WorkspaceConfig[] = [];
+  const configs: Array<WorkspaceConfig> = [];
 
   const cacheEnabled = opts?.cache ?? true;
-  if (cacheEnabled && cwd && workspaceConfigCache[cwd]) {
+  if (cacheEnabled && cwd && cwd in workspaceConfigCache) {
     return workspaceConfigCache[cwd];
   }
 
@@ -156,7 +154,7 @@ export function getWorkspaceConfigs(
     configPaths.forEach((configPath) => {
       try {
         const rawPackageJson = fs.readFileSync(configPath, "utf8");
-        const packageJsonContent = JSON.parse(rawPackageJson);
+        const packageJsonContent = JSON.parse(rawPackageJson) as PackageJson;
 
         const workspaceName = packageJsonContent.name;
         const workspacePath = path.dirname(configPath);
@@ -168,6 +166,7 @@ export function getWorkspaceConfigs(
         let turboConfig: Schema | undefined;
         try {
           rawTurboJson = fs.readFileSync(turboJsonPath, "utf8");
+          // eslint-disable-next-line import/no-named-as-default-member -- json5 exports different objects depending on if you're using esm or cjs (https://github.com/json5/json5/issues/240)
           turboConfig = JSON5.parse(rawTurboJson);
 
           if (turboConfig) {
@@ -177,11 +176,9 @@ export function getWorkspaceConfigs(
               if ("extends" in turboConfig) {
                 return;
               }
-            } else {
+            } else if (!("extends" in turboConfig)) {
               // invalid - workspace config with no extends
-              if (!("extends" in turboConfig)) {
-                return;
-              }
+              return;
             }
           }
         } catch (e) {
@@ -196,7 +193,7 @@ export function getWorkspaceConfigs(
         });
       } catch (e) {
         // if we can't read or parse the config, just ignore it with a warning
-        console.warn(e);
+        logger.warn(e);
       }
     });
   }

@@ -1,4 +1,4 @@
-import path from "path";
+import path from "node:path";
 import chalk from "chalk";
 import type { Project } from "@turbo/workspaces";
 import {
@@ -10,15 +10,16 @@ import {
 import {
   getAvailablePackageManagers,
   createProject,
+  DownloadError,
   logger,
 } from "@turbo/utils";
-import type { CreateCommandArgument, CreateCommandOptions } from "./types";
-import * as prompts from "./prompts";
-import { tryGitCommit, tryGitInit } from "../../utils/git";
+import { tryGitCommit, tryGitInit, tryGitAdd } from "../../utils/git";
 import { isOnline } from "../../utils/isOnline";
 import { transforms } from "../../transforms";
 import { TransformError } from "../../transforms/errors";
 import { isDefaultExample } from "../../utils/isDefaultExample";
+import * as prompts from "./prompts";
+import type { CreateCommandArgument, CreateCommandOptions } from "./types";
 
 const { turboGradient, turboLoader, info, error, warn } = logger;
 
@@ -33,8 +34,15 @@ function handleErrors(err: unknown) {
   } else if (err instanceof ConvertError && err.type !== "unknown") {
     error(chalk.red(err.message));
     process.exit(1);
-    // handle unknown errors (no special handling, just re-throw to catch at root)
-  } else {
+    // handle download errors from @turbo/utils
+  } else if (err instanceof DownloadError) {
+    error(chalk.red("Unable to download template from Github"));
+    error(chalk.red(err.message));
+    process.exit(1);
+  }
+
+  // handle unknown errors (no special handling, just re-throw to catch at root)
+  else {
     throw err;
   }
 }
@@ -48,13 +56,20 @@ const SCRIPTS_TO_DISPLAY: Record<string, string> = {
 
 export async function create(
   directory: CreateCommandArgument,
-  packageManager: CreateCommandArgument,
+  packageManagerCmd: CreateCommandArgument,
   opts: CreateCommandOptions
 ) {
-  const { skipInstall, skipTransforms } = opts;
-  console.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
+  const {
+    packageManager: packageManagerOpt,
+    skipInstall,
+    skipTransforms,
+  } = opts;
+  logger.log(chalk.bold(turboGradient(`\n>>> TURBOREPO\n`)));
   info(`Welcome to Turborepo! Let's get you set up with a new codebase.`);
-  console.log();
+  logger.log();
+
+  // if both the package manager option and command are provided, the option takes precedence
+  const packageManager = packageManagerOpt ?? packageManagerCmd;
 
   const [online, availablePackageManagers] = await Promise.all([
     isOnline(),
@@ -67,13 +82,13 @@ export async function create(
     );
     process.exit(1);
   }
-  const { root, projectName } = await prompts.directory({ directory });
+  const { root, projectName } = await prompts.directory({ dir: directory });
   const relativeProjectDir = path.relative(process.cwd(), root);
   const projectDirIsCurrentDir = relativeProjectDir === "";
 
   // selected package manager can be undefined if the user chooses to skip transforms
   const selectedPackageManagerDetails = await prompts.packageManager({
-    packageManager,
+    manager: packageManager,
     skipTransforms,
   });
 
@@ -85,12 +100,20 @@ export async function create(
 
   const { example, examplePath } = opts;
   const exampleName = example && example !== "default" ? example : "basic";
-  const { hasPackageJson, availableScripts, repoInfo } = await createProject({
-    appPath: root,
-    example: exampleName,
-    isDefaultExample: isDefaultExample(exampleName),
-    examplePath,
-  });
+
+  let projectData = {} as Awaited<ReturnType<typeof createProject>>;
+  try {
+    projectData = await createProject({
+      appPath: root,
+      example: exampleName,
+      isDefaultExample: isDefaultExample(exampleName),
+      examplePath,
+    });
+  } catch (err) {
+    handleErrors(err);
+  }
+
+  const { hasPackageJson, availableScripts, repoInfo } = projectData;
 
   // create a new git repo after creating the project
   tryGitInit(root, `feat(create-turbo): create ${exampleName}`);
@@ -107,6 +130,7 @@ export async function create(
   if (!skipTransforms) {
     for (const transform of transforms) {
       try {
+        // eslint-disable-next-line no-await-in-loop -- we need to run transforms sequentially
         const transformResult = await transform({
           example: {
             repo: repoInfo,
@@ -120,7 +144,10 @@ export async function create(
           },
           opts,
         });
+
         if (transformResult.result === "success") {
+          // add first to ensure any transforms that add new files are included
+          tryGitAdd();
           tryGitCommit(
             `feat(create-turbo): apply ${transformResult.name} transform`
           );
@@ -136,16 +163,16 @@ export async function create(
     skipTransforms || !selectedPackageManagerDetails
       ? {
           name: project.packageManager,
-          version: availablePackageManagers[project.packageManager].version,
+          version: availablePackageManagers[project.packageManager],
         }
       : selectedPackageManagerDetails;
 
   info("Created a new Turborepo with the following:");
-  console.log();
+  logger.log();
   if (project.workspaceData.workspaces.length > 0) {
     const workspacesForDisplay = project.workspaceData.workspaces
       .map((w) => ({
-        group: path.relative(root, w.paths.root).split(path.sep)?.[0] || "",
+        group: path.relative(root, w.paths.root).split(path.sep)[0] || "",
         title: path.relative(root, w.paths.root),
         description: w.description,
       }))
@@ -154,26 +181,26 @@ export async function create(
     let lastGroup: string | undefined;
     workspacesForDisplay.forEach(({ group, title, description }, idx) => {
       if (idx === 0 || group !== lastGroup) {
-        console.log(chalk.cyan(group));
+        logger.log(chalk.cyan(group));
       }
-      console.log(
+      logger.log(
         ` - ${chalk.bold(title)}${description ? `: ${description}` : ""}`
       );
       lastGroup = group;
     });
   } else {
-    console.log(chalk.cyan("apps"));
-    console.log(` - ${chalk.bold(projectName)}`);
+    logger.log(chalk.cyan("apps"));
+    logger.log(` - ${chalk.bold(projectName)}`);
   }
 
   // run install
-  console.log();
+  logger.log();
   if (hasPackageJson && !skipInstall) {
     // in the case when the user opted out of transforms, but not install, we need to make sure the package manager is available
     // before we attempt an install
     if (
       opts.skipTransforms &&
-      !availablePackageManagers[project.packageManager].available
+      !availablePackageManagers[project.packageManager]
     ) {
       warn(
         `Unable to install dependencies - "${exampleName}" uses "${project.packageManager}" which could not be found.`
@@ -181,10 +208,10 @@ export async function create(
       warn(
         `Try running without "--skip-transforms" to convert "${exampleName}" to a package manager that is available on your system.`
       );
-      console.log();
-    } else if (projectPackageManager) {
-      console.log("Installing packages. This might take a couple of minutes.");
-      console.log();
+      logger.log();
+    } else if (projectPackageManager.version) {
+      logger.log("Installing packages. This might take a couple of minutes.");
+      logger.log();
 
       const loader = turboLoader("Installing dependencies...").start();
       await install({
@@ -201,13 +228,13 @@ export async function create(
   }
 
   if (projectDirIsCurrentDir) {
-    console.log(
+    logger.log(
       `${chalk.bold(
         turboGradient(">>> Success!")
       )} Your new Turborepo is ready.`
     );
   } else {
-    console.log(
+    logger.log(
       `${chalk.bold(
         turboGradient(">>> Success!")
       )} Created a new Turborepo at "${relativeProjectDir}".`
@@ -217,33 +244,31 @@ export async function create(
   // get the package manager details so we display the right commands to the user in log messages
   const packageManagerMeta = getPackageManagerMeta(projectPackageManager);
   if (packageManagerMeta && hasPackageJson) {
-    console.log(
+    logger.log(
       `Inside ${
         projectDirIsCurrentDir ? "this" : "that"
       } directory, you can run several commands:`
     );
-    console.log();
+    logger.log();
     availableScripts
       .filter((script) => SCRIPTS_TO_DISPLAY[script])
       .forEach((script) => {
-        console.log(
-          chalk.cyan(`  ${packageManagerMeta.command} run ${script}`)
-        );
-        console.log(`     ${SCRIPTS_TO_DISPLAY[script]} all apps and packages`);
-        console.log();
+        logger.log(chalk.cyan(`  ${packageManagerMeta.command} run ${script}`));
+        logger.log(`     ${SCRIPTS_TO_DISPLAY[script]} all apps and packages`);
+        logger.log();
       });
-    console.log(`Turborepo will cache locally by default. For an additional`);
-    console.log(`speed boost, enable Remote Caching with Vercel by`);
-    console.log(`entering the following command:`);
-    console.log();
-    console.log(chalk.cyan(`  ${packageManagerMeta.executable} turbo login`));
-    console.log();
-    console.log(`We suggest that you begin by typing:`);
-    console.log();
+    logger.log(`Turborepo will cache locally by default. For an additional`);
+    logger.log(`speed boost, enable Remote Caching with Vercel by`);
+    logger.log(`entering the following command:`);
+    logger.log();
+    logger.log(chalk.cyan(`  ${packageManagerMeta.executable} turbo login`));
+    logger.log();
+    logger.log(`We suggest that you begin by typing:`);
+    logger.log();
     if (!projectDirIsCurrentDir) {
-      console.log(`  ${chalk.cyan("cd")} ${relativeProjectDir}`);
+      logger.log(`  ${chalk.cyan("cd")} ${relativeProjectDir}`);
     }
-    console.log(chalk.cyan(`  ${packageManagerMeta.executable} turbo login`));
-    console.log();
+    logger.log(chalk.cyan(`  ${packageManagerMeta.executable} turbo login`));
+    logger.log();
   }
 }

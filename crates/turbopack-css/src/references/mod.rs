@@ -10,28 +10,28 @@ use swc_core::{
         visit::{AstNodePath, AstParentKind, VisitAstPath, VisitWithPath},
     },
 };
-use turbo_tasks::Value;
+use turbo_tasks::{Value, Vc};
 use turbopack_core::{
-    asset::AssetVc,
-    issue::{IssueSeverity, IssueSourceVc, OptionIssueSourceVc},
-    reference::{AssetReferenceVc, AssetReferencesVc},
+    issue::{IssueSeverity, LazyIssueSource},
+    reference::{ModuleReference, ModuleReferences},
     reference_type::{CssReferenceSubType, ReferenceType},
     resolve::{
         handle_resolve_error,
-        origin::{ResolveOrigin, ResolveOriginVc},
-        parse::RequestVc,
-        ResolveResultVc,
+        origin::{ResolveOrigin, ResolveOriginExt},
+        parse::Request,
+        ModuleResolveResult,
     },
+    source::Source,
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
 
 use crate::{
     parse::{parse_css, ParseCssResult},
     references::{
-        import::{ImportAssetReferenceVc, ImportAttributes},
-        url::UrlAssetReferenceVc,
+        import::{ImportAssetReference, ImportAttributes},
+        url::UrlAssetReference,
     },
-    CssInputTransformsVc, CssModuleAssetType,
+    CssInputTransforms, CssModuleAssetType,
 };
 
 pub(crate) mod compose;
@@ -41,11 +41,11 @@ pub(crate) mod url;
 
 #[turbo_tasks::function]
 pub async fn analyze_css_stylesheet(
-    source: AssetVc,
-    origin: ResolveOriginVc,
+    source: Vc<Box<dyn Source>>,
+    origin: Vc<Box<dyn ResolveOrigin>>,
     ty: CssModuleAssetType,
-    transforms: CssInputTransformsVc,
-) -> Result<AssetReferencesVc> {
+    transforms: Vc<CssInputTransforms>,
+) -> Result<Vc<ModuleReferences>> {
     let mut references = Vec::new();
 
     let parsed = parse_css(source, ty, transforms).await?;
@@ -69,26 +69,26 @@ pub async fn analyze_css_stylesheet(
         HANDLER.set(&handler, || {
             GLOBALS.set(&globals, || {
                 // TODO migrate to effects
-                let mut visitor = AssetReferencesVisitor::new(source, origin, &mut references);
+                let mut visitor = ModuleReferencesVisitor::new(source, origin, &mut references);
                 stylesheet.visit_with_path(&mut visitor, &mut Default::default());
             })
         });
     }
-    Ok(AssetReferencesVc::cell(references))
+    Ok(Vc::cell(references))
 }
 
-struct AssetReferencesVisitor<'a> {
-    source: AssetVc,
-    origin: ResolveOriginVc,
-    references: &'a mut Vec<AssetReferenceVc>,
+struct ModuleReferencesVisitor<'a> {
+    source: Vc<Box<dyn Source>>,
+    origin: Vc<Box<dyn ResolveOrigin>>,
+    references: &'a mut Vec<Vc<Box<dyn ModuleReference>>>,
     is_import: bool,
 }
 
-impl<'a> AssetReferencesVisitor<'a> {
+impl<'a> ModuleReferencesVisitor<'a> {
     fn new(
-        source: AssetVc,
-        origin: ResolveOriginVc,
-        references: &'a mut Vec<AssetReferenceVc>,
+        source: Vc<Box<dyn Source>>,
+        origin: Vc<Box<dyn ResolveOrigin>>,
+        references: &'a mut Vec<Vc<Box<dyn ModuleReference>>>,
     ) -> Self {
         Self {
             source,
@@ -114,7 +114,7 @@ pub fn as_parent_path(ast_path: &AstNodePath<'_>) -> Vec<AstParentKind> {
     ast_path.iter().map(|n| n.kind()).collect()
 }
 
-impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
+impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
     fn visit_import_prelude<'ast: 'r, 'r>(
         &mut self,
         i: &'ast ImportPrelude,
@@ -128,20 +128,17 @@ impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
 
         let issue_span = i.href.span();
 
-        self.references.push(
-            ImportAssetReferenceVc::new(
-                self.origin,
-                RequestVc::parse(Value::new(src.to_string().into())),
-                AstPathVc::cell(as_parent_path(ast_path)),
-                ImportAttributes::new_from_prelude(i).into(),
-                IssueSourceVc::from_byte_offset(
-                    self.source,
-                    issue_span.lo.to_usize(),
-                    issue_span.hi.to_usize(),
-                ),
-            )
-            .into(),
-        );
+        self.references.push(Vc::upcast(ImportAssetReference::new(
+            self.origin,
+            Request::parse(Value::new(src.to_string().into())),
+            Vc::cell(as_parent_path(ast_path)),
+            ImportAttributes::new_from_prelude(i).into(),
+            LazyIssueSource::new(
+                Vc::upcast(self.source),
+                issue_span.lo.to_usize(),
+                issue_span.hi.to_usize(),
+            ),
+        )));
 
         self.is_import = true;
         i.visit_children_with_path(self, ast_path);
@@ -159,19 +156,16 @@ impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
         // ignore server-relative urls like `url(/foo)`
         if !matches!(src.bytes().next(), Some(b'#') | Some(b'/')) {
             let issue_span = u.span;
-            self.references.push(
-                UrlAssetReferenceVc::new(
-                    self.origin,
-                    RequestVc::parse(Value::new(src.to_string().into())),
-                    AstPathVc::cell(as_parent_path(ast_path)),
-                    IssueSourceVc::from_byte_offset(
-                        self.source,
-                        issue_span.lo.to_usize(),
-                        issue_span.hi.to_usize(),
-                    ),
-                )
-                .into(),
-            );
+            self.references.push(Vc::upcast(UrlAssetReference::new(
+                self.origin,
+                Request::parse(Value::new(src.to_string().into())),
+                Vc::cell(as_parent_path(ast_path)),
+                LazyIssueSource::new(
+                    Vc::upcast(self.source),
+                    issue_span.lo.to_usize(),
+                    issue_span.hi.to_usize(),
+                ),
+            )));
         }
 
         u.visit_children_with_path(self, ast_path);
@@ -180,11 +174,11 @@ impl<'a> VisitAstPath for AssetReferencesVisitor<'a> {
 
 #[turbo_tasks::function]
 pub async fn css_resolve(
-    origin: ResolveOriginVc,
-    request: RequestVc,
+    origin: Vc<Box<dyn ResolveOrigin>>,
+    request: Vc<Request>,
     ty: Value<CssReferenceSubType>,
-    issue_source: OptionIssueSourceVc,
-) -> Result<ResolveResultVc> {
+    issue_source: Option<Vc<LazyIssueSource>>,
+) -> Result<Vc<ModuleResolveResult>> {
     let ty = Value::new(ReferenceType::Css(ty.into_value()));
     let options = origin.resolve_options(ty.clone());
     let result = origin.resolve_asset(request, options, ty.clone());
@@ -195,8 +189,8 @@ pub async fn css_resolve(
         origin.origin_path(),
         request,
         options,
-        issue_source,
         IssueSeverity::Error.cell(),
+        issue_source,
     )
     .await
 }

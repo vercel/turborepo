@@ -1,12 +1,22 @@
-import { Logger } from "./logger";
+import type { PackageManager } from "@turbo/utils";
+import type { Logger } from "./logger";
 
-export type PackageManager = "npm" | "pnpm" | "yarn";
-export type PackageManagerDetails = {
+export interface Manager {
+  name: PackageManager;
+  lock: string;
+}
+
+export interface RequestedPackageManagerDetails {
   name: PackageManager;
   version?: string;
-};
+}
 
-export type Project = {
+export interface AvailablePackageManagerDetails {
+  name: PackageManager;
+  version: string;
+}
+
+export interface Project {
   name: string;
   description?: string;
   packageManager: PackageManager;
@@ -22,9 +32,9 @@ export type Project = {
     globs: Array<string>;
     workspaces: Array<Workspace>;
   };
-};
+}
 
-export type Workspace = {
+export interface Workspace {
   name: string;
   description?: string;
   paths: {
@@ -32,83 +42,68 @@ export type Workspace = {
     packageJson: string;
     nodeModules: string;
   };
-};
+}
 
 export type WorkspaceInfo = Pick<Workspace, "name" | "description">;
 
-export type DependencyList = Record<string, string>;
-
-export type PackageJsonDependencies = {
-  dependencies?: DependencyList;
-  devDependencies?: DependencyList;
-  peerDependencies?: DependencyList;
-  optionalDependencies?: DependencyList;
-};
-
-export type PackageJson = PackageJsonDependencies & {
-  name?: string;
-  description?: string;
-  workspaces?: Array<string>;
-  packageManager?: string;
-};
-
-export type DetectArgs = {
+export interface DetectArgs {
   workspaceRoot: string;
-};
+}
 
-export type ReadArgs = {
+export interface ReadArgs {
   workspaceRoot: string;
-};
+}
 
-export type CreateArgs = {
+export interface CreateArgs {
   project: Project;
-  to: PackageManagerDetails;
+  to: AvailablePackageManagerDetails;
   logger: Logger;
   options?: Options;
-};
+}
 
-export type RemoveArgs = {
+export interface RemoveArgs {
   project: Project;
-  to: PackageManagerDetails;
+  to: AvailablePackageManagerDetails;
   logger: Logger;
   options?: Options;
-};
+}
 
-export type CleanArgs = {
-  project: Project;
-  logger: Logger;
-  options?: Options;
-};
-
-export type ConvertArgs = {
+export interface CleanArgs {
   project: Project;
   logger: Logger;
   options?: Options;
-};
+}
 
-export type InstallArgs = {
+export interface ConvertArgs {
   project: Project;
-  to: PackageManagerDetails;
+  to: AvailablePackageManagerDetails;
+  logger: Logger;
+  options?: Options;
+}
+
+export interface InstallArgs {
+  project: Project;
+  to: RequestedPackageManagerDetails;
   logger?: Logger;
   options?: Options;
-};
+}
 
-export type Options = {
+export interface Options {
   dry?: boolean;
   skipInstall?: boolean;
   interactive?: boolean;
-};
+}
 
-export type PackageManagerInstallDetails = {
+export interface PackageManagerInstallDetails {
   name: string;
   template: string;
   command: PackageManager;
-  installArgs: string[];
+  installArgs: Array<string>;
   version: string;
   executable: string;
   semver: string;
   default?: boolean;
-};
+}
 
 export type ManagerDetect = (args: DetectArgs) => Promise<boolean>;
 export type ManagerRead = (args: ReadArgs) => Promise<Project>;
@@ -117,11 +112,11 @@ export type ManagerRemove = (args: RemoveArgs) => Promise<void>;
 export type ManagerClean = (args: CleanArgs) => Promise<void>;
 export type ManagerConvert = (args: ConvertArgs) => Promise<void>;
 
-export type ManagerHandler = {
+export interface ManagerHandler {
   detect: ManagerDetect;
   read: ManagerRead;
   create: ManagerCreate;
   remove: ManagerRemove;
   clean: ManagerClean;
   convertLock: ManagerConvert;
-};
+}

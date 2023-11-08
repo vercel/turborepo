@@ -1,12 +1,11 @@
 import { gt, lte, eq } from "semver";
-
-import loadTransformers from "../../../utils/loadTransformers";
+import { loadTransformers } from "../../../utils/loadTransformers";
 import type { Transformer } from "../../../types";
 
 /**
-  Returns all transformers introduced after fromVersion, but before or equal to toVersion
-**/
-function getTransformsForMigration({
+ * Returns all transformers introduced after fromVersion, but before or equal to toVersion
+ **/
+export function getTransformsForMigration({
   fromVersion,
   toVersion,
 }: {
@@ -26,12 +25,9 @@ function getTransformsForMigration({
       return 1;
     } else if (eq(a.introducedIn, b.introducedIn)) {
       return 0;
-    } else {
-      return -1;
     }
+    return -1;
   });
 
   return transforms;
 }
-
-export default getTransformsForMigration;

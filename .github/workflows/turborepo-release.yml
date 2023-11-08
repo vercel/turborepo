@@ -76,7 +76,6 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          target: ${{ matrix.os.name }}
       - name: Run Go Unit Tests
         run: turbo run test --filter=cli --color
 
@@ -94,7 +93,6 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          target: ${{ matrix.os.name }}
       - name: Run Rust Unit Tests
         run: cargo groups test turborepo
 
@@ -112,7 +110,6 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          target: ${{ matrix.os.name }}
       - name: Run JS Package Tests
         run: turbo run check-types test --filter="./packages/*" --color
 
@@ -217,7 +214,7 @@ jobs:
           - host: ubuntu-latest
             container: ubuntu:xenial
             container-options: "--platform=linux/amd64 --rm"
-            container-setup: "apt-get update && apt-get install -y curl musl-tools"
+            container-setup: "apt-get update && apt-get install -y curl musl-tools sudo"
             target: "x86_64-unknown-linux-musl"
             setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev"
           - host: ubuntu-latest
@@ -249,6 +246,9 @@ jobs:
         uses: arduino/setup-protoc@v1.2.0
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup capnproto
+        uses: ./.github/actions/setup-capnproto
 
       - name: Rust Setup
         uses: actions-rs/toolchain@v1
@@ -293,6 +293,9 @@ jobs:
         run: |
           git config --global user.name 'Turbobot'
           git config --global user.email 'turbobot@vercel.com'
+
+      - name: Setup capnproto
+        uses: ./.github/actions/setup-capnproto
 
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v3
@@ -381,7 +384,7 @@ jobs:
         uses: thomaseizinger/create-pull-request@master
         if: ${{ !inputs.dry_run }}
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           head: ${{ needs.stage.outputs.stage-branch }}
           base: main
           title: "release(turborepo): ${{ steps.getVersion.outputs.version }}"

@@ -1,9 +1,10 @@
 use swc_core::css::visit::{AstParentKind, VisitMut};
-use turbopack_core::chunk::ChunkingContextVc;
+use turbo_tasks::Vc;
+use turbopack_core::chunk::ChunkingContext;
 
 use crate::chunk::CssImport;
 
-/// impl of code generation inferred from a AssetReference.
+/// impl of code generation inferred from a ModuleReference.
 /// This is rust only and can't be implemented by non-rust plugins.
 #[turbo_tasks::value(
     shared,
@@ -26,11 +27,14 @@ pub trait VisitorFactory: Send + Sync {
 
 #[turbo_tasks::value_trait]
 pub trait CodeGenerateable {
-    fn code_generation(&self, context: ChunkingContextVc) -> CodeGenerationVc;
+    fn code_generation(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn ChunkingContext>>,
+    ) -> Vc<CodeGeneration>;
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct CodeGenerateables(Vec<CodeGenerateableVc>);
+pub struct CodeGenerateables(Vec<Vc<Box<dyn CodeGenerateable>>>);
 
 pub fn path_to(
     path: &[AstParentKind],

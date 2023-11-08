@@ -7,6 +7,7 @@ use std::{
 
 use command_group::AsyncCommandGroup;
 use notify::{Config, Event, EventKind, Watcher};
+use pidlock::PidFileError;
 use sysinfo::{Pid, ProcessExt, ProcessRefreshKind, RefreshKind, SystemExt};
 use thiserror::Error;
 use tokio::{sync::mpsc, time::timeout};
@@ -42,6 +43,9 @@ pub enum DaemonConnectorError {
 
     #[error("unable to connect to daemon after {0} retries")]
     ConnectRetriesExceeded(usize),
+
+    #[error("unable to use pid file: {0}")]
+    PidFile(#[from] PidFileError),
 }
 
 #[derive(Error, Debug)]
@@ -52,7 +56,7 @@ pub enum ForkError {
     Spawn(#[from] std::io::Error),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DaemonConnector {
     /// Whether the connector is allowed to start a daemon if it is not already
     /// running.
@@ -82,6 +86,7 @@ impl DaemonConnector {
     /// 1. the versions do not match
     /// 2. the server is not running
     /// 3. the server is unresponsive
+    #[tracing::instrument(skip(self))]
     pub async fn connect(self) -> Result<DaemonClient<DaemonConnector>, DaemonConnectorError> {
         let time = Instant::now();
         for _ in 0..Self::CONNECT_RETRY_MAX {
@@ -129,7 +134,7 @@ impl DaemonConnector {
 
         let pidfile = self.pid_lock();
 
-        match pidfile.get_owner() {
+        match pidfile.get_owner()? {
             Some(pid) => {
                 debug!("found pid: {}", pid);
                 Ok(sysinfo::Pid::from(pid as usize))
@@ -171,6 +176,7 @@ impl DaemonConnector {
     /// On Windows the socket file cannot be interacted with via any filesystem
     /// apis, due to this we need to just naively attempt to connect on that
     /// platform and retry in case of error.
+    #[tracing::instrument(skip(self))]
     async fn get_connection(
         &self,
         path: turbopath::AbsoluteSystemPathBuf,
@@ -239,7 +245,7 @@ impl DaemonConnector {
         );
 
         let owner = lock
-            .get_owner()
+            .get_owner()?
             .and_then(|p| system.process(sysinfo::Pid::from(p as usize)));
 
         // if the pidfile is owned by the same pid as the one we found, kill it
@@ -308,7 +314,7 @@ pub enum FileWaitError {
 ///
 /// It does this by watching the parent directory of the path, and waiting for
 /// events on that path.
-#[tracing::instrument(skip(path))]
+#[tracing::instrument]
 async fn wait_for_file(
     path: &turbopath::AbsoluteSystemPathBuf,
     action: WaitAction,
@@ -434,7 +440,7 @@ mod test {
 
         assert_matches!(
             connector.get_or_start_daemon().await,
-            Err(DaemonConnectorError::NotRunning)
+            Err(DaemonConnectorError::PidFile(PidFileError::Invalid { .. }))
         );
     }
 
@@ -486,7 +492,7 @@ mod test {
         let tmp_path = tmp_dir.path().to_owned();
 
         let pid = pid_path(&tmp_path);
-        std::fs::write(&pid, usize::MAX.to_string()).unwrap();
+        std::fs::write(&pid, i32::MAX.to_string()).unwrap();
         let sock = sock_path(&tmp_path);
         std::fs::write(&sock, "").unwrap();
 
@@ -502,7 +508,10 @@ mod test {
             Ok(())
         );
 
-        assert!(connector.pid_file.exists(), "pid file should still exist");
+        assert!(
+            !connector.pid_file.exists(),
+            "pid file should be cleaned up when getting the owner of a stale pid"
+        );
     }
 
     #[tokio::test]

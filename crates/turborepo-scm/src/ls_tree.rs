@@ -9,6 +9,7 @@ use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use crate::{package_deps::GitHashes, wait_for_success, Error, Git};
 
 impl Git {
+    #[tracing::instrument(skip(self))]
     pub fn git_ls_tree(&self, root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error> {
         let mut hashes = GitHashes::new();
         let mut git = Command::new(self.bin.as_std_path())
@@ -85,7 +86,7 @@ mod tests {
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
         HashMap::from_iter(
             pairs
-                .into_iter()
+                .iter()
                 .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
         )
     }
@@ -103,6 +104,8 @@ mod tests {
                 &[("package.json", "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391")],
             ),
             (
+                // We aren't attempting to use octal escapes here, it just looks like it
+                #[allow(clippy::octal_escapes)]
                 "100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\t\t\000100644 blob \
                  e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\t\"\000100644 blob \
                  5b999efa470b056e329b4c23a73904e0794bdc2f\t\n\000100644 blob \

@@ -6,7 +6,7 @@ Run without --continue
   \xe2\x80\xa2 Packages in scope: my-app, other-app, some-lib (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  some-lib:build: cache miss, executing 07e73f626f2c6e2c
+  some-lib:build: cache miss, executing 768adc25648baff5
   some-lib:build: 
   some-lib:build: > build
   some-lib:build: > exit 2
@@ -14,9 +14,9 @@ Run without --continue
   some-lib:build: npm ERR! Lifecycle script `build` failed with error: 
   some-lib:build: npm ERR! Error: command failed 
   some-lib:build: npm ERR!   in workspace: some-lib 
-  some-lib:build: npm ERR!   at location: (.*)/apps/some-lib  (re)
-  some-lib:build: ERROR: command finished with error: command \((.*)/apps/some-lib\) npm run build exited \(1\) (re)
-  command \((.*)/apps/some-lib\) npm run build exited \(1\) (re)
+  some-lib:build: npm ERR!   at location: (.*)\/apps\/some-lib  (re)
+  some-lib:build: ERROR: command finished with error: command \((.*)\/apps\/some-lib\) npm run build exited \(1\) (re)
+  some-lib#build: command \(.*\/apps\/some-lib\) npm run build exited \(1\) (re)
   
    Tasks:    0 successful, 1 total
   Cached:    0 cached, 1 total
@@ -26,12 +26,13 @@ Run without --continue
    ERROR  run failed: command  exited (1)
   [1]
 
+
 Run without --continue, and with only errors.
   $ ${TURBO} build --output-logs=errors-only
   \xe2\x80\xa2 Packages in scope: my-app, other-app, some-lib (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  some-lib:build: cache miss, executing 07e73f626f2c6e2c
+  some-lib:build: cache miss, executing 768adc25648baff5
   some-lib:build: 
   some-lib:build: > build
   some-lib:build: > exit 2
@@ -39,9 +40,9 @@ Run without --continue, and with only errors.
   some-lib:build: npm ERR! Lifecycle script `build` failed with error: 
   some-lib:build: npm ERR! Error: command failed 
   some-lib:build: npm ERR!   in workspace: some-lib 
-  some-lib:build: npm ERR!   at location: (.*)/apps/some-lib  (re)
-  some-lib:build: ERROR: command finished with error: command \((.*)/apps/some-lib\) npm run build exited \(1\) (re)
-  command \((.*)/apps/some-lib\) npm run build exited \(1\) (re)
+  some-lib:build: npm ERR!   at location: (.*)\/apps\/some-lib  (re)
+  some-lib:build: ERROR: command finished with error: command \((.*)\/apps\/some-lib\) npm run build exited \(1\) (re)
+  some-lib#build: command \(.*\) npm run build exited \(1\) (re)
   
    Tasks:    0 successful, 1 total
   Cached:    0 cached, 1 total
@@ -56,7 +57,7 @@ Run with --continue
   \xe2\x80\xa2 Packages in scope: my-app, other-app, some-lib (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  some-lib:build: cache miss, executing 07e73f626f2c6e2c
+  some-lib:build: cache miss, executing 768adc25648baff5
   some-lib:build: 
   some-lib:build: > build
   some-lib:build: > exit 2
@@ -66,7 +67,7 @@ Run with --continue
   some-lib:build: npm ERR!   in workspace: some-lib 
   some-lib:build: npm ERR!   at location: (.*)/apps/some-lib  (re)
   some-lib:build: command finished with error, but continuing...
-  other-app:build: cache miss, executing 2f40356243966a58
+  other-app:build: cache miss, executing a40a9e67334d0ae6
   other-app:build: 
   other-app:build: > build
   other-app:build: > exit 3
@@ -76,8 +77,8 @@ Run with --continue
   other-app:build: npm ERR!   in workspace: other-app 
   other-app:build: npm ERR!   at location: (.*)/apps/other-app  (re)
   other-app:build: command finished with error, but continuing...
-  command \((.*)/apps/some-lib\) npm run build exited \(1\) (re)
-  command \((.*)/apps/other-app\) npm run build exited \(1\) (re)
+  some-lib#build: command \((.*)/apps/some-lib\) npm run build exited \(1\) (re)
+  other-app#build: command \((.*)/apps/other-app\) npm run build exited \(1\) (re)
   
    Tasks:    1 successful, 3 total
   Cached:    0 cached, 3 total
@@ -86,3 +87,4 @@ Run with --continue
   
    ERROR  run failed: command  exited (1)
   [1]
+

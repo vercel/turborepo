@@ -1,12 +1,12 @@
 use std::env;
 
 use base64::{prelude::BASE64_STANDARD, Engine};
+use hmac::{Hmac, Mac};
 use os_str_bytes::OsStringBytes;
-use ring::{
-    hmac,
-    hmac::{Algorithm, Tag, HMAC_SHA256},
-};
+use sha2::Sha256;
 use thiserror::Error;
+
+type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug, Error)]
 pub enum SignatureError {
@@ -19,15 +19,15 @@ pub enum SignatureError {
     SerializationError(#[from] serde_json::Error),
     #[error("base64 encoding error: {0}")]
     Base64EncodingError(#[from] base64::DecodeError),
+    #[error(transparent)]
+    Hmac(#[from] hmac::digest::InvalidLength),
 }
-
-static TURBO_HMAC_ALGORITHM: Algorithm = HMAC_SHA256;
 
 #[derive(Debug)]
 pub struct ArtifactSignatureAuthenticator {
-    team_id: Vec<u8>,
+    pub(crate) team_id: Vec<u8>,
     // An override for testing purposes (to avoid env var race conditions)
-    secret_key_override: Option<Vec<u8>>,
+    pub(crate) secret_key_override: Option<Vec<u8>>,
 }
 
 impl ArtifactSignatureAuthenticator {
@@ -59,26 +59,25 @@ impl ArtifactSignatureAuthenticator {
         Ok(metadata)
     }
 
-    fn get_tag_generator(&self, hash: &[u8]) -> Result<hmac::Context, SignatureError> {
-        let secret_key = hmac::Key::new(TURBO_HMAC_ALGORITHM, &self.secret_key()?);
+    fn get_tag_generator(&self, hash: &[u8]) -> Result<HmacSha256, SignatureError> {
+        let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
         let metadata = self.construct_metadata(hash)?;
 
-        let mut hmac_ctx = hmac::Context::with_key(&secret_key);
-        hmac_ctx.update(&metadata);
+        mac.update(&metadata);
 
-        Ok(hmac_ctx)
+        Ok(mac)
     }
 
     pub fn generate_tag_bytes(
         &self,
         hash: &[u8],
         artifact_body: &[u8],
-    ) -> Result<Tag, SignatureError> {
-        let mut hmac_ctx = self.get_tag_generator(hash)?;
+    ) -> Result<Vec<u8>, SignatureError> {
+        let mut mac = self.get_tag_generator(hash)?;
 
-        hmac_ctx.update(artifact_body);
-        let hmac_output = hmac_ctx.sign();
-        Ok(hmac_output)
+        mac.update(artifact_body);
+        let hmac_output = mac.finalize();
+        Ok(hmac_output.into_bytes().to_vec())
     }
 
     pub fn generate_tag(
@@ -89,8 +88,8 @@ impl ArtifactSignatureAuthenticator {
         let mut hmac_ctx = self.get_tag_generator(hash)?;
 
         hmac_ctx.update(artifact_body);
-        let hmac_output = hmac_ctx.sign();
-        Ok(BASE64_STANDARD.encode(hmac_output))
+        let hmac_output = hmac_ctx.finalize();
+        Ok(BASE64_STANDARD.encode(hmac_output.into_bytes()))
     }
 
     pub fn validate(
@@ -99,11 +98,13 @@ impl ArtifactSignatureAuthenticator {
         artifact_body: &[u8],
         expected_tag: &str,
     ) -> Result<bool, SignatureError> {
-        let secret_key = hmac::Key::new(TURBO_HMAC_ALGORITHM, &self.secret_key()?);
-        let mut message = self.construct_metadata(hash)?;
-        message.extend(artifact_body);
+        let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
+        let message = self.construct_metadata(hash)?;
+        mac.update(&message);
+        mac.update(artifact_body);
+
         let expected_bytes = BASE64_STANDARD.decode(expected_tag)?;
-        Ok(hmac::verify(&secret_key, &message, &expected_bytes).is_ok())
+        Ok(mac.verify_slice(&expected_bytes).is_ok())
     }
 }
 
@@ -120,10 +121,12 @@ mod tests {
             artifact_body: &[u8],
             expected_tag: &[u8],
         ) -> Result<bool, SignatureError> {
-            let secret_key = hmac::Key::new(TURBO_HMAC_ALGORITHM, &self.secret_key()?);
-            let mut message = self.construct_metadata(hash)?;
-            message.extend(artifact_body);
-            Ok(hmac::verify(&secret_key, &message, expected_tag).is_ok())
+            let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
+            let message = self.construct_metadata(hash)?;
+            mac.update(&message);
+            mac.update(artifact_body);
+
+            Ok(mac.verify_slice(expected_tag).is_ok())
         }
     }
 

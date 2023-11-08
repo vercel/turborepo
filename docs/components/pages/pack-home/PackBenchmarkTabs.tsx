@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { BenchmarkCategory } from "./PackBenchmarks";
 import classNames from "classnames";
 import gradients from "../home-shared/gradients.module.css";
+import type { BenchmarkCategory } from "./PackBenchmarks";
 
 const TABS: {
   id: BenchmarkCategory;
@@ -70,9 +70,11 @@ export function PackBenchmarkTabs({
             {TABS.map((tab, index) => (
               <button
                 className="relative px-5 py-3"
-                key={tab.id}
-                onClick={() => onTabClick(index)}
                 disabled={tab.soon}
+                key={tab.id}
+                onClick={() => {
+                  onTabClick(index);
+                }}
               >
                 {TABS[activeTab].id === tab.id && (
                   <motion.div
@@ -89,8 +91,8 @@ export function PackBenchmarkTabs({
                   <motion.div
                     animate={{ opacity: activeTab === index ? 1 : 0.4 }}
                     className="flex flex-row items-center justify-center gap-2 whitespace-nowrap"
-                    transition={{ ...TRANSITION, duration: 0.2 }}
                     style={{ cursor: tab.soon ? "not-allowed" : "pointer" }}
+                    transition={{ ...TRANSITION, duration: 0.2 }}
                   >
                     <span
                       className="z-10 m-0 font-medium"
@@ -98,7 +100,7 @@ export function PackBenchmarkTabs({
                     >
                       {tab.title}
                     </span>
-                    {tab.soon && <SoonBadge />}
+                    {tab.soon ? <SoonBadge /> : null}
                   </motion.div>
                 </ToolTip>
               </button>
@@ -133,10 +135,8 @@ function ToolTip({ text, children }: { text; children: React.ReactNode }) {
     >
       <motion.div
         animate={show ? { opacity: 1, y: 0 } : { opacity: 0, y: -4 }}
+        className="absolute top-[100%] mt-4 w-full flex flex-col items-center justify-center z-50"
         transition={{ duration: 0.2, ease: [0.59, 0.15, 0.18, 0.93] }}
-        className={
-          "absolute top-[100%] mt-4 w-full flex flex-col items-center justify-center z-50"
-        }
       >
         <div className={gradients.tooltipArrow} />
         <div className="dark:bg-[#333333] bg-neutral-100 rounded-lg px-4 py-1 whitespace-nowrap">

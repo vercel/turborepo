@@ -1,6 +1,5 @@
 import {
   BookOpenIcon,
-  CloudDownloadIcon,
   CloudUploadIcon,
   LightBulbIcon,
   LightningBoltIcon,
@@ -9,9 +8,8 @@ import {
   SparklesIcon,
 } from "@heroicons/react/outline";
 import { DetailedFeatureLink } from "./Feature";
-import Turbo from "./logos/Turbo";
 
-export const QuickStartArea = () => {
+export function QuickStartArea() {
   return (
     <div className="grid grid-cols-1 mt-12 gap-x-6 gap-y-12 sm:grid-cols-2 lg:mt-16 lg:gap-x-8 lg:gap-y-12">
       <DetailedFeatureLink
@@ -21,7 +19,7 @@ export const QuickStartArea = () => {
           name: "Add to existing project",
         }}
         href="/repo/docs/getting-started/add-to-project"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: SparklesIcon,
@@ -29,7 +27,7 @@ export const QuickStartArea = () => {
           name: "Create a new monorepo",
         }}
         href="/repo/docs/getting-started/create-new"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: ServerIcon,
@@ -37,12 +35,12 @@ export const QuickStartArea = () => {
           name: "Add to existing monorepo",
         }}
         href="/repo/docs/getting-started/existing-monorepo"
-      ></DetailedFeatureLink>
+      />
     </div>
   );
-};
+}
 
-export const MonoreposArea = () => {
+export function MonoreposArea() {
   return (
     <div className="grid grid-cols-1 mt-12 gap-x-6 gap-y-12 sm:grid-cols-2 lg:mt-16 lg:gap-x-8 lg:gap-y-12">
       <DetailedFeatureLink
@@ -52,7 +50,7 @@ export const MonoreposArea = () => {
           name: "Why Turborepo?",
         }}
         href="/repo/docs/core-concepts/monorepos"
-      ></DetailedFeatureLink>
+      />
       <DetailedFeatureLink
         feature={{
           Icon: BookOpenIcon,
@@ -60,12 +58,12 @@ export const MonoreposArea = () => {
           name: "Read the Monorepo Handbook",
         }}
         href="/docs/handbook"
-      ></DetailedFeatureLink>
+      />
     </div>
   );
-};
+}
 
-export const LearnMoreArea = () => {
+export function LearnMoreArea() {
   return (
     <div className="grid grid-cols-1 mt-12 gap-x-6 gap-y-12 sm:grid-cols-2 lg:mt-16 lg:gap-x-8 lg:gap-y-12">
       <DetailedFeatureLink
@@ -83,7 +81,7 @@ export const LearnMoreArea = () => {
           name: "Maximum Multitasking",
         }}
         href="/repo/docs/core-concepts/monorepos/running-tasks"
-      ></DetailedFeatureLink>
+      />
     </div>
   );
-};
+}

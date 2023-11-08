@@ -33,7 +33,7 @@ Turborepo defaults to `"cache": true`, so you don't need to specify this value, 
 
 In these examples we have told Turborepo to cache the `lint` tasks. But, since we've only specified the `cache` key, the only thing that is being cached is the terminal output. For some types of tasks, such as `lint` or `test` this type of minimal configuration is likely correct!
 
-However, for most tasks you will also need to specify [_what_ to cache](./what-to-cache), as well as the [files](./file-configuration) and [environment variables](./environment-variables) that must match in order for the cache to be valid.
+However, for most tasks you will also need to specify [_what_ to cache](./what-to-cache), as well as the [files](./file-inputs) and [environment variables](./environment-variable-inputs) that must match in order for the cache to be valid.
 
 ## When Not To Cache
 

@@ -1,18 +1,25 @@
-#![feature(once_cell)]
+#![feature(trait_upcasting)]
+#![deny(clippy::all)]
 
 mod berry;
+mod bun;
 mod error;
 mod npm;
 mod pnpm;
 mod yarn1;
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    any::Any,
+    collections::{HashMap, HashSet},
+};
 
 pub use berry::{Error as BerryError, *};
+pub use bun::BunLockfile;
 pub use error::Error;
 pub use npm::*;
 pub use pnpm::{pnpm_global_change, pnpm_subgraph, PnpmLockfile};
 use serde::Serialize;
+use turbopath::RelativeUnixPathBuf;
 pub use yarn1::{yarn_subgraph, Yarn1Lockfile};
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
@@ -24,7 +31,7 @@ pub struct Package {
 // This trait will only be used when migrating the Go lockfile implementations
 // to Rust. Once the migration is complete we will leverage petgraph for doing
 // our graph calculations.
-pub trait Lockfile {
+pub trait Lockfile: Send + Sync + Any {
     // Given a workspace, a package it imports and version returns the key, resolved
     // version, and if it was found
     fn resolve_package(
@@ -36,8 +43,26 @@ pub trait Lockfile {
     // Given a lockfile key return all (prod/dev/optional) dependencies of that
     // package
     fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error>;
+
+    fn subgraph(
+        &self,
+        workspace_packages: &[String],
+        packages: &[String],
+    ) -> Result<Box<dyn Lockfile>, Error>;
+
+    fn encode(&self) -> Result<Vec<u8>, Error>;
+
+    /// All patch files referenced in the lockfile
+    fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+        Ok(Vec::new())
+    }
+
+    /// Determine if there's a global change between two lockfiles
+    fn global_change(&self, other: &dyn Lockfile) -> bool;
 }
 
+/// Takes a lockfile, and a map of workspace directory paths -> (package name,
+/// version) and calculates the transitive closures for all of them
 pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspaces: HashMap<String, HashMap<String, String>>,

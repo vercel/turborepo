@@ -182,7 +182,7 @@ The last thing that we need to do is make sure that Storybook is lined up with t
   // ...
   "scripts": {
     "dev": "storybook dev -p 6006",
-    "build": "build-storybook"
+    "build": "storybook build"
   }
 }
 ```
@@ -209,15 +209,3 @@ Your `dev` and `build` tasks will now include Storybook, allowing you to develop
 Let's deploy your Storybook project.
 
 In the "Build and Development Settings" on the General tab of your project settings, change your "Output Directory" to `storybook-static`.
-
-Additionally, at the time of this writing, Storybook cannot be ran on Node 18, the Vercel default. In the `package.json` of your `workshop` app, add an `engines` field to make sure that this project runs on Node 16:
-
-```json filename="apps/workshop/package.json"
-{
-  // ...
-  "engines": {
-    "node": "16"
-  }
-}
-
-```

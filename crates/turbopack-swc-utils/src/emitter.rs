@@ -5,14 +5,14 @@ use swc_core::common::{
     source_map::Pos,
     SourceMap,
 };
-use turbo_tasks::primitives::StringVc;
+use turbo_tasks::Vc;
 use turbopack_core::{
-    asset::{Asset, AssetVc},
-    issue::{analyze::AnalyzeIssue, IssueSeverity, IssueSourceVc},
+    issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, LazyIssueSource},
+    source::Source,
 };
 
 pub struct IssueEmitter {
-    pub source: AssetVc,
+    pub source: Vc<Box<dyn Source>>,
     pub source_map: Arc<SourceMap>,
     pub title: Option<String>,
 }
@@ -40,16 +40,13 @@ impl Emitter for IssueEmitter {
             message = message_split.remainder().unwrap_or("").to_string();
         }
 
-        let source = db.span.primary_span().map(|span| {
-            IssueSourceVc::from_byte_offset(
-                self.source,
-                self.source_map.lookup_byte_offset(span.lo()).pos.to_usize(),
-                self.source_map.lookup_byte_offset(span.lo()).pos.to_usize(),
-            )
-        });
+        let source = db
+            .span
+            .primary_span()
+            .map(|span| LazyIssueSource::new(self.source, span.lo.to_usize(), span.hi.to_usize()));
         // TODO add other primary and secondary spans with labels as sub_issues
 
-        let issue = AnalyzeIssue {
+        AnalyzeIssue {
             severity: match level {
                 Level::Bug => IssueSeverity::Bug,
                 Level::Fatal | Level::PhaseFatal => IssueSeverity::Fatal,
@@ -61,14 +58,14 @@ impl Emitter for IssueEmitter {
                 Level::FailureNote => IssueSeverity::Note,
             }
             .cell(),
-            category: StringVc::cell("parse".to_string()),
+            category: Vc::cell("parse".to_string()),
             source_ident: self.source.ident(),
-            title: StringVc::cell(title),
-            message: StringVc::cell(message),
+            title: Vc::cell(title),
+            message: Vc::cell(message),
             code,
             source,
         }
-        .cell();
-        issue.as_issue().emit();
+        .cell()
+        .emit();
     }
 }

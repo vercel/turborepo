@@ -131,7 +131,9 @@ func optsFromArgs(args *turbostate.ParsedArgsFromRust) (*Opts, error) {
 func configureRun(base *cmdutil.CmdBase, opts *Opts, signalWatcher *signals.Watcher) *run {
 	if opts.runOpts.LogOrder == "auto" && ci.Constant() == "GITHUB_ACTIONS" {
 		opts.runOpts.LogOrder = "grouped"
-		opts.runOpts.LogPrefix = "none"
+		if opts.runOpts.LogPrefix != "task" {
+			opts.runOpts.LogPrefix = "none"
+		}
 		opts.runOpts.IsGithubActions = true
 	}
 
@@ -164,6 +166,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	} else {
 		pkgDepGraph, err = context.BuildPackageGraph(r.base.RepoRoot, rootPackageJSON, executionState.PackageManager)
 	}
+
 	if err != nil {
 		var warnings *context.Warnings
 		if errors.As(err, &warnings) {
@@ -206,8 +209,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		return err
 	}
 
-	// TODO: these values come from a config file, hopefully viper can help us merge these
-	r.opts.cacheOpts.RemoteCacheOpts = turboJSON.RemoteCacheOptions
+	r.opts.cacheOpts.Signature = r.base.Config.Signature
 
 	// If a spaceID wasn't passed as a flag, read it from the turbo.json config.
 	// If that is not set either, we'll still end up with a blank string.
@@ -264,6 +266,13 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 
 	if globalHash, err := calculateGlobalHashFromHashableInputs(globalHashInputs); err == nil {
 		r.base.Logger.Debug("global hash", "value", globalHash)
+		if executionState.GlobalHash != nil {
+			if *executionState.GlobalHash != globalHash {
+				return fmt.Errorf("global hash differs between Rust and Go: rust %v go %v", executionState.GlobalHash, globalHash)
+			}
+			r.base.Logger.Debug("global hash matches between Rust and Go")
+		}
+
 		g.GlobalHash = globalHash
 	} else {
 		return fmt.Errorf("failed to calculate global hash: %v", err)
@@ -292,7 +301,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		g.RootNode,
 		g.GlobalHash,
 		envAtExecutionStart,
-		// TODO(mehulkar): remove g,Pipeline, because we need to get task definitions from CompleteGaph instead
+		// TODO(mehulkar): remove g.Pipeline, because we need to get task definitions from CompleteGraph instead
 		g.Pipeline,
 	)
 
@@ -368,6 +377,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		rs.Opts.scopeOpts.PackageInferenceRoot,
 		r.base.TurboVersion,
 		r.base.APIClient,
+		r.base.SpacesAPIClient,
 		rs.Opts.runOpts,
 		packagesInScope,
 		globalEnvMode,
@@ -394,7 +404,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 			engine,
 			taskHashTracker,
 			turboCache,
-			turboJSON,
 			globalEnvMode,
 			globalHashInputs.resolvedEnvVars.All,
 			resolvedPassThroughEnvVars,
@@ -411,7 +420,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		engine,
 		taskHashTracker,
 		turboCache,
-		turboJSON,
 		globalEnvMode,
 		globalHashInputs.resolvedEnvVars.All,
 		resolvedPassThroughEnvVars,
@@ -421,6 +429,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 		// Extra arg only for regular runs, dry-run doesn't get this
 		packageManager,
 		r.processes,
+		executionState,
 	)
 }
 
@@ -436,9 +445,9 @@ func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
 	}
 
 	// After we know if its _possible_ to enable remote cache, check the config
-	// and dsiable it if wanted.
-	if !r.opts.cacheOpts.RemoteCacheOpts.Enabled {
-		r.opts.cacheOpts.SkipRemote = true
+	// and disable it if wanted.
+	if r.base.Config.Enabled != nil {
+		r.opts.cacheOpts.SkipRemote = !*r.base.Config.Enabled
 	}
 
 	analyticsClient := analytics.NewClient(ctx, analyticsSink, r.base.Logger.Named("analytics"))

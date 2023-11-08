@@ -2,9 +2,9 @@
 
 import chalk from "chalk";
 import { Command } from "commander";
-
-import { summary, convert } from "./commands";
+import { logger } from "@turbo/utils";
 import cliPkg from "../package.json";
+import { summary, convert } from "./commands";
 import { ConvertError } from "./errors";
 
 const workspacesCli = new Command();
@@ -41,13 +41,13 @@ workspacesCli
   .action(summary);
 
 workspacesCli.parseAsync().catch((error) => {
-  console.log();
+  logger.log();
   if (error instanceof ConvertError) {
-    console.log(chalk.red(error.message));
+    logger.log(chalk.red(error.message));
   } else {
-    console.log(chalk.red("Unexpected error. Please report it as a bug:"));
-    console.log(error.message);
+    logger.log(chalk.red("Unexpected error. Please report it as a bug:"));
+    logger.log(error);
   }
-  console.log();
+  logger.log();
   process.exit(1);
 });

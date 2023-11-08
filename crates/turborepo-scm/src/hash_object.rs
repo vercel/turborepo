@@ -1,20 +1,26 @@
+use tracing::Span;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
 use crate::{package_deps::GitHashes, Error};
 
+#[tracing::instrument(skip(git_root, hashes, to_hash))]
 pub(crate) fn hash_objects(
     git_root: &AbsoluteSystemPath,
     pkg_path: &AbsoluteSystemPath,
     to_hash: Vec<RelativeUnixPathBuf>,
     hashes: &mut GitHashes,
 ) -> Result<(), Error> {
+    let parent = Span::current();
     for filename in to_hash {
+        let span = tracing::info_span!(parent: &parent, "hash_object", ?filename);
+        let _enter = span.enter();
+
         let full_file_path = git_root.join_unix_path(filename)?;
         match git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path) {
             Ok(hash) => {
                 let package_relative_path =
                     AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
-                        .to_unix()?;
+                        .to_unix();
                 hashes.insert(package_relative_path, hash.to_string());
             }
             Err(e) => {
@@ -85,9 +91,9 @@ mod test {
                 .collect();
 
             let git_to_pkg_path = git_root.anchor(pkg_path).unwrap();
-            let pkg_prefix = git_to_pkg_path.to_unix().unwrap();
+            let pkg_prefix = git_to_pkg_path.to_unix();
 
-            let expected_hashes = GitHashes::from_iter(file_hashes.into_iter());
+            let expected_hashes = GitHashes::from_iter(file_hashes);
             let mut hashes = GitHashes::new();
             let to_hash = expected_hashes.keys().map(|k| pkg_prefix.join(k)).collect();
             hash_objects(&git_root, pkg_path, to_hash, &mut hashes).unwrap();
@@ -102,7 +108,7 @@ mod test {
 
         for (to_hash, pkg_path) in error_tests {
             let git_to_pkg_path = git_root.anchor(pkg_path).unwrap();
-            let pkg_prefix = git_to_pkg_path.to_unix().unwrap();
+            let pkg_prefix = git_to_pkg_path.to_unix();
 
             let to_hash = to_hash
                 .into_iter()
@@ -110,8 +116,8 @@ mod test {
                 .collect();
 
             let mut hashes = GitHashes::new();
-            let result = hash_objects(&git_root, &pkg_path, to_hash, &mut hashes);
-            assert_eq!(result.is_err(), true);
+            let result = hash_objects(&git_root, pkg_path, to_hash, &mut hashes);
+            assert!(result.is_err());
         }
     }
 }

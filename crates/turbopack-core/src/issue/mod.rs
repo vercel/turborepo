@@ -9,22 +9,19 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use auto_hash_map::AutoSet;
 use turbo_tasks::{
-    emit,
-    primitives::{BoolVc, StringReadRef, StringVc, U64Vc},
-    CollectiblesSource, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
-    ValueToString, ValueToStringVc,
+    emit, CollectiblesSource, RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIterExt,
+    Upcast, ValueToString, Vc,
 };
-use turbo_tasks_fs::{
-    FileContent, FileContentReadRef, FileLine, FileLinesContent, FileSystemPathVc,
-};
+use turbo_tasks_fs::{FileContent, FileLine, FileLinesContent, FileSystemPath};
 use turbo_tasks_hash::{DeterministicHash, Xxh3Hash64Hasher};
 
 use crate::{
-    asset::{Asset, AssetContent, AssetVc},
+    asset::{Asset, AssetContent},
+    source::Source,
     source_pos::SourcePos,
 };
 
@@ -80,73 +77,109 @@ impl Display for IssueSeverity {
 pub trait Issue {
     /// Severity allows the user to filter out unimportant issues, with Bug
     /// being the highest priority and Info being the lowest.
-    fn severity(&self) -> IssueSeverityVc {
+    fn severity(self: Vc<Self>) -> Vc<IssueSeverity> {
         IssueSeverity::Error.into()
     }
 
     /// The file path that generated the issue, displayed to the user as message
     /// header.
-    fn context(&self) -> FileSystemPathVc;
+    fn file_path(self: Vc<Self>) -> Vc<FileSystemPath>;
 
     /// A short identifier of the type of error (eg "parse", "analyze", or
     /// "evaluate") displayed to the user as part of the message header.
-    fn category(&self) -> StringVc {
-        StringVc::empty()
+    fn category(self: Vc<Self>) -> Vc<String> {
+        Vc::<String>::default()
     }
 
     /// The issue title should be descriptive of the issue, but should be a
     /// single line. This is displayed to the user directly under the issue
     /// header.
-    // TODO add StyledStringVc
-    fn title(&self) -> StringVc;
+    // TODO add Vc<StyledString>
+    fn title(self: Vc<Self>) -> Vc<String>;
 
     /// A more verbose message of the issue, appropriate for providing multiline
     /// information of the issue.
-    // TODO add StyledStringVc
-    fn description(&self) -> StringVc;
+    // TODO add Vc<StyledString>
+    fn description(self: Vc<Self>) -> Vc<String>;
 
     /// Full details of the issue, appropriate for providing debug level
     /// information. Only displayed if the user explicitly asks for detailed
     /// messages (not to be confused with severity).
-    fn detail(&self) -> StringVc {
-        StringVc::empty()
+    fn detail(self: Vc<Self>) -> Vc<String> {
+        Vc::<String>::default()
     }
 
     /// A link to relevant documentation of the issue. Only displayed in console
     /// if the user explicitly asks for detailed messages.
-    fn documentation_link(&self) -> StringVc {
-        StringVc::empty()
+    fn documentation_link(self: Vc<Self>) -> Vc<String> {
+        Vc::<String>::default()
     }
 
     /// The source location that caused the issue. Eg, for a parsing error it
     /// should point at the offending character. Displayed to the user alongside
     /// the title/description.
-    fn source(&self) -> OptionIssueSourceVc {
-        OptionIssueSourceVc::none()
+    fn source(self: Vc<Self>) -> Vc<OptionIssueSource> {
+        Vc::cell(None)
     }
 
-    fn sub_issues(&self) -> IssuesVc {
-        IssuesVc::cell(Vec::new())
+    fn sub_issues(self: Vc<Self>) -> Vc<Issues> {
+        Vc::cell(Vec::new())
+    }
+
+    async fn into_plain(
+        self: Vc<Self>,
+        processing_path: Vc<OptionIssueProcessingPathItems>,
+    ) -> Result<Vc<PlainIssue>> {
+        Ok(PlainIssue {
+            severity: *self.severity().await?,
+            file_path: self.file_path().to_string().await?.clone_value(),
+            category: self.category().await?.clone_value(),
+            title: self.title().await?.clone_value(),
+            description: self.description().await?.clone_value(),
+            detail: self.detail().await?.clone_value(),
+            documentation_link: self.documentation_link().await?.clone_value(),
+            source: {
+                if let Some(s) = *self.source().await? {
+                    Some(s.into_plain().await?)
+                } else {
+                    None
+                }
+            },
+            sub_issues: self
+                .sub_issues()
+                .await?
+                .iter()
+                .map(|i| async move {
+                    anyhow::Ok(i.into_plain(OptionIssueProcessingPathItems::none()).await?)
+                })
+                .try_join()
+                .await?,
+            processing_path: processing_path.into_plain().await?,
+        }
+        .cell())
     }
 }
 
 #[turbo_tasks::value_trait]
 trait IssueProcessingPath {
-    fn shortest_path(&self, issue: IssueVc) -> OptionIssueProcessingPathItemsVc;
+    fn shortest_path(
+        self: Vc<Self>,
+        issue: Vc<Box<dyn Issue>>,
+    ) -> Vc<OptionIssueProcessingPathItems>;
 }
 
 #[turbo_tasks::value]
 pub struct IssueProcessingPathItem {
-    pub context: Option<FileSystemPathVc>,
-    pub description: StringVc,
+    pub file_path: Option<Vc<FileSystemPath>>,
+    pub description: Vc<String>,
 }
 
 #[turbo_tasks::value_impl]
 impl ValueToString for IssueProcessingPathItem {
     #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<StringVc> {
-        if let Some(context) = self.context {
-            Ok(StringVc::cell(format!(
+    async fn to_string(&self) -> Result<Vc<String>> {
+        if let Some(context) = self.file_path {
+            Ok(Vc::cell(format!(
                 "{} ({})",
                 context.to_string().await?,
                 self.description.await?
@@ -158,12 +191,12 @@ impl ValueToString for IssueProcessingPathItem {
 }
 
 #[turbo_tasks::value_impl]
-impl IssueProcessingPathItemVc {
+impl IssueProcessingPathItem {
     #[turbo_tasks::function]
-    pub async fn into_plain(self) -> Result<PlainIssueProcessingPathItemVc> {
+    pub async fn into_plain(self: Vc<Self>) -> Result<Vc<PlainIssueProcessingPathItem>> {
         let this = self.await?;
         Ok(PlainIssueProcessingPathItem {
-            context: if let Some(context) = this.context {
+            file_path: if let Some(context) = this.file_path {
                 Some(context.to_string().await?)
             } else {
                 None
@@ -175,59 +208,60 @@ impl IssueProcessingPathItemVc {
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct OptionIssueProcessingPathItems(Option<Vec<IssueProcessingPathItemVc>>);
+pub struct OptionIssueProcessingPathItems(Option<Vec<Vc<IssueProcessingPathItem>>>);
 
 #[turbo_tasks::value_impl]
-impl OptionIssueProcessingPathItemsVc {
+impl OptionIssueProcessingPathItems {
     #[turbo_tasks::function]
-    pub fn none() -> Self {
-        OptionIssueProcessingPathItemsVc::cell(None)
+    pub fn none() -> Vc<Self> {
+        Vc::cell(None)
     }
 
     #[turbo_tasks::function]
-    pub async fn into_plain(self) -> Result<PlainIssueProcessingPathVc> {
-        Ok(PlainIssueProcessingPathVc::cell(
-            if let Some(items) = &*self.await? {
-                Some(
-                    items
-                        .iter()
-                        .map(|item| item.into_plain())
-                        .try_join()
-                        .await?,
-                )
-            } else {
-                None
-            },
-        ))
+    pub async fn into_plain(self: Vc<Self>) -> Result<Vc<PlainIssueProcessingPath>> {
+        Ok(Vc::cell(if let Some(items) = &*self.await? {
+            Some(
+                items
+                    .iter()
+                    .map(|item| item.into_plain())
+                    .try_join()
+                    .await?,
+            )
+        } else {
+            None
+        }))
     }
 }
 
 #[turbo_tasks::value]
-struct RootIssueProcessingPath(IssueVc);
+struct RootIssueProcessingPath(Vc<Box<dyn Issue>>);
 
 #[turbo_tasks::value_impl]
 impl IssueProcessingPath for RootIssueProcessingPath {
     #[turbo_tasks::function]
-    fn shortest_path(&self, issue: IssueVc) -> OptionIssueProcessingPathItemsVc {
+    fn shortest_path(&self, issue: Vc<Box<dyn Issue>>) -> Vc<OptionIssueProcessingPathItems> {
         if self.0 == issue {
-            OptionIssueProcessingPathItemsVc::cell(Some(Vec::new()))
+            Vc::cell(Some(Vec::new()))
         } else {
-            OptionIssueProcessingPathItemsVc::cell(None)
+            Vc::cell(None)
         }
     }
 }
 
 #[turbo_tasks::value]
 struct ItemIssueProcessingPath(
-    Option<IssueProcessingPathItemVc>,
-    AutoSet<IssueProcessingPathVc>,
+    Option<Vc<IssueProcessingPathItem>>,
+    AutoSet<Vc<Box<dyn IssueProcessingPath>>>,
 );
 
 #[turbo_tasks::value_impl]
 impl IssueProcessingPath for ItemIssueProcessingPath {
     /// Returns the shortest path from the root issue to the given issue.
     #[turbo_tasks::function]
-    async fn shortest_path(&self, issue: IssueVc) -> Result<OptionIssueProcessingPathItemsVc> {
+    async fn shortest_path(
+        &self,
+        issue: Vc<Box<dyn Issue>>,
+    ) -> Result<Vc<OptionIssueProcessingPathItems>> {
         assert!(!self.1.is_empty());
         let paths = self
             .1
@@ -262,129 +296,68 @@ impl IssueProcessingPath for ItemIssueProcessingPath {
                 shortest = Some(path);
             }
         }
-        Ok(OptionIssueProcessingPathItemsVc::cell(shortest.map(
-            |path| {
-                if let Some(item) = self.0 {
-                    std::iter::once(item).chain(path.iter().copied()).collect()
-                } else {
-                    path.clone()
-                }
-            },
-        )))
-    }
-}
-
-impl IssueVc {
-    pub fn emit(self) {
-        emit(self);
-        emit(
-            RootIssueProcessingPathVc::cell(RootIssueProcessingPath(self))
-                .as_issue_processing_path(),
-        )
-    }
-}
-
-impl IssueVc {
-    #[allow(unused_variables, reason = "behind feature flag")]
-    pub async fn attach_context<T: CollectiblesSource + Copy + Send>(
-        context: impl Into<Option<FileSystemPathVc>> + Send,
-        description: impl Into<String> + Send,
-        source: T,
-    ) -> Result<T> {
-        #[cfg(feature = "issue_path")]
-        {
-            let children = source.take_collectibles().await?;
-            if !children.is_empty() {
-                emit(
-                    ItemIssueProcessingPathVc::cell(ItemIssueProcessingPath(
-                        Some(IssueProcessingPathItemVc::cell(IssueProcessingPathItem {
-                            context: context.into(),
-                            description: StringVc::cell(description.into()),
-                        })),
-                        children,
-                    ))
-                    .as_issue_processing_path(),
-                );
+        Ok(Vc::cell(shortest.map(|path| {
+            if let Some(item) = self.0 {
+                std::iter::once(item).chain(path.iter().copied()).collect()
+            } else {
+                path.clone()
             }
-        }
-        Ok(source)
+        })))
     }
+}
 
-    #[allow(unused_variables, reason = "behind feature flag")]
-    pub async fn attach_description<T: CollectiblesSource + Copy + Send>(
-        description: impl Into<String> + Send,
-        source: T,
-    ) -> Result<T> {
-        Self::attach_context(None, description, source).await
-    }
+pub trait IssueExt {
+    fn emit(self);
+}
 
-    /// Returns all issues from `source` in a list with their associated
-    /// processing path.
-    pub async fn peek_issues_with_path<T: CollectiblesSource + Copy>(
-        source: T,
-    ) -> Result<CapturedIssuesVc> {
-        Ok(CapturedIssuesVc::cell(CapturedIssues {
-            issues: source.peek_collectibles().strongly_consistent().await?,
-            #[cfg(feature = "issue_path")]
-            processing_path: ItemIssueProcessingPathVc::cell(ItemIssueProcessingPath(
-                None,
-                source.peek_collectibles().strongly_consistent().await?,
-            )),
-        }))
-    }
-
-    /// Returns all issues from `source` in a list with their associated
-    /// processing path.
-    ///
-    /// This unemits the issues. They will not propagate up.
-    pub async fn take_issues_with_path<T: CollectiblesSource + Copy>(
-        source: T,
-    ) -> Result<CapturedIssuesVc> {
-        Ok(CapturedIssuesVc::cell(CapturedIssues {
-            issues: source.take_collectibles().strongly_consistent().await?,
-            #[cfg(feature = "issue_path")]
-            processing_path: ItemIssueProcessingPathVc::cell(ItemIssueProcessingPath(
-                None,
-                source.take_collectibles().strongly_consistent().await?,
-            )),
-        }))
+impl<T> IssueExt for Vc<T>
+where
+    T: Upcast<Box<dyn Issue>>,
+{
+    fn emit(self) {
+        let issue = Vc::upcast::<Box<dyn Issue>>(self);
+        emit(issue);
+        emit(Vc::upcast::<Box<dyn IssueProcessingPath>>(
+            RootIssueProcessingPath::cell(RootIssueProcessingPath(issue)),
+        ))
     }
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct Issues(Vec<IssueVc>);
+pub struct Issues(Vec<Vc<Box<dyn Issue>>>);
 
-/// A list of issues captured with [`IssueVc::peek_issues_with_path`] and
-/// [`IssueVc::take_issues_with_path`].
+/// A list of issues captured with [`Issue::peek_issues_with_path`] and
+/// [`Issue::take_issues_with_path`].
+#[turbo_tasks::value(shared)]
 #[derive(Debug)]
-#[turbo_tasks::value]
 pub struct CapturedIssues {
-    issues: AutoSet<IssueVc>,
+    issues: AutoSet<Vc<Box<dyn Issue>>>,
     #[cfg(feature = "issue_path")]
-    processing_path: ItemIssueProcessingPathVc,
+    processing_path: Vc<ItemIssueProcessingPath>,
 }
 
 #[turbo_tasks::value_impl]
-impl CapturedIssuesVc {
+impl CapturedIssues {
     #[turbo_tasks::function]
-    pub async fn is_empty(self) -> Result<BoolVc> {
-        Ok(BoolVc::cell(self.await?.is_empty()))
+    pub async fn is_empty(self: Vc<Self>) -> Result<Vc<bool>> {
+        Ok(Vc::cell(self.await?.is_empty_ref()))
     }
 }
 
 impl CapturedIssues {
     /// Returns true if there are no issues.
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty_ref(&self) -> bool {
         self.issues.is_empty()
     }
 
     /// Returns the number of issues.
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.issues.len()
     }
 
     /// Returns an iterator over the issues.
-    pub fn iter(&self) -> impl Iterator<Item = IssueVc> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = Vc<Box<dyn Issue>>> + '_ {
         self.issues.iter().copied()
     }
 
@@ -392,17 +365,17 @@ impl CapturedIssues {
     /// issue to each issue.
     pub fn iter_with_shortest_path(
         &self,
-    ) -> impl Iterator<Item = (IssueVc, OptionIssueProcessingPathItemsVc)> + '_ {
+    ) -> impl Iterator<Item = (Vc<Box<dyn Issue>>, Vc<OptionIssueProcessingPathItems>)> + '_ {
         self.issues.iter().map(|issue| {
             #[cfg(feature = "issue_path")]
             let path = self.processing_path.shortest_path(*issue);
             #[cfg(not(feature = "issue_path"))]
-            let path = OptionIssueProcessingPathItemsVc::none();
+            let path = OptionIssueProcessingPathItems::none();
             (*issue, path)
         })
     }
 
-    pub async fn get_plain_issues(&self) -> Result<Vec<PlainIssueReadRef>> {
+    pub async fn get_plain_issues(&self) -> Result<Vec<ReadRef<PlainIssue>>> {
         let mut list = self
             .issues
             .iter()
@@ -413,28 +386,62 @@ impl CapturedIssues {
                     .await;
                 #[cfg(not(feature = "issue_path"))]
                 return issue
-                    .into_plain(OptionIssueProcessingPathItemsVc::none())
+                    .into_plain(OptionIssueProcessingPathItems::none())
                     .await;
             })
             .try_join()
             .await?;
-        list.sort_by(|a, b| ReadRef::ptr_cmp(a, b));
+        list.sort_by(ReadRef::ptr_cmp);
         Ok(list)
     }
 }
 
+/// Use this to pass and store byte offsets for an AST node along with its
+/// source. When row/column is needed, this can be lazily converted into a
+/// proper `IssueSource` at that time using
+/// [LazyIssueSource::to_issue_source].
 #[turbo_tasks::value]
-#[derive(Clone)]
-pub struct IssueSource {
-    pub asset: AssetVc,
-    pub start: SourcePos,
-    pub end: SourcePos,
+#[derive(Clone, Debug)]
+pub struct LazyIssueSource {
+    pub source: Vc<Box<dyn Source>>,
+    pub start: usize,
+    pub end: usize,
 }
 
 #[turbo_tasks::value_impl]
-impl IssueSourceVc {
+impl LazyIssueSource {
     #[turbo_tasks::function]
-    pub async fn from_byte_offset(asset: AssetVc, start: usize, end: usize) -> Result<Self> {
+    pub fn new(source: Vc<Box<dyn Source>>, start: usize, end: usize) -> Vc<Self> {
+        Self::cell(LazyIssueSource { source, start, end })
+    }
+
+    #[turbo_tasks::function]
+    pub async fn to_issue_source(self: Vc<Self>) -> Result<Vc<IssueSource>> {
+        let this = &*self.await?;
+        Ok(IssueSource::from_byte_offset(
+            this.source,
+            this.start,
+            this.end,
+        ))
+    }
+}
+
+#[turbo_tasks::value]
+#[derive(Clone, Debug)]
+pub struct IssueSource {
+    source: Vc<Box<dyn Source>>,
+    start: SourcePos,
+    end: SourcePos,
+}
+
+#[turbo_tasks::value_impl]
+impl IssueSource {
+    #[turbo_tasks::function]
+    pub async fn from_byte_offset(
+        source: Vc<Box<dyn Source>>,
+        start: usize,
+        end: usize,
+    ) -> Result<Vc<Self>> {
         fn find_line_and_column(lines: &[FileLine], offset: usize) -> SourcePos {
             match lines.binary_search_by(|line| line.bytes_offset.cmp(&offset)) {
                 Ok(i) => SourcePos { line: i, column: 0 },
@@ -454,13 +461,13 @@ impl IssueSourceVc {
             }
         }
         Ok(Self::cell(
-            if let FileLinesContent::Lines(lines) = &*asset.content().lines().await? {
+            if let FileLinesContent::Lines(lines) = &*source.content().lines().await? {
                 let start = find_line_and_column(lines.as_ref(), start);
                 let end = find_line_and_column(lines.as_ref(), end);
-                IssueSource { asset, start, end }
+                IssueSource { source, start, end }
             } else {
                 IssueSource {
-                    asset,
+                    source,
                     start: SourcePos::default(),
                     end: SourcePos::max(),
                 }
@@ -470,26 +477,13 @@ impl IssueSourceVc {
 }
 
 #[turbo_tasks::value(transparent)]
-pub struct OptionIssueSource(Option<IssueSourceVc>);
-
-#[turbo_tasks::value_impl]
-impl OptionIssueSourceVc {
-    #[turbo_tasks::function]
-    pub fn some(source: IssueSourceVc) -> Self {
-        OptionIssueSourceVc::cell(Some(source))
-    }
-
-    #[turbo_tasks::function]
-    pub fn none() -> Self {
-        OptionIssueSourceVc::cell(None)
-    }
-}
+pub struct OptionIssueSource(Option<Vc<IssueSource>>);
 
 #[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug)]
 pub struct PlainIssue {
     pub severity: IssueSeverity,
-    pub context: String,
+    pub file_path: String,
     pub category: String,
 
     pub title: String,
@@ -497,14 +491,14 @@ pub struct PlainIssue {
     pub detail: String,
     pub documentation_link: String,
 
-    pub source: Option<PlainIssueSourceReadRef>,
-    pub sub_issues: Vec<PlainIssueReadRef>,
-    pub processing_path: PlainIssueProcessingPathReadRef,
+    pub source: Option<ReadRef<PlainIssueSource>>,
+    pub sub_issues: Vec<ReadRef<PlainIssue>>,
+    pub processing_path: ReadRef<PlainIssueProcessingPath>,
 }
 
 fn hash_plain_issue(issue: &PlainIssue, hasher: &mut Xxh3Hash64Hasher, full: bool) {
     hasher.write_ref(&issue.severity);
-    hasher.write_ref(&issue.context);
+    hasher.write_ref(&issue.file_path);
     hasher.write_ref(&issue.category);
     hasher.write_ref(&issue.title);
     hasher.write_ref(
@@ -543,7 +537,7 @@ impl PlainIssue {
     /// useful for generating exact matching hashes, it's possible for the
     /// same issue to pass from multiple processing paths, making for overly
     /// verbose logging.
-    pub fn internal_hash(&self, full: bool) -> u64 {
+    pub fn internal_hash_ref(&self, full: bool) -> u64 {
         let mut hasher = Xxh3Hash64Hasher::new();
         hash_plain_issue(self, &mut hasher, full);
         hasher.finish()
@@ -551,7 +545,7 @@ impl PlainIssue {
 }
 
 #[turbo_tasks::value_impl]
-impl PlainIssueVc {
+impl PlainIssue {
     /// We need deduplicate issues that can come from unique paths, but
     /// represent the same underlying problem. Eg, a parse error for a file
     /// that is compiled in both client and server contexts.
@@ -561,66 +555,26 @@ impl PlainIssueVc {
     /// same issue to pass from multiple processing paths, making for overly
     /// verbose logging.
     #[turbo_tasks::function]
-    pub async fn internal_hash(self, full: bool) -> Result<U64Vc> {
-        Ok(U64Vc::cell(self.await?.internal_hash(full)))
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl IssueVc {
-    #[turbo_tasks::function]
-    pub async fn into_plain(
-        self,
-        processing_path: OptionIssueProcessingPathItemsVc,
-    ) -> Result<PlainIssueVc> {
-        Ok(PlainIssue {
-            severity: *self.severity().await?,
-            context: self.context().to_string().await?.clone_value(),
-            category: self.category().await?.clone_value(),
-            title: self.title().await?.clone_value(),
-            description: self.description().await?.clone_value(),
-            detail: self.detail().await?.clone_value(),
-            documentation_link: self.documentation_link().await?.clone_value(),
-            source: {
-                if let Some(s) = *self.source().await? {
-                    Some(s.into_plain().await?)
-                } else {
-                    None
-                }
-            },
-            sub_issues: self
-                .sub_issues()
-                .await?
-                .iter()
-                .map(|i| async move {
-                    anyhow::Ok(
-                        i.into_plain(OptionIssueProcessingPathItemsVc::none())
-                            .await?,
-                    )
-                })
-                .try_join()
-                .await?,
-            processing_path: processing_path.into_plain().await?,
-        }
-        .cell())
+    pub async fn internal_hash(self: Vc<Self>, full: bool) -> Result<Vc<u64>> {
+        Ok(Vc::cell(self.await?.internal_hash_ref(full)))
     }
 }
 
 #[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug)]
 pub struct PlainIssueSource {
-    pub asset: PlainAssetReadRef,
+    pub asset: ReadRef<PlainSource>,
     pub start: SourcePos,
     pub end: SourcePos,
 }
 
 #[turbo_tasks::value_impl]
-impl IssueSourceVc {
+impl IssueSource {
     #[turbo_tasks::function]
-    pub async fn into_plain(self) -> Result<PlainIssueSourceVc> {
+    pub async fn into_plain(self: Vc<Self>) -> Result<Vc<PlainIssueSource>> {
         let this = self.await?;
         Ok(PlainIssueSource {
-            asset: PlainAssetVc::from_asset(this.asset).await?,
+            asset: PlainSource::from_source(this.source).await?,
             start: this.start,
             end: this.end,
         }
@@ -630,23 +584,23 @@ impl IssueSourceVc {
 
 #[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug)]
-pub struct PlainAsset {
-    pub ident: StringReadRef,
+pub struct PlainSource {
+    pub ident: ReadRef<String>,
     #[turbo_tasks(debug_ignore)]
-    pub content: FileContentReadRef,
+    pub content: ReadRef<FileContent>,
 }
 
 #[turbo_tasks::value_impl]
-impl PlainAssetVc {
+impl PlainSource {
     #[turbo_tasks::function]
-    pub async fn from_asset(asset: AssetVc) -> Result<PlainAssetVc> {
+    pub async fn from_source(asset: Vc<Box<dyn Source>>) -> Result<Vc<PlainSource>> {
         let asset_content = asset.content().await?;
         let content = match *asset_content {
             AssetContent::File(file_content) => file_content.await?,
             AssetContent::Redirect { .. } => ReadRef::new(Arc::new(FileContent::NotFound)),
         };
 
-        Ok(PlainAsset {
+        Ok(PlainSource {
             ident: asset.ident().to_string().await?,
             content,
         }
@@ -656,50 +610,184 @@ impl PlainAssetVc {
 
 #[turbo_tasks::value(transparent, serialization = "none")]
 #[derive(Clone, Debug, DeterministicHash)]
-pub struct PlainIssueProcessingPath(Option<Vec<PlainIssueProcessingPathItemReadRef>>);
+pub struct PlainIssueProcessingPath(Option<Vec<ReadRef<PlainIssueProcessingPathItem>>>);
 
 #[turbo_tasks::value(serialization = "none")]
 #[derive(Clone, Debug, DeterministicHash)]
 pub struct PlainIssueProcessingPathItem {
-    pub context: Option<StringReadRef>,
-    pub description: StringReadRef,
+    pub file_path: Option<ReadRef<String>>,
+    pub description: ReadRef<String>,
 }
 
 #[turbo_tasks::value_trait]
 pub trait IssueReporter {
+    /// Reports issues to the user (e.g. to stdio). Returns whether fatal
+    /// (program-ending) issues were present.
+    ///
+    /// # Arguments:
+    ///
+    /// * `issues` - A [ReadRef] of [CapturedIssues]. Typically obtained with
+    ///   `source.peek_issues_with_path()`.
+    /// * `source` - The root [Vc] from which issues are traced. Can be used by
+    ///   implementers to determine which issues are new.
+    /// * `min_failing_severity` - The minimum Vc<[IssueSeverity]>
+    ///  The minimum issue severity level considered to fatally end the program.
     fn report_issues(
-        &self,
-        issues: TransientInstance<ReadRef<CapturedIssues>>,
+        self: Vc<Self>,
+        issues: TransientInstance<CapturedIssues>,
         source: TransientValue<RawVc>,
-    ) -> BoolVc;
+        min_failing_severity: Vc<IssueSeverity>,
+    ) -> Vc<bool>;
 }
 
 #[async_trait]
-pub trait IssueContextExt
+pub trait IssueDescriptionExt
 where
     Self: Sized,
 {
-    async fn issue_context(
+    #[allow(unused_variables, reason = "behind feature flag")]
+    async fn attach_file_path(
         self,
-        context: impl Into<Option<FileSystemPathVc>> + Send,
+        file_path: impl Into<Option<Vc<FileSystemPath>>> + Send,
+        description: impl Into<String> + Send,
+    ) -> Result<Self>;
+
+    #[allow(unused_variables, reason = "behind feature flag")]
+    async fn attach_description(self, description: impl Into<String> + Send) -> Result<Self>;
+
+    async fn issue_file_path(
+        self,
+        file_path: impl Into<Option<Vc<FileSystemPath>>> + Send,
         description: impl Into<String> + Send,
     ) -> Result<Self>;
     async fn issue_description(self, description: impl Into<String> + Send) -> Result<Self>;
+
+    /// Returns all issues from `source` in a list with their associated
+    /// processing path.
+    async fn peek_issues_with_path(self) -> Result<CapturedIssues>;
+
+    /// Returns all issues from `source` in a list with their associated
+    /// processing path.
+    ///
+    /// This unemits the issues. They will not propagate up.
+    async fn take_issues_with_path(self) -> Result<CapturedIssues>;
 }
 
 #[async_trait]
-impl<T> IssueContextExt for T
+impl<T> IssueDescriptionExt for T
 where
     T: CollectiblesSource + Copy + Send,
 {
-    async fn issue_context(
+    #[allow(unused_variables, reason = "behind feature flag")]
+    async fn attach_file_path(
         self,
-        context: impl Into<Option<FileSystemPathVc>> + Send,
+        file_path: impl Into<Option<Vc<FileSystemPath>>> + Send,
         description: impl Into<String> + Send,
     ) -> Result<Self> {
-        IssueVc::attach_context(context, description, self).await
+        #[cfg(feature = "issue_path")]
+        {
+            let children = self.take_collectibles();
+            if !children.is_empty() {
+                emit(Vc::upcast::<Box<dyn IssueProcessingPath>>(
+                    ItemIssueProcessingPath::cell(ItemIssueProcessingPath(
+                        Some(IssueProcessingPathItem::cell(IssueProcessingPathItem {
+                            file_path: file_path.into(),
+                            description: Vc::cell(description.into()),
+                        })),
+                        children,
+                    )),
+                ));
+            }
+        }
+        Ok(self)
     }
+
+    #[allow(unused_variables, reason = "behind feature flag")]
+    async fn attach_description(self, description: impl Into<String> + Send) -> Result<T> {
+        self.attach_file_path(None, description).await
+    }
+
+    async fn issue_file_path(
+        self,
+        file_path: impl Into<Option<Vc<FileSystemPath>>> + Send,
+        description: impl Into<String> + Send,
+    ) -> Result<Self> {
+        #[cfg(feature = "issue_path")]
+        {
+            let children = self.take_collectibles();
+            if !children.is_empty() {
+                emit(Vc::upcast::<Box<dyn IssueProcessingPath>>(
+                    ItemIssueProcessingPath::cell(ItemIssueProcessingPath(
+                        Some(IssueProcessingPathItem::cell(IssueProcessingPathItem {
+                            file_path: file_path.into(),
+                            description: Vc::cell(description.into()),
+                        })),
+                        children,
+                    )),
+                ));
+            }
+        }
+        #[cfg(not(feature = "issue_path"))]
+        {
+            let _ = (file_path, description);
+        }
+        Ok(self)
+    }
+
     async fn issue_description(self, description: impl Into<String> + Send) -> Result<Self> {
-        IssueVc::attach_description(description, self).await
+        self.issue_file_path(None, description).await
+    }
+
+    async fn peek_issues_with_path(self) -> Result<CapturedIssues> {
+        Ok(CapturedIssues {
+            issues: self.peek_collectibles(),
+            #[cfg(feature = "issue_path")]
+            processing_path: ItemIssueProcessingPath::cell(ItemIssueProcessingPath(
+                None,
+                self.peek_collectibles(),
+            )),
+        })
+    }
+
+    async fn take_issues_with_path(self) -> Result<CapturedIssues> {
+        Ok(CapturedIssues {
+            issues: self.take_collectibles(),
+            #[cfg(feature = "issue_path")]
+            processing_path: ItemIssueProcessingPath::cell(ItemIssueProcessingPath(
+                None,
+                self.take_collectibles(),
+            )),
+        })
+    }
+}
+
+pub async fn handle_issues<T: Send>(
+    source: Vc<T>,
+    issue_reporter: Vc<Box<dyn IssueReporter>>,
+    min_failing_severity: Vc<IssueSeverity>,
+    path: Option<&str>,
+    operation: Option<&str>,
+) -> Result<()> {
+    let _ = source.resolve_strongly_consistent().await?;
+    let issues = source.peek_issues_with_path().await?;
+
+    let has_fatal = issue_reporter.report_issues(
+        TransientInstance::new(issues),
+        TransientValue::new(Vc::into_raw(source)),
+        min_failing_severity,
+    );
+
+    if *has_fatal.await? {
+        let mut message = "Fatal issue(s) occurred".to_owned();
+        if let Some(path) = path.as_ref() {
+            message += &format!(" in {path}");
+        };
+        if let Some(operation) = operation.as_ref() {
+            message += &format!(" ({operation})");
+        };
+
+        Err(anyhow!(message))
+    } else {
+        Ok(())
     }
 }

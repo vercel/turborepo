@@ -18,11 +18,12 @@
     unused_must_use,
     unsafe_code
 )]
-#![feature(drain_filter)]
+#![feature(extract_if)]
 
 use std::{
     collections::HashMap,
     fs::File,
+    io,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -30,24 +31,41 @@ use std::{
     },
 };
 
-use camino::Utf8PathBuf;
 use futures::{channel::oneshot, future::Either, FutureExt, Stream, StreamExt as _};
 use itertools::Itertools;
 use merge_streams::MergeStreams;
 pub use notify::{Event, Watcher};
 pub use stop_token::{stream::StreamExt, StopSource, StopToken, TimedOutError};
+use thiserror::Error;
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender},
     watch,
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{error, event, span, trace, warn, Level};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
+
+/// WatchError wraps errors produced by GlobWatcher
+#[derive(Debug, Error)]
+pub enum WatchError {
+    // TODO: find a generic way to include the path in these errors
+    /// PathError wraps errors encountered dealing with paths while filewatching
+    #[error("Filewatching encountered a path error: {0}")]
+    PathError(#[from] PathError),
+    /// IO wraps IO errors encountered while attempting to watch the filesystem
+    #[error("Filewatching encountered an IO Error: {0}")]
+    IO(#[from] io::Error),
+    /// Backend wraps errors produced from the underlying filewatching
+    /// implementation.
+    #[error("Filewatching backend error: {0}")]
+    Backend(#[from] notify::Error),
+}
 
 /// A wrapper around notify that allows for glob-based watching.
 #[derive(Debug)]
 pub struct GlobWatcher {
     stream: UnboundedReceiver<Event>,
-    flush_dir: PathBuf,
+    flush_dir: AbsoluteSystemPathBuf,
 
     config: UnboundedReceiver<WatcherCommand>,
     setup_handle: tokio::task::JoinHandle<Result<(), notify::Error>>,
@@ -59,14 +77,13 @@ impl GlobWatcher {
     /// see the module-level documentation.
     #[tracing::instrument]
     pub fn new(
-        flush_dir: Utf8PathBuf,
-    ) -> Result<(Self, WatchConfig<notify::RecommendedWatcher>), notify::Error> {
+        flush_dir: &AbsoluteSystemPath,
+    ) -> Result<(Self, WatchConfig<notify::RecommendedWatcher>), WatchError> {
         let (send_event, receive_event) = tokio::sync::mpsc::unbounded_channel();
         let (send_config, receive_config) = tokio::sync::mpsc::unbounded_channel();
 
-        // even if this fails, we may still be able to continue
-        std::fs::create_dir_all(&flush_dir).ok();
-        let flush_dir = flush_dir.canonicalize()?;
+        flush_dir.create_dir_all()?;
+        let flush_dir = flush_dir.to_realpath()?;
 
         let watcher = notify::recommended_watcher(move |event: Result<Event, notify::Error>| {
             let span = span!(tracing::Level::TRACE, "watcher");
@@ -95,21 +112,20 @@ impl GlobWatcher {
         // so we just fire and forget a thread to do it in the
         // background, to cut our startup time in half.
         let flush = watcher.clone();
-        let path = flush_dir.as_path().to_owned();
+        let flush_watch_path = flush_dir.clone();
         let (setup_broadcaster, setup_receiver) = watch::channel(None);
         let setup_handle = tokio::task::spawn_blocking(move || {
-            if let Err(e) = flush
-                .lock()
-                .expect("only fails if poisoned")
-                .watch(&path, notify::RecursiveMode::Recursive)
-            {
+            if let Err(e) = flush.lock().expect("only fails if poisoned").watch(
+                flush_watch_path.as_std_path(),
+                notify::RecursiveMode::Recursive,
+            ) {
                 warn!("failed to watch flush dir: {}", e);
                 if setup_broadcaster.send(Some(false)).is_err() {
                     trace!("failed to notify failed flush watch");
                 }
                 Err(e)
             } else {
-                trace!("watching flush dir: {:?}", path);
+                trace!("watching flush dir: {:?}", flush_watch_path);
                 if setup_broadcaster.send(Some(true)).is_err() {
                     trace!("failed to notify successful flush watch");
                 }
@@ -198,7 +214,7 @@ impl GlobWatcher {
                                 // requestor. flushes should not be considered as events.
                                 for flush_id in e
                                     .paths
-                                    .drain_filter(|p| p.starts_with(flush_dir.as_path()))
+                                    .extract_if(|p| p.starts_with(flush_dir.as_path()))
                                     .filter_map(|p| {
                                         get_flush_id(
                                             p.strip_prefix(flush_dir.as_path())
@@ -233,7 +249,7 @@ impl GlobWatcher {
                             Either::Right(Ok(WatcherCommand::Flush(tx))) => {
                                 // create file in flush dir
                                 let flush_id = flush_id.fetch_add(1, Ordering::SeqCst);
-                                let flush_file = flush_dir.join(flush_id.to_string());
+                                let flush_file = flush_dir.join_component(&flush_id.to_string());
                                 if let Err(e) = File::create(flush_file) {
                                     warn!("failed to create flush file: {}", e);
                                 } else {

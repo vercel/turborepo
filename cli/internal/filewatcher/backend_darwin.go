@@ -136,7 +136,7 @@ func (f *fseventsBackend) AddRoot(someRoot turbopath.AbsoluteSystemPath, exclude
 				if !isExcluded {
 					f.events <- Event{
 						Path:      processedEventPath,
-						EventType: toFileEvent(ev.Flags),
+						EventType: toFileEvent(ev.Flags, processedEventPath),
 					}
 				}
 			}
@@ -192,7 +192,7 @@ func waitForEvent(events <-chan []fsevents.Event, path string, flag fsevents.Eve
 
 var _modifiedMask = fsevents.ItemModified | fsevents.ItemInodeMetaMod | fsevents.ItemFinderInfoMod | fsevents.ItemChangeOwner | fsevents.ItemXattrMod
 
-func toFileEvent(flags fsevents.EventFlags) FileEvent {
+func toFileEvent(flags fsevents.EventFlags, path turbopath.AbsoluteSystemPath) FileEvent {
 	if flags&fsevents.ItemCreated != 0 {
 		return FileAdded
 	} else if flags&fsevents.ItemRemoved != 0 {
@@ -200,7 +200,12 @@ func toFileEvent(flags fsevents.EventFlags) FileEvent {
 	} else if flags&_modifiedMask != 0 {
 		return FileModified
 	} else if flags&fsevents.ItemRenamed != 0 {
-		return FileRenamed
+		// FSEvents sends ItemRenamed for both the old and new files,
+		// and does not send delete / create events
+		if path.Exists() {
+			return FileAdded
+		}
+		return FileDeleted
 	} else if flags&fsevents.RootChanged != 0 {
 		// count this as a delete, something affected the path to the root
 		// of the stream

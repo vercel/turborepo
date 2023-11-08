@@ -19,6 +19,7 @@
 type RefreshRuntimeGlobals =
   import("@next/react-refresh-utils/dist/runtime").RefreshRuntimeGlobals;
 
+declare var CHUNK_BASE_PATH: string;
 declare var $RefreshHelpers$: RefreshRuntimeGlobals["$RefreshHelpers$"];
 declare var $RefreshReg$: RefreshRuntimeGlobals["$RefreshReg$"];
 declare var $RefreshSig$: RefreshRuntimeGlobals["$RefreshSig$"];
@@ -32,21 +33,8 @@ type RefreshContext = {
 
 type RefreshHelpers = RefreshRuntimeGlobals["$RefreshHelpers$"];
 
-interface TurbopackDevBaseContext {
-  e: Module["exports"];
-  r: CommonJsRequire;
-  f: RequireContextFactory;
-  i: EsmImport;
-  s: EsmExport;
-  j: typeof dynamicExport;
-  v: ExportValue;
-  n: typeof exportNamespace;
-  m: Module;
-  c: ModuleCache;
-  l: LoadChunk;
-  g: typeof globalThis;
+interface TurbopackDevBaseContext extends TurbopackBaseContext {
   k: RefreshContext;
-  __dirname: string;
 }
 
 interface TurbopackDevContext extends TurbopackDevBaseContext {}
@@ -328,21 +316,27 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
 
   // NOTE(alexkirsz) This can fail when the module encounters a runtime error.
   try {
+    const sourceInfo: SourceInfo = { type: SourceType.Parent, parentId: id };
+
     runModuleExecutionHooks(module, (refresh) => {
       moduleFactory.call(
         module.exports,
         augmentContext({
+          a: asyncModule.bind(null, module),
           e: module.exports,
           r: commonJsRequire.bind(null, module),
+          t: runtimeRequire,
           f: requireContext.bind(null, module),
           i: esmImport.bind(null, module),
-          s: esmExport.bind(null, module),
-          j: dynamicExport.bind(null, module),
+          s: esmExport.bind(null, module, module.exports),
+          j: dynamicExport.bind(null, module, module.exports),
           v: exportValue.bind(null, module),
           n: exportNamespace.bind(null, module),
           m: module,
           c: moduleCache,
-          l: loadChunk.bind(null, { type: SourceType.Parent, parentId: id }),
+          l: loadChunk.bind(null, sourceInfo),
+          w: loadWebAssembly.bind(null, sourceInfo),
+          u: loadWebAssemblyModule.bind(null, sourceInfo),
           g: globalThis,
           k: refresh,
           __dirname: module.id.replace(/(^|\/)\/+$/, ""),
@@ -1134,6 +1128,11 @@ function createModuleHot(
     // NOTE(alexkirsz) Since we always return "idle" for now, these are no-ops.
     addStatusHandler: (_handler) => {},
     removeStatusHandler: (_handler) => {},
+
+    // NOTE(jridgewell) Check returns the list of updated modules, but we don't
+    // want the webpack code paths to ever update (the turbopack paths handle
+    // this already).
+    check: () => Promise.resolve(null),
   };
 
   return { hot, hotState };
@@ -1285,6 +1284,13 @@ function getOrInstantiateRuntimeModule(
   }
 
   return instantiateModule(moduleId, { type: SourceType.Runtime, chunkPath });
+}
+
+/**
+ * Returns the URL relative to the origin where a chunk can be fetched from.
+ */
+function getChunkRelativeUrl(chunkPath: ChunkPath): string {
+  return `${CHUNK_BASE_PATH}${chunkPath}`;
 }
 
 /**

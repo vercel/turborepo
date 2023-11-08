@@ -16,54 +16,36 @@ use std::{
     collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex as StdMutux,
+        Arc, Mutex,
     },
     time::{Duration, Instant},
 };
 
-use globwatch::{StopSource, Watcher};
+use futures::Future;
+use thiserror::Error;
 use tokio::{
     select,
-    signal::ctrl_c,
-    sync::{
-        oneshot::{self, Receiver, Sender},
-        Mutex,
-    },
+    sync::{mpsc, oneshot, watch},
 };
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
-use tracing::{error, trace};
-use turbopath::AbsoluteSystemPathBuf;
+use tracing::{error, info, trace, warn};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_filewatch::{
+    cookie_jar::CookieJar,
+    globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
+    FileSystemWatcher, WatchError,
+};
 
 use super::{
     bump_timeout::BumpTimeout,
     endpoint::SocketOpenError,
     proto::{self},
-    DaemonError,
 };
 use crate::{
-    commands::CommandBase, daemon::bump_timeout_layer::BumpTimeoutLayer, get_version,
-    globwatcher::HashGlobWatcher,
+    daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket},
+    get_version,
 };
-
-pub struct DaemonServer<T: Watcher> {
-    #[allow(dead_code)]
-    daemon_root: AbsoluteSystemPathBuf,
-    log_file: AbsoluteSystemPathBuf,
-
-    start_time: Instant,
-    #[allow(dead_code)]
-    timeout: Arc<BumpTimeout>,
-
-    watcher: Arc<HashGlobWatcher<T>>,
-    shutdown: Mutex<Option<Sender<()>>>,
-    #[allow(dead_code)]
-    shutdown_rx: Option<Receiver<()>>,
-
-    running: Arc<AtomicBool>,
-
-    times_saved: Arc<std::sync::Mutex<HashMap<String, u64>>>,
-}
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -76,153 +58,286 @@ pub enum CloseReason {
     SocketOpenError(SocketOpenError),
 }
 
-impl DaemonServer<notify::RecommendedWatcher> {
-    #[tracing::instrument(skip(base), fields(repo_root = %base.repo_root))]
-    pub fn new(
-        base: &CommandBase,
-        timeout: Duration,
-        log_file: AbsoluteSystemPathBuf,
-    ) -> Result<Self, DaemonError> {
-        let daemon_root = base.daemon_file_root();
-
-        let watcher = Arc::new(HashGlobWatcher::new(
-            base.repo_root.clone(),
-            daemon_root.join_component("flush").as_path().to_owned(),
-        )?);
-
-        let (send_shutdown, recv_shutdown) = tokio::sync::oneshot::channel::<()>();
-
-        Ok(Self {
-            daemon_root,
-            log_file,
-
-            start_time: Instant::now(),
-            timeout: Arc::new(BumpTimeout::new(timeout)),
-
-            watcher,
-            shutdown: Mutex::new(Some(send_shutdown)),
-            shutdown_rx: Some(recv_shutdown),
-
-            running: Arc::new(AtomicBool::new(true)),
-            times_saved: Arc::new(StdMutux::new(HashMap::new())),
-        })
-    }
+struct FileWatching {
+    _watcher: FileSystemWatcher,
+    glob_watcher: GlobWatcher,
 }
 
-impl<T: Watcher> Drop for DaemonServer<T> {
-    fn drop(&mut self) {
-        self.running.store(false, Ordering::SeqCst);
-    }
+#[derive(Debug, Error)]
+enum RpcError {
+    #[error("deadline exceeded")]
+    DeadlineExceeded,
+    #[error("invalid glob: {0}")]
+    InvalidGlob(#[from] GlobError),
+    #[error("globwatching failed: {0}")]
+    GlobWatching(#[from] GlobWatcherError),
+    #[error("filewatching unavailable")]
+    NoFileWatching,
 }
 
-impl<T: Watcher + Send + 'static> DaemonServer<T> {
-    /// Serve the daemon server, while also watching for filesystem changes.
-    #[tracing::instrument(skip(self))]
-    pub async fn serve(mut self) -> CloseReason {
-        let stop = StopSource::new();
-        let watcher = self.watcher.clone();
-        let watcher_fut = watcher.watch(stop.token());
-        tokio::pin!(watcher_fut);
-
-        let timer = self.timeout.clone();
-        let timeout_fut = timer.wait();
-
-        // if shutdown is available, then listen. otherwise just wait forever
-        let shutdown_rx = self.shutdown_rx.take();
-        let shutdown_fut = async move {
-            match shutdown_rx {
-                Some(rx) => {
-                    rx.await.ok();
-                }
-                None => {
-                    futures::pending!();
-                }
+impl From<RpcError> for tonic::Status {
+    fn from(value: RpcError) -> Self {
+        match value {
+            RpcError::DeadlineExceeded => {
+                tonic::Status::deadline_exceeded("failed to load filewatching in time")
             }
+            RpcError::InvalidGlob(e) => tonic::Status::invalid_argument(e.to_string()),
+            RpcError::GlobWatching(e) => tonic::Status::unavailable(e.to_string()),
+            RpcError::NoFileWatching => tonic::Status::unavailable("filewatching unavailable"),
+        }
+    }
+}
+
+async fn start_filewatching(
+    repo_root: AbsoluteSystemPathBuf,
+    watcher_tx: watch::Sender<Option<Arc<FileWatching>>>,
+) -> Result<(), WatchError> {
+    let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).await?;
+    let cookie_jar = CookieJar::new(
+        watcher.cookie_dir(),
+        Duration::from_millis(100),
+        watcher.subscribe(),
+    );
+    let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
+    // We can ignore failures here, it means the server is shutting down and
+    // receivers have gone out of scope.
+    let _ = watcher_tx.send(Some(Arc::new(FileWatching {
+        _watcher: watcher,
+        glob_watcher,
+    })));
+    Ok(())
+}
+
+/// Timeout for every RPC the server handles
+const REQUEST_TIMEOUT: Duration = Duration::from_millis(100);
+
+/// run a gRPC server providing the Turbod interface. external_shutdown
+/// can be used to deliver a signal to shutdown the server. This is expected
+/// to be wired to signal handling.
+pub async fn serve<S>(
+    repo_root: &AbsoluteSystemPath,
+    daemon_root: &AbsoluteSystemPath,
+    log_file: AbsoluteSystemPathBuf,
+    timeout: Duration,
+    external_shutdown: S,
+) -> CloseReason
+where
+    S: Future<Output = CloseReason>,
+{
+    let running = Arc::new(AtomicBool::new(true));
+    let (_pid_lock, stream) = match listen_socket(daemon_root, running.clone()).await {
+        Ok((pid_lock, stream)) => (pid_lock, stream),
+        Err(e) => return CloseReason::SocketOpenError(e),
+    };
+    trace!("acquired connection stream for socket");
+
+    let watcher_repo_root = repo_root.to_owned();
+    // watcher_rx holds the filewatching instance once it has initialized. This
+    // allows us to start the gRPC server without waiting for the potentially
+    // expensive filewatching startup time.
+    let (watcher_tx, watcher_rx) = watch::channel(None);
+    // A channel to trigger the shutdown of the gRPC server. This is handed out
+    // to components internal to the server process such as root watching, as
+    // well as available to the gRPC server itself to handle the shutdown RPC.
+    let (trigger_shutdown, mut shutdown_signal) = mpsc::channel::<()>(1);
+
+    // watch receivers as a group own the filewatcher, which will exit when
+    // all references are dropped.
+    let fw_shutdown = trigger_shutdown.clone();
+    let fw_handle = tokio::task::spawn(async move {
+        if let Err(e) = start_filewatching(watcher_repo_root, watcher_tx).await {
+            error!("filewatching failed to start: {}", e);
+            let _ = fw_shutdown.send(()).await;
+        }
+        info!("filewatching started");
+    });
+    // exit_root_watch delivers a signal to the root watch loop to exit.
+    // In the event that the server shuts down via some other mechanism, this
+    // cleans up root watching task.
+    let (exit_root_watch, root_watch_exit_signal) = oneshot::channel();
+    let watch_root_handle = tokio::task::spawn(watch_root(
+        watcher_rx.clone(),
+        repo_root.to_owned(),
+        trigger_shutdown.clone(),
+        root_watch_exit_signal,
+    ));
+
+    let bump_timeout = Arc::new(BumpTimeout::new(timeout));
+    let timeout_fut = bump_timeout.wait();
+
+    // when one of these futures complete, let the server gracefully shutdown
+    let (grpc_shutdown_tx, shutdown_reason) = oneshot::channel();
+    let shutdown_fut = async move {
+        select! {
+            _ = shutdown_signal.recv() => grpc_shutdown_tx.send(CloseReason::Shutdown).ok(),
+            _ = timeout_fut => grpc_shutdown_tx.send(CloseReason::Timeout).ok(),
+            reason = external_shutdown => grpc_shutdown_tx.send(reason).ok(),
+        };
+    };
+
+    // Run the actual service. It takes ownership of the struct given to it,
+    // so we use a private struct with just the pieces of state needed to handle
+    // RPCs.
+    let service = TurboGrpcService {
+        shutdown: trigger_shutdown,
+        watcher_rx,
+        times_saved: Arc::new(Mutex::new(HashMap::new())),
+        start_time: Instant::now(),
+        log_file,
+    };
+    let server_fut = {
+        let service = ServiceBuilder::new()
+            .layer(BumpTimeoutLayer::new(bump_timeout.clone()))
+            .service(crate::daemon::proto::turbod_server::TurbodServer::new(
+                service,
+            ));
+
+        Server::builder()
+            // set a max timeout for RPCs
+            .timeout(REQUEST_TIMEOUT)
+            .add_service(service)
+            .serve_with_incoming_shutdown(stream, shutdown_fut)
+    };
+    // Wait for the server to exit.
+    // This can be triggered by timeout, root watcher, or an RPC
+    let _ = server_fut.await;
+    info!("gRPC server exited");
+    // Ensure our timer will exit
+    running.store(false, Ordering::SeqCst);
+    // We expect to have a signal from the grpc server on what triggered the exit
+    let close_reason = shutdown_reason.await.unwrap_or(CloseReason::ServerClosed);
+    // Now that the server has exited, the TurboGrpcService instance should be
+    // dropped. The root watcher still has a reference to a receiver, keeping
+    // the filewatcher alive. Trigger the root watcher to exit. We don't care
+    // if we fail to send, root watching may have exited already
+    let _ = exit_root_watch.send(());
+    let _ = watch_root_handle.await;
+    trace!("root watching exited");
+    // Clean up the filewatching handle in the event that we never even got
+    // started with filewatching. Again, we don't care about the error here.
+    let _ = fw_handle.await;
+    trace!("filewatching handle joined");
+    close_reason
+}
+
+struct TurboGrpcService {
+    //shutdown: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    shutdown: mpsc::Sender<()>,
+    watcher_rx: watch::Receiver<Option<Arc<FileWatching>>>,
+    times_saved: Arc<Mutex<HashMap<String, u64>>>,
+    start_time: Instant,
+    log_file: AbsoluteSystemPathBuf,
+}
+
+impl TurboGrpcService {
+    async fn trigger_shutdown(&self) {
+        info!("triggering shutdown");
+        let _ = self.shutdown.send(()).await;
+    }
+
+    async fn wait_for_filewatching(&self) -> Result<Arc<FileWatching>, RpcError> {
+        let rx = self.watcher_rx.clone();
+        wait_for_filewatching(rx, Duration::from_millis(100)).await
+    }
+
+    async fn watch_globs(
+        &self,
+        hash: String,
+        output_globs: Vec<String>,
+        output_glob_exclusions: Vec<String>,
+        time_saved: u64,
+    ) -> Result<(), RpcError> {
+        let glob_set = GlobSet::from_raw(output_globs, output_glob_exclusions)?;
+        let fw = self.wait_for_filewatching().await?;
+        fw.glob_watcher.watch_globs(hash.clone(), glob_set).await?;
+        {
+            let mut times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            times_saved.insert(hash, time_saved);
+        }
+        Ok(())
+    }
+
+    async fn get_changed_outputs(
+        &self,
+        hash: String,
+        candidates: HashSet<String>,
+    ) -> Result<(HashSet<String>, u64), RpcError> {
+        let time_saved = {
+            let times_saved = self.times_saved.lock().expect("times saved lock poisoned");
+            times_saved.get(hash.as_str()).copied().unwrap_or_default()
+        };
+        let fw = self.wait_for_filewatching().await?;
+        let changed_globs = fw.glob_watcher.get_changed_globs(hash, candidates).await?;
+        Ok((changed_globs, time_saved))
+    }
+}
+
+async fn wait_for_filewatching(
+    mut rx: watch::Receiver<Option<Arc<FileWatching>>>,
+    timeout: Duration,
+) -> Result<Arc<FileWatching>, RpcError> {
+    if let Some(fw) = rx.borrow().as_ref().cloned() {
+        return Ok(fw);
+    }
+    tokio::time::timeout(timeout, rx.changed())
+        .await
+        .map_err(|_| RpcError::DeadlineExceeded)? // timeout case
+        .map_err(|_| RpcError::NoFileWatching)?; // sender dropped with no receivers
+    let result = rx
+        .borrow()
+        .as_ref()
+        .cloned()
+        // This error should never happen, we got the change notification
+        // above, and we only ever go from None to Some filewatcher
+        .ok_or_else(|| RpcError::NoFileWatching)?;
+    Ok(result)
+}
+
+async fn watch_root(
+    filewatching_access: watch::Receiver<Option<Arc<FileWatching>>>,
+    root: AbsoluteSystemPathBuf,
+    trigger_shutdown: mpsc::Sender<()>,
+    mut exit_signal: oneshot::Receiver<()>,
+) -> Result<(), WatchError> {
+    let mut recv_events = {
+        let Ok(fw) = wait_for_filewatching(filewatching_access, Duration::from_secs(5)).await
+        else {
+            return Ok(());
         };
 
-        // when one of these futures complete, let the server gracefully shutdown
-        let (shutdown_tx, shutdown_reason) = oneshot::channel();
-        let shutdown_fut = async move {
-            select! {
-                _ = shutdown_fut => shutdown_tx.send(CloseReason::Shutdown).ok(),
-                _ = timeout_fut => shutdown_tx.send(CloseReason::Timeout).ok(),
-                _ = ctrl_c() => shutdown_tx.send(CloseReason::Interrupt).ok(),
-            };
-        };
+        fw._watcher.subscribe()
+    };
 
-        #[cfg(feature = "http")]
-        let server_fut = {
-            // set up grpc reflection
-            let efd = include_bytes!("file_descriptor_set.bin");
-            let reflection = tonic_reflection::server::Builder::configure()
-                .register_encoded_file_descriptor_set(efd)
-                .build()
-                .unwrap();
-
-            let service = ServiceBuilder::new()
-                .layer(BumpTimeoutLayer::new(self.timeout.clone()))
-                .service(crate::daemon::proto::turbod_server::TurbodServer::new(self));
-
-            Server::builder()
-                .add_service(reflection)
-                .add_service(service)
-                .serve_with_shutdown("127.0.0.1:5000".parse().unwrap(), shutdown_fut)
-        };
-
-        #[cfg(not(feature = "http"))]
-        let (_lock, server_fut) = {
-            let (lock, stream) = match crate::daemon::endpoint::listen_socket(
-                self.daemon_root.clone(),
-                self.running.clone(),
-            )
-            .await
-            {
-                Ok(val) => val,
-                Err(e) => return CloseReason::SocketOpenError(e),
-            };
-
-            trace!("acquired connection stream for socket");
-
-            let service = ServiceBuilder::new()
-                .layer(BumpTimeoutLayer::new(self.timeout.clone()))
-                .service(crate::daemon::proto::turbod_server::TurbodServer::new(self));
-
-            (
-                lock,
-                Server::builder()
-                    .add_service(service)
-                    .serve_with_incoming_shutdown(stream, shutdown_fut),
-            )
-        };
-        tokio::pin!(server_fut);
-
-        // necessary to make sure we don't try to poll the watcher_fut once it
-        // has completed
-        let mut watcher_done = false;
-        loop {
-            select! {
-                    _ = &mut server_fut => {
-                    return shutdown_reason.await.unwrap_or(CloseReason::ServerClosed);
-                },
-                watch_res = &mut watcher_fut, if !watcher_done => {
-                    match watch_res {
-                        Ok(()) => return CloseReason::WatcherClosed,
-                        Err(e) => {
-                            error!("Globwatch config error: {:?}", e);
-                            watcher_done = true;
-                        },
-                    }
-                },
+    loop {
+        // Ignore the outer layer of Result, if the sender has closed, filewatching has
+        // gone away and we can return.
+        select! {
+            _ = &mut exit_signal => return Ok(()),
+            event = recv_events.recv() => {
+                let Ok(event) = event else {
+                    return Ok(());
+                };
+                let should_trigger_shutdown = match event {
+                    // filewatching can throw some weird events, so check that the root is actually gone
+                    // before triggering a shutdown
+                    Ok(event) if event.paths.iter().any(|p| p == (&root as &AbsoluteSystemPath)) => !root.exists(),
+                    Ok(_) => false,
+                    Err(_) => true
+                };
+                if should_trigger_shutdown {
+                    warn!("Root watcher triggering shutdown");
+                    // We don't care if a shutdown has already been triggered,
+                    // so we can ignore the error.
+                    let _ = trigger_shutdown.send(()).await;
+                    return Ok(());
+                }
             }
         }
-
-        // here the stop token is dropped, and the pid lock is dropped
-        // causing them to be cleaned up
     }
 }
 
 #[tonic::async_trait]
-impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<T> {
+impl proto::turbod_server::Turbod for TurboGrpcService {
     async fn hello(
         &self,
         request: tonic::Request<proto::HelloRequest>,
@@ -243,7 +358,7 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         &self,
         _request: tonic::Request<proto::ShutdownRequest>,
     ) -> Result<tonic::Response<proto::ShutdownResponse>, tonic::Status> {
-        self.shutdown.lock().await.take().map(|s| s.send(()));
+        self.trigger_shutdown().await;
 
         // if Some(Ok), then the server is shutting down now
         // if Some(Err), then the server is already shutting down
@@ -269,25 +384,14 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
     ) -> Result<tonic::Response<proto::NotifyOutputsWrittenResponse>, tonic::Status> {
         let inner = request.into_inner();
 
-        {
-            let mut times_saved = self.times_saved.lock().expect("times saved lock poisoned");
-            times_saved.insert(inner.hash.clone(), inner.time_saved);
-        }
-        match self
-            .watcher
-            .watch_globs(
-                Arc::new(inner.hash),
-                inner.output_globs,
-                inner.output_exclusion_globs,
-            )
-            .await
-        {
-            Ok(_) => Ok(tonic::Response::new(proto::NotifyOutputsWrittenResponse {})),
-            Err(e) => {
-                error!("failed to watch globs: {:?}", e);
-                Err(tonic::Status::internal("failed to watch globs"))
-            }
-        }
+        self.watch_globs(
+            inner.hash,
+            inner.output_globs,
+            inner.output_exclusion_globs,
+            inner.time_saved,
+        )
+        .await?;
+        Ok(tonic::Response::new(proto::NotifyOutputsWrittenResponse {}))
     }
 
     async fn get_changed_outputs(
@@ -295,46 +399,32 @@ impl<T: Watcher + Send + 'static> proto::turbod_server::Turbod for DaemonServer<
         request: tonic::Request<proto::GetChangedOutputsRequest>,
     ) -> Result<tonic::Response<proto::GetChangedOutputsResponse>, tonic::Status> {
         let inner = request.into_inner();
-        let hash = Arc::new(inner.hash);
-        let changed = self
-            .watcher
-            .changed_globs(&hash, HashSet::from_iter(inner.output_globs))
-            .await;
-
-        let time_saved = {
-            let times_saved = self.times_saved.lock().expect("times saved lock poisoned");
-            times_saved.get(hash.as_str()).copied().unwrap_or_default()
-        };
-
-        match changed {
-            Ok(changed) => Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
-                changed_output_globs: changed.into_iter().collect(),
-                time_saved,
-            })),
-            Err(e) => {
-                error!("flush directory operation failed: {:?}", e);
-                Err(tonic::Status::internal("failed to watch flush directory"))
-            }
-        }
+        let (changed, time_saved) = self
+            .get_changed_outputs(inner.hash, HashSet::from_iter(inner.output_globs))
+            .await?;
+        Ok(tonic::Response::new(proto::GetChangedOutputsResponse {
+            changed_output_globs: changed.into_iter().collect(),
+            time_saved,
+        }))
     }
 }
 
-impl<T: Watcher> NamedService for DaemonServer<T> {
+impl NamedService for TurboGrpcService {
     const NAME: &'static str = "turborepo.Daemon";
 }
 
 #[cfg(test)]
 mod test {
     use std::{
-        assert_matches,
+        assert_matches::{self, assert_matches},
         time::{Duration, Instant},
     };
 
-    use tokio::select;
+    use futures::FutureExt;
+    use tokio::sync::oneshot;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use super::DaemonServer;
-    use crate::{commands::CommandBase, ui::UI, Args};
+    use crate::daemon::{server::serve, CloseReason};
 
     // the windows runner starts a new thread to accept uds requests,
     // so we need a multi-threaded runtime
@@ -342,41 +432,43 @@ mod test {
     #[tracing_test::traced_test]
     async fn lifecycle() {
         let tempdir = tempfile::tempdir().unwrap();
-        let path = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(tempdir.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
 
+        let repo_root = path.join_component("repo");
+        let daemon_root = path.join_component("daemon");
+        let log_file = daemon_root.join_component("log");
         tracing::info!("start");
 
-        let daemon = DaemonServer::new(
-            &CommandBase::new(
-                Args {
-                    ..Default::default()
-                },
-                path.clone(),
-                "test",
-                UI::new(true),
+        let pid_path = daemon_root.join_component("turbod.pid");
+
+        let (tx, rx) = oneshot::channel::<CloseReason>();
+        let exit_signal = rx.map(|_result| CloseReason::Interrupt);
+        let handle = tokio::task::spawn(async move {
+            serve(
+                &repo_root,
+                &daemon_root,
+                log_file,
+                Duration::from_secs(60 * 60),
+                exit_signal,
             )
-            .unwrap(),
-            Duration::from_secs(60 * 60),
-            path.clone(),
-        )
-        .unwrap();
+            .await
+        });
 
-        tracing::info!("server started");
+        tokio::time::sleep(Duration::from_millis(2000)).await;
+        assert!(pid_path.exists(), "pid file must be present");
+        // signal server exit
+        tx.send(CloseReason::Interrupt).unwrap();
+        handle.await.unwrap();
 
-        let pid_path = path.join_component("turbod.pid");
-        let sock_path = path.join_component("turbod.sock");
-
-        select! {
-            _ = daemon.serve() => panic!("must not close"),
-            _ = tokio::time::sleep(Duration::from_millis(10)) => (),
-        }
-
+        // The serve future should be dropped here, closing the server.
         tracing::info!("yay we are done");
 
         assert!(!pid_path.exists(), "pid file must be deleted");
-        assert!(!sock_path.exists(), "socket file must be deleted");
 
-        tracing::info!("and files cleaned up")
+        tracing::info!("and files cleaned up");
     }
 
     // the windows runner starts a new thread to accept uds requests,
@@ -385,27 +477,28 @@ mod test {
     #[tracing_test::traced_test]
     async fn timeout() {
         let tempdir = tempfile::tempdir().unwrap();
-        let path = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(tempdir.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
 
-        let daemon = DaemonServer::new(
-            &CommandBase::new(
-                Args {
-                    ..Default::default()
-                },
-                path.clone(),
-                "test",
-                UI::new(true),
-            )
-            .unwrap(),
-            Duration::from_millis(5),
-            path.clone(),
-        )
-        .unwrap();
+        let repo_root = path.join_component("repo");
+        let daemon_root = path.join_component("daemon");
+        let log_file = daemon_root.join_component("log");
 
-        let pid_path = path.join_component("turbod.pid");
+        let pid_path = daemon_root.join_component("turbod.pid");
 
         let now = Instant::now();
-        let close_reason = daemon.serve().await;
+        let (_tx, rx) = oneshot::channel::<CloseReason>();
+        let exit_signal = rx.map(|_result| CloseReason::Interrupt);
+        let close_reason = serve(
+            &repo_root,
+            &daemon_root,
+            log_file,
+            Duration::from_millis(5),
+            exit_signal,
+        )
+        .await;
 
         assert!(
             now.elapsed() >= Duration::from_millis(5),
@@ -417,5 +510,47 @@ mod test {
             "must close due to timeout"
         );
         assert!(!pid_path.exists(), "pid file must be deleted");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[tracing_test::traced_test]
+    async fn test_delete_root() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(tempdir.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        let repo_root = path.join_component("repo");
+        let daemon_root = path.join_component("daemon");
+        daemon_root.create_dir_all().unwrap();
+        let log_file = daemon_root.join_component("log");
+
+        let (_tx, rx) = oneshot::channel::<CloseReason>();
+        let exit_signal = rx.map(|_result| CloseReason::Interrupt);
+
+        let server_repo_root = repo_root.clone();
+        let handle = tokio::task::spawn(async move {
+            let repo_root = server_repo_root;
+            serve(
+                &repo_root,
+                &daemon_root,
+                log_file,
+                Duration::from_secs(60 * 60),
+                exit_signal,
+            )
+            .await
+        });
+
+        // give filewatching some time to bootstrap
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        // Remove the root
+        repo_root.remove_dir_all().unwrap();
+
+        let close_reason = tokio::time::timeout(Duration::from_secs(1), handle)
+            .await
+            .expect("no timeout")
+            .expect("server exited");
+        assert_matches!(close_reason, CloseReason::Shutdown);
     }
 }
