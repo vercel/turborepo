@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use turbopack_cli_utils::issue::{format_issue, LogOptions};
 use turbopack_core::{
-    issue::{IssueSeverity, PlainIssue},
+    issue::{IssueSeverity, PlainIssue, StyledString},
     source_pos::SourcePos,
 };
 
@@ -135,7 +135,7 @@ pub struct Issue<'a> {
     pub category: &'a str,
 
     pub title: &'a str,
-    pub description: &'a str,
+    pub description: StyledString,
     pub detail: &'a str,
     pub documentation_link: &'a str,
 
@@ -160,7 +160,7 @@ impl<'a> From<&'a PlainIssue> for Issue<'a> {
             file_path: &plain.file_path,
             category: &plain.category,
             title: &plain.title,
-            description: &plain.description,
+            description: plain.description.clone(),
             documentation_link: &plain.documentation_link,
             detail: &plain.detail,
             source,

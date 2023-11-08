@@ -22,7 +22,7 @@ use turbo_tasks_fs::{File, FileContent, FileSystemPath};
 use turbopack_core::{
     error::PrettyPrintError,
     ident::AssetIdent,
-    issue::{Issue, IssueExt, IssueSeverity},
+    issue::{Issue, IssueExt, IssueSeverity, StyledString},
 };
 
 use self::svg::calculate;
@@ -107,7 +107,7 @@ fn result_to_issue<T>(ident: Vc<AssetIdent>, result: Result<T>) -> Option<T> {
         Err(err) => {
             ImageProcessingIssue {
                 path: ident.path(),
-                message: Vc::cell(format!("{}", PrettyPrintError(&err))),
+                message: format!("{}", PrettyPrintError(&err)),
                 issue_severity: None,
                 title: None,
             }
@@ -164,11 +164,9 @@ fn load_image_internal(
     if matches!(format, Some(ImageFormat::Avif)) {
         ImageProcessingIssue {
             path: ident.path(),
-            message: Vc::cell(
-                "This version of Turbopack does not support AVIF images, will emit without \
-                 optimization or encoding"
-                    .to_string(),
-            ),
+            message: "This version of Turbopack does not support AVIF images, will emit without \
+                      optimization or encoding"
+                .to_string(),
             title: Some(Vc::cell("AVIF image not supported".to_string())),
             issue_severity: Some(IssueSeverity::Warning.into()),
         }
@@ -181,11 +179,9 @@ fn load_image_internal(
     if matches!(format, Some(ImageFormat::WebP)) {
         ImageProcessingIssue {
             path: ident.path(),
-            message: Vc::cell(
-                "This version of Turbopack does not support WEBP images, will emit without \
-                 optimization or encoding"
-                    .to_string(),
-            ),
+            message: "This version of Turbopack does not support WEBP images, will emit without \
+                      optimization or encoding"
+                .to_string(),
             title: Some(Vc::cell("WEBP image not supported".to_string())),
             issue_severity: Some(IssueSeverity::Warning.into()),
         }
@@ -211,7 +207,7 @@ fn compute_blur_data(
         Err(err) => {
             ImageProcessingIssue {
                 path: ident.path(),
-                message: Vc::cell(format!("{}", PrettyPrintError(&err))),
+                message: format!("{}", PrettyPrintError(&err)),
                 issue_severity: None,
                 title: None,
             }
@@ -481,7 +477,7 @@ pub async fn optimize(
 #[turbo_tasks::value]
 struct ImageProcessingIssue {
     path: Vc<FileSystemPath>,
-    message: Vc<String>,
+    message: String,
     title: Option<Vc<String>>,
     issue_severity: Option<Vc<IssueSeverity>>,
 }
@@ -508,7 +504,7 @@ impl Issue for ImageProcessingIssue {
     }
 
     #[turbo_tasks::function]
-    fn description(&self) -> Vc<String> {
-        self.message
+    fn description(&self) -> Vc<StyledString> {
+        StyledString::String(self.message.clone()).cell()
     }
 }

@@ -73,6 +73,41 @@ impl Display for IssueSeverity {
     }
 }
 
+#[derive(Clone, Debug)]
+#[turbo_tasks::value(shared)]
+pub enum StyledString {
+    Line(Vec<StyledString>),
+    String(String),
+    Pre(String),
+    Strong(String),
+}
+
+impl DeterministicHash for StyledString {
+    fn deterministic_hash<H: turbo_tasks_hash::DeterministicHasher>(&self, state: &mut H) {
+        match self {
+            StyledString::Line(parts) => {
+                for part in parts {
+                    part.deterministic_hash(state);
+                }
+            }
+            StyledString::String(s) | StyledString::Pre(s) | StyledString::Strong(s) => {
+                s.replace('\\', "/").deterministic_hash(state);
+            }
+        }
+    }
+}
+
+impl StyledString {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            StyledString::Line(parts) => parts.iter().all(|part| part.is_empty()),
+            StyledString::String(string)
+            | StyledString::Pre(string)
+            | StyledString::Strong(string) => string.is_empty(),
+        }
+    }
+}
+
 #[turbo_tasks::value_trait]
 pub trait Issue {
     /// Severity allows the user to filter out unimportant issues, with Bug
@@ -100,7 +135,7 @@ pub trait Issue {
     /// A more verbose message of the issue, appropriate for providing multiline
     /// information of the issue.
     // TODO add Vc<StyledString>
-    fn description(self: Vc<Self>) -> Vc<String>;
+    fn description(self: Vc<Self>) -> Vc<StyledString>;
 
     /// Full details of the issue, appropriate for providing debug level
     /// information. Only displayed if the user explicitly asks for detailed
@@ -487,7 +522,7 @@ pub struct PlainIssue {
     pub category: String,
 
     pub title: String,
-    pub description: String,
+    pub description: StyledString,
     pub detail: String,
     pub documentation_link: String,
 
@@ -503,7 +538,8 @@ fn hash_plain_issue(issue: &PlainIssue, hasher: &mut Xxh3Hash64Hasher, full: boo
     hasher.write_ref(&issue.title);
     hasher.write_ref(
         // Normalize syspaths from Windows. These appear in stack traces.
-        &issue.description.replace('\\', "/"),
+        // &issue.description.replace('\\', "/"),
+        &issue.description,
     );
     hasher.write_ref(&issue.detail);
     hasher.write_ref(&issue.documentation_link);

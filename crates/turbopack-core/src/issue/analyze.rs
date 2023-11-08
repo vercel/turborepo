@@ -2,7 +2,7 @@ use anyhow::Result;
 use turbo_tasks::Vc;
 use turbo_tasks_fs::FileSystemPath;
 
-use super::{Issue, IssueSeverity, LazyIssueSource, OptionIssueSource};
+use super::{Issue, IssueSeverity, LazyIssueSource, OptionIssueSource, StyledString};
 use crate::ident::AssetIdent;
 
 #[turbo_tasks::value(shared)]
@@ -43,8 +43,8 @@ impl Issue for AnalyzeIssue {
     }
 
     #[turbo_tasks::function]
-    fn description(&self) -> Vc<String> {
-        self.message
+    async fn description(&self) -> Result<Vc<StyledString>> {
+        Ok(StyledString::String(self.message.await?.to_string()).cell())
     }
 
     #[turbo_tasks::function]
