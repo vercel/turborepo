@@ -51,7 +51,7 @@ use turbo_tasks_fs::{FileJsonContent, FileSystemPath};
 use turbopack_core::{
     compile_time_info::{CompileTimeInfo, FreeVarReference},
     error::PrettyPrintError,
-    issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, LazyIssueSource},
+    issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, LazyIssueSource, StyledString},
     module::Module,
     reference::{ModuleReference, ModuleReferences, SourceMapReference},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
@@ -643,7 +643,10 @@ pub(crate) async fn analyze_ecmascript_module(
             AnalyzeIssue {
                 code: None,
                 category: Vc::cell("analyze".to_string()),
-                message: Vc::cell("top level await is only supported in ESM modules.".to_string()),
+                message: StyledString::String(
+                    "top level await is only supported in ESM modules.".to_string(),
+                )
+                .cell(),
                 source_ident: source.ident(),
                 severity: IssueSeverity::Error.into(),
                 source: Some(issue_source(source, span)),

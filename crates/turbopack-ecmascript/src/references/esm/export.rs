@@ -65,7 +65,7 @@ async fn expand_star_exports(
             }
             EcmascriptExports::None => AnalyzeIssue {
                 code: None,
-                category: ("analyze".to_string()),
+                category: Vc::cell("analyze".to_string()),
                 message: StyledString::String(format!(
                     "export * used with module {} which has no exports\nTypescript only: Did you \
                      want to export only types with `export type * from \"...\"`?\nNote: Using \
