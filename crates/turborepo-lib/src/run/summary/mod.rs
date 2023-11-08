@@ -154,32 +154,31 @@ impl RunTracker {
     ) -> Self {
         let scm = SCMState::get(env_at_execution_start, repo_root);
 
-        let mut run_tracker = RunTracker {
-            scm: scm.clone(),
+        let spaces_client_handle =
+            SpacesClient::new(spaces_id.clone(), spaces_api_client, api_auth).and_then(
+                |spaces_client| {
+                    let payload = CreateSpaceRunPayload::new(
+                        started_at,
+                        synthesized_command,
+                        package_inference_root,
+                        scm.branch.clone(),
+                        scm.sha.clone(),
+                        version.to_string(),
+                        user.clone(),
+                    );
+                    spaces_client.start(payload).ok()
+                },
+            );
+
+        RunTracker {
+            scm,
             version,
             started_at,
             execution_tracker: ExecutionTracker::new(),
-            spaces_client_handle: None,
-            user: user.clone(),
+            user,
             synthesized_command: synthesized_command.to_string(),
-        };
-
-        if let Some(spaces_client) =
-            SpacesClient::new(spaces_id.clone(), spaces_api_client, api_auth)
-        {
-            let payload = CreateSpaceRunPayload::new(
-                started_at,
-                synthesized_command,
-                package_inference_root,
-                scm.branch,
-                scm.sha,
-                version.to_string(),
-                user,
-            );
-            run_tracker.spaces_client_handle = spaces_client.start(payload).ok();
+            spaces_client_handle,
         }
-
-        run_tracker
     }
 
     #[allow(clippy::too_many_arguments)]
