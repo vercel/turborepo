@@ -11,6 +11,21 @@ pub async fn logout(base: &mut CommandBase) -> Result<(), Error> {
 
     let mut auth_file = read_or_create_auth_file(&auth_path, &config_path, &client).await?;
 
+    // If there's only a single token, don't prompt.
+    if auth_file.tokens.len() == 1 {
+        println!(
+            "Removing token: {}",
+            auth_file.tokens[0].friendly_token_display()
+        );
+
+        auth_file.tokens.remove(0);
+        if let Err(err) = auth_file.write_to_disk(&auth_path) {
+            error!("could not logout. Something went wrong: {}", err);
+            return Err(Error::Auth(err));
+        }
+        return Ok(());
+    }
+
     // Change how tokens are displayed for logout to make it nicer to read.
     // I am very human.
     let items = &auth_file
