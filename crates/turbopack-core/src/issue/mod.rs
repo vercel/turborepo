@@ -76,9 +76,16 @@ impl Display for IssueSeverity {
 #[derive(Clone, Debug)]
 #[turbo_tasks::value(shared)]
 pub enum StyledString {
+    /// Multiple [StyledString]s concatenated into a single line. Each item is considered as inline element. Items might contain line breaks, which would be considered as soft line breaks.
     Line(Vec<StyledString>),
-    String(String),
-    Pre(String),
+    /// Multiple [StyledString]s stacked vertically. They are considered as block elements, just like the top level [StyledString].
+    Stack(Vec<StyledString>),
+    /// Some prose text.
+    Text(String),
+    /// Code snippet.
+    // TODO add language to support syntax hightlighting
+    Code(String),
+    /// Some important text.
     Strong(String),
 }
 
