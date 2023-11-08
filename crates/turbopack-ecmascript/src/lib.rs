@@ -36,6 +36,7 @@ use parse::{parse, ParseResult};
 use path_visitor::ApplyVisitors;
 use references::esm::UrlRewriteBehavior;
 pub use references::{AnalyzeEcmascriptModuleResult, TURBOPACK_HELPER};
+use serde::{Deserialize, Serialize};
 pub use static_code::StaticEcmascriptCode;
 use swc_core::{
     common::GLOBALS,
@@ -90,7 +91,7 @@ pub enum SpecifiedModuleType {
 pub struct EcmascriptOptions {
     /// module is split into smaller module parts which can be selectively
     /// imported
-    pub split_into_parts: bool,
+    pub tree_shaking: Option<TreeShakingMode>,
     /// imports will import parts of modules
     pub import_parts: bool,
     /// module is forced to a specific type (happens e. g. for .cjs and .mjs)
@@ -99,6 +100,13 @@ pub struct EcmascriptOptions {
     /// This allows to construct url depends on the different building context,
     /// e.g. SSR, CSR, or Node.js.
     pub url_rewrite_behavior: Option<UrlRewriteBehavior>,
+}
+
+#[turbo_tasks::value(serialization = "auto_for_input")]
+#[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]
+pub enum TreeShakingMode {
+    FollowReexports,
+    SplitIntoParts,
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
