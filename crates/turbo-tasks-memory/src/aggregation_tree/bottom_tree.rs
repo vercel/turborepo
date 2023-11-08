@@ -646,14 +646,16 @@ fn propagate_change_to_upper<C: AggregationContext>(
 #[cfg(test)]
 fn visit_graph<C: AggregationContext>(
     aggregation_context: &C,
-    entry: &C::ItemRef,
+    entries: &[&C::ItemRef],
     height: u8,
 ) -> (usize, usize) {
     use std::collections::{HashSet, VecDeque};
     let mut queue = VecDeque::new();
     let mut visited = HashSet::new();
-    visited.insert(entry.clone());
-    queue.push_back(entry.clone());
+    for &entry in entries {
+        visited.insert(entry.clone());
+        queue.push_back(entry.clone());
+    }
     let mut edges = 0;
     while let Some(item) = queue.pop_front() {
         let tree = bottom_tree(aggregation_context, &item, height);
@@ -672,7 +674,7 @@ fn visit_graph<C: AggregationContext>(
 #[cfg(test)]
 pub fn print_graph<C: AggregationContext>(
     aggregation_context: &C,
-    entry: &C::ItemRef,
+    entries: &[&C::ItemRef],
     height: u8,
     color_upper: bool,
     name_fn: impl Fn(&C::ItemRef) -> String,
@@ -681,7 +683,7 @@ pub fn print_graph<C: AggregationContext>(
         collections::{HashSet, VecDeque},
         fmt::Write,
     };
-    let (nodes, edges) = visit_graph(aggregation_context, entry, height);
+    let (nodes, edges) = visit_graph(aggregation_context, entries, height);
     if !color_upper {
         print!("subgraph cluster_{} {{", height);
         print!(
@@ -693,8 +695,10 @@ pub fn print_graph<C: AggregationContext>(
     let mut edges = String::new();
     let mut queue = VecDeque::new();
     let mut visited = HashSet::new();
-    visited.insert(entry.clone());
-    queue.push_back(entry.clone());
+    for &entry in entries {
+        visited.insert(entry.clone());
+        queue.push_back(entry.clone());
+    }
     while let Some(item) = queue.pop_front() {
         let tree = bottom_tree(aggregation_context, &item, height);
         let name = name_fn(&item);

@@ -256,7 +256,7 @@ fn chain() {
     assert_eq!(ctx.additions.load(Ordering::SeqCst), 100);
     ctx.additions.store(0, Ordering::SeqCst);
 
-    print(&ctx, &current);
+    print(&ctx, &[&current]);
 
     {
         let root_info = leaf.inner.lock().aggregation_leaf.get_root_info(&ctx, &());
@@ -348,7 +348,7 @@ fn chain_double_connected() {
     }
     let current = NodeRef(current2);
 
-    print(&ctx, &current);
+    print(&ctx, &[&current]);
 
     {
         let aggregated = aggregation_info(&ctx, &current);
@@ -395,7 +395,7 @@ fn rectangle_tree() {
 
     let root = NodeRef(nodes[RECT_SIZE - 1][RECT_SIZE - 1].clone());
 
-    print(&ctx, &root);
+    print(&ctx, &[&root]);
 }
 
 #[test]
@@ -422,6 +422,7 @@ fn rectangle_adding_tree() {
         drop(state);
         job();
     }
+    let mut roots = Vec::new();
     for y in 0..RECT_SIZE {
         let mut line: Vec<Arc<Node>> = Vec::new();
         for x in 0..RECT_SIZE {
@@ -443,15 +444,16 @@ fn rectangle_adding_tree() {
                 add_child(parent, &node, &ctx);
             }
             if x == 0 && y == 0 {
-                aggregation_info(&ctx, &NodeRef(node.clone())).lock().active = true;
+                let node_ref = NodeRef(node.clone());
+                aggregation_info(&ctx, &node_ref).lock().active = true;
+                roots.push(node_ref);
             }
         }
         nodes.push(line);
     }
 
-    let root = NodeRef(nodes[0][0].clone());
-
-    print(&ctx, &root);
+    let roots = roots.iter().collect::<Vec<_>>();
+    print(&ctx, &roots);
 }
 
 #[test]
@@ -555,7 +557,7 @@ fn many_children() {
 
     let root = NodeRef(roots[0].clone());
 
-    print(&ctx, &root);
+    print(&ctx, &[&root]);
 }
 
 fn connect_child(
@@ -579,17 +581,17 @@ fn connect_child(
     job2();
 }
 
-fn print(aggregation_context: &NodeAggregationContext<'_>, current: &NodeRef) {
+fn print(aggregation_context: &NodeAggregationContext<'_>, entries: &[&NodeRef]) {
     println!("digraph {{");
     let start = 0;
     let end = 3;
     for i in start..end {
-        print_graph(aggregation_context, current, i, false, |item| {
+        print_graph(aggregation_context, entries, i, false, |item| {
             format!("{}", item.0.inner.lock().value)
         });
     }
     for i in start + 1..end + 1 {
-        print_graph(aggregation_context, current, i, true, |item| {
+        print_graph(aggregation_context, entries, i, true, |item| {
             format!("{}", item.0.inner.lock().value)
         });
     }
