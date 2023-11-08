@@ -6,7 +6,7 @@
 export class Repository {
   readonly root: string;
   readonly isMonorepo: boolean;
-  static detectJS(path?: string | undefined | null): Promise<Repository>;
+  static discover(path?: string | undefined | null): Promise<Repository>;
   packageManager(): PackageManager;
   workspaces(): Promise<Array<Workspace>>;
 }

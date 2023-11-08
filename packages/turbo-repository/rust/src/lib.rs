@@ -54,7 +54,7 @@ impl From<RustPackageManager> for PackageManager {
 
 #[napi]
 impl Repository {
-    #[napi(factory, js_name = "detectJS")]
+    #[napi(factory, js_name = "discover")]
     pub async fn detect_js_repository(path: Option<String>) -> Result<Repository, napi::Error> {
         Self::detect_js_internal(path).await.map_err(|e| e.into())
     }
