@@ -17,7 +17,7 @@ impl Engine<Built> {
     }
 }
 
-const GRAPH_PRELUDE: &str = "digraph {\n\tcompound = \"true\"
+const GRAPH_PRELUDE: &str = "\ndigraph {\n\tcompound = \"true\"
 \tnewrank = \"true\"
 \tsubgraph \"root\" {
 ";
