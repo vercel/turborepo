@@ -224,7 +224,7 @@ impl<'a> Visitor<'a> {
 
             let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
 
-            let mut exec_context = factory.context(
+            let mut exec_context = factory.exec_context(
                 info.clone(),
                 task_hash,
                 task_cache,
@@ -498,7 +498,7 @@ impl<'a> ExecContextFactory<'a> {
         }
     }
 
-    pub fn context(
+    pub fn exec_context(
         &self,
         task_id: TaskId<'static>,
         task_hash: String,
