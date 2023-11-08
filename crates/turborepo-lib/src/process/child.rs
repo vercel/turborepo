@@ -747,4 +747,19 @@ mod test {
         assert_eq!(buffer, &[0, 159, 146, 150, b'\n']);
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_kill_process_group() {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "while true; do sleep 0.2; done"]);
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(100))).unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let exit = child.stop().await;
+
+        assert_matches!(exit, Some(ChildExit::Finished(None)));
+    }
 }
