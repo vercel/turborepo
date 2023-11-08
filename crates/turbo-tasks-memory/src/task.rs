@@ -11,7 +11,7 @@ use std::{
         Debug, Display, Formatter, {self},
     },
     future::Future,
-    hash::Hash,
+    hash::{BuildHasherDefault, Hash},
     mem::{replace, take},
     pin::Pin,
     sync::Arc,
@@ -22,6 +22,7 @@ use anyhow::Result;
 use auto_hash_map::{AutoMap, AutoSet};
 use nohash_hasher::BuildNoHashHasher;
 use parking_lot::{Mutex, RwLock};
+use rustc_hash::FxHasher;
 use smallvec::SmallVec;
 use stats::TaskStats;
 use tokio::task_local;
@@ -51,11 +52,12 @@ pub enum TaskDependency {
     Cell(TaskId, CellId),
     Collectibles(TaskId, TraitTypeId),
 }
+pub type TaskDependencySet = AutoSet<TaskDependency, BuildHasherDefault<FxHasher>>;
 
 task_local! {
     /// Cells/Outputs/Collectibles that are read during task execution
     /// These will be stored as dependencies when the execution has finished
-    pub(crate) static DEPENDENCIES_TO_TRACK: RefCell<AutoSet<TaskDependency>>;
+    pub(crate) static DEPENDENCIES_TO_TRACK: RefCell<TaskDependencySet>;
 }
 
 type OnceTaskFn = Mutex<Option<Pin<Box<dyn Future<Output = Result<RawVc>> + Send + 'static>>>>;
@@ -198,6 +200,7 @@ impl TaskState {
             aggregation_leaf: TaskAggregationTreeLeaf::new(),
             state_type: Dirty {
                 event: Event::new(move || format!("TaskState({})::event", description())),
+                outdated_dependencies: Default::default(),
             },
             stateful: false,
             children: Default::default(),
@@ -220,6 +223,7 @@ impl TaskState {
             aggregation_leaf: TaskAggregationTreeLeaf::new(),
             state_type: Scheduled {
                 event: Event::new(move || format!("TaskState({})::event", description())),
+                outdated_dependencies: Default::default(),
             },
             stateful: false,
             children: Default::default(),
@@ -251,6 +255,7 @@ impl PartialTaskState {
             aggregation_leaf: self.aggregation_leaf,
             state_type: Dirty {
                 event: Event::new(move || format!("TaskState({})::event", description())),
+                outdated_dependencies: Default::default(),
             },
             stateful: false,
             children: Default::default(),
@@ -284,6 +289,7 @@ impl UnloadedTaskState {
             aggregation_leaf: TaskAggregationTreeLeaf::new(),
             state_type: Dirty {
                 event: Event::new(move || format!("TaskState({})::event", description())),
+                outdated_dependencies: Default::default(),
             },
             stateful: false,
             children: Default::default(),
@@ -367,18 +373,24 @@ enum TaskStateType {
         /// there might affect this task.
         ///
         /// This back-edge is [Cell] `dependent_tasks`, which is a weak edge.
-        dependencies: AutoSet<TaskDependency>,
+        dependencies: TaskDependencySet,
     },
 
     /// Execution is invalid, but not yet scheduled
     ///
     /// on activation this will move to Scheduled
-    Dirty { event: Event },
+    Dirty {
+        event: Event,
+        outdated_dependencies: TaskDependencySet,
+    },
 
     /// Execution is invalid and scheduled
     ///
     /// on start this will move to InProgress or Dirty depending on active flag
-    Scheduled { event: Event },
+    Scheduled {
+        event: Event,
+        outdated_dependencies: TaskDependencySet,
+    },
 
     /// Execution is happening
     ///
@@ -598,7 +610,7 @@ impl Task {
     #[cfg(not(feature = "report_expensive"))]
     fn clear_dependencies(
         &self,
-        dependencies: AutoSet<TaskDependency>,
+        dependencies: TaskDependencySet,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
@@ -610,7 +622,7 @@ impl Task {
     #[cfg(feature = "report_expensive")]
     fn clear_dependencies(
         &self,
-        dependencies: AutoSet<TaskDependency>,
+        dependencies: TaskDependencySet,
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) {
@@ -662,6 +674,7 @@ impl Task {
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> Option<TaskExecutionSpec> {
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
+        let dependencies;
         let future;
         {
             let mut state = self.full_state_mut();
@@ -670,8 +683,12 @@ impl Task {
                     // should not start in this state
                     return None;
                 }
-                Scheduled { ref mut event } => {
+                Scheduled {
+                    ref mut event,
+                    ref mut outdated_dependencies,
+                } => {
                     let event = event.take();
+                    dependencies = take(outdated_dependencies);
                     let outdated_children = take(&mut state.children);
                     let outdated_collectibles = take(&mut state.collectibles);
                     state.state_type = InProgress {
@@ -693,6 +710,7 @@ impl Task {
             future = self.make_execution_future(state, backend, turbo_tasks);
         }
         aggregation_context.apply_queued_updates();
+        self.clear_dependencies(dependencies, backend, turbo_tasks);
         Some(TaskExecutionSpec { future })
     }
 
@@ -930,7 +948,10 @@ impl Task {
                     }
                     InProgressDirty { ref mut event } => {
                         let event = event.take();
-                        state.state_type = Scheduled { event };
+                        state.state_type = Scheduled {
+                            event,
+                            outdated_dependencies: Default::default(),
+                        };
                         schedule_task = true;
                     }
                     Dirty { .. } | Scheduled { .. } | Done { .. } => {
@@ -989,20 +1010,22 @@ impl Task {
         };
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         if let TaskMetaStateWriteGuard::Full(mut state) = state {
-            let mut clear_dependencies = AutoSet::default();
-
             match state.state_type {
                 Scheduled { .. } | InProgressDirty { .. } => {
                     // already dirty
                     drop(state);
                 }
-                Dirty { .. } => {
+                Dirty {
+                    ref mut outdated_dependencies,
+                    ..
+                } => {
                     if force_schedule {
                         let description = self.get_event_description();
                         state.state_type = Scheduled {
                             event: Event::new(move || {
                                 format!("TaskState({})::event", description())
                             }),
+                            outdated_dependencies: take(outdated_dependencies),
                         };
                         state.aggregation_leaf.change(
                             &TaskAggregationContext::new(turbo_tasks, backend),
@@ -1022,7 +1045,7 @@ impl Task {
                     ref mut dependencies,
                 } => {
                     let mut has_set_unfinished = false;
-                    clear_dependencies = take(dependencies);
+                    let outdated_dependencies = take(dependencies);
                     // add to dirty lists and potentially schedule
                     let description = self.get_event_description();
                     let should_schedule = force_schedule
@@ -1070,6 +1093,7 @@ impl Task {
                             event: Event::new(move || {
                                 format!("TaskState({})::event", description())
                             }),
+                            outdated_dependencies,
                         };
                         drop(state);
 
@@ -1082,6 +1106,7 @@ impl Task {
                             event: Event::new(move || {
                                 format!("TaskState({})::event", description())
                             }),
+                            outdated_dependencies,
                         };
                         drop(state);
                     }
@@ -1133,10 +1158,6 @@ impl Task {
                     remove_job();
                 }
             }
-
-            if !clear_dependencies.is_empty() {
-                self.clear_dependencies(clear_dependencies, backend, turbo_tasks);
-            }
         }
     }
 
@@ -1147,9 +1168,14 @@ impl Task {
     ) {
         let aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         let mut state = self.full_state_mut();
-        if let TaskStateType::Dirty { ref mut event } = state.state_type {
+        if let TaskStateType::Dirty {
+            ref mut event,
+            ref mut outdated_dependencies,
+        } = state.state_type
+        {
             state.state_type = Scheduled {
                 event: event.take(),
+                outdated_dependencies: take(outdated_dependencies),
             };
             let job = state.aggregation_leaf.change_job(
                 &aggregation_context,
@@ -1455,11 +1481,17 @@ impl Task {
 
                 Ok(Ok(result))
             }
-            Dirty { ref mut event } => {
+            Dirty {
+                ref mut event,
+                ref mut outdated_dependencies,
+            } => {
                 turbo_tasks.schedule(self.id);
                 let event = event.take();
                 let listener = event.listen_with_note(note);
-                state.state_type = Scheduled { event };
+                state.state_type = Scheduled {
+                    event,
+                    outdated_dependencies: take(outdated_dependencies),
+                };
                 state.aggregation_leaf.change(
                     &aggregation_context,
                     &TaskChange {
@@ -1470,7 +1502,7 @@ impl Task {
                 drop(state);
                 Ok(Err(listener))
             }
-            Scheduled { ref event }
+            Scheduled { ref event, .. }
             | InProgress { ref event, .. }
             | InProgressDirty { ref event } => {
                 let listener = event.listen_with_note(note);
@@ -1878,9 +1910,18 @@ impl Task {
                 }
                 clear_dependencies = Some(take(dependencies));
             }
-            Dirty { ref event } => {
+            Dirty {
+                ref event,
+                ref mut outdated_dependencies,
+            } => {
                 // We want to get rid of this Event, so notify it to make sure it's empty.
                 event.notify(usize::MAX);
+                if !outdated_dependencies.is_empty() {
+                    // TODO we need to find a way to handle this case without introducting a race
+                    // condition
+
+                    return false;
+                }
             }
             _ => {
                 // Any other state is not unloadable.
