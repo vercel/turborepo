@@ -8,36 +8,36 @@ Check
   $ ${TURBO} run build --dry
   
   Global Hash Inputs
-    Global Files                          = 2
-    External Dependencies Hash            = 
-    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
-    Global .env Files Considered          = 0
-    Global Env Vars                       = 
-    Global Env Vars Values                = 
-    Inferred Global Env Vars Values       = 
-    Global Passed Through Env Vars        = 
-    Global Passed Through Env Vars Values = 
+    Global Files                          = 2\s* (re)
+    External Dependencies Hash            =\s* (re)
+    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA\s* (re)
+    Global .env Files Considered          = 0\s* (re)
+    Global Env Vars                       =\s* (re)
+    Global Env Vars Values                =\s* (re)
+    Inferred Global Env Vars Values       =\s* (re)
+    Global Passed Through Env Vars        =\s* (re)
+    Global Passed Through Env Vars Values =\s* (re)
   
   Tasks to Run
   build
-    Task                           = build                                                                                                                                       
-    Hash                           = db9ab850083a69be                                                                                                                            
-    Cached (Local)                 = false                                                                                                                                       
-    Cached (Remote)                = false                                                                                                                                       
-    Command                        = echo 'building' > foo.txt                                                                                                                   
-    Outputs                        =                                                                                                                                             
-    Log File                       = .turbo/turbo-build.log                                                                                                                      
-    Dependencies                   =                                                                                                                                             
-    Dependendents                  =                                                                                                                                             
-    Inputs Files Considered        = 4                                                                                                                                           
-    .env Files Considered          = 0                                                                                                                                           
-    Env Vars                       =                                                                                                                                             
-    Env Vars Values                =                                                                                                                                             
-    Inferred Env Vars Values       =                                                                                                                                             
-    Passed Through Env Vars        =                                                                                                                                             
-    Passed Through Env Vars Values =                                                                                                                                             
-    ResolvedTaskDefinition         = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
-    Framework                      = <NO FRAMEWORK DETECTED>                                                                                                                     
+    Task                           = build\s* (re)
+    Hash                           = db9ab850083a69be\s* (re)
+    Cached \(Local\)                 = false\s* (re)
+    Cached \(Remote\)                = false\s* (re)
+    Command                        = echo 'building' > foo.txt\s* (re)
+    Outputs                        =\s* (re)
+    Log File                       = .turbo/turbo-build.log\s* (re)
+    Dependencies                   =\s* (re)
+    Dependents                     =\s* (re)
+    Inputs Files Considered        = 4\s* (re)
+    .env Files Considered          = 0\s* (re)
+    Env Vars                       =\s* (re)
+    Env Vars Values                =\s* (re)
+    Inferred Env Vars Values       =\s* (re)
+    Passed Through Env Vars        =\s* (re)
+    Passed Through Env Vars Values =\s* (re)
+    Resolved Task Definition       = {"outputs":\[],"cache":false,"dependsOn":\[],"inputs":\[],"outputMode":"full","persistent":false,"env":\[],"passThroughEnv":null,"dotEnv":null}\s* (re)
+    Framework                      = <NO FRAMEWORK DETECTED>\s* (re)
 
   $ ${TURBO} run build --graph
   
