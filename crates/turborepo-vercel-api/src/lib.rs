@@ -98,7 +98,7 @@ pub struct SpaceRun {
     pub url: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct User {
     pub id: String,
     pub username: String,
@@ -106,16 +106,6 @@ pub struct User {
     pub name: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: Option<u64>,
-}
-
-impl PartialEq for User {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-            && self.username == other.username
-            && self.email == other.email
-            && self.name == other.name
-            && self.created_at == other.created_at
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
