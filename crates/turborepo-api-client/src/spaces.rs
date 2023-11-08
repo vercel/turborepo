@@ -121,50 +121,6 @@ impl FinishSpaceRunPayload {
 }
 
 impl APIClient {
-    /// Create a new request builder with the preflight check done,
-    /// team parameters added, and CI header. In the future this should
-    /// be extended to all of the APIClient methods.
-    async fn create_request_builder(
-        &self,
-        url: &str,
-        api_auth: &APIAuth,
-        method: Method,
-    ) -> Result<RequestBuilder, Error> {
-        let mut url = self.make_url(url);
-        let mut allow_auth = true;
-
-        let APIAuth {
-            token,
-            team_id,
-            team_slug,
-        } = api_auth;
-
-        if self.use_preflight {
-            let preflight_response = self
-                .do_preflight(token, &url, method.as_str(), "Authorization, User-Agent")
-                .await?;
-
-            allow_auth = preflight_response.allow_authorization_header;
-            url = preflight_response.location.to_string();
-        }
-
-        let mut request_builder = self
-            .client
-            .request(method, &url)
-            .header("Content-Type", "application/json");
-
-        if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
-        }
-
-        request_builder = Self::add_team_params(request_builder, team_id, team_slug.as_deref());
-
-        if let Some(constant) = turborepo_ci::Vendor::get_constant() {
-            request_builder = request_builder.header("x-artifact-client-ci", constant);
-        }
-
-        Ok(request_builder)
-    }
     pub async fn create_space_run(
         &self,
         space_id: &str,

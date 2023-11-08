@@ -1,10 +1,9 @@
 use std::collections::HashSet;
 
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turborepo_repository::package_graph::{ChangedPackagesError, PackageGraph, WorkspaceName};
 use turborepo_scm::SCM;
 use wax::Pattern;
-
-use crate::package_graph::{ChangedPackagesError, PackageGraph, WorkspaceName};
 
 pub trait PackageChangeDetector {
     /// Get the list of changed packages between two refs.

@@ -61,7 +61,7 @@ impl From<Workspaces> for Vec<String> {
     }
 }
 
-#[derive(Debug, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum PackageManager {
     Berry,
@@ -219,7 +219,7 @@ impl Display for MissingWorkspaceError {
 impl From<&PackageManager> for MissingWorkspaceError {
     fn from(value: &PackageManager) -> Self {
         Self {
-            package_manager: value.clone(),
+            package_manager: *value,
         }
     }
 }
