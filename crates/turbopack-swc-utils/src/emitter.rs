@@ -7,7 +7,7 @@ use swc_core::common::{
 };
 use turbo_tasks::Vc;
 use turbopack_core::{
-    issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, LazyIssueSource},
+    issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, LazyIssueSource, StyledString},
     source::Source,
 };
 
@@ -61,7 +61,7 @@ impl Emitter for IssueEmitter {
             category: Vc::cell("parse".to_string()),
             source_ident: self.source.ident(),
             title: Vc::cell(title),
-            message: Vc::cell(message),
+            message: StyledString::String(message).cell(),
             code,
             source,
         }
