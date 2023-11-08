@@ -5,7 +5,7 @@
 
 #[derive(serde::Deserialize, serde::Serialize)]
 /// ConfigToken describes the legacy token format. It should only be used as a
-/// way to store the underlying token as a Token trait, and then converted to an
+/// way to store the underlying token as a String, and then converted to an
 /// AuthToken.
 pub struct ConfigToken {
     pub token: String,

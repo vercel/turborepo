@@ -79,7 +79,7 @@ impl AuthToken {
     }
     /// Validates the token by checking the expiration date and the signature.
     pub async fn validate(&self, _client: impl Client) -> bool {
-        unimplemented!("validate token")
+        todo!("validate token")
     }
     pub fn friendly_token_display(&self) -> String {
         format!(
