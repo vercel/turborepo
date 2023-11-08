@@ -9,7 +9,7 @@ Setup
 # The first part of the file is Packages in Scope
   $ cat tmp-1.txt
   Packages in Scope
-  Name    Path             
+  Name    Path\s* (re)
   another packages(\/|\\)another\s+ (re)
   my-app  apps(\/|\\)my-app\s+ (re)
   util    packages(\/|\\)util\s+ (re)
