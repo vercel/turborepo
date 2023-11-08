@@ -39,7 +39,7 @@ pub struct SpaceTaskSummary {
     pub exit_code: u32,
     pub dependencies: Vec<String>,
     pub dependents: Vec<String>,
-    pub logs: String,
+    pub logs: Vec<u8>,
 }
 
 #[derive(Serialize)]
