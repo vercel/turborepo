@@ -8,6 +8,7 @@ mod error;
 mod login;
 mod login_server;
 mod logout;
+// Make this publicly avaliable for testing in other crates.
 pub mod mocks;
 mod sso;
 mod sso_server;
