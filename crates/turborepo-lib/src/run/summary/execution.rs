@@ -255,16 +255,14 @@ pub enum ExecutionState {
     Canceled,
     Built { exit_code: i32 },
     Cached,
-    BuildFailed { exit_code: i32, err: String },
-    SpawnFailed { err: String },
+    BuildFailed { exit_code: Option<i32>, err: String },
 }
 
 impl ExecutionState {
     pub fn exit_code(&self) -> Option<i32> {
         match self {
-            ExecutionState::BuildFailed { exit_code, .. } | ExecutionState::Built { exit_code } => {
-                Some(*exit_code)
-            }
+            ExecutionState::Built { exit_code } => Some(*exit_code),
+            ExecutionState::BuildFailed { exit_code, .. } => *exit_code,
             _ => None,
         }
     }
@@ -417,7 +415,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
             .expect("summary state thread finished");
     }
 
-    pub async fn build_failed(self, exit_code: i32, error: impl fmt::Display) {
+    pub async fn build_failed(self, exit_code: Option<i32>, error: impl fmt::Display) {
         let Self {
             sender,
             started_at,
@@ -432,30 +430,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
                 exit_code,
                 err: error.to_string(),
             },
-            exit_code: Some(exit_code),
-        });
-
-        sender
-            .send(TrackerMessage::Finished(TaskState { task_id, execution }))
-            .await
-            .expect("summary state thread finished");
-    }
-
-    pub async fn spawn_failed(self, error: impl fmt::Display) {
-        let Self {
-            sender,
-            started_at,
-            task_id,
-        } = self;
-
-        let ended_at = Local::now();
-        let execution = Some(TaskExecutionSummary {
-            start_time: started_at.timestamp_millis(),
-            end_time: ended_at.timestamp_millis(),
-            state: ExecutionState::SpawnFailed {
-                err: error.to_string(),
-            },
-            exit_code: None,
+            exit_code,
         });
 
         sender
@@ -476,7 +451,6 @@ impl TrackerMessage {
                 ExecutionState::Built { .. } => Some(Event::Built),
                 ExecutionState::Cached => Some(Event::Cached),
                 ExecutionState::BuildFailed { .. } => Some(Event::BuildFailed),
-                ExecutionState::SpawnFailed { .. } => Some(Event::BuildFailed),
                 ExecutionState::Canceled => None,
             },
             TrackerMessage::Finished(TaskState {
@@ -519,7 +493,7 @@ mod test {
             let tracker = summary.task_tracker(baz.clone());
             tasks.push(tokio::spawn(async move {
                 let tracker = tracker.start().await;
-                tracker.build_failed(1, "big bad error").await;
+                tracker.build_failed(Some(1), "big bad error").await;
             }));
         }
         {

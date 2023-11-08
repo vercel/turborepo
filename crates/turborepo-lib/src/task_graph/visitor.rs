@@ -549,11 +549,19 @@ struct ExecContext {
 
 enum ExecOutcome {
     // All operations during execution succeeded
-    Success,
+    Success(SuccessOutcome),
     // An internal error that indicates a shutdown should be performed
     Internal,
     // An error with the task execution
-    Task,
+    Task {
+        exit_code: Option<i32>,
+        message: String,
+    },
+}
+
+enum SuccessOutcome {
+    CacheHit,
+    Run,
 }
 
 impl ExecContext {
@@ -564,9 +572,8 @@ impl ExecContext {
         output_client: OutputClient<impl std::io::Write>,
         callback: oneshot::Sender<Result<(), StopExecution>>,
     ) {
-        let mut result = self
-            .execute_inner(parent_span_id, tracker, &output_client)
-            .await;
+        let tracker = tracker.start().await;
+        let mut result = self.execute_inner(parent_span_id, &output_client).await;
 
         let _logs = match output_client.finish() {
             Ok(logs) => logs,
@@ -578,14 +585,20 @@ impl ExecContext {
         };
 
         match result {
-            ExecOutcome::Success => {
+            ExecOutcome::Success(outcome) => {
+                match outcome {
+                    SuccessOutcome::CacheHit => tracker.cached().await,
+                    SuccessOutcome::Run => tracker.build_succeeded(0).await,
+                }
                 callback.send(Ok(())).ok();
             }
             ExecOutcome::Internal => {
+                tracker.cancel();
                 callback.send(Err(StopExecution)).ok();
                 self.manager.stop().await;
             }
-            ExecOutcome::Task => {
+            ExecOutcome::Task { exit_code, message } => {
+                tracker.build_failed(exit_code, message).await;
                 callback
                     .send(match self.continue_on_error {
                         true => Ok(()),
@@ -602,13 +615,11 @@ impl ExecContext {
     async fn execute_inner(
         &mut self,
         parent_span_id: Option<tracing::Id>,
-        tracker: TaskTracker<()>,
         output_client: &OutputClient<impl std::io::Write>,
     ) -> ExecOutcome {
         let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
         span.follows_from(parent_span_id);
         let _enter = span.enter();
-        let tracker = tracker.start().await;
 
         let mut prefixed_ui = Visitor::prefixed_ui(
             self.ui,
@@ -626,8 +637,7 @@ impl ExecContext {
                 );
                 self.hash_tracker
                     .insert_cache_status(self.task_id.clone(), status);
-                tracker.cached().await;
-                return ExecOutcome::Success;
+                return ExecOutcome::Success(SuccessOutcome::CacheHit);
             }
             Ok(None) => (),
             Err(e) => {
@@ -636,7 +646,6 @@ impl ExecContext {
         }
 
         let Ok(package_manager_binary) = which(self.package_manager.command()) else {
-            tracker.cancel();
             return ExecOutcome::Internal;
         };
 
@@ -659,10 +668,6 @@ impl ExecContext {
             Ok(w) => w,
             Err(e) => {
                 error!("failed to capture outputs for \"{}\": {e}", self.task_id);
-                self.manager.stop().await;
-                // If we have an internal failure of being unable setup log capture we
-                // mark it as cancelled.
-                tracker.cancel();
                 return ExecOutcome::Internal;
             }
         };
@@ -678,12 +683,13 @@ impl ExecContext {
                     .lock()
                     .expect("lock poisoned")
                     .push(TaskError::from_spawn(self.task_id_for_display.clone(), e));
-                tracker.spawn_failed(error_string).await;
-                return ExecOutcome::Task;
+                return ExecOutcome::Task {
+                    exit_code: None,
+                    message: error_string,
+                };
             }
             // Turbo is shutting down
             None => {
-                tracker.cancel();
                 return ExecOutcome::Internal;
             }
         };
@@ -695,7 +701,6 @@ impl ExecContext {
             Ok(Some(exit_status)) => exit_status,
             Err(e) => {
                 error!("unable to pipe outputs from command: {e}");
-                tracker.cancel();
                 return ExecOutcome::Internal;
             }
             Ok(None) => {
@@ -703,15 +708,28 @@ impl ExecContext {
                 // exit status with Some and it is only initialized with
                 // None. Is it still running?
                 error!("unable to determine why child exited");
-                tracker.cancel();
                 return ExecOutcome::Internal;
             }
         };
 
         match exit_status {
-            // The task was successful, nothing special needs to happen.
             ChildExit::Finished(Some(0)) => {
-                tracker.build_succeeded(0).await;
+                if let Err(e) = stdout_writer.flush() {
+                    error!("{e}");
+                } else if let Err(e) = self
+                    .task_cache
+                    .save_outputs(&mut prefixed_ui, Duration::from_secs(1))
+                    .await
+                {
+                    error!("error caching output: {e}");
+                } else {
+                    self.hash_tracker.insert_expanded_outputs(
+                        self.task_id.clone(),
+                        self.task_cache.expanded_outputs().to_vec(),
+                    );
+                }
+
+                ExecOutcome::Success(SuccessOutcome::Run)
             }
             ChildExit::Finished(Some(code)) => {
                 // If there was an error, flush the buffered output
@@ -719,7 +737,7 @@ impl ExecContext {
                     error!("error reading logs: {e}");
                 }
                 let error = TaskErrorCause::from_execution(process.label().to_string(), code);
-                tracker.build_failed(code, error.to_string()).await;
+                let message = error.to_string();
                 if self.continue_on_error {
                     prefixed_ui.warn("command finished with error, but continuing...");
                 } else {
@@ -729,33 +747,16 @@ impl ExecContext {
                     task_id: self.task_id_for_display.clone(),
                     cause: error,
                 });
-                return ExecOutcome::Task;
+                ExecOutcome::Task {
+                    exit_code: Some(code),
+                    message,
+                }
             }
             // All of these indicate a failure where we don't know how to recover
             ChildExit::Finished(None)
             | ChildExit::Killed
             | ChildExit::KilledExternal
-            | ChildExit::Failed => {
-                tracker.cancel();
-                return ExecOutcome::Internal;
-            }
+            | ChildExit::Failed => ExecOutcome::Internal,
         }
-
-        if let Err(e) = stdout_writer.flush() {
-            error!("{e}");
-        } else if let Err(e) = self
-            .task_cache
-            .save_outputs(&mut prefixed_ui, Duration::from_secs(1))
-            .await
-        {
-            error!("error caching output: {e}");
-        } else {
-            self.hash_tracker.insert_expanded_outputs(
-                self.task_id.clone(),
-                self.task_cache.expanded_outputs().to_vec(),
-            );
-        }
-
-        ExecOutcome::Success
     }
 }
