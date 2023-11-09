@@ -259,7 +259,7 @@ impl TaskCache {
         };
 
         match self.task_output_mode {
-            OutputLogsMode::HashOnly => {
+            OutputLogsMode::HashOnly | OutputLogsMode::NewOnly => {
                 prefixed_ui.output(format!(
                     "cache hit{}, suppressing logs {}",
                     more_context,
@@ -275,7 +275,9 @@ impl TaskCache {
                 ));
                 self.replay_log_file(prefixed_ui)?;
             }
-            _ => {}
+            // Note that if we're restoring from cache, the task succeeded
+            // so we know we don't need to print anything for errors
+            OutputLogsMode::ErrorsOnly | OutputLogsMode::None => {}
         }
 
         Ok(cache_status)
