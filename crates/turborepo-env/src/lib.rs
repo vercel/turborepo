@@ -56,7 +56,8 @@ impl EnvironmentVariableMap {
     // This is the value used to print out the task hash input,
     // so the values are cryptographically hashed
     pub fn to_secret_hashable(&self) -> EnvironmentVariablePairs {
-        self.iter()
+        let mut pairs: Vec<String> = self
+            .iter()
             .map(|(k, v)| {
                 if !v.is_empty() {
                     let mut hasher = Sha256::new();
@@ -68,7 +69,10 @@ impl EnvironmentVariableMap {
                     format!("{k}=")
                 }
             })
-            .collect()
+            .collect();
+        // Make it deterministic to facilitate comparisons
+        pairs.sort();
+        pairs
     }
 }
 

@@ -218,7 +218,7 @@ impl<'a> TaskHasher<'a> {
         let mut all_env_var_map = EnvironmentVariableMap::default();
         let mut matching_env_var_map = EnvironmentVariableMap::default();
 
-        if do_framework_inference {
+        let framework_slug = if do_framework_inference {
             // See if we infer a framework
             if let Some(framework) = infer_framework(workspace, is_monorepo) {
                 debug!("auto detected framework for {}", task_id.package());
@@ -263,12 +263,14 @@ impl<'a> TaskHasher<'a> {
 
                 matching_env_var_map.union(&inference_env_var_map);
                 matching_env_var_map.difference(&user_env_var_set.exclusions);
+                Some(framework.slug().to_string())
             } else {
                 all_env_var_map = self
                     .env_at_execution_start
                     .from_wildcards(&task_definition.env)?;
 
                 explicit_env_var_map.union(&all_env_var_map);
+                None
             }
         } else {
             all_env_var_map = self
@@ -276,7 +278,8 @@ impl<'a> TaskHasher<'a> {
                 .from_wildcards(&task_definition.env)?;
 
             explicit_env_var_map.union(&all_env_var_map);
-        }
+            None
+        };
 
         let env_vars = DetailedMap {
             all: all_env_var_map,
@@ -326,8 +329,12 @@ impl<'a> TaskHasher<'a> {
 
         let task_hash = task_hashable.calculate_task_hash();
 
-        self.task_hash_tracker
-            .insert_hash(task_id.clone(), env_vars, task_hash.clone());
+        self.task_hash_tracker.insert_hash(
+            task_id.clone(),
+            env_vars,
+            task_hash.clone(),
+            framework_slug,
+        );
 
         Ok(task_hash)
     }
@@ -447,11 +454,22 @@ impl TaskHashTracker {
         state.package_task_hashes.get(task_id).cloned()
     }
 
-    fn insert_hash(&self, task_id: TaskId<'static>, env_vars: DetailedMap, hash: String) {
+    fn insert_hash(
+        &self,
+        task_id: TaskId<'static>,
+        env_vars: DetailedMap,
+        hash: String,
+        framework_slug: Option<String>,
+    ) {
         let mut state = self.state.lock().expect("hash tracker mutex poisoned");
         state
             .package_task_env_vars
             .insert(task_id.clone(), env_vars);
+        if let Some(framework) = framework_slug {
+            state
+                .package_task_framework
+                .insert(task_id.clone(), framework);
+        }
         state.package_task_hashes.insert(task_id, hash);
     }
 
