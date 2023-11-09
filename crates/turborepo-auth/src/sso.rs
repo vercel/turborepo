@@ -21,8 +21,9 @@ fn make_token_name() -> Result<String, Error> {
     ))
 }
 
-/// present, and the token has access to the provided `sso_team`, we do not
-/// overwrite it and instead log that we found an existing token.
+/// Given an API client and a login URL, fetches a raw token from the login
+/// server. Will use the `sso_team` to fetch a correct token and verify it
+/// against the user.
 pub async fn sso_login<'a>(
     api_client: &impl Client,
     ui: &UI,
