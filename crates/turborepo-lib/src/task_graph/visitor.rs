@@ -31,7 +31,10 @@ use crate::{
     process::{ChildExit, ProcessManager},
     run::{
         global_hash::GlobalHashableInputs,
-        summary::{self, GlobalHashSummary, RunTracker, SpacesTaskClient, TaskTracker},
+        summary::{
+            self, GlobalHashSummary, RunTracker, SpacesTaskClient, SpacesTaskInformation,
+            TaskExecutionSummary, TaskTracker,
+        },
         task_id::TaskId,
         RunCache, TaskCache,
     },
@@ -135,7 +138,7 @@ impl<'a> Visitor<'a> {
 
         let span = Span::current();
 
-        let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone());
+        let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine);
 
         while let Some(message) = node_stream.recv().await {
             let span = tracing::debug_span!(parent: &span, "queue_task", task = %message.info);
@@ -233,11 +236,18 @@ impl<'a> Visitor<'a> {
             );
 
             let tracker = self.run_tracker.track_task(info.clone().into_owned());
+            let spaces_client = self.run_tracker.spaces_task_client();
             let output_client = self.output_client();
             let parent_span = Span::current();
             tasks.push(tokio::spawn(async move {
                 exec_context
-                    .execute(parent_span.id(), tracker, output_client, callback)
+                    .execute(
+                        parent_span.id(),
+                        tracker,
+                        output_client,
+                        callback,
+                        spaces_client,
+                    )
                     .await;
             }));
         }
@@ -484,6 +494,7 @@ struct ExecContextFactory<'a> {
     visitor: &'a Visitor<'a>,
     errors: Arc<Mutex<Vec<TaskError>>>,
     manager: ProcessManager,
+    engine: &'a Arc<Engine>,
 }
 
 impl<'a> ExecContextFactory<'a> {
@@ -491,11 +502,13 @@ impl<'a> ExecContextFactory<'a> {
         visitor: &'a Visitor,
         errors: Arc<Mutex<Vec<TaskError>>>,
         manager: ProcessManager,
+        engine: &'a Arc<Engine>,
     ) -> Self {
         Self {
             visitor,
             errors,
             manager,
+            engine,
         }
     }
 
@@ -509,6 +522,7 @@ impl<'a> ExecContextFactory<'a> {
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         ExecContext {
+            engine: self.engine.clone(),
             ui: self.visitor.ui,
             is_github_actions: self.visitor.opts.run_opts.is_github_actions,
             pretty_prefix: self
@@ -531,6 +545,7 @@ impl<'a> ExecContextFactory<'a> {
 }
 
 struct ExecContext {
+    engine: Arc<Engine>,
     ui: UI,
     is_github_actions: bool,
     pretty_prefix: StyledObject<String>,
@@ -571,11 +586,12 @@ impl ExecContext {
         tracker: TaskTracker<()>,
         output_client: OutputClient<impl std::io::Write>,
         callback: oneshot::Sender<Result<(), StopExecution>>,
+        spaces_client: Option<SpacesTaskClient>,
     ) {
         let tracker = tracker.start().await;
         let mut result = self.execute_inner(parent_span_id, &output_client).await;
 
-        let _logs = match output_client.finish() {
+        let logs = match output_client.finish() {
             Ok(logs) => logs,
             Err(e) => {
                 error!("unable to flush output client: {e}");
@@ -586,11 +602,16 @@ impl ExecContext {
 
         match result {
             ExecOutcome::Success(outcome) => {
-                let _task_summary = match outcome {
+                let task_summary = match outcome {
                     SuccessOutcome::CacheHit => tracker.cached().await,
                     SuccessOutcome::Run => tracker.build_succeeded(0).await,
                 };
                 callback.send(Ok(())).ok();
+                if let Some(client) = spaces_client {
+                    let logs = logs.expect("spaces enabled logs should be collected");
+                    let info = self.spaces_task_info(self.task_id.clone(), task_summary, logs);
+                    client.finish_task(info).await.ok();
+                }
             }
             ExecOutcome::Internal => {
                 tracker.cancel();
@@ -598,15 +619,34 @@ impl ExecContext {
                 self.manager.stop().await;
             }
             ExecOutcome::Task { exit_code, message } => {
-                let _task_summary = tracker.build_failed(exit_code, message).await;
+                let task_summary = tracker.build_failed(exit_code, message).await;
                 callback
                     .send(match self.continue_on_error {
                         true => Ok(()),
                         false => Err(StopExecution),
                     })
                     .ok();
-                if !self.continue_on_error {
-                    self.manager.stop().await;
+
+                match (spaces_client, self.continue_on_error) {
+                    // Nothing to do
+                    (None, true) => (),
+                    // Shut down manager
+                    (None, false) => self.manager.stop().await,
+                    // Send task
+                    (Some(client), true) => {
+                        let logs = logs.expect("spaced enabled logs should be collected");
+                        let info = self.spaces_task_info(self.task_id.clone(), task_summary, logs);
+                        client.finish_task(info).await.ok();
+                    }
+                    // Send task and shut down manager
+                    (Some(client), false) => {
+                        let logs = logs.unwrap_or_default();
+                        let info = self.spaces_task_info(self.task_id.clone(), task_summary, logs);
+                        // Ignore spaces result as that indicates handler is shut down and we are
+                        // unable to send information to spaces
+                        let (_spaces_result, _) =
+                            tokio::join!(client.finish_task(info), self.manager.stop());
+                    }
                 }
             }
         }
@@ -757,6 +797,26 @@ impl ExecContext {
             | ChildExit::Killed
             | ChildExit::KilledExternal
             | ChildExit::Failed => ExecOutcome::Internal,
+        }
+    }
+
+    fn spaces_task_info(
+        &self,
+        task_id: TaskId<'static>,
+        execution_summary: TaskExecutionSummary,
+        logs: Vec<u8>,
+    ) -> SpacesTaskInformation {
+        let dependencies = self.engine.dependencies(&task_id);
+        let dependents = self.engine.dependents(&task_id);
+        let cache_status = self.hash_tracker.cache_status(&task_id);
+        SpacesTaskInformation {
+            task_id,
+            execution_summary,
+            logs,
+            hash: self.task_hash.clone(),
+            cache_status,
+            dependencies,
+            dependents,
         }
     }
 }
