@@ -142,7 +142,7 @@ impl RunTracker {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         started_at: DateTime<Local>,
-        synthesized_command: &str,
+        synthesized_command: String,
         package_inference_root: Option<&AnchoredSystemPath>,
         env_at_execution_start: &EnvironmentVariableMap,
         repo_root: &AbsoluteSystemPath,

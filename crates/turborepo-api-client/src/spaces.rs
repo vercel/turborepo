@@ -70,7 +70,7 @@ pub struct CreateSpaceRunPayload {
 impl CreateSpaceRunPayload {
     pub fn new(
         start_time: DateTime<Local>,
-        synthesized_command: &str,
+        synthesized_command: String,
         package_inference_root: Option<&AnchoredSystemPath>,
         git_branch: Option<String>,
         git_sha: Option<String>,

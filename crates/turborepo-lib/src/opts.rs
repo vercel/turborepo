@@ -37,6 +37,48 @@ pub struct Opts<'a> {
     pub scope_opts: ScopeOpts,
 }
 
+impl Opts<'_> {
+    pub fn synthesize_command(&self, tasks: &[String]) -> String {
+        let mut cmd = format!("turbo run {}", tasks.join(" "));
+        for pattern in &self.scope_opts.filter_patterns {
+            cmd.push_str(" --filter=");
+            cmd.push_str(&pattern);
+        }
+
+        for pattern in &self.scope_opts.legacy_filter.as_filter_pattern() {
+            cmd.push_str(" --filter=");
+            cmd.push_str(&pattern);
+        }
+
+        if self.run_opts.parallel {
+            cmd.push_str(" --parallel");
+        }
+
+        if self.run_opts.continue_on_error {
+            cmd.push_str(" --continue");
+        }
+
+        if self.run_opts.dry_run {
+            if self.run_opts.dry_run_json {
+                cmd.push_str(" --dry=json");
+            } else {
+                cmd.push_str(" --dry");
+            }
+        }
+
+        if self.run_opts.only {
+            cmd.push_str(" --only");
+        }
+
+        if !self.run_opts.pass_through_args.is_empty() {
+            cmd.push_str(" --");
+            cmd.push_str(&self.run_opts.pass_through_args.join(" "));
+        }
+
+        cmd
+    }
+}
+
 impl<'a> TryFrom<&'a Args> for Opts<'a> {
     type Error = self::Error;
 
