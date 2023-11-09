@@ -16,6 +16,7 @@ use serde::Deserialize;
 use thiserror::Error;
 use tiny_gradient::{GradientStr, RGB};
 use tracing::debug;
+use tracing_subscriber::field::debug;
 use turbo_updater::check_for_updates;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::{
@@ -567,9 +568,13 @@ fn spawn_local_turbo(
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
 
+    debug!("about to spawn a child");
     let child = spawn_child(command).map_err(Error::LocalTurboProcess)?;
 
+    debug!("spawned the child");
+
     let exit_status = child.wait().map_err(Error::LocalTurboProcess)?;
+    debug!("got an exit status");
     let exit_code = exit_status.code().unwrap_or_else(|| {
         debug!("go-turbo failed to report exit code");
         #[cfg(unix)]
@@ -584,7 +589,7 @@ fn spawn_local_turbo(
         }
         2
     });
-
+    debug!("exit code is {}", exit_code);
     Ok(exit_code)
 }
 
