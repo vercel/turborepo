@@ -82,7 +82,7 @@ pub async fn read_or_create_auth_file(
 mod tests {
     use std::{fs::File, io::Write};
 
-    use turborepo_vercel_api::User;
+    use turborepo_vercel_api::{Membership, Role, Space, Team, User};
 
     use super::*;
     use crate::mocks::MockApiClient;
@@ -114,7 +114,13 @@ mod tests {
                     id: "team-id".to_string(),
                     spaces: vec![Space {
                         id: "space-id".to_string(),
+                        name: "space1 name".to_string(),
                     }],
+                    slug: "team1 slug".to_string(),
+                    name: "maximum effort".to_string(),
+                    created_at: 0,
+                    created: chrono::Utc::now(),
+                    membership: Membership::new(Role::Developer),
                 }],
             }],
         };

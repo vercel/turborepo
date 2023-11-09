@@ -5,7 +5,7 @@ use turborepo_auth::{
 };
 use turborepo_ui::{BOLD, CYAN, UI};
 
-use crate::{cli::Error, commands::CommandBase, config, rewrite_json::set_path};
+use crate::{cli::Error, commands::CommandBase};
 
 /// Entry point for `turbo login --sso`.
 pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Error> {
@@ -13,38 +13,36 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Err
     let ui = base.ui;
     let login_url_config = base.config()?.login_url().to_string();
 
+    // Get both possible token paths for existing token(s) checks.
+    let global_auth_path = base.global_auth_path()?;
+    let global_config_path = base.global_config_path()?;
+
+    let mut auth_file =
+        read_or_create_auth_file(&global_auth_path, &global_config_path, &api_client).await?;
+
+    // TODO(voz): Do we need to do additional checks for token existence? Things
+    // like user, team, etc?
+    if let Some(token) = auth_file.get_token(api_client.base_url()) {
+        if token.contains_team(sso_team) {
+            // Token already exists, return early.
+            println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
+            print_cli_authorized(&token.user.username, &ui);
+            return Ok(());
+        }
+    }
+
+    // Get the token from the login server.
     let token = auth_sso_login(
         &api_client,
         &ui,
-        base.config()?.token(),
         &login_url_config,
         sso_team,
         &DefaultSSOLoginServer,
     )
     .await?;
 
-    let global_auth_path = base.global_auth_path()?;
-    let before = global_auth_path
-        .read_existing_to_string_or(Ok("{}"))
-        .map_err(|e| config::Error::FailedToReadAuth {
-            auth_path: global_auth_path.clone(),
-            error: e,
-        })?;
-
-    let after = set_path(&before, &["token"], &format!("\"{}\"", token))?;
-    global_auth_path
-        .ensure_dir()
-        .map_err(|e| Error::FailedToSetAuth {
-            auth_path: global_auth_path.clone(),
-            error: e,
-        })?;
-
-    global_auth_path
-        .create_with_contents(after)
-        .map_err(|e| Error::FailedToSetAuth {
-            auth_path: global_auth_path.clone(),
-            error: e,
-        })?;
+    auth_file.add_or_update_token(token);
+    auth_file.write_to_disk(&global_auth_path)?;
 
     Ok(())
 }
@@ -113,9 +111,10 @@ mod tests {
     use camino::Utf8PathBuf;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_auth::{
-        mocks::MockApiClient, read_or_create_auth_file, AuthFile, AuthToken, Space, Team,
+        mocks::MockApiClient, read_or_create_auth_file, AuthFile, AuthToken,
         TURBOREPO_AUTH_FILE_NAME,
     };
+    use turborepo_vercel_api::{Membership, Space, Team};
 
     use crate::{
         cli::Verbosity,
@@ -189,7 +188,13 @@ mod tests {
                     id: "team-id".to_string(),
                     spaces: vec![Space {
                         id: "space-id".to_string(),
+                        name: "space1 name".to_string(),
                     }],
+                    slug: "team slug".to_string(),
+                    name: "team name".to_string(),
+                    created_at: 0,
+                    created: chrono::Utc::now(),
+                    membership: Membership::new(turborepo_vercel_api::Role::Developer),
                 }],
             }],
         };

@@ -78,6 +78,10 @@ impl Client for MockApiClient {
                 created_at: 0,
                 created: chrono::Utc::now(),
                 membership: Membership::new(Role::Member),
+                spaces: vec![Space {
+                    id: "space-id".to_string(),
+                    name: "space1 name".to_string(),
+                }],
             }],
         })
     }

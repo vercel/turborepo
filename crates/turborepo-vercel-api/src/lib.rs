@@ -37,7 +37,7 @@ pub struct ArtifactResponse {
 
 /// Membership is the relationship between the logged-in user and a particular
 /// team
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Membership {
     role: Role,
 }
@@ -49,7 +49,7 @@ impl Membership {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Role {
     Member,
@@ -59,7 +59,7 @@ pub enum Role {
     Billing,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Team {
     pub id: String,
     pub slug: String,
@@ -68,15 +68,20 @@ pub struct Team {
     pub created_at: u64,
     pub created: chrono::DateTime<chrono::Utc>,
     pub membership: Membership,
+    pub spaces: Vec<Space>,
 }
 
 impl Team {
     pub fn is_owner(&self) -> bool {
         matches!(self.membership.role, Role::Owner)
     }
+    // Search the team to see if it contains the space.
+    pub fn contains_space(&self, space: &str) -> bool {
+        self.spaces.iter().any(|s| s.id == space)
+    }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Space {
     pub id: String,
     pub name: String,

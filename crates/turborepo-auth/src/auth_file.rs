@@ -3,7 +3,7 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::Client;
-use turborepo_vercel_api::User;
+use turborepo_vercel_api::{Team, User};
 
 use crate::Error;
 
@@ -70,7 +70,7 @@ pub struct AuthToken {
 impl AuthToken {
     /// Searches the teams to see if any team ID matches the passed in team.
     pub fn contains_team(&self, team: &str) -> bool {
-        self.teams.iter().any(|t| t.id == team)
+        self.teams.iter().any(|t| t.slug == team)
     }
     /// Searches the teams to see if any team contains the space ID matching the
     /// passed in space.
@@ -119,23 +119,6 @@ impl Display for AuthToken {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct Team {
-    pub id: String,
-    pub spaces: Vec<Space>,
-}
-impl Team {
-    // Search the team to see if it contains the space.
-    pub fn contains_space(&self, space: &str) -> bool {
-        self.spaces.iter().any(|s| s.id == space)
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct Space {
-    pub id: String,
-}
-
 /// Converts our old style of token held in `config.json` into the new schema.
 ///
 /// Uses the client to get information not readily available in the current
@@ -157,15 +140,11 @@ pub async fn convert_to_auth_token(token: &str, client: &impl Client) -> Result<
             .get_spaces(token, Some(team_id))
             .await
             .map_err(Error::APIError)?;
-        let spaces = spaces_response
-            .spaces
-            .into_iter()
-            .map(|space_data| Space { id: space_data.id })
-            .collect();
-        teams.push(Team {
-            id: team_id.to_string(),
-            spaces,
-        })
+        let spaces = spaces_response.spaces;
+        // TODO(voz): Don't like this.
+        let mut team = team;
+        team.spaces = spaces;
+        teams.push(team)
     }
 
     let auth_token = AuthToken {
@@ -183,6 +162,7 @@ mod tests {
     use std::fs;
 
     use tempfile::tempdir;
+    use turborepo_vercel_api::{Membership, Role, Space};
 
     use super::*;
     use crate::{mocks::*, TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR};
@@ -331,7 +311,13 @@ mod tests {
             id: "team1".to_string(),
             spaces: vec![Space {
                 id: "space1".to_string(),
+                name: "space1 name".to_string(),
             }],
+            slug: "team1 slug".to_string(),
+            name: "maximum effort".to_string(),
+            created_at: 0,
+            created: chrono::Utc::now(),
+            membership: Membership::new(Role::Developer),
         };
         let auth_token = AuthToken {
             token: "token1".to_string(),
@@ -347,7 +333,7 @@ mod tests {
             },
         };
 
-        assert!(auth_token.contains_team("team1"));
+        assert!(auth_token.contains_team("team1 slug"));
         assert!(!auth_token.contains_team("team2"));
         assert!(team.contains_space("space1"));
         assert!(!team.contains_space("space2"));
