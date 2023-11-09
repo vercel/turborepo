@@ -10,8 +10,6 @@ Make sure we use local and do not pass --skip-infer to old binary
 
   $ ${TURBO} bin
 
-  $ ls -al $PWD/node_modules/.bin/
-
   $ cat -vet node_modules/turbo-windows-64/bin/turbo.exe
   $ cat -vet node_modules/turbo-windows-arm64/bin/turbo.exe
 
