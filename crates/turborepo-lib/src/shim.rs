@@ -553,6 +553,8 @@ fn spawn_local_turbo(
     // We spawn a process that executes the local turbo
     // that we've found in node_modules/.bin/turbo.
     let mut command = process::Command::new(local_turbo_path);
+
+    debug!("Passing raw args to local turbo binary: {:?}", raw_args);
     command
         .args(&raw_args)
         // rather than passing an argument that local turbo might not understand, set
