@@ -257,11 +257,11 @@ enum Event {
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskExecutionSummary {
-    start_time: i64,
-    end_time: i64,
-    exit_code: Option<i32>,
+    pub start_time: i64,
+    pub end_time: i64,
+    pub exit_code: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
+    pub error: Option<String>,
 }
 
 impl TaskExecutionSummary {

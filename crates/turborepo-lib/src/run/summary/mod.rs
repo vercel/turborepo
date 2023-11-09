@@ -13,11 +13,11 @@ mod task_factory;
 use std::{collections::HashSet, io, io::Write};
 
 use chrono::{DateTime, Local};
-pub use execution::TaskTracker;
+pub use execution::{TaskExecutionSummary, TaskTracker};
 pub use global_hash::GlobalHashSummary;
 use itertools::Itertools;
 use serde::Serialize;
-pub use spaces::SpacesTaskClient;
+pub use spaces::{SpacesTaskClient, SpacesTaskInformation};
 use svix_ksuid::{Ksuid, KsuidLike};
 use tabwriter::TabWriter;
 use thiserror::Error;
