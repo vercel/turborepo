@@ -18,21 +18,21 @@ Check
   
   Tasks to Run
   build
-    Task                           = build                                                                                                                                               
-    Hash                           = 273cd179351c6ef3                                                                                                                                    
-    Cached (Local)                 = false                                                                                                                                               
-    Cached (Remote)                = false                                                                                                                                               
-    Command                        = echo 'building' > foo.txt                                                                                                                           
-    Outputs                        = foo.txt                                                                                                                                             
-    Log File                       = .turbo/turbo-build.log                                                                                                                              
-    Dependencies                   =                                                                                                                                                     
-    Dependendents                  =                                                                                                                                                     
-    Inputs Files Considered        = 5                                                                                                                                                   
-    .env Files Considered          = 0                                                                                                                                                   
-    Env Vars                       =                                                                                                                                                     
-    Env Vars Values                =                                                                                                                                                     
-    Inferred Env Vars Values       =                                                                                                                                                     
-    Passed Through Env Vars        =                                                                                                                                                     
-    Passed Through Env Vars Values =                                                                                                                                                     
+    Task                           = build\s* (re)
+    Hash                           = 273cd179351c6ef3\s* (re)
+    Cached \(Local\)                 = false\s* (re)
+    Cached \(Remote\)                = false\s* (re)
+    Command                        = echo 'building' > foo.txt\s* (re)
+    Outputs                        = foo.txt\s* (re)
+    Log File                       = .turbo/turbo-build.log\s* (re)
+    Dependencies                   =\s* (re)
+    Dependendents                  =\s* (re)
+    Inputs Files Considered        = 5\s* (re)
+    .env Files Considered          = 0\s* (re)
+    Env Vars                       =\s* (re)
+    Env Vars Values                =\s* (re)
+    Inferred Env Vars Values       =\s* (re)
+    Passed Through Env Vars        =\s* (re)
+    Passed Through Env Vars Values =\s* (re)
     ResolvedTaskDefinition         = {"outputs":["foo.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
-    Framework                      = <NO FRAMEWORK DETECTED>                                                                                                                             
+    Framework                      = <NO FRAMEWORK DETECTED>\s* (re)
