@@ -49,11 +49,16 @@ impl Issue for ResolvingIssue {
 
     #[turbo_tasks::function]
     async fn description(&self) -> Result<Vc<StyledString>> {
-        Ok(StyledString::Line(vec![
-            StyledString::Strong("Module not found".to_string()),
-            StyledString::Text(": Can't resolve".to_string()),
-            StyledString::Code(self.request.to_string().await?.to_string()),
-        ])
+        let module_not_found = StyledString::Strong("Module not found".to_string());
+
+        Ok(match self.request.await?.request() {
+            Some(request) => StyledString::Line(vec![
+                module_not_found,
+                StyledString::Text(": Can't resolve ".to_string()),
+                StyledString::Code(request),
+            ]),
+            None => module_not_found,
+        }
         .cell())
     }
 
