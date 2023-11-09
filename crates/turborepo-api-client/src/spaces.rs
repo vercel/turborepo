@@ -20,11 +20,25 @@ pub struct SpaceClientSummary {
     pub version: String,
 }
 
-#[derive(Default, Debug, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct SpacesCacheStatus {
-    pub status: String,
-    pub source: Option<String>,
-    pub time_saved: u32,
+    pub status: CacheStatus,
+    pub source: Option<CacheSource>,
+    pub time_saved: u64,
+}
+
+#[derive(Debug, Serialize, Copy, Clone)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum CacheStatus {
+    Hit,
+    Miss,
+}
+
+#[derive(Debug, Serialize, Copy, Clone)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum CacheSource {
+    Local,
+    Remote,
 }
 
 #[derive(Default, Debug, Serialize)]
@@ -36,7 +50,7 @@ pub struct SpaceTaskSummary {
     pub start_time: i64,
     pub end_time: i64,
     pub cache: SpacesCacheStatus,
-    pub exit_code: u32,
+    pub exit_code: Option<i32>,
     pub dependencies: Vec<String>,
     pub dependents: Vec<String>,
     pub logs: Vec<u8>,
@@ -185,5 +199,31 @@ impl APIClient {
             .error_for_status()?;
 
         Ok(())
+    }
+}
+
+impl Default for SpacesCacheStatus {
+    fn default() -> Self {
+        Self {
+            status: CacheStatus::Miss,
+            source: None,
+            time_saved: 0,
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use serde_json::json;
+    use test_case::test_case;
+
+    use super::*;
+
+    #[test_case(CacheStatus::Hit, json!("HIT") ; "hit")]
+    #[test_case(CacheStatus::Miss, json!("MISS") ; "miss")]
+    #[test_case(CacheSource::Local, json!("LOCAL") ; "local")]
+    #[test_case(CacheSource::Remote, json!("REMOTE") ; "remote")]
+    fn test_serialization(value: impl serde::Serialize, expected: serde_json::Value) {
+        assert_eq!(serde_json::to_value(value).unwrap(), expected);
     }
 }
