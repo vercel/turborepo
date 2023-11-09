@@ -252,7 +252,16 @@ impl RunTracker {
         })
     }
 
-    #[tracing::instrument(skip(pkg_dep_graph, ui, engine, hash_tracker))]
+    #[tracing::instrument(skip(
+        pkg_dep_graph,
+        ui,
+        run_opts,
+        packages,
+        global_hash_summary,
+        engine,
+        hash_tracker,
+        env_at_execution_start
+    ))]
     #[allow(clippy::too_many_arguments)]
     pub async fn finish<'a>(
         self,
@@ -352,6 +361,7 @@ impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
 }
 
 impl<'a> RunSummary<'a> {
+    #[tracing::instrument(skip(self, pkg_dep_graph, ui))]
     async fn finish(
         mut self,
         end_time: DateTime<Local>,
