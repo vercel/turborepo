@@ -1,15 +1,17 @@
-use anyhow::{anyhow, Result};
 use napi_derive::napi;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::AbsoluteSystemPath;
 use turborepo_repository::{
-    inference::{RepoMode, RepoState},
-    package_manager::PackageManager as RustPackageManager,
+    inference::RepoState, package_manager::PackageManager as RustPackageManager,
 };
+
+mod internal;
 
 #[napi]
 pub struct Repository {
     repo_state: RepoState,
+    #[napi(readonly)]
     pub root: String,
+    #[napi(readonly)]
     pub is_monorepo: bool,
 }
 
@@ -17,7 +19,28 @@ pub struct Repository {
 pub struct PackageManager {
     #[allow(dead_code)]
     package_manager: RustPackageManager,
+    #[napi(readonly)]
     pub name: String,
+}
+
+#[napi]
+pub struct Workspace {
+    #[napi(readonly)]
+    pub absolute_path: String,
+    #[napi(readonly)]
+    pub repo_path: String,
+}
+
+impl Workspace {
+    fn new(repo_root: &AbsoluteSystemPath, workspace_path: &AbsoluteSystemPath) -> Self {
+        let repo_path = repo_root
+            .anchor(workspace_path)
+            .expect("workspace is in the repo root");
+        Self {
+            absolute_path: workspace_path.to_string(),
+            repo_path: repo_path.to_string(),
+        }
+    }
 }
 
 impl From<RustPackageManager> for PackageManager {
@@ -32,57 +55,23 @@ impl From<RustPackageManager> for PackageManager {
 #[napi]
 impl Repository {
     #[napi(factory, js_name = "detectJS")]
-    pub fn detect_js(path: Option<String>) -> Result<Self> {
-        let reference_dir = path
-            .map(|path| {
-                AbsoluteSystemPathBuf::from_cwd(&path)
-                    .map_err(|e| anyhow!("Couldn't resolve path {}: {}", path, e))
-            })
-            .unwrap_or_else(|| {
-                AbsoluteSystemPathBuf::cwd()
-                    .map_err(|e| anyhow!("Couldn't resolve path from cwd: {}", e))
-            })?;
-        let repo_state = RepoState::infer(&reference_dir).map_err(|e| anyhow!(e))?;
-        let is_monorepo = repo_state.mode == RepoMode::MultiPackage;
-        Ok(Self {
-            root: repo_state.root.to_string(),
-            repo_state,
-            is_monorepo,
-        })
+    pub async fn detect_js_repository(path: Option<String>) -> Result<Repository, napi::Error> {
+        Self::detect_js_internal(path).await.map_err(|e| e.into())
     }
 
     #[napi]
-    pub fn package_manager(&self) -> Result<PackageManager> {
+    pub fn package_manager(&self) -> Result<PackageManager, napi::Error> {
         // match rather than map/map_err due to only the Ok variant implementing "Copy"
         // match lets us handle each case independently, rather than forcing the whole
         // value to a reference or concrete value
         match self.repo_state.package_manager.as_ref() {
             Ok(pm) => Ok(pm.clone().into()),
-            Err(e) => Err(anyhow!("{}", e)),
+            Err(e) => Err(napi::Error::from_reason(format!("{}", e))),
         }
     }
 
     #[napi]
-    pub fn workspace_directories(&self) -> Result<Vec<String>> {
-        let package_manager = self
-            .repo_state
-            .package_manager
-            .as_ref()
-            .map_err(|e| anyhow!("{}", e))?;
-        let workspace_directories = package_manager
-            .get_package_jsons(&self.repo_state.root)?
-            .map(|path| {
-                path.parent()
-                    .map(|dir| {
-                        self.repo_state
-                            .root
-                            .anchor(dir)
-                            .expect("workspaces are contained within the root")
-                    })
-                    .map(|dir| dir.to_string())
-                    .ok_or_else(|| anyhow!("{} does not have a parent directory", path))
-            })
-            .collect::<Result<Vec<String>>>()?;
-        Ok(workspace_directories)
+    pub async fn workspaces(&self) -> std::result::Result<Vec<Workspace>, napi::Error> {
+        self.workspaces_internal().await.map_err(|e| e.into())
     }
 }

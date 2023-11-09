@@ -10,6 +10,7 @@ globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 itertools = { workspace = true }
 lazy-regex = "2.5.0"
 node-semver = "2.1.0"
+petgraph = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -17,6 +18,7 @@ serde_yaml = { workspace = true }
 thiserror = "1.0.38"
 tracing.workspace = true
 turbopath = { workspace = true }
+turborepo-graph-utils = { path = "../turborepo-graph-utils" }
 turborepo-lockfiles = { workspace = true }
 wax = { workspace = true }
 which = { workspace = true }

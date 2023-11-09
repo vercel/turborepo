@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use itertools::Itertools;
 use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
-use turborepo_cache::CacheResponse;
+use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{DetailedMap, EnvironmentVariableMap};
 
 use super::{execution::TaskExecutionSummary, EnvMode};
@@ -131,30 +131,36 @@ impl TaskCacheSummary {
     }
 }
 
-impl From<Option<CacheResponse>> for TaskCacheSummary {
-    fn from(value: Option<CacheResponse>) -> Self {
-        value.map_or_else(Self::cache_miss, |CacheResponse { source, time_saved }| {
-            let source = CacheSource::from(source);
-            // Assign these deprecated fields Local and Remote based on the information
-            // available in the itemStatus. Note that these fields are
-            // problematic, because an ItemStatus isn't always the composite
-            // of both local and remote caches. That means that an ItemStatus might say it
-            // was a local cache hit, and we return remote: false here. That's misleading
-            // because it does not mean that there is no remote cache hit,
-            // it _could_ mean that we never checked the remote cache. These
-            // fields are being deprecated for this reason.
-            let (local, remote) = match source {
-                CacheSource::Local => (true, false),
-                CacheSource::Remote => (false, true),
-            };
-            Self {
-                local,
-                remote,
-                status: CacheStatus::Hit,
-                source: Some(source),
-                time_saved,
+// This is an `Option<Option<CacheHitMetadata>>` because we could fail
+// to fetch from cache (giving `None`), and we could also get a miss
+// `Some(None)`
+impl From<Option<CacheHitMetadata>> for TaskCacheSummary {
+    fn from(response: Option<CacheHitMetadata>) -> Self {
+        match response {
+            Some(CacheHitMetadata { source, time_saved }) => {
+                let source = CacheSource::from(source);
+                // Assign these deprecated fields Local and Remote based on the information
+                // available in the itemStatus. Note that these fields are
+                // problematic, because an ItemStatus isn't always the composite
+                // of both local and remote caches. That means that an ItemStatus might say it
+                // was a local cache hit, and we return remote: false here. That's misleading
+                // because it does not mean that there is no remote cache hit,
+                // it _could_ mean that we never checked the remote cache. These
+                // fields are being deprecated for this reason.
+                let (local, remote) = match source {
+                    CacheSource::Local => (true, false),
+                    CacheSource::Remote => (false, true),
+                };
+                Self {
+                    local,
+                    remote,
+                    status: CacheStatus::Hit,
+                    source: Some(source),
+                    time_saved,
+                }
             }
-        })
+            None => Self::cache_miss(),
+        }
     }
 }
 
