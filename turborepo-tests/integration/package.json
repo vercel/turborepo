@@ -1,8 +1,7 @@
 {
   "name": "turborepo-tests-integration",
   "scripts": {
-    "test": "node ./test.mjs find_turbo/hoisted.t",
-    "test2": "node ./test.mjs command-bin.t",
+    "test": "node ./test.mjs",
     "test:rust-codepath": "EXPERIMENTAL_RUST_CODEPATH=true node ./test.mjs",
     "test:interactive": "PRYSK_INTERACTIVE=true node ./test.mjs",
     "test:parallel": ".cram_env/bin/pytest -n auto tests --prysk-shell=`which bash`",
