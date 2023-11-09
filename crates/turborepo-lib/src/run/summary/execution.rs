@@ -266,7 +266,8 @@ pub struct TaskExecutionSummary {
 
 impl TaskExecutionSummary {
     pub fn is_failure(&self) -> bool {
-        // TODO: how do we treat a "none"
+        // We consider None as a failure as it indicates the task failed to start
+        // or was killed in a manner where we didn't collect an exit code.
         !matches!(self.exit_code, Some(0))
     }
 }
