@@ -5,6 +5,7 @@ Setup
 Make sure we use local and do not pass --skip-infer to old binary
   $ ${TESTDIR}/set_version.sh $(pwd) "1.0.0"
 
+  $ echo ${ROOT_DIR}
   $ echo ${TURBO}
   $ ls -al $(dirname ${TURBO})
 
