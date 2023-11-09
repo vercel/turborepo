@@ -14,7 +14,7 @@ It finds repo root and uses correct version
   $ cd $TESTROOT/subdir/node_modules
   $ ${TURBO} build --filter foo -vv > out.log
   $ grep --quiet -F "Local turbo version: 1.8.0" out.log
-  $ grep --quiet -E "Running local turbo binary in .*/hard_mode.t/subdir/node_modules/.*/bin/turbo" out.log
+  $ grep --quiet -E "Running local turbo binary in .*/hard-mode.t/subdir/node_modules/.*/bin/turbo" out.log
   $ cat out.log | tail -n1
   --skip-infer build --filter foo -vv --single-package --
 
@@ -23,7 +23,7 @@ It respects cwd
   $ cd $TESTROOT
   $ ${TURBO} build --filter foo -vv --cwd ${TESTROOT}/subdir > out.log
   $ grep --quiet -F "Local turbo version: 1.8.0" out.log
-  $ grep --quiet -E "Running local turbo binary in .*/hard_mode.t/subdir/node_modules/.*/bin/turbo" out.log
+  $ grep --quiet -E "Running local turbo binary in .*/hard-mode.t/subdir/node_modules/.*/bin/turbo" out.log
   $ cat out.log | tail -n1
   --skip-infer build --filter foo -vv --single-package --
 
@@ -32,6 +32,6 @@ It respects cwd and finds repo root
   $ cd $TESTROOT
   $ ${TURBO} build --filter foo -vv --cwd ${TESTROOT}/subdir/node_modules > out.log
   $ grep --quiet -F "Local turbo version: 1.8.0" out.log
-  $ grep --quiet -E "Running local turbo binary in .*/hard_mode.t/subdir/node_modules/.*/bin/turbo" out.log
+  $ grep --quiet -E "Running local turbo binary in .*/hard-mode.t/subdir/node_modules/.*/bin/turbo" out.log
   $ cat out.log | tail -n1
   --skip-infer build --filter foo -vv --single-package --
