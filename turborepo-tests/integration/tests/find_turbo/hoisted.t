@@ -7,8 +7,6 @@ Make sure we use local and do not pass --skip-infer to old binary
 
   $ echo ${ROOT_DIR}
   $ echo ${TURBO}
-  
-  $ ls -al $(dirname ${TURBO})
 
   $ ${TURBO} bin -vvv
 
