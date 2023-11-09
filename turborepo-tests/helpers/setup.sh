@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
+THIS_DIR=$(dirname "$(realpath "$0")")
 ROOT_DIR="${THIS_DIR}/../.."
 
 TURBO=${ROOT_DIR}/target/debug/turbo

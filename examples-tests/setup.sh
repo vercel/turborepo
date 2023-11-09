@@ -8,7 +8,7 @@ exampleName=$1
 pkgManager=$2
 
 # Copy the example dir over to the test dir that prysk puts you in
-SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
+SCRIPT_DIR=$(dirname "$(realpath "$0")")
 MONOREPO_ROOT_DIR="$SCRIPT_DIR/.."
 EXAMPLE_DIR="$MONOREPO_ROOT_DIR/examples/$exampleName"
 

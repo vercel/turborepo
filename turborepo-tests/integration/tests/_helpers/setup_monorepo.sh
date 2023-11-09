@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
+SCRIPT_DIR=$(dirname "$(realpath "$0")")
 FIXTURE="_fixtures/${2-basic_monorepo}"
 TURBOREPO_TESTS_DIR="$SCRIPT_DIR/../../.."
 
