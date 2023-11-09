@@ -6,7 +6,7 @@ use turbopack_core::issue::{Issue, StyledString};
 #[turbo_tasks::value(shared)]
 pub struct ProcessEnvIssue {
     pub path: Vc<FileSystemPath>,
-    pub description: String,
+    pub description: Vc<StyledString>,
 }
 
 #[turbo_tasks::value_impl]
@@ -28,6 +28,6 @@ impl Issue for ProcessEnvIssue {
 
     #[turbo_tasks::function]
     fn description(&self) -> Vc<StyledString> {
-        StyledString::Text(self.description.clone()).cell()
+        self.description
     }
 }
