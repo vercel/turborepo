@@ -132,6 +132,7 @@ async fn expand_star_exports(
 pub struct EsmExports {
     pub exports: BTreeMap<String, EsmExport>,
     pub star_exports: Vec<Vc<EsmAssetReference>>,
+    pub side_effect_free: bool,
 }
 
 #[turbo_tasks::value_impl]
