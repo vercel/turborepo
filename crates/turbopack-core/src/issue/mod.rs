@@ -4,7 +4,7 @@ pub mod resolve;
 pub mod unsupported_module;
 
 use std::{
-    cmp::Ordering,
+    cmp::{min, Ordering},
     fmt::{Display, Formatter},
     sync::Arc,
 };
@@ -404,8 +404,7 @@ impl CapturedIssues {
 #[derive(Clone, Debug)]
 pub struct LazyIssueSource {
     pub source: Vc<Box<dyn Source>>,
-    pub start: usize,
-    pub end: usize,
+    pub start_end: Option<(usize, usize)>,
 }
 
 #[turbo_tasks::value_impl]
@@ -420,19 +419,33 @@ impl LazyIssueSource {
     /// * `end`: The end index of the span. Must use **1-based** indexing.
     #[turbo_tasks::function]
     pub fn from_swc_offsets(source: Vc<Box<dyn Source>>, start: usize, end: usize) -> Vc<Self> {
-        Self::cell(LazyIssueSource {
-            source,
-            start: start - 1,
-            end: end - 1,
-        })
+        match (start == 0, end == 0) {
+            (true, true) => Self::cell(LazyIssueSource {
+                source,
+                start_end: None,
+            }),
+            (false, false) => Self::cell(LazyIssueSource {
+                source,
+                start_end: Some((start - 1, end - 1)),
+            }),
+            (false, true) => Self::cell(LazyIssueSource {
+                source,
+                start_end: Some((start - 1, start - 1)),
+            }),
+            (true, false) => Self::cell(LazyIssueSource {
+                source,
+                start_end: Some((end - 1, end - 1)),
+            }),
+        }
     }
 
     #[turbo_tasks::function]
     pub async fn to_issue_source(self: Vc<Self>) -> Result<Vc<IssueSource>> {
         let this = &*self.await?;
-        Ok(match (this.start, this.end) {
-            (0, 0) => IssueSource::from_source_only(this.source),
-            _ => IssueSource::from_byte_offset(this.source, this.start, this.end),
+        Ok(if let Some((start, end)) = this.start_end {
+            IssueSource::from_byte_offset(this.source, start, end)
+        } else {
+            IssueSource::from_source_only(this.source)
         })
     }
 }
@@ -483,29 +496,25 @@ impl IssueSource {
                             column: offset,
                         }
                     } else {
+                        let line = &lines[i - 1];
                         SourcePos {
                             line: i - 1,
-                            column: offset - lines[i - 1].bytes_offset,
+                            column: min(line.content.len(), offset - line.bytes_offset),
                         }
                     }
                 }
             }
         }
-        Ok(Self::cell(
-            if let FileLinesContent::Lines(lines) = &*source.content().lines().await? {
+        Ok(Self::cell(IssueSource {
+            source,
+            range: if let FileLinesContent::Lines(lines) = &*source.content().lines().await? {
                 let start = find_line_and_column(lines.as_ref(), start);
                 let end = find_line_and_column(lines.as_ref(), end);
-                IssueSource {
-                    source,
-                    range: Some((start, end)),
-                }
+                Some((start, end))
             } else {
-                IssueSource {
-                    source,
-                    range: Some((SourcePos::default(), SourcePos::max())),
-                }
+                None
             },
-        ))
+        }))
     }
 }
 
