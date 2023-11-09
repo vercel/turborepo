@@ -367,7 +367,7 @@ impl<'a> Run<'a> {
 
         let run_tracker = RunTracker::new(
             start_at,
-            "todo",
+            opts.synthesize_command(),
             opts.scope_opts.pkg_inference_root.as_deref(),
             &env_at_execution_start,
             &self.base.repo_root,
@@ -564,7 +564,7 @@ impl<'a> Run<'a> {
 
         let run_tracker = RunTracker::new(
             started_at,
-            "todo",
+            opts.synthesize_command(),
             opts.scope_opts.pkg_inference_root.as_deref(),
             &env_at_execution_start,
             &self.base.repo_root,
