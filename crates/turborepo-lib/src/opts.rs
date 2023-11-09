@@ -40,48 +40,42 @@ pub struct Opts<'a> {
 
 impl<'a> Opts<'a> {
     pub fn synthesize_command(&self) -> String {
-        let mut cmd = format!("turbo run {} ", self.run_opts.tasks.join(" "));
-        let mut flags: Vec<String> = vec![];
-        flags.extend(
-            self.scope_opts
-                .filter_patterns
-                .iter()
-                .map(|pattern| format!("--filter={pattern}")),
-        );
-        flags.extend(
-            self.scope_opts
-                .legacy_filter
-                .as_filter_pattern()
-                .iter()
-                .map(|pattern| format!("--filter={pattern}")),
-        );
-        //cmd += &self.scope_opts.filter_patterns.iter().map(|pattern|
-        // format!("--filter={pattern}")).join(" "); cmd += &self.scope_opts.
-        // legacy_filter.as_filter_pattern().iter().map(|pattern|
-        // format!("--filter={pattern}")).join(" ");
+        let mut cmd = format!("turbo run {}", self.run_opts.tasks.join(" "));
+        for pattern in &self.scope_opts.filter_patterns {
+            cmd.push_str(" --filter=");
+            cmd.push_str(pattern);
+        }
+
+        for pattern in &self.scope_opts.legacy_filter.as_filter_pattern() {
+            cmd.push_str(" --filter=");
+            cmd.push_str(pattern);
+        }
+
         if self.run_opts.parallel {
-            //cmd += " --parallel";
-            flags.push("--parallel".to_string());
+            cmd.push_str(" --parallel");
         }
+
         if self.run_opts.continue_on_error {
-            //cmd += " --continue";
-            flags.push("--continue".to_string())
+            cmd.push_str(" --continue");
         }
+
         if self.run_opts.dry_run {
             if self.run_opts.dry_run_json {
-                flags.push("--dry=json".to_string());
+                cmd.push_str(" --dry=json");
             } else {
-                flags.push("--dry".to_string());
+                cmd.push_str(" --dry");
             }
         }
+
         if self.run_opts.only {
-            flags.push("--only".to_string());
+            cmd.push_str(" --only");
         }
-        cmd += &flags.into_iter().join(" ");
+
         if !self.run_opts.pass_through_args.is_empty() {
-            cmd += " -- ";
-            cmd += &self.run_opts.pass_through_args.iter().join(" ");
+            cmd.push_str(" -- ");
+            cmd.push_str(&self.run_opts.pass_through_args.join(" "));
         }
+
         cmd
     }
 }
