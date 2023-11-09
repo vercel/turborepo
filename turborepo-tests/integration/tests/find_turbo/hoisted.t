@@ -17,7 +17,7 @@ Make sure we use local and do not pass --skip-infer to old binary
   
   $ echo "PRYSK_TEMP: $PRYSK_TEMP"
 
-  $ . "$PRYSK_TMP/hoisted.t/node_modules/turbo-windows-64/bin/turbo.exe" hi yes # direct call from prysk tmp
+  $ . "$PRYSK_TEMP/hoisted.t/node_modules/turbo-windows-64/bin/turbo.exe" hi yes # direct call from prysk tmp
   
   $ "$PWD/node_modules/turbo-windows-64/bin/turbo.exe" hi yes # direct call from pwd
 
