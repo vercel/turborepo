@@ -54,8 +54,9 @@ impl Issue for ResolvingIssue {
         Ok(match self.request.await?.request() {
             Some(request) => StyledString::Line(vec![
                 module_not_found,
-                StyledString::Text(": Can't resolve ".to_string()),
+                StyledString::Text(": Can't resolve '".to_string()),
                 StyledString::Code(request),
+                StyledString::Text("'".to_string()),
             ]),
             None => module_not_found,
         }
