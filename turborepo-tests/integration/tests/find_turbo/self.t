@@ -5,4 +5,4 @@ Setup
 Make sure we do not reinvoke ourself.
   $ ${TESTDIR}/set_link.sh $(pwd) ${TURBO}
   $ ${TURBO} --version -vv > out.log
-  $ grep --quiet -oF "Currently running turbo is local turbo" out.log
+  $ grep --quiet -F "Currently running turbo is local turbo" out.log
