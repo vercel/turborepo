@@ -21,8 +21,10 @@ pub struct SpaceClientSummary {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpacesCacheStatus {
     pub status: CacheStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<CacheSource>,
     pub time_saved: u64,
 }
@@ -42,6 +44,7 @@ pub enum CacheSource {
 }
 
 #[derive(Default, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpaceTaskSummary {
     pub key: String,
     pub name: String,
@@ -53,7 +56,8 @@ pub struct SpaceTaskSummary {
     pub exit_code: Option<i32>,
     pub dependencies: Vec<String>,
     pub dependents: Vec<String>,
-    pub logs: Vec<u8>,
+    #[serde(rename = "log")]
+    pub logs: String,
 }
 
 #[derive(Serialize)]
@@ -223,6 +227,34 @@ mod test {
     #[test_case(CacheStatus::Miss, json!("MISS") ; "miss")]
     #[test_case(CacheSource::Local, json!("LOCAL") ; "local")]
     #[test_case(CacheSource::Remote, json!("REMOTE") ; "remote")]
+    #[test_case(SpacesCacheStatus {
+        source: None,
+        status: CacheStatus::Miss,
+        time_saved: 0,
+    },
+    json!({ "status": "MISS", "timeSaved": 0 })
+    ; "cache miss")]
+    #[test_case(SpaceTaskSummary{
+        key: "foo#build".into(),
+        exit_code: Some(0),
+        ..Default::default()},
+    json!({
+       "key": "foo#build",
+       "name": "",
+       "workspace": "",
+       "hash": "",
+       "startTime": 0,
+       "endTime": 0,
+       "cache": {
+            "timeSaved": 0,
+            "status": "MISS"
+       },
+       "exitCode": 0,
+       "dependencies": [],
+       "dependents": [],
+       "log": "",
+    })
+    ; "spaces task summary")]
     fn test_serialization(value: impl serde::Serialize, expected: serde_json::Value) {
         assert_eq!(serde_json::to_value(value).unwrap(), expected);
     }
