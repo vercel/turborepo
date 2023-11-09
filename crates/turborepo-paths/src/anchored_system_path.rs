@@ -53,7 +53,7 @@ impl AnchoredSystemPath {
         let path_str = path.as_ref();
         let path = Path::new(path_str);
         if path.is_absolute() {
-            return Err(PathError::NotRelative(path_str.to_string()));
+            return Err(PathError::NotRelative(path_str.to_string(), None));
         }
 
         Ok(unsafe { &*(path as *const Path as *const Self) })

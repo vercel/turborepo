@@ -46,53 +46,106 @@ mod anchored_system_path_buf;
 mod relative_unix_path;
 mod relative_unix_path_buf;
 
-use std::io;
+use std::{io, sync::Arc};
 
 pub use absolute_system_path::{AbsoluteSystemPath, PathRelation};
 pub use absolute_system_path_buf::AbsoluteSystemPathBuf;
 pub use anchored_system_path::AnchoredSystemPath;
 pub use anchored_system_path_buf::AnchoredSystemPathBuf;
 use camino::{Utf8Path, Utf8PathBuf};
+use miette::Diagnostic;
 pub use relative_unix_path::RelativeUnixPath;
 pub use relative_unix_path_buf::{RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
+use thiserror::Error;
+use turborepo_errors::{Provenance, Sourced};
 
 // Lets windows know that we're going to be reading this file sequentially
 #[cfg(windows)]
 pub const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x08000000;
 
-#[derive(Debug, thiserror::Error)]
+impl From<camino::FromPathError> for PathError {
+    fn from(value: camino::FromPathError) -> Self {
+        PathError::FromPathError(value, None)
+    }
+}
+
+impl From<camino::FromPathBufError> for PathError {
+    fn from(value: camino::FromPathBufError) -> Self {
+        PathError::FromPathBufError(value, None)
+    }
+}
+
+impl From<io::Error> for PathError {
+    fn from(value: io::Error) -> Self {
+        PathError::IO(value, None)
+    }
+}
+
+#[derive(Debug, Error, Diagnostic)]
 pub enum PathError {
     #[error("Path is non-UTF-8: {0}")]
-    InvalidUnicode(String),
+    InvalidUnicode(String, Option<Arc<Provenance>>),
     #[error("Failed to convert path")]
-    FromPathBufError(#[from] camino::FromPathBufError),
+    FromPathBufError(camino::FromPathBufError, Option<Arc<Provenance>>),
     #[error("Failed to convert path")]
-    FromPathError(#[from] camino::FromPathError),
+    FromPathError(camino::FromPathError, Option<Arc<Provenance>>),
     #[error("path is malformed: {0}")]
-    MalformedPath(String),
+    MalformedPath(String, Option<Arc<Provenance>>),
     #[error("Path is not safe for windows: {0}")]
-    WindowsUnsafePath(String),
+    WindowsUnsafePath(String, Option<Arc<Provenance>>),
     #[error("Path is not absolute: {0}")]
-    NotAbsolute(String),
+    NotAbsolute(String, Option<Arc<Provenance>>),
     #[error("Path is not relative: {0}")]
-    NotRelative(String),
+    NotRelative(String, Option<Arc<Provenance>>),
     #[error("Path {0} is not parent of {1}")]
-    NotParent(String, String),
+    NotParent(String, String, Option<Arc<Provenance>>),
     #[error("IO Error {0}")]
-    IO(#[from] io::Error),
+    IO(io::Error, Option<Arc<Provenance>>),
     #[error("{0} is not a prefix for {1}")]
-    PrefixError(String, String),
+    PrefixError(String, String, Option<Arc<Provenance>>),
+}
+
+impl Sourced for PathError {
+    fn with_provenance(mut self, provenance: Option<Arc<Provenance>>) -> Self {
+        match self {
+            PathError::InvalidUnicode(_, ref mut p)
+            | PathError::FromPathBufError(_, ref mut p)
+            | PathError::FromPathError(_, ref mut p)
+            | PathError::MalformedPath(_, ref mut p)
+            | PathError::WindowsUnsafePath(_, ref mut p)
+            | PathError::NotAbsolute(_, ref mut p)
+            | PathError::NotRelative(_, ref mut p)
+            | PathError::NotParent(_, _, ref mut p)
+            | PathError::IO(_, ref mut p)
+            | PathError::PrefixError(_, _, ref mut p) => *p = provenance,
+        }
+        self
+    }
+    fn provenance(&self) -> Option<Arc<Provenance>> {
+        match self {
+            PathError::InvalidUnicode(_, provenance)
+            | PathError::FromPathBufError(_, provenance)
+            | PathError::FromPathError(_, provenance)
+            | PathError::MalformedPath(_, provenance)
+            | PathError::WindowsUnsafePath(_, provenance)
+            | PathError::NotAbsolute(_, provenance)
+            | PathError::NotRelative(_, provenance)
+            | PathError::NotParent(_, _, provenance)
+            | PathError::IO(_, provenance)
+            | PathError::PrefixError(_, _, provenance) => provenance.clone(),
+        }
+    }
 }
 
 impl From<std::string::FromUtf8Error> for PathError {
     fn from(value: std::string::FromUtf8Error) -> Self {
-        PathError::InvalidUnicode(value.utf8_error().to_string())
+        PathError::InvalidUnicode(value.utf8_error().to_string(), None)
     }
 }
 
 impl PathError {
     pub fn is_io_error(&self, kind: io::ErrorKind) -> bool {
-        matches!(self, PathError::IO(err) if err.kind() == kind)
+        matches!(self, PathError::IO(err, _) if err.kind() == kind)
     }
 }
 
@@ -209,11 +262,11 @@ pub enum UnknownPathType {
 /// Categorizes a path as either an `AbsoluteSystemPathBuf` or
 /// an `AnchoredSystemPathBuf` depending on whether it
 /// is absolute or relative.
-pub fn categorize(path: &Utf8Path) -> UnknownPathType {
+pub fn categorize(path: &Utf8Path, provenance: Option<Arc<Provenance>>) -> UnknownPathType {
     let path = Utf8PathBuf::try_from(path_clean::clean(path))
         .expect("path cleaning should preserve UTF-8");
     if path.is_absolute() {
-        UnknownPathType::Absolute(AbsoluteSystemPathBuf(path))
+        UnknownPathType::Absolute(AbsoluteSystemPathBuf(provenance, path))
     } else {
         UnknownPathType::Anchored(AnchoredSystemPathBuf(path))
     }

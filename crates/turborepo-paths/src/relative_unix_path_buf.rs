@@ -24,7 +24,7 @@ impl RelativeUnixPathBuf {
     pub fn new(path: impl Into<String>) -> Result<Self, PathError> {
         let path_string = path.into();
         if path_string.starts_with('/') || Utf8Path::new(&path_string).is_absolute() {
-            return Err(PathError::NotRelative(path_string));
+            return Err(PathError::NotRelative(path_string, None));
         }
 
         Ok(Self(path_string))
@@ -53,6 +53,7 @@ impl RelativeUnixPathBuf {
             return Err(PathError::NotParent(
                 prefix.0.to_string(),
                 self.0.to_string(),
+                None,
             ));
         }
 
@@ -66,7 +67,7 @@ impl RelativeUnixPathBuf {
         if self.0.as_bytes()[prefix_len] != b'/' {
             let prefix_str = prefix.0.clone();
             let this = self.0.clone();
-            return Err(PathError::PrefixError(prefix_str, this));
+            return Err(PathError::PrefixError(prefix_str, this, None));
         }
 
         let tail_slice = &self.0[(prefix_len + 1)..];

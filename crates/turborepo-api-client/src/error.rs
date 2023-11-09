@@ -31,8 +31,6 @@ pub enum Error {
         status: CachingStatus,
         message: String,
     },
-    #[error("cache miss")]
-    CacheMiss,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

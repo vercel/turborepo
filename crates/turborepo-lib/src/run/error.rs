@@ -1,3 +1,4 @@
+use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_repository::package_graph;
 
@@ -8,12 +9,15 @@ use crate::{
     task_graph, task_hash,
 };
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum Error {
+    #[error("error preparing engine: Invalid persistent task configuration:")]
+    EngineValidation {
+        #[related]
+        validation_errors: Vec<engine::ValidateError>,
+    },
     #[error(transparent)]
     Graph(#[from] graph_visualizer::Error),
-    #[error("error preparing engine: Invalid persistent task configuration:\n{0}")]
-    EngineValidation(String),
     #[error(transparent)]
     Builder(#[from] engine::BuilderError),
     #[error(transparent)]

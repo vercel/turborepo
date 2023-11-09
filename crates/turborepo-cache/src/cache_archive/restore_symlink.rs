@@ -60,7 +60,7 @@ fn actually_restore_symlink<'a>(
     let link_name = header.link_name()?.expect("have linkname");
     let symlink_to = link_name.to_str().ok_or_else(|| {
         CacheError::PathError(
-            PathError::InvalidUnicode(link_name.to_string_lossy().to_string()),
+            PathError::InvalidUnicode(link_name.to_string_lossy().to_string(), None),
             Backtrace::capture(),
         )
     })?;
@@ -93,7 +93,7 @@ pub fn canonicalize_linkname(
 ) -> Result<AbsoluteSystemPathBuf, CacheError> {
     let linkname = linkname.try_into().map_err(|_| {
         CacheError::PathError(
-            PathError::InvalidUnicode(linkname.to_string_lossy().to_string()),
+            PathError::InvalidUnicode(linkname.to_string_lossy().to_string(), None),
             Backtrace::capture(),
         )
     })?;
@@ -119,7 +119,7 @@ pub fn canonicalize_linkname(
     // In order to DAG sort them, however, we do need to canonicalize them.
     // We canonicalize them as if we're restoring them verbatim.
     //
-    match turbopath::categorize(linkname) {
+    match turbopath::categorize(linkname, None) {
         // 1. Check to see if the link target is absolute _on the current platform_.
         // If it is an absolute path it's canonical by rule.
         UnknownPathType::Absolute(abs) => Ok(abs),

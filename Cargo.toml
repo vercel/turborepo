@@ -82,7 +82,7 @@ lto = "off"
 async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.13.0" }
-
+miette = { version = "5.10.0", features = ["fancy"] }
 mdxjs = "0.1.20"
 modularize_imports = { version = "0.61.0" }
 styled_components = { version = "0.89.0" }
@@ -147,6 +147,7 @@ turborepo-api-client = { path = "crates/turborepo-api-client" }
 turborepo-cache = { path = "crates/turborepo-cache" }
 turborepo-ci = { path = "crates/turborepo-ci" }
 turborepo-env = { path = "crates/turborepo-env" }
+turborepo-errors = { path = "crates/turborepo-errors" }
 turborepo-ffi = { path = "crates/turborepo-ffi" }
 turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib", default-features = false }

@@ -18,6 +18,7 @@ use tiny_gradient::{GradientStr, RGB};
 use tracing::debug;
 use turbo_updater::check_for_updates;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_errors::Sourced;
 use turborepo_repository::{
     inference::{RepoMode, RepoState},
     package_json::PackageJson,
@@ -382,6 +383,7 @@ impl LocalTurboState {
                                 unplugged_base_path.join(file_name).join("node_modules"),
                             )
                             .ok()
+                            .map(|path| path.with_provenance(root_path.provenance()))
                         } else {
                             None
                         }
