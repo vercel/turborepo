@@ -11,7 +11,10 @@ pub fn spawn_child(mut command: Command) -> Result<Arc<SharedChild>, io::Error> 
         // on windows, we can't send signals so just kill
         // we are quiting anyways so just ignore
         #[cfg(target_os = "windows")]
-        handler_shared_child.kill().ok();
+        unsafe {
+            debug!("Calling special kill code for windows");
+            handler_shared_child.kill().ok();
+        }
 
         // on unix, we should send a SIGTERM to the child
         // so that go can gracefully shut down process groups
