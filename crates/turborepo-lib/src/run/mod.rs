@@ -18,7 +18,6 @@ use std::{
 
 pub use cache::{RunCache, TaskCache};
 use chrono::{DateTime, Local};
-use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tracing::debug;
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
@@ -496,14 +495,8 @@ impl<'a> Run<'a> {
         if !opts.run_opts.parallel {
             engine
                 .validate(pkg_dep_graph, opts.run_opts.concurrency)
-                .map_err(|errors| {
-                    Error::EngineValidation(
-                        errors
-                            .into_iter()
-                            .map(|e| e.to_string())
-                            .sorted()
-                            .join("\n"),
-                    )
+                .map_err(|errors| Error::EngineValidation {
+                    validation_errors: errors,
                 })?;
         }
 

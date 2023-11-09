@@ -38,7 +38,7 @@ impl ToOwned for AbsoluteSystemPath {
     type Owned = AbsoluteSystemPathBuf;
 
     fn to_owned(&self) -> Self::Owned {
-        AbsoluteSystemPathBuf(self.0.to_owned())
+        AbsoluteSystemPathBuf(None, self.0.to_owned())
     }
 }
 
@@ -199,6 +199,7 @@ impl AbsoluteSystemPath {
     pub fn join_component(&self, segment: &str) -> AbsoluteSystemPathBuf {
         debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
         AbsoluteSystemPathBuf(
+            None,
             self.0
                 .join(segment)
                 .as_std_path()
@@ -214,6 +215,7 @@ impl AbsoluteSystemPath {
             .iter()
             .any(|segment| segment.contains(std::path::MAIN_SEPARATOR)));
         AbsoluteSystemPathBuf(
+            None,
             self.0
                 .join(segments.join(std::path::MAIN_SEPARATOR_STR))
                 .as_std_path()
@@ -233,6 +235,7 @@ impl AbsoluteSystemPath {
     ) -> Result<AbsoluteSystemPathBuf, PathError> {
         let tail = unix_path.as_ref().to_system_path_buf();
         Ok(AbsoluteSystemPathBuf(
+            None,
             self.0.join(tail).as_std_path().clean().try_into()?,
         ))
     }
@@ -264,7 +267,7 @@ impl AbsoluteSystemPath {
 
     pub fn resolve(&self, path: &AnchoredSystemPath) -> AbsoluteSystemPathBuf {
         let path = self.0.join(path);
-        AbsoluteSystemPathBuf(path)
+        AbsoluteSystemPathBuf(None, path)
     }
 
     /// Lexically cleans a path by doing the following:
@@ -283,13 +286,16 @@ impl AbsoluteSystemPath {
             .try_into()
             .map_err(|_| PathError::InvalidUnicode(self.0.as_str().to_owned()))?;
 
-        Ok(AbsoluteSystemPathBuf(cleaned_path))
+        Ok(AbsoluteSystemPathBuf(None, cleaned_path))
     }
 
     /// Canonicalizes a path. Uses `dunce` to avoid UNC paths when possible.
     pub fn to_realpath(&self) -> Result<AbsoluteSystemPathBuf, PathError> {
         let realpath = dunce::canonicalize(&self.0)?;
-        Ok(AbsoluteSystemPathBuf(Utf8PathBuf::try_from(realpath)?))
+        Ok(AbsoluteSystemPathBuf(
+            None,
+            Utf8PathBuf::try_from(realpath)?,
+        ))
     }
 
     /// Gets metadata on path.

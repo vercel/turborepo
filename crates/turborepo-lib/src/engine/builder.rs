@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use itertools::Itertools;
+use miette::Diagnostic;
+use thiserror::Error;
 use turbopath::AbsoluteSystemPath;
 use turborepo_graph_utils as graph;
 use turborepo_repository::package_graph::{
@@ -14,10 +16,12 @@ use crate::{
     task_graph::{BookkeepingTaskDefinition, TaskDefinition},
 };
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum Error {
+    #[diagnostic(code(turbo::task_graph::missing_tasks))]
     #[error("Could not find the following tasks in project: {0}")]
     MissingTasks(String),
+    #[diagnostic(code(turbo::task_graph::missing_tasks))]
     #[error("No package.json for {workspace}")]
     MissingPackageJson { workspace: WorkspaceName },
     #[error(

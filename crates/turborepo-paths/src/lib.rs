@@ -215,7 +215,7 @@ pub fn categorize(path: &Utf8Path) -> UnknownPathType {
     let path = Utf8PathBuf::try_from(path_clean::clean(path))
         .expect("path cleaning should preserve UTF-8");
     if path.is_absolute() {
-        UnknownPathType::Absolute(AbsoluteSystemPathBuf(path))
+        UnknownPathType::Absolute(AbsoluteSystemPathBuf(None, path))
     } else {
         UnknownPathType::Anchored(AnchoredSystemPathBuf(path))
     }

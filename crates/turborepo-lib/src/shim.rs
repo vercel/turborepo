@@ -20,6 +20,7 @@ use tiny_gradient::{GradientStr, RGB};
 use tracing::debug;
 use turbo_updater::check_for_updates;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_errors::{Sourced, WithSource};
 use turborepo_repository::{
     inference::{RepoMode, RepoState},
     package_json::PackageJson,
@@ -408,7 +409,9 @@ impl LocalTurboState {
     // - berry (nodeLinker: "node-modules")
     //
     // This also supports people directly depending upon the platform version.
-    fn generate_hoisted_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+    fn generate_hoisted_path(
+        root_path: WithSource<&AbsoluteSystemPath>,
+    ) -> Option<AbsoluteSystemPathBuf> {
         Some(root_path.join_component("node_modules"))
     }
 
@@ -416,14 +419,18 @@ impl LocalTurboState {
     // - `npm install --install-strategy=shallow` (`npm install --global-style`)
     // - `npm install --install-strategy=nested` (`npm install --legacy-bundling`)
     // - berry (nodeLinker: "pnpm")
-    fn generate_nested_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+    fn generate_nested_path(
+        root_path: WithSource<&AbsoluteSystemPath>,
+    ) -> Option<AbsoluteSystemPathBuf> {
         Some(root_path.join_components(&["node_modules", "turbo", "node_modules"]))
     }
 
     // Linked strategy:
     // - `pnpm install`
     // - `npm install --install-strategy=linked`
-    fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+    fn generate_linked_path(
+        root_path: WithSource<&AbsoluteSystemPath>,
+    ) -> Option<AbsoluteSystemPathBuf> {
         // root_path/node_modules/turbo is a symlink. Canonicalize the symlink to what
         // it points to. We do this _before_ traversing up to the parent,
         // because on Windows, if you canonicalize a path that ends with `/..`
@@ -438,7 +445,7 @@ impl LocalTurboState {
     }
 
     // The unplugged directory doesn't have a fixed path.
-    fn get_unplugged_base_path(root_path: &AbsoluteSystemPath) -> Utf8PathBuf {
+    fn get_unplugged_base_path(root_path: WithSource<&AbsoluteSystemPath>) -> Utf8PathBuf {
         let yarn_rc_filename =
             env::var("YARN_RC_FILENAME").unwrap_or_else(|_| String::from(".yarnrc.yml"));
         let yarn_rc_filepath = root_path.as_path().join(yarn_rc_filename);
@@ -451,9 +458,11 @@ impl LocalTurboState {
 
     // Unplugged strategy:
     // - berry 2.1+
-    fn generate_unplugged_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+    fn generate_unplugged_path(
+        root_path: WithSource<&AbsoluteSystemPath>,
+    ) -> Option<AbsoluteSystemPathBuf> {
         let platform_package_name = TurboState::platform_package_name();
-        let unplugged_base_path = Self::get_unplugged_base_path(root_path);
+        let unplugged_base_path = Self::get_unplugged_base_path(root_path.clone());
 
         unplugged_base_path
             .read_dir_utf8()
@@ -469,6 +478,7 @@ impl LocalTurboState {
                                 unplugged_base_path.join(file_name).join("node_modules"),
                             )
                             .ok()
+                            .map(|path| path.with_provenance(root_path.clone().provenance()))
                         } else {
                             None
                         }
@@ -485,7 +495,7 @@ impl LocalTurboState {
     //
     // In spite of that, the only known unsupported local invocation is Yarn/Berry <
     // 2.1 PnP
-    pub fn infer(root_path: &AbsoluteSystemPath) -> Option<Self> {
+    pub fn infer(root_path: WithSource<&AbsoluteSystemPath>) -> Option<Self> {
         let platform_package_name = TurboState::platform_package_name();
         let binary_name = TurboState::binary_name();
 
@@ -505,7 +515,7 @@ impl LocalTurboState {
         // search.
         for root in search_functions
             .iter()
-            .filter_map(|search_function| search_function(root_path))
+            .filter_map(|search_function| search_function(root_path.clone()))
         {
             // Needs borrow because of the loop.
             #[allow(clippy::needless_borrow)]
@@ -562,7 +572,7 @@ fn run_correct_turbo(
     subscriber: &TurboSubscriber,
     ui: UI,
 ) -> Result<Payload, Error> {
-    if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
+    if let Some(turbo_state) = LocalTurboState::infer(repo_state.root.as_sourced_path()) {
         try_check_for_updates(&shim_args, &turbo_state.version);
 
         if turbo_state.local_is_self() {

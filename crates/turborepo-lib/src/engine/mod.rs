@@ -163,6 +163,7 @@ impl Engine<Built> {
                     // No need to check the root node if that's where we are.
                     return Ok(false);
                 };
+
                 let is_persistent = self
                     .task_definitions
                     .get(task_id)
@@ -181,18 +182,15 @@ impl Engine<Built> {
                         continue;
                     };
 
-                    let task_definition = self.task_definitions.get(dep_id).ok_or_else(|| {
-                        ValidateError::MissingTask {
-                            task_id: dep_id.to_string(),
-                            package_name: dep_id.package().to_string(),
-                        }
-                    })?;
+                    let task_definition = self
+                        .task_definitions
+                        .get(dep_id)
+                        .expect("task definitions should contain task");
 
                     let package_json = package_graph
                         .package_json(&WorkspaceName::from(dep_id.package()))
-                        .ok_or_else(|| ValidateError::MissingPackageJson {
-                            package: dep_id.package().to_string(),
-                        })?;
+                        .expect("package graph should have package json for task");
+
                     if task_definition.persistent
                         && package_json.scripts.contains_key(dep_id.task())
                     {
@@ -230,13 +228,7 @@ impl Engine<Built> {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum ValidateError {
-    #[error("Cannot find task definition for {task_id} in package {package_name}")]
-    MissingTask {
-        task_id: String,
-        package_name: String,
-    },
-    #[error("Cannot find package {package}")]
-    MissingPackageJson { package: String },
+    #[diagnostic(code(turbo::engine::validate::dependency_on_persistent_task))]
     #[error("\"{persistent_task}\" is a persistent task, \"{dependant}\" cannot depend on it")]
     DependencyOnPersistentTask {
         persistent_task: String,
@@ -246,6 +238,7 @@ pub enum ValidateError {
         "You have {persistent_count} persistent tasks but `turbo` is configured for concurrency \
          of {concurrency}. Set --concurrency to at least {}", persistent_count+1
     )]
+    #[diagnostic(code(turbo::engine::validate::persistent_tasks_exceed_concurrency))]
     PersistentTasksExceedConcurrency {
         persistent_count: u32,
         concurrency: u32,
