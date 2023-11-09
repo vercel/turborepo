@@ -586,10 +586,10 @@ impl ExecContext {
 
         match result {
             ExecOutcome::Success(outcome) => {
-                match outcome {
+                let _task_summary = match outcome {
                     SuccessOutcome::CacheHit => tracker.cached().await,
                     SuccessOutcome::Run => tracker.build_succeeded(0).await,
-                }
+                };
                 callback.send(Ok(())).ok();
             }
             ExecOutcome::Internal => {
@@ -598,7 +598,7 @@ impl ExecContext {
                 self.manager.stop().await;
             }
             ExecOutcome::Task { exit_code, message } => {
-                tracker.build_failed(exit_code, message).await;
+                let _task_summary = tracker.build_failed(exit_code, message).await;
                 callback
                     .send(match self.continue_on_error {
                         true => Ok(()),

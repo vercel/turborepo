@@ -368,7 +368,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
     // internal turbo error
     pub fn cancel(self) {}
 
-    pub async fn cached(self) {
+    pub async fn cached(self) -> TaskExecutionSummary {
         let Self {
             sender,
             started_at,
@@ -376,15 +376,18 @@ impl TaskTracker<chrono::DateTime<Local>> {
         } = self;
 
         let ended_at = Local::now();
-        let execution = Some(TaskExecutionSummary {
+        let execution = TaskExecutionSummary {
             start_time: started_at.timestamp_millis(),
             end_time: ended_at.timestamp_millis(),
             // Go synthesizes a zero exit code on cache hits
             exit_code: Some(0),
             error: None,
-        });
+        };
 
-        let state = TaskState { task_id, execution };
+        let state = TaskState {
+            task_id,
+            execution: Some(execution.clone()),
+        };
         sender
             .send(TrackerMessage {
                 event: Event::Cached,
@@ -392,9 +395,10 @@ impl TaskTracker<chrono::DateTime<Local>> {
             })
             .await
             .expect("summary state thread finished");
+        execution
     }
 
-    pub async fn build_succeeded(self, exit_code: i32) {
+    pub async fn build_succeeded(self, exit_code: i32) -> TaskExecutionSummary {
         let Self {
             sender,
             started_at,
@@ -402,14 +406,17 @@ impl TaskTracker<chrono::DateTime<Local>> {
         } = self;
 
         let ended_at = Local::now();
-        let execution = Some(TaskExecutionSummary {
+        let execution = TaskExecutionSummary {
             start_time: started_at.timestamp_millis(),
             end_time: ended_at.timestamp_millis(),
             exit_code: Some(exit_code),
             error: None,
-        });
+        };
 
-        let state = TaskState { task_id, execution };
+        let state = TaskState {
+            task_id,
+            execution: Some(execution.clone()),
+        };
         sender
             .send(TrackerMessage {
                 event: Event::Built,
@@ -417,9 +424,14 @@ impl TaskTracker<chrono::DateTime<Local>> {
             })
             .await
             .expect("summary state thread finished");
+        execution
     }
 
-    pub async fn build_failed(self, exit_code: Option<i32>, error: impl fmt::Display) {
+    pub async fn build_failed(
+        self,
+        exit_code: Option<i32>,
+        error: impl fmt::Display,
+    ) -> TaskExecutionSummary {
         let Self {
             sender,
             started_at,
@@ -427,14 +439,17 @@ impl TaskTracker<chrono::DateTime<Local>> {
         } = self;
 
         let ended_at = Local::now();
-        let execution = Some(TaskExecutionSummary {
+        let execution = TaskExecutionSummary {
             start_time: started_at.timestamp_millis(),
             end_time: ended_at.timestamp_millis(),
             exit_code,
             error: Some(error.to_string()),
-        });
+        };
 
-        let state = TaskState { task_id, execution };
+        let state = TaskState {
+            task_id,
+            execution: Some(execution.clone()),
+        };
         sender
             .send(TrackerMessage {
                 event: Event::BuildFailed,
@@ -442,6 +457,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
             })
             .await
             .expect("summary state thread finished");
+        execution
     }
 }
 
