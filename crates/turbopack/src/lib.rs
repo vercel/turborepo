@@ -27,7 +27,7 @@ use anyhow::Result;
 use css::{CssModuleAsset, GlobalCssAsset, ModuleCssAsset};
 use ecmascript::{
     typescript::resolve::TypescriptTypesAssetReference, EcmascriptModuleAsset,
-    EcmascriptModuleAssetType,
+    EcmascriptModuleAssetType, TreeShakingMode,
 };
 use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
 use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
@@ -153,7 +153,7 @@ async fn apply_module_type(
                 builder = builder.with_inner_assets(inner_assets);
             }
 
-            if options.split_into_parts {
+            if let Some(TreeShakingMode::SplitIntoParts) = options.tree_shaking {
                 if let Some(part) = part {
                     builder = builder.with_part(part);
                 }
