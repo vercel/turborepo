@@ -98,3 +98,7 @@ jobs:
       - name: Integration Tests
         shell: bash
         run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+
+      - name: Integration Tests2
+        shell: bash
+        run: cd turborepo-tests/integration && pnpm run test2 -F=turborepo-tests-integration
