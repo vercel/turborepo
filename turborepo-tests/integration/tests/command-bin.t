@@ -3,6 +3,7 @@ Setup
   $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd)
 
 Run info
+  $ ${TURBO} bin -vvv
   $ ${TURBO} bin -vvv > out.log
   $ grep --quiet -E "Global turbo version: .*" out.log
   $ grep --quiet -E "No local turbo binary found at" out.log
