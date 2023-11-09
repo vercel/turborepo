@@ -42,12 +42,12 @@ impl Opts<'_> {
         let mut cmd = format!("turbo run {}", tasks.join(" "));
         for pattern in &self.scope_opts.filter_patterns {
             cmd.push_str(" --filter=");
-            cmd.push_str(&pattern);
+            cmd.push_str(pattern);
         }
 
         for pattern in &self.scope_opts.legacy_filter.as_filter_pattern() {
             cmd.push_str(" --filter=");
-            cmd.push_str(&pattern);
+            cmd.push_str(pattern);
         }
 
         if self.run_opts.parallel {
