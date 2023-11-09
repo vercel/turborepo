@@ -390,162 +390,153 @@ mod test {
             expected.iter().map(|s| s.to_string()).collect::<Vec<_>>()
         )
     }
+    #[derive(Default)]
+    struct TestCaseOpts {
+        filter_patterns: Vec<String>,
+        tasks: Vec<String>,
+        only: bool,
+        pass_through_args: Vec<String>,
+        parallel: bool,
+        continue_on_error: bool,
+        dry_run: bool,
+        dry_run_json: bool,
+        legacy_filter: Option<LegacyFilter>,
+    }
 
-    #[test]
-    fn test_synthesize_command() {
-        #[derive(Default)]
-        struct TestCaseOpts {
-            filter_patterns: Vec<String>,
-            tasks: Vec<String>,
-            only: bool,
-            pass_through_args: Vec<String>,
-            parallel: bool,
-            continue_on_error: bool,
-            dry_run: bool,
-            dry_run_json: bool,
-            legacy_filter: Option<LegacyFilter>,
-        }
-
-        let tests = vec![
-            (
-                TestCaseOpts {
-                    filter_patterns: vec!["my-app".to_string()],
-                    tasks: vec!["build".to_string()],
-                    ..Default::default()
-                },
-                "turbo run build --filter=my-app",
-            ),
-            (
-                TestCaseOpts {
-                    tasks: vec!["build".to_string()],
-                    only: true,
-                    ..Default::default()
-                },
-                "turbo run build --only",
-            ),
-            (
-                TestCaseOpts {
-                    filter_patterns: vec!["my-app".to_string()],
-                    tasks: vec!["build".to_string()],
-                    pass_through_args: vec!["-v".to_string(), "--foo=bar".to_string()],
-                    ..Default::default()
-                },
-                "turbo run build --filter=my-app -- -v --foo=bar",
-            ),
-            (
-                TestCaseOpts {
-                    legacy_filter: Some(LegacyFilter {
-                        include_dependencies: false,
-                        skip_dependents: true,
-                        entrypoints: vec!["my-app".to_string()],
-                        since: None,
-                    }),
-                    tasks: vec!["build".to_string()],
-                    pass_through_args: vec!["-v".to_string(), "--foo=bar".to_string()],
-                    ..Default::default()
-                },
-                "turbo run build --filter=my-app -- -v --foo=bar",
-            ),
-            (
-                TestCaseOpts {
-                    legacy_filter: Some(LegacyFilter {
-                        include_dependencies: false,
-                        skip_dependents: true,
-                        entrypoints: vec!["my-app".to_string()],
-                        since: None,
-                    }),
-                    filter_patterns: vec!["other-app".to_string()],
-                    tasks: vec!["build".to_string()],
-                    pass_through_args: vec!["-v".to_string(), "--foo=bar".to_string()],
-                    ..Default::default()
-                },
-                "turbo run build --filter=other-app --filter=my-app -- -v --foo=bar",
-            ),
-            (
-                TestCaseOpts {
-                    legacy_filter: Some(LegacyFilter {
-                        include_dependencies: true,
-                        skip_dependents: false,
-                        entrypoints: vec!["my-app".to_string()],
-                        since: Some("some-ref".to_string()),
-                    }),
-                    filter_patterns: vec!["other-app".to_string()],
-                    tasks: vec!["build".to_string()],
-                    ..Default::default()
-                },
-                "turbo run build --filter=other-app --filter=...my-app...[some-ref]...",
-            ),
-            (
-                TestCaseOpts {
-                    filter_patterns: vec!["my-app".to_string()],
-                    tasks: vec!["build".to_string()],
-                    parallel: true,
-                    continue_on_error: true,
-                    ..Default::default()
-                },
-                "turbo run build --filter=my-app --parallel --continue",
-            ),
-            (
-                TestCaseOpts {
-                    filter_patterns: vec!["my-app".to_string()],
-                    tasks: vec!["build".to_string()],
-                    dry_run: true,
-                    ..Default::default()
-                },
-                "turbo run build --filter=my-app --dry",
-            ),
-            (
-                TestCaseOpts {
-                    filter_patterns: vec!["my-app".to_string()],
-                    tasks: vec!["build".to_string()],
-                    dry_run: true,
-                    dry_run_json: true,
-                    ..Default::default()
-                },
-                "turbo run build --filter=my-app --dry=json",
-            ),
-        ];
-
-        for (opts_input, expected) in tests {
-            let run_opts = RunOpts {
-                tasks: &opts_input.tasks,
-                concurrency: 10,
-                parallel: opts_input.parallel,
-                env_mode: crate::cli::EnvMode::Loose,
-                framework_inference: true,
-                profile: None,
-                continue_on_error: opts_input.continue_on_error,
-                pass_through_args: &opts_input.pass_through_args,
-                only: opts_input.only,
-                dry_run: opts_input.dry_run,
-                dry_run_json: opts_input.dry_run_json,
-                graph: None,
-                no_daemon: false,
-                single_package: false,
-                log_prefix: crate::opts::ResolvedLogPrefix::Task,
-                log_order: crate::opts::ResolvedLogOrder::Stream,
-                summarize: None,
-                experimental_space_id: None,
-                is_github_actions: false,
-            };
-            let cache_opts = CacheOpts::default();
-            let runcache_opts = RunCacheOpts::default();
-            let legacy_filter = opts_input.legacy_filter.unwrap_or_default();
-            let scope_opts = ScopeOpts {
-                pkg_inference_root: None,
-                legacy_filter,
-                global_deps: vec![],
-                filter_patterns: opts_input.filter_patterns,
-                ignore_patterns: vec![],
-            };
-            let opts = Opts {
-                run_opts,
-                cache_opts,
-                scope_opts,
-                runcache_opts,
-            };
-            let synthesized = opts.synthesize_command();
-            assert_eq!(synthesized, expected);
-        }
+    #[test_case(TestCaseOpts {
+        filter_patterns: vec!["my-app".to_string()],
+        tasks: vec!["build".to_string()],
+        ..Default::default()
+    },
+    "turbo run build --filter=my-app")]
+    #[test_case(
+        TestCaseOpts {
+            tasks: vec!["build".to_string()],
+            only: true,
+            ..Default::default()
+        },
+        "turbo run build --only"
+    )]
+    #[test_case(
+        TestCaseOpts {
+            filter_patterns: vec!["my-app".to_string()],
+            tasks: vec!["build".to_string()],
+            pass_through_args: vec!["-v".to_string(), "--foo=bar".to_string()],
+            ..Default::default()
+        },
+        "turbo run build --filter=my-app -- -v --foo=bar"
+    )]
+    #[test_case(
+        TestCaseOpts {
+            legacy_filter: Some(LegacyFilter {
+                include_dependencies: false,
+                skip_dependents: true,
+                entrypoints: vec!["my-app".to_string()],
+                since: None,
+            }),
+            tasks: vec!["build".to_string()],
+            pass_through_args: vec!["-v".to_string(), "--foo=bar".to_string()],
+            ..Default::default()
+        },
+        "turbo run build --filter=my-app -- -v --foo=bar"
+    )]
+    #[test_case(
+        TestCaseOpts {
+            legacy_filter: Some(LegacyFilter {
+                include_dependencies: false,
+                skip_dependents: true,
+                entrypoints: vec!["my-app".to_string()],
+                since: None,
+            }),
+            filter_patterns: vec!["other-app".to_string()],
+            tasks: vec!["build".to_string()],
+            pass_through_args: vec!["-v".to_string(), "--foo=bar".to_string()],
+            ..Default::default()
+        },
+        "turbo run build --filter=other-app --filter=my-app -- -v --foo=bar"
+    )]
+    #[test_case    (
+        TestCaseOpts {
+            legacy_filter: Some(LegacyFilter {
+                include_dependencies: true,
+                skip_dependents: false,
+                entrypoints: vec!["my-app".to_string()],
+                since: Some("some-ref".to_string()),
+            }),
+            filter_patterns: vec!["other-app".to_string()],
+            tasks: vec!["build".to_string()],
+            ..Default::default()
+        },
+        "turbo run build --filter=other-app --filter=...my-app...[some-ref]..."
+    )]
+    #[test_case    (
+        TestCaseOpts {
+            filter_patterns: vec!["my-app".to_string()],
+            tasks: vec!["build".to_string()],
+            parallel: true,
+            continue_on_error: true,
+            ..Default::default()
+        },
+        "turbo run build --filter=my-app --parallel --continue"
+    )]
+    #[test_case    (
+        TestCaseOpts {
+            filter_patterns: vec!["my-app".to_string()],
+            tasks: vec!["build".to_string()],
+            dry_run: true,
+            ..Default::default()
+        },
+        "turbo run build --filter=my-app --dry"
+    )]
+    #[test_case    (
+        TestCaseOpts {
+            filter_patterns: vec!["my-app".to_string()],
+            tasks: vec!["build".to_string()],
+            dry_run: true,
+            dry_run_json: true,
+            ..Default::default()
+        },
+        "turbo run build --filter=my-app --dry=json"
+    )]
+    fn test_synthesize_command(opts_input: TestCaseOpts, expected: &str) {
+        let run_opts = RunOpts {
+            tasks: &opts_input.tasks,
+            concurrency: 10,
+            parallel: opts_input.parallel,
+            env_mode: crate::cli::EnvMode::Loose,
+            framework_inference: true,
+            profile: None,
+            continue_on_error: opts_input.continue_on_error,
+            pass_through_args: &opts_input.pass_through_args,
+            only: opts_input.only,
+            dry_run: opts_input.dry_run,
+            dry_run_json: opts_input.dry_run_json,
+            graph: None,
+            no_daemon: false,
+            single_package: false,
+            log_prefix: crate::opts::ResolvedLogPrefix::Task,
+            log_order: crate::opts::ResolvedLogOrder::Stream,
+            summarize: None,
+            experimental_space_id: None,
+            is_github_actions: false,
+        };
+        let cache_opts = CacheOpts::default();
+        let runcache_opts = RunCacheOpts::default();
+        let legacy_filter = opts_input.legacy_filter.unwrap_or_default();
+        let scope_opts = ScopeOpts {
+            pkg_inference_root: None,
+            legacy_filter,
+            global_deps: vec![],
+            filter_patterns: opts_input.filter_patterns,
+            ignore_patterns: vec![],
+        };
+        let opts = Opts {
+            run_opts,
+            cache_opts,
+            scope_opts,
+            runcache_opts,
+        };
+        let synthesized = opts.synthesize_command();
+        assert_eq!(synthesized, expected);
     }
 }
