@@ -1,11 +1,14 @@
 mod turbo;
 mod turbo_config;
 
+use std::io;
+
 use thiserror::Error;
 pub use turbo::{
     validate_extends, validate_no_package_task_syntax, RawTurboJSON, SpacesJson, TurboJson,
 };
 pub use turbo_config::{ConfigurationOptions, TurborepoConfigBuilder};
+use turbopath::AbsoluteSystemPathBuf;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -21,16 +24,24 @@ pub enum Error {
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    Io(#[from] io::Error),
     #[error(transparent)]
     Camino(#[from] camino::FromPathBufError),
+    #[error("Encountered an IO error while attempting to read {config_path}: {error}")]
+    FailedToReadConfig {
+        config_path: AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
+    #[error("Encountered an IO error while attempting to set {config_path}: {error}")]
+    FailedToSetConfig {
+        config_path: AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
     #[error(
         "Package tasks (<package>#<task>) are not allowed in single-package repositories: found \
          {task_id}"
     )]
     PackageTaskInSinglePackageMode { task_id: String },
-    #[error(transparent)]
-    Anyhow(#[from] anyhow::Error),
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
     #[error(
@@ -50,4 +61,16 @@ pub enum Error {
     ExtendFromNonRoot,
     #[error("No \"extends\" key found")]
     NoExtends,
+    #[error("Failed to create APIClient: {0}")]
+    ApiClient(#[source] turborepo_api_client::Error),
+    #[error("{0} is not UTF8.")]
+    Encoding(String),
+    #[error("TURBO_SIGNATURE should be either 1 or 0.")]
+    InvalidSignature,
+    #[error("TURBO_REMOTE_CACHE_ENABLED should be either 1 or 0.")]
+    InvalidRemoteCacheEnabled,
+    #[error("TURBO_REMOTE_CACHE_TIMEOUT: error parsing timeout.")]
+    InvalidRemoteCacheTimeout(#[source] std::num::ParseIntError),
+    #[error("TURBO_PREFLIGHT should be either 1 or 0.")]
+    InvalidPreflight,
 }

@@ -344,7 +344,12 @@ pub enum Command {
         command: Option<Box<GenerateCommand>>,
     },
     #[clap(hide = true)]
-    Info { workspace: Option<String> },
+    Info {
+        workspace: Option<String>,
+        // We output turbo info as json. Currently just for internal testing
+        #[clap(long)]
+        json: bool,
+    },
     /// Link your local directory to a Vercel organization and enable remote
     /// caching.
     Link {
@@ -543,7 +548,7 @@ pub struct RunArgs {
     /// Execute all tasks in parallel.
     #[clap(long)]
     pub parallel: bool,
-    #[clap(long, hide = true, default_missing_value = "")]
+    #[clap(long, hide = true)]
     pub pkg_inference_root: Option<String>,
     /// File to write turbo's performance profile output into.
     /// You can load the file up in chrome://tracing to see
@@ -658,6 +663,8 @@ pub async fn run(
         // inference root, as long as the user hasn't overridden the cwd
         if cli_args.cwd.is_none() {
             if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
+                // TODO: this calculation can probably be wrapped into the path library
+                // and made a little more robust or clear
                 let invocation_path = Utf8Path::new(&invocation_dir);
 
                 // If repo state doesn't exist, we're either local turbo running at the root
@@ -667,8 +674,10 @@ pub async fn run(
                 let this_dir = AbsoluteSystemPathBuf::cwd()?;
                 let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
                 if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
-                    debug!("pkg_inference_root set to \"{}\"", relative_path);
-                    run_args.pkg_inference_root = Some(relative_path.to_string());
+                    if !relative_path.as_str().is_empty() {
+                        debug!("pkg_inference_root set to \"{}\"", relative_path);
+                        run_args.pkg_inference_root = Some(relative_path.to_string());
+                    }
                 }
             } else {
                 debug!("{} not set", INVOCATION_DIR_ENV_VAR);
@@ -736,10 +745,11 @@ pub async fn run(
             generate::run(tag, command, &args)?;
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Info { workspace } => {
+        Command::Info { workspace, json } => {
+            let json = *json;
             let workspace = workspace.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
-            info::run(&mut base, workspace.as_deref())?;
+            info::run(&mut base, workspace.as_deref(), json)?;
 
             Ok(Payload::Rust(Ok(0)))
         }

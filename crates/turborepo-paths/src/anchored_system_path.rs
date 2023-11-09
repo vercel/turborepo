@@ -41,6 +41,8 @@ impl AsRef<Path> for AnchoredSystemPath {
     }
 }
 
+const EMPTY: &str = "";
+
 impl AnchoredSystemPath {
     pub(crate) unsafe fn new_unchecked<'a>(path: impl AsRef<Path> + 'a) -> &'a Self {
         let path = path.as_ref();
@@ -55,6 +57,10 @@ impl AnchoredSystemPath {
         }
 
         Ok(unsafe { &*(path as *const Path as *const Self) })
+    }
+
+    pub fn empty() -> &'static Self {
+        unsafe { Self::new_unchecked(EMPTY) }
     }
 
     pub fn as_str(&self) -> &str {

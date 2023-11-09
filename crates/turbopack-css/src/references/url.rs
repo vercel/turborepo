@@ -1,13 +1,16 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use swc_core::{
     common::DUMMY_SP,
     css::ast::{Str, UrlValue},
 };
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{debug::ValueDebug, Value, ValueToString, Vc};
 use turbopack_core::{
-    chunk::ChunkingContext,
+    chunk::{
+        ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,
+        ChunkingTypeOption,
+    },
     ident::AssetIdent,
-    issue::{IssueSeverity, IssueSource},
+    issue::{IssueSeverity, LazyIssueSource},
     output::OutputAsset,
     reference::ModuleReference,
     reference_type::UrlReferenceSubType,
@@ -18,7 +21,7 @@ use turbopack_ecmascript::resolve::url_resolve;
 use crate::{
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
-    embed::{CssEmbed, CssEmbeddable},
+    embed::CssEmbed,
     references::AstPath,
 };
 
@@ -34,7 +37,7 @@ pub struct UrlAssetReference {
     pub origin: Vc<Box<dyn ResolveOrigin>>,
     pub request: Vc<Request>,
     pub path: Vc<AstPath>,
-    pub issue_source: Vc<IssueSource>,
+    pub issue_source: Vc<LazyIssueSource>,
 }
 
 #[turbo_tasks::value_impl]
@@ -44,7 +47,7 @@ impl UrlAssetReference {
         origin: Vc<Box<dyn ResolveOrigin>>,
         request: Vc<Request>,
         path: Vc<AstPath>,
-        issue_source: Vc<IssueSource>,
+        issue_source: Vc<LazyIssueSource>,
     ) -> Vc<Self> {
         Self::cell(UrlAssetReference {
             origin,
@@ -59,15 +62,22 @@ impl UrlAssetReference {
         self: Vc<Self>,
         chunking_context: Vc<Box<dyn ChunkingContext>>,
     ) -> Result<Vc<ReferencedAsset>> {
-        for &module in self.resolve_reference().primary_modules().await?.iter() {
-            if let Some(embeddable) =
-                Vc::try_resolve_sidecast::<Box<dyn CssEmbeddable>>(module).await?
+        if let Some(module) = *self.resolve_reference().first_module().await? {
+            if let Some(chunkable) =
+                Vc::try_resolve_downcast::<Box<dyn ChunkableModule>>(module).await?
             {
-                return Ok(ReferencedAsset::Some(
-                    embeddable.as_css_embed(chunking_context).embeddable_asset(),
-                )
-                .into());
+                let chunk_item = chunkable.as_chunk_item(chunking_context);
+                if let Some(embeddable) =
+                    Vc::try_resolve_downcast::<Box<dyn CssEmbed>>(chunk_item).await?
+                {
+                    return Ok(ReferencedAsset::Some(embeddable.embedded_asset()).into());
+                }
             }
+            bail!(
+                "A module referenced by a url() reference must be chunkable and the chunk item \
+                 must be css embeddable\nreferenced module: {:?}",
+                module.dbg_depth(1).await?
+            )
         }
         Ok(ReferencedAsset::cell(ReferencedAsset::None))
     }
@@ -84,6 +94,15 @@ impl ModuleReference for UrlAssetReference {
             self.issue_source,
             IssueSeverity::Error.cell(),
         )
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ChunkableModuleReference for UrlAssetReference {
+    #[turbo_tasks::function]
+    fn chunking_type(self: Vc<Self>) -> Vc<ChunkingTypeOption> {
+        // Since this chunk item is embedded, we don't want to put it in the chunk group
+        Vc::cell(Some(ChunkingType::Passthrough))
     }
 }
 
@@ -116,8 +135,6 @@ impl CodeGenerateable for UrlAssetReference {
         let mut visitors = Vec::new();
 
         if let ReferencedAsset::Some(asset) = &*self.get_referenced_asset(chunking_context).await? {
-            // TODO(WEB-662) This is not the correct way to get the path of the asset.
-            // `asset` is on module-level, but we need the output-level asset instead.
             let path = asset.ident().path().await?;
             let relative_path = context_path
                 .get_relative_path_to(&path)

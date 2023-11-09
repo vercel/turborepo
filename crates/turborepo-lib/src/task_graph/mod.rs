@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
-pub use visitor::{Error, Visitor};
+pub use visitor::{Error as VisitorError, Visitor};
 
 use crate::{
     cli::OutputLogsMode,
@@ -325,22 +325,21 @@ mod test {
     #[test]
     fn test_escape_log_file() {
         let build_log = TaskDefinition::workspace_relative_log_file("build");
-        let build_expected = AnchoredSystemPathBuf::from_raw(
-            &[".turbo", "turbo-build.log"].join(MAIN_SEPARATOR_STR),
-        )
-        .unwrap();
+        let build_expected =
+            AnchoredSystemPathBuf::from_raw([".turbo", "turbo-build.log"].join(MAIN_SEPARATOR_STR))
+                .unwrap();
         assert_eq!(build_log, build_expected);
 
         let build_log = TaskDefinition::workspace_relative_log_file("build:prod");
         let build_expected = AnchoredSystemPathBuf::from_raw(
-            &[".turbo", "turbo-build$colon$prod.log"].join(MAIN_SEPARATOR_STR),
+            [".turbo", "turbo-build$colon$prod.log"].join(MAIN_SEPARATOR_STR),
         )
         .unwrap();
         assert_eq!(build_log, build_expected);
 
         let build_log = TaskDefinition::workspace_relative_log_file("build:prod:extra");
         let build_expected = AnchoredSystemPathBuf::from_raw(
-            &[".turbo", "turbo-build$colon$prod$colon$extra.log"].join(MAIN_SEPARATOR_STR),
+            [".turbo", "turbo-build$colon$prod$colon$extra.log"].join(MAIN_SEPARATOR_STR),
         )
         .unwrap();
         assert_eq!(build_log, build_expected);

@@ -18,19 +18,17 @@ mod engine;
 mod execution_state;
 mod framework;
 pub(crate) mod globwatcher;
-pub mod graph;
 mod hash;
 mod opts;
-mod package_graph;
 mod process;
 mod rewrite_json;
 mod run;
 mod shim;
+mod signal;
 mod task_graph;
 mod task_hash;
 mod tracing;
 
-use anyhow::Result;
 pub use child::spawn_child;
 
 use crate::commands::CommandBase;
@@ -40,7 +38,7 @@ pub use crate::{cli::Args, execution_state::ExecutionState};
 /// the Rust variant will be returned. If Go is needed then the execution state
 /// that should be passed to Go will be returned.
 pub enum Payload {
-    Rust(Result<i32>),
+    Rust(Result<i32, shim::Error>),
     Go(Box<CommandBase>),
 }
 

@@ -1,5 +1,3 @@
-use std::process;
-
 use human_panic::report::{Method, Report};
 use turborepo_lib::get_version;
 

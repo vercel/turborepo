@@ -2,6 +2,7 @@
 /// <reference path="../shared-node/node-utils.ts" />
 
 declare var RUNTIME_PUBLIC_PATH: string;
+declare var OUTPUT_ROOT: string;
 
 enum SourceType {
   /**
@@ -17,18 +18,20 @@ enum SourceType {
 
 type SourceInfo =
   | {
-      type: SourceType.Runtime;
-      chunkPath: ChunkPath;
-    }
+    type: SourceType.Runtime;
+    chunkPath: ChunkPath;
+  }
   | {
-      type: SourceType.Parent;
-      parentId: ModuleId;
-    };
+    type: SourceType.Parent;
+    parentId: ModuleId;
+  };
 
 type ExternalRequire = (id: ModuleId) => Exports | EsmNamespaceObject;
 type ExternalImport = (id: ModuleId) => Promise<Exports | EsmNamespaceObject>;
 
 interface TurbopackNodeBuildContext extends TurbopackBaseContext {
+  p: ResolveAbsolutePath
+  U: RelativeURL,
   x: ExternalRequire;
   y: ExternalImport;
 }
@@ -40,10 +43,53 @@ type ModuleFactory = (
 
 const path = require("path");
 const relativePathToRuntimeRoot = path.relative(RUNTIME_PUBLIC_PATH, ".");
+// Compute the relative path to the `distDir`.
+const relativePathToDistRoot = path.relative(path.join(OUTPUT_ROOT, RUNTIME_PUBLIC_PATH), ".");
 const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
+// Compute the absolute path to the root, by stripping distDir from the absolute path to this file.
+const ABSOLUTE_ROOT = path.resolve(__filename, relativePathToDistRoot);
 
 const moduleFactories: ModuleFactories = Object.create(null);
 const moduleCache: ModuleCache = Object.create(null);
+
+/**
+ * Returns an absolute path to the given module path.
+ * Module path should be relative, either path to a file or a directory.
+ *
+ * This fn allows to calculate an absolute path for some global static values, such as
+ * `__dirname` or `import.meta.url` that Turbopack will not embeds in compile time.
+ * See ImportMetaBinding::code_generation for the usage.
+ */
+function resolveAbsolutePath(modulePath?: string): string {
+  if (modulePath) {
+    // Module path can contain common relative path to the root, recalaute to avoid duplicated joined path.
+    const relativePathToRoot = path.relative(ABSOLUTE_ROOT, modulePath);
+    return path.join(ABSOLUTE_ROOT, relativePathToRoot);
+  }
+  return ABSOLUTE_ROOT;
+}
+
+/**
+ * A pseudo, `fake` URL object to resolve to the its relative path.
+ * When urlrewritebehavior is set to relative, calls to the `new URL()` will construct url without base using this
+ * runtime function to generate context-agnostic urls between different rendering context, i.e ssr / client to avoid
+ * hydration mismatch.
+ *
+ * This is largely based on the webpack's existing implementation at
+ * https://github.com/webpack/webpack/blob/87660921808566ef3b8796f8df61bd79fc026108/lib/runtime/RelativeUrlRuntimeModule.js
+ */
+var relativeURL = function(this: any, inputUrl: string) {
+  const realUrl = new URL(inputUrl, "x:/");
+  const values: Record<string, any> = {};
+  for (var key in realUrl) values[key] = (realUrl as any)[key];
+  values.href = inputUrl;
+  values.pathname = inputUrl.replace(/[?#].*/, "");
+  values.origin = values.protocol = "";
+  values.toString = values.toJSON = (..._args: Array<any>) => inputUrl;
+  for (var key in values) Object.defineProperty(this, key, { enumerable: true, configurable: true, value: values[key] });
+}
+
+relativeURL.prototype = URL.prototype;
 
 function loadChunk(chunkData: ChunkData): void {
   if (typeof chunkData === "string") {
@@ -161,6 +207,8 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
       w: loadWebAssembly,
       u: loadWebAssemblyModule,
       g: globalThis,
+      p: resolveAbsolutePath,
+      U: relativeURL,
       __dirname: module.id.replace(/(^|\/)[\/]+$/, ""),
     });
   } catch (error) {

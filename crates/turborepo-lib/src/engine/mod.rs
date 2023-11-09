@@ -8,15 +8,12 @@ use std::{
     fmt,
 };
 
-pub use builder::EngineBuilder;
+pub use builder::{EngineBuilder, Error as BuilderError};
 pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
 use petgraph::Graph;
+use turborepo_repository::package_graph::{PackageGraph, WorkspaceName};
 
-use crate::{
-    package_graph::{PackageGraph, WorkspaceName},
-    run::task_id::TaskId,
-    task_graph::TaskDefinition,
-};
+use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TaskNode {

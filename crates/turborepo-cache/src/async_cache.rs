@@ -6,9 +6,10 @@ use tokio::{
     task::JoinHandle,
 };
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
-use crate::{multiplexer::CacheMultiplexer, CacheError, CacheOpts, CacheResponse};
+use crate::{multiplexer::CacheMultiplexer, CacheError, CacheHitMetadata, CacheOpts};
 
 pub struct AsyncCache {
     real_cache: Arc<CacheMultiplexer>,
@@ -33,10 +34,15 @@ impl AsyncCache {
         repo_root: &AbsoluteSystemPath,
         api_client: APIClient,
         api_auth: Option<APIAuth>,
+        analytics_recorder: Option<AnalyticsSender>,
     ) -> Result<AsyncCache, CacheError> {
         let max_workers = opts.workers.try_into().expect("usize is smaller than u32");
         let real_cache = Arc::new(CacheMultiplexer::new(
-            opts, repo_root, api_client, api_auth,
+            opts,
+            repo_root,
+            api_client,
+            api_auth,
+            analytics_recorder,
         )?);
         let (writer_sender, mut write_consumer) = mpsc::channel(1);
 
@@ -111,16 +117,16 @@ impl AsyncCache {
         }
     }
 
+    pub async fn exists(&mut self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
+        self.real_cache.exists(key).await
+    }
+
     pub async fn fetch(
         &self,
         anchor: &AbsoluteSystemPath,
         key: &str,
-    ) -> Result<(CacheResponse, Vec<AnchoredSystemPathBuf>), CacheError> {
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
         self.real_cache.fetch(anchor, key).await
-    }
-
-    pub async fn exists(&mut self, key: &str) -> Result<CacheResponse, CacheError> {
-        self.real_cache.exists(key).await
     }
 
     // Used for testing to ensure that the workers resolve
@@ -155,7 +161,7 @@ mod tests {
 
     use crate::{
         test_cases::{get_test_cases, TestCase},
-        AsyncCache, CacheError, CacheOpts, CacheResponse, CacheSource, RemoteCacheOpts,
+        AsyncCache, CacheHitMetadata, CacheOpts, CacheSource, RemoteCacheOpts,
     };
 
     #[tokio::test]
@@ -198,12 +204,12 @@ mod tests {
             token: "my-token".to_string(),
             team_slug: None,
         });
-        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth)?;
+        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
 
-        assert_matches!(response, Err(CacheError::CacheMiss));
+        assert_matches!(response, Ok(None));
 
         // Add test case
         async_cache
@@ -238,10 +244,10 @@ mod tests {
         // Confirm that we fetch from remote cache and not local.
         assert_eq!(
             response,
-            CacheResponse {
+            Some(CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: test_case.duration
-            }
+            })
         );
 
         Ok(())
@@ -273,12 +279,12 @@ mod tests {
             token: "my-token".to_string(),
             team_slug: None,
         });
-        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth)?;
+        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
 
-        assert_matches!(response, Err(CacheError::CacheMiss));
+        assert_matches!(response, Ok(None));
 
         // Add test case
         async_cache
@@ -313,19 +319,19 @@ mod tests {
         // Confirm that we fetch from local cache first.
         assert_eq!(
             response,
-            CacheResponse {
+            Some(CacheHitMetadata {
                 source: CacheSource::Local,
                 time_saved: test_case.duration
-            }
+            })
         );
 
         // Remove fs cache file
         fs_cache_path.remove_file()?;
 
-        let response = async_cache.exists(&hash).await;
+        let response = async_cache.exists(&hash).await?;
 
         // Confirm that we get a cache miss
-        assert_matches!(response, Err(CacheError::CacheMiss));
+        assert!(response.is_none());
 
         Ok(())
     }
@@ -354,12 +360,12 @@ mod tests {
             token: "my-token".to_string(),
             team_slug: None,
         });
-        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth)?;
+        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
 
-        assert_matches!(response, Err(CacheError::CacheMiss));
+        assert_matches!(response, Ok(None));
 
         // Add test case
         async_cache
@@ -394,10 +400,10 @@ mod tests {
         // Confirm that we fetch from local cache first.
         assert_eq!(
             response,
-            CacheResponse {
+            Some(CacheHitMetadata {
                 source: CacheSource::Local,
                 time_saved: test_case.duration
-            }
+            })
         );
 
         // Remove fs cache file
@@ -408,10 +414,10 @@ mod tests {
         // Confirm that we still can fetch from remote cache
         assert_eq!(
             response,
-            CacheResponse {
+            Some(CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: test_case.duration
-            }
+            })
         );
 
         Ok(())

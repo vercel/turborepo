@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package_deps
+  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
 
   $ ${TURBO} run test --dry=json
   {
@@ -12,7 +12,8 @@ Setup
       "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
       "files": {
         "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-        "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0"
+        "package.json": "c38e07c8d8d5f851dec8cdbc3d103deed82bc960",
+        "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
       },
       "hashOfExternalDependencies": "",
       "globalDotEnv": null,
@@ -32,12 +33,13 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "cb6df6cef2cfd596",
+        "hash": "273cd179351c6ef3",
         "inputs": {
-          ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
+          ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-          "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0",
-          "turbo.json": "e1fe3e5402fe019ef3845cc63a736878a68934c7"
+          "package.json": "c38e07c8d8d5f851dec8cdbc3d103deed82bc960",
+          "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
+          "turbo.json": "bf9ddbce36808b6ea5a0ea2b7ceb400ee6c42c4c"
         },
         "hashOfExternalDependencies": "",
         "cache": {
@@ -46,10 +48,10 @@ Setup
           "status": "MISS",
           "timeSaved": 0
         },
-        "command": "echo 'building' > foo",
+        "command": "echo 'building' > foo.txt",
         "cliArguments": [],
         "outputs": [
-          "foo"
+          "foo.txt"
         ],
         "excludedOutputs": null,
         "logFile": ".turbo/turbo-build.log",
@@ -59,7 +61,7 @@ Setup
         ],
         "resolvedTaskDefinition": {
           "outputs": [
-            "foo"
+            "foo.txt"
           ],
           "cache": true,
           "dependsOn": [],
@@ -87,12 +89,13 @@ Setup
       {
         "taskId": "test",
         "task": "test",
-        "hash": "af35177522814c73",
+        "hash": "f21d7ac37c171ce7",
         "inputs": {
-          ".gitignore": "6f23ff6842b5526da43ab38f4a5bf3b0158eeb42",
+          ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-          "package.json": "bc24e5c5b8bd13d419e0742ae3e92a2bf61c53d0",
-          "turbo.json": "e1fe3e5402fe019ef3845cc63a736878a68934c7"
+          "package.json": "c38e07c8d8d5f851dec8cdbc3d103deed82bc960",
+          "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
+          "turbo.json": "bf9ddbce36808b6ea5a0ea2b7ceb400ee6c42c4c"
         },
         "hashOfExternalDependencies": "",
         "cache": {
@@ -101,7 +104,7 @@ Setup
           "status": "MISS",
           "timeSaved": 0
         },
-        "command": "[[ ( -f foo ) && $(cat foo) == 'building' ]]",
+        "command": "cat foo.txt",
         "cliArguments": [],
         "outputs": null,
         "excludedOutputs": null,

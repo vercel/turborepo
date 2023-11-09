@@ -3,7 +3,7 @@ use turborepo_auth::{
     login as auth_login, sso_login as auth_sso_login, DefaultLoginServer, DefaultSSOLoginServer,
 };
 
-use crate::{cli::Error, commands::CommandBase, rewrite_json::set_path};
+use crate::{cli::Error, commands::CommandBase, config, rewrite_json::set_path};
 
 pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Error> {
     let api_client: APIClient = base.api_client()?;
@@ -23,7 +23,7 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Err
     let global_config_path = base.global_config_path()?;
     let before = global_config_path
         .read_existing_to_string_or(Ok("{}"))
-        .map_err(|e| Error::FailedToReadConfig {
+        .map_err(|e| config::Error::FailedToReadConfig {
             config_path: global_config_path.clone(),
             error: e,
         })?;
@@ -32,14 +32,14 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Err
 
     global_config_path
         .ensure_dir()
-        .map_err(|e| Error::FailedToSetConfig {
+        .map_err(|e| config::Error::FailedToSetConfig {
             config_path: global_config_path.clone(),
             error: e,
         })?;
 
     global_config_path
         .create_with_contents(after)
-        .map_err(|e| Error::FailedToSetConfig {
+        .map_err(|e| config::Error::FailedToSetConfig {
             config_path: global_config_path.clone(),
             error: e,
         })?;
@@ -64,7 +64,7 @@ pub async fn login(base: &mut CommandBase) -> Result<(), Error> {
     let global_config_path = base.global_config_path()?;
     let before = global_config_path
         .read_existing_to_string_or(Ok("{}"))
-        .map_err(|e| Error::FailedToReadConfig {
+        .map_err(|e| config::Error::FailedToReadConfig {
             config_path: global_config_path.clone(),
             error: e,
         })?;
@@ -72,14 +72,14 @@ pub async fn login(base: &mut CommandBase) -> Result<(), Error> {
 
     global_config_path
         .ensure_dir()
-        .map_err(|e| Error::FailedToSetConfig {
+        .map_err(|e| config::Error::FailedToSetConfig {
             config_path: global_config_path.clone(),
             error: e,
         })?;
 
     global_config_path
         .create_with_contents(after)
-        .map_err(|e| Error::FailedToSetConfig {
+        .map_err(|e| config::Error::FailedToSetConfig {
             config_path: global_config_path.clone(),
             error: e,
         })?;

@@ -56,7 +56,7 @@ impl<'a> TryFrom<GlobalHashableInputs<'a>> for GlobalHashSummary<'a> {
                 |pass_through_env| -> Result<EnvironmentVariablePairs, Error> {
                     Ok(env_at_execution_start
                         .from_wildcards(pass_through_env)
-                        .map_err(Error::EnvironmentVars)?
+                        .map_err(Error::Env)?
                         .to_secret_hashable())
                 },
             )

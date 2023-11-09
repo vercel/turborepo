@@ -101,7 +101,7 @@ Check
   $ echo $TASK_SUMMARY | jq '.expandedOutputs'
   [
     ".turbo/turbo-build.log",
-    "foo"
+    "foo.txt"
   ]
   $ echo $TASK_SUMMARY | jq '.cache'
   {

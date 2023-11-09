@@ -75,6 +75,11 @@ directions even if you aren't planning to make a contribution.
 
 ## Common Pitfalls
 
+### Nested workspaces
+
+Turborepo does not support nested workspaces. Therefore, if you have a workspace that contains another workspace,
+you may see unexpected behavior. We recommend flattening your workspace structure to avoid this issue.
+
 ### The `.turbo` directory
 
 One of the [core concepts][2] behind Turbo is that when a declared input

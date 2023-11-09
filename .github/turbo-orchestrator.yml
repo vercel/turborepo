@@ -34,14 +34,14 @@ labeler:
     - label: "owned-by: turborepo"
       when:
         isAnyFileOwnedByMatch: '@vercel\/turbo-oss'
-    - label: "owned-by: web-tooling"
+    - label: "owned-by: turbopack"
       when:
-        isAnyFileOwnedByMatch: '@vercel\/web-tooling'
+        isAnyFileOwnedByMatch: '@vercel\/turbopack'
 
     # created-by
-    - label: "created-by: web-tooling"
+    - label: "created-by: turbopack"
       when:
-        isPRAuthorMatch: "^(alexkirsz|Brooooooklyn|ForsakenHarmony|jridgewell|kdy1|kwonoj|padmaia|sokra|wbinnssmith)$"
+        isPRAuthorMatch: "^(ForsakenHarmony|jridgewell|kdy1|kwonoj|padmaia|sokra|wbinnssmith)$"
     - label: "created-by: turborepo"
       when:
         isPRAuthorMatch: "^(gsoltis|nathanhammond|tknickman|mehulkar|chris-olszewski|NicholasLYang|arlyon|Zertsov)$"

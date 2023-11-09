@@ -61,7 +61,7 @@ impl From<Workspaces> for Vec<String> {
     }
 }
 
-#[derive(Debug, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum PackageManager {
     Berry,
@@ -219,7 +219,7 @@ impl Display for MissingWorkspaceError {
 impl From<&PackageManager> for MissingWorkspaceError {
     fn from(value: &PackageManager) -> Self {
         Self {
-            package_manager: value.clone(),
+            package_manager: *value,
         }
     }
 }
@@ -264,7 +264,7 @@ pub enum Error {
     #[error(transparent)]
     WalkError(#[from] globwalk::WalkError),
     #[error("invalid workspace glob {0}: {1}")]
-    Glob(String, Box<wax::BuildError>),
+    Glob(String, #[source] Box<wax::BuildError>),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
 }
@@ -273,6 +273,15 @@ static PACKAGE_MANAGER_PATTERN: Lazy<Regex> =
     lazy_regex!(r"(?P<manager>bun|npm|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(-.+)?)");
 
 impl PackageManager {
+    pub fn command(&self) -> &'static str {
+        match self {
+            PackageManager::Npm => "npm",
+            PackageManager::Pnpm | PackageManager::Pnpm6 => "pnpm",
+            PackageManager::Yarn | PackageManager::Berry => "yarn",
+            PackageManager::Bun => "bun",
+        }
+    }
+
     /// Returns the set of globs for the workspace.
     pub fn get_workspace_globs(
         &self,

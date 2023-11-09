@@ -14,6 +14,7 @@ mod task_factory;
 use std::{collections::HashSet, io, io::Write};
 
 use chrono::{DateTime, Local};
+pub use execution::TaskTracker;
 pub use global_hash::GlobalHashSummary;
 use itertools::Itertools;
 use serde::Serialize;
@@ -24,19 +25,17 @@ use tracing::log::warn;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_repository::package_graph::{PackageGraph, WorkspaceName};
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
 use self::{
-    execution::{TaskState, TaskTracker},
-    task::SinglePackageTaskSummary,
-    task_factory::TaskSummaryFactory,
+    execution::TaskState, task::SinglePackageTaskSummary, task_factory::TaskSummaryFactory,
 };
 use super::task_id::TaskId;
 use crate::{
     cli,
     engine::Engine,
     opts::RunOpts,
-    package_graph::{PackageGraph, WorkspaceName},
     run::summary::{
         execution::{ExecutionSummary, ExecutionTracker},
         scm::SCMState,
@@ -63,7 +62,7 @@ pub enum Error {
     #[error("failed to contact spaces client")]
     SpacesClientSend(#[from] tokio::sync::mpsc::error::SendError<SpaceRequest>),
     #[error("failed to parse environment variables")]
-    EnvironmentVars(regex::Error),
+    Env(#[source] turborepo_env::Error),
     #[error("failed to construct task summary: {0}")]
     TaskSummary(#[from] task_factory::Error),
 }
@@ -443,8 +442,8 @@ impl<'a> RunSummary<'a> {
 
         if self.monorepo {
             println!("\n{}", color!(ui, BOLD_CYAN, "Packages in Scope"));
-            let mut tab_writer = TabWriter::new(io::stdout());
-            writeln!(tab_writer, "Name\tPath")?;
+            let mut tab_writer = TabWriter::new(io::stdout()).minwidth(0).padding(1);
+            writeln!(tab_writer, "Name\tPath\t")?;
             for pkg in &self.packages {
                 if matches!(pkg, WorkspaceName::Root) {
                     continue;
@@ -455,13 +454,13 @@ impl<'a> RunSummary<'a> {
                     .package_path();
 
                 writeln!(tab_writer, "{}\t{}", pkg, dir)?;
-                tab_writer.flush()?;
             }
+            tab_writer.flush()?;
         }
 
         let file_count = self.global_hash_summary.files.len();
 
-        let mut tab_writer = TabWriter::new(io::stdout());
+        let mut tab_writer = TabWriter::new(io::stdout()).minwidth(0).padding(1);
         cprintln!(ui, BOLD_CYAN, "\nGlobal Hash Inputs");
         cwriteln!(tab_writer, ui, GREY, "  Global Files\t=\t{}", file_count)?;
         cwriteln!(
@@ -482,7 +481,7 @@ impl<'a> RunSummary<'a> {
             tab_writer,
             ui,
             GREY,
-            "  Global .env Files considered\t=\t{}",
+            "  Global .env Files Considered\t=\t{}",
             self.global_hash_summary
                 .global_dot_env
                 .unwrap_or_default()
@@ -519,6 +518,30 @@ impl<'a> RunSummary<'a> {
             self.global_hash_summary
                 .environment_variables
                 .inferred
+                .as_deref()
+                .unwrap_or_default()
+                .join(", ")
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Passed Through Env Vars\t=\t{}",
+            self.global_hash_summary
+                .environment_variables
+                .specified
+                .pass_through_env
+                .unwrap_or_default()
+                .join(", ")
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Passed Through Env Vars Values\t=\t{}",
+            self.global_hash_summary
+                .environment_variables
+                .pass_through
                 .as_deref()
                 .unwrap_or_default()
                 .join(", ")

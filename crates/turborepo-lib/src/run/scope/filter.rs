@@ -6,6 +6,7 @@ use std::{
 
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turborepo_repository::package_graph::{self, PackageGraph, WorkspaceName};
 use turborepo_scm::SCM;
 use wax::Pattern;
 
@@ -14,7 +15,6 @@ use super::{
     simple_glob::{Match, SimpleGlob},
     target_selector::{InvalidSelectorError, TargetSelector},
 };
-use crate::package_graph::{self, PackageGraph, WorkspaceName};
 
 pub struct PackageInference {
     package_name: Option<String>,
@@ -148,6 +148,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             // return all packages in the workspace
             self.pkg_graph
                 .workspaces()
+                .filter(|(name, _)| matches!(name, WorkspaceName::Other(_)))
                 .map(|(name, _)| name.to_owned())
                 .collect()
         } else {
@@ -568,16 +569,14 @@ mod test {
 
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
-    use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
+    use turborepo_repository::{
+        package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
+        package_json::PackageJson,
+        package_manager::PackageManager,
+    };
 
     use super::{FilterResolver, PackageInference, TargetSelector};
-    use crate::{
-        package_graph::{PackageGraph, WorkspaceName},
-        run::{
-            scope::change_detector::{ChangeDetectError, PackageChangeDetector},
-            task_id::ROOT_PKG_NAME,
-        },
-    };
+    use crate::run::scope::change_detector::{ChangeDetectError, PackageChangeDetector};
 
     fn get_name(name: &str) -> (Option<&str>, &str) {
         if let Some(idx) = name.rfind('/') {

@@ -66,7 +66,7 @@ impl EcmascriptChunkItemContent {
             },
             ..Default::default()
         }
-        .into())
+        .cell())
     }
 
     #[turbo_tasks::function]
@@ -82,6 +82,8 @@ impl EcmascriptChunkItemContent {
             "c: __turbopack_cache__",
             "l: __turbopack_load__",
             "j: __turbopack_dynamic__",
+            "p: __turbopack_resolve_absolute_path__",
+            "U: __turbopack_relative_url__",
             "g: global",
             // HACK
             "__dirname",

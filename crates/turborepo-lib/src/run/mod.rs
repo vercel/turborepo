@@ -1,10 +1,12 @@
 #![allow(dead_code)]
 
 mod cache;
+mod error;
 pub(crate) mod global_hash;
 mod scope;
 pub(crate) mod summary;
 pub mod task_id;
+
 use std::{
     collections::HashSet,
     io::{BufWriter, IsTerminal, Write},
@@ -12,34 +14,39 @@ use std::{
     time::SystemTime,
 };
 
-use anyhow::{anyhow, Context as ErrorContext, Result};
 pub use cache::{RunCache, TaskCache};
-use chrono::Local;
+use chrono::{DateTime, Local};
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tracing::{debug, info};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
+use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_repository::package_json::PackageJson;
+use turborepo_repository::{
+    package_graph::{PackageGraph, WorkspaceName},
+    package_json::PackageJson,
+};
 use turborepo_scm::SCM;
 use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY};
 
 use self::task_id::TaskName;
+pub use crate::run::error::Error;
 use crate::{
     cli::EnvMode,
     commands::CommandBase,
     config::TurboJson,
     daemon::DaemonConnector,
-    engine::EngineBuilder,
+    engine::{Engine, EngineBuilder},
     opts::{GraphOpts, Opts},
-    package_graph::{PackageGraph, WorkspaceName},
     process::ProcessManager,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker},
     shim::TurboState,
+    signal::SignalSubscriber,
     task_graph::Visitor,
-    task_hash::{PackageInputsHashes, TaskHashTrackerState},
+    task_hash::{get_external_deps_hash, PackageInputsHashes, TaskHashTrackerState},
 };
 
 #[derive(Debug)]
@@ -54,12 +61,30 @@ impl<'a> Run<'a> {
         Self { base, processes }
     }
 
+    fn connect_process_manager(&self, signal_subscriber: SignalSubscriber) {
+        let manager = self.processes.clone();
+        tokio::spawn(async move {
+            let _guard = signal_subscriber.listen().await;
+            manager.stop().await;
+        });
+    }
+
     fn targets(&self) -> &[String] {
         self.base.args().get_tasks()
     }
 
-    fn opts(&self) -> Result<Opts> {
-        self.base.args().try_into()
+    fn opts(&self) -> Result<Opts, Error> {
+        Ok(self.base.args().try_into()?)
+    }
+
+    fn initialize_analytics(
+        api_auth: Option<APIAuth>,
+        api_client: APIClient,
+    ) -> Option<(AnalyticsSender, AnalyticsHandle)> {
+        // If there's no API auth, we don't want to record analytics
+        let api_auth = api_auth?;
+
+        Some(start_analytics(api_auth, api_client))
     }
 
     fn print_run_prelude(&self, opts: &Opts<'_>, filtered_pkgs: &HashSet<WorkspaceName>) {
@@ -92,8 +117,8 @@ impl<'a> Run<'a> {
         }
     }
 
-    #[tracing::instrument(skip(self))]
-    pub async fn run(&mut self) -> Result<i32> {
+    #[tracing::instrument(skip(self, signal_subscriber))]
+    pub async fn run(&mut self, signal_subscriber: SignalSubscriber) -> Result<i32, Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
@@ -102,13 +127,37 @@ impl<'a> Run<'a> {
             TurboState::platform_name(),
         );
         let start_at = Local::now();
-        let package_json_path = self.base.repo_root.join_component("package.json");
-        let root_package_json =
-            PackageJson::load(&package_json_path).context("failed to read package.json")?;
-        let mut opts = self.opts()?;
+        self.connect_process_manager(signal_subscriber);
 
         let api_auth = self.base.api_auth()?;
         let api_client = self.base.api_client()?;
+        let (analytics_sender, analytics_handle) =
+            Self::initialize_analytics(api_auth.clone(), api_client.clone()).unzip();
+
+        let result = self
+            .run_with_analytics(start_at, api_auth, api_client, analytics_sender)
+            .await;
+
+        if let Some(analytics_handle) = analytics_handle {
+            analytics_handle.close_with_timeout().await;
+        }
+
+        result
+    }
+
+    // We split this into a separate function because we need
+    // to close the AnalyticsHandle regardless of whether the run succeeds or not
+    async fn run_with_analytics(
+        &mut self,
+        start_at: DateTime<Local>,
+        api_auth: Option<APIAuth>,
+        api_client: APIClient,
+        analytics_sender: Option<AnalyticsSender>,
+    ) -> Result<i32, Error> {
+        let package_json_path = self.base.repo_root.join_component("package.json");
+        let root_package_json = PackageJson::load(&package_json_path)?;
+        let mut opts = self.opts()?;
+
         let config = self.base.config()?;
 
         // Pulled from initAnalyticsClient in run.go
@@ -125,9 +174,10 @@ impl<'a> Run<'a> {
 
         let is_single_package = opts.run_opts.single_package;
 
-        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-            .with_single_package_mode(opts.run_opts.single_package)
-            .build()?;
+        let mut pkg_dep_graph =
+            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+                .with_single_package_mode(opts.run_opts.single_package)
+                .build()?;
 
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
@@ -169,9 +219,7 @@ impl<'a> Run<'a> {
             daemon = Some(client);
         }
 
-        pkg_dep_graph
-            .validate()
-            .context("Invalid package dependency graph")?;
+        pkg_dep_graph.validate()?;
 
         let scm = SCM::new(&self.base.repo_root);
 
@@ -208,61 +256,15 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
             api_client.clone(),
             api_auth.clone(),
+            analytics_sender,
         )?;
 
         info!("created cache");
 
-        let engine = EngineBuilder::new(
-            &self.base.repo_root,
-            &pkg_dep_graph,
-            opts.run_opts.single_package,
-        )
-        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
-        .with_turbo_jsons(Some(
-            Some((WorkspaceName::Root, root_turbo_json.clone()))
-                .into_iter()
-                .collect(),
-        ))
-        .with_tasks_only(opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.iter().cloned().collect())
-        .with_tasks(
-            opts.run_opts
-                .tasks
-                .iter()
-                .map(|task| TaskName::from(task.as_str()).into_owned()),
-        )
-        .build()?;
+        let mut engine =
+            self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
 
-        engine
-            .validate(&pkg_dep_graph, opts.run_opts.concurrency)
-            .map_err(|errors| {
-                anyhow!(
-                    "error preparing engine: Invalid persistent task configuration:\n{}",
-                    errors
-                        .into_iter()
-                        .map(|e| e.to_string())
-                        .sorted()
-                        .join("\n")
-                )
-            })?;
-
-        if let Some(graph_opts) = opts.run_opts.graph {
-            match graph_opts {
-                GraphOpts::File(graph_file) => {
-                    let graph_file =
-                        AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
-                    let file = graph_file.open()?;
-                    let _writer = BufWriter::new(file);
-                    todo!("Need to implement different format support");
-                }
-                GraphOpts::Stdout => {
-                    engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?
-                }
-            }
-            return Ok(0);
-        }
-
-        if !opts.run_opts.dry_run {
+        if !opts.run_opts.dry_run && opts.run_opts.graph.is_none() {
             self.print_run_prelude(&opts, &filtered_pkgs);
         }
 
@@ -273,7 +275,7 @@ impl<'a> Run<'a> {
         let is_monorepo = !opts.run_opts.single_package;
 
         let root_external_dependencies_hash =
-            is_monorepo.then(|| root_workspace.get_external_deps_hash());
+            is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
         let mut global_hash_inputs = get_global_hash_inputs(
             root_external_dependencies_hash.as_deref(),
@@ -322,6 +324,31 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
         )?;
 
+        if opts.run_opts.parallel {
+            pkg_dep_graph.remove_workspace_dependencies();
+            engine = self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
+        }
+
+        if let Some(graph_opts) = opts.run_opts.graph {
+            match graph_opts {
+                GraphOpts::File(graph_file) => {
+                    let graph_file =
+                        AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
+                    let file = graph_file
+                        .open()
+                        .map_err(|e| Error::OpenGraphFile(e, graph_file.clone()))?;
+                    let _writer = BufWriter::new(file);
+                    todo!("Need to implement different format support");
+                }
+                GraphOpts::Stdout => {
+                    engine
+                        .dot_graph(std::io::stdout(), opts.run_opts.single_package)
+                        .map_err(Error::GraphOutput)?;
+                }
+            }
+            return Ok(0);
+        }
+
         // remove dead code warnings
         let _proc_manager = ProcessManager::new();
 
@@ -330,7 +357,8 @@ impl<'a> Run<'a> {
 
         let global_env = {
             let mut env = env_at_execution_start
-                .from_wildcards(global_hash_inputs.pass_through_env.unwrap_or_default())?;
+                .from_wildcards(global_hash_inputs.pass_through_env.unwrap_or_default())
+                .map_err(Error::Env)?;
             if let Some(resolved_global) = &global_hash_inputs.resolved_env_vars {
                 env.union(&resolved_global.all);
             }
@@ -402,21 +430,21 @@ impl<'a> Run<'a> {
 
     #[tokio::main]
     #[tracing::instrument(skip(self))]
-    pub async fn get_hashes(&self) -> Result<(String, TaskHashTrackerState)> {
+    pub async fn get_hashes(&self) -> Result<(String, TaskHashTrackerState), Error> {
         let started_at = Local::now();
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
         let package_json_path = self.base.repo_root.join_component("package.json");
-        let root_package_json =
-            PackageJson::load(&package_json_path).context("failed to read package.json")?;
+        let root_package_json = PackageJson::load(&package_json_path)?;
 
         let opts = self.opts()?;
 
         let is_single_package = opts.run_opts.single_package;
 
-        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-            .with_single_package_mode(opts.run_opts.single_package)
-            .build()?;
+        let mut pkg_dep_graph =
+            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+                .with_single_package_mode(opts.run_opts.single_package)
+                .build()?;
 
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
@@ -427,7 +455,7 @@ impl<'a> Run<'a> {
 
         let is_monorepo = !opts.run_opts.single_package;
         let root_external_dependencies_hash =
-            is_monorepo.then(|| root_workspace.get_external_deps_hash());
+            is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
         let mut global_hash_inputs = get_global_hash_inputs(
             root_external_dependencies_hash.as_deref(),
@@ -470,7 +498,7 @@ impl<'a> Run<'a> {
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
         let api_auth = self.base.api_auth()?;
 
-        let engine = EngineBuilder::new(
+        let mut engine = EngineBuilder::new(
             &self.base.repo_root,
             &pkg_dep_graph,
             opts.run_opts.single_package,
@@ -506,6 +534,11 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
         )?;
 
+        if opts.run_opts.parallel {
+            pkg_dep_graph.remove_workspace_dependencies();
+            engine = self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
+        }
+
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
         let api_client = self.base.api_client()?;
@@ -515,6 +548,7 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
             api_client.clone(),
             api_auth.clone(),
+            None,
         )?;
 
         let color_selector = ColorSelector::default();
@@ -565,5 +599,50 @@ impl<'a> Run<'a> {
         let task_hash_tracker = visitor.into_task_hash_tracker();
 
         Ok((global_hash, task_hash_tracker))
+    }
+
+    fn build_engine(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        opts: &Opts,
+        root_turbo_json: &TurboJson,
+        filtered_pkgs: &HashSet<WorkspaceName>,
+    ) -> Result<Engine, Error> {
+        let engine = EngineBuilder::new(
+            &self.base.repo_root,
+            pkg_dep_graph,
+            opts.run_opts.single_package,
+        )
+        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
+        .with_turbo_jsons(Some(
+            Some((WorkspaceName::Root, root_turbo_json.clone()))
+                .into_iter()
+                .collect(),
+        ))
+        .with_tasks_only(opts.run_opts.only)
+        .with_workspaces(filtered_pkgs.clone().into_iter().collect())
+        .with_tasks(
+            opts.run_opts
+                .tasks
+                .iter()
+                .map(|task| TaskName::from(task.as_str()).into_owned()),
+        )
+        .build()?;
+
+        if !opts.run_opts.parallel {
+            engine
+                .validate(pkg_dep_graph, opts.run_opts.concurrency)
+                .map_err(|errors| {
+                    Error::EngineValidation(
+                        errors
+                            .into_iter()
+                            .map(|e| e.to_string())
+                            .sorted()
+                            .join("\n"),
+                    )
+                })?;
+        }
+
+        Ok(engine)
     }
 }
