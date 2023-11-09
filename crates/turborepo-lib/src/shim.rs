@@ -589,11 +589,7 @@ fn spawn_local_turbo(
         }
         #[cfg(windows)]
         {
-            let core_dumped = exit_status.core_dumped();
-            debug!(
-                "something went wrong when unwrapping exit_status.code on windows",
-                core_dumped
-            );
+            debug!("something went wrong when unwrapping exit_status.code on windows");
         }
         2
     });
