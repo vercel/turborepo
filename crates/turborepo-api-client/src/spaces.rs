@@ -1,10 +1,10 @@
 use chrono::{DateTime, Local};
-use reqwest::{Method, RequestBuilder};
+use reqwest::Method;
 use serde::Serialize;
 use turbopath::AnchoredSystemPath;
 use turborepo_vercel_api::SpaceRun;
 
-use crate::{retry, APIAuth, APIClient, Client, Error};
+use crate::{retry, APIAuth, APIClient, Error};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "lowercase")]
