@@ -4,10 +4,10 @@ use anyhow::{Context, Result};
 use indexmap::IndexMap;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use swc_atoms::JsWord;
 use swc_common::{
     errors::Handler, source_map::SourceMapGenConfig, BytePos, FileName, LineCol, SourceMap,
 };
-use swc_core::ecma::atoms::JsWord;
 use swc_css_ast::Stylesheet;
 use swc_css_modules::{CssClassName, TransformConfig};
 use swc_css_parser::{parse_file, parser::ParserConfig};
