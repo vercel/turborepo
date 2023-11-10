@@ -59,11 +59,10 @@ impl<'a> Opts<'a> {
             cmd.push_str(" --continue");
         }
 
-        if self.run_opts.dry_run {
-            if self.run_opts.dry_run_json {
-                cmd.push_str(" --dry=json");
-            } else {
-                cmd.push_str(" --dry");
+        if let Some(dry) = self.run_opts.dry_run {
+            match dry {
+                DryRunMode::Json => cmd.push_str(" --dry=json"),
+                DryRunMode::Text => cmd.push_str(" --dry"),
             }
         }
 
