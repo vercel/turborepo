@@ -41,7 +41,7 @@ swc_common = { workspace = true }
 swc_core = { workspace = true, features = ["ecma_quote"] }
 swc_ecma_ast = { workspace = true }
 swc_ecma_transforms_proposal = { workspace = true }
-swc_ecma_visit = { workspace = true }
+swc_ecma_visit = { workspace = true, features = ["path"] }
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio"] }
