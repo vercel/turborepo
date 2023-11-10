@@ -254,7 +254,7 @@ impl EcmascriptInputTransform {
                 // TODO(WEB-1213)
                 use_define_for_class_fields: _use_define_for_class_fields,
             } => {
-                use swc_core::ecma::transforms::proposal::decorators::{decorators, Config};
+                use swc_ecma_transforms_proposal::decorators::{decorators, Config};
                 let config = Config {
                     legacy: *is_legacy,
                     emit_metadata: *emit_decorators_metadata,

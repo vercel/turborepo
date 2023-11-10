@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use swc_core::common::{
+use swc_common::{
     errors::{DiagnosticBuilder, DiagnosticId, Emitter, Level},
     source_map::Pos,
     SourceMap,
