@@ -4,14 +4,10 @@ use anyhow::Result;
 use clap::Parser;
 use owo_colors::OwoColorize;
 use regex::{NoExpand, Regex};
-use swc_core::{
-    base::{config::IsModule, try_with_handler, Compiler, HandlerOpts},
-    common::{errors::ColorConfig, source_map::FileName, Globals, SourceMap, GLOBALS},
-    ecma::{
-        ast::EsVersion,
-        parser::{Syntax, TsConfig},
-    },
-};
+use swc::{config::IsModule, try_with_handler, Compiler, HandlerOpts};
+use swc_common::{errors::ColorConfig, source_map::FileName, Globals, SourceMap, GLOBALS};
+use swc_ecma_ast::EsVersion;
+use swc_ecma_parser::{Syntax, TsConfig};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
