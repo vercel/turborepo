@@ -11,6 +11,7 @@ use swc_ecma_preset_env::{
 use swc_ecma_transforms_base::{
     assumptions::Assumptions, feature::FeatureFlag, helpers::inject_helpers,
 };
+use swc_ecma_transforms_react::react;
 use swc_ecma_visit::{FoldWith, VisitMutWith};
 use turbo_tasks::{ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
@@ -157,7 +158,7 @@ impl EcmascriptInputTransform {
                     development: Some(*development),
                     import_source: import_source.await?.clone_value(),
                     refresh: if *refresh {
-                        Some(swc_core::ecma::transforms::react::RefreshOptions {
+                        Some(swc_ecma_transforms_react::RefreshOptions {
                             refresh_reg: "__turbopack_refresh__.register".to_string(),
                             refresh_sig: "__turbopack_refresh__.signature".to_string(),
                             ..Default::default()
@@ -238,7 +239,7 @@ impl EcmascriptInputTransform {
                 // TODO(WEB-1213)
                 use_define_for_class_fields: _use_define_for_class_fields,
             } => {
-                use swc_core::ecma::transforms::typescript::typescript;
+                use swc_ecma_transforms_typescript::typescript;
                 let config = Default::default();
                 program.visit_mut_with(&mut typescript(config, unresolved_mark));
             }

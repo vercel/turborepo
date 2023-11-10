@@ -287,7 +287,7 @@ lazy_static! {
 
 pub(crate) fn insert_hoisted_stmt(program: &mut Program, stmt: Stmt) {
     match program {
-        Program::Module(ast::Module { body, .. }) => {
+        Program::Module(swc_ecma_ast::Module { body, .. }) => {
             let pos = body.iter().position(|item| {
                 if let ModuleItem::Stmt(Stmt::Expr(ExprStmt {
                     expr: box Expr::Lit(Lit::Str(s)),
