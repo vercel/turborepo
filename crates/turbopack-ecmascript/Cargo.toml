@@ -36,27 +36,7 @@ turbopack-core = { workspace = true }
 turbopack-swc-utils = { workspace = true }
 url = { workspace = true }
 
-swc_core = { workspace = true, features = [
-  "ecma_ast",
-  "ecma_ast_serde",
-  "common",
-  "common_concurrent",
-  "common_sourcemap",
-  "ecma_codegen",
-  "ecma_parser",
-  "ecma_preset_env",
-  "ecma_transforms",
-  "ecma_transforms_module",
-  "ecma_transforms_react",
-  "ecma_transforms_typescript",
-  "ecma_transforms_proposal",
-  "ecma_quote",
-  "ecma_visit",
-  "ecma_visit_path",
-  "ecma_utils",
-  "testing",
-  "base",
-] }
+swc_core = { workspace = true, features = ["ecma_quote"] }
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio"] }

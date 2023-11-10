@@ -13,12 +13,5 @@ bench = false
 turbo-tasks = { workspace = true }
 turbopack-core = { workspace = true }
 
-swc_core = { workspace = true, features = [
-  "base",
-  "common",
-  "common_concurrent",
-  "common_sourcemap",
-] }
-
 [build-dependencies]
 turbo-tasks-build = { workspace = true }
