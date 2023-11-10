@@ -17,6 +17,12 @@ indoc = { workspace = true }
 once_cell = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
+swc_common.workspace = true
+swc_css_ast = "0.140.9"
+swc_css_compat = "0.27.14"
+swc_css_modules = "0.29.15"
+swc_css_prefixer = "0.153.16"
+swc_css_visit = { version = "0.139.9", features = ["path"] }
 turbo-tasks = { workspace = true }
 turbo-tasks-fs = { workspace = true }
 turbo-tasks-hash = { workspace = true }
