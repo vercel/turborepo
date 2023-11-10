@@ -59,11 +59,10 @@ impl<'a> Opts<'a> {
             cmd.push_str(" --continue");
         }
 
-        if self.run_opts.dry_run {
-            if self.run_opts.dry_run_json {
-                cmd.push_str(" --dry=json");
-            } else {
-                cmd.push_str(" --dry");
+        if let Some(dry) = self.run_opts.dry_run {
+            match dry {
+                DryRunMode::Json => cmd.push_str(" --dry=json"),
+                DryRunMode::Text => cmd.push_str(" --dry"),
             }
         }
 
@@ -362,7 +361,10 @@ mod test {
     use turborepo_cache::CacheOpts;
 
     use super::{LegacyFilter, RunOpts};
-    use crate::opts::{Opts, RunCacheOpts, ScopeOpts};
+    use crate::{
+        cli::DryRunMode,
+        opts::{Opts, RunCacheOpts, ScopeOpts},
+    };
 
     #[test_case(LegacyFilter {
             include_dependencies: true,
@@ -396,8 +398,7 @@ mod test {
         pass_through_args: Vec<String>,
         parallel: bool,
         continue_on_error: bool,
-        dry_run: bool,
-        dry_run_json: bool,
+        dry_run: Option<DryRunMode>,
         legacy_filter: Option<LegacyFilter>,
     }
 
@@ -481,7 +482,7 @@ mod test {
         TestCaseOpts {
             filter_patterns: vec!["my-app".to_string()],
             tasks: vec!["build".to_string()],
-            dry_run: true,
+            dry_run: Some(DryRunMode::Text),
             ..Default::default()
         },
         "turbo run build --filter=my-app --dry"
@@ -490,8 +491,7 @@ mod test {
         TestCaseOpts {
             filter_patterns: vec!["my-app".to_string()],
             tasks: vec!["build".to_string()],
-            dry_run: true,
-            dry_run_json: true,
+            dry_run: Some(DryRunMode::Json),
             ..Default::default()
         },
         "turbo run build --filter=my-app --dry=json"
@@ -508,7 +508,6 @@ mod test {
             pass_through_args: &opts_input.pass_through_args,
             only: opts_input.only,
             dry_run: opts_input.dry_run,
-            dry_run_json: opts_input.dry_run_json,
             graph: None,
             no_daemon: false,
             single_package: false,
