@@ -76,16 +76,21 @@ lto = "off"
 [workspace.dependencies]
 async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
-browserslist-rs = { version = "0.12.2" }
+browserslist-rs = { version = "0.13.0" }
 
 mdxjs = "0.1.19"
 modularize_imports = { version = "0.55.0" }
 styled_components = { version = "0.82.0" }
 styled_jsx = { version = "0.59.0" }
-swc_core = { version = "0.86.40"}
+swc_core = { version = "0.86.50" }
+swc_ecma_preset_env = { version = "0.203.36" }
 swc_emotion = { version = "0.58.0" }
 swc_relay = { version = "0.30.0" }
-testing = { version = "0.35.7" }
+testing = { version = "0.35.10" }
+swc = "0.269.44"
+swc_common = "0.33.8"
+swc_ecma_ast = "0.110.9"
+swc_ecma_parser = "0.141.18"
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
