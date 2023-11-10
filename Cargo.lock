@@ -9901,7 +9901,12 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_qs",
+ "swc_atoms",
+ "swc_common",
  "swc_core",
+ "swc_ecma_ast",
+ "swc_ecma_transforms_proposal",
+ "swc_ecma_visit",
  "tokio",
  "tracing",
  "turbo-tasks",
@@ -10077,6 +10082,7 @@ dependencies = [
 name = "turbopack-swc-utils"
 version = "0.1.0"
 dependencies = [
+ "swc_common",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbopack-core",
