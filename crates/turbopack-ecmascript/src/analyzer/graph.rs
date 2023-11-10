@@ -4,14 +4,10 @@ use std::{
     mem::{replace, take},
 };
 
-use swc_core::{
-    common::{pass::AstNodePath, Mark, Span, Spanned, SyntaxContext},
-    ecma::{
-        ast::*,
-        atoms::js_word,
-        visit::{fields::*, VisitAstPath, VisitWithPath, *},
-    },
-};
+use swc_atoms::js_word;
+use swc_common::{pass::AstNodePath, Mark, Span, Spanned, SyntaxContext};
+use swc_ecma_ast::*;
+use swc_ecma_visit::{fields::*, VisitAstPath, VisitWithPath, *};
 use turbo_tasks::Vc;
 use turbopack_core::source::Source;
 

@@ -3247,14 +3247,11 @@ pub mod test_utils {
 mod tests {
     use std::{mem::take, path::PathBuf, time::Instant};
 
-    use swc_core::{
-        common::Mark,
-        ecma::{
-            ast::EsVersion, parser::parse_file_as_program, transforms::base::resolver,
-            visit::VisitMutWith,
-        },
-        testing::{fixture, run_test, NormalizedOutput},
-    };
+    use swc_common::Mark;
+    use swc_core::ecma::{transforms::base::resolver, visit::VisitMutWith};
+    use swc_ecma_ast::EsVersion;
+    use swc_ecma_parser::parse_file_as_program;
+    use testing::{fixture, run_test, NormalizedOutput};
     use turbo_tasks::{util::FormatDuration, Value};
     use turbopack_core::{
         compile_time_info::CompileTimeInfo,

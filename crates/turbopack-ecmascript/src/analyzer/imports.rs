@@ -2,14 +2,10 @@ use std::{collections::BTreeMap, fmt::Display, mem::take};
 
 use indexmap::{IndexMap, IndexSet};
 use once_cell::sync::Lazy;
-use swc_core::{
-    common::{source_map::Pos, Span},
-    ecma::{
-        ast::*,
-        atoms::{js_word, JsWord},
-        visit::{Visit, VisitWith},
-    },
-};
+use swc_atoms::{js_word, JsWord};
+use swc_common::{source_map::Pos, Span};
+use swc_ecma_ast::*;
+use swc_ecma_visit::{Visit, VisitWith};
 use turbo_tasks::Vc;
 use turbopack_core::{issue::LazyIssueSource, source::Source};
 
