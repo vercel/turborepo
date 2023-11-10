@@ -466,7 +466,7 @@ impl EcmascriptChunkItem for RequireContextChunkItem {
             obj: Expr = Expr::Object(context_map),
         );
 
-        let module = swc_ecma_at::Module {
+        let module = swc_ecma_ast::Module {
             span: DUMMY_SP,
             body: vec![ModuleItem::Stmt(Stmt::Expr(ExprStmt {
                 span: DUMMY_SP,
