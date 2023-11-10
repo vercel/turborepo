@@ -70,7 +70,7 @@ pub struct CreateSpaceRunPayload {
 impl CreateSpaceRunPayload {
     pub fn new(
         start_time: DateTime<Local>,
-        synthesized_command: &str,
+        synthesized_command: String,
         package_inference_root: Option<&AnchoredSystemPath>,
         git_branch: Option<String>,
         git_sha: Option<String>,
@@ -84,7 +84,7 @@ impl CreateSpaceRunPayload {
         CreateSpaceRunPayload {
             start_time,
             status: RunStatus::Running,
-            command: synthesized_command.to_string(),
+            command: synthesized_command,
             package_inference_root: package_inference_root
                 .map(|p| p.to_string())
                 .unwrap_or_default(),
