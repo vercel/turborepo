@@ -23,6 +23,16 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_qs = { workspace = true }
 sourcemap = { workspace = true }
+swc.workspace = true
+swc_common.workspace = true
+swc_ecma_ast.workspace = true
+swc_ecma_codegen.workspace = true
+swc_ecma_minifier = { version = "0.189.39", features = ["concurrent"] }
+swc_ecma_parser.workspace = true
+swc_ecma_transforms_base = { workspace = true, features = [
+  "concurrent-renamer",
+] }
+swc_ecma_visit.workspace = true
 
 turbo-tasks = { workspace = true }
 turbo-tasks-fs = { workspace = true }
