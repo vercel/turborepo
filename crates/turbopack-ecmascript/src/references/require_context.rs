@@ -2,17 +2,13 @@ use std::{collections::VecDeque, sync::Arc};
 
 use anyhow::{bail, Context, Result};
 use indexmap::IndexMap;
-use swc_core::{
-    common::DUMMY_SP,
-    ecma::{
-        ast::{
-            Expr, ExprStmt, KeyValueProp, Lit, ModuleItem, ObjectLit, Prop, PropName, PropOrSpread,
-            Stmt, {self},
-        },
-        codegen::{text_writer::JsWriter, Emitter},
-    },
-    quote, quote_expr,
+use swc_common::DUMMY_SP;
+use swc_core::{quote, quote_expr};
+use swc_ecma_ast::{
+    Expr, ExprStmt, KeyValueProp, Lit, ModuleItem, ObjectLit, Prop, PropName, PropOrSpread, Stmt,
+    {self},
 };
+use swc_ecma_codegen::{text_writer::JsWriter, Emitter};
 use turbo_tasks::{primitives::Regex, Value, ValueToString, Vc};
 use turbo_tasks_fs::{DirectoryContent, DirectoryEntry, FileSystemPath};
 use turbopack_core::{
@@ -479,10 +475,10 @@ impl EcmascriptChunkItem for RequireContextChunkItem {
             shebang: None,
         };
 
-        let source_map: Arc<swc_core::common::SourceMap> = Default::default();
+        let source_map: Arc<swc_common::SourceMap> = Default::default();
         let mut bytes: Vec<u8> = vec![];
         let mut emitter = Emitter {
-            cfg: swc_core::ecma::codegen::Config::default(),
+            cfg: swc_ecma_codegen::Config::default(),
             cm: source_map.clone(),
             comments: None,
             wr: JsWriter::new(source_map, "\n", &mut bytes, None),

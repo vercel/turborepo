@@ -1,5 +1,5 @@
 use anyhow::Result;
-use swc_core::ecma::ast::Lit;
+use swc_ecma_ast::Lit;
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},

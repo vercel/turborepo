@@ -1,15 +1,10 @@
-use swc_core::{
-    common::DUMMY_SP,
-    ecma::{
-        ast::{
-            Expr, ExprStmt, Ident, ImportDecl, ImportDefaultSpecifier, ImportSpecifier,
-            KeyValueProp, Lit, Module, ModuleDecl, ModuleItem, ObjectLit, Program, Prop, PropName,
-            PropOrSpread, Stmt, Str,
-        },
-        utils::private_ident,
-    },
-    quote,
+use swc_common::DUMMY_SP;
+use swc_core::quote;
+use swc_ecma_ast::{
+    Expr, ExprStmt, Ident, ImportDecl, ImportDefaultSpecifier, ImportSpecifier, KeyValueProp, Lit,
+    Module, ModuleDecl, ModuleItem, ObjectLit, Program, Prop, PropName, PropOrSpread, Stmt, Str,
 };
+use swc_ecma_utils::private_ident;
 use turbopack_ecmascript::TURBOPACK_HELPER;
 
 pub fn create_proxy_module(transition_name: &str, target_import: &str) -> Program {

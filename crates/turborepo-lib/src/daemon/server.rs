@@ -416,7 +416,9 @@ impl NamedService for TurboGrpcService {
 #[cfg(test)]
 mod test {
     use std::{
-        assert_matches::{self, assert_matches},
+        assert_matches::{
+            assert_matches, {self},
+        },
         time::{Duration, Instant},
     };
 

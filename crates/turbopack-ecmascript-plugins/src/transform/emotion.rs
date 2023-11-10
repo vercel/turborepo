@@ -7,13 +7,9 @@ use std::{
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use swc_core::{
-    common::util::take::Take,
-    ecma::{
-        ast::{Module, Program},
-        visit::FoldWith,
-    },
-};
+use swc_common::util::take::Take;
+use swc_ecma_ast::{Module, Program};
+use swc_ecma_visit::FoldWith;
 use turbo_tasks::{trace::TraceRawVcs, ValueDefault, Vc};
 use turbopack_ecmascript::{CustomTransformer, TransformContext};
 

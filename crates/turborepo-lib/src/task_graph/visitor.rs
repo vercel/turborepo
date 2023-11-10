@@ -31,11 +31,15 @@ use crate::{
     process::{ChildExit, ProcessManager},
     run::{
         global_hash::GlobalHashableInputs,
-        summary::{self, GlobalHashSummary, RunTracker, TaskTracker},
+        summary::{
+            GlobalHashSummary, RunTracker, TaskTracker, {self},
+        },
         task_id::TaskId,
         RunCache, TaskCache,
     },
-    task_hash::{self, PackageInputsHashes, TaskHashTracker, TaskHashTrackerState, TaskHasher},
+    task_hash::{
+        PackageInputsHashes, TaskHashTracker, TaskHashTrackerState, TaskHasher, {self},
+    },
 };
 
 // This holds the whole world

@@ -1,9 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use swc_core::{
-    ecma::ast::{ModuleItem, Program},
-    quote,
-};
+use swc_core::quote;
+use swc_ecma_ast::{ModuleItem, Program};
 use turbo_tasks::Vc;
 use turbopack_core::issue::IssueExt;
 use turbopack_ecmascript::{CustomTransformer, TransformContext, UnsupportedServerActionIssue};

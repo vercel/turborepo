@@ -10,12 +10,16 @@ use std::{
 use itertools::Itertools as _;
 use regex::Regex;
 use thiserror::Error;
-use walkdir::{self, DirEntry, WalkDir};
+use walkdir::{
+    DirEntry, WalkDir, {self},
+};
 
 use crate::{
     capture::MatchedText,
     encode::CompileError,
-    token::{self, Token, TokenTree},
+    token::{
+        Token, TokenTree, {self},
+    },
     BuildError, CandidatePath, Compose, Glob, PositionExt as _,
 };
 

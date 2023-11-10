@@ -8,7 +8,9 @@ use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
 };
 use turborepo_repository::{
-    package_graph::{self, PackageGraph, WorkspaceName, WorkspaceNode},
+    package_graph::{
+        PackageGraph, WorkspaceName, WorkspaceNode, {self},
+    },
     package_json::PackageJson,
 };
 use turborepo_ui::BOLD;

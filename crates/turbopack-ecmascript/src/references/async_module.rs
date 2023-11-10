@@ -1,11 +1,9 @@
 use anyhow::Result;
 use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
-use swc_core::{
-    common::DUMMY_SP,
-    ecma::ast::{ArrayLit, ArrayPat, Expr, Ident, Pat, Program},
-    quote,
-};
+use swc_common::DUMMY_SP;
+use swc_core::quote;
+use swc_ecma_ast::{ArrayLit, ArrayPat, Expr, Ident, Pat, Program};
 use turbo_tasks::{trace::TraceRawVcs, TryFlatJoinIterExt, Vc};
 use turbopack_core::chunk::{AsyncModuleInfo, ChunkableModule};
 

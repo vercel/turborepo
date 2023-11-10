@@ -3,11 +3,15 @@ use std::os::unix::fs::symlink as symlink_file;
 #[cfg(not(windows))]
 use std::os::unix::fs::symlink as symlink_dir;
 #[cfg(windows)]
-use std::os::windows::fs::{symlink_dir, symlink_file};
+use std::os::windows::fs::symlink_dir;
+#[cfg(windows)]
+use std::os::windows::fs::symlink_file;
 use std::{
     fmt,
     fs::{File, Metadata, OpenOptions, Permissions},
-    io::{self, Write},
+    io::{
+        Write, {self},
+    },
     path::{Path, PathBuf},
 };
 

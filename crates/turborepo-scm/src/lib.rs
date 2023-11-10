@@ -4,7 +4,9 @@
 #![deny(clippy::all)]
 
 use std::{
-    backtrace::{self, Backtrace},
+    backtrace::{
+        Backtrace, {self},
+    },
     io::Read,
     process::{Child, Command},
 };

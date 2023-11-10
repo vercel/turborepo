@@ -1,12 +1,8 @@
 use std::borrow::Cow;
 
-use swc_core::{
-    common::pass::AstKindPath,
-    ecma::{
-        ast::*,
-        visit::{AstParentKind, VisitMut, VisitMutAstPath, VisitMutWith, VisitMutWithPath},
-    },
-};
+use swc_common::pass::AstKindPath;
+use swc_ecma_ast::*;
+use swc_ecma_visit::{AstParentKind, VisitMut, VisitMutAstPath, VisitMutWith, VisitMutWithPath};
 
 use crate::code_gen::VisitorFactory;
 
@@ -158,17 +154,13 @@ impl VisitMutAstPath for ApplyVisitors<'_, '_> {
 mod tests {
     use std::sync::Arc;
 
-    use swc_core::{
-        common::{errors::HANDLER, FileName, Mark, SourceFile, SourceMap},
-        ecma::{
-            ast::*,
-            codegen::{text_writer::JsWriter, Emitter},
-            parser::parse_file_as_module,
-            transforms::base::resolver,
-            visit::{fields::*, AstParentKind, VisitMut, VisitMutWith, VisitMutWithPath},
-        },
-        testing::run_test,
-    };
+    use swc_common::{errors::HANDLER, FileName, Mark, SourceFile, SourceMap};
+    use swc_ecma_ast::*;
+    use swc_ecma_codegen::{text_writer::JsWriter, Emitter};
+    use swc_ecma_parser::parse_file_as_module;
+    use swc_ecma_transforms_base::resolver;
+    use swc_ecma_visit::{fields::*, AstParentKind, VisitMut, VisitMutWith, VisitMutWithPath};
+    use testing::run_test;
 
     use super::{ApplyVisitors, VisitorFactory};
 
@@ -215,7 +207,7 @@ mod tests {
     fn to_js(m: &Module, cm: &Arc<SourceMap>) -> String {
         let mut bytes = Vec::new();
         let mut emitter = Emitter {
-            cfg: swc_core::ecma::codegen::Config::default().with_minify(true),
+            cfg: swc_ecma_codegen::Config::default().with_minify(true),
             cm: cm.clone(),
             comments: None,
             wr: JsWriter::new(cm.clone(), "\n", &mut bytes, None),

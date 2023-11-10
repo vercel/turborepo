@@ -16,7 +16,9 @@
 //! them when the manager is closed.
 
 use std::{
-    io::{self, Write},
+    io::{
+        Write, {self},
+    },
     sync::{Arc, Mutex},
     time::Duration,
 };

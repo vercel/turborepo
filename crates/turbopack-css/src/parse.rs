@@ -4,17 +4,13 @@ use anyhow::{Context, Result};
 use indexmap::IndexMap;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use swc_core::{
-    common::{
-        errors::Handler, source_map::SourceMapGenConfig, BytePos, FileName, LineCol, SourceMap,
-    },
-    css::{
-        ast::Stylesheet,
-        modules::{CssClassName, TransformConfig},
-        parser::{parse_file, parser::ParserConfig},
-    },
-    ecma::atoms::JsWord,
+use swc_common::{
+    errors::Handler, source_map::SourceMapGenConfig, BytePos, FileName, LineCol, SourceMap,
 };
+use swc_core::ecma::atoms::JsWord;
+use swc_css_ast::Stylesheet;
+use swc_css_modules::{CssClassName, TransformConfig};
+use swc_css_parser::{parse_file, parser::ParserConfig};
 use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
@@ -209,7 +205,7 @@ async fn parse_content(
     let (imports, exports) = match ty {
         CssModuleAssetType::Default => Default::default(),
         CssModuleAssetType::Module => {
-            let imports = swc_core::css::modules::imports::analyze_imports(&parsed_stylesheet);
+            let imports = swc_css_modules::imports::analyze_imports(&parsed_stylesheet);
             let basename = BASENAME_RE
                 .captures(fs_path.file_name())
                 .context("Must include basename preceding .")?
@@ -218,7 +214,7 @@ async fn parse_content(
                 .as_str();
             // Truncate this as u32 so it's formated as 8-character hex in the suffic below
             let path_hash = turbo_tasks_hash::hash_xxh3_hash64(ident_str) as u32;
-            let result = swc_core::css::modules::compile(
+            let result = swc_css_modules::compile(
                 &mut parsed_stylesheet,
                 // TODO swc_css_modules should take `impl TransformConfig + '_`
                 ModuleTransformConfig {

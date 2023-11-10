@@ -1,8 +1,6 @@
 use anyhow::Result;
-use swc_core::{
-    common::DUMMY_SP,
-    ecma::ast::{Callee, Expr, ExprOrSpread, Ident, ObjectLit},
-};
+use swc_common::DUMMY_SP;
+use swc_ecma_ast::{Callee, Expr, ExprOrSpread, Ident, ObjectLit};
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::ChunkableModuleReference,

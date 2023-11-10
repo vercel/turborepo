@@ -5,13 +5,11 @@ use std::{
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use swc_core::{
-    common::DUMMY_SP,
-    ecma::ast::{
-        self, ComputedPropName, Expr, ExprStmt, Ident, KeyValueProp, Lit, MemberExpr, MemberProp,
-        ModuleItem, ObjectLit, Program, Prop, PropName, PropOrSpread, Script, Stmt, Str,
-    },
-    quote, quote_expr,
+use swc_common::DUMMY_SP;
+use swc_core::{quote, quote_expr};
+use swc_ecma_ast::{
+    ComputedPropName, Expr, ExprStmt, Ident, KeyValueProp, Lit, MemberExpr, MemberProp, ModuleItem,
+    ObjectLit, Program, Prop, PropName, PropOrSpread, Script, Stmt, Str, {self},
 };
 use turbo_tasks::{trace::TraceRawVcs, ValueToString, Vc};
 use turbopack_core::{
@@ -243,7 +241,7 @@ impl CodeGenerateable for EsmExports {
                 getters: Expr = getters.clone()
             );
             match program {
-                Program::Module(ast::Module { body, .. }) => {
+                Program::Module(swc_ecma_ast::Module { body, .. }) => {
                     body.insert(0, ModuleItem::Stmt(stmt));
                 }
                 Program::Script(Script { body, .. }) => {

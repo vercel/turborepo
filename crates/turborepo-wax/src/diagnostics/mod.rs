@@ -2,7 +2,9 @@ mod miette;
 
 use std::{
     cmp,
-    fmt::{self, Display, Formatter},
+    fmt::{
+        Display, Formatter, {self},
+    },
 };
 
 #[cfg(feature = "miette")]

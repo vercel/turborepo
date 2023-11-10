@@ -8,7 +8,9 @@ use itertools::Itertools as _;
 
 use crate::{
     encode,
-    token::{self, Separator, Token},
+    token::{
+        Separator, Token, {self},
+    },
     PATHS_ARE_CASE_INSENSITIVE,
 };
 
@@ -599,9 +601,10 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use crate::token::{
-        self,
-        variance::{self, Boundedness, InvariantSize, Variance},
-        TokenTree,
+        variance::{
+            Boundedness, InvariantSize, Variance, {self},
+        },
+        TokenTree, {self},
     };
 
     #[test]

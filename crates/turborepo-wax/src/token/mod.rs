@@ -1070,7 +1070,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::token::{self, TokenKind, TokenTree};
+    use crate::token::{
+        TokenKind, TokenTree, {self},
+    };
 
     #[test]
     fn literal_case_insensitivity() {

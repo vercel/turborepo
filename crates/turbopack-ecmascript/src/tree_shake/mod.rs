@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
 use rustc_hash::FxHashMap;
-use swc_core::ecma::ast::{Id, Module, Program};
+use swc_ecma_ast::{Id, Module, Program};
 use turbo_tasks::Vc;
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{

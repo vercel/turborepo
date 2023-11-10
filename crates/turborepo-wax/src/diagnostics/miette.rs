@@ -8,7 +8,9 @@ use thiserror::Error;
 
 use crate::{
     diagnostics::SpanExt as _,
-    token::{self, TokenKind, TokenTree, Tokenized},
+    token::{
+        TokenKind, TokenTree, Tokenized, {self},
+    },
 };
 
 #[derive(Clone, Debug, Diagnostic, Error)]

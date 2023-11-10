@@ -30,21 +30,17 @@ use lazy_static::lazy_static;
 use num_traits::Zero;
 use parking_lot::Mutex;
 use regex::Regex;
-use swc_core::{
-    common::{
-        comments::{CommentKind, Comments},
-        errors::{DiagnosticId, Handler, HANDLER},
-        pass::AstNodePath,
-        source_map::Pos,
-        Globals, Span, Spanned, GLOBALS,
-    },
-    ecma::{
-        ast::*,
-        visit::{
-            fields::{AssignExprField, ExprField, PatField, PatOrExprField},
-            AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath,
-        },
-    },
+use swc_common::{
+    comments::{CommentKind, Comments},
+    errors::{DiagnosticId, Handler, HANDLER},
+    pass::AstNodePath,
+    source_map::Pos,
+    Globals, Span, Spanned, GLOBALS,
+};
+use swc_ecma_ast::*;
+use swc_ecma_visit::{
+    fields::{AssignExprField, ExprField, PatField, PatOrExprField},
+    AstParentKind, AstParentNodeRef, VisitAstPath, VisitWithPath,
 };
 use turbo_tasks::{TryJoinIterExt, Upcast, Value, Vc};
 use turbo_tasks_fs::{FileJsonContent, FileSystemPath};
@@ -2625,7 +2621,7 @@ enum DetectedDynamicExportType {
 }
 
 fn detect_dynamic_export(p: &Program) -> DetectedDynamicExportType {
-    use swc_core::ecma::visit::{visit_obj_and_computed, Visit, VisitWith};
+    use swc_ecma_visit::{visit_obj_and_computed, Visit, VisitWith};
 
     if let Program::Module(m) = p {
         // Check for imports/exports

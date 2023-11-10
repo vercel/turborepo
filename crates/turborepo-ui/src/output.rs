@@ -1,6 +1,8 @@
 use std::{
     borrow::Cow,
-    io::{self, Write},
+    io::{
+        Write, {self},
+    },
     sync::{Arc, Mutex, RwLock},
 };
 

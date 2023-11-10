@@ -43,9 +43,13 @@ use std::{
     borrow::{Borrow, Cow},
     convert::Infallible,
     ffi::OsStr,
-    fmt::{self, Debug, Display, Formatter},
+    fmt::{
+        Debug, Display, Formatter, {self},
+    },
     path::{Path, PathBuf},
-    str::{self, FromStr},
+    str::{
+        FromStr, {self},
+    },
 };
 
 use itertools::Position;
@@ -53,14 +57,33 @@ use itertools::Position;
 use miette::Diagnostic;
 use regex::Regex;
 #[cfg(feature = "miette")]
-use tardar::{DiagnosticResult, DiagnosticResultExt as _, IteratorExt as _, ResultExt as _};
+use tardar::DiagnosticResult;
+#[cfg(feature = "miette")]
+use tardar::DiagnosticResultExt as _;
+#[cfg(feature = "miette")]
+use tardar::IteratorExt as _;
+#[cfg(feature = "miette")]
+use tardar::ResultExt as _;
 use thiserror::Error;
 
 #[cfg(feature = "walk")]
-pub use crate::walk::{
-    FileIterator, FilterTarget, FilterTree, LinkBehavior, Negation, Walk, WalkBehavior, WalkEntry,
-    WalkError,
-};
+pub use crate::walk::FileIterator;
+#[cfg(feature = "walk")]
+pub use crate::walk::FilterTarget;
+#[cfg(feature = "walk")]
+pub use crate::walk::FilterTree;
+#[cfg(feature = "walk")]
+pub use crate::walk::LinkBehavior;
+#[cfg(feature = "walk")]
+pub use crate::walk::Negation;
+#[cfg(feature = "walk")]
+pub use crate::walk::Walk;
+#[cfg(feature = "walk")]
+pub use crate::walk::WalkBehavior;
+#[cfg(feature = "walk")]
+pub use crate::walk::WalkEntry;
+#[cfg(feature = "walk")]
+pub use crate::walk::WalkError;
 pub use crate::{
     capture::MatchedText,
     diagnostics::{LocatedError, Span},

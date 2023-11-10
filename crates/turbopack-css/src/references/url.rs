@@ -1,8 +1,6 @@
 use anyhow::{bail, Result};
-use swc_core::{
-    common::DUMMY_SP,
-    css::ast::{Str, UrlValue},
-};
+use swc_common::DUMMY_SP;
+use swc_css_ast::{Str, UrlValue};
 use turbo_tasks::{debug::ValueDebug, Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{

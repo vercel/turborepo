@@ -5,13 +5,9 @@ use async_trait::async_trait;
 use indexmap::IndexMap;
 use modularize_imports::{modularize_imports, Config, PackageConfig};
 use serde::{Deserialize, Serialize};
-use swc_core::{
-    common::util::take::Take,
-    ecma::{
-        ast::{Module, Program},
-        visit::FoldWith,
-    },
-};
+use swc_common::util::take::Take;
+use swc_ecma_ast::{Module, Program};
+use swc_ecma_visit::FoldWith;
 use turbo_tasks::trace::TraceRawVcs;
 use turbopack_ecmascript::{CustomTransformer, TransformContext};
 

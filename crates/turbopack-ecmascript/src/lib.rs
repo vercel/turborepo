@@ -37,13 +37,9 @@ use path_visitor::ApplyVisitors;
 use references::esm::UrlRewriteBehavior;
 pub use references::{AnalyzeEcmascriptModuleResult, TURBOPACK_HELPER};
 pub use static_code::StaticEcmascriptCode;
-use swc_core::{
-    common::GLOBALS,
-    ecma::{
-        codegen::{text_writer::JsWriter, Emitter},
-        visit::{VisitMutWith, VisitMutWithPath},
-    },
-};
+use swc_common::GLOBALS;
+use swc_ecma_codegen::{text_writer::JsWriter, Emitter};
+use swc_ecma_visit::{VisitMutWith, VisitMutWithPath};
 pub use transform::{
     CustomTransformer, EcmascriptInputTransform, EcmascriptInputTransforms, OptionTransformPlugin,
     TransformContext, TransformPlugin, UnsupportedServerActionIssue,
@@ -620,10 +616,7 @@ impl EcmascriptModuleContent {
 async fn gen_content_with_visitors(
     parsed: Vc<ParseResult>,
     ident: Vc<AssetIdent>,
-    visitors: Vec<(
-        &Vec<swc_core::ecma::visit::AstParentKind>,
-        &dyn VisitorFactory,
-    )>,
+    visitors: Vec<(&Vec<swc_ecma_visit::AstParentKind>, &dyn VisitorFactory)>,
     root_visitors: Vec<&dyn VisitorFactory>,
 ) -> Result<Vc<EcmascriptModuleContent>> {
     let parsed = parsed.await?;
@@ -649,8 +642,8 @@ async fn gen_content_with_visitors(
             for visitor in root_visitors {
                 program.visit_mut_with(&mut visitor.create());
             }
-            program.visit_mut_with(&mut swc_core::ecma::transforms::base::hygiene::hygiene());
-            program.visit_mut_with(&mut swc_core::ecma::transforms::base::fixer::fixer(None));
+            program.visit_mut_with(&mut swc_ecma_transforms_base::hygiene::hygiene());
+            program.visit_mut_with(&mut swc_ecma_transforms_base::fixer::fixer(None));
 
             // we need to remove any shebang before bundling as it's only valid as the first
             // line in a js file (not in a chunk item wrapped in the runtime)
@@ -666,7 +659,7 @@ async fn gen_content_with_visitors(
         let comments = comments.consumable();
 
         let mut emitter = Emitter {
-            cfg: swc_core::ecma::codegen::Config::default(),
+            cfg: swc_ecma_codegen::Config::default(),
             cm: source_map.clone(),
             comments: Some(&comments),
             wr: JsWriter::new(source_map.clone(), "\n", &mut bytes, Some(&mut srcmap)),

@@ -4,9 +4,8 @@ use indexmap::IndexSet;
 use turbo_tasks_macros::generic_type as __turbo_tasks_internal_generic_type;
 
 use crate::{
-    self as turbo_tasks,
     debug::{ValueDebug, ValueDebugFormat, ValueDebugString},
-    ValueDefault, Vc,
+    ValueDefault, Vc, {self as turbo_tasks},
 };
 
 __turbo_tasks_internal_generic_type!(<T>, IndexSet<Vc<T>>);

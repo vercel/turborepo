@@ -1,6 +1,8 @@
 #![deny(clippy::all)]
 #![feature(assert_matches)]
 
+#[cfg(feature = "manual_recursive_watch")]
+use std::io;
 use std::{
     fmt::{Debug, Display},
     future::IntoFuture,
@@ -15,25 +17,27 @@ use std::{
 // macos -> custom watcher impl in fsevents, no recursive watch, no watching ancestors
 #[cfg(target_os = "macos")]
 use fsevent::FsEventWatcher;
+#[cfg(feature = "manual_recursive_watch")]
+use notify::event::CreateKind;
+#[cfg(feature = "manual_recursive_watch")]
+use notify::event::EventAttributes;
 #[cfg(any(feature = "manual_recursive_watch", feature = "watch_ancestors"))]
 use notify::event::EventKind;
 #[cfg(not(target_os = "macos"))]
-use notify::{Config, RecommendedWatcher};
+use notify::Config;
+#[cfg(feature = "manual_recursive_watch")]
+use notify::ErrorKind;
+#[cfg(not(target_os = "macos"))]
+use notify::RecommendedWatcher;
 use notify::{Event, EventHandler, RecursiveMode, Watcher};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
+#[cfg(feature = "manual_recursive_watch")]
+use tracing::trace;
 use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
 #[cfg(feature = "manual_recursive_watch")]
-use {
-    notify::{
-        event::{CreateKind, EventAttributes},
-        ErrorKind,
-    },
-    std::io,
-    tracing::trace,
-    walkdir::WalkDir,
-};
+use walkdir::WalkDir;
 
 pub mod cookie_jar;
 #[cfg(target_os = "macos")]

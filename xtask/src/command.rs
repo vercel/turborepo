@@ -1,6 +1,8 @@
 use std::{
     path::PathBuf,
-    process::{self, Stdio},
+    process::{
+        Stdio, {self},
+    },
 };
 
 pub struct Command {

@@ -5,7 +5,9 @@ mod yarn;
 
 use std::{
     backtrace,
-    fmt::{self, Display},
+    fmt::{
+        Display, {self},
+    },
     fs,
     process::Command,
 };

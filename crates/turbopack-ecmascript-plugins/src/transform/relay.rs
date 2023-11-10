@@ -3,13 +3,9 @@ use std::path::PathBuf;
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use swc_core::{
-    common::{util::take::Take, FileName},
-    ecma::{
-        ast::{Module, Program},
-        visit::FoldWith,
-    },
-};
+use swc_common::{util::take::Take, FileName};
+use swc_ecma_ast::{Module, Program};
+use swc_ecma_visit::FoldWith;
 use swc_relay::RelayLanguageConfig;
 use turbo_tasks::trace::TraceRawVcs;
 use turbopack_ecmascript::{CustomTransformer, TransformContext};

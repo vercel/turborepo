@@ -1,8 +1,6 @@
 use anyhow::Result;
-use swc_core::{
-    ecma::ast::{Expr, ExprOrSpread, NewExpr},
-    quote,
-};
+use swc_core::quote;
+use swc_ecma_ast::{Expr, ExprOrSpread, NewExpr};
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{

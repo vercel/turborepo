@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use swc_core::{
-    common::SourceMap,
-    css::{ast::Stylesheet, visit::VisitMutWith},
-};
+use swc_common::SourceMap;
+use swc_css_ast::Stylesheet;
+use swc_css_visit::VisitMutWith;
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Debug, Copy, Clone)]

@@ -12,14 +12,15 @@ pub use tracing_subscriber::reload::Error;
 use tracing_subscriber::{
     filter::{Filtered, Targets},
     fmt::{
-        self,
         format::{DefaultFields, Writer},
-        FmtContext, FormatEvent, FormatFields,
+        FmtContext, FormatEvent, FormatFields, {self},
     },
     layer,
     prelude::*,
     registry::LookupSpan,
-    reload::{self, Handle},
+    reload::{
+        Handle, {self},
+    },
     EnvFilter, Layer, Registry,
 };
 use turborepo_ui::UI;

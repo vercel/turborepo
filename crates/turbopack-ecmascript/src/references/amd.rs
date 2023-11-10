@@ -2,14 +2,10 @@ use std::mem::take;
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use swc_core::{
-    common::DUMMY_SP,
-    ecma::{
-        ast::{CallExpr, Callee, Expr, ExprOrSpread},
-        utils::private_ident,
-    },
-    quote, quote_expr,
-};
+use swc_common::DUMMY_SP;
+use swc_core::{quote, quote_expr};
+use swc_ecma_ast::{CallExpr, Callee, Expr, ExprOrSpread};
+use swc_ecma_utils::private_ident;
 use turbo_tasks::{
     debug::ValueDebugFormat, trace::TraceRawVcs, ReadRef, TryJoinIterExt, Value, ValueToString, Vc,
 };

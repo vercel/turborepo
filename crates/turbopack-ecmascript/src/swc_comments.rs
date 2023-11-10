@@ -1,11 +1,9 @@
 use std::{cell::RefCell, collections::HashMap, mem::take};
 
-use swc_core::{
-    base::SwcComments,
-    common::{
-        comments::{Comment, Comments},
-        BytePos,
-    },
+use swc::SwcComments;
+use swc_common::{
+    comments::{Comment, Comments},
+    BytePos,
 };
 
 /// Immutable version of [SwcComments] which doesn't allow mutation. The `take`
@@ -44,89 +42,75 @@ impl ImmutableComments {
 }
 
 impl Comments for ImmutableComments {
-    fn add_leading(
-        &self,
-        _pos: swc_core::common::BytePos,
-        _cmt: swc_core::common::comments::Comment,
-    ) {
+    fn add_leading(&self, _pos: swc_common::BytePos, _cmt: swc_common::comments::Comment) {
         panic!("Comments are immutable after parsing")
     }
 
     fn add_leading_comments(
         &self,
-        _pos: swc_core::common::BytePos,
-        _comments: Vec<swc_core::common::comments::Comment>,
+        _pos: swc_common::BytePos,
+        _comments: Vec<swc_common::comments::Comment>,
     ) {
         panic!("Comments are immutable after parsing")
     }
 
-    fn has_leading(&self, pos: swc_core::common::BytePos) -> bool {
+    fn has_leading(&self, pos: swc_common::BytePos) -> bool {
         self.leading.contains_key(&pos)
     }
 
-    fn move_leading(&self, _from: swc_core::common::BytePos, _to: swc_core::common::BytePos) {
+    fn move_leading(&self, _from: swc_common::BytePos, _to: swc_common::BytePos) {
         panic!("Comments are immutable after parsing")
     }
 
     fn take_leading(
         &self,
-        _pos: swc_core::common::BytePos,
-    ) -> Option<Vec<swc_core::common::comments::Comment>> {
+        _pos: swc_common::BytePos,
+    ) -> Option<Vec<swc_common::comments::Comment>> {
         panic!(
             "Comments are immutable after parsing (Use ImmutableComments::consumable() to allow \
              taking out values)"
         )
     }
 
-    fn get_leading(
-        &self,
-        pos: swc_core::common::BytePos,
-    ) -> Option<Vec<swc_core::common::comments::Comment>> {
+    fn get_leading(&self, pos: swc_common::BytePos) -> Option<Vec<swc_common::comments::Comment>> {
         self.leading.get(&pos).map(|v| v.to_owned())
     }
 
-    fn add_trailing(
-        &self,
-        _pos: swc_core::common::BytePos,
-        _cmt: swc_core::common::comments::Comment,
-    ) {
+    fn add_trailing(&self, _pos: swc_common::BytePos, _cmt: swc_common::comments::Comment) {
         panic!("Comments are immutable after parsing")
     }
 
     fn add_trailing_comments(
         &self,
-        _pos: swc_core::common::BytePos,
-        _comments: Vec<swc_core::common::comments::Comment>,
+        _pos: swc_common::BytePos,
+        _comments: Vec<swc_common::comments::Comment>,
     ) {
         panic!("Comments are immutable after parsing")
     }
 
-    fn has_trailing(&self, pos: swc_core::common::BytePos) -> bool {
+    fn has_trailing(&self, pos: swc_common::BytePos) -> bool {
         self.trailing.contains_key(&pos)
     }
 
-    fn move_trailing(&self, _from: swc_core::common::BytePos, _to: swc_core::common::BytePos) {
+    fn move_trailing(&self, _from: swc_common::BytePos, _to: swc_common::BytePos) {
         panic!("Comments are immutable after parsing")
     }
 
     fn take_trailing(
         &self,
-        _pos: swc_core::common::BytePos,
-    ) -> Option<Vec<swc_core::common::comments::Comment>> {
+        _pos: swc_common::BytePos,
+    ) -> Option<Vec<swc_common::comments::Comment>> {
         panic!(
             "Comments are immutable after parsing (Use ImmutableComments::consumable() to allow \
              taking out values)"
         )
     }
 
-    fn get_trailing(
-        &self,
-        pos: swc_core::common::BytePos,
-    ) -> Option<Vec<swc_core::common::comments::Comment>> {
+    fn get_trailing(&self, pos: swc_common::BytePos) -> Option<Vec<swc_common::comments::Comment>> {
         self.trailing.get(&pos).map(|v| v.to_owned())
     }
 
-    fn add_pure_comment(&self, _pos: swc_core::common::BytePos) {
+    fn add_pure_comment(&self, _pos: swc_common::BytePos) {
         panic!("Comments are immutable after parsing")
     }
 
@@ -186,86 +170,69 @@ impl<'a> CowComments<'a> {
 }
 
 impl<'a> Comments for CowComments<'a> {
-    fn add_leading(
-        &self,
-        _pos: swc_core::common::BytePos,
-        _cmt: swc_core::common::comments::Comment,
-    ) {
+    fn add_leading(&self, _pos: swc_common::BytePos, _cmt: swc_common::comments::Comment) {
         panic!("Comments are immutable after parsing")
     }
 
     fn add_leading_comments(
         &self,
-        _pos: swc_core::common::BytePos,
-        _comments: Vec<swc_core::common::comments::Comment>,
+        _pos: swc_common::BytePos,
+        _comments: Vec<swc_common::comments::Comment>,
     ) {
         panic!("Comments are immutable after parsing")
     }
 
-    fn has_leading(&self, pos: swc_core::common::BytePos) -> bool {
+    fn has_leading(&self, pos: swc_common::BytePos) -> bool {
         self.leading.borrow().contains_key(&pos)
     }
 
-    fn move_leading(&self, _from: swc_core::common::BytePos, _to: swc_core::common::BytePos) {
+    fn move_leading(&self, _from: swc_common::BytePos, _to: swc_common::BytePos) {
         panic!("Comments are immutable after parsing")
     }
 
-    fn take_leading(
-        &self,
-        pos: swc_core::common::BytePos,
-    ) -> Option<Vec<swc_core::common::comments::Comment>> {
+    fn take_leading(&self, pos: swc_common::BytePos) -> Option<Vec<swc_common::comments::Comment>> {
         self.leading.borrow_mut().remove(&pos).map(|v| v.to_owned())
     }
 
-    fn get_leading(
-        &self,
-        pos: swc_core::common::BytePos,
-    ) -> Option<Vec<swc_core::common::comments::Comment>> {
+    fn get_leading(&self, pos: swc_common::BytePos) -> Option<Vec<swc_common::comments::Comment>> {
         self.leading.borrow().get(&pos).map(|&v| v.to_owned())
     }
 
-    fn add_trailing(
-        &self,
-        _pos: swc_core::common::BytePos,
-        _cmt: swc_core::common::comments::Comment,
-    ) {
+    fn add_trailing(&self, _pos: swc_common::BytePos, _cmt: swc_common::comments::Comment) {
         panic!("Comments are immutable after parsing")
     }
 
     fn add_trailing_comments(
         &self,
-        _pos: swc_core::common::BytePos,
-        _comments: Vec<swc_core::common::comments::Comment>,
+        _pos: swc_common::BytePos,
+        _comments: Vec<swc_common::comments::Comment>,
     ) {
         panic!("Comments are immutable after parsing")
     }
 
-    fn has_trailing(&self, pos: swc_core::common::BytePos) -> bool {
+    fn has_trailing(&self, pos: swc_common::BytePos) -> bool {
         self.trailing.borrow().contains_key(&pos)
     }
 
-    fn move_trailing(&self, _from: swc_core::common::BytePos, _to: swc_core::common::BytePos) {
+    fn move_trailing(&self, _from: swc_common::BytePos, _to: swc_common::BytePos) {
         panic!("Comments are immutable after parsing")
     }
 
     fn take_trailing(
         &self,
-        pos: swc_core::common::BytePos,
-    ) -> Option<Vec<swc_core::common::comments::Comment>> {
+        pos: swc_common::BytePos,
+    ) -> Option<Vec<swc_common::comments::Comment>> {
         self.trailing
             .borrow_mut()
             .remove(&pos)
             .map(|v| v.to_owned())
     }
 
-    fn get_trailing(
-        &self,
-        pos: swc_core::common::BytePos,
-    ) -> Option<Vec<swc_core::common::comments::Comment>> {
+    fn get_trailing(&self, pos: swc_common::BytePos) -> Option<Vec<swc_common::comments::Comment>> {
         self.trailing.borrow().get(&pos).map(|&v| v.to_owned())
     }
 
-    fn add_pure_comment(&self, _pos: swc_core::common::BytePos) {
+    fn add_pure_comment(&self, _pos: swc_common::BytePos) {
         panic!("Comments are immutable after parsing")
     }
 

@@ -2,10 +2,10 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use swc_core::{
-    common::FileName,
-    ecma::{ast::Program, atoms::JsWord, visit::VisitMutWith},
-};
+use swc_common::FileName;
+use swc_core::ecma::atoms::JsWord;
+use swc_ecma_ast::Program;
+use swc_ecma_visit::VisitMutWith;
 use turbo_tasks::{ValueDefault, Vc};
 use turbopack_ecmascript::{CustomTransformer, TransformContext};
 

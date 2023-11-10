@@ -9,19 +9,15 @@ use petgraph::{
     prelude::DiGraphMap,
 };
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
-use swc_core::{
-    common::{util::take::Take, DUMMY_SP},
-    ecma::{
-        ast::{
-            op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt,
-            FnDecl, Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier, KeyValueProp,
-            Lit, Module, ModuleDecl, ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop,
-            PropName, PropOrSpread, Stmt, VarDecl,
-        },
-        atoms::{js_word, JsWord},
-        utils::{find_pat_ids, quote_ident},
-    },
+use swc_common::{util::take::Take, DUMMY_SP};
+use swc_core::ecma::atoms::{js_word, JsWord};
+use swc_ecma_ast::{
+    op, ClassDecl, Decl, ExportDecl, ExportNamedSpecifier, ExportSpecifier, Expr, ExprStmt, FnDecl,
+    Id, Ident, ImportDecl, ImportNamedSpecifier, ImportSpecifier, KeyValueProp, Lit, Module,
+    ModuleDecl, ModuleExportName, ModuleItem, NamedExport, ObjectLit, Prop, PropName, PropOrSpread,
+    Stmt, VarDecl,
 };
+use swc_ecma_utils::{find_pat_ids, quote_ident};
 
 use super::{
     util::{ids_captured_by, ids_used_by, ids_used_by_ignoring_nested},

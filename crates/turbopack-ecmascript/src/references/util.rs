@@ -1,5 +1,6 @@
 use anyhow::Result;
-use swc_core::{ecma::ast::Expr, quote};
+use swc_core::quote;
+use swc_ecma_ast::Expr;
 use turbo_tasks::Vc;
 use turbopack_core::resolve::parse::Request;
 

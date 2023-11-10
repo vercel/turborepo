@@ -6,7 +6,9 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_env::{get_global_hashable_env_vars, DetailedMap, EnvironmentVariableMap};
 use turborepo_lockfiles::Lockfile;
-use turborepo_repository::package_manager::{self, PackageManager};
+use turborepo_repository::package_manager::{
+    PackageManager, {self},
+};
 use turborepo_scm::SCM;
 
 use crate::{

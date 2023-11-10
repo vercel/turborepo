@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use swc_core::ecma::visit::{AstParentKind, VisitMut};
+use swc_ecma_visit::{AstParentKind, VisitMut};
 use turbo_tasks::{debug::ValueDebugFormat, trace::TraceRawVcs, Vc};
 use turbopack_core::chunk::AsyncModuleInfo;
 
@@ -69,7 +69,7 @@ pub fn path_to(
 /// path exactly. Otherwise, the visitor will visit the closest matching parent
 /// node in the path.
 ///
-/// Refer to the [swc_core::ecma::visit::VisitMut] trait for a list of all
+/// Refer to the [swc_ecma_visit::VisitMut] trait for a list of all
 /// possible visit methods.
 #[macro_export]
 macro_rules! create_visitor {
@@ -77,22 +77,22 @@ macro_rules! create_visitor {
     // expected one of `!`, `)`, `,`, `.`, `::`, `?`, `{`, or an operator, found `:`
     // This is a regression on nightly.
     (visit_mut_program($arg:ident: &mut Program) $b:block) => {{
-        struct Visitor<T: Fn(&mut swc_core::ecma::ast::Program) + Send + Sync> {
+        struct Visitor<T: Fn(&mut swc_ecma_ast::Program) + Send + Sync> {
             visit_mut_program: T,
         }
 
-        impl<T: Fn(&mut swc_core::ecma::ast::Program) + Send + Sync> $crate::code_gen::VisitorFactory
+        impl<T: Fn(&mut swc_ecma_ast::Program) + Send + Sync> $crate::code_gen::VisitorFactory
             for Box<Visitor<T>>
         {
-            fn create<'a>(&'a self) -> Box<dyn swc_core::ecma::visit::VisitMut + Send + Sync + 'a> {
+            fn create<'a>(&'a self) -> Box<dyn swc_ecma_visit::VisitMut + Send + Sync + 'a> {
                 Box::new(&**self)
             }
         }
 
-        impl<'a, T: Fn(&mut swc_core::ecma::ast::Program) + Send + Sync> swc_core::ecma::visit::VisitMut
+        impl<'a, T: Fn(&mut swc_ecma_ast::Program) + Send + Sync> swc_ecma_visit::VisitMut
             for &'a Visitor<T>
         {
-            fn visit_mut_program(&mut self, $arg: &mut swc_core::ecma::ast::Program) {
+            fn visit_mut_program(&mut self, $arg: &mut swc_ecma_ast::Program) {
                 (self.visit_mut_program)($arg);
             }
         }
@@ -100,7 +100,7 @@ macro_rules! create_visitor {
         (
             Vec::new(),
             Box::new(Box::new(Visitor {
-                visit_mut_program: move |$arg: &mut swc_core::ecma::ast::Program| $b,
+                visit_mut_program: move |$arg: &mut swc_ecma_ast::Program| $b,
             })) as Box<dyn $crate::code_gen::VisitorFactory>,
         )
     }};
@@ -109,26 +109,26 @@ macro_rules! create_visitor {
     };
     ($ast_path:expr, $name:ident($arg:ident: &mut $ty:ident) $b:block) => {
         $crate::create_visitor!(__ $crate::code_gen::path_to(&$ast_path, |n| {
-            matches!(n, swc_core::ecma::visit::AstParentKind::$ty(_))
+            matches!(n, swc_ecma_visit::AstParentKind::$ty(_))
         }), $name($arg: &mut $ty) $b)
     };
     (__ $ast_path:expr, $name:ident($arg:ident: &mut $ty:ident) $b:block) => {{
-        struct Visitor<T: Fn(&mut swc_core::ecma::ast::$ty) + Send + Sync> {
+        struct Visitor<T: Fn(&mut swc_ecma_ast::$ty) + Send + Sync> {
             $name: T,
         }
 
-        impl<T: Fn(&mut swc_core::ecma::ast::$ty) + Send + Sync> $crate::code_gen::VisitorFactory
+        impl<T: Fn(&mut swc_ecma_ast::$ty) + Send + Sync> $crate::code_gen::VisitorFactory
             for Box<Visitor<T>>
         {
-            fn create<'a>(&'a self) -> Box<dyn swc_core::ecma::visit::VisitMut + Send + Sync + 'a> {
+            fn create<'a>(&'a self) -> Box<dyn swc_ecma_visit::VisitMut + Send + Sync + 'a> {
                 Box::new(&**self)
             }
         }
 
-        impl<'a, T: Fn(&mut swc_core::ecma::ast::$ty) + Send + Sync> swc_core::ecma::visit::VisitMut
+        impl<'a, T: Fn(&mut swc_ecma_ast::$ty) + Send + Sync> swc_ecma_visit::VisitMut
             for &'a Visitor<T>
         {
-            fn $name(&mut self, $arg: &mut swc_core::ecma::ast::$ty) {
+            fn $name(&mut self, $arg: &mut swc_ecma_ast::$ty) {
                 (self.$name)($arg);
             }
         }
@@ -136,7 +136,7 @@ macro_rules! create_visitor {
         (
             $ast_path,
             Box::new(Box::new(Visitor {
-                $name: move |$arg: &mut swc_core::ecma::ast::$ty| $b,
+                $name: move |$arg: &mut swc_ecma_ast::$ty| $b,
             })) as Box<dyn $crate::code_gen::VisitorFactory>,
         )
     }};

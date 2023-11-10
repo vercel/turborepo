@@ -2,21 +2,17 @@ use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use swc_core::{
-    base::SwcComments,
-    common::{chain, comments::Comments, util::take::Take, Mark, SourceMap},
-    ecma::{
-        ast::{Module, ModuleItem, Program, Script},
-        preset_env::{
-            Targets, {self},
-        },
-        transforms::{
-            base::{feature::FeatureFlag, helpers::inject_helpers, Assumptions},
-            react::react,
-        },
-        visit::{FoldWith, VisitMutWith},
+use swc::SwcComments;
+use swc_common::{chain, comments::Comments, util::take::Take, Mark, SourceMap};
+use swc_core::ecma::{
+    preset_env::{
+        Targets, {self},
     },
+    transforms::react::react,
 };
+use swc_ecma_ast::{Module, ModuleItem, Program, Script};
+use swc_ecma_transforms_base::{feature::FeatureFlag, helpers::inject_helpers, Assumptions};
+use swc_ecma_visit::{FoldWith, VisitMutWith};
 use turbo_tasks::{ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
@@ -186,20 +182,20 @@ impl EcmascriptInputTransform {
             EcmascriptInputTransform::CommonJs => {
                 // Explicit type annotation to ensure that we don't duplicate transforms in the
                 // final binary
-                program.visit_mut_with(&mut swc_core::ecma::transforms::module::common_js::<
-                    &dyn Comments,
-                >(
-                    unresolved_mark,
-                    swc_core::ecma::transforms::module::util::Config {
-                        allow_top_level_this: true,
-                        import_interop: Some(
-                            swc_core::ecma::transforms::module::util::ImportInterop::Swc,
-                        ),
-                        ..Default::default()
-                    },
-                    swc_core::ecma::transforms::base::feature::FeatureFlag::all(),
-                    Some(&comments),
-                ));
+                program.visit_mut_with(
+                    &mut swc_ecma_transforms_module::common_js::<&dyn Comments>(
+                        unresolved_mark,
+                        swc_ecma_transforms_module::util::Config {
+                            allow_top_level_this: true,
+                            import_interop: Some(
+                                swc_ecma_transforms_module::util::ImportInterop::Swc,
+                            ),
+                            ..Default::default()
+                        },
+                        swc_ecma_transforms_base::feature::FeatureFlag::all(),
+                        Some(&comments),
+                    ),
+                );
             }
             EcmascriptInputTransform::PresetEnv(env) => {
                 let versions = env.runtime_versions().await?;

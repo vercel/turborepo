@@ -1,4 +1,4 @@
-use swc_core::ecma::ast::{Lit, Program};
+use swc_ecma_ast::{Lit, Program};
 
 pub mod client;
 pub mod server;

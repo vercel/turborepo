@@ -1,8 +1,10 @@
 use anyhow::Result;
 
 use crate::{
-    self as turbo_tasks, macro_helpers::find_cell_by_type, manager::current_task,
+    macro_helpers::find_cell_by_type,
+    manager::current_task,
     ConcreteTaskInput, CurrentCellRef, RawVc, TaskId, TaskInput, ValueTypeId, Vc, VcValueType,
+    {self as turbo_tasks},
 };
 
 #[turbo_tasks::value]

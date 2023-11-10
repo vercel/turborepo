@@ -4,7 +4,9 @@ use napi::Status;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPathBuf, PathError};
 use turborepo_repository::{
-    inference::{self, RepoMode, RepoState},
+    inference::{
+        RepoMode, RepoState, {self},
+    },
     package_manager,
 };
 

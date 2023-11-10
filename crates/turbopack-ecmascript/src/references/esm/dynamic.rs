@@ -1,8 +1,6 @@
 use anyhow::Result;
-use swc_core::{
-    ecma::ast::{Callee, ExprOrSpread},
-    quote_expr,
-};
+use swc_core::quote_expr;
+use swc_ecma_ast::{Callee, ExprOrSpread};
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{ChunkableModuleReference, ChunkingType, ChunkingTypeOption},

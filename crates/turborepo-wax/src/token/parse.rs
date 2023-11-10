@@ -1,11 +1,19 @@
 use std::{
     borrow::Cow,
-    fmt::{self, Display, Formatter},
+    fmt::{
+        Display, Formatter, {self},
+    },
     str::FromStr,
 };
 
 #[cfg(feature = "miette")]
-use miette::{self, Diagnostic, LabeledSpan, SourceCode};
+use miette::Diagnostic;
+#[cfg(feature = "miette")]
+use miette::LabeledSpan;
+#[cfg(feature = "miette")]
+use miette::SourceCode;
+#[cfg(feature = "miette")]
+use miette::{self};
 use nom::error::{VerboseError as NomError, VerboseErrorKind as NomErrorKind};
 use pori::{Located, Location, Stateful};
 use thiserror::Error;

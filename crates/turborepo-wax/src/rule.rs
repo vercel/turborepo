@@ -19,12 +19,18 @@ use std::{borrow::Cow, convert::Infallible, iter::Fuse, path::PathBuf, slice};
 
 use itertools::Itertools as _;
 #[cfg(feature = "miette")]
-use miette::{Diagnostic, LabeledSpan, SourceCode};
+use miette::Diagnostic;
+#[cfg(feature = "miette")]
+use miette::LabeledSpan;
+#[cfg(feature = "miette")]
+use miette::SourceCode;
 use thiserror::Error;
 
 use crate::{
     diagnostics::{CompositeSpan, CorrelatedSpan, SpanExt as _},
-    token::{self, InvariantSize, Token, TokenKind, TokenTree, Tokenized},
+    token::{
+        InvariantSize, Token, TokenKind, TokenTree, Tokenized, {self},
+    },
     Any, BuildError, Compose, Glob,
 };
 

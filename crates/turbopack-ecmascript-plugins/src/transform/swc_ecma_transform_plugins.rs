@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use swc_core::ecma::ast::Program;
+use swc_ecma_ast::Program;
 use turbo_tasks::Vc;
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::issue::{Issue, IssueSeverity};
@@ -121,18 +121,18 @@ impl CustomTransformer for SwcEcmaTransformPluginsTransformer {
         {
             use std::{cell::RefCell, rc::Rc, sync::Arc};
 
-            use swc_core::{
-                common::{
-                    comments::SingleThreadedComments,
-                    plugin::{
-                        metadata::TransformPluginMetadataContext, serialized::PluginSerializedBytes,
-                    },
-                    util::take::Take,
+            use swc_common::{
+                comments::SingleThreadedComments,
+                plugin::{
+                    metadata::TransformPluginMetadataContext, serialized::PluginSerializedBytes,
                 },
-                ecma::ast::Module,
+                util::take::Take,
+            };
+            use swc_core::{
                 plugin::proxies::{HostCommentsStorage, COMMENTS},
                 plugin_runner::plugin_module_bytes::PluginModuleBytes,
             };
+            use swc_ecma_ast::Module;
 
             let mut plugins = vec![];
             for (plugin_module, config) in &self.plugins {
@@ -154,14 +154,12 @@ impl CustomTransformer for SwcEcmaTransformPluginsTransformer {
             let comments = if should_enable_comments_proxy {
                 // Plugin only able to accept singlethreaded comments, interop from
                 // multithreaded comments.
-                let mut leading =
-                    swc_core::common::comments::SingleThreadedCommentsMapInner::default();
+                let mut leading = swc_common::comments::SingleThreadedCommentsMapInner::default();
                 ctx.comments.leading.as_ref().into_iter().for_each(|c| {
                     leading.insert(*c.key(), c.value().clone());
                 });
 
-                let mut trailing =
-                    swc_core::common::comments::SingleThreadedCommentsMapInner::default();
+                let mut trailing = swc_common::comments::SingleThreadedCommentsMapInner::default();
                 ctx.comments.trailing.as_ref().into_iter().for_each(|c| {
                     trailing.insert(*c.key(), c.value().clone());
                 });
@@ -179,9 +177,7 @@ impl CustomTransformer for SwcEcmaTransformPluginsTransformer {
                     let module_program =
                         std::mem::replace(program, Program::Module(Module::dummy()));
                     let module_program =
-                        swc_core::common::plugin::serialized::VersionedSerializable::new(
-                            module_program,
-                        );
+                        swc_common::plugin::serialized::VersionedSerializable::new(module_program);
                     let mut serialized_program =
                         PluginSerializedBytes::try_serialize(&module_program)?;
 

@@ -1,10 +1,6 @@
-use swc_core::{
-    common::Span,
-    ecma::{
-        ast::*,
-        visit::{noop_visit_type, Visit, VisitWith},
-    },
-};
+use swc_common::Span;
+use swc_ecma_ast::*;
+use swc_ecma_visit::{noop_visit_type, Visit, VisitWith};
 
 /// Checks if the program contains a top level await, if it does it will returns
 /// the span of the first await.

@@ -9,17 +9,13 @@ use anyhow::Error;
 use indexmap::IndexSet;
 use rustc_hash::FxHasher;
 use serde::Deserialize;
-use swc_core::{
-    common::{util::take::Take, SourceMap},
-    ecma::{
-        ast::{EsVersion, Id, Module},
-        atoms::JsWord,
-        codegen::text_writer::JsWriter,
-        parser::parse_file_as_module,
-    },
-    testing::{
-        fixture, NormalizedOutput, {self},
-    },
+use swc_common::{util::take::Take, SourceMap};
+use swc_core::ecma::atoms::JsWord;
+use swc_ecma_ast::{EsVersion, Id, Module};
+use swc_ecma_codegen::text_writer::JsWriter;
+use swc_ecma_parser::parse_file_as_module;
+use testing::{
+    fixture, NormalizedOutput, {self},
 };
 
 use super::{
@@ -260,13 +256,12 @@ impl super::merge::Load for SingleModuleLoader<'_> {
     }
 }
 
-fn print<N: swc_core::ecma::codegen::Node>(cm: &Arc<SourceMap>, nodes: &[&N]) -> String {
+fn print<N: swc_ecma_codegen::Node>(cm: &Arc<SourceMap>, nodes: &[&N]) -> String {
     let mut buf = vec![];
 
     {
-        let mut emitter = swc_core::ecma::codegen::Emitter {
-            cfg: swc_core::ecma::codegen::Config::default()
-                .with_emit_assert_for_import_attributes(true),
+        let mut emitter = swc_ecma_codegen::Emitter {
+            cfg: swc_ecma_codegen::Config::default().with_emit_assert_for_import_attributes(true),
             cm: cm.clone(),
             comments: None,
             wr: Box::new(JsWriter::new(cm.clone(), "\n", &mut buf, None)),

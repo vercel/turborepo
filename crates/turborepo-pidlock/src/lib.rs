@@ -4,7 +4,9 @@
 use std::{
     convert::TryInto,
     fs,
-    io::{self, Read, Write},
+    io::{
+        Read, Write, {self},
+    },
     num::TryFromIntError,
     path::PathBuf,
     process,

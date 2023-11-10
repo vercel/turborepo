@@ -5,8 +5,8 @@ use std::{
 
 use thiserror::Error;
 use turborepo_lockfiles::{
-    self, BerryLockfile, BunLockfile, Lockfile, LockfileData, NpmLockfile, Package, PnpmLockfile,
-    Yarn1Lockfile,
+    BerryLockfile, BunLockfile, Lockfile, LockfileData, NpmLockfile, Package, PnpmLockfile,
+    Yarn1Lockfile, {self},
 };
 
 use super::{proto, Buffer};

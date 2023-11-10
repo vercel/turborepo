@@ -3,7 +3,9 @@
 use std::{collections::HashSet, path::PathBuf};
 
 use build_fs_tree::{dir, file, Build, FileSystemTree};
-use tempfile::{self, TempDir};
+use tempfile::{
+    TempDir, {self},
+};
 use wax::{Glob, LinkBehavior, WalkBehavior};
 
 // TODO: Rust's testing framework does not provide a mechanism for maintaining

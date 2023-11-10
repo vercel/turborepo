@@ -1,9 +1,7 @@
 use anyhow::Result;
 use indexmap::IndexMap;
-use swc_core::{
-    ecma::ast::{Expr, Lit},
-    quote,
-};
+use swc_core::quote;
+use swc_ecma_ast::{Expr, Lit};
 use turbo_tasks::{debug::ValueDebug, Value, Vc};
 use turbopack_core::{
     chunk::{ChunkItemExt, ChunkableModule, ChunkingContext, ModuleId},

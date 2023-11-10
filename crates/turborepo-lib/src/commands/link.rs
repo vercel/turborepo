@@ -27,7 +27,9 @@ use crate::{
     cli::LinkTarget,
     commands::CommandBase,
     config,
-    rewrite_json::{self, set_path, unset_path},
+    rewrite_json::{
+        set_path, unset_path, {self},
+    },
 };
 
 #[derive(Debug, Error)]
