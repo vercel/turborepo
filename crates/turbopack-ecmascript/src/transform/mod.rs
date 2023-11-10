@@ -4,13 +4,10 @@ use anyhow::Result;
 use async_trait::async_trait;
 use swc::SwcComments;
 use swc_common::{chain, comments::Comments, util::take::Take, Mark, SourceMap};
-use swc_core::ecma::{
-    preset_env::{
-        Targets, {self},
-    },
-    transforms::react::react,
-};
 use swc_ecma_ast::{Module, ModuleItem, Program, Script};
+use swc_ecma_preset_env::{
+    Targets, {self as preset_env},
+};
 use swc_ecma_transforms_base::{feature::FeatureFlag, helpers::inject_helpers, Assumptions};
 use swc_ecma_visit::{FoldWith, VisitMutWith};
 use turbo_tasks::{ValueDefault, Vc};
@@ -137,7 +134,7 @@ impl EcmascriptInputTransform {
                 import_source,
                 runtime,
             } => {
-                use swc_core::ecma::transforms::react::{Options, Runtime};
+                use swc_ecma_transforms_react::{Options, Runtime};
                 let runtime = if let Some(runtime) = &*runtime.await? {
                     match runtime.as_str() {
                         "classic" => Runtime::Classic,
