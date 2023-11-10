@@ -1,21 +1,15 @@
 {
   "name": "ui",
   "version": "0.0.0",
-  "main": "./index.tsx",
-  "types": "./index.tsx",
-  "license": "MIT",
+  "private": true,
   "scripts": {
-    "lint": "eslint .",
-    "generate:component": "turbo gen react-component"
+    "dev": "echo 'Add dev script here'",
+    "build": "echo 'Add build script here'",
+    "test": "echo 'Add test script here'",
+    "lint": "echo 'Add lint script here'"
   },
   "devDependencies": {
-    "@turbo/gen": "^1.10.12",
-    "@types/node": "^20.5.2",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
     "eslint-config-custom": "workspace:*",
-    "react": "^18.2.0",
-    "tsconfig": "workspace:*",
-    "typescript": "^4.5.2"
+    "tsconfig": "workspace:*"
   }
 }
