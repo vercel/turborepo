@@ -8,7 +8,9 @@ use swc_ecma_ast::{Module, ModuleItem, Program, Script};
 use swc_ecma_preset_env::{
     Targets, {self as preset_env},
 };
-use swc_ecma_transforms_base::{feature::FeatureFlag, helpers::inject_helpers, Assumptions};
+use swc_ecma_transforms_base::{
+    assumptions::Assumptions, feature::FeatureFlag, helpers::inject_helpers,
+};
 use swc_ecma_visit::{FoldWith, VisitMutWith};
 use turbo_tasks::{ValueDefault, Vc};
 use turbo_tasks_fs::FileSystemPath;
