@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use swc_core::ecma::preset_env::{Version, Versions};
+use swc_ecma_preset_env::{Version, Versions};
 use turbo_tasks::{Value, Vc};
 use turbo_tasks_env::ProcessEnv;
 
