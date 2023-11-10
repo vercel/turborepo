@@ -33,8 +33,12 @@ turbopack-ecmascript = { workspace = true }
 modularize_imports = { workspace = true }
 styled_components = { workspace = true }
 styled_jsx = { workspace = true }
+swc_common.workspace = true
 swc_core = { workspace = true, features = ["ecma_ast", "ecma_visit", "common"] }
 swc_ecma_ast = { workspace = true, features = ["rkyv", "rkyv-impl"] }
+swc_ecma_transforms_base.workspace = true
+swc_ecma_utils = "0.124.23"
+swc_ecma_visit.workspace = true
 swc_emotion = { workspace = true }
 swc_relay = { workspace = true }
 
