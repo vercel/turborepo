@@ -223,7 +223,6 @@ impl<'a> Visitor<'a> {
             let Some(_command) = command else { continue };
 
             let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
-            let pass_through_args = self.opts.run_opts.args_for_task(&info);
 
             let mut exec_context = factory.exec_context(
                 info.clone(),
@@ -231,7 +230,6 @@ impl<'a> Visitor<'a> {
                 task_cache,
                 workspace_directory,
                 execution_env,
-                pass_through_args,
             );
 
             let tracker = self.run_tracker.track_task(info.clone().into_owned());
@@ -507,9 +505,9 @@ impl<'a> ExecContextFactory<'a> {
         task_cache: TaskCache,
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
-        pass_through_args: Option<Vec<String>>,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
+        let pass_through_args = self.visitor.opts.run_opts.args_for_task(&task_id);
         ExecContext {
             ui: self.visitor.ui,
             is_github_actions: self.visitor.opts.run_opts.is_github_actions,
