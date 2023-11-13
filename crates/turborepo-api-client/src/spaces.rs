@@ -20,7 +20,7 @@ pub struct SpaceClientSummary {
     pub version: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesCacheStatus {
     pub status: CacheStatus,
@@ -206,13 +206,9 @@ impl APIClient {
     }
 }
 
-impl Default for SpacesCacheStatus {
+impl Default for CacheStatus {
     fn default() -> Self {
-        Self {
-            status: CacheStatus::Miss,
-            source: None,
-            time_saved: 0,
-        }
+        Self::Miss
     }
 }
 
