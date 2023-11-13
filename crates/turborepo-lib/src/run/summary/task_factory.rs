@@ -119,7 +119,7 @@ impl<'a> TaskSummaryFactory<'a> {
             .scripts
             .get(task_id.task())
             .cloned()
-            .unwrap_or_default();
+            .unwrap_or_else(|| "<NONEXISTENT>".to_string());
 
         let task_definition = self.task_definition(task_id)?;
 
