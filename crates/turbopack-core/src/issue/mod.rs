@@ -568,7 +568,12 @@ impl IssueSource {
         let this = self.await?;
         Ok(PlainIssueSource {
             asset: PlainSource::from_source(this.source).await?,
-            range: this.range,
+            range: match &*this.range.await? {
+                SourceRange::Normal(start, end) => Some((start.clone_value(), end.clone_value())),
+                SourceRange::Lazy(start, end) => {
+                    todo!()
+                }
+            },
         }
         .cell())
     }
