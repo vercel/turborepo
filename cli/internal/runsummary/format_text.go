@@ -84,7 +84,7 @@ func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog, ui cli.Ui) 
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Outputs\t=\t%s\t${RESET}", strings.Join(task.Outputs, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Log File\t=\t%s\t${RESET}", task.LogFileRelativePath))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependencies\t=\t%s\t${RESET}", strings.Join(task.Dependencies, ", ")))
-		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependendents\t=\t%s\t${RESET}", strings.Join(task.Dependents, ", ")))
+		fmt.Fprintln(w, util.Sprintf("  ${GREY}Dependents\t=\t%s\t${RESET}", strings.Join(task.Dependents, ", ")))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Inputs Files Considered\t=\t%d\t${RESET}", len(task.ExpandedInputs)))
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}.env Files Considered\t=\t%d\t${RESET}", len(task.DotEnv)))
 
@@ -98,7 +98,7 @@ func (rsm Meta) FormatAndPrintText(workspaceInfos workspace.Catalog, ui cli.Ui) 
 		bytes, err := json.Marshal(task.ResolvedTaskDefinition)
 		// If there's an error, we can silently ignore it, we don't need to block the entire print.
 		if err == nil {
-			fmt.Fprintln(w, util.Sprintf("  ${GREY}ResolvedTaskDefinition\t=\t%s\t${RESET}", string(bytes)))
+			fmt.Fprintln(w, util.Sprintf("  ${GREY}Resolved Task Definition\t=\t%s\t${RESET}", string(bytes)))
 		}
 
 		fmt.Fprintln(w, util.Sprintf("  ${GREY}Framework\t=\t%s\t${RESET}", task.Framework))

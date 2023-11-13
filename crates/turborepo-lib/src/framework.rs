@@ -160,7 +160,6 @@ impl Matcher {
     }
 }
 
-#[allow(dead_code)]
 pub fn infer_framework(workspace: &WorkspaceInfo, is_monorepo: bool) -> Option<&'static Framework> {
     let frameworks = get_frameworks();
 

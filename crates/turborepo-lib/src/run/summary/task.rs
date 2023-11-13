@@ -17,9 +17,9 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 pub struct TaskCacheSummary {
     // Deprecated, but keeping around for --dry=json
-    local: bool,
+    pub local: bool,
     // Deprecated, but keeping around for --dry=json
-    remote: bool,
+    pub remote: bool,
     status: CacheStatus,
     // Present unless a cache miss
     #[serde(skip_serializing_if = "Option::is_none")]

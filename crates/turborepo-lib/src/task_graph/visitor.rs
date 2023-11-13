@@ -521,6 +521,7 @@ impl<'a> ExecContextFactory<'a> {
         execution_env: EnvironmentVariableMap,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
+        let pass_through_args = self.visitor.opts.run_opts.args_for_task(&task_id);
         ExecContext {
             engine: self.engine.clone(),
             ui: self.visitor.ui,
@@ -539,6 +540,7 @@ impl<'a> ExecContextFactory<'a> {
             task_hash,
             execution_env,
             continue_on_error: self.visitor.opts.run_opts.continue_on_error,
+            pass_through_args,
             errors: self.errors.clone(),
         }
     }
@@ -559,6 +561,7 @@ struct ExecContext {
     task_hash: String,
     execution_env: EnvironmentVariableMap,
     continue_on_error: bool,
+    pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
 }
 
@@ -690,7 +693,16 @@ impl ExecContext {
         };
 
         let mut cmd = Command::new(package_manager_binary);
-        cmd.args(["run", self.task_id.task()]);
+        let mut args = vec!["run".to_string(), self.task_id.task().to_string()];
+        if let Some(pass_through_args) = &self.pass_through_args {
+            args.extend(
+                self.package_manager
+                    .arg_separator(pass_through_args.as_slice())
+                    .map(|s| s.to_string()),
+            );
+            args.extend(pass_through_args.iter().cloned());
+        }
+        cmd.args(args);
         cmd.current_dir(self.workspace_directory.as_path());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
