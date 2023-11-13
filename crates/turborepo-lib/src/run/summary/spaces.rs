@@ -249,7 +249,7 @@ mod tests {
         let start_time = Local::now();
         let spaces_client_handle = spaces_client.start(CreateSpaceRunPayload::new(
             start_time,
-            "turbo run build",
+            "turbo run build".to_string(),
             None,
             None,
             None,
