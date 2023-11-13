@@ -1,12 +1,12 @@
 use std::backtrace;
 
-use itertools::Itertools;
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
 use turborepo_cache::CacheOpts;
 
 use crate::{
     cli::{Command, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, RunArgs},
+    run::task_id::TaskId,
     Args,
 };
 
@@ -138,6 +138,20 @@ pub struct RunOpts<'a> {
     pub summarize: Option<Option<bool>>,
     pub(crate) experimental_space_id: Option<String>,
     pub is_github_actions: bool,
+}
+
+impl<'a> RunOpts<'a> {
+    pub fn args_for_task(&self, task_id: &TaskId) -> Option<Vec<String>> {
+        if self
+            .tasks
+            .iter()
+            .any(|task| task.as_str() == task_id.task())
+        {
+            Some(Vec::from(self.pass_through_args))
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug)]
