@@ -400,12 +400,12 @@ impl CapturedIssues {
 #[derive(Clone, Debug)]
 pub struct IssueSource {
     source: Vc<Box<dyn Source>>,
-    range: Option<Vc<Range>>,
+    range: Option<Vc<SourceRange>>,
 }
 
 #[turbo_tasks::value]
 #[derive(Clone, Debug)]
-enum Range {
+enum SourceRange {
     Normal(SourcePos, SourcePos),
     Lazy(usize, usize),
 }
