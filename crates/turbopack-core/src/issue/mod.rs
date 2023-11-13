@@ -436,9 +436,9 @@ impl IssueSource {
             source,
             range: match (start == 0, end == 0) {
                 (true, true) => None,
-                (false, false) => Some(SourceRange::Lazy(start - 1, end - 1).cell()),
-                (false, true) => Some(SourceRange::Lazy(start - 1, start - 1).cell()),
-                (true, false) => Some(SourceRange::Lazy(end - 1, end - 1).cell()),
+                (false, false) => Some(SourceRange::ByteOffset(start - 1, end - 1).cell()),
+                (false, true) => Some(SourceRange::ByteOffset(start - 1, start - 1).cell()),
+                (true, false) => Some(SourceRange::ByteOffset(end - 1, end - 1).cell()),
             },
         })
     }
@@ -465,7 +465,7 @@ impl IssueSource {
             range: if let FileLinesContent::Lines(lines) = &*source.content().lines().await? {
                 let start = find_line_and_column(lines.as_ref(), start);
                 let end = find_line_and_column(lines.as_ref(), end);
-                Some(SourceRange::Normal(start, end).cell())
+                Some(SourceRange::LineColumn(start, end).cell())
             } else {
                 None
             },
@@ -572,8 +572,8 @@ impl IssueSource {
             asset: PlainSource::from_source(this.source).await?,
             range: match this.range {
                 Some(range) => match &*range.await? {
-                    SourceRange::Normal(start, end) => Some((*start, *end)),
-                    SourceRange::Lazy(start, end) => {
+                    SourceRange::LineColumn(start, end) => Some((*start, *end)),
+                    SourceRange::ByteOffset(start, end) => {
                         if let FileLinesContent::Lines(lines) =
                             &*this.source.content().lines().await?
                         {
