@@ -422,6 +422,27 @@ impl IssueSource {
         })
     }
 
+    /// Create a [`IssueSource`] from byte offsets given by an swc ast node
+    /// span.
+    ///
+    /// Arguments:
+    ///
+    /// * `source`: The source code in which to look up the byte offsets.
+    /// * `start`: The start index of the span. Must use **1-based** indexing.
+    /// * `end`: The end index of the span. Must use **1-based** indexing.
+    #[turbo_tasks::function]
+    pub fn from_swc_offsets(source: Vc<Box<dyn Source>>, start: usize, end: usize) -> Vc<Self> {
+        Self::cell(IssueSource {
+            source,
+            range: match (start == 0, end == 0) {
+                (true, true) => None,
+                (false, false) => Some(SourceRange::Lazy(start - 1, end - 1).cell()),
+                (false, true) => Some((start - 1, start - 1)),
+                (true, false) => Some((end - 1, end - 1)),
+            },
+        })
+    }
+
     #[turbo_tasks::function]
     /// Returns an `IssueSource` representing a span of code in the `source`.
     /// Positions are derived from byte offsets and stored as lines and columns.
