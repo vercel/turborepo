@@ -12,7 +12,7 @@ use swc_core::{
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{ChunkableModuleReference, ChunkingContext},
-    issue::LazyIssueSource,
+    issue::IssueSource,
     reference::ModuleReference,
     reference_type::CssReferenceSubType,
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},

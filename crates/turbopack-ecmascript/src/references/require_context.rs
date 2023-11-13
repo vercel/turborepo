@@ -22,7 +22,7 @@ use turbopack_core::{
         ChunkingContext,
     },
     ident::AssetIdent,
-    issue::{IssueSeverity, LazyIssueSource},
+    issue::{IssueSeverity, IssueSource},
     module::Module,
     reference::{ModuleReference, ModuleReferences},
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},

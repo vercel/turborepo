@@ -9,7 +9,7 @@ use turbopack_core::{
         ChunkItemExt, ChunkableModule, ChunkableModuleReference, ChunkingType, ChunkingTypeOption,
     },
     environment::Rendering,
-    issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity, LazyIssueSource},
+    issue::{code_gen::CodeGenerationIssue, IssueExt, IssueSeverity, IssueSource},
     reference::ModuleReference,
     reference_type::UrlReferenceSubType,
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},

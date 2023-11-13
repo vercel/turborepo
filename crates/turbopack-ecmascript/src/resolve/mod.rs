@@ -4,7 +4,7 @@ use anyhow::Result;
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
     context::AssetContext,
-    issue::{IssueSeverity, LazyIssueSource},
+    issue::{IssueSeverity, IssueSource},
     reference_type::{
         CommonJsReferenceSubType, EcmaScriptModulesReferenceSubType, ReferenceType,
         UrlReferenceSubType,

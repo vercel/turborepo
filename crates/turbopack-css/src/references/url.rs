@@ -10,7 +10,7 @@ use turbopack_core::{
         ChunkingTypeOption,
     },
     ident::AssetIdent,
-    issue::{IssueSeverity, LazyIssueSource},
+    issue::{IssueSeverity, IssueSource},
     output::OutputAsset,
     reference::ModuleReference,
     reference_type::UrlReferenceSubType,

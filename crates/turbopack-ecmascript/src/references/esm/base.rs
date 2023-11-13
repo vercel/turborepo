@@ -11,7 +11,7 @@ use turbopack_core::{
         ChunkItemExt, ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,
         ChunkingTypeOption, ModuleId,
     },
-    issue::{IssueSeverity, LazyIssueSource},
+    issue::{IssueSeverity, IssueSource},
     module::Module,
     reference::ModuleReference,
     reference_type::EcmaScriptModulesReferenceSubType,

@@ -15,7 +15,7 @@ use turbo_tasks::{
 };
 use turbopack_core::{
     chunk::ChunkableModuleReference,
-    issue::LazyIssueSource,
+    issue::IssueSource,
     reference::ModuleReference,
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
