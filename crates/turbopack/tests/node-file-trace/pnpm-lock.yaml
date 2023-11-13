@@ -78,6 +78,9 @@ importers:
       auth0:
         specifier: ^2.27.1
         version: 2.44.0(debug@4.3.4)
+      aws-sdk:
+        specifier: ^2.1495.0
+        version: 2.1495.0
       axios:
         specifier: ^0.21.2
         version: 0.21.4(debug@4.3.4)
@@ -5887,8 +5890,8 @@ packages:
     engines: {node: '>= 0.4'}
     dev: true
 
-  /aws-sdk@2.1240.0:
-    resolution: {integrity: sha512-WmZHnvka7SFKOwnGV0tDwjBPz5j9jJ7KU4BfvOZ/1y+hwcXsUY2JjKj9T7KKMjjG/L3m2H5b9JpS+r/gtcjnog==}
+  /aws-sdk@2.1495.0:
+    resolution: {integrity: sha512-JbefhY9G3WooJJjTtSUegyuNiYhY0vFd0q1KtpY8W+z1U6aKovkIyLJsR2de6u8KXZQkcwT+7N46BYT1SbZ5sQ==}
     engines: {node: '>= 10.0.0'}
     dependencies:
       buffer: 4.9.2
@@ -5900,7 +5903,7 @@ packages:
       url: 0.10.3
       util: 0.12.5
       uuid: 8.0.0
-      xml2js: 0.4.19
+      xml2js: 0.5.0
     dev: true
 
   /aws-sign2@0.7.0:
@@ -6939,7 +6942,7 @@ packages:
     engines: {node: '>= 6.10.0'}
     requiresBuild: true
     dependencies:
-      aws-sdk: 2.1240.0
+      aws-sdk: 2.1495.0
       bluebird: 3.7.2
       chrome-launcher: 0.10.7
       chrome-remote-interface: 0.25.7
@@ -19290,15 +19293,16 @@ packages:
       sax: 0.5.8
     dev: true
 
-  /xml2js@0.4.19:
-    resolution: {integrity: sha512-esZnJZJOiJR9wWKMyuvSE1y6Dq5LCuJanqhxslH2bxM6duahNZ+HMpCLhBQGZkbX6xRf8x1Y2eJlgt2q3qo49Q==}
-    dependencies:
-      sax: 1.2.4
-      xmlbuilder: 9.0.7
-    dev: true
-
   /xml2js@0.4.23:
     resolution: {integrity: sha512-ySPiMjM0+pLDftHgXY4By0uswI3SPKLDw/i3UXbnO8M/p28zqexCUoPmQFrYD+/1BzhGJSs2i1ERWKJAtiLrug==}
+    engines: {node: '>=4.0.0'}
+    dependencies:
+      sax: 1.2.4
+      xmlbuilder: 11.0.1
+    dev: true
+
+  /xml2js@0.5.0:
+    resolution: {integrity: sha512-drPFnkQJik/O+uPKpqSgr22mpuFHqKdbS835iAQrUC73L2F5WkboIRd63ai/2Yg6I1jzifPFKH2NTK+cfglkIA==}
     engines: {node: '>=4.0.0'}
     dependencies:
       sax: 1.2.4
