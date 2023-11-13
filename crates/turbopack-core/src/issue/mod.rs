@@ -439,25 +439,6 @@ impl IssueSource {
         start: usize,
         end: usize,
     ) -> Result<Vc<Self>> {
-        fn find_line_and_column(lines: &[FileLine], offset: usize) -> SourcePos {
-            match lines.binary_search_by(|line| line.bytes_offset.cmp(&offset)) {
-                Ok(i) => SourcePos { line: i, column: 0 },
-                Err(i) => {
-                    if i == 0 {
-                        SourcePos {
-                            line: 0,
-                            column: offset,
-                        }
-                    } else {
-                        let line = &lines[i - 1];
-                        SourcePos {
-                            line: i - 1,
-                            column: min(line.content.len(), offset - line.bytes_offset),
-                        }
-                    }
-                }
-            }
-        }
         Ok(Self::cell(IssueSource {
             source,
             range: if let FileLinesContent::Lines(lines) = &*source.content().lines().await? {
@@ -568,11 +549,22 @@ impl IssueSource {
         let this = self.await?;
         Ok(PlainIssueSource {
             asset: PlainSource::from_source(this.source).await?,
-            range: match &*this.range.await? {
-                SourceRange::Normal(start, end) => Some((start.clone_value(), end.clone_value())),
-                SourceRange::Lazy(start, end) => {
-                    todo!()
-                }
+            range: match this.range {
+                Some(range) => match &*range.await? {
+                    SourceRange::Normal(start, end) => Some((*start, *end)),
+                    SourceRange::Lazy(start, end) => {
+                        if let FileLinesContent::Lines(lines) =
+                            &*this.source.content().lines().await?
+                        {
+                            let start = find_line_and_column(lines.as_ref(), start);
+                            let end = find_line_and_column(lines.as_ref(), end);
+                            Some((start, end))
+                        } else {
+                            None
+                        }
+                    }
+                },
+                _ => None,
             },
         }
         .cell())
@@ -786,5 +778,25 @@ pub async fn handle_issues<T: Send>(
         Err(anyhow!(message))
     } else {
         Ok(())
+    }
+}
+
+fn find_line_and_column(lines: &[FileLine], offset: usize) -> SourcePos {
+    match lines.binary_search_by(|line| line.bytes_offset.cmp(&offset)) {
+        Ok(i) => SourcePos { line: i, column: 0 },
+        Err(i) => {
+            if i == 0 {
+                SourcePos {
+                    line: 0,
+                    column: offset,
+                }
+            } else {
+                let line = &lines[i - 1];
+                SourcePos {
+                    line: i - 1,
+                    column: min(line.content.len(), offset - line.bytes_offset),
+                }
+            }
+        }
     }
 }
