@@ -212,10 +212,15 @@ impl TaskCache {
                 .await?;
 
             let Some((cache_hit_metadata, restored_files)) = cache_status else {
-                prefixed_ui.output(format!(
-                    "cache miss, executing {}",
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
+                if !matches!(
+                    self.task_output_mode,
+                    OutputLogsMode::None | OutputLogsMode::ErrorsOnly
+                ) {
+                    prefixed_ui.output(format!(
+                        "cache miss, executing {}",
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ));
+                }
 
                 return Ok(None);
             };
