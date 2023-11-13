@@ -160,7 +160,7 @@ impl RunTracker {
                 |spaces_client| {
                     let payload = CreateSpaceRunPayload::new(
                         started_at,
-                        synthesized_command,
+                        synthesized_command.clone(),
                         package_inference_root,
                         scm.branch.clone(),
                         scm.sha.clone(),
@@ -177,7 +177,7 @@ impl RunTracker {
             started_at,
             execution_tracker: ExecutionTracker::new(),
             user,
-            synthesized_command: synthesized_command.to_string(),
+            synthesized_command,
             spaces_client_handle,
         }
     }
