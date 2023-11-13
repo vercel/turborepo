@@ -5,7 +5,8 @@
   "compilerOptions": {
     "plugins": [{ "name": "next" }],
     "incremental": true,
-    "jsx": "preserve",
+    "allowJs": true,
+    "jsx": "preserve"
   },
   "include": ["src", "next-env.d.ts"],
   "exclude": ["node_modules"]
