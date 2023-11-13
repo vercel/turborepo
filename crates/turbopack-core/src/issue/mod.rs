@@ -406,8 +406,8 @@ pub struct IssueSource {
 #[turbo_tasks::value]
 #[derive(Clone, Debug)]
 enum SourceRange {
-    Normal(SourcePos, SourcePos),
-    Lazy(usize, usize),
+    LineColumn(SourcePos, SourcePos),
+    ByteOffset(usize, usize),
 }
 
 #[turbo_tasks::value_impl]
