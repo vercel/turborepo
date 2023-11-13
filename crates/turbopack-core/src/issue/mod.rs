@@ -463,7 +463,7 @@ impl IssueSource {
             range: if let FileLinesContent::Lines(lines) = &*source.content().lines().await? {
                 let start = find_line_and_column(lines.as_ref(), start);
                 let end = find_line_and_column(lines.as_ref(), end);
-                Some((start, end))
+                Some(SourceRange::Normal(start, end).cell())
             } else {
                 None
             },
