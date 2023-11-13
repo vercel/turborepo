@@ -1,6 +1,7 @@
 use std::{io, process::Command, sync::Arc};
 
 use shared_child::SharedChild;
+use tracing::debug;
 
 /// Spawns a child in a way where SIGINT is correctly forwarded to the child
 pub fn spawn_child(mut command: Command) -> Result<Arc<SharedChild>, io::Error> {
