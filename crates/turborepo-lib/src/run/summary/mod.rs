@@ -201,6 +201,7 @@ impl RunTracker {
         run_opts: &RunOpts<'a>,
         packages: HashSet<WorkspaceName>,
         global_hash_summary: GlobalHashSummary<'a>,
+        global_env_mode: EnvMode,
         task_factory: TaskSummaryFactory<'a>,
     ) -> Result<RunSummary<'a>, Error> {
         let single_package = run_opts.single_package;
@@ -235,7 +236,7 @@ impl RunTracker {
             turbo_version: self.version,
             packages: packages.into_iter().sorted().collect(),
             execution: Some(execution_summary),
-            env_mode: run_opts.env_mode.into(),
+            env_mode: global_env_mode,
             framework_inference: run_opts.framework_inference,
             tasks,
             global_hash_summary,
@@ -286,6 +287,7 @@ impl RunTracker {
                 run_opts,
                 packages,
                 global_hash_summary,
+                global_env_mode.into(),
                 task_factory,
             )
             .await?;
