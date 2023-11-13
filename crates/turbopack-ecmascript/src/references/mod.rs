@@ -1792,7 +1792,7 @@ async fn handle_free_var_reference(
     Ok(true)
 }
 
-fn issue_source(source: Vc<Box<dyn Source>>, span: Span) -> Vc<LazyIssueSource> {
+fn issue_source(source: Vc<Box<dyn Source>>, span: Span) -> Vc<IssueSource> {
     LazyIssueSource::from_swc_offsets(source, span.lo.to_usize(), span.hi.to_usize())
 }
 

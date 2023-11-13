@@ -177,7 +177,7 @@ pub async fn css_resolve(
     origin: Vc<Box<dyn ResolveOrigin>>,
     request: Vc<Request>,
     ty: Value<CssReferenceSubType>,
-    issue_source: Option<Vc<LazyIssueSource>>,
+    issue_source: Option<Vc<IssueSource>>,
 ) -> Result<Vc<ModuleResolveResult>> {
     let ty = Value::new(ReferenceType::Css(ty.into_value()));
     let options = origin.resolve_options(ty.clone());

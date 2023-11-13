@@ -118,7 +118,7 @@ pub(crate) struct ImportMapReference {
     pub module_path: JsWord,
     pub imported_symbol: ImportedSymbol,
     pub annotations: ImportAnnotations,
-    pub issue_source: Option<Vc<LazyIssueSource>>,
+    pub issue_source: Option<Vc<IssueSource>>,
 }
 
 impl ImportMap {

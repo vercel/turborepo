@@ -2,7 +2,7 @@ use anyhow::Result;
 use turbo_tasks::Vc;
 use turbo_tasks_fs::FileSystemPath;
 
-use super::{Issue, IssueSeverity, LazyIssueSource, OptionIssueSource};
+use super::{Issue, IssueSeverity, IssueSource, OptionIssueSource};
 use crate::ident::AssetIdent;
 
 #[turbo_tasks::value(shared)]
@@ -13,7 +13,7 @@ pub struct AnalyzeIssue {
     pub message: Vc<String>,
     pub category: Vc<String>,
     pub code: Option<String>,
-    pub source: Option<Vc<LazyIssueSource>>,
+    pub source: Option<Vc<IssueSource>>,
 }
 
 #[turbo_tasks::value_impl]

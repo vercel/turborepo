@@ -50,7 +50,7 @@ pub struct UrlAssetReference {
     request: Vc<Request>,
     rendering: Vc<Rendering>,
     ast_path: Vc<AstPath>,
-    issue_source: Vc<LazyIssueSource>,
+    issue_source: Vc<IssueSource>,
     in_try: bool,
     url_rewrite_behavior: Vc<UrlRewriteBehavior>,
 }
@@ -63,7 +63,7 @@ impl UrlAssetReference {
         request: Vc<Request>,
         rendering: Vc<Rendering>,
         ast_path: Vc<AstPath>,
-        issue_source: Vc<LazyIssueSource>,
+        issue_source: Vc<IssueSource>,
         in_try: bool,
         url_rewrite_behavior: Vc<UrlRewriteBehavior>,
     ) -> Vc<Self> {
