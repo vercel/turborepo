@@ -396,65 +396,16 @@ impl CapturedIssues {
     }
 }
 
-/// Use this to pass and store byte offsets for an AST node along with its
-/// source. When row/column is needed, this can be lazily converted into a
-/// proper `IssueSource` at that time using
-/// [LazyIssueSource::to_issue_source].
-#[turbo_tasks::value]
-#[derive(Clone, Debug)]
-pub struct LazyIssueSource {
-    pub source: Vc<Box<dyn Source>>,
-    pub start_end: Option<(usize, usize)>,
-}
-
-#[turbo_tasks::value_impl]
-impl LazyIssueSource {
-    /// Create a [`LazyIssueSource`] from byte offsets given by an swc ast node
-    /// span.
-    ///
-    /// Arguments:
-    ///
-    /// * `source`: The source code in which to look up the byte offsets.
-    /// * `start`: The start index of the span. Must use **1-based** indexing.
-    /// * `end`: The end index of the span. Must use **1-based** indexing.
-    #[turbo_tasks::function]
-    pub fn from_swc_offsets(source: Vc<Box<dyn Source>>, start: usize, end: usize) -> Vc<Self> {
-        match (start == 0, end == 0) {
-            (true, true) => Self::cell(LazyIssueSource {
-                source,
-                start_end: None,
-            }),
-            (false, false) => Self::cell(LazyIssueSource {
-                source,
-                start_end: Some((start - 1, end - 1)),
-            }),
-            (false, true) => Self::cell(LazyIssueSource {
-                source,
-                start_end: Some((start - 1, start - 1)),
-            }),
-            (true, false) => Self::cell(LazyIssueSource {
-                source,
-                start_end: Some((end - 1, end - 1)),
-            }),
-        }
-    }
-
-    #[turbo_tasks::function]
-    pub async fn to_issue_source(self: Vc<Self>) -> Result<Vc<IssueSource>> {
-        let this = &*self.await?;
-        Ok(if let Some((start, end)) = this.start_end {
-            IssueSource::from_byte_offset(this.source, start, end)
-        } else {
-            IssueSource::from_source_only(this.source)
-        })
-    }
-}
-
 #[turbo_tasks::value]
 #[derive(Clone, Debug)]
 pub struct IssueSource {
     source: Vc<Box<dyn Source>>,
-    range: Option<(SourcePos, SourcePos)>,
+    range: Range,
+}
+
+enum Range {
+    Normal(Option<(SourcePos, SourcePos)>),
+    Lazy(Option<(usize, usize)>),
 }
 
 #[turbo_tasks::value_impl]
