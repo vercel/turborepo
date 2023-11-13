@@ -22,6 +22,4 @@
   $ ${TURBO} run build
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "pkg-z#dev" is a persistent task, "pkg-b#build" cannot depend on it
-  Turbo error: error preparing engine: Invalid persistent task configuration:
-  "pkg-z#dev" is a persistent task, "pkg-b#build" cannot depend on it
   [1]

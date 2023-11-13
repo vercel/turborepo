@@ -1,10 +1,10 @@
 use chrono::{DateTime, Local};
-use reqwest::{Method, RequestBuilder};
+use reqwest::Method;
 use serde::Serialize;
 use turbopath::AnchoredSystemPath;
 use turborepo_vercel_api::SpaceRun;
 
-use crate::{retry, APIAuth, APIClient, Client, Error};
+use crate::{retry, APIAuth, APIClient, Error};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -70,7 +70,7 @@ pub struct CreateSpaceRunPayload {
 impl CreateSpaceRunPayload {
     pub fn new(
         start_time: DateTime<Local>,
-        synthesized_command: &str,
+        synthesized_command: String,
         package_inference_root: Option<&AnchoredSystemPath>,
         git_branch: Option<String>,
         git_sha: Option<String>,
@@ -84,7 +84,7 @@ impl CreateSpaceRunPayload {
         CreateSpaceRunPayload {
             start_time,
             status: RunStatus::Running,
-            command: synthesized_command.to_string(),
+            command: synthesized_command,
             package_inference_root: package_inference_root
                 .map(|p| p.to_string())
                 .unwrap_or_default(),

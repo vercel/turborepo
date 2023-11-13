@@ -61,7 +61,7 @@ impl From<Workspaces> for Vec<String> {
     }
 }
 
-#[derive(Debug, Serialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum PackageManager {
     Berry,
@@ -219,7 +219,7 @@ impl Display for MissingWorkspaceError {
 impl From<&PackageManager> for MissingWorkspaceError {
     fn from(value: &PackageManager) -> Self {
         Self {
-            package_manager: value.clone(),
+            package_manager: *value,
         }
     }
 }
@@ -531,6 +531,24 @@ impl PackageManager {
 
     pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
         turbo_root.join_component(self.lockfile_name())
+    }
+
+    pub fn arg_separator(&self, user_args: &[String]) -> Option<&str> {
+        match self {
+            PackageManager::Yarn | PackageManager::Bun => {
+                // Yarn and bun warn and swallows a "--" token. If the user is passing "--", we
+                // need to prepend our own so that the user's doesn't get
+                // swallowed. If they are not passing their own, we don't need
+                // the "--" token and can avoid the warning.
+                if user_args.iter().any(|arg| arg == "--") {
+                    Some("--")
+                } else {
+                    None
+                }
+            }
+            PackageManager::Npm | PackageManager::Pnpm6 => Some("--"),
+            PackageManager::Pnpm | PackageManager::Berry => None,
+        }
     }
 }
 
