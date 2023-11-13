@@ -1216,6 +1216,9 @@ importers:
       '@types/node':
         specifier: ^20.8.5
         version: 20.8.5
+      cross-env:
+        specifier: ^7.0.3
+        version: 7.0.3
       typescript:
         specifier: ^5.2.2
         version: 5.2.2
@@ -1227,6 +1230,10 @@ importers:
       turborepo-tests-helpers:
         specifier: workspace:*
         version: link:../helpers
+    devDependencies:
+      cross-env:
+        specifier: ^7.0.3
+        version: 7.0.3
 
 packages:
 

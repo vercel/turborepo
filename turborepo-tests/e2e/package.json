@@ -1,8 +1,8 @@
 {
   "name": "turborepo-tests-e2e",
   "scripts": {
-    "test": "EXPERIMENTAL_RUST_CODEPATH=false node -r esbuild-register index.ts",
-    "test:rust-codepath": "EXPERIMENTAL_RUST_CODEPATH=true node -r esbuild-register index.ts",
+    "test": "cross-env EXPERIMENTAL_RUST_CODEPATH=false node -r esbuild-register index.ts",
+    "test:rust-codepath": "cross-env EXPERIMENTAL_RUST_CODEPATH=true node -r esbuild-register index.ts",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
@@ -18,6 +18,7 @@
   "devDependencies": {
     "@turbo/tsconfig": "workspace:*",
     "@types/node": "^20.8.5",
+    "cross-env": "^7.0.3",
     "typescript": "^5.2.2"
   }
 }
