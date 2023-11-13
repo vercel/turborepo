@@ -26,7 +26,7 @@ Check
     Outputs                        = foo.txt\s* (re)
     Log File                       = .turbo(\/|\\)turbo-build.log\s+ (re)
     Dependencies                   =\s* (re)
-    Dependendents                  =\s* (re)
+    Dependents                     =\s* (re)
     Inputs Files Considered        = 5\s* (re)
     .env Files Considered          = 0\s* (re)
     Env Vars                       =\s* (re)
@@ -34,5 +34,5 @@ Check
     Inferred Env Vars Values       =\s* (re)
     Passed Through Env Vars        =\s* (re)
     Passed Through Env Vars Values =\s* (re)
-    ResolvedTaskDefinition         = {"outputs":["foo.txt"],"cache":true,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
+    Resolved Task Definition       = {"outputs":\["foo.txt"],"cache":true,"dependsOn":\[],"inputs":\[],"outputMode":"full","persistent":false,"env":\[],"passThroughEnv":null,"dotEnv":null}\s* (re)
     Framework                      = <NO FRAMEWORK DETECTED>\s* (re)

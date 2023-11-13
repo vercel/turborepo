@@ -28,7 +28,7 @@ Check
     Outputs                        =\s* (re)
     Log File                       = .turbo(\/|\\)turbo-build.log\s+ (re)
     Dependencies                   =\s* (re)
-    Dependendents                  =\s* (re)
+    Dependents                     =\s* (re)
     Inputs Files Considered        = 4\s* (re)
     .env Files Considered          = 0\s* (re)
     Env Vars                       =\s* (re)
@@ -36,7 +36,7 @@ Check
     Inferred Env Vars Values       =\s* (re)
     Passed Through Env Vars        =\s* (re)
     Passed Through Env Vars Values =\s* (re)
-    ResolvedTaskDefinition         = {"outputs":[],"cache":false,"dependsOn":[],"inputs":[],"outputMode":"full","persistent":false,"env":[],"passThroughEnv":null,"dotEnv":null} 
+    Resolved Task Definition       = {"outputs":\[],"cache":false,"dependsOn":\[],"inputs":\[],"outputMode":"full","persistent":false,"env":\[],"passThroughEnv":null,"dotEnv":null}\s* (re)
     Framework                      = <NO FRAMEWORK DETECTED>\s* (re)
 
   $ ${TURBO} run build --graph

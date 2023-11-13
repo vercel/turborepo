@@ -35,7 +35,7 @@ use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY};
 use self::task_id::TaskName;
 pub use crate::run::error::Error;
 use crate::{
-    cli::EnvMode,
+    cli::{DryRunMode, EnvMode},
     commands::CommandBase,
     config::TurboJson,
     daemon::DaemonConnector,
@@ -170,7 +170,8 @@ impl<'a> Run<'a> {
             opts.cache_opts.skip_remote = !enabled;
         }
 
-        let _is_structured_output = opts.run_opts.graph.is_some() || opts.run_opts.dry_run_json;
+        let _is_structured_output = opts.run_opts.graph.is_some()
+            || matches!(opts.run_opts.dry_run, Some(DryRunMode::Json));
 
         let is_single_package = opts.run_opts.single_package;
 
@@ -264,7 +265,7 @@ impl<'a> Run<'a> {
         let mut engine =
             self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
 
-        if !opts.run_opts.dry_run && opts.run_opts.graph.is_none() {
+        if opts.run_opts.dry_run.is_none() && opts.run_opts.graph.is_none() {
             self.print_run_prelude(&opts, &filtered_pkgs);
         }
 
@@ -367,7 +368,7 @@ impl<'a> Run<'a> {
 
         let run_tracker = RunTracker::new(
             start_at,
-            "todo",
+            opts.synthesize_command(),
             opts.scope_opts.pkg_inference_root.as_deref(),
             &env_at_execution_start,
             &self.base.repo_root,
@@ -394,7 +395,7 @@ impl<'a> Run<'a> {
             global_env,
         );
 
-        if opts.run_opts.dry_run {
+        if opts.run_opts.dry_run.is_some() {
             visitor.dry_run();
         }
 
@@ -564,7 +565,7 @@ impl<'a> Run<'a> {
 
         let run_tracker = RunTracker::new(
             started_at,
-            "todo",
+            opts.synthesize_command(),
             opts.scope_opts.pkg_inference_root.as_deref(),
             &env_at_execution_start,
             &self.base.repo_root,

@@ -26,6 +26,9 @@ pub struct ExecutionTracker {
 pub struct ExecutionSummary<'a> {
     // a synthesized turbo command to produce this invocation
     command: String,
+    // the (possibly empty) path from the turborepo root to where the command was run
+    #[serde(rename = "repoPath")]
+    repo_path: &'a AnchoredSystemPath,
     // number of tasks that exited successfully (does not include cache hits)
     success: usize,
     // number of tasks that exited with failure
@@ -34,9 +37,6 @@ pub struct ExecutionSummary<'a> {
     cached: usize,
     // number of tasks that started
     attempted: usize,
-    // the (possibly empty) path from the turborepo root to where the command was run
-    #[serde(rename = "repoPath")]
-    repo_path: &'a AnchoredSystemPath,
     pub(crate) start_time: i64,
     pub(crate) end_time: i64,
     #[serde(skip)]
