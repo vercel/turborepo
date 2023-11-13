@@ -289,7 +289,7 @@ impl<'a> From<SpacesTaskInformation<'a>> for SpaceTaskSummary {
                         turborepo_api_client::spaces::CacheSource::Local
                     }
                     turborepo_cache::CacheSource::Remote => {
-                        turborepo_api_client::spaces::CacheSource::Local
+                        turborepo_api_client::spaces::CacheSource::Remote
                     }
                 }),
                 time_saved,
