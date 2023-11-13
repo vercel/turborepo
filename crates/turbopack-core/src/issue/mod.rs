@@ -437,8 +437,8 @@ impl IssueSource {
             range: match (start == 0, end == 0) {
                 (true, true) => None,
                 (false, false) => Some(SourceRange::Lazy(start - 1, end - 1).cell()),
-                (false, true) => Some((start - 1, start - 1)),
-                (true, false) => Some((end - 1, end - 1)),
+                (false, true) => Some(SourceRange::Lazy(start - 1, start - 1).cell()),
+                (true, false) => Some(SourceRange::Lazy(end - 1, end - 1).cell()),
             },
         })
     }
