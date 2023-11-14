@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    io::Write,
     path::Path,
 };
 
@@ -105,21 +106,25 @@ impl From<Vec<String>> for TaskOutputs {
         for glob in outputs {
             if let Some(glob) = glob.strip_prefix('!') {
                 if Utf8Path::new(glob).is_absolute() {
-                    println!(
+                    writeln!(
+                        std::io::stderr(),
                         "[WARNING] Using an absolute path in \"outputs\" ({}) will not work and \
                          will be an error in a future version",
                         glob
                     )
+                    .expect("unable to write to stderr");
                 }
 
                 exclusions.push(glob.to_string());
             } else {
                 if Utf8Path::new(&glob).is_absolute() {
-                    println!(
+                    writeln!(
+                        std::io::stderr(),
                         "[WARNING] Using an absolute path in \"outputs\" ({}) will not work and \
                          will be an error in a future version",
                         glob
                     )
+                    .expect("unable to write to stderr");
                 }
 
                 inclusions.push(glob);
@@ -211,11 +216,13 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
                 defined_fields.insert("Inputs".to_string());
                 for input in &inputs {
                     if Path::new(&input).is_absolute() {
-                        println!(
+                        writeln!(
+                            std::io::stderr(),
                             "[WARNING] Using an absolute path in \"inputs\" ({}) will not work \
                              and will be an error in a future version",
                             input
                         )
+                        .expect("unable to write to stderr");
                     }
                 }
 
@@ -329,11 +336,13 @@ impl TryFrom<RawTurboJSON> for TurboJson {
                 global_env.insert(env_var.to_string());
             } else {
                 if Path::new(&value).is_absolute() {
-                    println!(
+                    writeln!(
+                        std::io::stderr(),
                         "[WARNING] Using an absolute path in \"globalDependencies\" ({}) will not \
                          work and will be an error in a future version",
                         value
                     )
+                    .expect("unable to write to stderr");
                 }
 
                 global_file_dependencies.insert(value);
