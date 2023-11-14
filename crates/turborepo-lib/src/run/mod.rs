@@ -204,9 +204,9 @@ impl<'a> Run<'a> {
         // There's some warning handling code in Go that I'm ignoring
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
 
-        let mut daemon = None;
-        if is_ci_or_not_tty && !opts.run_opts.no_daemon {
+        let daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
             info!("skipping turbod since we appear to be in a non-interactive context");
+            None
         } else if !opts.run_opts.no_daemon {
             let connector = DaemonConnector {
                 can_start_server: true,
@@ -215,10 +215,20 @@ impl<'a> Run<'a> {
                 sock_file: self.base.daemon_file_root().join_component("turbod.sock"),
             };
 
-            let client = connector.connect().await?;
-            debug!("running in daemon mode");
-            daemon = Some(client);
-        }
+            match connector.connect().await {
+                Ok(client) => {
+                    debug!("running in daemon mode");
+                    Some(client)
+                }
+                Err(e) => {
+                    debug!("failed to connect to daemon {e}");
+                    None
+                }
+            }
+        } else {
+            // We are opted out of using the daemon
+            None
+        };
 
         pkg_dep_graph.validate()?;
 
