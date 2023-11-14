@@ -8,11 +8,22 @@ use tracing::debug;
 pub fn spawn_child(mut command: Command) -> Result<Arc<SharedChild>, io::Error> {
     debug!("spawn_child entered with command {:?}", command);
 
-    let xx = SharedChild::spawn(&mut command)?;
+    let child = SharedChild::spawn(&mut command);
+
+    let unwrapped_child = match child {
+        Ok(unwrapped_child) => {
+            println!("All good, child is spawned");
+            unwrapped_child
+        }
+        Err(err) => {
+            println!("Error spawning, {}", err);
+            return Err(err);
+        }
+    };
 
     debug!("got a spawnd child");
 
-    let shared_child = Arc::new(xx);
+    let shared_child = Arc::new(unwrapped_child);
 
     debug!("shared_child assigned");
 
