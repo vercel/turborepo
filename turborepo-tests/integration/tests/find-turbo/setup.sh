@@ -14,6 +14,9 @@ WINDOWS_BIN="${SCRIPT_DIR}/../_fixtures/find_turbo/-windows-binary/turbostub.exe
 # into the fixture itself. For Windows platform, the binary itself needs to be a _real_ Windows binary. Instead
 # of maintaining many copies of these binaries, we keep one and move it over to the specific folder in node_modules
 # required by that fixture. This makes the fixture a bit dynamic in nature, but it's easier to maintain.
+##
+# Note that we only _really_ need to do this when these tests are running on Windows, because that's the
+# only time they get used, but we will do it always, because the folders exist in the fixture and they shuoldn't be empty.
 
 if [[ "$FIXTURE_DIR" == "hoisted" ]]; then
   cp "$WINDOWS_BIN"  "${TARGET_DIR}/node_modules/turbo-windows-64/bin/turbo.exe"
