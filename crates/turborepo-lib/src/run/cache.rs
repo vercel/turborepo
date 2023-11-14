@@ -288,7 +288,7 @@ impl TaskCache {
         prefixed_ui: &mut PrefixedUI<impl Write>,
         duration: Duration,
     ) -> Result<(), Error> {
-        if self.caching_disabled || self.run_cache.reads_disabled {
+        if self.caching_disabled || self.run_cache.writes_disabled {
             return Ok(());
         }
 
