@@ -785,6 +785,9 @@ impl ExecContext {
             }
             ChildExit::Finished(Some(code)) => {
                 // If there was an error, flush the buffered output
+                if let Err(e) = stdout_writer.flush() {
+                    error!("error flushing logs: {e}");
+                }
                 if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
                     error!("error reading logs: {e}");
                 }
