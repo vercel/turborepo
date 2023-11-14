@@ -241,6 +241,7 @@ jobs:
           CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          EXPERIMENTAL_RUST_CODEPATH: true
 
       - name: Run sccache stat for check
         shell: bash
@@ -302,6 +303,8 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: turbo run test --filter=cli --color
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
   turborepo_integration:
     name: Turborepo Integration Tests
@@ -333,6 +336,8 @@ jobs:
 
       - name: Integration Tests
         run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
   turborepo_integration_rust:
     name: Turborepo Integration Tests (Rust Codepath)
@@ -365,6 +370,8 @@ jobs:
 
       - name: Integration Tests
         run: turbo run test:rust-codepath --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
   turborepo_e2e:
     name: Turborepo E2E Tests
@@ -391,6 +398,8 @@ jobs:
 
       - name: E2E Tests
         run: turbo run test --filter=turborepo-tests-e2e --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --color --env-mode=strict
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
   turborepo_examples:
     name: Turborepo Examples
@@ -448,6 +457,8 @@ jobs:
         # envs var would apply to the actual tests that exercise turbo also,
         # making test output non-deterministic.
         run: turbo run example-test --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
       # Re-enable corepack, actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it here. The "Post" step
@@ -497,7 +508,9 @@ jobs:
 
       - name: Run tests
         run: |
-          turbo run check-types test --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color
+          turbo run check-types test --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
   turbopack_typescript:
     name: Turbopack TypeScript files
@@ -935,7 +948,9 @@ jobs:
         # Filters some workspaces out:
         # - `cli` because it runs golangci-lint and this Job doesn't have all the dependencies for that.
         # - Other `@vercel/*` packages because ??
-        run: turbo run lint --filter=!cli --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat
+        run: turbo run lint --filter=!cli --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat --env-mode=strict
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
   final:
     name: Ok
