@@ -16,7 +16,6 @@ use serde::Deserialize;
 use thiserror::Error;
 use tiny_gradient::{GradientStr, RGB};
 use tracing::debug;
-use tracing_subscriber::field::debug;
 use turbo_updater::check_for_updates;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::{

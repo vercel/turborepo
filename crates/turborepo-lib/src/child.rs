@@ -1,5 +1,6 @@
 use std::{io, process::Command, sync::Arc};
 
+use ctrlc;
 use shared_child::SharedChild;
 use tracing::debug;
 
@@ -8,7 +9,10 @@ pub fn spawn_child(mut command: Command) -> Result<Arc<SharedChild>, io::Error> 
     let shared_child = Arc::new(SharedChild::spawn(&mut command)?);
     let handler_shared_child = shared_child.clone();
 
+    debug!("before setting handler");
+
     ctrlc::set_handler(move || {
+        debug!("ctrlc handler called");
         // on windows, we can't send signals so just kill
         // we are quiting anyways so just ignore
         #[cfg(target_os = "windows")]
@@ -21,12 +25,15 @@ pub fn spawn_child(mut command: Command) -> Result<Arc<SharedChild>, io::Error> 
         // so that go can gracefully shut down process groups
         // SAFETY: we could pull in the nix crate to handle this
         // 'safely' but nix::sys::signal::kill just calls libc::kill
+        debug!("Calling special kill code for unix");
         #[cfg(not(target_os = "windows"))]
         unsafe {
             libc::kill(handler_shared_child.id() as i32, libc::SIGTERM);
         }
     })
     .expect("handler set");
+
+    debug!("returning shared child");
 
     Ok(shared_child)
 }
