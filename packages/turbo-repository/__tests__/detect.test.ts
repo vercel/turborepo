@@ -1,17 +1,17 @@
 import * as path from "node:path";
-import { Repository } from "../js/dist/index.js";
+import { PackageManagerRoot } from "../js/dist/index.js";
 
 describe("detect", () => {
   it("detects a repo", async () => {
-    const repo = await Repository.detectJS();
-    console.log(repo);
+    const packageManagerRoot = await PackageManagerRoot.find();
+    console.log(packageManagerRoot);
     const expectedRoot = path.resolve(__dirname, "../../..");
-    expect(repo.root).toBe(expectedRoot);
+    expect(packageManagerRoot.root).toBe(expectedRoot);
   });
 
   it("enumerates workspaces", async () => {
-    const repo = await Repository.detectJS();
-    const workspaces = await repo.workspaces();
+    const packageManagerRoot = await PackageManagerRoot.find();
+    const workspaces = await packageManagerRoot.packages();
     expect(workspaces.length).not.toBe(0);
   });
 
