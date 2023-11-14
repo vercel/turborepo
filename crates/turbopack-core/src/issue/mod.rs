@@ -76,7 +76,7 @@ impl Display for IssueSeverity {
 /// Represents a section of structured styled text. This can be interpreted and
 /// rendered by various UIs as appropriate, e.g. HTML for display on the web,
 /// ANSI sequences in TTYs.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, DeterministicHash)]
 #[turbo_tasks::value(shared)]
 pub enum StyledString {
     /// Multiple [StyledString]s concatenated into a single line. Each item is
@@ -93,42 +93,6 @@ pub enum StyledString {
     Code(String),
     /// Some important text.
     Strong(String),
-}
-
-impl DeterministicHash for StyledString {
-    fn deterministic_hash<H: turbo_tasks_hash::DeterministicHasher>(&self, state: &mut H) {
-        match self {
-            StyledString::Line(parts) => {
-                "line_start".deterministic_hash(state);
-                for part in parts {
-                    part.deterministic_hash(state);
-                }
-                "line_end".deterministic_hash(state);
-            }
-            StyledString::Stack(parts) => {
-                "stack_start".deterministic_hash(state);
-                for part in parts {
-                    part.deterministic_hash(state);
-                }
-                "stack_end".deterministic_hash(state);
-            }
-            StyledString::Text(s) => {
-                "text_start".deterministic_hash(state);
-                s.deterministic_hash(state);
-                "text_end".deterministic_hash(state);
-            }
-            StyledString::Code(s) => {
-                "code_start".deterministic_hash(state);
-                s.deterministic_hash(state);
-                "code_end".deterministic_hash(state);
-            }
-            StyledString::Strong(s) => {
-                "strong_start".deterministic_hash(state);
-                s.deterministic_hash(state);
-                "strong_end".deterministic_hash(state);
-            }
-        }
-    }
 }
 
 impl StyledString {
