@@ -34,11 +34,6 @@ pub trait Client {
     async fn get_teams(&self, token: &str) -> Result<TeamsResponse>;
     async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>>;
     fn add_ci_header(request_builder: RequestBuilder) -> RequestBuilder;
-    fn add_team_params(
-        request_builder: RequestBuilder,
-        team_id: &str,
-        team_slug: Option<&str>,
-    ) -> RequestBuilder;
     async fn get_caching_status(
         &self,
         token: &str,
@@ -154,21 +149,6 @@ impl Client for APIClient {
             if let Some(vendor_constant) = Vendor::get_constant() {
                 request_builder = request_builder.header("x-artifact-client-ci", vendor_constant);
             }
-        }
-
-        request_builder
-    }
-
-    fn add_team_params(
-        mut request_builder: RequestBuilder,
-        team_id: &str,
-        team_slug: Option<&str>,
-    ) -> RequestBuilder {
-        if let Some(slug) = team_slug {
-            request_builder = request_builder.query(&[("teamSlug", slug)]);
-        }
-        if team_id.starts_with("team_") {
-            request_builder = request_builder.query(&[("teamId", team_id)]);
         }
 
         request_builder
@@ -507,6 +487,21 @@ impl APIClient {
         }
 
         Ok(request_builder)
+    }
+
+    fn add_team_params(
+        mut request_builder: RequestBuilder,
+        team_id: &str,
+        team_slug: Option<&str>,
+    ) -> RequestBuilder {
+        if let Some(slug) = team_slug {
+            request_builder = request_builder.query(&[("teamSlug", slug)]);
+        }
+        if team_id.starts_with("team_") {
+            request_builder = request_builder.query(&[("teamId", team_id)]);
+        }
+
+        request_builder
     }
 }
 

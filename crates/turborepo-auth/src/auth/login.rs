@@ -185,13 +185,6 @@ mod tests {
         fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
             unimplemented!("add_ci_header")
         }
-        fn add_team_params(
-            _request_builder: RequestBuilder,
-            _team_id: &str,
-            _team_slug: Option<&str>,
-        ) -> RequestBuilder {
-            unimplemented!("add_team_params")
-        }
         async fn get_caching_status(
             &self,
             _token: &str,
