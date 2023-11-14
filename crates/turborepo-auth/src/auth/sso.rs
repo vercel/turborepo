@@ -199,7 +199,7 @@ mod tests {
         async fn get_caching_status(
             &self,
             _token: &str,
-            _team_id: &str,
+            _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> turborepo_api_client::Result<CachingStatusResponse> {
             unimplemented!("get_caching_status")
@@ -238,7 +238,7 @@ mod tests {
             &self,
             _hash: &str,
             _token: &str,
-            _team_id: &str,
+            _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> turborepo_api_client::Result<Option<Response>> {
             unimplemented!("fetch_artifact")
@@ -247,7 +247,7 @@ mod tests {
             &self,
             _hash: &str,
             _token: &str,
-            _team_id: &str,
+            _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> turborepo_api_client::Result<Option<Response>> {
             unimplemented!("artifact_exists")
@@ -256,7 +256,7 @@ mod tests {
             &self,
             _hash: &str,
             _token: &str,
-            _team_id: &str,
+            _team_id: Option<&str>,
             _team_slug: Option<&str>,
             _method: Method,
         ) -> turborepo_api_client::Result<Option<Response>> {

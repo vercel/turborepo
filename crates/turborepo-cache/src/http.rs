@@ -99,7 +99,7 @@ impl HTTPCache {
             .artifact_exists(
                 hash,
                 &self.api_auth.token,
-                &self.api_auth.team_id,
+                Some(&self.api_auth.team_id),
                 self.api_auth.team_slug.as_deref(),
             )
             .await?
@@ -152,7 +152,7 @@ impl HTTPCache {
             .fetch_artifact(
                 hash,
                 &self.api_auth.token,
-                &self.api_auth.team_id,
+                Some(&self.api_auth.team_id),
                 self.api_auth.team_slug.as_deref(),
             )
             .await?
