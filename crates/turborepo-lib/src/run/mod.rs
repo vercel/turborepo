@@ -3,6 +3,7 @@
 mod cache;
 mod error;
 pub(crate) mod global_hash;
+mod graph_visualizer;
 mod scope;
 pub(crate) mod summary;
 pub mod task_id;
@@ -344,11 +345,14 @@ impl<'a> Run<'a> {
         if let Some(graph_opts) = opts.run_opts.graph {
             match graph_opts {
                 GraphOpts::File(graph_file) => {
-                    let graph_file =
+                    let mut graph_file =
                         AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
                     let file = graph_file
                         .open()
                         .map_err(|e| Error::OpenGraphFile(e, graph_file.clone()))?;
+                    match graph_file.extension() {
+
+                    }
                     let _writer = BufWriter::new(file);
                     todo!("Need to implement different format support");
                 }
