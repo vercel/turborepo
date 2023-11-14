@@ -270,8 +270,6 @@ impl<'a> Run<'a> {
             analytics_sender,
         )?;
 
-        info!("created cache");
-
         let mut engine =
             self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
 
@@ -316,8 +314,6 @@ impl<'a> Run<'a> {
             daemon,
             self.base.ui,
         ));
-
-        info!("created cache");
 
         let mut global_env_mode = opts.run_opts.env_mode;
         if matches!(global_env_mode, EnvMode::Infer)
