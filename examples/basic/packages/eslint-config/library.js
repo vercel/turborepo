@@ -11,6 +11,7 @@ const project = resolve(process.cwd(), "tsconfig.json");
  *
  */
 
+/** @type {import("eslint").Linter.Config} */
 module.exports = {
   extends: [
     "@vercel/style-guide/eslint/node",
