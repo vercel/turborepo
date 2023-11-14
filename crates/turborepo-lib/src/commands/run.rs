@@ -25,7 +25,12 @@ pub async fn run(base: CommandBase) -> Result<i32, run::Error> {
             // Run finished so close the signal handler
             handler.close().await;
             match result {
-                Ok(code) => Ok(code),
+                Ok(code) => {
+                    if code != 0 {
+                        error!("run failed: command  exited ({code})")
+                    }
+                    Ok(code)
+                },
                 Err(err) => {
                     error!("run failed: {}", err);
                     Err(err)
