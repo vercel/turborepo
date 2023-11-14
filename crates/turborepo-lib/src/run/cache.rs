@@ -149,9 +149,9 @@ impl TaskCache {
 
         log_writer.with_log_file(&self.log_file_path)?;
 
-        if matches!(
+        if !matches!(
             self.task_output_mode,
-            OutputLogsMode::Full | OutputLogsMode::NewOnly
+            OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly
         ) {
             log_writer.with_prefixed_writer(prefixed_writer);
         }
