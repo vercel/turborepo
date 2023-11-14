@@ -553,8 +553,6 @@ fn spawn_local_turbo(
     // We spawn a process that executes the local turbo
     // that we've found in node_modules/.bin/turbo.
     let mut command = process::Command::new(local_turbo_path);
-
-    debug!("Passing raw args to local turbo binary: {:?}", raw_args);
     command
         .args(&raw_args)
         // rather than passing an argument that local turbo might not understand, set
@@ -567,13 +565,9 @@ fn spawn_local_turbo(
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
 
-    debug!("about to spawn a child");
     let child = spawn_child(command).map_err(Error::LocalTurboProcess)?;
 
-    debug!("spawned the child");
-
     let exit_status = child.wait().map_err(Error::LocalTurboProcess)?;
-    debug!("got an exit status");
     let exit_code = exit_status.code().unwrap_or_else(|| {
         debug!("go-turbo failed to report exit code");
         #[cfg(unix)]
@@ -586,13 +580,9 @@ fn spawn_local_turbo(
                 signal, core_dumped
             );
         }
-        #[cfg(windows)]
-        {
-            debug!("something went wrong when unwrapping exit_status.code on windows");
-        }
         2
     });
-    debug!("exit code is {}", exit_code);
+
     Ok(exit_code)
 }
 
