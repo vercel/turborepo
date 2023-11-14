@@ -5,11 +5,11 @@
   "main": "./index.ts",
   "types": "./index.ts",
   "scripts": {
-    "lint": "eslint .",
-    "generate:component": "turbo gen react-component"
+    "lint": "eslint ."
   },
   "devDependencies": {
     "eslint-config-custom": "workspace:*",
-    "tsconfig": "workspace:*"
+    "tsconfig": "workspace:*",
+    "vue": "^3.3.8"
   }
 }

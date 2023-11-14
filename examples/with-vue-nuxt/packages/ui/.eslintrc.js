@@ -1,4 +1,4 @@
 module.exports = {
   root: true,
-  extends: ["custom/vue"],
+  extends: ["plugin:vue/vue3-essential", "custom/vue"],
 };

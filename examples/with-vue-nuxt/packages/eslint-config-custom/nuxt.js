@@ -17,6 +17,9 @@ module.exports = {
     "@vercel/style-guide/eslint/browser",
     "eslint-config-turbo",
   ].map(require.resolve),
+  parserOptions: {
+    sourceType: "module",
+  },
   settings: {
     "import/resolver": {
       typescript: {
@@ -28,7 +31,7 @@ module.exports = {
   rules: {
     "comma-dangle": "off",
     semi: "off",
-
+    "no-undef": "off",
     // add specific rules configurations here
   },
 };

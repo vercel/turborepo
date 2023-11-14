@@ -1,4 +1,4 @@
-lockfileVersion: '6.0'
+lockfileVersion: '6.1'
 
 settings:
   autoInstallPeers: true
@@ -130,6 +130,9 @@ importers:
       tsconfig:
         specifier: workspace:*
         version: link:../tsconfig
+      vue:
+        specifier: ^3.3.8
+        version: 3.3.8(typescript@5.2.2)
 
 packages:
 
@@ -7914,6 +7917,7 @@ packages:
 
   /semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
+    hasBin: true
     dev: true
 
   /semver@7.5.4:
