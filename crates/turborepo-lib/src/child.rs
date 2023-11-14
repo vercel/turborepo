@@ -6,8 +6,15 @@ use tracing::debug;
 
 /// Spawns a child in a way where SIGINT is correctly forwarded to the child
 pub fn spawn_child(mut command: Command) -> Result<Arc<SharedChild>, io::Error> {
+    debug!("spawn_child entered");
+
     let shared_child = Arc::new(SharedChild::spawn(&mut command)?);
+
+    debug!("shared_child assigned");
+
     let handler_shared_child = shared_child.clone();
+
+    debug!("shared_child cloned");
 
     debug!("before setting handler");
 
