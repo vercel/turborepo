@@ -12,7 +12,7 @@ Make sure we use local and do not pass --skip-infer to old binary
 
   $ ${TURBO} bin -vvv
 
-  $ cat -vet "$PWD/node_modules/turbo-windows-64/bin/turbo.exe"
+$ cat -vet "$PWD/node_modules/turbo-windows-64/bin/turbo.exe"
 
   $ echo "PRYSK_TEMP: $PRYSK_TEMP"
 
