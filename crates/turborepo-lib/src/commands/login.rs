@@ -111,10 +111,10 @@ mod tests {
     use camino::Utf8PathBuf;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_auth::{
-        mocks::MockApiClient, read_or_create_auth_file, AuthFile, AuthToken,
+        mocks::MockApiClient, read_or_create_auth_file, AuthFile, AuthToken, Team,
         TURBOREPO_AUTH_FILE_NAME,
     };
-    use turborepo_vercel_api::{Membership, Space, Team};
+    use turborepo_vercel_api::{Membership, Space};
 
     use crate::{
         cli::Verbosity,

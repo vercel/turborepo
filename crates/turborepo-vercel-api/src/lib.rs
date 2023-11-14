@@ -39,7 +39,7 @@ pub struct ArtifactResponse {
 /// team
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Membership {
-    role: Role,
+    pub role: Role,
 }
 
 impl Membership {
@@ -68,16 +68,11 @@ pub struct Team {
     pub created_at: u64,
     pub created: chrono::DateTime<chrono::Utc>,
     pub membership: Membership,
-    pub spaces: Vec<Space>,
 }
 
 impl Team {
     pub fn is_owner(&self) -> bool {
         matches!(self.membership.role, Role::Owner)
-    }
-    // Search the team to see if it contains the space.
-    pub fn contains_space(&self, space: &str) -> bool {
-        self.spaces.iter().any(|s| s.id == space)
     }
 }
 

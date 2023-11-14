@@ -43,7 +43,7 @@ pub async fn login<'a>(
     spinner.finish_and_clear();
 
     let token = token_cell.get().ok_or(Error::FailedToGetToken)?;
-    let auth_token = convert_to_auth_token(token, api_client).await?;
+    let auth_token = convert_to_auth_token(token, api_client, None).await?;
 
     ui::print_cli_authorized(&auth_token.user.email, ui);
 

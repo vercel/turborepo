@@ -71,7 +71,6 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                         created_at: EXPECTED_TEAM_CREATED_AT,
                         created: Default::default(),
                         membership: Membership::new(Role::Owner),
-                        spaces: Vec::new(),
                     }],
                 })
             }),

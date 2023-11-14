@@ -3,7 +3,7 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::Client;
-use turborepo_vercel_api::{Team, User};
+use turborepo_vercel_api::{Membership, Space, User};
 
 use crate::Error;
 
@@ -67,6 +67,42 @@ pub struct AuthToken {
     pub teams: Vec<Team>,
 }
 
+/// Team is re-implemented here because we need to add the `spaces` field to it,
+/// and it's not currently returned by the teams endpoint.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Team {
+    pub id: String,
+    pub slug: String,
+    pub name: String,
+    pub created_at: u64,
+    pub created: chrono::DateTime<chrono::Utc>,
+    pub membership: Membership,
+    pub spaces: Vec<Space>,
+}
+impl From<turborepo_vercel_api::Team> for Team {
+    fn from(team: turborepo_vercel_api::Team) -> Self {
+        Self {
+            id: team.id,
+            slug: team.slug,
+            name: team.name,
+            created_at: team.created_at,
+            created: team.created,
+            membership: team.membership,
+            spaces: vec![],
+        }
+    }
+}
+
+impl Team {
+    pub fn is_owner(&self) -> bool {
+        matches!(self.membership.role, turborepo_vercel_api::Role::Owner)
+    }
+    /// Search the team to see if it contains the space.
+    pub fn contains_space(&self, space: &str) -> bool {
+        self.spaces.iter().any(|s| s.id == space)
+    }
+}
+
 impl AuthToken {
     /// Searches the teams to see if any team ID matches the passed in team.
     pub fn contains_team(&self, team: &str) -> bool {
@@ -119,12 +155,46 @@ impl Display for AuthToken {
     }
 }
 
+async fn convert_sso_to_auth_token(
+    token: &str,
+    client: &impl Client,
+    team_id: &str,
+) -> Result<AuthToken, Error> {
+    let user_response = client.get_user(token).await.map_err(Error::APIError)?;
+    let team = client
+        .get_team(token, team_id)
+        .await
+        .map_err(Error::APIError)?;
+
+    let auth_token = AuthToken {
+        token: token.to_string(),
+        api: client.base_url().to_owned(),
+        created_at: user_response.user.created_at,
+        user: user_response.user,
+        teams: match team {
+            Some(t) => vec![t.into()],
+            None => Vec::new(),
+        },
+    };
+    Ok(auth_token)
+}
+
 /// Converts our old style of token held in `config.json` into the new schema.
 ///
 /// Uses the client to get information not readily available in the current
 /// token. Will write the new token to disk immediately and return the AuthFile
 /// for use.
-pub async fn convert_to_auth_token(token: &str, client: &impl Client) -> Result<AuthToken, Error> {
+pub async fn convert_to_auth_token(
+    token: &str,
+    client: &impl Client,
+    team_id: Option<&str>,
+) -> Result<AuthToken, Error> {
+    // Converting the SSO token is a bit different than the normal token. It uses
+    // `get_team` and skips the loop.
+    if let Some(team) = team_id {
+        return convert_sso_to_auth_token(token, client, team).await;
+    }
+
     // Fill in auth file data.
     let user_response = client.get_user(token).await.map_err(Error::APIError)?;
     let teams_response = client.get_teams(token).await.map_err(Error::APIError)?;
@@ -141,8 +211,11 @@ pub async fn convert_to_auth_token(token: &str, client: &impl Client) -> Result<
             .await
             .map_err(Error::APIError)?;
         let spaces = spaces_response.spaces;
-        // TODO(voz): Don't like this.
-        let mut team = team;
+
+        // Because the team endpoint doesn't return the spaces associated for the team,
+        // we need to use our custom `Team` struct and apply what we got from the teams
+        // endpoint to it.
+        let mut team: Team = team.into();
         team.spaces = spaces;
         teams.push(team)
     }
@@ -178,7 +251,7 @@ mod tests {
         fs::create_dir_all(temp_dir.path().join(TURBOREPO_CONFIG_DIR)).unwrap();
 
         // Test: Call the convert_to_auth_file function and check the result
-        let result = convert_to_auth_token(token, &mock_client).await;
+        let result = convert_to_auth_token(token, &mock_client, None).await;
         assert!(result.is_ok());
         let auth_token = result.unwrap();
 

@@ -63,7 +63,7 @@ pub async fn read_or_create_auth_file(
         let config_token: ConfigToken = serde_json::from_str(&content)
             .map_err(|e| Error::FailedToDeserializeConfigToken { source: e })?;
 
-        let auth_token = convert_to_auth_token(&config_token.token, client).await?;
+        let auth_token = convert_to_auth_token(&config_token.token, client, None).await?;
         let auth_file = AuthFile {
             tokens: vec![auth_token],
         };
@@ -82,7 +82,7 @@ pub async fn read_or_create_auth_file(
 mod tests {
     use std::{fs::File, io::Write};
 
-    use turborepo_vercel_api::{Membership, Role, Space, Team, User};
+    use turborepo_vercel_api::{Membership, Role, Space, User};
 
     use super::*;
     use crate::mocks::MockApiClient;
