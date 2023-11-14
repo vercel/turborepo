@@ -1,3 +1,4 @@
+/** @type {import("eslint").Linter.Config} */
 module.exports = {
-  extends: ["custom/next"],
+  extends: [require.resolve("@repo/lint/next.js")],
 };

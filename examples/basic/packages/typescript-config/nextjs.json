@@ -4,9 +4,12 @@
   "extends": "./base.json",
   "compilerOptions": {
     "plugins": [{ "name": "next" }],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "incremental": true,
     "allowJs": true,
-    "jsx": "preserve"
+    "jsx": "preserve",
+    "noEmit": true
   },
   "include": ["src", "next-env.d.ts"],
   "exclude": ["node_modules"]

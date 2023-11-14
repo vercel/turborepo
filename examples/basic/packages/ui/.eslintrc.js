@@ -1,3 +1,5 @@
+/** @type {import("eslint").Linter.Config} */
 module.exports = {
-  extends: ["custom/react-internal"],
+  extends: [require.resolve("@repo/lint/react-internal.js")],
+  ignorePatterns: ["turbo/**"],
 };
