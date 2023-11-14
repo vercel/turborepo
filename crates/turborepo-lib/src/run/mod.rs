@@ -18,7 +18,7 @@ pub use cache::{RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
@@ -221,7 +221,7 @@ impl<'a> Run<'a> {
                     Some(client)
                 }
                 Err(e) => {
-                    warn!("failed to connect to daemon {e}");
+                    debug!("failed to connect to daemon {e}");
                     None
                 }
             }
