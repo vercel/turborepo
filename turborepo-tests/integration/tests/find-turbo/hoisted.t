@@ -10,13 +10,17 @@ Make sure we use local and do not pass --skip-infer to old binary
   $ echo "pwd: $PWD"
   $ ls -al "$PWD/node_modules/turbo-windows-64/bin"
 
-$ ${TURBO} bin -vvv
+  $ ${TURBO} bin -vvv
 
-$ cat -vet "$PWD/node_modules/turbo-windows-64/bin/turbo.exe"
-$ cat -vet "$PWD/node_modules/turbo-windows-arm64/bin/turbo.exe"  
-$ echo "PRYSK_TEMP: $PRYSK_TEMP"
-$ . "$PRYSK_TEMP/hoisted.t/node_modules/turbo-windows-64/bin/turbo.exe" hi yes # direct call from prysk tmp
-$ . "$PWD/node_modules/turbo-windows-64/bin/turbo.exe" hi yes # direct call from pwd
+  $ cat -vet "$PWD/node_modules/turbo-windows-64/bin/turbo.exe"
+
+  $ echo "PRYSK_TEMP: $PRYSK_TEMP"
+
+# direct call from prysk tmp
+  $ . "$PRYSK_TEMP/hoisted.t/node_modules/turbo-windows-64/bin/turbo.exe" hi yes
+
+ # direct call from pwd
+  $ . "$PWD/node_modules/turbo-windows-64/bin/turbo.exe" hi yes
 
   $ ${TURBO} build --filter foo -vv # debug version
 
