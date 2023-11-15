@@ -52,6 +52,8 @@ impl PartialEq for StyleSheetLike<'_, '_> {
     }
 }
 
+pub type CssOutput = (ToCssResult, Option<ParseCssResultSourceMap>);
+
 impl<'i, 'o> StyleSheetLike<'i, 'o> {
     pub fn to_static(
         &self,
@@ -74,13 +76,24 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
     pub fn to_css(
         &self,
         mut options: PrinterOptions,
-    ) -> Result<ToCssResult, lightningcss::error::Error<PrinterErrorKind>> {
+        enable_srcmap: bool,
+    ) -> Result<CssOutput, lightningcss::error::Error<PrinterErrorKind>> {
         match self {
             StyleSheetLike::LightningCss(ss) => {
+                let mut srcmap = if enable_srcmap {
+                    Some(parcel_sourcemap::SourceMap::new(""))
+                } else {
+                    None
+                };
+                options.source_map = srcmap.as_mut();
+
+                let result = ss.to_css(options)?;
+
                 if let Some(srcmap) = &mut options.source_map {
                     srcmap.add_sources(ss.sources.clone());
                 }
-                ss.to_css(options)
+
+                Ok((result, srcmap.map(ParseCssResultSourceMap::new)))
             }
             StyleSheetLike::Swc {
                 stylesheet,
@@ -98,7 +111,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
 
                 let srcmap = ParseCssResultSourceMap::new(source_map.clone(), srcmap).cell();
 
-                Ok(ToCssResult { code: code_string })
+                Ok((ToCssResult { code: code_string }, srcmap))
             }
         }
     }
@@ -200,12 +213,15 @@ pub async fn process_css_with_placeholder(
 
             dbg!("process_css_with_placeholder => after stylesheet_into_static");
 
-            let result = stylesheet.to_css(PrinterOptions {
-                analyze_dependencies: Some(DependencyOptions {
+            let result = stylesheet.to_css(
+                PrinterOptions {
+                    analyze_dependencies: Some(DependencyOptions {
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                ..Default::default()
-            })?;
+                },
+                false,
+            )?;
 
             dbg!("process_css_with_placeholder => after StyleSheet::to_css");
 
@@ -267,7 +283,6 @@ pub async fn finalize_css(
             replace_url_references(&mut stylesheet, &url_map);
             dbg!("finalize_css => after replacing url refs");
 
-            let mut srcmap = parcel_sourcemap::SourceMap::new("");
             let result = stylesheet.to_css(PrinterOptions {
                 source_map: Some(&mut srcmap),
                 analyze_dependencies: Some(DependencyOptions {
