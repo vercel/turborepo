@@ -21,12 +21,12 @@ Check
   Tasks to Run
   build
     Task                           = build\s* (re)
-    Hash                           = db9ab850083a69be\s* (re)
-    Cached \(Local\)               = false\s* (re)
-    Cached \(Remote\)              = false\s* (re)
-    Command                        = echo 'building' > foo.txt\s* (re)
+    Hash                           = e46d6df5143cae99\s* (re)
+    Cached \(Local\)                 = false\s* (re)
+    Cached \(Remote\)                = false\s* (re)
+    Command                        = echo building > foo.txt\s* (re)
     Outputs                        =\s* (re)
-    Log File                       = .turbo(\/|\\)turbo-build.log\s+ (re)
+    Log File                       = .turbo(\/|\\)turbo-build.log\s* (re)
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
     Inputs Files Considered        = 4\s* (re)
