@@ -93,7 +93,7 @@ pub struct APIClient {
 
 #[derive(Clone)]
 pub struct APIAuth {
-    pub team_id: String,
+    pub team_id: Option<String>,
     pub token: String,
     pub team_slug: Option<String>,
 }
@@ -481,7 +481,7 @@ impl APIClient {
         }
 
         request_builder =
-            Self::add_team_params(request_builder, Some(team_id), team_slug.as_deref());
+            Self::add_team_params(request_builder, team_id.as_deref(), team_slug.as_deref());
 
         if let Some(constant) = turborepo_ci::Vendor::get_constant() {
             request_builder = request_builder.header("x-artifact-client-ci", constant);
@@ -505,6 +505,12 @@ impl APIClient {
             request_builder = request_builder.query(&[("slug", slug)]);
         }
         request_builder
+    }
+}
+
+impl APIAuth {
+    pub fn is_linked(&self) -> bool {
+        self.team_id.is_some() || self.team_slug.is_some()
     }
 }
 

@@ -244,7 +244,7 @@ mod tests {
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
                 token: "foo".to_string(),
-                team_id: "bar".to_string(),
+                team_id: Some("bar".to_string()),
                 team_slug: None,
             },
             client.clone(),
@@ -286,7 +286,7 @@ mod tests {
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
                 token: "foo".to_string(),
-                team_id: "bar".to_string(),
+                team_id: Some("bar".to_string()),
                 team_slug: None,
             },
             client.clone(),
@@ -334,7 +334,7 @@ mod tests {
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
                 token: "foo".to_string(),
-                team_id: "bar".to_string(),
+                team_id: Some("bar".to_string()),
                 team_slug: None,
             },
             client.clone(),
