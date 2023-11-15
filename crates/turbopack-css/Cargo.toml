@@ -37,6 +37,8 @@ parcel_sourcemap = "2.1.1"
 smallvec = "1.11.0"
 swc_core = { workspace = true, features = [
   "css_ast",
+  "css_parser",
+  "css_visit",
   "ecma_ast",
   "common",
   "common_concurrent",
