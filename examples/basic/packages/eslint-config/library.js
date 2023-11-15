@@ -13,16 +13,18 @@ const project = resolve(process.cwd(), "tsconfig.json");
 
 /** @type {import("eslint").Linter.Config} */
 module.exports = {
-  extends: [
-    "@vercel/style-guide/eslint/node",
-    "@vercel/style-guide/eslint/typescript",
-  ].map(require.resolve),
-  parserOptions: {
-    project,
-  },
+  extends: ["eslint:recommended", "prettier", "eslint-config-turbo"],
   globals: {
     React: true,
     JSX: true,
+  },
+  plugins: ["@typescript-eslint"],
+  parser: "@typescript-eslint/parser",
+  parserOptions: {
+    project,
+  },
+  env: {
+    node: true,
   },
   settings: {
     "import/resolver": {
@@ -31,5 +33,5 @@ module.exports = {
       },
     },
   },
-  ignorePatterns: ["node_modules/", "dist/"],
+  ignorePatterns: [".*.js", "node_modules/", "dist/"],
 };
