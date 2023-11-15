@@ -198,12 +198,6 @@ impl<'a> Visitor<'a> {
             )?;
 
             debug!("task {} hash is {}", info, task_hash);
-            if self.dry {
-                self.run_tracker.track_task(info.clone()).dry_run().await;
-                callback.send(Ok(())).ok();
-                continue;
-            }
-
             // We do this calculation earlier than we do in Go due to the `task_hasher`
             // being !Send. In the future we can look at doing this right before
             // task execution instead.
@@ -217,7 +211,6 @@ impl<'a> Visitor<'a> {
                 info.clone(),
                 &task_hash,
             );
-
             // TODO(gsoltis): if/when we fix https://github.com/vercel/turbo/issues/937
             // the following block should never get hit. In the meantime, keep it after
             // hashing so that downstream tasks can count on the hash existing
@@ -239,16 +232,21 @@ impl<'a> Visitor<'a> {
             let spaces_client = self.run_tracker.spaces_task_client();
             let output_client = self.output_client();
             let parent_span = Span::current();
+            let is_dry_run = self.dry;
             tasks.push(tokio::spawn(async move {
-                exec_context
-                    .execute(
-                        parent_span.id(),
-                        tracker,
-                        output_client,
-                        callback,
-                        spaces_client,
-                    )
-                    .await;
+                if is_dry_run {
+                    exec_context.execute_dry_run(output_client, tracker).await;
+                } else {
+                    exec_context
+                        .execute(
+                            parent_span.id(),
+                            tracker,
+                            output_client,
+                            callback,
+                            spaces_client,
+                        )
+                        .await;
+                }
             }));
         }
 
@@ -590,6 +588,23 @@ enum SuccessOutcome {
 }
 
 impl ExecContext {
+    pub async fn execute_dry_run(
+        &mut self,
+        output_client: OutputClient<impl std::io::Write>,
+        tracker: TaskTracker<()>,
+    ) {
+        if let Ok(Some(status)) = self.task_cache.restore_outputs(None).await {
+            // we need to set expanded outputs
+            self.hash_tracker.insert_expanded_outputs(
+                self.task_id.clone(),
+                self.task_cache.expanded_outputs().to_vec(),
+            );
+            self.hash_tracker
+                .insert_cache_status(self.task_id.clone(), status);
+        }
+
+        tracker.dry_run().await;
+    }
     pub async fn execute(
         &mut self,
         parent_span_id: Option<tracing::Id>,
