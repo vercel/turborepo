@@ -34,6 +34,7 @@ impl CustomTransformer for StyledJsxTransformer {
             FileName::Anon,
             styled_jsx::visitor::Config {
                 use_lightningcss: false,
+                ..Default::default()
             },
         ));
 

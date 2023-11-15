@@ -94,7 +94,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                     self.origin,
                     Request::parse(Value::new(src.to_string().into())),
                     ImportAttributes::new_from_prelude(&i.clone().into_owned()).into(),
-                    IssueSource::new(
+                    IssueSource::from_line_col(
                         Vc::upcast(self.source),
                         SourcePos {
                             line: issue_span.line as _,
@@ -109,7 +109,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                 let vc = UrlAssetReference::new(
                     self.origin,
                     Request::parse(Value::new(src.to_string().into())),
-                    IssueSource::new(
+                    IssueSource::from_line_col(
                         Vc::upcast(self.source),
                         SourcePos {
                             line: issue_span.line as _,
@@ -143,7 +143,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
             let vc = UrlAssetReference::new(
                 self.origin,
                 Request::parse(Value::new(src.to_string().into())),
-                IssueSource::new(
+                IssueSource::from_line_col(
                     Vc::upcast(self.source),
                     SourcePos {
                         line: issue_span.line as _,
