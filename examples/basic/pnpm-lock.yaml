@@ -8,7 +8,7 @@ importers:
 
   .:
     devDependencies:
-      '@repo/lint':
+      '@repo/eslint-config':
         specifier: workspace:*
         version: link:packages/eslint-config
       '@repo/typescript-config':
@@ -42,7 +42,7 @@ importers:
       '@next/eslint-plugin-next':
         specifier: ^14.0.2
         version: 14.0.2
-      '@repo/lint':
+      '@repo/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
       '@repo/typescript-config':
@@ -85,7 +85,7 @@ importers:
       '@next/eslint-plugin-next':
         specifier: ^14.0.2
         version: 14.0.2
-      '@repo/lint':
+      '@repo/eslint-config':
         specifier: workspace:*
         version: link:../../packages/eslint-config
       '@repo/typescript-config':
@@ -127,6 +127,9 @@ importers:
       eslint-config-turbo:
         specifier: ^1.10.12
         version: 1.10.12(eslint@8.53.0)
+      eslint-plugin-only-warn:
+        specifier: ^1.1.0
+        version: 1.1.0
       typescript:
         specifier: ^5.2.2
         version: 5.2.2
@@ -135,7 +138,7 @@ importers:
 
   packages/ui:
     devDependencies:
-      '@repo/lint':
+      '@repo/eslint-config':
         specifier: workspace:*
         version: link:../eslint-config
       '@repo/typescript-config':
@@ -1056,6 +1059,11 @@ packages:
     dependencies:
       eslint: 8.53.0
       eslint-plugin-turbo: 1.10.12(eslint@8.53.0)
+    dev: true
+
+  /eslint-plugin-only-warn@1.1.0:
+    resolution: {integrity: sha512-2tktqUAT+Q3hCAU0iSf4xAN1k9zOpjK5WO8104mB0rT/dGhOa09582HN5HlbxNbPRZ0THV7nLGvzugcNOSjzfA==}
+    engines: {node: '>=6'}
     dev: true
 
   /eslint-plugin-turbo@1.10.12(eslint@8.53.0):

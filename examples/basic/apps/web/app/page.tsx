@@ -53,6 +53,7 @@ const LINKS = [
 export default function Page(): JSX.Element {
   return (
     <main className={styles.main}>
+      <img />
       <div className={styles.description}>
         <p>
           examples/basic&nbsp;
