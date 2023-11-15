@@ -232,7 +232,7 @@ jobs:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - run: turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+      - run: set && turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
         env:
           SCCACHE_BUCKET: turborepo-sccache
           SCCACHE_REGION: us-east-2
@@ -302,7 +302,7 @@ jobs:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - run: turbo run test --filter=cli --color
+      - run: set && turbo run test --filter=cli --color
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
