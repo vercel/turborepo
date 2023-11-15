@@ -233,10 +233,13 @@ impl<'a> Visitor<'a> {
             let output_client = self.output_client();
             let parent_span = Span::current();
             let is_dry_run = self.dry;
-            tasks.push(tokio::spawn(async move {
-                if is_dry_run {
-                    exec_context.execute_dry_run(output_client, tracker).await;
-                } else {
+
+            if is_dry_run {
+                tasks.push(tokio::spawn(async move {
+                    exec_context.execute_dry_run(tracker).await;
+                }));
+            } else {
+                tasks.push(tokio::spawn(async move {
                     exec_context
                         .execute(
                             parent_span.id(),
@@ -246,8 +249,8 @@ impl<'a> Visitor<'a> {
                             spaces_client,
                         )
                         .await;
-                }
-            }));
+                }));
+            }
         }
 
         // Wait for the engine task to finish and for all of our tasks to finish
@@ -588,23 +591,8 @@ enum SuccessOutcome {
 }
 
 impl ExecContext {
-    pub async fn execute_dry_run(
-        &mut self,
-        output_client: OutputClient<impl std::io::Write>,
-        tracker: TaskTracker<()>,
-    ) {
-        let mut prefixed_ui = Visitor::prefixed_ui(
-            self.ui,
-            self.is_github_actions,
-            &output_client,
-            self.pretty_prefix.clone(),
-        );
-        if let Ok(Some(status)) = self.task_cache.restore_outputs(&mut prefixed_ui).await {
-            // we need to set expanded outputs
-            self.hash_tracker.insert_expanded_outputs(
-                self.task_id.clone(),
-                self.task_cache.expanded_outputs().to_vec(),
-            );
+    pub async fn execute_dry_run(&mut self, tracker: TaskTracker<()>) {
+        if let Ok(Some(status)) = self.task_cache.exists().await {
             self.hash_tracker
                 .insert_cache_status(self.task_id.clone(), status);
         }

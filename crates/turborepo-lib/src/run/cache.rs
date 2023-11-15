@@ -3,7 +3,7 @@ use std::{io::Write, sync::Arc, time::Duration};
 use console::StyledObject;
 use tracing::{debug, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-use turborepo_cache::{AsyncCache, CacheHitMetadata, CacheSource};
+use turborepo_cache::{AsyncCache, CacheError, CacheHitMetadata, CacheSource};
 use turborepo_repository::package_graph::WorkspaceInfo;
 use turborepo_ui::{
     color, replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI,
@@ -163,6 +163,10 @@ impl TaskCache {
         }
 
         Ok(log_writer)
+    }
+
+    pub async fn exists(&mut self) -> Result<Option<CacheHitMetadata>, CacheError> {
+        self.run_cache.cache.exists(&self.hash).await
     }
 
     pub async fn restore_outputs(
