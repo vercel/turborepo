@@ -5,6 +5,7 @@ use indexmap::IndexMap;
 use lightningcss::{
     css_modules::{CssModuleExport, CssModuleExports, Pattern, Segment},
     dependencies::{Dependency, DependencyOptions},
+    rules::style,
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet},
     targets::{Features, Targets},
     values::url::Url,
@@ -31,6 +32,29 @@ use crate::{
     CssModuleAssetType,
 };
 
+#[derive(Debug)]
+pub enum StyleSheetLike<'i, 'o> {
+    LightningCss(StyleSheet<'i, 'o>),
+    Swc(swc_core::css::ast::Stylesheet),
+}
+
+impl PartialEq for StyleSheetLike<'_, '_> {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
+impl<'i, 'o> StyleSheetLike<'i, 'o> {
+    pub fn to_static(&self, options: ParserOptions<'o, 'i>) -> StyleSheetLike<'static, 'static> {
+        match self {
+            StyleSheetLike::LightningCss(ss) => {
+                StyleSheetLike::LightningCss(stylesheet_into_static(ss, options))
+            }
+            StyleSheetLike::Swc(ss) => StyleSheetLike::Swc(ss.clone()),
+        }
+    }
+}
+
 /// Multiple [ModuleReference]s
 #[turbo_tasks::value(transparent)]
 pub struct UnresolvedUrlReferences(pub Vec<(String, Vc<UrlAssetReference>)>);
@@ -39,7 +63,7 @@ pub struct UnresolvedUrlReferences(pub Vec<(String, Vc<UrlAssetReference>)>);
 pub enum ParseCssResult {
     Ok {
         #[turbo_tasks(trace_ignore)]
-        stylesheet: StyleSheet<'static, 'static>,
+        stylesheet: StyleSheetLike<'static, 'static>,
 
         references: Vc<ModuleReferences>,
 
@@ -62,7 +86,7 @@ impl PartialEq for ParseCssResult {
 pub enum CssWithPlaceholderResult {
     Ok {
         #[turbo_tasks(trace_ignore)]
-        stylesheet: StyleSheet<'static, 'static>,
+        stylesheet: StyleSheetLike<'static, 'static>,
 
         references: Vc<ModuleReferences>,
 
@@ -123,7 +147,7 @@ pub async fn process_css_with_placeholder(
         } => {
             dbg!("process_css_with_placeholder => start");
 
-            let stylesheet = stylesheet_into_static(stylesheet, options.clone());
+            let stylesheet = stylesheet.to_static(options.clone());
 
             dbg!("process_css_with_placeholder => after stylesheet_into_static");
 
@@ -176,7 +200,7 @@ pub async fn finalize_css(
         } => {
             dbg!("finalize_css => start");
 
-            let mut stylesheet = stylesheet_into_static(stylesheet, options.clone());
+            let mut stylesheet = stylesheet.to_static(options.clone());
 
             dbg!("finalize_css => after stylesheet_into_static");
 
