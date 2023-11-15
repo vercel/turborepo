@@ -7,6 +7,7 @@ use lightningcss::{
     visit_types,
     visitor::{Visit, Visitor},
 };
+use swc_core::css::visit::{VisitMut, VisitMutWith};
 use turbo_tasks::{debug::ValueDebug, Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
@@ -145,11 +146,22 @@ pub fn replace_url_references(
     urls: &HashMap<String, String>,
 ) {
     let mut replacer = AssetReferenceReplacer { urls };
-    ss.visit(&mut replacer).unwrap();
+    match ss {
+        StyleSheetLike::LightningCss(ss) => {
+            ss.visit(&mut replacer).unwrap();
+        }
+        StyleSheetLike::Swc(ss) => {
+            ss.visit_mut_with(&mut replacer);
+        }
+    }
 }
 
 struct AssetReferenceReplacer<'a> {
     urls: &'a HashMap<String, String>,
+}
+
+impl VisitMut for AssetReferenceReplacer<'_> {
+    // TODO
 }
 
 impl<'i> Visitor<'i> for AssetReferenceReplacer<'_> {

@@ -8,7 +8,7 @@ use lightningcss::{
     values::{image::Image, url::Url},
     visitor::{Visit, Visitor},
 };
-use swc_core::css::visit::VisitMutWith;
+use swc_core::css::visit::{VisitMut, VisitMutWith};
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
     issue::{IssueSeverity, IssueSource},
@@ -57,7 +57,7 @@ pub fn analyze_references(
             ss.visit(&mut visitor).unwrap();
         }
         StyleSheetLike::Swc(ss) => {
-            ss.visit_mut_with(&mut visitor).unwrap();
+            ss.visit_mut_with(&mut visitor);
         }
     }
 
@@ -85,6 +85,10 @@ impl<'a> ModuleReferencesVisitor<'a> {
             urls,
         }
     }
+}
+
+impl VisitMut for ModuleReferencesVisitor<'_> {
+    // TODO
 }
 
 impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
