@@ -10,7 +10,7 @@ Populate cache
   a:build: cache miss, executing [0-9a-f]+ (re)
   a:build: yarn run v1.22.19
   a:build: warning package.json: No license field
-  a:build: $ echo 'building'
+  a:build: $ echo building
   a:build: building
   a:build: Done in [\.0-9]+m?s\. (re)
   
@@ -25,7 +25,7 @@ Populate cache
   b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: yarn run v1.22.19
   b:build: warning package.json: No license field
-  b:build: $ echo 'building'
+  b:build: $ echo building
   b:build: building
   b:build: Done in [\.0-9]+m?s\. (re)
   
@@ -45,7 +45,7 @@ Only b should have a cache miss
   a:build: cache hit, replaying logs [0-9a-f]+ (re)
   a:build: yarn run v1.22.19
   a:build: warning package.json: No license field
-  a:build: $ echo 'building'
+  a:build: $ echo building
   a:build: building
   a:build: Done in [\.0-9]+m?s\. (re)
   
@@ -61,7 +61,7 @@ Only b should have a cache miss
   b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: yarn run v1.22.19
   b:build: warning package.json: No license field
-  b:build: $ echo 'building'
+  b:build: $ echo building
   b:build: building
   b:build: Done in [\.0-9]+m?s\. (re)
   
@@ -88,7 +88,7 @@ Bump of root workspace invalidates all packages
   a:build: cache miss, executing [0-9a-f]+ (re)
   a:build: yarn run v1.22.19
   a:build: warning package.json: No license field
-  a:build: $ echo 'building'
+  a:build: $ echo building
   a:build: building
   a:build: Done in [\.0-9]+m?s\. (re)
   
@@ -103,7 +103,7 @@ Bump of root workspace invalidates all packages
   b:build: cache miss, executing [0-9a-f]+ (re)
   b:build: yarn run v1.22.19
   b:build: warning package.json: No license field
-  b:build: $ echo 'building'
+  b:build: $ echo building
   b:build: building
   b:build: Done in [\.0-9]+m?s\. (re)
   

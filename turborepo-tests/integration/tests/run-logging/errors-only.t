@@ -38,12 +38,12 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running builderror in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  app-a:builderror: cache miss, executing 76f9cde7c640a786
+  app-a:builderror: cache miss, executing 63f09c22afb626a8
   app-a:builderror: 
   app-a:builderror: > builderror
-  app-a:builderror: > echo "error builderror app-a!" && exit 1
+  app-a:builderror: > echo error-builderror-app-a && exit 1
   app-a:builderror: 
-  app-a:builderror: error builderror app-a!
+  app-a:builderror: error-builderror-app-a
   app-a:builderror: npm ERR! Lifecycle script `builderror` failed with error: 
   app-a:builderror: npm ERR! Error: command failed 
   app-a:builderror: npm ERR!   in workspace: app-a 
@@ -68,12 +68,12 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running builderror2 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  app-a:builderror2: cache miss, executing 3c923821fa8cd7b6
+  app-a:builderror2: cache miss, executing 7303c469d075d34c
   app-a:builderror2: 
   app-a:builderror2: > builderror2
-  app-a:builderror2: > echo "error builderror2 app-a!" && exit 1
+  app-a:builderror2: > echo error-builderror2-app-a && exit 1
   app-a:builderror2: 
-  app-a:builderror2: error builderror2 app-a!
+  app-a:builderror2: error-builderror2-app-a
   app-a:builderror2: npm ERR! Lifecycle script `builderror2` failed with error: 
   app-a:builderror2: npm ERR! Error: command failed 
   app-a:builderror2: npm ERR!   in workspace: app-a 
