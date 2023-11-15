@@ -283,6 +283,7 @@ pub async fn parse_css(
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
     ty: CssModuleAssetType,
+    use_lightningcss: bool,
 ) -> Result<Vc<ParseCssResult>> {
     let content = source.content();
     let fs_path = &*source.ident().path().await?;
@@ -294,8 +295,16 @@ pub async fn parse_css(
             FileContent::Content(file) => match file.content().to_str() {
                 Err(_err) => ParseCssResult::Unparseable.cell(),
                 Ok(string) => {
-                    process_content(string.into_owned(), fs_path, ident_str, source, origin, ty)
-                        .await?
+                    process_content(
+                        string.into_owned(),
+                        fs_path,
+                        ident_str,
+                        source,
+                        origin,
+                        ty,
+                        use_lightningcss,
+                    )
+                    .await?
                 }
             },
         },
@@ -309,6 +318,7 @@ async fn process_content(
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
     ty: CssModuleAssetType,
+    use_lightningcss: bool,
 ) -> Result<Vc<ParseCssResult>> {
     let config = ParserOptions {
         css_modules: match ty {

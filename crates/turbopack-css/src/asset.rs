@@ -34,6 +34,7 @@ pub struct CssModuleAsset {
     source: Vc<Box<dyn Source>>,
     asset_context: Vc<Box<dyn AssetContext>>,
     ty: CssModuleAssetType,
+    use_lightningcss: bool,
 }
 
 #[turbo_tasks::value_impl]
@@ -44,11 +45,13 @@ impl CssModuleAsset {
         source: Vc<Box<dyn Source>>,
         asset_context: Vc<Box<dyn AssetContext>>,
         ty: CssModuleAssetType,
+        use_lightningcss: bool,
     ) -> Vc<Self> {
         Self::cell(CssModuleAsset {
             source,
             asset_context,
             ty,
+            use_lightningcss,
         })
     }
 
@@ -65,7 +68,12 @@ impl ParseCss for CssModuleAsset {
     async fn parse_css(self: Vc<Self>) -> Result<Vc<ParseCssResult>> {
         let this = self.await?;
 
-        Ok(parse_css(this.source, Vc::upcast(self), this.ty))
+        Ok(parse_css(
+            this.source,
+            Vc::upcast(self),
+            this.ty,
+            this.use_lightningcss,
+        ))
     }
 }
 
