@@ -83,8 +83,9 @@ impl<'a> Run<'a> {
     ) -> Option<(AnalyticsSender, AnalyticsHandle)> {
         // If there's no API auth, we don't want to record analytics
         let api_auth = api_auth?;
-
-        Some(start_analytics(api_auth, api_client))
+        api_auth
+            .is_linked()
+            .then(|| start_analytics(api_auth, api_client))
     }
 
     fn print_run_prelude(&self, opts: &Opts<'_>, filtered_pkgs: &HashSet<WorkspaceName>) {
