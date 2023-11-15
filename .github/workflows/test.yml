@@ -233,7 +233,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: |
-          set && turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+          env && turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
         env:
           SCCACHE_BUCKET: turborepo-sccache
           SCCACHE_REGION: us-east-2
@@ -304,7 +304,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: |
-          set && turbo run test --filter=cli --color
+          env && turbo run test --filter=cli --color
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
