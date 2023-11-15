@@ -202,6 +202,7 @@ mod tests {
 
         let opts = CacheOpts {
             override_dir: None,
+            remote_cache_read_only: false,
             skip_remote: false,
             skip_filesystem: true,
             workers: 10,
@@ -275,6 +276,7 @@ mod tests {
 
         let opts = CacheOpts {
             override_dir: None,
+            remote_cache_read_only: false,
             skip_remote: true,
             skip_filesystem: false,
             workers: 10,
@@ -358,6 +360,7 @@ mod tests {
 
         let opts = CacheOpts {
             override_dir: None,
+            remote_cache_read_only: false,
             skip_remote: false,
             skip_filesystem: false,
             workers: 10,
