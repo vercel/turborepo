@@ -38,7 +38,7 @@ use std::{
 
 use indexmap::IndexMap;
 use intervaltree::{Element, IntervalTree};
-use turbopack_cli_utils::tracing::{TraceRow, TraceValue};
+use turbopack_trace_utils::tracing::{TraceRow, TraceValue};
 
 macro_rules! pjson {
     ($($tt:tt)*) => {
@@ -155,11 +155,11 @@ fn main() {
     let mut tasks = 0;
 
     fn get_name<'a>(
-        name: &'a str,
+        name: Cow<'a, str>,
         values: &IndexMap<Cow<'a, str>, TraceValue<'a>>,
         collapse_names: bool,
     ) -> Cow<'a, str> {
-        match name {
+        match &*name {
             "turbo_tasks::function" => {
                 if let Some(v) = values.get("name") {
                     return format!("{v} ({name})").into();
@@ -173,7 +173,7 @@ fn main() {
             _ => {}
         }
         if collapse_names || values.is_empty() {
-            return name.into();
+            return name;
         }
         let mut name = name.to_string();
         name.push_str(" (");
@@ -210,7 +210,7 @@ fn main() {
             } => {
                 let values = values.into_iter().collect();
                 if matches!(
-                    name,
+                    &*name,
                     "turbo_tasks::function"
                         | "turbo_tasks::resolve_call"
                         | "turbo_tasks::resolve_trait_call"
@@ -277,7 +277,11 @@ fn main() {
                     in_parent,
                 });
             }
-            TraceRow::Exit { ts, id } => {
+            TraceRow::Exit {
+                ts,
+                id,
+                thread_id: _,
+            } => {
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
                 let span = &mut spans[internal_id];
                 if let Some(SelfTimeStarted {

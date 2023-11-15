@@ -9846,6 +9846,7 @@ dependencies = [
  "turbopack-swc-utils",
  "turbopack-test-utils",
  "turbopack-tests",
+ "turbopack-trace-utils",
 ]
 
 [[package]]
@@ -9908,6 +9909,7 @@ dependencies = [
  "turbopack-ecmascript-runtime",
  "turbopack-env",
  "turbopack-node",
+ "turbopack-trace-utils",
  "webbrowser",
 ]
 
@@ -9917,16 +9919,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap 4.4.2",
- "crossbeam-channel",
  "crossterm 0.26.1",
  "once_cell",
  "owo-colors",
- "postcard",
  "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
  "turbo-tasks",
  "turbo-tasks-build",
  "turbo-tasks-fs",
@@ -9948,7 +9944,7 @@ dependencies = [
  "postcard",
  "serde",
  "serde_json",
- "turbopack-cli-utils",
+ "turbopack-trace-utils",
 ]
 
 [[package]]
@@ -10331,6 +10327,37 @@ dependencies = [
  "turbopack-env",
  "turbopack-node",
  "turbopack-test-utils",
+]
+
+[[package]]
+name = "turbopack-trace-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 4.4.2",
+ "futures",
+ "indexmap 1.9.3",
+ "intervaltree",
+ "itertools",
+ "owo-colors",
+ "postcard",
+ "serde",
+ "serde_json",
+ "turbopack-trace-utils",
+]
+
+[[package]]
+name = "turbopack-trace-utils"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "crossbeam-channel",
+ "once_cell",
+ "postcard",
+ "serde",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

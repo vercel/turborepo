@@ -46,6 +46,8 @@ default-members = [
   "crates/turbopack-swc-utils",
   "crates/turbopack-test-utils",
   "crates/turbopack-tests",
+  "crates/turbopack-trace-server",
+  "crates/turbopack-trace-utils",
   "crates/turbopack-wasm",
   "xtask",
 ]
@@ -136,6 +138,7 @@ turbopack-static = { path = "crates/turbopack-static" }
 turbopack-swc-utils = { path = "crates/turbopack-swc-utils" }
 turbopack-test-utils = { path = "crates/turbopack-test-utils" }
 turbopack-tests = { path = "crates/turbopack-tests" }
+turbopack-trace-utils = { path = "crates/turbopack-trace-utils" }
 turbopack-wasm = { path = "crates/turbopack-wasm" }
 turbopath = { path = "crates/turborepo-paths" }
 turborepo = { path = "crates/turborepo" }

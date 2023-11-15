@@ -1,5 +1,5 @@
 [package]
-name = "turbopack-convert-trace"
+name = "turbopack-trace-server"
 version = "0.1.0"
 description = "TBD"
 license = "MPL-2.0"
@@ -7,12 +7,9 @@ edition = "2021"
 autobenches = false
 
 [[bin]]
-name = "turbopack-convert-trace"
+name = "turbo-trace-server"
 path = "src/main.rs"
 bench = false
-
-[lints]
-workspace = true
 
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
@@ -26,3 +23,4 @@ postcard = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 turbopack-trace-utils = { workspace = true }
+websocket = { version = "0.27.0", features = ["sync"] }
