@@ -7,10 +7,7 @@ pub fn spawn_child(mut command: Command) -> Result<Arc<SharedChild>, io::Error> 
     let child = SharedChild::spawn(&mut command);
 
     let unwrapped_child = match child {
-        Ok(unwrapped_child) => {
-            println!("All good, child is spawned");
-            unwrapped_child
-        }
+        Ok(unwrapped_child) => unwrapped_child,
         Err(err) => {
             println!("Error spawning, {}", err);
             return Err(err);
