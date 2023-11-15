@@ -11,11 +11,11 @@ Baseline task hashes
   }
   {
     "taskId": "my-app#build",
-    "hash": "90ff09567a6b2356"
+    "hash": "8a8944ef32696847"
   }
   {
     "taskId": "util#build",
-    "hash": "9b9969f14caa05a4"
+    "hash": "1ce33e04f265f95c"
   }
 
 Change only my-app#build
@@ -27,11 +27,11 @@ Change only my-app#build
   }
   {
     "taskId": "my-app#build",
-    "hash": "6c0ac038b6e27281"
+    "hash": "83bb5352c916557e"
   }
   {
     "taskId": "util#build",
-    "hash": "9b9969f14caa05a4"
+    "hash": "1ce33e04f265f95c"
   }
 
 Change my-app#build dependsOn
@@ -43,11 +43,11 @@ Change my-app#build dependsOn
   }
   {
     "taskId": "my-app#build",
-    "hash": "bcaf2a39bbcbcb58"
+    "hash": "346838a5f9d9a530"
   }
   {
     "taskId": "util#build",
-    "hash": "9b9969f14caa05a4"
+    "hash": "1ce33e04f265f95c"
   }
 
 Non-materially modifying the dep graph does nothing.
@@ -59,11 +59,11 @@ Non-materially modifying the dep graph does nothing.
   }
   {
     "taskId": "my-app#build",
-    "hash": "bcaf2a39bbcbcb58"
+    "hash": "346838a5f9d9a530"
   }
   {
     "taskId": "util#build",
-    "hash": "9b9969f14caa05a4"
+    "hash": "1ce33e04f265f95c"
   }
 
 
@@ -76,9 +76,9 @@ Change util#build impacts itself and my-app
   }
   {
     "taskId": "my-app#build",
-    "hash": "807226804bff5475"
+    "hash": "b15e1a917912cd09"
   }
   {
     "taskId": "util#build",
-    "hash": "0e5f606c75e19ed2"
+    "hash": "2ee29eb57d7f69b3"
   }

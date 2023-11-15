@@ -12,7 +12,7 @@ Check my-app#build output
   util:build: > build
   util:build: > echo building
   util:build: 
-  util:build: building (re)
+  util:build: building
   my-app:build: cache miss, executing 6f5a797f7b88130e
   my-app:build: 
   my-app:build: > build
