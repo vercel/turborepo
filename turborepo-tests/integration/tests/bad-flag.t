@@ -7,7 +7,7 @@ Bad flag should print misuse text
   
     tip: to pass '--bad-flag' as a value, use '-- --bad-flag'
   
-  Usage: (turbo|turbo\.exe) .* (re)
+  Usage: turbo(\.exe)? .* (re)
   
   For more information, try '--help'.
   
@@ -19,7 +19,7 @@ Bad flag with an implied run command should display run flags
   
     tip: to pass '--bad-flag' as a value, use '-- --bad-flag'
   
-  Usage: (turbo|turbo\.exe) .* (re)
+  Usage: turbo(\.exe)? .* (re)
   
   For more information, try '--help'.
   

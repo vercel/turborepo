@@ -5,7 +5,7 @@ Make sure exit code is 2 when no args are passed
   $ ${TURBO}
   The build system that makes ship happen
   
-  Usage: (turbo|turbo\.exe) \[OPTIONS\] \[COMMAND\] (re)
+  Usage: turbo(\.exe)? \[OPTIONS\] \[COMMAND\] (re)
   
   Commands:
     bin         Get the path to the Turbo binary

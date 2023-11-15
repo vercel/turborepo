@@ -5,7 +5,7 @@ Test help flag
   $ ${TURBO} -h
   The build system that makes ship happen
   
-  Usage: (turbo|turbo\.exe) \[OPTIONS\] \[COMMAND\] (re)
+  Usage: turbo(\.exe)? \[OPTIONS\] \[COMMAND\] (re)
   
   Commands:
     bin         Get the path to the Turbo binary
@@ -141,7 +141,7 @@ Test help flag for link command
   $ ${TURBO} link -h
   Link your local directory to a Vercel organization and enable remote caching
   
-  Usage: (turbo|turbo\.exe) link \[OPTIONS\] (re)
+  Usage: turbo(\.exe)? link \[OPTIONS\] (re)
   
   Options:
         --no-gitignore                    Do not create or modify .gitignore (default false)
