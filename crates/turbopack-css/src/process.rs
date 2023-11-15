@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem::transmute};
+use std::{collections::HashMap, mem::transmute, sync::Arc};
 
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -12,7 +12,7 @@ use lightningcss::{
     values::url::Url,
 };
 use smallvec::smallvec;
-use swc_core::base::sourcemap::SourceMapBuilder;
+use swc_core::{base::sourcemap::SourceMapBuilder, common::FileName};
 use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
@@ -23,6 +23,7 @@ use turbopack_core::{
     source::Source,
     source_map::{GenerateSourceMap, OptionSourceMap},
 };
+use turbopack_swc_utils::emitter::IssueEmitter;
 
 use crate::{
     lifetime_util::stylesheet_into_static,
@@ -341,13 +342,58 @@ async fn process_content(
         ..Default::default()
     };
 
-    let stylesheet = match StyleSheet::parse(&code, config.clone()) {
-        Ok(stylesheet) => stylesheet,
-        Err(_e) => {
-            // TODO(kdy1): Report errors
-            // e.to_diagnostics(&handler).emit();
+    let stylesheet = if use_lightningcss {
+        StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
+            Ok(stylesheet) => stylesheet,
+            Err(_e) => {
+                // TODO(kdy1): Report errors
+                // e.to_diagnostics(&handler).emit();
+                return Ok(ParseCssResult::Unparseable.into());
+            }
+        })
+    } else {
+        let source_map: Arc<swc_core::common::SourceMap> = Default::default();
+        let handler = swc_core::common::errors::Handler::with_emitter(
+            true,
+            false,
+            Box::new(IssueEmitter {
+                source,
+                source_map: source_map.clone(),
+                title: Some("Parsing css source code failed".to_string()),
+            }),
+        );
+
+        let fm = source_map.new_source_file(FileName::Custom(ident_str.to_string()), code);
+        let mut errors = vec![];
+
+        let ss = swc_core::css::parser::parse_file(
+            &fm,
+            Default::default(),
+            swc_core::css::parser::parser::ParserConfig {
+                css_modules: true,
+                legacy_ie: true,
+                ..Default::default()
+            },
+            &mut errors,
+        );
+
+        for err in errors {
+            err.to_diagnostics(&handler).emit();
+        }
+
+        let ss = match ss {
+            Ok(v) => v,
+            Err(err) => {
+                err.to_diagnostics(&handler).emit();
+                return Ok(ParseCssResult::Unparseable.into());
+            }
+        };
+
+        if handler.has_errors() {
             return Ok(ParseCssResult::Unparseable.into());
         }
+
+        StyleSheetLike::Swc(ss)
     };
 
     fn clone_options(config: ParserOptions) -> ParserOptions<'static, 'static> {
@@ -373,7 +419,7 @@ async fn process_content(
     }
 
     let config = clone_options(config);
-    let mut stylesheet = stylesheet_into_static(&stylesheet, config.clone());
+    let mut stylesheet = stylesheet.to_static(config.clone());
 
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
 
