@@ -5,8 +5,9 @@ use indexmap::IndexMap;
 use lightningcss::{
     css_modules::{CssModuleExport, CssModuleExports, Pattern, Segment},
     dependencies::{Dependency, DependencyOptions},
+    error::PrinterErrorKind,
     rules::style,
-    stylesheet::{ParserOptions, PrinterOptions, StyleSheet},
+    stylesheet::{ParserOptions, PrinterOptions, StyleSheet, ToCssResult},
     targets::{Features, Targets},
     values::url::Url,
 };
@@ -51,6 +52,23 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                 StyleSheetLike::LightningCss(stylesheet_into_static(ss, options))
             }
             StyleSheetLike::Swc(ss) => StyleSheetLike::Swc(ss.clone()),
+        }
+    }
+
+    pub fn to_css(
+        &self,
+        mut options: PrinterOptions,
+    ) -> Result<ToCssResult, lightningcss::error::Error<PrinterErrorKind>> {
+        match self {
+            StyleSheetLike::LightningCss(ss) => {
+                let res = ss.to_css(options);
+
+                if let Some(srcmap) = options.source_map {
+                    srcmap.add_sources(ss.sources.clone());
+                }
+                res
+            }
+            StyleSheetLike::Swc(ss) => todo!(),
         }
     }
 }
@@ -232,8 +250,6 @@ pub async fn finalize_css(
             })?;
 
             dbg!("finalize_css => after StyleSheet::to_css");
-
-            srcmap.add_sources(stylesheet.sources.clone());
 
             Ok(FinalCssResult::Ok {
                 output_code: result.code,

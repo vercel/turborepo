@@ -22,7 +22,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::resolve::url_resolve;
 
-use crate::embed::CssEmbed;
+use crate::{embed::CssEmbed, StyleSheetLike};
 
 #[turbo_tasks::value(into = "new")]
 pub enum ReferencedAsset {
@@ -141,7 +141,7 @@ pub async fn resolve_url_reference(
 }
 
 pub fn replace_url_references(
-    ss: &mut StyleSheet<'static, 'static>,
+    ss: &mut StyleSheetLike<'static, 'static>,
     urls: &HashMap<String, String>,
 ) {
     let mut replacer = AssetReferenceReplacer { urls };
