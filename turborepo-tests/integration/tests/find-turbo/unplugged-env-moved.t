@@ -7,7 +7,7 @@ Make sure we use local and do not pass --skip-infer to old binary
   $ set -o allexport; source .env; set +o allexport;
   $ ${TURBO} build --filter foo -vv > out.log
   $ grep --quiet -F "Local turbo version: 1.0.0" out.log
-  $ grep --quiet -E "Running local turbo binary in .*[\/|\\]unplugged-env-moved\.t[\/|\\]\.moved[\/|\\]unplugged[\/|\\].*[\/|\\]bin[\/|\\]turbo(\.exe)?" out.log
+  $ grep --quiet -E "Running local turbo binary in .*[\/\\]unplugged-env-moved\.t[\/\\]\.moved[\/\\]unplugged[\/\\].*[\/\\]bin[\/\\]turbo(\.exe)?" out.log
   $ cat out.log | tail -n1
   build --filter foo -vv --
 
@@ -16,6 +16,6 @@ Make sure we use local and pass --skip-infer to newer binary
   $ set -o allexport; source .env; set +o allexport;
   $ ${TURBO} build --filter foo -vv > out.log
   $ grep --quiet -F "Local turbo version: 1.8.0" out.log
-  $ grep --quiet -E "Running local turbo binary in .*[\/|\\]unplugged-env-moved\.t[\/|\\]\.moved[\/|\\]unplugged[\/|\\].*[\/|\\]bin[\/|\\]turbo(\.exe)?" out.log
+  $ grep --quiet -E "Running local turbo binary in .*[\/\\]unplugged-env-moved\.t[\/\\]\.moved[\/\\]unplugged[\/\\].*[\/\\]bin[\/\\]turbo(\.exe)?" out.log
   $ cat out.log | tail -n1
   --skip-infer build --filter foo -vv --single-package --
