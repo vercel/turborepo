@@ -177,7 +177,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	}
 
 	if ui.IsCI && !r.opts.runOpts.NoDaemon {
-		r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
+		r.base.Logger.Debug("skipping turbod since we appear to be in a non-interactive context")
 	} else if !r.opts.runOpts.NoDaemon {
 		turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
 		if err != nil {
