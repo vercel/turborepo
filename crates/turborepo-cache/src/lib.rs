@@ -89,7 +89,7 @@ pub struct CacheHitMetadata {
 #[derive(Debug, Default)]
 pub struct CacheOpts<'a> {
     pub override_dir: Option<&'a Utf8Path>,
-    pub read_only_remote_cache: bool,
+    pub remote_cache_read_only: bool,
     pub skip_remote: bool,
     pub skip_filesystem: bool,
     pub workers: u32,
