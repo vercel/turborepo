@@ -1,9 +1,13 @@
+use std::{collections::HashMap, convert::Infallible};
+
 use anyhow::{bail, Result};
-use swc_core::{
-    common::DUMMY_SP,
-    css::ast::{Str, UrlValue},
+use lightningcss::{
+    stylesheet::StyleSheet,
+    values::url::Url,
+    visit_types,
+    visitor::{Visit, Visitor},
 };
-use turbo_tasks::{debug::ValueDebug, vdbg, Value, ValueToString, Vc};
+use turbo_tasks::{debug::ValueDebug, Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
         ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,
@@ -18,7 +22,7 @@ use turbopack_core::{
 };
 use turbopack_ecmascript::resolve::url_resolve;
 
-use crate::embed::{CssEmbed, CssEmbeddable};
+use crate::embed::CssEmbed;
 
 #[turbo_tasks::value(into = "new")]
 pub enum ReferencedAsset {
