@@ -11,7 +11,11 @@ use lightningcss::{
     values::url::Url,
 };
 use smallvec::smallvec;
-use swc_core::{base::sourcemap::SourceMapBuilder, common::FileName};
+use swc_core::{
+    base::sourcemap::SourceMapBuilder,
+    common::FileName,
+    css::codegen::{writer::basic::BasicCssWriter, CodeGenerator},
+};
 use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
@@ -36,7 +40,10 @@ use crate::{
 #[derive(Debug)]
 pub enum StyleSheetLike<'i, 'o> {
     LightningCss(StyleSheet<'i, 'o>),
-    Swc(swc_core::css::ast::Stylesheet),
+    Swc {
+        stylesheet: swc_core::css::ast::Stylesheet,
+        css_modules: bool,
+    },
 }
 
 impl PartialEq for StyleSheetLike<'_, '_> {
@@ -54,7 +61,13 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
             StyleSheetLike::LightningCss(ss) => {
                 StyleSheetLike::LightningCss(stylesheet_into_static(ss, options))
             }
-            StyleSheetLike::Swc(ss) => StyleSheetLike::Swc(ss.clone()),
+            StyleSheetLike::Swc {
+                stylesheet,
+                css_modules,
+            } => StyleSheetLike::Swc {
+                stylesheet: stylesheet.clone(),
+                css_modules: *css_modules,
+            },
         }
     }
 
@@ -67,11 +80,26 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                 if let Some(srcmap) = &mut options.source_map {
                     srcmap.add_sources(ss.sources.clone());
                 }
-                let res = ss.to_css(options);
-
-                res
+                ss.to_css(options)
             }
-            StyleSheetLike::Swc(ss) => todo!(),
+            StyleSheetLike::Swc {
+                stylesheet,
+                css_modules,
+            } => {
+                let mut code_string = String::new();
+                let mut srcmap = vec![];
+
+                let mut code_gen = CodeGenerator::new(
+                    BasicCssWriter::new(&mut code_string, Some(&mut srcmap), Default::default()),
+                    Default::default(),
+                );
+
+                code_gen.emit(&stylesheet)?;
+
+                let srcmap = ParseCssResultSourceMap::new(source_map.clone(), srcmap).cell();
+
+                Ok(ToCssResult { code: code_string })
+            }
         }
     }
 }
@@ -417,7 +445,10 @@ async fn process_content(
             return Ok(ParseCssResult::Unparseable.into());
         }
 
-        StyleSheetLike::Swc(ss)
+        StyleSheetLike::Swc {
+            stylesheet: ss,
+            css_modules: matches!(ty, CssModuleAssetType::Module),
+        }
     };
 
     let config = clone_options(config);

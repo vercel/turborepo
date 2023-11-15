@@ -149,8 +149,8 @@ pub fn replace_url_references(
         StyleSheetLike::LightningCss(ss) => {
             ss.visit(&mut replacer).unwrap();
         }
-        StyleSheetLike::Swc(ss) => {
-            ss.visit_mut_with(&mut replacer);
+        StyleSheetLike::Swc { stylesheet, .. } => {
+            stylesheet.visit_mut_with(&mut replacer);
         }
     }
 }
