@@ -593,7 +593,13 @@ impl ExecContext {
         output_client: OutputClient<impl std::io::Write>,
         tracker: TaskTracker<()>,
     ) {
-        if let Ok(Some(status)) = self.task_cache.restore_outputs(None).await {
+        let mut prefixed_ui = Visitor::prefixed_ui(
+            self.ui,
+            self.is_github_actions,
+            &output_client,
+            self.pretty_prefix.clone(),
+        );
+        if let Ok(Some(status)) = self.task_cache.restore_outputs(&mut prefixed_ui).await {
             // we need to set expanded outputs
             self.hash_tracker.insert_expanded_outputs(
                 self.task_id.clone(),

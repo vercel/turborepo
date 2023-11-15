@@ -50,9 +50,15 @@ impl RunCache {
         color_selector: ColorSelector,
         daemon_client: Option<DaemonClient<DaemonConnector>>,
         ui: UI,
+        is_dry_run: bool,
     ) -> Self {
+        let task_output_mode = if is_dry_run {
+            Some(OutputLogsMode::None)
+        } else {
+            opts.task_output_mode_override
+        };
         RunCache {
-            task_output_mode: opts.task_output_mode_override,
+            task_output_mode,
             cache,
             reads_disabled: opts.skip_reads,
             writes_disabled: opts.skip_writes,

@@ -314,6 +314,7 @@ impl<'a> Run<'a> {
             color_selector,
             daemon,
             self.base.ui,
+            opts.run_opts.dry_run.is_some(),
         ));
 
         let mut global_env_mode = opts.run_opts.env_mode;
@@ -568,6 +569,8 @@ impl<'a> Run<'a> {
             color_selector,
             None,
             self.base.ui,
+            // Always dry run when getting hashes
+            true,
         ));
 
         let run_tracker = RunTracker::new(
