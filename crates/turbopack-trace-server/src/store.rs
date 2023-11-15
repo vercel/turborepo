@@ -4,6 +4,8 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
+use indexmap::IndexMap;
+
 use crate::span::{Span, SpanEvent, SpanGraph, SpanGraphEvent, SpanId};
 
 pub struct Store {
@@ -22,6 +24,7 @@ impl Store {
                 name: "(root)".into(),
                 args: vec![],
                 events: vec![],
+                nice_name: OnceLock::new(),
                 max_depth: OnceLock::new(),
                 graph: OnceLock::new(),
                 self_time: 0,
@@ -55,6 +58,7 @@ impl Store {
             name,
             args,
             events: vec![],
+            nice_name: OnceLock::new(),
             max_depth: OnceLock::new(),
             graph: OnceLock::new(),
             self_time: 0,
@@ -116,6 +120,7 @@ impl Store {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct SpanRef<'a> {
     span: &'a Span,
     store: &'a Store,
@@ -141,12 +146,29 @@ impl<'a> SpanRef<'a> {
         self.span.end
     }
 
-    pub fn category(&self) -> &str {
+    pub fn category(&self) -> &'a str {
         &self.span.category
     }
 
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &'a str {
         &self.span.name
+    }
+
+    pub fn nice_name(&self) -> (&'a str, &'a str) {
+        let (category, title) = self.span.nice_name.get_or_init(|| {
+            if let Some(name) = self
+                .span
+                .args
+                .iter()
+                .find(|&(k, _)| k == "name")
+                .map(|(_, v)| v.to_string())
+            {
+                (format!("{} {}", self.span.name, self.span.category), name)
+            } else {
+                (self.span.category.to_string(), self.span.name.to_string())
+            }
+        });
+        (category, title)
     }
 
     pub fn args(&self) -> impl Iterator<Item = (&str, &str)> {
@@ -172,7 +194,7 @@ impl<'a> SpanRef<'a> {
         })
     }
 
-    pub fn children(&self) -> impl Iterator<Item = SpanRef<'a>> + DoubleEndedIterator + '_ {
+    pub fn children(&self) -> impl Iterator<Item = SpanRef<'a>> + DoubleEndedIterator + 'a {
         self.span.events.iter().filter_map(|event| match event {
             SpanEvent::SelfTime { .. } => None,
             SpanEvent::Child { id } => Some(SpanRef {
@@ -218,15 +240,37 @@ impl<'a> SpanRef<'a> {
     pub fn graph(&self) -> impl Iterator<Item = SpanGraphEventRef<'a>> {
         self.span
             .graph
-            .get_or_init(|| todo!())
+            .get_or_init(|| {
+                let mut map: IndexMap<&str, Vec<SpanId>> = IndexMap::new();
+                for child in self.children() {
+                    let (_, name) = child.nice_name();
+                    map.entry(name).or_default().push(child.id());
+                }
+                map.into_iter()
+                    .map(|(_, spans)| {
+                        let graph = SpanGraph {
+                            spans,
+                            max_depth: OnceLock::new(),
+                            events: OnceLock::new(),
+                            self_time: OnceLock::new(),
+                            total_time: OnceLock::new(),
+                            corrected_self_time: OnceLock::new(),
+                            corrected_total_time: OnceLock::new(),
+                        };
+                        SpanGraphEvent::Child {
+                            child: Arc::new(graph),
+                        }
+                    })
+                    .collect()
+            })
             .iter()
             .map(|event| match event {
                 SpanGraphEvent::SelfTime { duration } => SpanGraphEventRef::SelfTime {
                     duration: *duration,
                 },
                 SpanGraphEvent::Child { child } => SpanGraphEventRef::Child {
-                    span: SpanGraphRef {
-                        span: child.clone(),
+                    graph: SpanGraphRef {
+                        graph: child.clone(),
                         store: self.store,
                     },
                 },
@@ -234,17 +278,152 @@ impl<'a> SpanRef<'a> {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum SpanEventRef<'a> {
     SelfTime { start: u64, end: u64 },
     Child { span: SpanRef<'a> },
 }
 
+#[derive(Clone)]
 pub enum SpanGraphEventRef<'a> {
     SelfTime { duration: u64 },
-    Child { span: SpanGraphRef<'a> },
+    Child { graph: SpanGraphRef<'a> },
 }
 
+#[derive(Clone)]
 pub struct SpanGraphRef<'a> {
-    span: Arc<SpanGraph>,
+    graph: Arc<SpanGraph>,
     store: &'a Store,
+}
+
+impl<'a> SpanGraphRef<'a> {
+    pub fn first_span(&self) -> SpanRef<'a> {
+        SpanRef {
+            span: &self.store.spans[self.graph.spans[0].get()],
+            store: self.store,
+        }
+    }
+
+    pub fn id(&self) -> SpanId {
+        self.first_span().id() | (1 << (usize::BITS - 1))
+    }
+
+    pub fn name(&self) -> &'a str {
+        self.first_span().name()
+    }
+
+    pub fn nice_name(&self) -> (&str, &str) {
+        self.first_span().nice_name()
+    }
+
+    pub fn count(&self) -> usize {
+        self.graph.spans.len()
+    }
+
+    pub fn spans(&self) -> impl Iterator<Item = SpanRef<'a>> + DoubleEndedIterator + '_ {
+        self.graph.spans.iter().map(move |span| SpanRef {
+            span: &self.store.spans[span.get()],
+            store: self.store,
+        })
+    }
+
+    pub fn events(&self) -> impl Iterator<Item = SpanGraphEventRef<'a>> + DoubleEndedIterator + '_ {
+        self.graph
+            .events
+            .get_or_init(|| {
+                if self.graph.spans.len() == 1 {
+                    let _ = self.first_span().graph();
+                    self.first_span().span.graph.get().unwrap().clone()
+                } else {
+                    let mut map: IndexMap<&str, Vec<SpanId>> = IndexMap::new();
+                    for span in self.spans() {
+                        for span in span.children() {
+                            let (_, name) = span.nice_name();
+                            map.entry(name).or_default().push(span.id());
+                        }
+                    }
+                    map.into_iter()
+                        .map(|(_, spans)| {
+                            let graph = SpanGraph {
+                                spans,
+                                max_depth: OnceLock::new(),
+                                events: OnceLock::new(),
+                                self_time: OnceLock::new(),
+                                total_time: OnceLock::new(),
+                                corrected_self_time: OnceLock::new(),
+                                corrected_total_time: OnceLock::new(),
+                            };
+                            SpanGraphEvent::Child {
+                                child: Arc::new(graph),
+                            }
+                        })
+                        .collect()
+                }
+            })
+            .iter()
+            .map(|graph| match graph {
+                SpanGraphEvent::SelfTime { duration } => SpanGraphEventRef::SelfTime {
+                    duration: *duration,
+                },
+                SpanGraphEvent::Child { child } => SpanGraphEventRef::Child {
+                    graph: SpanGraphRef {
+                        graph: child.clone(),
+                        store: self.store,
+                    },
+                },
+            })
+    }
+
+    pub fn children(&self) -> impl Iterator<Item = SpanGraphRef<'a>> + DoubleEndedIterator + '_ {
+        self.events().filter_map(|event| match event {
+            SpanGraphEventRef::SelfTime { .. } => None,
+            SpanGraphEventRef::Child { graph: span } => Some(span),
+        })
+    }
+
+    pub fn max_depth(&self) -> u32 {
+        *self.graph.max_depth.get_or_init(|| {
+            self.children()
+                .map(|graph| graph.max_depth() + 1)
+                .max()
+                .unwrap_or_default()
+        })
+    }
+
+    pub fn self_time(&self) -> u64 {
+        *self.graph.self_time.get_or_init(|| {
+            self.spans()
+                .map(|span| span.self_time())
+                .reduce(|a, b| a + b)
+                .unwrap_or_default()
+        })
+    }
+
+    pub fn total_time(&self) -> u64 {
+        *self.graph.total_time.get_or_init(|| {
+            self.spans()
+                .map(|span| span.total_time())
+                .reduce(|a, b| a + b)
+                .unwrap_or_default()
+                + self.self_time()
+        })
+    }
+
+    pub fn corrected_self_time(&self) -> u64 {
+        *self.graph.self_time.get_or_init(|| {
+            self.spans()
+                .map(|span| span.corrected_self_time())
+                .reduce(|a, b| a + b)
+                .unwrap_or_default()
+        })
+    }
+
+    pub fn corrected_total_time(&self) -> u64 {
+        *self.graph.total_time.get_or_init(|| {
+            self.spans()
+                .map(|span| span.corrected_total_time())
+                .reduce(|a, b| a + b)
+                .unwrap_or_default()
+        })
+    }
 }

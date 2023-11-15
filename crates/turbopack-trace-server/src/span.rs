@@ -22,6 +22,7 @@ pub struct Span {
     pub self_time: u64,
 
     // These values are computed when accessed (and maybe deleted during writing):
+    pub nice_name: OnceLock<(String, String)>,
     pub max_depth: OnceLock<u32>,
     pub total_time: OnceLock<u64>,
     pub corrected_self_time: OnceLock<u64>,
@@ -29,11 +30,13 @@ pub struct Span {
     pub graph: OnceLock<Vec<SpanGraphEvent>>,
 }
 
+#[derive(Copy, Clone)]
 pub enum SpanEvent {
     SelfTime { start: u64, end: u64 },
     Child { id: SpanId },
 }
 
+#[derive(Clone)]
 pub enum SpanGraphEvent {
     SelfTime { duration: u64 },
     Child { child: Arc<SpanGraph> },
@@ -41,9 +44,13 @@ pub enum SpanGraphEvent {
 
 pub struct SpanGraph {
     // These values won't change after creation:
-    pub id: u64,
     pub spans: Vec<SpanId>,
 
     // These values are computed when accessed:
-    pub events: Option<Vec<SpanGraphEvent>>,
+    pub max_depth: OnceLock<u32>,
+    pub events: OnceLock<Vec<SpanGraphEvent>>,
+    pub self_time: OnceLock<u64>,
+    pub total_time: OnceLock<u64>,
+    pub corrected_self_time: OnceLock<u64>,
+    pub corrected_total_time: OnceLock<u64>,
 }
