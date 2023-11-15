@@ -4,9 +4,8 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use lightningcss::{
     css_modules::{CssModuleExport, CssModuleExports, Pattern, Segment},
-    dependencies::{Dependency, DependencyOptions},
+    dependencies::DependencyOptions,
     error::PrinterErrorKind,
-    rules::style,
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet, ToCssResult},
     targets::{Features, Targets},
     values::url::Url,
@@ -47,7 +46,10 @@ impl PartialEq for StyleSheetLike<'_, '_> {
 }
 
 impl<'i, 'o> StyleSheetLike<'i, 'o> {
-    pub fn to_static(&self, options: ParserOptions<'o, 'i>) -> StyleSheetLike<'static, 'static> {
+    pub fn to_static(
+        &self,
+        options: ParserOptions<'static, 'static>,
+    ) -> StyleSheetLike<'static, 'static> {
         match self {
             StyleSheetLike::LightningCss(ss) => {
                 StyleSheetLike::LightningCss(stylesheet_into_static(ss, options))
@@ -62,11 +64,11 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
     ) -> Result<ToCssResult, lightningcss::error::Error<PrinterErrorKind>> {
         match self {
             StyleSheetLike::LightningCss(ss) => {
-                let res = ss.to_css(options);
-
-                if let Some(srcmap) = options.source_map {
+                if let Some(srcmap) = &mut options.source_map {
                     srcmap.add_sources(ss.sources.clone());
                 }
+                let res = ss.to_css(options);
+
                 res
             }
             StyleSheetLike::Swc(ss) => todo!(),
