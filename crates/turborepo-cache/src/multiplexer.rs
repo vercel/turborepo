@@ -89,8 +89,7 @@ impl CacheMultiplexer {
                     let http_result = http.put(anchor, key, files, duration).await;
 
                     Some(http_result)
-                }
-                else {
+                } else {
                     None
                 }
             }
