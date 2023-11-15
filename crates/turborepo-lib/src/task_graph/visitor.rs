@@ -270,6 +270,13 @@ impl<'a> Visitor<'a> {
 
     /// Finishes visiting the tasks, creates the run summary, and either
     /// prints, saves, or sends it to spaces.
+    #[tracing::instrument(skip(
+        self,
+        packages,
+        global_hash_inputs,
+        engine,
+        env_at_execution_start
+    ))]
     pub(crate) async fn finish(
         self,
         exit_code: i32,
