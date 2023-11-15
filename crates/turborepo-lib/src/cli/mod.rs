@@ -564,8 +564,8 @@ pub struct RunArgs {
     #[clap(long, env = "TURBO_REMOTE_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
     pub remote_only: bool,
     /// Treat remote cache as read only
-    #[clap(long, env = "TURBO_READ_ONLY_REMOTE_CACHE", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
-    pub read_only_remote_cache: bool,
+    #[clap(long, env = "TURBO_REMOTE_CACHE_READ_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
+    pub remote_cache_read_only: bool,
     /// Specify package(s) to act as entry points for task execution.
     /// Supports globs.
     #[clap(long)]
