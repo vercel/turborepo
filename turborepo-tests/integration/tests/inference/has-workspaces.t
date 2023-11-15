@@ -16,9 +16,9 @@ Setup
   $ grep --quiet "No tasks were executed as part of this run." CRATES
 
   $ cd $TARGET_DIR/crates/super-crate/tests/test-package && ${TURBO} run build --filter=nothing -vv 1> TEST_PACKAGE 2>&1
-  $ grep --quiet 'pkg_inference_root set to "crates[\/\\]super-crate[\/\\]tests[\/\\]test-package"' TEST_PACKAGE
+  $ grep --quiet -E 'pkg_inference_root set to "crates[\/\\]super-crate[\/\\]tests[\/\\]test-package"' TEST_PACKAGE
   $ grep --quiet "No tasks were executed as part of this run." TEST_PACKAGE
 
   $ cd $TARGET_DIR/packages/ui-library/src && ${TURBO} run build --filter=nothing -vv 1> UI_LIBRARY 2>&1
-  $ grep --quiet 'pkg_inference_root set to "packages[\/\\]ui-library[\/\\]src"' UI_LIBRARY
+  $ grep --quiet -E 'pkg_inference_root set to "packages[\/\\]ui-library[\/\\]src"' UI_LIBRARY
   $ grep --quiet "No tasks were executed as part of this run." UI_LIBRARY
