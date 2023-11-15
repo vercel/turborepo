@@ -2,7 +2,6 @@ use std::{collections::HashMap, convert::Infallible};
 
 use anyhow::{bail, Result};
 use lightningcss::{
-    stylesheet::StyleSheet,
     values::url::Url,
     visit_types,
     visitor::{Visit, Visitor},

@@ -3,9 +3,8 @@ use std::convert::Infallible;
 use anyhow::Result;
 use lightningcss::{
     rules::CssRule,
-    stylesheet::StyleSheet,
     traits::IntoOwned,
-    values::{image::Image, url::Url},
+    values::url::Url,
     visitor::{Visit, Visitor},
 };
 use swc_core::css::visit::{VisitMut, VisitMutWith};
