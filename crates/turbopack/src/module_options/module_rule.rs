@@ -122,6 +122,7 @@ pub enum ModuleType {
     CssModule,
     Css {
         ty: CssModuleAssetType,
+        use_lightningcss: bool,
     },
     Static,
     WebAssembly {

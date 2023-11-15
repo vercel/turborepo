@@ -77,6 +77,7 @@ impl ModuleOptions {
             execution_context,
             ref rules,
             esm_url_rewrite_behavior,
+            use_lightningcss,
             ..
         } = *module_options_context.await?;
         if !rules.is_empty() {
@@ -380,6 +381,7 @@ impl ModuleOptions {
                     )]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                         ty: CssModuleAssetType::Default,
+                        use_lightningcss,
                     })],
                 ),
                 ModuleRule::new(
@@ -388,6 +390,7 @@ impl ModuleOptions {
                     )]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                         ty: CssModuleAssetType::Module,
+                        use_lightningcss,
                     })],
                 ),
             ]);
@@ -458,6 +461,7 @@ impl ModuleOptions {
                     ]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                         ty: CssModuleAssetType::Default,
+                        use_lightningcss,
                     })],
                 ),
                 ModuleRule::new(
@@ -470,6 +474,7 @@ impl ModuleOptions {
                     ]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                         ty: CssModuleAssetType::Module,
+                        use_lightningcss,
                     })],
                 ),
                 ModuleRule::new_internal(
@@ -478,6 +483,7 @@ impl ModuleOptions {
                     )]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                         ty: CssModuleAssetType::Default,
+                        use_lightningcss,
                     })],
                 ),
                 ModuleRule::new_internal(
@@ -486,6 +492,7 @@ impl ModuleOptions {
                     )]),
                     vec![ModuleRuleEffect::ModuleType(ModuleType::Css {
                         ty: CssModuleAssetType::Module,
+                        use_lightningcss,
                     })],
                 ),
             ]);

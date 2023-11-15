@@ -170,10 +170,14 @@ async fn apply_module_type(
             source,
             Vc::upcast(module_asset_context),
         )),
-        ModuleType::Css { ty } => Vc::upcast(CssModuleAsset::new(
+        ModuleType::Css {
+            ty,
+            use_lightningcss,
+        } => Vc::upcast(CssModuleAsset::new(
             source,
             Vc::upcast(module_asset_context),
             *ty,
+            *use_lightningcss,
         )),
         ModuleType::Static => Vc::upcast(StaticModuleAsset::new(
             source,
