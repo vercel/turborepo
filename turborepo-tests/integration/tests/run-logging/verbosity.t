@@ -48,6 +48,7 @@ Verbosity level 2
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::task_hash: task hash env vars for util:build (re)
    vars: \[] (re)
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::task_graph::visitor: task util#build hash is 1ce33e04f265f95c (re)
+  [-0-9:.TWZ+]+ \[DEBUG] log: Engine visitor dropped callback sender without sending result (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/\.]+" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: rust (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
@@ -93,6 +94,7 @@ Verbosity level 2
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::task_hash: task hash env vars for util:build (re)
    vars: []
   [-0-9:.TWZ+]+ \[DEBUG] turborepo_lib::task_graph::visitor: task util#build hash is 1ce33e04f265f95c (re)
+  [-0-9:.TWZ+]+ \[DEBUG] log: Engine visitor dropped callback sender without sending result (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: Found go binary at "[\-\w\/\.]+" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: build tag: rust (re)
   [-0-9:.TWZ+]+ \[INFO]  turbo: skipping turbod since we appear to be in a non-interactive context (re)
