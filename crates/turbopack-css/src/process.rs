@@ -321,6 +321,28 @@ async fn process_content(
     ty: CssModuleAssetType,
     use_lightningcss: bool,
 ) -> Result<Vc<ParseCssResult>> {
+    fn clone_options(config: ParserOptions) -> ParserOptions<'static, 'static> {
+        ParserOptions {
+            filename: config.filename,
+            css_modules: config
+                .css_modules
+                .clone()
+                .map(|v| lightningcss::css_modules::Config {
+                    pattern: Pattern {
+                        segments: unsafe {
+                            // Safety: It's actually static (two `__``)
+                            transmute(v.pattern.segments.clone())
+                        },
+                    },
+                    dashed_idents: v.dashed_idents,
+                }),
+            source_index: config.source_index,
+            error_recovery: config.error_recovery,
+            warnings: None,
+            flags: config.flags,
+        }
+    }
+
     let config = ParserOptions {
         css_modules: match ty {
             CssModuleAssetType::Module => Some(lightningcss::css_modules::Config {
@@ -344,7 +366,7 @@ async fn process_content(
 
     let stylesheet = if use_lightningcss {
         StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
-            Ok(stylesheet) => stylesheet,
+            Ok(stylesheet) => stylesheet_into_static(&stylesheet, clone_options(config.clone())),
             Err(_e) => {
                 // TODO(kdy1): Report errors
                 // e.to_diagnostics(&handler).emit();
@@ -395,28 +417,6 @@ async fn process_content(
 
         StyleSheetLike::Swc(ss)
     };
-
-    fn clone_options(config: ParserOptions) -> ParserOptions<'static, 'static> {
-        ParserOptions {
-            filename: config.filename,
-            css_modules: config
-                .css_modules
-                .clone()
-                .map(|v| lightningcss::css_modules::Config {
-                    pattern: Pattern {
-                        segments: unsafe {
-                            // Safety: It's actually static (two `__``)
-                            transmute(v.pattern.segments.clone())
-                        },
-                    },
-                    dashed_idents: v.dashed_idents,
-                }),
-            source_index: config.source_index,
-            error_recovery: config.error_recovery,
-            warnings: None,
-            flags: config.flags,
-        }
-    }
 
     let config = clone_options(config);
     let mut stylesheet = stylesheet.to_static(config.clone());

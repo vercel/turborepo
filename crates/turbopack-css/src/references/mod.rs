@@ -8,6 +8,7 @@ use lightningcss::{
     values::{image::Image, url::Url},
     visitor::{Visit, Visitor},
 };
+use swc_core::css::visit::VisitMutWith;
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
     issue::{IssueSeverity, IssueSource},
@@ -23,9 +24,12 @@ use turbopack_core::{
     source_pos::SourcePos,
 };
 
-use crate::references::{
-    import::{ImportAssetReference, ImportAttributes},
-    url::UrlAssetReference,
+use crate::{
+    references::{
+        import::{ImportAssetReference, ImportAttributes},
+        url::UrlAssetReference,
+    },
+    StyleSheetLike,
 };
 
 pub(crate) mod compose;
@@ -40,7 +44,7 @@ pub type AnalyzedRefs = (
 
 /// Returns `(all_references, urls)`.
 pub fn analyze_references(
-    stylesheet: &mut StyleSheet<'static, 'static>,
+    stylesheet: &mut StyleSheetLike<'static, 'static>,
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
 ) -> Result<AnalyzedRefs> {
@@ -48,7 +52,14 @@ pub fn analyze_references(
     let mut urls = Vec::new();
 
     let mut visitor = ModuleReferencesVisitor::new(source, origin, &mut references, &mut urls);
-    stylesheet.visit(&mut visitor).unwrap();
+    match stylesheet {
+        StyleSheetLike::LightningCss(ss) => {
+            ss.visit(&mut visitor).unwrap();
+        }
+        StyleSheetLike::Swc(ss) => {
+            ss.visit_mut_with(&mut visitor).unwrap();
+        }
+    }
 
     Ok((references, urls))
 }
