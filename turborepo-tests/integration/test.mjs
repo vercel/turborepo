@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = __filename.replace(/[^/\\]*$/, "");
+
 const VENV_NAME = ".cram_env";
 
 // disable package manager update notifiers
