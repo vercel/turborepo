@@ -13,7 +13,7 @@ Verbosity level 1
   util:build: > build
   util:build: > echo building
   util:build: 
-  util:build: '?building'? (re)
+  util:build: building (re)
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -29,7 +29,7 @@ Verbosity level 1
   util:build: > build
   util:build: > echo building
   util:build: 
-  util:build: '?building'? (re)
+  util:build: building (re)
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -73,7 +73,7 @@ Verbosity level 2
   util:build: > build
   util:build: > echo building
   util:build: 
-  util:build: '?building'? (re)
+  util:build: building (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo.: caching output: outputs="{\[packages/util/.turbo/turbo-build.log] \[]}" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo.: done: status=complete duration=[\.0-9]+m?s (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: task hashes match (re)
@@ -118,7 +118,7 @@ Verbosity level 2
   util:build: > build
   util:build: > echo building
   util:build: 
-  util:build: '?building'? (re)
+  util:build: building (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo.: caching output: outputs="{\[packages/util/.turbo/turbo-build.log] \[]}" (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo.: done: status=complete duration=[\.0-9]+m?s (re)
   [-0-9:.TWZ+]+ \[DEBUG] turbo: task hashes match (re)

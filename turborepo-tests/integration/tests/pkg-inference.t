@@ -12,7 +12,7 @@ Setup
   util:build: > build
   util:build: > echo building
   util:build: 
-  util:build: '?building'? (re)
+  util:build: building (re)
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
