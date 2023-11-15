@@ -200,7 +200,7 @@ mod tests {
 
         let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
         let api_auth = Some(APIAuth {
-            team_id: "my-team-id".to_string(),
+            team_id: Some("my-team-id".to_string()),
             token: "my-token".to_string(),
             team_slug: None,
         });
@@ -275,7 +275,7 @@ mod tests {
         // network
         let api_client = APIClient::new("http://example.com", 200, "2.0.0", true)?;
         let api_auth = Some(APIAuth {
-            team_id: "my-team-id".to_string(),
+            team_id: Some("my-team-id".to_string()),
             token: "my-token".to_string(),
             team_slug: None,
         });
@@ -356,7 +356,7 @@ mod tests {
 
         let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
         let api_auth = Some(APIAuth {
-            team_id: "my-team-id".to_string(),
+            team_id: Some("my-team-id".to_string()),
             token: "my-token".to_string(),
             team_slug: None,
         });
