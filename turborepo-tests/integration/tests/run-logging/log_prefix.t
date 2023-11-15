@@ -7,12 +7,12 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  cache miss, executing 724fbf5201e1b2c8
+  cache miss, executing 6b91fee8d61438d4
   
   \> build (re)
-  \> echo 'build app-a' (re)
+  \> echo build-app-a (re)
   
-  build app-a
+  build-app-a
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -22,21 +22,21 @@ Setup
   $ cat app-a/.turbo/turbo-build.log
   
   \> build (re)
-  \> echo 'build app-a' (re)
+  \> echo build-app-a (re)
   
-  build app-a
+  build-app-a
 
 # Running again should get a cache hit and no prefixes
   $ ${TURBO} run build --log-prefix=none
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  cache hit, replaying logs 724fbf5201e1b2c8
+  cache hit, replaying logs 6b91fee8d61438d4
   
   \> build (re)
-  \> echo 'build app-a' (re)
+  \> echo build-app-a (re)
   
-  build app-a
+  build-app-a
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -47,12 +47,12 @@ Setup
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  app-a:build: cache hit, replaying logs 724fbf5201e1b2c8
+  app-a:build: cache hit, replaying logs 6b91fee8d61438d4
   app-a:build: 
   app-a:build: > build
-  app-a:build: > echo 'build app-a'
+  app-a:build: > echo build-app-a
   app-a:build: 
-  app-a:build: build app-a
+  app-a:build: build-app-a
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
