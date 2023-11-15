@@ -63,14 +63,14 @@ impl Viewer {
             let start = span.start();
             current = max(current, start);
             let width = span.corrected_total_time();
-            queue.push((span, 0, current));
+            queue.push((span, 0, current, false));
             current += width;
         }
         queue.reverse();
 
         let mut lines: Vec<Vec<LineEntry<'_>>> = vec![];
 
-        while let Some((span, line_index, start)) = queue.pop() {
+        while let Some((span, line_index, start, placeholder)) = queue.pop() {
             // filter by view rect (vertical)
             if line_index > (view_rect.y + view_rect.height + EXTRA_HEIGHT) as usize {
                 continue;
@@ -95,7 +95,7 @@ impl Viewer {
             }
 
             let pixel_width =
-                (width * view_rect.horizontal_pixels + view_rect.width) / view_rect.width;
+                (width * view_rect.horizontal_pixels + view_rect.width - 1) / view_rect.width;
 
             // compute children
             let mut children = Vec::new();
@@ -103,13 +103,26 @@ impl Viewer {
             for child in span.children() {
                 let child_width = child.corrected_total_time();
                 let max_depth = child.max_depth();
-                children.push(((child, line_index + 1, current), max_depth));
+                let pixel1 = current * view_rect.horizontal_pixels / view_rect.width;
+                let pixel2 =
+                    ((current + child_width) * view_rect.horizontal_pixels + view_rect.width - 1)
+                        / view_rect.width;
+                children.push((
+                    (child, line_index + 1, current, false),
+                    max_depth,
+                    (pixel1, pixel2),
+                ));
                 current += child_width;
             }
 
+            const MIN_VISIBLE_PIXEL_SIZE: u64 = 3;
+
             // When span size is smaller than a pixel, we only show the deepest child.
-            if pixel_width <= 100 {
-                if let Some((entry, _)) = children.into_iter().max_by_key(|(_, depth)| *depth) {
+            if placeholder {
+                if let Some((mut entry, _, _)) =
+                    children.into_iter().max_by_key(|(_, depth, _)| *depth)
+                {
+                    entry.3 = true;
                     queue.push(entry);
                 }
 
@@ -122,8 +135,23 @@ impl Viewer {
             } else {
                 // add children to queue
                 children.reverse();
-                for (entry, _) in children {
+                let mut last_pixel = u64::MAX;
+                let mut last_max_depth = 0;
+                for (mut entry, max_depth, (pixel1, pixel2)) in children {
+                    if last_pixel <= pixel1 + MIN_VISIBLE_PIXEL_SIZE {
+                        if last_max_depth < max_depth {
+                            queue.pop();
+                            entry.3 = true;
+                        } else {
+                            if let Some(entry) = queue.last_mut() {
+                                entry.3 = true;
+                            }
+                            continue;
+                        }
+                    };
                     queue.push(entry);
+                    last_max_depth = max_depth;
+                    last_pixel = pixel2;
                 }
 
                 // add span to line
