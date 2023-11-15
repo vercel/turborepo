@@ -5,11 +5,6 @@ const project = resolve(process.cwd(), "tsconfig.json");
 /** @type {import("eslint").Linter.Config} */
 module.exports = {
   extends: ["plugin:@next/next/recommended", "prettier", "eslint-config-turbo"],
-  parser: "@typescript-eslint/parser",
-  plugins: ["@typescript-eslint"],
-  parserOptions: {
-    project,
-  },
   settings: {
     "import/resolver": {
       typescript: {
@@ -21,11 +16,10 @@ module.exports = {
     // Ignore dotfiles
     ".*.js",
     "node_modules/",
-    "dist/",
   ],
   overrides: [
     {
-      files: ["*.js?(x)", "*.mjs"],
+      files: ["*.js?(x)", "*.ts?(x)"],
       parserOptions: {
         presets: (() => {
           try {
