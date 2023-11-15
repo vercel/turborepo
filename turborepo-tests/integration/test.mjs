@@ -5,43 +5,35 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = __filename.replace(/[^/\\]*$/, "");
 
-const venvName = ".cram_env";
-const isWindows = process.platform === "win32";
-
-// Make virtualenv
-execSync(`python3 -m venv ${venvName}`);
-
-// Get executables
-const python3 = getVenvBin("python3");
-const pip = getVenvBin("pip");
-
-// Install pip and prysk
-console.log("install latest pip");
-execSync(`${python3} -m pip install --quiet --upgrade pip`);
-
-console.log("install prysk");
-execSync(`${pip} install "prysk"`);
+const VENV_NAME = ".cram_env";
 
 // disable package manager update notifiers
 process.env.NO_UPDATE_NOTIFIER = 1;
 
+const isWindows = process.platform === "win32";
+
+// Make virtualenv
+execSync(`python3 -m venv ${VENV_NAME}`);
+
+// Upgrade pip
+execSync(`${getVenvBin("python3")} -m pip install --quiet --upgrade pip`);
+
+// Install prysk
+execSync(`${getVenvBin("pip")} install "prysk"`);
+
 // Which tests do we want to run?
 let testArg = process.argv[2] ? process.argv[2] : "";
 testArg = isWindows ? testArg.replaceAll("/", path.sep) : testArg;
+const tests = path.join("tests", testArg);
 
 // What flags to pass to prysk?
 const flags = [
   "--shell=bash",
-  isWindows ? "--dos2unix" : "",
   process.env.PRYSK_INTERACTIVE === "true" ? "--interactive" : "",
+  isWindows ? "--dos2unix" : "",
 ].join(" ");
 
-const cmd = [
-  getVenvBin("prysk"), // prysk program
-  flags, // flags for the program
-  path.join("tests", testArg), // arguments for the program
-].join(" ");
-
+const cmd = [getVenvBin("prysk"), flags, tests].join(" ");
 console.log(`Running ${cmd}`);
 
 try {
@@ -55,14 +47,13 @@ try {
 
 function getVenvBin(tool) {
   const allowedVenvTools = ["python3", "pip", "prysk"];
-
   if (!allowedVenvTools.includes(tool)) {
     throw new Error(`Tool not allowed: ${tool}`);
   }
 
   const suffix = isWindows ? ".exe" : "";
 
-  const venvPath = path.join(__dirname, venvName);
+  const venvPath = path.join(__dirname, VENV_NAME);
   const venvBin = isWindows
     ? path.join(venvPath, "Scripts")
     : path.join(venvPath, "bin");
