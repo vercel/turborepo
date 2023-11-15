@@ -10,14 +10,14 @@
   my-app:build: cache bypass, force executing [0-9a-f]+ (re)
   my-app:build: 
   my-app:build: > build
-  my-app:build: > echo 'building' && sleep 1 && echo 'done'
+  my-app:build: > echo building && sleep 1 && echo done
   my-app:build: 
   my-app:build: building (re)
   my-app:build: done (re)
   util:build: cache bypass, force executing [0-9a-f]+ (re)
   util:build: 
   util:build: > build
-  util:build: > sleep 0.5 && echo 'building' && sleep 1 && echo 'completed'
+  util:build: > sleep 0.5 && echo building && sleep 1 && echo completed
   util:build: 
   util:build: building (re)
   util:build: completed (re)
@@ -35,14 +35,14 @@
   my-app:build: cache bypass, force executing [0-9a-f]+ (re)
   my-app:build: 
   my-app:build: > build
-  my-app:build: > echo 'building' && sleep 1 && echo 'done'
+  my-app:build: > echo building && sleep 1 && echo done
   my-app:build: 
   my-app:build: building (re)
   my-app:build: done (re)
   util:build: cache bypass, force executing [0-9a-f]+ (re)
   util:build: 
   util:build: > build
-  util:build: > sleep 0.5 && echo 'building' && sleep 1 && echo 'completed'
+  util:build: > sleep 0.5 && echo building && sleep 1 && echo completed
   util:build: 
   util:build: building (re)
   util:build: completed (re)
@@ -59,14 +59,14 @@
   my-app:build: cache bypass, force executing [0-9a-f]+ (re)
   my-app:build: 
   my-app:build: > build
-  my-app:build: > echo 'building' && sleep 1 && echo 'done'
+  my-app:build: > echo building && sleep 1 && echo done
   my-app:build: 
   my-app:build: building (re)
   my-app:build: done (re)
   util:build: cache bypass, force executing [0-9a-f]+ (re)
   util:build: 
   util:build: > build
-  util:build: > sleep 0.5 && echo 'building' && sleep 1 && echo 'completed'
+  util:build: > sleep 0.5 && echo building && sleep 1 && echo completed
   util:build: 
   util:build: building (re)
   util:build: completed (re)
