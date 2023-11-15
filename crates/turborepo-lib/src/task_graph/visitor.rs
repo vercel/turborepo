@@ -270,6 +270,13 @@ impl<'a> Visitor<'a> {
 
     /// Finishes visiting the tasks, creates the run summary, and either
     /// prints, saves, or sends it to spaces.
+    #[tracing::instrument(skip(
+        self,
+        packages,
+        global_hash_inputs,
+        engine,
+        env_at_execution_start
+    ))]
     pub(crate) async fn finish(
         self,
         exit_code: i32,
@@ -785,6 +792,9 @@ impl ExecContext {
             }
             ChildExit::Finished(Some(code)) => {
                 // If there was an error, flush the buffered output
+                if let Err(e) = stdout_writer.flush() {
+                    error!("error flushing logs: {e}");
+                }
                 if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
                     error!("error reading logs: {e}");
                 }

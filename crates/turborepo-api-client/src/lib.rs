@@ -34,15 +34,10 @@ pub trait Client {
     async fn get_teams(&self, token: &str) -> Result<TeamsResponse>;
     async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>>;
     fn add_ci_header(request_builder: RequestBuilder) -> RequestBuilder;
-    fn add_team_params(
-        request_builder: RequestBuilder,
-        team_id: &str,
-        team_slug: Option<&str>,
-    ) -> RequestBuilder;
     async fn get_caching_status(
         &self,
         token: &str,
-        team_id: &str,
+        team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<CachingStatusResponse>;
     async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse>;
@@ -60,21 +55,21 @@ pub trait Client {
         &self,
         hash: &str,
         token: &str,
-        team_id: &str,
+        team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<Option<Response>>;
     async fn artifact_exists(
         &self,
         hash: &str,
         token: &str,
-        team_id: &str,
+        team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<Option<Response>>;
     async fn get_artifact(
         &self,
         hash: &str,
         token: &str,
-        team_id: &str,
+        team_id: Option<&str>,
         team_slug: Option<&str>,
         method: Method,
     ) -> Result<Option<Response>>;
@@ -98,7 +93,7 @@ pub struct APIClient {
 
 #[derive(Clone)]
 pub struct APIAuth {
-    pub team_id: String,
+    pub team_id: Option<String>,
     pub token: String,
     pub team_slug: Option<String>,
 }
@@ -159,25 +154,10 @@ impl Client for APIClient {
         request_builder
     }
 
-    fn add_team_params(
-        mut request_builder: RequestBuilder,
-        team_id: &str,
-        team_slug: Option<&str>,
-    ) -> RequestBuilder {
-        if let Some(slug) = team_slug {
-            request_builder = request_builder.query(&[("teamSlug", slug)]);
-        }
-        if team_id.starts_with("team_") {
-            request_builder = request_builder.query(&[("teamId", team_id)]);
-        }
-
-        request_builder
-    }
-
     async fn get_caching_status(
         &self,
         token: &str,
-        team_id: &str,
+        team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<CachingStatusResponse> {
         let request_builder = self
@@ -326,7 +306,7 @@ impl Client for APIClient {
         &self,
         hash: &str,
         token: &str,
-        team_id: &str,
+        team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<Option<Response>> {
         self.get_artifact(hash, token, team_id, team_slug, Method::GET)
@@ -337,7 +317,7 @@ impl Client for APIClient {
         &self,
         hash: &str,
         token: &str,
-        team_id: &str,
+        team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<Option<Response>> {
         self.get_artifact(hash, token, team_id, team_slug, Method::HEAD)
@@ -348,7 +328,7 @@ impl Client for APIClient {
         &self,
         hash: &str,
         token: &str,
-        team_id: &str,
+        team_id: Option<&str>,
         team_slug: Option<&str>,
         method: Method,
     ) -> Result<Option<Response>> {
@@ -500,13 +480,37 @@ impl APIClient {
             request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
         }
 
-        request_builder = Self::add_team_params(request_builder, team_id, team_slug.as_deref());
+        request_builder =
+            Self::add_team_params(request_builder, team_id.as_deref(), team_slug.as_deref());
 
         if let Some(constant) = turborepo_ci::Vendor::get_constant() {
             request_builder = request_builder.header("x-artifact-client-ci", constant);
         }
 
         Ok(request_builder)
+    }
+
+    fn add_team_params(
+        mut request_builder: RequestBuilder,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> RequestBuilder {
+        match team_id {
+            Some(team_id) if team_id.starts_with("team_") => {
+                request_builder = request_builder.query(&[("teamId", team_id)]);
+            }
+            _ => (),
+        }
+        if let Some(slug) = team_slug {
+            request_builder = request_builder.query(&[("slug", slug)]);
+        }
+        request_builder
+    }
+}
+
+impl APIAuth {
+    pub fn is_linked(&self) -> bool {
+        self.team_id.is_some() || self.team_slug.is_some()
     }
 }
 

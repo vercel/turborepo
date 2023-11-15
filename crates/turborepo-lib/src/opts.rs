@@ -142,10 +142,11 @@ pub struct RunOpts<'a> {
 
 impl<'a> RunOpts<'a> {
     pub fn args_for_task(&self, task_id: &TaskId) -> Option<Vec<String>> {
-        if self
-            .tasks
-            .iter()
-            .any(|task| task.as_str() == task_id.task())
+        if !self.pass_through_args.is_empty()
+            && self
+                .tasks
+                .iter()
+                .any(|task| task.as_str() == task_id.task())
         {
             Some(Vec::from(self.pass_through_args))
         } else {

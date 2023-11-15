@@ -149,9 +149,9 @@ impl TaskCache {
 
         log_writer.with_log_file(&self.log_file_path)?;
 
-        if matches!(
+        if !matches!(
             self.task_output_mode,
-            OutputLogsMode::Full | OutputLogsMode::NewOnly
+            OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly
         ) {
             log_writer.with_prefixed_writer(prefixed_writer);
         }
@@ -212,10 +212,15 @@ impl TaskCache {
                 .await?;
 
             let Some((cache_hit_metadata, restored_files)) = cache_status else {
-                prefixed_ui.output(format!(
-                    "cache miss, executing {}",
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
+                if !matches!(
+                    self.task_output_mode,
+                    OutputLogsMode::None | OutputLogsMode::ErrorsOnly
+                ) {
+                    prefixed_ui.output(format!(
+                        "cache miss, executing {}",
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ));
+                }
 
                 return Ok(None);
             };
@@ -288,7 +293,7 @@ impl TaskCache {
         prefixed_ui: &mut PrefixedUI<impl Write>,
         duration: Duration,
     ) -> Result<(), Error> {
-        if self.caching_disabled || self.run_cache.reads_disabled {
+        if self.caching_disabled || self.run_cache.writes_disabled {
             return Ok(());
         }
 

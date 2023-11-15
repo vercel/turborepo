@@ -34,7 +34,12 @@ impl HTTPCache {
             .map_or(false, |remote_cache_opts| remote_cache_opts.signature)
         {
             Some(ArtifactSignatureAuthenticator {
-                team_id: api_auth.team_id.as_bytes().to_vec(),
+                team_id: api_auth
+                    .team_id
+                    .as_deref()
+                    .unwrap_or_default()
+                    .as_bytes()
+                    .to_vec(),
                 secret_key_override: None,
             })
         } else {
@@ -99,7 +104,7 @@ impl HTTPCache {
             .artifact_exists(
                 hash,
                 &self.api_auth.token,
-                &self.api_auth.team_id,
+                self.api_auth.team_id.as_deref(),
                 self.api_auth.team_slug.as_deref(),
             )
             .await?
@@ -152,7 +157,7 @@ impl HTTPCache {
             .fetch_artifact(
                 hash,
                 &self.api_auth.token,
-                &self.api_auth.team_id,
+                self.api_auth.team_id.as_deref(),
                 self.api_auth.team_slug.as_deref(),
             )
             .await?
@@ -263,7 +268,7 @@ mod test {
         let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
         let opts = CacheOpts::default();
         let api_auth = APIAuth {
-            team_id: "my-team".to_string(),
+            team_id: Some("my-team".to_string()),
             token: "my-token".to_string(),
             team_slug: None,
         };

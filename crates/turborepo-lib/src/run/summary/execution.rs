@@ -67,21 +67,27 @@ impl fmt::Display for TurboDuration {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let duration = &self.0;
 
-        if duration.num_hours() > 0 {
-            write!(
-                f,
-                "{}h{}m{}s",
-                duration.num_hours(),
-                duration.num_minutes(),
-                duration.num_seconds()
-            )
-        } else if duration.num_minutes() > 0 {
-            write!(f, "{}m{}s", duration.num_minutes(), duration.num_seconds())
-        } else if duration.num_seconds() > 0 {
-            write!(f, "{}s", duration.num_seconds())
-        } else {
-            write!(f, "{}ms", duration.num_milliseconds())
+        // If duration is less than a second, we print milliseconds
+        if duration.num_seconds() <= 0 {
+            let milliseconds = duration.num_milliseconds() - duration.num_seconds() * 1000;
+            return write!(f, "{}ms", milliseconds);
         }
+
+        if duration.num_hours() > 0 {
+            write!(f, "{}h", duration.num_hours(),)?;
+        }
+
+        if duration.num_minutes() > 0 {
+            let minutes = duration.num_minutes() - duration.num_hours() * 60;
+            write!(f, "{}m", minutes)?;
+        }
+
+        if duration.num_seconds() > 0 {
+            let seconds = duration.num_seconds() - duration.num_minutes() * 60;
+            write!(f, "{}s", seconds)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -259,9 +265,9 @@ enum Event {
 pub struct TaskExecutionSummary {
     pub start_time: i64,
     pub end_time: i64,
-    pub exit_code: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    pub exit_code: Option<i32>,
 }
 
 impl TaskExecutionSummary {
