@@ -4,7 +4,7 @@ Setup
 
   $ cd $TARGET_DIR/outer && ${TURBO} run build --filter=nothing -vv 1> OUTER 2>&1
   $ grep --quiet -E "Repository Root: .*[\/\\]nested_workspaces[\/\\]outer" OUTER
-  $ cat OUTER | grep --quiet "No tasks were executed as part of this run."
+  $ grep --quiet "No tasks were executed as part of this run." OUTER
 
   $ cd $TARGET_DIR/outer/apps && ${TURBO} run build --filter=nothing -vv 1> OUTER_APPS 2>&1
   $ grep --quiet -E "Repository Root: .*[\/\\]nested_workspaces[\/\\]outer" OUTER_APPS
