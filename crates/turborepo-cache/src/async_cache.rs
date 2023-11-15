@@ -117,7 +117,7 @@ impl AsyncCache {
         }
     }
 
-    pub async fn exists(&mut self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
+    pub async fn exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         self.real_cache.exists(key).await
     }
 
