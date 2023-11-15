@@ -18,7 +18,7 @@ Check my-app#build output
   my-app:build: > build
   my-app:build: > echo building
   my-app:build: 
-  my-app:build: building (re)
+  my-app:build: building
   
    Tasks:    2 successful, 2 total
   Cached:    0 cached, 2 total

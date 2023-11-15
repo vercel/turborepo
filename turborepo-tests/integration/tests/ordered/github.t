@@ -24,8 +24,8 @@ because otherwise prysk interprets them as multiline commands
   >\sbuild (re)
   \>\ssleep 0.5 && echo building && sleep 1 && echo completed (re)
   
-  building (re)
-  completed (re)
+  building
+  completed
   ::endgroup::
   
    Tasks:    2 successful, 2 total
@@ -43,8 +43,8 @@ because otherwise prysk interprets them as multiline commands
   util:build: > build
   util:build: > sleep 0.5 && echo building && sleep 1 && echo completed
   util:build: 
-  util:build: building (re)
-  util:build: completed (re)
+  util:build: building
+  util:build: completed
   ::endgroup::
   
    Tasks:    1 successful, 1 total
@@ -61,7 +61,7 @@ Verify that errors are grouped properly
   cache miss, executing 35b693e4fd63546f
   
   \> fail (re)
-  \> echo 'failing'; exit 1 (re)
+  \> echo failing; exit 1 (re)
   
   failing (re)
   npm ERR! Lifecycle script `fail` failed with error: 

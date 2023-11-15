@@ -16,7 +16,7 @@ Check
   test: > test
   test: > cat foo.txt
   test: 
-  test: building\s* (re)
+  test: building
   
    Tasks:    2 successful, 2 total
   Cached:    0 cached, 2 total
@@ -36,7 +36,7 @@ Run a second time, verify caching works because there is a config
   test: > test
   test: > cat foo.txt
   test: 
-  test: building\s* (re)
+  test: building
   
    Tasks:    2 successful, 2 total
   Cached:    2 cached, 2 total

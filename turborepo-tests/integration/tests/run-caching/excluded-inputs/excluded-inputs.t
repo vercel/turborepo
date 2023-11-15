@@ -15,7 +15,7 @@ Running build for my-app succeeds
   my-app:build: > build
   my-app:build: > echo building
   my-app:build: 
-  my-app:build: building (re)
+  my-app:build: building
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -32,7 +32,7 @@ Update exluded file and try again
   my-app:build: > build
   my-app:build: > echo building
   my-app:build: 
-  my-app:build: building (re)
+  my-app:build: building
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
