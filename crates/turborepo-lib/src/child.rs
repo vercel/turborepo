@@ -4,7 +4,20 @@ use shared_child::SharedChild;
 
 /// Spawns a child in a way where SIGINT is correctly forwarded to the child
 pub fn spawn_child(mut command: Command) -> Result<Arc<SharedChild>, io::Error> {
-    let shared_child = Arc::new(SharedChild::spawn(&mut command)?);
+    let child = SharedChild::spawn(&mut command);
+
+    let unwrapped_child = match child {
+        Ok(unwrapped_child) => {
+            println!("All good, child is spawned");
+            unwrapped_child
+        }
+        Err(err) => {
+            println!("Error spawning, {}", err);
+            return Err(err);
+        }
+    };
+
+    let shared_child = Arc::new(unwrapped_child);
     let handler_shared_child = shared_child.clone();
 
     ctrlc::set_handler(move || {
