@@ -4,10 +4,13 @@
   "private": true,
   "license": "MIT",
   "exports": {
-    "./*": "./dist/*.js"
+    "./*": {
+      "types": "./src/*.tsx",
+      "development": "./src/*.tsx",
+      "default": "./dist/*.js"
+    }
   },
   "scripts": {
-    "dev": "tsc --watch --preserveWatchOutput",
     "build": "tsc",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit",
