@@ -86,11 +86,13 @@ impl CacheMultiplexer {
         let http_result = match self.get_http_cache() {
             Some(http) => {
                 if self.remote_cache_read_only {
+                    // Cache is functional but running in read-only mode, so we don't want to try to
+                    // write to it
+                    None
+                } else {
                     let http_result = http.put(anchor, key, files, duration).await;
 
                     Some(http_result)
-                } else {
-                    None
                 }
             }
             _ => None,
