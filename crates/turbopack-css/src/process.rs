@@ -99,6 +99,8 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                 stylesheet,
                 css_modules,
             } => {
+                use swc_core::css::codegen::Emit;
+
                 let mut code_string = String::new();
                 let mut srcmap = vec![];
 
@@ -107,9 +109,9 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                     Default::default(),
                 );
 
-                code_gen.emit(&stylesheet)?;
+                code_gen.emit(stylesheet)?;
 
-                let srcmap = ParseCssResultSourceMap::new(source_map.clone(), srcmap).cell();
+                let srcmap = ParseCssResultSourceMap::new(source_map.clone(), srcmap);
 
                 Ok((ToCssResult { code: code_string }, srcmap))
             }
@@ -213,7 +215,7 @@ pub async fn process_css_with_placeholder(
 
             dbg!("process_css_with_placeholder => after stylesheet_into_static");
 
-            let result = stylesheet.to_css(
+            let (result, _) = stylesheet.to_css(
                 PrinterOptions {
                     analyze_dependencies: Some(DependencyOptions {
                         ..Default::default()
@@ -283,24 +285,27 @@ pub async fn finalize_css(
             replace_url_references(&mut stylesheet, &url_map);
             dbg!("finalize_css => after replacing url refs");
 
-            let result = stylesheet.to_css(PrinterOptions {
-                source_map: Some(&mut srcmap),
-                analyze_dependencies: Some(DependencyOptions {
-                    remove_imports: true,
-                }),
-                targets: Targets {
-                    include: Features::Nesting,
+            let (result, srcmap) = stylesheet.to_css(
+                PrinterOptions {
+                    source_map: Some(&mut srcmap),
+                    analyze_dependencies: Some(DependencyOptions {
+                        remove_imports: true,
+                    }),
+                    targets: Targets {
+                        include: Features::Nesting,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
-                ..Default::default()
-            })?;
+                true,
+            )?;
 
             dbg!("finalize_css => after StyleSheet::to_css");
 
             Ok(FinalCssResult::Ok {
                 output_code: result.code,
                 exports: result.exports,
-                source_map: ParseCssResultSourceMap::new(srcmap).cell(),
+                source_map: srcmap.unwrap().cell(),
             }
             .into())
         }
