@@ -206,7 +206,7 @@ impl<'a> Run<'a> {
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
 
         let daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
-            info!("skipping turbod since we appear to be in a non-interactive context");
+            debug!("skipping turbod since we appear to be in a non-interactive context");
             None
         } else if !opts.run_opts.no_daemon {
             let connector = DaemonConnector {
