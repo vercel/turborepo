@@ -19,11 +19,17 @@ if (!profileFile.endsWith(".json")) {
 }
 
 const profileName = path.basename(profileFile, ".json");
+
 const profileExt = path.extname(profileFile); // Should always be .json, but we'll get it from here anyway.
 
 const ttftFileName = `${profileName}-ttft${profileExt}`;
 
+// process.cwd() should be benchmark/ here.
 const fullProfilePath = path.join(process.cwd(), profileFile);
+const ttftFilePath = path.join(process.cwd(), ttftFileName);
+
+console.log(`Profile will be saved to ${fullProfilePath}`);
+console.log(`TTFT data will be saved to ${ttftFilePath}`);
 
 if (fs.existsSync(fullProfilePath)) {
   console.error(`Error: ${fullProfilePath} already exists`);
@@ -84,7 +90,7 @@ for (const item of profileJSON) {
   }
 }
 
-fs.writeFileSync(ttftFileName, JSON.stringify(ttftData, null, 2));
+fs.writeFileSync(ttftFilePath, JSON.stringify(ttftData, null, 2));
 
 // -----------------------
 // Helpers

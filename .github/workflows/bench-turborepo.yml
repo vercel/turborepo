@@ -97,8 +97,11 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: profiles # This name will be the folder each file gets downloaded to
-          path: "benchmark/${{ steps.filename.outputs.filename }}*" # cwd is root of the repository, so we need the benchmark/ prefixed path
           if-no-files-found: error
+          # cwd is root of the repository, so we need the benchmark/ prefixed path
+          path: |
+            "benchmark/${{ steps.filename.outputs.filename }}.json"
+            "benchmark/${{ steps.filename.outputs.filename }}-ttft.json"
 
   # Send each of the profiles generated from the previous job to TinyBird
   # We'll wait for all profiles to complete before sending.
