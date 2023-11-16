@@ -130,9 +130,6 @@ impl TaskCacheSummary {
     }
 }
 
-// This is an `Option<Option<CacheHitMetadata>>` because we could fail
-// to fetch from cache (giving `None`), and we could also get a miss
-// `Some(None)`
 impl From<Option<CacheHitMetadata>> for TaskCacheSummary {
     fn from(response: Option<CacheHitMetadata>) -> Self {
         match response {
