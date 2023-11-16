@@ -1,5 +1,5 @@
 import fetch from "node-fetch";
-import { getTTFTData } from "../helpers";
+import { type TTFTData, getTTFTData } from "../helpers";
 
 const filePath = process.argv[2];
 const runID = process.argv[3];
@@ -16,8 +16,19 @@ if (!runID) {
 const DATA_SOURCE_NAME = "turborepo_perf_ttft";
 const DATA_SOURCE_URL = `https://api.us-east.tinybird.co/v0/events?name=${DATA_SOURCE_NAME}`;
 
+type TinyBirdTTFT = Omit<TTFTData, "cpus">;
+
 async function main() {
   const data = getTTFTData(filePath, runID);
+
+  const augmentData: TinyBirdTTFT = {
+    ...data,
+    platform: `${data.platform}-${data.cpus}-cores`,
+  };
+
+  // @ts-expect-error don't know how to fix this
+  delete augmentData.cpus;
+
   console.log("Sending data to Tinybird: ", data);
 
   const res = await fetch(DATA_SOURCE_URL, {

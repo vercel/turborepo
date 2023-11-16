@@ -56,6 +56,7 @@ export interface TTFTData {
   name: string;
   scm: string;
   platform: string;
+  cpus: number;
   startTimeUnixMicroseconds: number;
   turboVersion: string;
   durationMicroseconds: number;

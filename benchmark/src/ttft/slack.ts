@@ -15,24 +15,23 @@ console.log("Executing turbo build in child process", {
   slackPayloadPath,
 });
 
-const perPlatform = {
-  ubuntu: getTTFTData("profiles/ubuntu-ttft.json", runID),
-  macos: getTTFTData("profiles/macos-ttft.json", runID),
-  windows: getTTFTData("profiles/windows-ttft.json", runID),
-};
+const ubuntu = getTTFTData("profiles/ubuntu-ttft.json", runID);
+const macos = getTTFTData("profiles/macos-ttft.json", runID);
+const windows = getTTFTData("profiles/windows-ttft.json", runID);
 
 // For commitSha and runURL, we use the ubuntu data because it's the same for all platforms
 // In the future, we could modify getTTFTData to not include this data and augment it
 // ourselves here. This is currently matching ttft-send.ts
 const data = {
-  commitSha: perPlatform.ubuntu.commitSha,
-  runURL: perPlatform.ubuntu.url,
+  commitSha: ubuntu.commitSha,
+  runURL: ubuntu.url,
+  ubuntu: `${microToSeconds(ubuntu.durationMicroseconds)}s`,
+  windows: `${microToSeconds(windows.durationMicroseconds)}s`,
+  macos: `${microToSeconds(macos.durationMicroseconds)}s`,
+  "ubuntu-cpus": ubuntu.cpus,
+  "windows-cpus": windows.cpus,
+  "macos-cpus": macos.cpus,
 };
-
-for (const platformData of Object.values(perPlatform)) {
-  const duration = `${microToSeconds(platformData.durationMicroseconds)}s`;
-  data[platformData.platform] = duration;
-}
 
 fs.writeFileSync(slackPayloadPath, JSON.stringify(data));
 

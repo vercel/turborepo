@@ -54,6 +54,7 @@ const ttftData: TTFTData = {
   startTimeUnixMicroseconds: 0,
   durationMicroseconds: 0,
   turboVersion: "",
+  cpus: 0,
 };
 
 const cores = new Set(profileJSON.map((x) => x.tid)).size - 2;
@@ -67,8 +68,10 @@ for (const item of profileJSON) {
   const { args } = item;
 
   if (args.platform) {
-    ttftData.platform = `${args.platform}-${cores}-cores`;
+    ttftData.platform = `${args.platform}`;
   }
+
+  ttftData.cpus = cores;
 
   if (args.turbo_version) {
     ttftData.turboVersion = args.turbo_version;
