@@ -102,10 +102,10 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                 use swc_core::css::codegen::Emit;
 
                 let mut code_string = String::new();
-                let mut srcmap = vec![];
+                let mut srcmap = if enable_srcmap { Some(vec![]) } else { None };
 
                 let mut code_gen = CodeGenerator::new(
-                    BasicCssWriter::new(&mut code_string, Some(&mut srcmap), Default::default()),
+                    BasicCssWriter::new(&mut code_string, srcmap.as_mut(), Default::default()),
                     Default::default(),
                 );
 
