@@ -7,15 +7,20 @@ FIXTURE_NAME=$2
 
 # readlink should resolve the relative paths to the fixture so we have a canonicalized absolute path
 FIXTURE_DIR="${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_NAME"
+FIXTURE_DIR2="${TESTDIR}/../_fixtures/find_turbo/$FIXTURE_NAME" # TESTDIR should be `turborepo-tests/integration/tests/find-turbo` here
 
 echo "PWD: $PWD"
+echo "HOME: ${HOME}"
 echo "TMPDIR: $TMPDIR"
 echo "BASH_SOURCE[0]: ${BASH_SOURCE[0]}"
 echo "SCRIPT_DIR: ${SCRIPT_DIR}"
+echo "TESTDIR: ${TESTDIR}"
 
 echo "FIXTURE_DIR: $FIXTURE_DIR"
+echo "FIXTURE_DIR2: $FIXTURE_DIR2"
 echo "TARGET_DIR: $TARGET_DIR"
 echo "READLINK_FIXTURE_DIR: $(readlink -f "$FIXTURE_DIR")"
+echo "READLINK_FIXTURE_DIR2: $(readlink -f "$FIXTURE_DIR2")"
 echo "READLINK_TARGET_DIR: $(readlink -f "$TARGET_DIR")"
 echo "-----------"
 
@@ -27,12 +32,14 @@ if [[ "$OSTYPE" == "msys" ]]; then
 
   REL_TARGET_DIR="$(realpath --relative-to="$PWD" "$TARGET_DIR")"
   REL_FIXTURE_DIR="$(realpath --relative-to="$PWD" "$FIXTURE_DIR")"
+  REL_FIXTURE_DIR2="$(realpath --relative-to="$PWD" "$FIXTURE_DIR2")"
 
   echo "REL_TARGET_DIR: $REL_TARGET_DIR"
   echo "REL_FIXTURE_DIR: $REL_FIXTURE_DIR"
+  echo "REL_FIXTURE_DIR2: $REL_FIXTURE_DIR2"
 
-  echo "rsync -a $REL_FIXTURE_DIR/. $REL_TARGET_DIR"
-  rsync -a "$REL_FIXTURE_DIR/." "$REL_TARGET_DIR"
+  echo "rsync -a $REL_FIXTURE_DIR2/. $REL_TARGET_DIR"
+  rsync -a "$REL_FIXTURE_DIR2/." "$REL_TARGET_DIR"
 else
   DESTINATION="${TARGET_DIR}"
   echo "cp cmd: cp -a ${FIXTURE_DIR}/. ${DESTINATION}/"

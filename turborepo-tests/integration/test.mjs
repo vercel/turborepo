@@ -19,7 +19,7 @@ const isWindows = process.platform === "win32";
 // for ~/tmp, and that works. When TMPDIR is /tmp, this realpath --relative-to solution does
 // not work either.
 if (isWindows) {
-  process.env.TMPDIR = "~/tmp";
+  process.env.TMPDIR = path.join(process.env.HOME, "tmp");
 }
 
 // Make virtualenv
