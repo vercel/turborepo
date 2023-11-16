@@ -57,8 +57,6 @@ const ttftData: TTFTData = {
   cpus: 0,
 };
 
-const cores = new Set(profileJSON.map((x) => x.tid)).size - 2;
-
 // Get the info we need out of the profile
 for (const item of profileJSON) {
   if (!item.args) {
@@ -71,7 +69,9 @@ for (const item of profileJSON) {
     ttftData.platform = `${args.platform}`;
   }
 
-  ttftData.cpus = cores;
+  if (args.numcpus) {
+    ttftData.cpus = `${args.numcpus}`;
+  }
 
   if (args.turbo_version) {
     ttftData.turboVersion = args.turbo_version;
