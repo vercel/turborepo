@@ -162,7 +162,7 @@ impl<W: Write> OutputClient<W> {
                 };
                 writer.write_all(buffer)?;
             }
-            if let Some(suffix) = suffix {
+            if let Some(suffix) = footer {
                 writers.out.write_all(suffix.as_bytes())?;
             }
         }
