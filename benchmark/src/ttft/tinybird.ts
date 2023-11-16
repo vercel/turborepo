@@ -21,13 +21,12 @@ type TinyBirdTTFT = Omit<TTFTData, "cpus">;
 async function main() {
   const data = getTTFTData(filePath, runID);
 
-  const augmentData: TinyBirdTTFT = {
-    ...data,
-    platform: `${data.platform}-${data.cpus}-cores`,
-  };
+  const { cpus, platform, ...restData } = data;
 
-  // @ts-expect-error don't know how to fix this
-  delete augmentData.cpus;
+  const augmentData: TinyBirdTTFT = {
+    platform: `${platform}-${cpus}-cores`,
+    ...restData,
+  };
 
   console.log("Sending data to Tinybird: ", augmentData);
 
