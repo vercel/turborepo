@@ -124,6 +124,7 @@ impl<'a> Run<'a> {
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
             turbo_version = %TurboState::version(),
+            numcpus = num_cpus::get(),
             "performing run on {:?}",
             TurboState::platform_name(),
         );

@@ -52,16 +52,17 @@ export function getCommitDetails(): {
   };
 }
 
-interface TTFTData {
+export interface TTFTData {
   name: string;
   scm: string;
   platform: string;
+  cpus: number;
   startTimeUnixMicroseconds: number;
   turboVersion: string;
   durationMicroseconds: number;
-  commitSha: string;
-  commitTimestamp: Date;
-  url: string;
+  commitSha?: string;
+  commitTimestamp?: Date;
+  url?: string;
 }
 
 export function getTTFTData(filePath: string, runID: string): TTFTData {
