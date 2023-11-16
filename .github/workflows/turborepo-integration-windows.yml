@@ -1,24 +1,13 @@
-name: Test
+name: Turborepo Prysk Tests
 on:
   push:
     branches: [main]
   pull_request:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-permissions:
-  actions: write
-  contents: read
-  pull-requests: read
-
 jobs:
   turborepo_integration:
     name: Turborepo Integration Tests
-    # needs: [determine_jobs, build_turborepo]
     # if: needs.determine_jobs.outputs.turborepo_integration == 'true'
-    # timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
