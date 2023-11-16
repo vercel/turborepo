@@ -75,8 +75,9 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
 
     pub fn to_css(
         &self,
-        mut options: PrinterOptions,
         enable_srcmap: bool,
+        remove_imports: bool,
+        handle_nesting: bool,
     ) -> Result<CssOutput, lightningcss::error::Error<PrinterErrorKind>> {
         match self {
             StyleSheetLike::LightningCss(ss) => {
@@ -85,15 +86,32 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                 } else {
                     None
                 };
-                options.source_map = srcmap.as_mut();
 
-                let result = ss.to_css(options)?;
+                let result = ss.to_css(PrinterOptions {
+                    minify: true,
+                    source_map: srcmap.as_mut(),
+                    targets: if handle_nesting {
+                        Targets {
+                            include: Features::Nesting,
+                            ..Default::default()
+                        }
+                    } else {
+                        Default::default()
+                    },
+                    analyze_dependencies: Some(DependencyOptions {
+                        remove_imports: remove_imports,
+                    }),
+                    ..Default::default()
+                })?;
 
-                if let Some(srcmap) = &mut options.source_map {
+                if let Some(srcmap) = &mut srcmap {
                     srcmap.add_sources(ss.sources.clone());
                 }
 
-                Ok((result, srcmap.map(ParseCssResultSourceMap::new)))
+                Ok((
+                    result,
+                    srcmap.map(ParseCssResultSourceMap::new_lightningcss),
+                ))
             }
             StyleSheetLike::Swc {
                 stylesheet,
@@ -111,7 +129,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
 
                 code_gen.emit(stylesheet)?;
 
-                let srcmap = ParseCssResultSourceMap::new(source_map.clone(), srcmap);
+                let srcmap = ParseCssResultSourceMap::new_swc(source_map.clone(), srcmap);
 
                 Ok((ToCssResult { code: code_string }, srcmap))
             }
@@ -215,15 +233,7 @@ pub async fn process_css_with_placeholder(
 
             dbg!("process_css_with_placeholder => after stylesheet_into_static");
 
-            let (result, _) = stylesheet.to_css(
-                PrinterOptions {
-                    analyze_dependencies: Some(DependencyOptions {
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-                false,
-            )?;
+            let (result, _) = stylesheet.to_css(false, false, false)?;
 
             dbg!("process_css_with_placeholder => after StyleSheet::to_css");
 
@@ -285,20 +295,7 @@ pub async fn finalize_css(
             replace_url_references(&mut stylesheet, &url_map);
             dbg!("finalize_css => after replacing url refs");
 
-            let (result, srcmap) = stylesheet.to_css(
-                PrinterOptions {
-                    source_map: Some(&mut srcmap),
-                    analyze_dependencies: Some(DependencyOptions {
-                        remove_imports: true,
-                    }),
-                    targets: Targets {
-                        include: Features::Nesting,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-                true,
-            )?;
+            let (result, srcmap) = stylesheet.to_css(true, true, true)?;
 
             dbg!("finalize_css => after StyleSheet::to_css");
 
@@ -486,9 +483,11 @@ async fn process_content(
 }
 
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
-pub struct ParseCssResultSourceMap {
-    #[turbo_tasks(debug_ignore, trace_ignore)]
-    source_map: parcel_sourcemap::SourceMap,
+pub enum ParseCssResultSourceMap {
+    Parcel {
+        #[turbo_tasks(debug_ignore, trace_ignore)]
+        source_map: parcel_sourcemap::SourceMap,
+    },
 }
 
 impl PartialEq for ParseCssResultSourceMap {
@@ -498,7 +497,11 @@ impl PartialEq for ParseCssResultSourceMap {
 }
 
 impl ParseCssResultSourceMap {
-    pub fn new(source_map: parcel_sourcemap::SourceMap) -> Self {
+    pub fn new_lightningcss(source_map: parcel_sourcemap::SourceMap) -> Self {
+        ParseCssResultSourceMap::Parcel { source_map }
+    }
+
+    pub fn new_swc(source_map: parcel_sourcemap::SourceMap) -> Self {
         ParseCssResultSourceMap { source_map }
     }
 }
