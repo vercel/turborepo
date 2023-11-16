@@ -5,9 +5,11 @@ TARGET_DIR=$1
 FIXTURE_NAME=$2
 
 # readlink should resolve the relative paths to the fixture so we have a canonicalized absolute path
-FIXTURE_DIR="$(readlink -f "${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_NAME")"
+FIXTURE_DIR="${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_NAME"
+READLINK_FIXTURE_DIR="$(readlink -f "$FIXTURE_DIR")"
 
 echo "FIXTURE_DIR: $FIXTURE_DIR"
+echo "READLINK_FIXTURE_DIR: $READLINK_FIXTURE_DIR"
 echo "TMPDIR: $TMPDIR"
 echo "TARGET_DIR: $TARGET_DIR"
 echo "ABS_TARGET_DIR: $(readlink -f "$TARGET_DIR")"
