@@ -70,7 +70,7 @@ for (const item of profileJSON) {
   }
 
   if (args.numcpus) {
-    ttftData.cpus = `${args.numcpus}`;
+    ttftData.cpus = Number(args.numcpus); // Should always be a number
   }
 
   if (args.turbo_version) {

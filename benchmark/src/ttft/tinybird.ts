@@ -29,7 +29,7 @@ async function main() {
   // @ts-expect-error don't know how to fix this
   delete augmentData.cpus;
 
-  console.log("Sending data to Tinybird: ", data);
+  console.log("Sending data to Tinybird: ", augmentData);
 
   const res = await fetch(DATA_SOURCE_URL, {
     method: "POST",
@@ -37,7 +37,7 @@ async function main() {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify(augmentData),
   });
 
   if (res.ok) {
