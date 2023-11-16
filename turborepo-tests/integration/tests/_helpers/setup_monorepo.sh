@@ -11,8 +11,10 @@ TARGET_DIR=$1
 # On Windows, we use rsync because cp isn't preserving symlinks. We could use rsync
 # on all platforms, but want to limit the changes.
 if [[ "$OSTYPE" == "msys" ]]; then
+  echo "copying fixture with rsync"
   rsync -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
 else
+  echo "copying fixture with cp"
   cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
 if
 
