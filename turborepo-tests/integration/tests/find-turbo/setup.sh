@@ -7,12 +7,16 @@ FIXTURE_DIR=$2
 # Copy fixtures to target directory.
 # On Windows, we use rsync because cp isn't preserving symlinks. We could use rsync
 # on all platforms, but want to limit the changes.
+
+SOURCE="${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_DIR/."
+DESTINATION="${TARGET_DIR}/"
+
 if [[ "$OSTYPE" == "msys" ]]; then
-  echo "copying fixture with rsync"
-  rsync -a ${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_DIR/. ${TARGET_DIR}/
+  echo "Running rsync -a $SOURCE $DESTINATION"
+  rsync -a "$SOURCE" "$DESTINATION"
 else
-  echo "copying fixture with cp"
-  cp -a ${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_DIR/. ${TARGET_DIR}/
+  echo "Running cp -a $SOURCE $DESTINATION"
+  cp -a "$SOURCE" "$DESTINATION"
 fi
 
 
