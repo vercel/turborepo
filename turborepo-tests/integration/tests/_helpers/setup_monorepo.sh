@@ -6,7 +6,15 @@ TURBOREPO_TESTS_DIR="$SCRIPT_DIR/../../.."
 TURBOREPO_INTEGRATION_TESTS_DIR="${SCRIPT_DIR}/.."
 
 TARGET_DIR=$1
-cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
+
+# Copy fixtures to target directory.
+# On Windows, we use rsync because cp isn't preserving symlinks. We could use rsync
+# on all platforms, but want to limit the changes.
+if [[ "$OSTYPE" == "msys" ]]; then
+  rsync -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
+else
+  cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
+if
 
 ${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh ${TARGET_DIR}
 
