@@ -30,6 +30,7 @@ use turbopack_swc_utils::emitter::IssueEmitter;
 
 use crate::{
     lifetime_util::stylesheet_into_static,
+    parse::InlineSourcesContentConfig,
     references::{
         analyze_references,
         url::{replace_url_references, resolve_url_reference, UrlAssetReference},
@@ -129,7 +130,8 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
 
                 code_gen.emit(stylesheet)?;
 
-                let srcmap = ParseCssResultSourceMap::new_swc(source_map.clone(), srcmap);
+                let srcmap =
+                    srcmap.map(|srcmap| ParseCssResultSourceMap::new_swc(cm.clone(), srcmap));
 
                 Ok((ToCssResult { code: code_string }, srcmap))
             }
@@ -526,29 +528,47 @@ impl ParseCssResultSourceMap {
 impl GenerateSourceMap for ParseCssResultSourceMap {
     #[turbo_tasks::function]
     fn generate_source_map(&self) -> Vc<OptionSourceMap> {
-        let mut builder = SourceMapBuilder::new(None);
+        match self {
+            ParseCssResultSourceMap::Parcel { source_map } => {
+                let mut builder = SourceMapBuilder::new(None);
 
-        for src in self.source_map.get_sources() {
-            builder.add_source(src);
+                for src in source_map.get_sources() {
+                    builder.add_source(src);
+                }
+
+                for (idx, content) in source_map.get_sources_content().iter().enumerate() {
+                    builder.set_source_contents(idx as _, Some(content));
+                }
+
+                for m in source_map.get_mappings() {
+                    builder.add(
+                        m.generated_line,
+                        m.generated_column,
+                        m.original.map(|v| v.original_line).unwrap_or_default(),
+                        m.original.map(|v| v.original_column).unwrap_or_default(),
+                        None,
+                        None,
+                    );
+                }
+
+                Vc::cell(Some(
+                    turbopack_core::source_map::SourceMap::new_regular(builder.into_sourcemap())
+                        .cell(),
+                ))
+            }
+            ParseCssResultSourceMap::Swc {
+                source_map,
+                mappings,
+            } => {
+                let map = source_map.build_source_map_with_config(
+                    mappings,
+                    None,
+                    InlineSourcesContentConfig {},
+                );
+                Vc::cell(Some(
+                    turbopack_core::source_map::SourceMap::new_regular(map).cell(),
+                ))
+            }
         }
-
-        for (idx, content) in self.source_map.get_sources_content().iter().enumerate() {
-            builder.set_source_contents(idx as _, Some(content));
-        }
-
-        for m in self.source_map.get_mappings() {
-            builder.add(
-                m.generated_line,
-                m.generated_column,
-                m.original.map(|v| v.original_line).unwrap_or_default(),
-                m.original.map(|v| v.original_column).unwrap_or_default(),
-                None,
-                None,
-            );
-        }
-
-        Vc::cell(Some(
-            turbopack_core::source_map::SourceMap::new_regular(builder.into_sourcemap()).cell(),
-        ))
     }
 }

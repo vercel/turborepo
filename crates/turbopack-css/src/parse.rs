@@ -8,7 +8,7 @@ use turbopack_core::SOURCE_MAP_ROOT_NAME;
 /// A config to generate a source map which includes the source content of every
 /// source file. SWC doesn't inline sources content by default when generating a
 /// sourcemap, so we need to provide a custom config to do it.
-struct InlineSourcesContentConfig {}
+pub struct InlineSourcesContentConfig {}
 
 impl SourceMapGenConfig for InlineSourcesContentConfig {
     fn file_name_to_source(&self, f: &FileName) -> String {
