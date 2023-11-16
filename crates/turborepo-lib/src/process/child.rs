@@ -29,7 +29,7 @@ use tokio::{
     join,
     sync::{mpsc, watch, RwLock},
 };
-use tracing::{debug, info};
+use tracing::debug;
 
 #[derive(Debug)]
 pub enum ChildState {
@@ -104,14 +104,14 @@ impl ShutdownStyle {
                         }
                     };
 
-                    info!("starting shutdown");
+                    debug!("starting shutdown");
 
                     let result = tokio::time::timeout(*timeout, fut).await;
                     match result {
                         Ok(Ok(result)) => ChildState::Exited(ChildExit::Finished(result)),
                         Ok(Err(_)) => ChildState::Exited(ChildExit::Failed),
                         Err(_) => {
-                            info!("graceful shutdown timed out, killing child");
+                            debug!("graceful shutdown timed out, killing child");
                             match child.kill().await {
                                 Ok(_) => ChildState::Exited(ChildExit::Killed),
                                 Err(_) => ChildState::Exited(ChildExit::Failed),
@@ -215,7 +215,7 @@ impl Child {
         let task_state = state.clone();
 
         let _task = tokio::spawn(async move {
-            info!("waiting for task");
+            debug!("waiting for task");
             tokio::select! {
                 command = command_rx.recv() => {
                     let state = match command {

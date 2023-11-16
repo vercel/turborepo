@@ -117,7 +117,7 @@ impl AsyncCache {
         }
     }
 
-    pub async fn exists(&mut self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
+    pub async fn exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         self.real_cache.exists(key).await
     }
 
@@ -204,7 +204,7 @@ mod tests {
             token: "my-token".to_string(),
             team_slug: None,
         });
-        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
+        let async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -279,7 +279,7 @@ mod tests {
             token: "my-token".to_string(),
             team_slug: None,
         });
-        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
+        let async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -360,7 +360,7 @@ mod tests {
             token: "my-token".to_string(),
             team_slug: None,
         });
-        let mut async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
+        let async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
