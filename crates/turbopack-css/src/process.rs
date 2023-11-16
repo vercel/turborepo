@@ -76,6 +76,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
 
     pub fn to_css(
         &self,
+        cm: Arc<swc_core::common::SourceMap>,
         enable_srcmap: bool,
         remove_imports: bool,
         handle_nesting: bool,
@@ -146,6 +147,9 @@ pub struct UnresolvedUrlReferences(pub Vec<(String, Vc<UrlAssetReference>)>);
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 pub enum ParseCssResult {
     Ok {
+        #[turbo_tasks(debug_ignore, trace_ignore)]
+        cm: Arc<swc_core::common::SourceMap>,
+
         #[turbo_tasks(trace_ignore)]
         stylesheet: StyleSheetLike<'static, 'static>,
 
@@ -169,6 +173,9 @@ impl PartialEq for ParseCssResult {
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 pub enum CssWithPlaceholderResult {
     Ok {
+        #[turbo_tasks(debug_ignore, trace_ignore)]
+        cm: Arc<swc_core::common::SourceMap>,
+
         #[turbo_tasks(trace_ignore)]
         stylesheet: StyleSheetLike<'static, 'static>,
 
@@ -224,6 +231,7 @@ pub async fn process_css_with_placeholder(
 
     match &*result {
         ParseCssResult::Ok {
+            cm,
             stylesheet,
             references,
             url_references,
@@ -235,7 +243,7 @@ pub async fn process_css_with_placeholder(
 
             dbg!("process_css_with_placeholder => after stylesheet_into_static");
 
-            let (result, _) = stylesheet.to_css(false, false, false)?;
+            let (result, _) = stylesheet.to_css(cm.clone(), false, false, false)?;
 
             dbg!("process_css_with_placeholder => after StyleSheet::to_css");
 
@@ -250,6 +258,7 @@ pub async fn process_css_with_placeholder(
             dbg!("process_css_with_placeholder => after sorting exports");
 
             Ok(CssWithPlaceholderResult::Ok {
+                cm: cm.clone(),
                 exports,
                 references: *references,
                 url_references: *url_references,
@@ -272,6 +281,7 @@ pub async fn finalize_css(
     let result = result.await?;
     match &*result {
         CssWithPlaceholderResult::Ok {
+            cm,
             stylesheet,
             url_references,
             options,
@@ -297,7 +307,7 @@ pub async fn finalize_css(
             replace_url_references(&mut stylesheet, &url_map);
             dbg!("finalize_css => after replacing url refs");
 
-            let (result, srcmap) = stylesheet.to_css(true, true, true)?;
+            let (result, srcmap) = stylesheet.to_css(cm.clone(), true, true, true)?;
 
             dbg!("finalize_css => after StyleSheet::to_css");
 
@@ -413,6 +423,8 @@ async fn process_content(
         ..Default::default()
     };
 
+    let cm: Arc<swc_core::common::SourceMap> = Default::default();
+
     let stylesheet = if use_lightningcss {
         StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
             Ok(stylesheet) => stylesheet_into_static(&stylesheet, clone_options(config.clone())),
@@ -423,18 +435,17 @@ async fn process_content(
             }
         })
     } else {
-        let source_map: Arc<swc_core::common::SourceMap> = Default::default();
         let handler = swc_core::common::errors::Handler::with_emitter(
             true,
             false,
             Box::new(IssueEmitter {
                 source,
-                source_map: source_map.clone(),
+                source_map: cm.clone(),
                 title: Some("Parsing css source code failed".to_string()),
             }),
         );
 
-        let fm = source_map.new_source_file(FileName::Custom(ident_str.to_string()), code);
+        let fm = cm.new_source_file(FileName::Custom(ident_str.to_string()), code);
         let mut errors = vec![];
 
         let ss = swc_core::css::parser::parse_file(
@@ -476,6 +487,7 @@ async fn process_content(
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
 
     Ok(ParseCssResult::Ok {
+        cm,
         stylesheet,
         references: Vc::cell(references),
         url_references: Vc::cell(url_references),
