@@ -1,6 +1,6 @@
 use std::{collections::HashMap, mem::transmute, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use indexmap::IndexMap;
 use lightningcss::{
     css_modules::{CssModuleExport, CssModuleExports, Pattern, Segment},
@@ -10,6 +10,8 @@ use lightningcss::{
     targets::{Features, Targets},
     values::url::Url,
 };
+use once_cell::sync::Lazy;
+use regex::Regex;
 use smallvec::smallvec;
 use swc_core::{
     atoms::Atom,
@@ -43,6 +45,9 @@ use crate::{
     CssModuleAssetType,
 };
 
+// Capture up until the first "."
+static BASENAME_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[^.]*").unwrap());
+
 #[derive(Debug)]
 pub enum StyleSheetLike<'i, 'o> {
     LightningCss(StyleSheet<'i, 'o>),
@@ -52,7 +57,7 @@ pub enum StyleSheetLike<'i, 'o> {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SwcCssModuleMode {
     basename: String,
     path_hash: u32,
@@ -80,7 +85,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                 css_modules,
             } => StyleSheetLike::Swc {
                 stylesheet: stylesheet.clone(),
-                css_modules: *css_modules,
+                css_modules: css_modules.clone(),
             },
         }
     }
@@ -422,7 +427,7 @@ pub async fn parse_css(
 
 async fn process_content(
     code: String,
-    _fs_path: &FileSystemPath,
+    fs_path: &FileSystemPath,
     ident_str: &str,
     source: Vc<Box<dyn Source>>,
     origin: Vc<Box<dyn ResolveOrigin>>,
@@ -526,7 +531,23 @@ async fn process_content(
 
         StyleSheetLike::Swc {
             stylesheet: ss,
-            css_modules: matches!(ty, CssModuleAssetType::Module),
+            css_modules: if matches!(ty, CssModuleAssetType::Module) {
+                let basename = BASENAME_RE
+                    .captures(fs_path.file_name())
+                    .context("Must include basename preceding .")?
+                    .get(0)
+                    .context("Must include basename preceding .")?
+                    .as_str();
+                // Truncate this as u32 so it's formated as 8-character hex in the suffic below
+                let path_hash = turbo_tasks_hash::hash_xxh3_hash64(ident_str) as u32;
+
+                Some(SwcCssModuleMode {
+                    basename: basename.to_string(),
+                    path_hash: path_hash,
+                })
+            } else {
+                None
+            },
         }
     };
 
