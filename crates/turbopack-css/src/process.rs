@@ -13,7 +13,7 @@ use lightningcss::{
 use smallvec::smallvec;
 use swc_core::{
     base::sourcemap::SourceMapBuilder,
-    common::FileName,
+    common::{BytePos, FileName, LineCol},
     css::codegen::{writer::basic::BasicCssWriter, CodeGenerator},
 };
 use turbo_tasks::{ValueToString, Vc};
@@ -488,6 +488,16 @@ pub enum ParseCssResultSourceMap {
         #[turbo_tasks(debug_ignore, trace_ignore)]
         source_map: parcel_sourcemap::SourceMap,
     },
+
+    Swc {
+        #[turbo_tasks(debug_ignore, trace_ignore)]
+        source_map: Arc<swc_core::common::SourceMap>,
+
+        /// The position mappings that can generate a real source map given a
+        /// (SWC) SourceMap.
+        #[turbo_tasks(debug_ignore, trace_ignore)]
+        mappings: Vec<(BytePos, LineCol)>,
+    },
 }
 
 impl PartialEq for ParseCssResultSourceMap {
@@ -501,8 +511,14 @@ impl ParseCssResultSourceMap {
         ParseCssResultSourceMap::Parcel { source_map }
     }
 
-    pub fn new_swc(source_map: parcel_sourcemap::SourceMap) -> Self {
-        ParseCssResultSourceMap { source_map }
+    pub fn new_swc(
+        source_map: Arc<swc_core::common::SourceMap>,
+        mappings: Vec<(BytePos, LineCol)>,
+    ) -> Self {
+        ParseCssResultSourceMap::Swc {
+            source_map,
+            mappings,
+        }
     }
 }
 
