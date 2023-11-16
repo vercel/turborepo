@@ -53,14 +53,19 @@ pub fn diagnose<'i, 't>(
                     }) as BoxedDiagnostic
                 }),
         )
-        .chain(tokenized.tokens().last().into_iter().filter_map(|token| {
-            matches!(token.kind(), TokenKind::Separator(_)).then(|| {
-                Box::new(TerminatingSeparatorWarning {
-                    expression: tokenized.expression().clone(),
-                    span: (*token.annotation()).into(),
-                }) as BoxedDiagnostic
-            })
-        }))
+        .chain(
+            tokenized
+                .tokens()
+                .last()
+                .into_iter()
+                .filter(|token| matches!(token.kind(), TokenKind::Separator(_)))
+                .map(|token| {
+                    Box::new(TerminatingSeparatorWarning {
+                        expression: tokenized.expression().clone(),
+                        span: (*token.annotation()).into(),
+                    }) as BoxedDiagnostic
+                }),
+        )
 }
 
 // These tests exercise `Glob` APIs, which wrap functions in this module.
