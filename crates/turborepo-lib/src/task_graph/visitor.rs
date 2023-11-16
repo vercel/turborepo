@@ -216,7 +216,9 @@ impl<'a> Visitor<'a> {
             // hashing so that downstream tasks can count on the hash existing
             //
             // bail if the script doesn't exist
-            let Some(_command) = command else { continue };
+            if command.is_none() {
+                continue;
+            }
 
             let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
 
