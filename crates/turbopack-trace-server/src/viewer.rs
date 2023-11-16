@@ -1,14 +1,10 @@
-use std::{
-    cmp::max,
-    collections::{HashMap, HashSet},
-};
+use std::{cmp::max, collections::HashMap};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     server::ViewRect,
-    span::SpanId,
-    store::{SpanGraphEventRef, SpanGraphRef, SpanRef, Store},
+    store::{SpanGraphEventRef, SpanGraphRef, SpanId, SpanRef, Store},
 };
 
 const EXTRA_WIDTH_PERCENTAGE: u64 = 20;
@@ -17,21 +13,16 @@ const EXTRA_HEIGHT: u64 = 5;
 #[derive(Default)]
 pub struct Viewer {
     span_options: HashMap<SpanId, SpanOptions>,
-    graph_options: HashMap<SpanId, SpanGraphOptions>,
 }
 
-enum ExpandedState {
+pub enum ExpandedState {
     Expanded,
     AllExpanded,
     Collapsed,
-    AllCollapsed,
 }
 
+#[derive(Default)]
 struct SpanOptions {
-    expanded: Option<ExpandedState>,
-}
-
-struct SpanGraphOptions {
     expanded: Option<ExpandedState>,
 }
 
@@ -90,6 +81,10 @@ struct QueueItemWithState<'a> {
 impl Viewer {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn set_expanded_state(&mut self, id: SpanId, expanded: Option<ExpandedState>) {
+        self.span_options.entry(id).or_default().expanded = expanded;
     }
 
     pub fn compute_update(&mut self, store: &Store, view_rect: &ViewRect) -> Vec<ViewLineUpdate> {
@@ -181,11 +176,10 @@ impl Viewer {
                         .get(&span.id())
                         .and_then(|o| o.expanded.as_ref())
                     {
-                        None if expanded => (true, expanded),
+                        None => (expanded, expanded),
                         Some(ExpandedState::Expanded) => (true, expanded),
                         Some(ExpandedState::AllExpanded) => (true, true),
-                        None | Some(ExpandedState::Collapsed) => (false, expanded),
-                        Some(ExpandedState::AllCollapsed) => (false, false),
+                        Some(ExpandedState::Collapsed) => (false, false),
                     };
                     if show_children {
                         for child in span.children() {
@@ -218,15 +212,14 @@ impl Viewer {
                 }
                 QueueItem::SpanGraph(span_graph) => {
                     let (show_spans, expanded) = match self
-                        .graph_options
+                        .span_options
                         .get(&span_graph.id())
                         .and_then(|o| o.expanded.as_ref())
                     {
-                        None if expanded => (true, expanded),
+                        None => (expanded, expanded),
                         Some(ExpandedState::Expanded) => (true, expanded),
                         Some(ExpandedState::AllExpanded) => (true, true),
-                        None | Some(ExpandedState::Collapsed) => (false, expanded),
-                        Some(ExpandedState::AllCollapsed) => (false, false),
+                        Some(ExpandedState::Collapsed) => (false, false),
                     };
                     if show_spans {
                         for child in span_graph.spans() {

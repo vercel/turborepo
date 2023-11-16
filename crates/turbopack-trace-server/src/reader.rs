@@ -11,7 +11,7 @@ use std::{
 use turbopack_trace_utils::tracing::TraceRow;
 
 use crate::{
-    span::SpanId,
+    span::SpanIndex,
     store_container::{StoreContainer, StoreWriteGuard},
 };
 
@@ -219,9 +219,9 @@ fn process(store: &mut StoreWriteGuard, state: &mut ReaderState, row: TraceRow<'
 
 #[derive(Default)]
 struct ReaderState {
-    active_ids: HashMap<u64, SpanId>,
+    active_ids: HashMap<u64, SpanIndex>,
     queued_rows: HashMap<u64, Vec<TraceRow<'static>>>,
-    outdated_spans: HashSet<SpanId>,
-    thread_stacks: HashMap<u64, Vec<SpanId>>,
-    self_time_started: HashMap<(SpanId, u64), u64>,
+    outdated_spans: HashSet<SpanIndex>,
+    thread_stacks: HashMap<u64, Vec<SpanIndex>>,
+    self_time_started: HashMap<(SpanIndex, u64), u64>,
 }

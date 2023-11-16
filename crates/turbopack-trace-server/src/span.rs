@@ -3,12 +3,12 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-pub type SpanId = NonZeroUsize;
+pub type SpanIndex = NonZeroUsize;
 
 pub struct Span {
     // These values won't change after creation:
-    pub id: SpanId,
-    pub parent: Option<SpanId>,
+    pub index: SpanIndex,
+    pub parent: Option<SpanIndex>,
     pub start: u64,
     pub category: String,
     pub name: String,
@@ -23,6 +23,7 @@ pub struct Span {
 
     // These values are computed when accessed (and maybe deleted during writing):
     pub nice_name: OnceLock<(String, String)>,
+    pub group_name: OnceLock<String>,
     pub max_depth: OnceLock<u32>,
     pub total_time: OnceLock<u64>,
     pub corrected_self_time: OnceLock<u64>,
@@ -33,7 +34,7 @@ pub struct Span {
 #[derive(Copy, Clone)]
 pub enum SpanEvent {
     SelfTime { start: u64, end: u64 },
-    Child { id: SpanId },
+    Child { id: SpanIndex },
 }
 
 #[derive(Clone)]
@@ -44,7 +45,7 @@ pub enum SpanGraphEvent {
 
 pub struct SpanGraph {
     // These values won't change after creation:
-    pub spans: Vec<SpanId>,
+    pub spans: Vec<SpanIndex>,
 
     // These values are computed when accessed:
     pub max_depth: OnceLock<u32>,

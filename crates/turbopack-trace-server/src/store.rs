@@ -1,12 +1,15 @@
 use std::{
     cmp::max,
     collections::HashSet,
+    num::NonZeroUsize,
     sync::{Arc, OnceLock},
 };
 
 use indexmap::IndexMap;
 
-use crate::span::{Span, SpanEvent, SpanGraph, SpanGraphEvent, SpanId};
+use crate::span::{Span, SpanEvent, SpanGraph, SpanGraphEvent, SpanIndex};
+
+pub type SpanId = NonZeroUsize;
 
 pub struct Store {
     spans: Vec<Span>,
@@ -16,7 +19,7 @@ impl Store {
     pub fn new() -> Self {
         Self {
             spans: vec![Span {
-                id: SpanId::MAX,
+                index: SpanIndex::MAX,
                 parent: None,
                 start: 0,
                 end: u64::MAX,
@@ -25,6 +28,7 @@ impl Store {
                 args: vec![],
                 events: vec![],
                 nice_name: OnceLock::new(),
+                group_name: OnceLock::new(),
                 max_depth: OnceLock::new(),
                 graph: OnceLock::new(),
                 self_time: 0,
@@ -41,16 +45,16 @@ impl Store {
 
     pub fn add_span(
         &mut self,
-        parent: Option<SpanId>,
+        parent: Option<SpanIndex>,
         start: u64,
         category: String,
         name: String,
         args: Vec<(String, String)>,
-        outdated_spans: &mut HashSet<SpanId>,
-    ) -> SpanId {
-        let id = SpanId::new(self.spans.len()).unwrap();
+        outdated_spans: &mut HashSet<SpanIndex>,
+    ) -> SpanIndex {
+        let id = SpanIndex::new(self.spans.len()).unwrap();
         self.spans.push(Span {
-            id,
+            index: id,
             parent,
             start,
             end: start,
@@ -59,6 +63,7 @@ impl Store {
             args,
             events: vec![],
             nice_name: OnceLock::new(),
+            group_name: OnceLock::new(),
             max_depth: OnceLock::new(),
             graph: OnceLock::new(),
             self_time: 0,
@@ -78,10 +83,10 @@ impl Store {
 
     pub fn add_self_time(
         &mut self,
-        span: SpanId,
+        span: SpanIndex,
         start: u64,
         end: u64,
-        outdated_spans: &mut HashSet<SpanId>,
+        outdated_spans: &mut HashSet<SpanIndex>,
     ) {
         outdated_spans.insert(span);
         let span = &mut self.spans[span.get()];
@@ -128,7 +133,7 @@ pub struct SpanRef<'a> {
 
 impl<'a> SpanRef<'a> {
     pub fn id(&self) -> SpanId {
-        self.span.id
+        unsafe { SpanId::new_unchecked(self.span.index.get() << 1) }
     }
 
     pub fn parent(&self) -> Option<SpanRef<'_>> {
@@ -169,6 +174,26 @@ impl<'a> SpanRef<'a> {
             }
         });
         (category, title)
+    }
+
+    pub fn group_name(&self) -> &'a str {
+        self.span.group_name.get_or_init(|| {
+            if matches!(
+                self.span.name.as_str(),
+                "turbo_tasks::function"
+                    | "turbo_tasks::resolve_call"
+                    | "turbo_tasks::resolve_trait"
+            ) {
+                self.span
+                    .args
+                    .iter()
+                    .find(|&(k, _)| k == "name")
+                    .map(|(_, v)| v.to_string())
+                    .unwrap_or_else(|| self.span.name.to_string())
+            } else {
+                self.span.name.to_string()
+            }
+        })
     }
 
     pub fn args(&self) -> impl Iterator<Item = (&str, &str)> {
@@ -241,10 +266,10 @@ impl<'a> SpanRef<'a> {
         self.span
             .graph
             .get_or_init(|| {
-                let mut map: IndexMap<&str, Vec<SpanId>> = IndexMap::new();
+                let mut map: IndexMap<&str, Vec<SpanIndex>> = IndexMap::new();
                 for child in self.children() {
-                    let (_, name) = child.nice_name();
-                    map.entry(name).or_default().push(child.id());
+                    let name = child.group_name();
+                    map.entry(name).or_default().push(child.span.index);
                 }
                 map.into_iter()
                     .map(|(_, spans)| {
@@ -305,7 +330,7 @@ impl<'a> SpanGraphRef<'a> {
     }
 
     pub fn id(&self) -> SpanId {
-        self.first_span().id() | (1 << (usize::BITS - 1))
+        unsafe { SpanId::new_unchecked(self.first_span().span.index.get() << 1 | 1) }
     }
 
     pub fn name(&self) -> &'a str {
@@ -313,7 +338,11 @@ impl<'a> SpanGraphRef<'a> {
     }
 
     pub fn nice_name(&self) -> (&str, &str) {
-        self.first_span().nice_name()
+        if self.graph.spans.len() == 1 {
+            return self.first_span().nice_name();
+        } else {
+            return ("", self.first_span().group_name());
+        }
     }
 
     pub fn count(&self) -> usize {
@@ -335,11 +364,11 @@ impl<'a> SpanGraphRef<'a> {
                     let _ = self.first_span().graph();
                     self.first_span().span.graph.get().unwrap().clone()
                 } else {
-                    let mut map: IndexMap<&str, Vec<SpanId>> = IndexMap::new();
+                    let mut map: IndexMap<&str, Vec<SpanIndex>> = IndexMap::new();
                     for span in self.spans() {
                         for span in span.children() {
-                            let (_, name) = span.nice_name();
-                            map.entry(name).or_default().push(span.id());
+                            let name = span.group_name();
+                            map.entry(name).or_default().push(span.span.index);
                         }
                     }
                     map.into_iter()

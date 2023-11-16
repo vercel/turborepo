@@ -17,8 +17,9 @@ use websocket::{
 };
 
 use crate::{
+    store::SpanId,
     store_container::StoreContainer,
-    viewer::{ViewLineUpdate, Viewer},
+    viewer::{ExpandedState, ViewLineUpdate, Viewer},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -29,6 +30,9 @@ pub enum ServerToClientMessage {
         #[serde(flatten)]
         update: ViewLineUpdate,
     },
+    ViewLinesCount {
+        count: usize,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -36,7 +40,21 @@ pub enum ServerToClientMessage {
 #[serde(rename_all = "kebab-case")]
 pub enum ClientToServerMessage {
     #[serde(rename_all = "camelCase")]
-    ViewRect { view_rect: ViewRect },
+    ViewRect {
+        view_rect: ViewRect,
+    },
+    Expand {
+        id: SpanId,
+    },
+    ExpandAll {
+        id: SpanId,
+    },
+    Collapse {
+        id: SpanId,
+    },
+    ResetExpand {
+        id: SpanId,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -102,6 +120,7 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                     }
                     state.last_update_generation = store.generation();
                     let updates = state.viewer.compute_update(&*store, &state.view_rect);
+                    let count = updates.len();
                     for update in updates {
                         let message = ServerToClientMessage::ViewLine { update };
                         let message = serde_json::to_string(&message).unwrap();
@@ -110,6 +129,12 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                             .send_message(&OwnedMessage::Text(message))
                             .unwrap();
                     }
+                    let message = ServerToClientMessage::ViewLinesCount { count };
+                    let message = serde_json::to_string(&message).unwrap();
+                    state
+                        .writer
+                        .send_message(&OwnedMessage::Text(message))
+                        .unwrap();
                 }
                 let inner_thread = {
                     let should_shutdown = should_shutdown.clone();
@@ -126,14 +151,31 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                     match reader.recv_message()? {
                         OwnedMessage::Text(text) => {
                             let message: ClientToServerMessage = serde_json::from_str(&text)?;
-                            println!("Received message: {:?}", message);
+                            let mut state = state.lock().unwrap();
                             match message {
                                 ClientToServerMessage::ViewRect { view_rect } => {
-                                    let mut state = state.lock().unwrap();
                                     state.view_rect = view_rect;
-                                    send_update(&mut *state, true);
+                                }
+                                ClientToServerMessage::Expand { id } => {
+                                    state
+                                        .viewer
+                                        .set_expanded_state(id, Some(ExpandedState::Expanded));
+                                }
+                                ClientToServerMessage::ExpandAll { id } => {
+                                    state
+                                        .viewer
+                                        .set_expanded_state(id, Some(ExpandedState::AllExpanded));
+                                }
+                                ClientToServerMessage::Collapse { id } => {
+                                    state
+                                        .viewer
+                                        .set_expanded_state(id, Some(ExpandedState::Collapsed));
+                                }
+                                ClientToServerMessage::ResetExpand { id } => {
+                                    state.viewer.set_expanded_state(id, None);
                                 }
                             }
+                            send_update(&mut *state, true);
                         }
                         OwnedMessage::Binary(_) => {
                             // This doesn't happen
