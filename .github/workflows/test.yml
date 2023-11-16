@@ -829,7 +829,9 @@ jobs:
         run: npm install
 
       - name: Install nextest
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.61
 
       - name: Build nextest
         timeout-minutes: 120
@@ -906,7 +908,9 @@ jobs:
         run: npm install
 
       - name: Install nextest
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.61
 
       - name: Build nextest
         timeout-minutes: 120
