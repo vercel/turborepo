@@ -419,21 +419,7 @@ impl LocalTurboState {
         // search.
         for root in search_functions
             .iter()
-            .enumerate()
-            .filter_map(|(index, search_function)| {
-                let xx = search_function(root_path);
-
-                let label = match index {
-                    0 => "hoisted",
-                    1 => "nested",
-                    2 => "linked",
-                    3 => "unplugged",
-                    _ => "",
-                };
-
-                println!("{}: {:?}", label, xx);
-                return xx;
-            })
+            .filter_map(|search_function| search_function(root_path))
         {
             // Needs borrow because of the loop.
             #[allow(clippy::needless_borrow)]
