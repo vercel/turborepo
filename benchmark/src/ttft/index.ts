@@ -1,7 +1,7 @@
 import cp from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { TURBO_BIN } from "../helpers";
+import { TURBO_BIN, type TTFTData } from "../helpers";
 import { run } from "./run";
 
 const profileFile = process.argv[2]; // Should be "windows", "ubuntu" or "macos"
@@ -47,22 +47,13 @@ run(fullProfilePath); // Actual benchmark
 
 const profileJSON = JSON.parse(fs.readFileSync(fullProfilePath).toString());
 
-interface TTFTData {
-  name: string;
-  scm: string;
-  platform: string | undefined;
-  startTimeUnixMicroseconds: number | undefined;
-  durationMicroseconds: string | undefined;
-  turboVersion: string | undefined;
-}
-
 const ttftData: TTFTData = {
   name: "time-to-first-task",
   scm: "git",
-  platform: undefined,
-  startTimeUnixMicroseconds: undefined,
-  durationMicroseconds: undefined,
-  turboVersion: undefined,
+  platform: "",
+  startTimeUnixMicroseconds: 0,
+  durationMicroseconds: 0,
+  turboVersion: "",
 };
 
 const cores = new Set(profileJSON.map((x) => x.tid)).size - 2;
