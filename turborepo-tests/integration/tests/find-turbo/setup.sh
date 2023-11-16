@@ -4,12 +4,11 @@ SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
 TARGET_DIR=$1
 FIXTURE_NAME=$2
 
-
 # readlink should resolve the relative paths to the fixture so we have a canonicalized absolute path
 FIXTURE_DIR="$(readlink -f "${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_NAME")"
 
 echo "FIXTURE_DIR: $FIXTURE_DIR"
-echo "TMP_DIR: $TMP_DIR"
+echo "TMPDIR: $TMPDIR"
 echo "TARGET_DIR: $TARGET_DIR"
 echo "ABS_TARGET_DIR: $(readlink -f "$TARGET_DIR")"
 echo "-----------"
@@ -20,16 +19,17 @@ echo "-----------"
 if [[ "$OSTYPE" == "msys" ]]; then
   echo "runing rsync cmd on windows"
 
-  # ABS_PWD="$(realpath "$(pwd)")"
   REL_TARGET_DIR="$(realpath --relative-to="$PWD" "$TARGET_DIR")"
   REL_FIXTURE_DIR="$(realpath --relative-to="$PWD" "$FIXTURE_DIR")"
+
+  echo "REL_TARGET_DIR: $REL_TARGET_DIR"
+  echo "REL_FIXTURE_DIR: $REL_FIXTURE_DIR"
 
   echo "rsync -a $REL_FIXTURE_DIR/. $REL_TARGET_DIR"
   rsync -a "$REL_FIXTURE_DIR/." "$REL_TARGET_DIR"
 else
   DESTINATION="${TARGET_DIR}"
-  echo "cp cmd: cp -a $SOURCE $DESTINATION"
-  echo "runing cp cmd on non-Windows"
+  echo "cp cmd: cp -a ${FIXTURE_DIR}/. ${DESTINATION}/"
   cp -a "${FIXTURE_DIR}/." "${DESTINATION}/"
 fi
 
