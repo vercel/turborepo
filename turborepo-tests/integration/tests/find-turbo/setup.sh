@@ -8,24 +8,29 @@ FIXTURE_DIR=$2
 # On Windows, we use rsync because cp isn't preserving symlinks. We could use rsync
 # on all platforms, but want to limit the changes.
 
+
 SOURCE="${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_DIR/."
 
 DESTINATION="${TARGET_DIR}/"
 
 readlink -f $SOURCE
 
-SOURCE_MOD="$(readlink -f $SOURCE)"
 
 echo "DESTINATION: $DESTINATION"
 echo "SOURCE: $SOURCE"
 echo "-----------"
-echo "rsync cmd: rsync -a $SOURCE_MOD $DESTINATION"
-echo "cp cmd:    cp -a $SOURCE $DESTINATION"
 
 if [[ "$OSTYPE" == "msys" ]]; then
   echo "runing rsync cmd on windows"
-  rsync -a "$SOURCE_MOD" "$DESTINATION"
+
+  pushd "${SCRIPT_DIR}/.." > /dev/null || exit 1 # this gets us into turborepo-tests/integration/tests/find-turbo
+
+  echo "rsync cmd: rsync -a _fixtures/find_turbo/$FIXTURE_DIR/. $DESTINATION"
+  rsync -a "_fixtures/find_turbo/$FIXTURE_DIR/." "$DESTINATION"
+
+  popd > /dev/null || exit 1
 else
+  echo "cp cmd:    cp -a $SOURCE $DESTINATION"
   echo "runing cp cmd on windows"
   cp -a "$SOURCE" "$DESTINATION"
 fi
