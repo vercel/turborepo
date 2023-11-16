@@ -4,19 +4,19 @@ SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
 TARGET_DIR=$1
 FIXTURE_NAME=$2
 
-# Copy fixtures to target directory.
-# On Windows, we use rsync because cp isn't preserving symlinks. We could use rsync
-# on all platforms, but want to limit the changes.
 
 # readlink should resolve the relative paths to the fixture so we have a canonicalized absolute path
 FIXTURE_DIR="$(readlink -f "${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_NAME")"
 
-
-
 echo "FIXTURE_DIR: $FIXTURE_DIR"
-echo "SOURCE: $SOURCE"
+echo "TMP_DIR: $TMP_DIR"
+echo "TARGET_DIR: $TARGET_DIR"
+echo "ABS_TARGET_DIR: $(readlink -f "$TARGET_DIR")"
 echo "-----------"
 
+# Copy fixtures to target directory.
+# On Windows, we use rsync because cp isn't preserving symlinks. We could use rsync
+# on all platforms, but want to limit the changes.
 if [[ "$OSTYPE" == "msys" ]]; then
   echo "runing rsync cmd on windows"
 
