@@ -104,8 +104,9 @@ impl<W: Write> OutputSink<W> {
 }
 
 impl<W: Write> OutputClient<W> {
-    pub fn with_github_fenceposts(&mut self, task_name: String) {
-        self.fenceposts = Some(Fenceposts::Github(task_name));
+    pub fn with_header_footer(&mut self, header: Option<String>, footer: Option<String>) {
+        self.header = header;
+        self.footer = footer;
     }
 
     /// A writer that will write to the underlying sink's out writer according
