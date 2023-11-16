@@ -38,7 +38,8 @@ pub struct OutputClient<W> {
     // Any locals held across an await must implement Sync and RwLock lets us achieve this
     buffer: Option<RwLock<Vec<SinkBytes<'static>>>>,
     writers: Arc<Mutex<SinkWriters<W>>>,
-    fenceposts: Option<Fenceposts>,
+    header: Option<String>,
+    footer: Option<String>,
 }
 
 pub struct OutputWriter<'a, W> {
