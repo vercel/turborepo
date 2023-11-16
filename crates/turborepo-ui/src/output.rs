@@ -136,7 +136,8 @@ impl<W: Write> OutputClient<W> {
             behavior,
             buffer,
             writers,
-            fenceposts,
+            header,
+            footer,
         } = self;
         let buffers = buffer.map(|cell| cell.into_inner().expect("lock poisoned"));
 
