@@ -14,7 +14,10 @@ use smallvec::smallvec;
 use swc_core::{
     base::sourcemap::SourceMapBuilder,
     common::{BytePos, FileName, LineCol},
-    css::codegen::{writer::basic::BasicCssWriter, CodeGenerator},
+    css::{
+        codegen::{writer::basic::BasicCssWriter, CodeGenerator},
+        visit::VisitMutWith,
+    },
 };
 use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
@@ -119,6 +122,18 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                 stylesheet,
                 css_modules,
             } => {
+                let mut stylesheet = stylesheet.clone();
+                // We always analyze dependencies, but remove them only if remove_imports is
+                // true
+
+                if handle_nesting {
+                    stylesheet.visit_mut_with(&mut swc_core::css::compat::compiler::Compiler::new(
+                        swc_core::css::compat::compiler::Config {
+                            process: swc_core::css::compat::feature::Features::NESTING,
+                        },
+                    ));
+                }
+
                 use swc_core::css::codegen::Emit;
 
                 let mut code_string = String::new();
@@ -129,7 +144,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                     Default::default(),
                 );
 
-                code_gen.emit(stylesheet)?;
+                code_gen.emit(&stylesheet)?;
 
                 let srcmap =
                     srcmap.map(|srcmap| ParseCssResultSourceMap::new_swc(cm.clone(), srcmap));
