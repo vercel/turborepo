@@ -68,6 +68,7 @@ jobs:
         id: filename
         shell: bash
         run: |
+          echo 'file_basename=${{ matrix.os.name }}' >> "$GITHUB_OUTPUT"
           echo 'filename=${{ matrix.os.name }}.json' >> "$GITHUB_OUTPUT"
 
       - name: Display filename
@@ -100,8 +101,8 @@ jobs:
           if-no-files-found: error
           # cwd is root of the repository, so we need the benchmark/ prefixed path
           path: |
-            "benchmark/${{ steps.filename.outputs.filename }}.json"
-            "benchmark/${{ steps.filename.outputs.filename }}-ttft.json"
+            benchmark/${{ steps.filename.outputs.filename }}
+            benchmark/${{ steps.filename.outputs.file_basename }}-ttft.json
 
   # Send each of the profiles generated from the previous job to TinyBird
   # We'll wait for all profiles to complete before sending.
