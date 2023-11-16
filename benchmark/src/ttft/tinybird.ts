@@ -1,5 +1,5 @@
 import fetch from "node-fetch";
-import { getTTFTData } from "./helpers";
+import { getTTFTData } from "../helpers";
 
 const filePath = process.argv[2];
 const runID = process.argv[3];

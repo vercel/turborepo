@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { getTTFTData } from "./helpers";
+import { getTTFTData } from "../helpers";
 
 const runID = process.argv[2];
 

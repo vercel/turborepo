@@ -68,7 +68,7 @@ jobs:
         id: filename
         shell: bash
         run: |
-          echo 'filename=${{ matrix.os.runner }}.json' >> "$GITHUB_OUTPUT"
+          echo 'filename=${{ matrix.os.name }}.json' >> "$GITHUB_OUTPUT"
 
       - name: Display filename
         shell: bash
@@ -97,7 +97,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: profiles # This name will be the folder each file gets downloaded to
-          path: "benchmark/${{ steps.filename.outputs.filename }}" # cwd is root of the repository, so we need the benchmark/ prefixed path
+          path: "benchmark/${{ steps.filename.outputs.filename }}*" # cwd is root of the repository, so we need the benchmark/ prefixed path
           if-no-files-found: error
 
   # Send each of the profiles generated from the previous job to TinyBird
@@ -123,14 +123,6 @@ jobs:
       - name: List Downloaded Profiles
         shell: bash
         run: ls benchmark/profiles
-
-      # TODO: This is duplicated in the Adjust data step in post-to-slack, consolidate
-      - name: Adjust data
-        shell: bash
-        run: |
-          jq -f benchmark/src/fold.jq < benchmark/profiles/ubuntu-latest.json > benchmark/profiles/ubuntu-ttft.json
-          jq -f benchmark/src/fold.jq < benchmark/profiles/macos-latest.json > benchmark/profiles/macos-ttft.json
-          jq -f benchmark/src/fold.jq < benchmark/profiles/windows-latest.json > benchmark/profiles/windows-ttft.json
 
       - name: Display TTFT Data
         shell: bash
@@ -165,14 +157,6 @@ jobs:
       - name: List downloaded profiles
         shell: bash
         run: ls benchmark/profiles
-
-      # TODO: This is duplicated from the Adjust data step in send-to-tinybird, consolidate
-      - name: Adjust data
-        shell: bash
-        run: |
-          jq -f benchmark/src/fold.jq < benchmark/profiles/ubuntu-latest.json > benchmark/profiles/ubuntu-ttft.json
-          jq -f benchmark/src/fold.jq < benchmark/profiles/macos-latest.json > benchmark/profiles/macos-ttft.json
-          jq -f benchmark/src/fold.jq < benchmark/profiles/windows-latest.json > benchmark/profiles/windows-ttft.json
 
       - name: Display TTFT data
         shell: bash

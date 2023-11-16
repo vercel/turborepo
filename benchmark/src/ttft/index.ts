@@ -1,0 +1,95 @@
+import cp from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { TURBO_BIN } from "../helpers";
+import { run } from "./run";
+
+const profileFile = process.argv[2]; // Should be "windows", "ubuntu" or "macos"
+
+if (!profileFile) {
+  console.error("Error: Missing profile name");
+  printUsageMessage();
+  process.exit(1);
+}
+
+if (!profileFile.endsWith(".json")) {
+  console.error("Error: please provide a profile name ending in .json");
+  printUsageMessage();
+  process.exit(1);
+}
+
+const profileName = path.basename(profileFile, ".json");
+const profileExt = path.extname(profileFile); // Should always be .json, but we'll get it from here anyway.
+
+const ttftFileName = `${profileName}-ttft${profileExt}`;
+
+const fullProfilePath = path.join(process.cwd(), profileFile);
+
+if (fs.existsSync(fullProfilePath)) {
+  console.error(`Error: ${fullProfilePath} already exists`);
+  printUsageMessage();
+  process.exit(1);
+}
+
+if (!fs.existsSync(TURBO_BIN)) {
+  throw new Error("No turbo binary found");
+}
+
+cp.execSync(`${TURBO_BIN} --version`, { stdio: "inherit" });
+
+run(fullProfilePath); // Actual benchmark
+
+const profileJSON = JSON.parse(fs.readFileSync(fullProfilePath).toString());
+
+interface TTFTData {
+  name: string;
+  scm: string;
+  platform: string | undefined;
+  startTimeUnixMicroseconds: number | undefined;
+  durationMicroseconds: string | undefined;
+  turboVersion: string | undefined;
+}
+
+const ttftData: TTFTData = {
+  name: "time-to-first-task",
+  scm: "git",
+  platform: undefined,
+  startTimeUnixMicroseconds: undefined,
+  durationMicroseconds: undefined,
+  turboVersion: undefined,
+};
+
+// Get the info we need out of the profile
+for (const item of profileJSON) {
+  if (!item.args) {
+    continue;
+  }
+
+  const { args } = item;
+
+  if (args.platform) {
+    ttftData.platform = args.platform;
+  }
+
+  if (args.turbo_version) {
+    ttftData.turboVersion = args.turbo_version;
+  }
+
+  if (args.start_time) {
+    ttftData.startTimeUnixMicroseconds = Number(args.start_time);
+  }
+
+  if (args.message === "running visitor") {
+    ttftData.durationMicroseconds = item.ts;
+  }
+}
+
+fs.writeFileSync(ttftFileName, JSON.stringify(ttftData, null, 2));
+
+// -----------------------
+// Helpers
+// -----------------------
+
+function printUsageMessage() {
+  console.log("Usage:\n\npnpm -F benchmark ttft <path>");
+}
