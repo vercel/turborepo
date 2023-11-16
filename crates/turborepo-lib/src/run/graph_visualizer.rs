@@ -32,11 +32,11 @@ pub(crate) fn write_graph(
     cwd: &AbsoluteSystemPath,
 ) -> Result<(), Error> {
     match graph_opts {
-        GraphOpts::Stdout => render_graph(std::io::stdout(), engine, single_package)?,
+        GraphOpts::Stdout => render_dot_graph(std::io::stdout(), engine, single_package)?,
         GraphOpts::File(raw_filename) => {
             let (filename, extension) = filename_and_extension(cwd, raw_filename)?;
             if extension == "mermaid" {
-                todo!("write mermaid")
+                render_mermaid_graph(&filename, engine, single_package)?;
             } else if extension == "html" {
                 render_html(&filename, engine, single_package)?;
             } else {
@@ -47,11 +47,11 @@ pub(crate) fn write_graph(
                         .current_dir(cwd);
                     let child = spawn_child(cmd).map_err(|e| Error::Graphviz(e))?;
                     let stdin = child.take_stdin().expect("graphviz should have a stdin");
-                    render_graph(stdin, engine, single_package)?;
+                    render_dot_graph(stdin, engine, single_package)?;
                     child.wait().map_err(|e| Error::Graphviz(e))?;
                 } else {
                     write_graphviz_warning(ui);
-                    render_graph(std::io::stdout(), engine, single_package)?;
+                    render_dot_graph(std::io::stdout(), engine, single_package)?;
                 }
             }
             print!("\n✔ Generated task graph in ");
@@ -67,7 +67,22 @@ fn write_graphviz_warning(ui: UI) {
     cwriteln!(&stderr, ui, YELLOW, " `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer.");
 }
 
-fn render_graph<W: io::Write>(
+fn render_mermaid_graph(
+    filename: &AbsoluteSystemPath,
+    engine: &Engine,
+    single_package: bool,
+) -> Result<(), Error> {
+    let mut opts = OpenOptions::new();
+    opts.truncate(true).create(true).write(true);
+    let file = filename
+        .open_with_options(opts)
+        .map_err(Error::GraphOutput)?;
+    engine
+        .mermaid_graph(file, single_package)
+        .map_err(Error::GraphOutput)
+}
+
+fn render_dot_graph<W: io::Write>(
     writer: W,
     engine: &Engine,
     single_package: bool,
@@ -106,7 +121,7 @@ fn render_html(
         .open_with_options(opts)
         .map_err(Error::GraphOutput)?;
     let mut graph_buffer = Vec::new();
-    render_graph(&mut graph_buffer, engine, single_package)?;
+    render_dot_graph(&mut graph_buffer, engine, single_package)?;
     let graph_string = String::from_utf8(graph_buffer).expect("graph rendering should be UTF-8");
 
     file.write_all(HTML_PREFIX.as_bytes())

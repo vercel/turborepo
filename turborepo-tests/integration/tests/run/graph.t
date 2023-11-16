@@ -47,5 +47,12 @@ Graph to stdout
   $ ${TURBO} build -F my-app --graph=graph.html
   
   .*Generated task graph in .*graph\.html.* (re)
-  $ cat graph.html
+  $ cat graph.html | grep --quiet "DOCTYPE"
 
+  $ ${TURBO} build -F my-app --graph=graph.mermaid
+  .*Generated task graph in .*graph\.mermaid.* (re)
+
+  $ cat graph.mermaid
+  graph TD
+  \\t[A-Z]{4}\("my-app#build"\) --> [A-Z]{4}\("util#build"\).* (re)
+  \\t[A-Z]{4}\("util#build"\) --> [A-Z]{4}\("___ROOT___"\).* (re)
