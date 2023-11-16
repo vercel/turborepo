@@ -12,6 +12,16 @@ process.env.NO_UPDATE_NOTIFIER = 1;
 
 const isWindows = process.platform === "win32";
 
+// In Windows, we set the TMP_DIR to ~/tmp, because one of our fixtures has a symlink.
+// To copy that symlink over correctly, we need to use rsync instead of cp. The default TMP_DIR
+// is /tmp, which, on Windows resolves to a network/mounted path, so rsync attempts to invoke
+// ssh and fails. In that particular test, we use realpath --relative-to to get a relative path
+// for ~/tmp, and that works. When TMP_DIR is /tmp, this realpath --relative-to solution does
+// not work either.
+if (isWindows) {
+  process.env.TMP_DIR = "~/tmp";
+}
+
 // Make virtualenv
 execSync(`python3 -m venv ${VENV_NAME}`);
 

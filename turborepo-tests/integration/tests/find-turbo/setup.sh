@@ -2,37 +2,36 @@
 
 SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
 TARGET_DIR=$1
-FIXTURE_DIR=$2
+FIXTURE_NAME=$2
 
 # Copy fixtures to target directory.
 # On Windows, we use rsync because cp isn't preserving symlinks. We could use rsync
 # on all platforms, but want to limit the changes.
 
-
-SOURCE="${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_DIR/."
+# readlink should resolve the relative paths to the fixture so we have a canonicalized absolute path
+FIXTURE_DIR="$(readlink -f "${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_NAME")"
 
 DESTINATION="${TARGET_DIR}/"
 
-readlink -f $SOURCE
-
-
-echo "DESTINATION: $DESTINATION"
+echo "FIXTURE_DIR: $FIXTURE_DIR"
 echo "SOURCE: $SOURCE"
 echo "-----------"
 
 if [[ "$OSTYPE" == "msys" ]]; then
   echo "runing rsync cmd on windows"
 
-  pushd "${SCRIPT_DIR}/.." > /dev/null || exit 1 # this gets us into turborepo-tests/integration/tests/find-turbo
+  # ABS_PWD="$(realpath "$(pwd)")"
+  REL_TMPDIR="$(realpath --relative-to="$PWD" "$TARGET_DIR")"
 
-  echo "rsync cmd: rsync -a _fixtures/find_turbo/$FIXTURE_DIR/. $DESTINATION"
-  rsync -a "_fixtures/find_turbo/$FIXTURE_DIR/." "$DESTINATION"
+  # Notice that this rsync doesn't have the trailing "/." in the first argument like cp does.
+  # This is important!
+  echo "rsync -a $FIXTURE_DIR $REL_TMPDIR"
+  rsync -a "$FIXTURE_DIR" "$REL_TMPDIR"
 
-  popd > /dev/null || exit 1
 else
   echo "cp cmd:    cp -a $SOURCE $DESTINATION"
-  echo "runing cp cmd on windows"
-  cp -a "$SOURCE" "$DESTINATION"
+  echo "runing cp cmd on non-Windows"
+  cp -a "${FIXTURE_DIR}/." "${TARGET_DIR}/"
 fi
 
 
