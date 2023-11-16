@@ -4,7 +4,7 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use lightningcss::{
     css_modules::{CssModuleExport, CssModuleExports, Pattern, Segment},
-    dependencies::DependencyOptions,
+    dependencies::{Dependency, DependencyOptions},
     error::PrinterErrorKind,
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet, ToCssResult},
     targets::{Features, Targets},
@@ -12,11 +12,13 @@ use lightningcss::{
 };
 use smallvec::smallvec;
 use swc_core::{
+    atoms::Atom,
     base::sourcemap::SourceMapBuilder,
     common::{BytePos, FileName, LineCol},
     css::{
         codegen::{writer::basic::BasicCssWriter, CodeGenerator},
-        visit::VisitMutWith,
+        modules::TransformConfig,
+        visit::{VisitMut, VisitMutWith},
     },
 };
 use turbo_tasks::{ValueToString, Vc};
@@ -46,8 +48,14 @@ pub enum StyleSheetLike<'i, 'o> {
     LightningCss(StyleSheet<'i, 'o>),
     Swc {
         stylesheet: swc_core::css::ast::Stylesheet,
-        css_modules: bool,
+        css_modules: Option<SwcCssModuleMode>,
     },
+}
+
+#[derive(Debug)]
+pub struct SwcCssModuleMode {
+    basename: String,
+    path_hash: u32,
 }
 
 impl PartialEq for StyleSheetLike<'_, '_> {
@@ -103,9 +111,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                     } else {
                         Default::default()
                     },
-                    analyze_dependencies: Some(DependencyOptions {
-                        remove_imports: remove_imports,
-                    }),
+                    analyze_dependencies: Some(DependencyOptions { remove_imports }),
                     ..Default::default()
                 })?;
 
@@ -125,6 +131,26 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                 let mut stylesheet = stylesheet.clone();
                 // We always analyze dependencies, but remove them only if remove_imports is
                 // true
+                let mut deps = vec![];
+                stylesheet.visit_mut_with(&mut SwcDepColllector {
+                    deps: &mut deps,
+                    remove_imports,
+                });
+
+                // lightningcss specifies css module mode in the parser options.
+                let mut css_module_exports = None;
+                if let Some(SwcCssModuleMode {
+                    basename,
+                    path_hash,
+                }) = css_modules
+                {
+                    let output = swc_core::css::modules::compile(
+                        &mut stylesheet,
+                        ModuleTransformConfig {
+                            suffix: format!("__{}__{:x}", basename, path_hash),
+                        },
+                    );
+                }
 
                 if handle_nesting {
                     stylesheet.visit_mut_with(&mut swc_core::css::compat::compiler::Compiler::new(
@@ -149,7 +175,15 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                 let srcmap =
                     srcmap.map(|srcmap| ParseCssResultSourceMap::new_swc(cm.clone(), srcmap));
 
-                Ok((ToCssResult { code: code_string }, srcmap))
+                Ok((
+                    ToCssResult {
+                        code: code_string,
+                        dependencies: Some(deps),
+                        exports: css_module_exports,
+                        references: None,
+                    },
+                    srcmap,
+                ))
             }
         }
     }
@@ -597,5 +631,22 @@ impl GenerateSourceMap for ParseCssResultSourceMap {
                 ))
             }
         }
+    }
+}
+
+struct SwcDepColllector<'a> {
+    deps: &'a mut Vec<Dependency>,
+    remove_imports: bool,
+}
+
+impl VisitMut for SwcDepColllector<'_> {}
+
+struct ModuleTransformConfig {
+    suffix: String,
+}
+
+impl TransformConfig for ModuleTransformConfig {
+    fn new_name_for(&self, local: &Atom) -> Atom {
+        format!("{}{}", *local, self.suffix).into()
     }
 }
