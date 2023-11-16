@@ -10,6 +10,7 @@ use super::{
 };
 use crate::{
     cli,
+    cli::DryRunMode,
     engine::{Engine, TaskNode},
     opts::RunOpts,
     run::task_id::TaskId,
@@ -129,9 +130,14 @@ impl<'a> TaskSummaryFactory<'a> {
             .unwrap_or_default();
 
         let framework = self.hash_tracker.framework(task_id).unwrap_or_else(|| {
-            match self.run_opts.framework_inference {
-                true => NO_FRAMEWORK_DETECTED,
-                false => NO_FRAMEWORK_INFERENCE,
+            if matches!(self.run_opts.dry_run, Some(DryRunMode::Json)) {
+                ""
+            } else {
+                if self.run_opts.framework_inference {
+                    NO_FRAMEWORK_DETECTED
+                } else {
+                    NO_FRAMEWORK_INFERENCE
+                }
             }
             .to_string()
         });
