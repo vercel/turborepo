@@ -139,9 +139,9 @@ jobs:
         shell: bash
         run: |
           cd benchmark
-          node -r esbuild-register ./src/ttft-tinybird.ts profiles/ubuntu-ttft.json ${{github.run_id}}
-          node -r esbuild-register ./src/ttft-tinybird.ts profiles/macos-ttft.json ${{github.run_id}}
-          node -r esbuild-register ./src/ttft-tinybird.ts profiles/windows-ttft.json ${{github.run_id}}
+          node -r esbuild-register ./src/ttft/tinybird.ts profiles/ubuntu-ttft.json ${{github.run_id}}
+          node -r esbuild-register ./src/ttft/tinybird.ts profiles/macos-ttft.json ${{github.run_id}}
+          node -r esbuild-register ./src/ttft/tinybird.ts profiles/windows-ttft.json ${{github.run_id}}
 
   send-to-slack:
     name: Send to Slack
@@ -174,7 +174,7 @@ jobs:
         shell: bash
         run: |
           cd benchmark
-          node -r esbuild-register ./src/ttft-slack.ts ${{github.run_id}}
+          node -r esbuild-register ./src/ttft/slack.ts ${{github.run_id}}
 
       - name: Debug Slack payload
         shell: bash
