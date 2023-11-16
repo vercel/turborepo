@@ -4,10 +4,15 @@
   "private": true,
   "license": "MIT",
   "exports": {
-    "./*": {
-      "types": "./src/*.tsx",
-      "development": "./src/*.tsx",
-      "default": "./dist/*.js"
+    "./card": {
+      "types": "./src/card.tsx",
+      "development": "./src/card.tsx",
+      "default": "./dist/card.js"
+    },
+    "./code": {
+      "types": "./src/code.tsx",
+      "development": "./src/code.tsx",
+      "default": "./dist/code.js"
     }
   },
   "scripts": {
