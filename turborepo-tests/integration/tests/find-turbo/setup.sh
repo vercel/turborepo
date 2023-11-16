@@ -9,11 +9,15 @@ FIXTURE_DIR=$2
 # on all platforms, but want to limit the changes.
 
 SOURCE="${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_DIR/."
+
 DESTINATION="${TARGET_DIR}/"
 
 if [[ "$OSTYPE" == "msys" ]]; then
-  echo "Running rsync -a $SOURCE $DESTINATION"
-  rsync -a "$SOURCE" "$DESTINATION"
+  readlink -f $SOURCE
+  SOURCE_MOD="$(readlink -f $SOURCE)"
+  echo "SOURCE: $SOURCE"
+  echo "Running rsync -a $SOURCE_MOD $DESTINATION"
+  rsync -a "$SOURCE_MOD" "$DESTINATION"
 else
   echo "Running cp -a $SOURCE $DESTINATION"
   cp -a "$SOURCE" "$DESTINATION"
