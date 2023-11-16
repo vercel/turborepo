@@ -13,7 +13,7 @@ if [[ "$OSTYPE" == "msys" ]]; then
 else
   echo "copying fixture with cp"
   cp -a ${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_DIR/. ${TARGET_DIR}/
-if
+fi
 
 
 # TODO: copy over the stub instead of having a duplicate in each fixture
