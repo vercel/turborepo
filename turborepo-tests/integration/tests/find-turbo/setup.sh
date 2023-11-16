@@ -12,14 +12,21 @@ SOURCE="${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_DIR/."
 
 DESTINATION="${TARGET_DIR}/"
 
+readlink -f $SOURCE
+
+SOURCE_MOD="$(readlink -f $SOURCE)"
+
+echo "DESTINATION: $DESTINATION"
+echo "SOURCE: $SOURCE"
+echo "-----------"
+echo "rsync cmd: rsync -a $SOURCE_MOD $DESTINATION"
+echo "cp cmd:    cp -a $SOURCE $DESTINATION"
+
 if [[ "$OSTYPE" == "msys" ]]; then
-  readlink -f $SOURCE
-  SOURCE_MOD="$(readlink -f $SOURCE)"
-  echo "SOURCE: $SOURCE"
-  echo "Running rsync -a $SOURCE_MOD $DESTINATION"
+  echo "runing rsync cmd on windows"
   rsync -a "$SOURCE_MOD" "$DESTINATION"
 else
-  echo "Running cp -a $SOURCE $DESTINATION"
+  echo "runing cp cmd on windows"
   cp -a "$SOURCE" "$DESTINATION"
 fi
 
