@@ -45,7 +45,24 @@ cp.execSync(`${TURBO_BIN} --version`, { stdio: "inherit" });
 
 run(fullProfilePath); // Actual benchmark
 
-const profileJSON = JSON.parse(fs.readFileSync(fullProfilePath).toString());
+interface ProfileItem {
+  name: string;
+  tid: number;
+  pid: number;
+  ph: string;
+  ts: number;
+  ".file"?: string;
+  ".line"?: string;
+  args?: Record<string, string | number>;
+  cat?: string;
+  s?: string;
+}
+
+type ProfileJSON = Array<ProfileItem>;
+
+const profileJSON = JSON.parse(
+  fs.readFileSync(fullProfilePath).toString()
+) as ProfileJSON;
 
 const ttftData: TTFTData = {
   name: "time-to-first-task",
@@ -74,7 +91,7 @@ for (const item of profileJSON) {
   }
 
   if (args.turbo_version) {
-    ttftData.turboVersion = args.turbo_version;
+    ttftData.turboVersion = `${args.turbo_version}`;
   }
 
   if (args.start_time) {
