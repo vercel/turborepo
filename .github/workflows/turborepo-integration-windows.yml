@@ -30,6 +30,13 @@ jobs:
         if: matrix.os.name == 'windows'
         shell: bash
         run: git config --global core.autocrlf input
+
+      # We use rsync for some integration tests to copy fixture files when they contain symlinks
+      # because `cp` on Windows doesn't seem to preserve symlinks.
+      - name: Install rsync
+        if: matrix.os.name == 'windows'
+        run: choco install rsync -y
+
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
