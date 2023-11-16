@@ -11,7 +11,7 @@ const SITE_ROOT = "https://turbo.build";
 
 const config: DocsThemeConfig = {
   sidebar: {
-    defaultMenuCollapseLevel: 10000,
+    defaultMenuCollapseLevel: 1,
     toggleButton: true,
   },
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
