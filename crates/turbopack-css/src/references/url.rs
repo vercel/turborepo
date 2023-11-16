@@ -6,7 +6,10 @@ use lightningcss::{
     visit_types,
     visitor::{Visit, Visitor},
 };
-use swc_core::css::visit::{VisitMut, VisitMutWith};
+use swc_core::css::{
+    ast::UrlValue,
+    visit::{VisitMut, VisitMutWith},
+};
 use turbo_tasks::{debug::ValueDebug, Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{
@@ -160,7 +163,23 @@ struct AssetReferenceReplacer<'a> {
 }
 
 impl VisitMut for AssetReferenceReplacer<'_> {
-    // TODO
+    fn visit_mut_url_value(&mut self, u: &mut UrlValue) {
+        u.visit_mut_children_with(self);
+
+        match u {
+            UrlValue::Str(v) => {
+                if let Some(new) = self.urls.get(&*v.value) {
+                    v.value = (&**new).into();
+                }
+            }
+            UrlValue::Raw(v) => {
+                if let Some(new) = self.urls.get(&*v.value) {
+                    v.value = (&**new).into();
+                    v.raw = None;
+                }
+            }
+        }
+    }
 }
 
 impl<'i> Visitor<'i> for AssetReferenceReplacer<'_> {
