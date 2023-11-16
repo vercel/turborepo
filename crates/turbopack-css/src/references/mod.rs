@@ -7,7 +7,10 @@ use lightningcss::{
     values::url::Url,
     visitor::{Visit, Visitor},
 };
-use swc_core::css::visit::{VisitMut, VisitMutWith};
+use swc_core::css::{
+    ast::UrlValue,
+    visit::{VisitMut, VisitMutWith},
+};
 use turbo_tasks::{Value, Vc};
 use turbopack_core::{
     issue::{IssueSeverity, IssueSource},
@@ -87,7 +90,35 @@ impl<'a> ModuleReferencesVisitor<'a> {
 }
 
 impl VisitMut for ModuleReferencesVisitor<'_> {
-    // TODO
+    // TODO: visit_import_prelude
+
+    fn visit_mut_url(&mut self, u: &mut swc_core::css::ast::Url) {
+        u.visit_mut_children_with(self);
+
+        let src = match u.value.as_deref().unwrap() {
+            UrlValue::Str(v) => v.value.clone(),
+            UrlValue::Raw(v) => v.value.clone(),
+        };
+
+        // ignore internal urls like `url(#noiseFilter)`
+        // ignore server-relative urls like `url(/foo)`
+        if !matches!(src.bytes().next(), Some(b'#') | Some(b'/')) {
+            let issue_span = u.span;
+
+            let vc = UrlAssetReference::new(
+                self.origin,
+                Request::parse(Value::new(src.to_string().into())),
+                IssueSource::from_swc_offsets(
+                    Vc::upcast(self.source),
+                    issue_span.lo.0 as _,
+                    issue_span.hi.0 as _,
+                ),
+            );
+
+            self.references.push(Vc::upcast(vc));
+            self.urls.push((src.to_string(), vc));
+        }
+    }
 }
 
 impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
