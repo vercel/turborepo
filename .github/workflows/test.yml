@@ -402,6 +402,7 @@ jobs:
         run: turbo run test --filter=turborepo-tests-e2e --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --color --env-mode=strict
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
+        shell: bash
 
   turborepo_examples:
     name: Turborepo Examples
