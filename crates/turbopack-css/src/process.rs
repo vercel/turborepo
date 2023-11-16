@@ -19,7 +19,7 @@ use swc_core::{
     common::{BytePos, FileName, LineCol},
     css::{
         codegen::{writer::basic::BasicCssWriter, CodeGenerator},
-        modules::TransformConfig,
+        modules::{CssClassName, TransformConfig},
         visit::{VisitMut, VisitMutWith},
     },
 };
@@ -155,6 +155,26 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                             suffix: format!("__{}__{:x}", basename, path_hash),
                         },
                     );
+
+                    let mut map = CssModuleExports::default();
+
+                    for (k, export_class_names) in output.renamed {
+                        for export_class_name in export_class_names {
+                            match export_class_name {
+                                CssClassName::Local { name } => {
+                                    todo!()
+                                }
+                                CssClassName::Global { name } => {
+                                    todo!()
+                                }
+                                CssClassName::Import { name, from } => {
+                                    todo!()
+                                }
+                            }
+                        }
+                    }
+
+                    css_module_exports = Some(map);
                 }
 
                 if handle_nesting {
