@@ -4,7 +4,16 @@ SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
 TARGET_DIR=$1
 FIXTURE_DIR=$2
 
-cp -a ${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_DIR/. ${TARGET_DIR}/
+# Copy fixtures to target directory.
+# On Windows, we use rsync because cp isn't preserving symlinks. We could use rsync
+# on all platforms, but want to limit the changes.
+if [[ "$OSTYPE" == "msys" ]]; then
+  echo "copying fixture with rsync"
+  rsync -a ${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_DIR/. ${TARGET_DIR}/
+else
+  echo "copying fixture with cp"
+  cp -a ${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_DIR/. ${TARGET_DIR}/
+if
 
 
 # TODO: copy over the stub instead of having a duplicate in each fixture
