@@ -148,8 +148,7 @@ impl<W: Write> OutputClient<W> {
             // We hold the mutex until we write all of the bytes associated for the client
             // to ensure that the bytes aren't interspersed.
             let mut writers = writers.lock().expect("lock poisoned");
-            let (prefix, suffix) = fenceposts.map(|f| f.prefix_suffix()).unwrap_or_default();
-            if let Some(prefix) = prefix {
+            if let Some(prefix) = header {
                 writers.out.write_all(prefix.as_bytes())?;
             }
             for SinkBytes {
