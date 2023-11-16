@@ -99,6 +99,10 @@ impl<'a> TaskId<'a> {
         }
     }
 
+    pub fn as_github_task_id(&self) -> String {
+        format!("{}:{}", self.package, self.task)
+    }
+
     pub fn into_owned(self) -> TaskId<'static> {
         let TaskId { package, task } = self;
         TaskId {

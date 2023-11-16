@@ -15,6 +15,22 @@ struct SinkWriters<W> {
     err: W,
 }
 
+// TODO: add support for additional CI providers here
+pub enum Fenceposts {
+    Github(String),
+}
+
+impl Fenceposts {
+    fn prefix_suffix(&self) -> (Option<String>, Option<String>) {
+        match self {
+            Self::Github(task_name) => (
+                Some(format!("::group::{task_name}\n")),
+                Some("::endgroup::\n".to_string()),
+            ),
+        }
+    }
+}
+
 /// OutputClient allows for multiple threads to write to the same OutputSink
 pub struct OutputClient<W> {
     behavior: OutputClientBehavior,
@@ -22,6 +38,7 @@ pub struct OutputClient<W> {
     // Any locals held across an await must implement Sync and RwLock lets us achieve this
     buffer: Option<RwLock<Vec<SinkBytes<'static>>>>,
     writers: Arc<Mutex<SinkWriters<W>>>,
+    fenceposts: Option<Fenceposts>,
 }
 
 pub struct OutputWriter<'a, W> {
@@ -80,11 +97,16 @@ impl<W: Write> OutputSink<W> {
             behavior,
             buffer,
             writers,
+            fenceposts: None,
         }
     }
 }
 
 impl<W: Write> OutputClient<W> {
+    pub fn with_github_fenceposts(&mut self, task_name: String) {
+        self.fenceposts = Some(Fenceposts::Github(task_name));
+    }
+
     /// A writer that will write to the underlying sink's out writer according
     /// to this client's behavior.
     pub fn stdout(&self) -> OutputWriter<W> {
@@ -112,6 +134,7 @@ impl<W: Write> OutputClient<W> {
             behavior,
             buffer,
             writers,
+            fenceposts,
         } = self;
         let buffers = buffer.map(|cell| cell.into_inner().expect("lock poisoned"));
 
@@ -122,6 +145,10 @@ impl<W: Write> OutputClient<W> {
             // We hold the mutex until we write all of the bytes associated for the client
             // to ensure that the bytes aren't interspersed.
             let mut writers = writers.lock().expect("lock poisoned");
+            let (prefix, suffix) = fenceposts.map(|f| f.prefix_suffix()).unwrap_or_default();
+            if let Some(prefix) = prefix {
+                writers.out.write_all(prefix.as_bytes())?;
+            }
             for SinkBytes {
                 buffer,
                 destination,
@@ -132,6 +159,9 @@ impl<W: Write> OutputClient<W> {
                     Destination::Stderr => &mut writers.err,
                 };
                 writer.write_all(buffer)?;
+            }
+            if let Some(suffix) = suffix {
+                writers.out.write_all(suffix.as_bytes())?;
             }
         }
 

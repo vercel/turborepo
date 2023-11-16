@@ -235,9 +235,9 @@ impl<'a> Visitor<'a> {
                 execution_env,
             );
 
+            let output_client = self.output_client(&info);
             let tracker = self.run_tracker.track_task(info.clone().into_owned());
             let spaces_client = self.run_tracker.spaces_task_client();
-            let output_client = self.output_client();
             let parent_span = Span::current();
             tasks.push(tokio::spawn(async move {
                 exec_context
@@ -327,7 +327,7 @@ impl<'a> Visitor<'a> {
         OutputSink::new(out, err)
     }
 
-    fn output_client(&self) -> OutputClient<impl std::io::Write> {
+    fn output_client(&self, task_id: &TaskId) -> OutputClient<impl std::io::Write> {
         let behavior = match self.opts.run_opts.log_order {
             crate::opts::ResolvedLogOrder::Stream if self.run_tracker.spaces_enabled() => {
                 turborepo_ui::OutputClientBehavior::InMemoryBuffer
@@ -337,7 +337,12 @@ impl<'a> Visitor<'a> {
             }
             crate::opts::ResolvedLogOrder::Grouped => turborepo_ui::OutputClientBehavior::Grouped,
         };
-        self.sink.logger(behavior)
+
+        let mut logger = self.sink.logger(behavior);
+        if self.opts.run_opts.is_github_actions {
+            logger.with_github_fenceposts(task_id.as_github_task_id())
+        }
+        logger
     }
 
     fn prefix<'b>(&self, task_id: &'b TaskId) -> Cow<'b, str> {
@@ -375,8 +380,8 @@ impl<'a> Visitor<'a> {
             .with_warn_prefix(prefix);
         if is_github_actions {
             prefixed_ui = prefixed_ui
-                .with_error_prefix(Style::new().apply_to("[ERROR]".to_string()))
-                .with_warn_prefix(Style::new().apply_to("[WARN]".to_string()));
+                .with_error_prefix(Style::new().apply_to("[ERROR] ".to_string()))
+                .with_warn_prefix(Style::new().apply_to("[WARN] ".to_string()));
         }
         prefixed_ui
     }
