@@ -65,7 +65,7 @@ Validate that we got a full task summary for the failed task with an error in .e
       "dotEnv": null
     },
     "expandedOutputs": [],
-    "framework": "",
+    "framework": "<NO FRAMEWORK DETECTED>",
     "envMode": "loose",
     "environmentVariables": {
       "specified": {

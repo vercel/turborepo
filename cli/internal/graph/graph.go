@@ -122,6 +122,13 @@ func (g *CompleteGraph) GetPackageTaskVisitor(
 		envVars := g.TaskHashTracker.GetEnvVars(taskID)
 		expandedInputs := g.TaskHashTracker.GetExpandedInputs(packageTask)
 		framework := g.TaskHashTracker.GetFramework(taskID)
+		if framework == "" {
+			if frameworkInference {
+				framework = runsummary.NoFrameworkDetected
+			} else {
+				framework = runsummary.FrameworkDetectionSkipped
+			}
+		}
 
 		packageTask.Command = command
 
