@@ -1,18 +1,22 @@
 #!/bin/bash
 
 SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
+
 TARGET_DIR=$1
 FIXTURE_NAME=$2
 
 # readlink should resolve the relative paths to the fixture so we have a canonicalized absolute path
 FIXTURE_DIR="${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_NAME"
-READLINK_FIXTURE_DIR="$(readlink -f "$FIXTURE_DIR")"
+
+echo "PWD: $PWD"
+echo "TMPDIR: $TMPDIR"
+echo "BASH_SOURCE[0]: ${BASH_SOURCE[0]}"
+echo "SCRIPT_DIR: ${SCRIPT_DIR}"
 
 echo "FIXTURE_DIR: $FIXTURE_DIR"
-echo "READLINK_FIXTURE_DIR: $READLINK_FIXTURE_DIR"
-echo "TMPDIR: $TMPDIR"
 echo "TARGET_DIR: $TARGET_DIR"
-echo "ABS_TARGET_DIR: $(readlink -f "$TARGET_DIR")"
+echo "READLINK_FIXTURE_DIR: $(readlink -f "$FIXTURE_DIR")"
+echo "READLINK_TARGET_DIR: $(readlink -f "$TARGET_DIR")"
 echo "-----------"
 
 # Copy fixtures to target directory.
