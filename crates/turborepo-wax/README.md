@@ -17,7 +17,7 @@ boundaries.
 Match a path against a glob:
 
 ```rust
-use wax::{Glob, Pattern};
+use wax::{Glob, Program};
 
 let glob = Glob::new("*.png").unwrap();
 assert!(glob.is_match("logo.png"));
@@ -26,7 +26,7 @@ assert!(glob.is_match("logo.png"));
 Match a path against a glob with matched text (captures):
 
 ```rust
-use wax::{CandidatePath, Glob, Pattern};
+use wax::{CandidatePath, Glob, Program};
 
 let glob = Glob::new("**/{*.{go,rs}}").unwrap();
 
@@ -68,7 +68,7 @@ for entry in glob
 Match a path against multiple globs:
 
 ```rust
-use wax::{Glob, Pattern};
+use wax::{Glob, Program};
 
 let any = wax::any([
     "src/**/*.rs",
@@ -273,12 +273,12 @@ the expression to match or walk overlapping trees.
 ## Combinators
 
 Glob patterns can be combined and matched together using the `any` combinator.
-`any` accepts an `IntoIterator` with items that are compiled `Pattern`s or `str`
-slices. The output is an `Any`, which implements `Pattern` and efficiently
-matches any of its input patterns.
+`any` accepts an `IntoIterator` of `Pattern`s, such as compiled `Program`s like
+`Glob` or pattern text like `str` slices. The output is an `Any`, which
+implements `Program` and efficiently matches any of its input patterns.
 
 ```rust
-use wax::{Glob, Pattern};
+use wax::{Glob, Program};
 
 let any = wax::any(["**/*.txt", "src/**/*.rs"]).unwrap();
 assert!(any.is_match("src/lib.rs"));
@@ -403,7 +403,7 @@ combination with the glob.
 ```rust
 use dunce; // Avoids UNC paths on Windows.
 use std::path::Path;
-use wax::{Glob, Pattern};
+use wax::{Glob, Program};
 
 let path: &Path = /* ... */ // Candidate path.
 

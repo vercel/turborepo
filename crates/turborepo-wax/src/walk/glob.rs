@@ -15,7 +15,7 @@ use crate::{
         Entry, EntryResidue, FileIterator, JoinAndGetDepth, TreeEntry, WalkBehavior, WalkError,
         WalkTree,
     },
-    BuildError, CandidatePath, Combine, Glob,
+    BuildError, CandidatePath, Glob, Pattern,
 };
 
 /// APIs for matching globs against directory trees.
@@ -96,8 +96,8 @@ impl<'t> Glob<'t> {
     /// [`not`]: crate::walk::FileIterator::not
     /// [`Path::join`]: std::path::Path::join
     /// [`PathBuf::push`]: std::path::PathBuf::push
-    /// [`Pattern`]: crate::Pattern
-    /// [`Pattern::is_exhaustive`]: crate::Pattern::is_exhaustive
+    /// [`Program`]: crate::Program
+    /// [`Program::is_exhaustive`]: crate::Program::is_exhaustive
     /// [`WalkBehavior`]: crate::walk::WalkBehavior
     pub fn walk(
         &self,
@@ -161,8 +161,8 @@ impl<'t> Glob<'t> {
     fn walker(&self, directory: impl Into<PathBuf>) -> GlobWalker {
         GlobWalker {
             anchor: self.anchor(directory),
-            pattern: WalkPattern {
-                complete: self.pattern.clone(),
+            program: WalkProgram {
+                complete: self.program.clone(),
                 components: compile(self.tree.as_ref().tokens())
                     .expect("failed to compile glob sub-expressions"),
             },
@@ -220,7 +220,7 @@ impl Anchor {
 }
 
 #[derive(Clone, Debug)]
-struct WalkPattern {
+struct WalkProgram {
     complete: Regex,
     components: Vec<Regex>,
 }
@@ -228,7 +228,7 @@ struct WalkPattern {
 #[derive(Clone, Debug)]
 struct GlobWalker {
     anchor: Anchor,
-    pattern: WalkPattern,
+    program: WalkProgram,
 }
 
 impl GlobWalker {
@@ -264,22 +264,22 @@ impl GlobWalker {
                         Component::Normal(component) => Some(CandidatePath::from(component)),
                         _ => None,
                     })
-                    .zip_longest(self.pattern.components.iter().skip(depth))
+                    .zip_longest(self.program.components.iter().skip(depth))
                     .with_position()
                 {
                     match (position, candidate) {
-                        (First | Middle, Both(candidate, pattern)) => {
-                            if !pattern.is_match(candidate.as_ref()) {
+                        (First | Middle, Both(candidate, program)) => {
+                            if !program.is_match(candidate.as_ref()) {
                                 // Do not walk directories that do not match the corresponding
-                                // component pattern.
+                                // component program.
                                 return filtrate.filter_tree(cancellation).into();
                             }
                         }
-                        (Last | Only, Both(candidate, pattern)) => {
-                            return if pattern.is_match(candidate.as_ref()) {
+                        (Last | Only, Both(candidate, program)) => {
+                            return if program.is_match(candidate.as_ref()) {
                                 let candidate = CandidatePath::from(path);
                                 if let Some(matched) = self
-                                    .pattern
+                                    .program
                                     .complete
                                     .captures(candidate.as_ref())
                                     .map(MatchedText::from)
@@ -293,14 +293,14 @@ impl GlobWalker {
                                 }
                             } else {
                                 // Do not walk directories that do not match the corresponding
-                                // component pattern.
+                                // component program.
                                 filtrate.filter_tree(cancellation).into()
                             };
                         }
                         (_, Left(_candidate)) => {
                             let candidate = CandidatePath::from(path);
                             return if let Some(matched) = self
-                                .pattern
+                                .program
                                 .complete
                                 .captures(candidate.as_ref())
                                 .map(MatchedText::from)
@@ -313,7 +313,7 @@ impl GlobWalker {
                                 filtrate.filter_node().into()
                             };
                         }
-                        (_, Right(_pattern)) => {
+                        (_, Right(_program)) => {
                             return filtrate.filter_node().into();
                         }
                     }
@@ -323,7 +323,7 @@ impl GlobWalker {
                 // may be matched.
                 let candidate = CandidatePath::from(path);
                 if let Some(matched) = self
-                    .pattern
+                    .program
                     .complete
                     .captures(candidate.as_ref())
                     .map(MatchedText::from)
@@ -339,7 +339,7 @@ impl GlobWalker {
 }
 
 #[derive(Clone, Debug)]
-enum FilterAnyPattern {
+enum FilterAnyProgram {
     Empty,
     Exhaustive(Regex),
     Nonexhaustive(Regex),
@@ -349,9 +349,9 @@ enum FilterAnyPattern {
     },
 }
 
-impl FilterAnyPattern {
+impl FilterAnyProgram {
     pub fn residue(&self, candidate: CandidatePath<'_>) -> Option<EntryResidue> {
-        use FilterAnyPattern::{Exhaustive, Nonexhaustive, Partitioned};
+        use FilterAnyProgram::{Exhaustive, Nonexhaustive, Partitioned};
 
         match self {
             Exhaustive(ref exhaustive) | Partitioned { ref exhaustive, .. }
@@ -372,29 +372,29 @@ impl FilterAnyPattern {
 /// patterns.
 #[derive(Clone, Debug)]
 pub struct FilterAny {
-    pattern: FilterAnyPattern,
+    program: FilterAnyProgram,
 }
 
 impl FilterAny {
     /// Combines patterns into a `FilterAny`.
     ///
     /// This function accepts an [`IntoIterator`] with items that implement
-    /// [`Combine`], such as [`Glob`] and `&str`.
+    /// [`Pattern`], such as [`Glob`] and `&str`.
     ///
     /// # Errors
     ///
     /// Returns an error if any of the inputs fail to build. If the inputs are a
-    /// compiled [`Pattern`] type such as [`Glob`], then this only occurs if
+    /// compiled [`Program`] type such as [`Glob`], then this only occurs if
     /// the compiled program is too large.
     ///
-    /// [`Combine`]: crate::Combine
     /// [`Glob`]: crate::Glob
     /// [`IntoIterator`]: std::iter::IntoIterator
     /// [`Pattern`]: crate::Pattern
+    /// [`Program`]: crate::Program
     pub fn any<'t, I>(patterns: I) -> Result<Self, BuildError>
     where
         I: IntoIterator,
-        I::Item: Combine<'t>,
+        I::Item: Pattern<'t>,
     {
         let (exhaustive, nonexhaustive) = patterns
             .into_iter()
@@ -404,23 +404,23 @@ impl FilterAny {
             .into_iter()
             .partition::<Vec<_>, _>(|tree| token::is_exhaustive(tree.as_ref().tokens()));
         Ok(FilterAny {
-            // TODO: This kind of expression is a bit unfortunate. `FilterAnyPattern` is necessary,
+            // TODO: This kind of expression is a bit unfortunate. `FilterAnyProgram` is necessary,
             //       because empty token sequences yield the regular expression `^()$`, which
             //       matches empty strings and therefore empty `CandidatePath`s. Note that
             //       sometimes the relative path of an `Entry` is empty (when the entry represents
-            //       the root). Alternatively, a pattern type that bypasses `Regex` and matches
+            //       the root). Alternatively, a program type that bypasses `Regex` and matches
             //       nothing when it is empty could be used instead. Then there would be no need to
             //       match against only non-empty patterns.
-            pattern: match (exhaustive.is_empty(), nonexhaustive.is_empty()) {
-                (false, false) => FilterAnyPattern::Partitioned {
-                    exhaustive: crate::any(exhaustive)?.pattern,
-                    nonexhaustive: crate::any(nonexhaustive)?.pattern,
+            program: match (exhaustive.is_empty(), nonexhaustive.is_empty()) {
+                (false, false) => FilterAnyProgram::Partitioned {
+                    exhaustive: crate::any(exhaustive)?.program,
+                    nonexhaustive: crate::any(nonexhaustive)?.program,
                 },
-                (false, true) => FilterAnyPattern::Exhaustive(crate::any(exhaustive)?.pattern),
+                (false, true) => FilterAnyProgram::Exhaustive(crate::any(exhaustive)?.program),
                 (true, false) => {
-                    FilterAnyPattern::Nonexhaustive(crate::any(nonexhaustive)?.pattern)
+                    FilterAnyProgram::Nonexhaustive(crate::any(nonexhaustive)?.program)
                 }
-                (true, true) => FilterAnyPattern::Empty,
+                (true, true) => FilterAnyProgram::Empty,
             },
         })
     }
@@ -428,16 +428,16 @@ impl FilterAny {
     /// Gets the appropriate [`EntryResidue`] for the given [`Entry`].
     ///
     /// Notably, this function returns [`EntryResidue::Tree`] if the [`Entry`]
-    /// matches an [exhaustive glob expression][`Pattern::is_exhaustive`],
+    /// matches an [exhaustive glob expression][`Program::is_exhaustive`],
     /// such as `secret/**`.
     ///
     /// [`Entry`]: crate::walk::Entry
     /// [`EntryResidue`]: crate::walk::EntryResidue
     /// [`EntryResidue::Tree`]: crate::walk::EntryResidue::Tree
-    /// [`Pattern::is_exhaustive`]: crate::Pattern::is_exhaustive
+    /// [`Program::is_exhaustive`]: crate::Program::is_exhaustive
     pub fn residue(&self, entry: &dyn Entry) -> Option<EntryResidue> {
         let candidate = CandidatePath::from(entry.root_relative_paths().1);
-        self.pattern.residue(candidate)
+        self.program.residue(candidate)
     }
 }
 
