@@ -56,7 +56,7 @@ Setup
     Hash                           = 1ce33e04f265f95c\s* (re)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
-    Directory                      = packages(\/|\\)util\s+ (re)
+    Directory                      = packages(\/|\\)util\s* (re)
     Command                        = echo building\s* (re)
     Outputs                        =\s* (re)
     Log File                       = packages(\/|\\)util(\/|\\)\.turbo(\/|\\)turbo-build\.log\s* (re)
