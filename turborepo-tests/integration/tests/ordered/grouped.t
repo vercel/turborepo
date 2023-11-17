@@ -37,8 +37,8 @@
   my-app:build: > build
   my-app:build: > echo building && sleep 1 && echo done
   my-app:build: 
-  my-app:build: building (re)
-  my-app:build: done (re)
+  my-app:build: building
+  my-app:build: done
   util:build: cache bypass, force executing [0-9a-f]+ (re)
   util:build: 
   util:build: > build

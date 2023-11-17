@@ -15,8 +15,8 @@ because otherwise prysk interprets them as multiline commands
   >\sbuild (re)
   \>\secho building && sleep 1 && echo done (re)
   
-  building (re)
-  done (re)
+  building
+  done
   ::endgroup::
   ::group::util:build
   cache bypass, force executing ff1050c513839636
@@ -63,14 +63,14 @@ Verify that errors are grouped properly
   \> fail (re)
   \> echo failing; exit 1 (re)
   
-  failing (re)
+  failing
   npm ERR! Lifecycle script `fail` failed with error: 
   npm ERR! Error: command failed 
   npm ERR!   in workspace: util 
   npm ERR\!   at location: (.*)(\/|\\)packages(\/|\\)util  (re)
-  \[ERROR\] command finished with error: command \((.*)(\/|\\)packages(\/|\\)util\) npm run fail exited \(1\) (re)
+  \[ERROR\] command finished with error: command \((.*)/packages(\/|\\)util\) (.*)npm run fail exited \(1\) (re)
   ::endgroup::
-  ::error::util#fail: command \(.*(\/|\\)packages(\/|\\)util\) npm run fail exited \(1\) (re)
+  ::error::util#fail: command \(.*(\/|\\)packages(\/|\\)util\) (.*)npm run fail exited \(1\) (re)
   
    Tasks:    0 successful, 1 total
   Cached:    0 cached, 1 total

@@ -165,7 +165,7 @@ impl TaskCache {
         Ok(log_writer)
     }
 
-    pub async fn exists(&mut self) -> Result<Option<CacheHitMetadata>, CacheError> {
+    pub async fn exists(&self) -> Result<Option<CacheHitMetadata>, CacheError> {
         self.run_cache.cache.exists(&self.hash).await
     }
 

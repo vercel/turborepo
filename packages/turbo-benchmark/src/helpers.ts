@@ -10,7 +10,7 @@ export const DEFAULT_EXEC_OPTS = { stdio: "ignore" as const, cwd: REPO_PATH };
 const isWin = process.platform === "win32";
 
 export const TURBO_BIN = path.resolve(
-  path.join("..", "target", "release", `turbo${isWin ? ".exe" : ""}`)
+  path.join("..", "..", "target", "release", `turbo${isWin ? ".exe" : ""}`)
 );
 
 export function setup(): void {
@@ -52,16 +52,17 @@ export function getCommitDetails(): {
   };
 }
 
-interface TTFTData {
+export interface TTFTData {
   name: string;
   scm: string;
   platform: string;
+  cpus: number;
   startTimeUnixMicroseconds: number;
   turboVersion: string;
   durationMicroseconds: number;
-  commitSha: string;
-  commitTimestamp: Date;
-  url: string;
+  commitSha?: string;
+  commitTimestamp?: Date;
+  url?: string;
 }
 
 export function getTTFTData(filePath: string, runID: string): TTFTData {

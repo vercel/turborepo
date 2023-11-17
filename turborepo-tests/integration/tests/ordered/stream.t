@@ -18,9 +18,9 @@
   .* (re)
   .* (re)
   .* (re)
-  util:build: building (re)
-  my-app:build: done (re)
-  util:build: completed (re)
+  util:build: building
+  my-app:build: done
+  util:build: completed
   
    Tasks:    2 successful, 2 total
   Cached:    0 cached, 2 total

@@ -8,7 +8,7 @@ use turborepo_repository::{
     package_manager,
 };
 
-use crate::{Repository, Workspace};
+use crate::{PackageManagerRoot, Workspace};
 
 /// This module is used to isolate code with defined errors
 /// from code in lib.rs that needs to have errors coerced to strings /
@@ -42,8 +42,8 @@ impl From<Error> for napi::Error<Status> {
     }
 }
 
-impl Repository {
-    pub(crate) async fn detect_js_internal(path: Option<String>) -> Result<Self, Error> {
+impl PackageManagerRoot {
+    pub(crate) async fn find_internal(path: Option<String>) -> Result<Self, Error> {
         let reference_dir = path
             .map(|path| {
                 AbsoluteSystemPathBuf::from_cwd(&path).map_err(|path_error| Error::StartingPath {
@@ -62,11 +62,11 @@ impl Repository {
         Ok(Self {
             root: repo_state.root.to_string(),
             repo_state,
-            is_monorepo,
+            is_single_package: !is_monorepo,
         })
     }
 
-    pub(crate) async fn workspaces_internal(&self) -> Result<Vec<Workspace>, Error> {
+    pub(crate) async fn packages_internal(&self) -> Result<Vec<Workspace>, Error> {
         // Note: awkward error handling because we memoize the error from package
         // manager discovery. That probably isn't the best design. We should
         // address it when we decide how we want to handle possibly finding a
