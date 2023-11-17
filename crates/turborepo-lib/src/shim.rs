@@ -355,11 +355,17 @@ impl LocalTurboState {
     // - `npm install --install-strategy=linked`
     #[cfg(target_os = "windows")]
     fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+        println!("joining root path with node_modules and turbo");
+        let joined = root_path.as_path().join("node_modules").join("turbo");
+
         println!("before first pass");
-        let firstpass =
-            fs_canonicalize(root_path.as_path().join("node_modules").join("turbo")).ok()?;
-        println!("before second pass");
-        let secondpass = fs_canonicalize(firstpass.join("..")).ok()?;
+        let firstpass = fs_canonicalize(joined).expect("Failed to canonicalize path");
+
+        println!("first pass output: {:?}", firstpass);
+
+        let secondpass =
+            fs_canonicalize(firstpass.parent()).expect("Failed to canonicalize parent");
+
         println!("after second pass");
         println!("canonical_path: {:?}", secondpass);
         AbsoluteSystemPathBuf::try_from(secondpass).ok()
