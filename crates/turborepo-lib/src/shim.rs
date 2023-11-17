@@ -363,8 +363,10 @@ impl LocalTurboState {
 
         println!("first pass output: {:?}", firstpass);
 
-        let secondpass =
-            fs_canonicalize(firstpass.parent()).expect("Failed to canonicalize parent");
+        let secondpass = firstpass
+            .parent()
+            .and_then(|parent| fs_canonicalize(parent).ok())
+            .expect("Failed to canonicalize parent");
 
         println!("after second pass");
         println!("canonical_path: {:?}", secondpass);
