@@ -37,6 +37,7 @@ if [[ "$OSTYPE" == "msys" && $FIXTURE_NAME == "linked" ]]; then
   popd > /dev/null || exit 1
   echo "PWD: $PWD"
   ls -al
+  ls -al node_modules/turbo/../turbo-windows-64/bin
 fi
 
 # Copy fixtures to target directory.
