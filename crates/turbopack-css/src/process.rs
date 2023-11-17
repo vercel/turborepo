@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use indexmap::IndexMap;
 use lightningcss::{
     css_modules::{CssModuleExport, CssModuleExports, CssModuleReference, Pattern, Segment},
-    dependencies::{Dependency, DependencyOptions},
+    dependencies::{Dependency, DependencyOptions, ImportDependency, Location, SourceRange},
     error::PrinterErrorKind,
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet, ToCssResult},
     targets::{Features, Targets},
@@ -16,8 +16,9 @@ use smallvec::smallvec;
 use swc_core::{
     atoms::Atom,
     base::sourcemap::SourceMapBuilder,
-    common::{BytePos, FileName, LineCol},
+    common::{BytePos, FileName, LineCol, DUMMY_SP},
     css::{
+        ast::UrlValue,
         codegen::{writer::basic::BasicCssWriter, CodeGenerator},
         modules::{CssClassName, TransformConfig},
         visit::{VisitMut, VisitMutWith},
@@ -693,7 +694,46 @@ struct SwcDepColllector<'a> {
     remove_imports: bool,
 }
 
-impl VisitMut for SwcDepColllector<'_> {}
+impl VisitMut for SwcDepColllector<'_> {
+    fn visit_mut_at_rule_prelude(&mut self, node: &mut swc_core::css::ast::AtRulePrelude) {
+        match node {
+            swc_core::css::ast::AtRulePrelude::ImportPrelude(i) => {
+                let src = match &*i.href {
+                    swc_core::css::ast::ImportHref::Url(v) => match v.value.as_deref().unwrap() {
+                        UrlValue::Str(v) => v.value.clone(),
+                        UrlValue::Raw(v) => v.value.clone(),
+                    },
+                    swc_core::css::ast::ImportHref::Str(v) => v.value.clone(),
+                };
+
+                self.deps.push(Dependency::Import(ImportDependency {
+                    url: src.to_string(),
+                    placeholder: Default::default(),
+                    supports: None,
+                    media: None,
+                    loc: SourceRange {
+                        file_path: String::new(),
+                        start: Location { line: 0, column: 0 },
+                        end: Location { line: 0, column: 0 },
+                    },
+                }));
+
+                if self.remove_imports {
+                    *node = swc_core::css::ast::AtRulePrelude::ListOfComponentValues(
+                        swc_core::css::ast::ListOfComponentValues {
+                            span: DUMMY_SP,
+                            children: Default::default(),
+                        },
+                    )
+                }
+            }
+
+            _ => {
+                node.visit_mut_children_with(self);
+            }
+        }
+    }
+}
 
 struct ModuleTransformConfig {
     suffix: String,
