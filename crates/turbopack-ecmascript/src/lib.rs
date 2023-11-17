@@ -63,6 +63,7 @@ use turbopack_core::{
     reference_type::InnerAssets,
     resolve::{origin::ResolveOrigin, parse::Request, ModulePart},
     source::Source,
+    source_map::{GenerateSourceMap, SourceMap},
 };
 
 use self::{
@@ -544,7 +545,7 @@ impl EcmascriptChunkItem for ModuleChunkItem {
 #[turbo_tasks::value]
 pub struct EcmascriptModuleContent {
     pub inner_code: Rope,
-    pub source_map: Option<Vc<ParseResultSourceMap>>,
+    pub source_map: Option<Vc<Box<dyn GenerateSourceMap>>>,
     pub is_esm: bool,
 }
 
@@ -566,6 +567,7 @@ impl EcmascriptModuleContent {
         } = &*analyzed.await?;
 
         let mut code_gens = Vec::new();
+        let mut original_src_map = None;
         for r in references.await?.iter() {
             let r = r.resolve().await?;
             if let Some(code_gen) =
@@ -576,6 +578,10 @@ impl EcmascriptModuleContent {
                 Vc::try_resolve_sidecast::<Box<dyn CodeGenerateable>>(r).await?
             {
                 code_gens.push(code_gen.code_generation(chunking_context));
+            } else if let Some(source_map) =
+                Vc::try_resolve_sidecast::<Box<dyn GenerateSourceMap>>(r).await?
+            {
+                original_src_map = source_map.generate_source_map().await?.map(|m| m.clone());
             }
         }
         for c in code_generation.await?.iter() {
@@ -604,7 +610,7 @@ impl EcmascriptModuleContent {
             }
         }
 
-        gen_content_with_visitors(parsed, ident, visitors, root_visitors).await
+        gen_content_with_visitors(parsed, ident, visitors, root_visitors, original_src_map).await
     }
 
     /// Creates a new [`Vc<EcmascriptModuleContent>`] without an analysis pass.
@@ -613,7 +619,7 @@ impl EcmascriptModuleContent {
         parsed: Vc<ParseResult>,
         ident: Vc<AssetIdent>,
     ) -> Result<Vc<Self>> {
-        gen_content_with_visitors(parsed, ident, Vec::new(), Vec::new()).await
+        gen_content_with_visitors(parsed, ident, Vec::new(), Vec::new(), None).await
     }
 }
 
@@ -625,6 +631,7 @@ async fn gen_content_with_visitors(
         &dyn VisitorFactory,
     )>,
     root_visitors: Vec<&dyn VisitorFactory>,
+    original_src_map: Option<Vc<SourceMap>>,
 ) -> Result<Vc<EcmascriptModuleContent>> {
     let parsed = parsed.await?;
 
@@ -661,7 +668,7 @@ async fn gen_content_with_visitors(
         // TODO: Insert this as a sourceless segment so that sourcemaps aren't affected.
         // = format!("/* {} */\n", self.module.path().to_string().await?).into_bytes();
 
-        let mut srcmap = vec![];
+        let mut mappings = vec![];
 
         let comments = comments.consumable();
 
@@ -669,16 +676,17 @@ async fn gen_content_with_visitors(
             cfg: swc_core::ecma::codegen::Config::default(),
             cm: source_map.clone(),
             comments: Some(&comments),
-            wr: JsWriter::new(source_map.clone(), "\n", &mut bytes, Some(&mut srcmap)),
+            wr: JsWriter::new(source_map.clone(), "\n", &mut bytes, Some(&mut mappings)),
         };
 
         emitter.emit_program(&program)?;
 
-        let srcmap = ParseResultSourceMap::new(source_map.clone(), srcmap).cell();
+        let srcmap =
+            ParseResultSourceMap::new(source_map.clone(), mappings, original_src_map).cell();
 
         Ok(EcmascriptModuleContent {
             inner_code: bytes.into(),
-            source_map: Some(srcmap),
+            source_map: Some(Vc::upcast(srcmap)),
             is_esm: eval_context.is_esm(),
         }
         .cell())

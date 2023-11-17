@@ -27,7 +27,7 @@ use turbopack_core::{
     error::PrettyPrintError,
     issue::{Issue, IssueExt, IssueSeverity, StyledString},
     source::Source,
-    source_map::{GenerateSourceMap, OptionSourceMap},
+    source_map::{GenerateSourceMap, OptionSourceMap, SourceMap},
     SOURCE_MAP_ROOT_NAME,
 };
 use turbopack_swc_utils::emitter::IssueEmitter;
@@ -71,31 +71,35 @@ impl PartialEq for ParseResult {
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 pub struct ParseResultSourceMap {
     /// Confusingly, SWC's SourceMap is not a mapping of transformed locations
-    /// to source locations. I don't know what it is, really, but it's not
-    /// that.
+    /// to source locations. It's a map of filesnames to file contents.
     #[turbo_tasks(debug_ignore, trace_ignore)]
-    source_map: Arc<swc_core::common::SourceMap>,
+    files_map: Arc<swc_core::common::SourceMap>,
 
-    /// The position mappings that can generate a real source map given a (SWC)
-    /// SourceMap.
+    /// The position mappings that can generate a real source map.
     #[turbo_tasks(debug_ignore, trace_ignore)]
     mappings: Vec<(BytePos, LineCol)>,
+
+    /// An input's original source map, if one exists. This will be used to
+    /// trace locations back to the input's pre-transformed sources.
+    original_source_map: Option<Vc<SourceMap>>,
 }
 
 impl PartialEq for ParseResultSourceMap {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.source_map, &other.source_map) && self.mappings == other.mappings
+        Arc::ptr_eq(&self.files_map, &other.files_map) && self.mappings == other.mappings
     }
 }
 
 impl ParseResultSourceMap {
     pub fn new(
-        source_map: Arc<swc_core::common::SourceMap>,
+        files_map: Arc<swc_core::common::SourceMap>,
         mappings: Vec<(BytePos, LineCol)>,
+        original_source_map: Option<Vc<SourceMap>>,
     ) -> Self {
         ParseResultSourceMap {
-            source_map,
+            files_map,
             mappings,
+            original_source_map,
         }
     }
 }
@@ -103,15 +107,23 @@ impl ParseResultSourceMap {
 #[turbo_tasks::value_impl]
 impl GenerateSourceMap for ParseResultSourceMap {
     #[turbo_tasks::function]
-    fn generate_source_map(&self) -> Vc<OptionSourceMap> {
-        let map = self.source_map.build_source_map_with_config(
+    async fn generate_source_map(&self) -> Result<Vc<OptionSourceMap>> {
+        let original_src_map = if let Some(input) = self.original_source_map {
+            input.await?.to_source_map()
+        } else {
+            None
+        };
+        let input_map = if let Some(map) = original_src_map.as_ref() {
+            Some(map.as_source_map())
+        } else {
+            None
+        };
+        let map = self.files_map.build_source_map_with_config(
             &self.mappings,
-            None,
+            input_map,
             InlineSourcesContentConfig {},
         );
-        Vc::cell(Some(
-            turbopack_core::source_map::SourceMap::new_regular(map).cell(),
-        ))
+        Ok(Vc::cell(Some(SourceMap::new_regular(map).cell())))
     }
 }
 

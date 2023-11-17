@@ -5,7 +5,10 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sourcemap::{SourceMap as CrateMap, SourceMapBuilder};
 use turbo_tasks::{TryJoinIterExt, Vc};
-use turbo_tasks_fs::rope::{Rope, RopeBuilder};
+use turbo_tasks_fs::{
+    rope::{Rope, RopeBuilder},
+    FileSystemPath,
+};
 
 use crate::source_pos::SourcePos;
 
@@ -166,6 +169,17 @@ impl SourceMap {
         SourceMap::Sectioned(SectionedSourceMap::new(sections))
     }
 
+    pub async fn new_from_file(file: Vc<FileSystemPath>) -> Result<Option<Self>> {
+        let read = file.read().await?;
+        let Some(contents) = read.as_content() else {
+            return Ok(None);
+        };
+        let Ok(map) = CrateMap::from_reader(contents.read()) else {
+            return Ok(None);
+        };
+        Ok(Some(Self::new_regular(map)))
+    }
+
     pub async fn tokens(&self) -> Result<Vec<Token>> {
         Ok(match self {
             Self::Regular(m) => (*m).tokens().map(|t| t.into()).collect(),
@@ -188,6 +202,15 @@ impl SourceMap {
     }
 }
 
+impl SourceMap {
+    pub fn to_source_map(&self) -> Option<Arc<CrateMapWrapper>> {
+        match self {
+            Self::Regular(m) => Some(m.map.clone()),
+            Self::Sectioned(_) => None,
+        }
+    }
+}
+
 #[turbo_tasks::value_impl]
 impl SourceMap {
     /// A source map that contains no actual source location information (no
@@ -200,10 +223,7 @@ impl SourceMap {
         builder.add(0, 0, 0, 0, None, None);
         SourceMap::new_regular(builder.into_sourcemap()).cell()
     }
-}
 
-#[turbo_tasks::value_impl]
-impl SourceMap {
     /// Stringifies the source map into JSON bytes.
     #[turbo_tasks::function]
     pub async fn to_rope(self: Vc<Self>) -> Result<Vc<Rope>> {
@@ -327,7 +347,7 @@ impl SourceMap {
     /// chunk back to its original sources.
     #[turbo_tasks::function]
     pub async fn trace(self: Vc<Self>, other: Vc<SourceMap>) -> Result<Vc<SourceMap>> {
-        let mut builder = sourcemap::SourceMapBuilder::new(None);
+        let mut builder = SourceMapBuilder::new(None);
         let other = &*other.await?;
         let other_tokens = other.tokens().await?;
         let traced_tokens = other_tokens
@@ -444,7 +464,7 @@ impl PartialEq for RegularSourceMap {
 
 /// Wraps the CrateMap struct so that it can be cached in a Vc.
 #[derive(Debug)]
-pub struct CrateMapWrapper(sourcemap::SourceMap);
+pub struct CrateMapWrapper(CrateMap);
 
 // Safety: CrateMap contains a raw pointer, which isn't Send, which is required
 // to cache in a Vc. So, we have wrap it in 4 layers of cruft to do it.
@@ -453,8 +473,14 @@ pub struct CrateMapWrapper(sourcemap::SourceMap);
 unsafe impl Send for CrateMapWrapper {}
 unsafe impl Sync for CrateMapWrapper {}
 
+impl CrateMapWrapper {
+    pub fn as_source_map(&self) -> &'_ CrateMap {
+        &*self
+    }
+}
+
 impl Deref for CrateMapWrapper {
-    type Target = sourcemap::SourceMap;
+    type Target = CrateMap;
 
     fn deref(&self) -> &Self::Target {
         &self.0
