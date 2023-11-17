@@ -1,5 +1,5 @@
 import fetch from "node-fetch";
-import { getTTFTData } from "./helpers";
+import { type TTFTData, getTTFTData } from "../helpers";
 
 const filePath = process.argv[2];
 const runID = process.argv[3];
@@ -16,9 +16,19 @@ if (!runID) {
 const DATA_SOURCE_NAME = "turborepo_perf_ttft";
 const DATA_SOURCE_URL = `https://api.us-east.tinybird.co/v0/events?name=${DATA_SOURCE_NAME}`;
 
+type TinyBirdTTFT = Omit<TTFTData, "cpus">;
+
 async function main() {
   const data = getTTFTData(filePath, runID);
-  console.log("Sending data to Tinybird: ", data);
+
+  const { cpus, platform, ...restData } = data;
+
+  const augmentData: TinyBirdTTFT = {
+    platform: `${platform}-${cpus}-cores`,
+    ...restData,
+  };
+
+  console.log("Sending data to Tinybird: ", augmentData);
 
   const res = await fetch(DATA_SOURCE_URL, {
     method: "POST",
@@ -26,7 +36,7 @@ async function main() {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify(augmentData),
   });
 
   if (res.ok) {
