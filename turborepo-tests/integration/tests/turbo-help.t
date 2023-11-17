@@ -75,7 +75,7 @@ Test help flag
   $ ${TURBO} --help
   The build system that makes ship happen
   
-  Usage: (turbo|turbo.exe) \[OPTIONS\] \[COMMAND\] (re)
+  Usage: turbo(\.exe)? \[OPTIONS\] \[COMMAND\] (re)
   
   Commands:
     bin         Get the path to the Turbo binary
@@ -168,7 +168,7 @@ Test help flag for unlink command
   $ ${TURBO} unlink -h
   Unlink the current directory from your Vercel organization and disable Remote Caching
   
-  Usage: (turbo|turbo.exe) unlink \[OPTIONS\] (re)
+  Usage: turbo(\.exe)? unlink \[OPTIONS\] (re)
   
   Options:
         --target <TARGET>                 Specify what should be unlinked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
@@ -194,7 +194,7 @@ Test help flag for login command
   $ ${TURBO} login -h
   Login to your Vercel account
   
-  Usage: (turbo|turbo.exe) login \[OPTIONS\] (re)
+  Usage: turbo(\.exe)? login \[OPTIONS\] (re)
   
   Options:
         --sso-team <SSO_TEAM>             
@@ -220,7 +220,7 @@ Test help flag for logout command
   $ ${TURBO} logout -h
   Logout to your Vercel account
   
-  Usage: (turbo|turbo.exe) logout \[OPTIONS\] (re)
+  Usage: turbo(\.exe)? logout \[OPTIONS\] (re)
   
   Options:
         --version                         
