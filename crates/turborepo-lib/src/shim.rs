@@ -345,7 +345,7 @@ impl LocalTurboState {
                 .join(".."),
         )
         .ok()?;
-
+        println!("canonical_path: {:?}", canonical_path);
         AbsoluteSystemPathBuf::try_from(canonical_path).ok()
     }
 
@@ -424,12 +424,12 @@ impl LocalTurboState {
             // Needs borrow because of the loop.
             #[allow(clippy::needless_borrow)]
             let bin_path = root.join_components(&platform_package_executable_path_components);
-            println!("bin path is: {}", bin_path);
-            println!("root is: {}", root);
+            println!("canonicalized root path frm search function is: {}", root);
             println!(
                 "platform_package_executable_path_components is: {:?}",
                 platform_package_executable_path_components
             );
+            println!("bin path is: {}", bin_path);
 
             match fs_canonicalize(&bin_path) {
                 Ok(bin_path) => {

@@ -11,6 +11,8 @@ Make sure we use local, but do not pass --skip-infer to old binary
 
   $ ls -al node_modules/turbo/..
 
+  $ realpath node_modules/turbo/..
+
   $ ls -al node_modules/turbo/../turbo-windows-64/bin
 
   $ ${TURBO} build --filter foo -vv > out.log 2>&1
