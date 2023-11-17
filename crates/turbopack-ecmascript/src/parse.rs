@@ -114,13 +114,13 @@ impl GenerateSourceMap for ParseResultSourceMap {
             None
         };
         let input_map = if let Some(map) = original_src_map.as_ref() {
-            Some(map.as_source_map())
+            map.as_regular_source_map()
         } else {
             None
         };
         let map = self.files_map.build_source_map_with_config(
             &self.mappings,
-            input_map,
+            input_map.as_deref(),
             InlineSourcesContentConfig {},
         );
         Ok(Vc::cell(Some(SourceMap::new_regular(map).cell())))
