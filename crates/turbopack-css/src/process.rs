@@ -378,11 +378,7 @@ pub async fn finalize_css(
             options,
             ..
         } => {
-            dbg!("finalize_css => start");
-
             let mut stylesheet = stylesheet.to_static(options.clone());
-
-            dbg!("finalize_css => after stylesheet_into_static");
 
             let url_references = *url_references;
 
@@ -396,11 +392,8 @@ pub async fn finalize_css(
             }
 
             replace_url_references(&mut stylesheet, &url_map);
-            dbg!("finalize_css => after replacing url refs");
 
             let (result, srcmap) = stylesheet.to_css(cm.clone(), true, true, true)?;
-
-            dbg!("finalize_css => after StyleSheet::to_css");
 
             Ok(FinalCssResult::Ok {
                 output_code: result.code,
@@ -580,7 +573,7 @@ async fn process_content(
 
                 Some(SwcCssModuleMode {
                     basename: basename.to_string(),
-                    path_hash: path_hash,
+                    path_hash,
                 })
             } else {
                 None
