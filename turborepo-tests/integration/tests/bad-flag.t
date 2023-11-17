@@ -7,7 +7,7 @@ Bad flag should print misuse text
   
     tip: to pass '--bad-flag' as a value, use '-- --bad-flag'
   
-  Usage: turbo(\.exe)? .* (re)
+  Usage: turbo(\.exe)? \[OPTIONS] [COMMAND] (re)
   
   For more information, try '--help'.
   
