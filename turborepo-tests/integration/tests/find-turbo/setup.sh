@@ -31,11 +31,11 @@ cp -a "${FIXTURE_DIR}/." "${DESTINATION}/"
 
 if [[ "$OSTYPE" == "msys" && $FIXTURE_NAME == "linked" ]]; then
   rm -rf node_modules/turbo
-  cd node_modules
-  cmd //c mklink turbo .pnpm\turbo@1.0.0\node_modules\turbo
-  cd ..
+  pushd node_modules > /dev/null || exit 1
+  cmd //c mklink turbo .pnpm\\turbo@1.0.0\\node_modules\\turbo
+  popd > /dev/null || exit 1
+  echo "PWD: $PWD"
 fi
-
 
 # Copy fixtures to target directory.
 # On Windows, we use rsync because cp isn't preserving symlinks. We could use rsync
