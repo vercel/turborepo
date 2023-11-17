@@ -336,6 +336,7 @@ impl LocalTurboState {
     // Linked strategy:
     // - `pnpm install`
     // - `npm install --install-strategy=linked`
+    #[cfg(not(target_os = "windows"))]
     fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
         let canonical_path = fs_canonicalize(
             root_path
@@ -347,6 +348,19 @@ impl LocalTurboState {
         .ok()?;
         println!("canonical_path: {:?}", canonical_path);
         AbsoluteSystemPathBuf::try_from(canonical_path).ok()
+    }
+
+    // Linked strategy:
+    // - `pnpm install`
+    // - `npm install --install-strategy=linked`
+    #[cfg(target_os = "windows")]
+    fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+        let firstpass =
+            fs_canonicalize(root_path.as_path().join("node_modules").join("turbo")).ok()?;
+
+        let secondpass = fs_canonicalize(firstpass.join("..")).ok()?;
+        println!("canonical_path: {:?}", secondpass);
+        AbsoluteSystemPathBuf::try_from(secondpass).ok()
     }
 
     // The unplugged directory doesn't have a fixed path.
