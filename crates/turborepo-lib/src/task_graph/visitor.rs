@@ -16,6 +16,7 @@ use tokio::{
 };
 use tracing::{debug, error, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_ci::github_header_footer;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_repository::{
     package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
@@ -340,7 +341,13 @@ impl<'a> Visitor<'a> {
 
         let mut logger = self.sink.logger(behavior);
         if self.opts.run_opts.is_github_actions {
-            logger.with_github_fenceposts(task_id.as_github_task_id())
+            let package = if self.opts.run_opts.single_package {
+                None
+            } else {
+                Some(task_id.package())
+            };
+            let (header, footer) = github_header_footer(package, task_id.task());
+            logger.with_header_footer(Some(header), Some(footer));
         }
         logger
     }

@@ -15,22 +15,6 @@ struct SinkWriters<W> {
     err: W,
 }
 
-// TODO: add support for additional CI providers here
-pub enum Fenceposts {
-    Github(String),
-}
-
-impl Fenceposts {
-    fn prefix_suffix(&self) -> (Option<String>, Option<String>) {
-        match self {
-            Self::Github(task_name) => (
-                Some(format!("::group::{task_name}\n")),
-                Some("::endgroup::\n".to_string()),
-            ),
-        }
-    }
-}
-
 /// OutputClient allows for multiple threads to write to the same OutputSink
 pub struct OutputClient<W> {
     behavior: OutputClientBehavior,
@@ -98,7 +82,8 @@ impl<W: Write> OutputSink<W> {
             behavior,
             buffer,
             writers,
-            fenceposts: None,
+            header: None,
+            footer: None,
         }
     }
 }
