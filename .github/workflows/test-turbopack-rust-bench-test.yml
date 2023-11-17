@@ -14,8 +14,8 @@ env:
   TURBOPACK_BENCH_PROGRESS: "1"
 
 jobs:
-  turbopack_rust_test_bench1:
-    name: Turbopack Rust testing benchmarks on ${{ inputs.os }}
+  test:
+    name: Test
     runs-on: ${{ inputs.runner }}
     steps:
       - name: Set git to use LF

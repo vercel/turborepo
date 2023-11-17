@@ -938,6 +938,7 @@ jobs:
 
   turbopack_rust_test_bench1:
     needs: [determine_jobs, turbopack_rust_check]
+    name: Turbopack Rust testing benchmarks on linux
     uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
     with:
       runner: ubuntu-latest-16-core-oss
@@ -955,6 +956,7 @@ jobs:
           # Temporarily disable windows bench due to consistent timeouts
           # - name: windows
           #   runner: windows-2019
+    name: Turbopack Rust testing benchmarks on ${{ matrix.os.name }}
     uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
     with:
       runner: ${{ matrix.os.runner }}
