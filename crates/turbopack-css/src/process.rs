@@ -159,7 +159,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                     let mut map = CssModuleExports::default();
 
                     for (k, export_class_names) in output.renamed {
-                        let mut e = map.entry(k.to_string()).or_insert_with(|| CssModuleExport {
+                        let e = map.entry(k.to_string()).or_insert_with(|| CssModuleExport {
                             name: k.to_string(),
                             composes: Vec::new(),
                             is_referenced: true,
