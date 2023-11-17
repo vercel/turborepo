@@ -126,6 +126,7 @@ struct MemoizedSuccessfulAnalysis {
     references: ReadRef<ModuleReferences>,
     exports: ReadRef<EcmascriptExports>,
     async_module: ReadRef<OptionAsyncModule>,
+    source_map: Option<ReadRef<SourceMap>>,
 }
 
 pub struct EcmascriptModuleAssetBuilder {
@@ -295,12 +296,18 @@ impl EcmascriptModuleAsset {
                     references: result_value.references.await?,
                     exports: result_value.exports.await?,
                     async_module: result_value.async_module.await?,
+                    source_map: if let Some(map) = result_value.source_map {
+                        Some(map.await?)
+                    } else {
+                        None
+                    },
                 }));
         } else if let Some(MemoizedSuccessfulAnalysis {
             operation,
             references,
             exports,
             async_module,
+            source_map,
         }) = &*this.last_successful_analysis.get()
         {
             // It's important to connect to the last operation here to keep it active, so
@@ -311,6 +318,7 @@ impl EcmascriptModuleAsset {
                 exports: ReadRef::cell(exports.clone()),
                 code_generation: result_value.code_generation,
                 async_module: ReadRef::cell(async_module.clone()),
+                source_map: source_map.clone().map(ReadRef::cell),
                 successful: false,
             }
             .cell());
@@ -563,11 +571,11 @@ impl EcmascriptModuleContent {
         let AnalyzeEcmascriptModuleResult {
             references,
             code_generation,
+            source_map,
             ..
         } = &*analyzed.await?;
 
         let mut code_gens = Vec::new();
-        let mut original_src_map = None;
         for r in references.await?.iter() {
             let r = r.resolve().await?;
             if let Some(code_gen) =
@@ -578,10 +586,6 @@ impl EcmascriptModuleContent {
                 Vc::try_resolve_sidecast::<Box<dyn CodeGenerateable>>(r).await?
             {
                 code_gens.push(code_gen.code_generation(chunking_context));
-            } else if let Some(source_map) =
-                Vc::try_resolve_sidecast::<Box<dyn GenerateSourceMap>>(r).await?
-            {
-                original_src_map = source_map.generate_source_map().await?.map(|m| m.clone());
             }
         }
         for c in code_generation.await?.iter() {
@@ -610,7 +614,7 @@ impl EcmascriptModuleContent {
             }
         }
 
-        gen_content_with_visitors(parsed, ident, visitors, root_visitors, original_src_map).await
+        gen_content_with_visitors(parsed, ident, visitors, root_visitors, *source_map).await
     }
 
     /// Creates a new [`Vc<EcmascriptModuleContent>`] without an analysis pass.

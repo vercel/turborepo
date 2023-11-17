@@ -1,10 +1,9 @@
-// TODO: search for "regular"
 use std::{borrow::Cow, io::Write, ops::Deref, sync::Arc};
 
 use anyhow::Result;
 use indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use sourcemap::{DecodedMap as CrateMap, SourceMap as RegularMap, SourceMapBuilder};
+use sourcemap::{DecodedMap, SourceMap as RegularMap, SourceMapBuilder};
 use turbo_tasks::{TryJoinIterExt, Vc};
 use turbo_tasks_fs::{
     rope::{Rope, RopeBuilder},
@@ -32,13 +31,18 @@ pub trait GenerateSourceMap {
     }
 }
 
-/// The source map spec lists 2 formats, a regular format where a single map
-/// covers the entire file, and an "index" sectioned format where multiple maps
-/// cover different regions of the file.
+/// [SourceMap] enum implements the source map specification in 2 ways: A
+/// "decoded" map which represents a source map as if it was came out of a JSON
+/// decode, and a "sectioned" source map which is a tree of many [SourceMap]
+/// covering regions of an output file.
+///
+/// The distinction between the source map spec's [sourcemap::Index] and our
+/// [SourceMap::Sectioned] is whether the sections are represented with Vcs
+/// pointers.
 #[turbo_tasks::value(shared)]
 pub enum SourceMap {
-    /// A regular source map covers an entire file.
-    Regular(#[turbo_tasks(trace_ignore)] InnerSourceMap),
+    /// A decoded source map contains no Vcs.
+    Decoded(#[turbo_tasks(trace_ignore)] InnerSourceMap),
     /// A sectioned source map contains many (possibly recursive) maps covering
     /// different regions of the file.
     Sectioned(#[turbo_tasks(trace_ignore)] SectionedSourceMap),
@@ -158,10 +162,14 @@ impl TryInto<sourcemap::RawToken> for Token {
 }
 
 impl SourceMap {
-    /// Creates a new SourceMap::Regular Vc out of a sourcemap::SourceMap
-    /// ("CrateMap") instance.
+    /// Creates a new SourceMap::Decoded Vc out of a [RegularMap] instance.
     pub fn new_regular(map: RegularMap) -> Self {
-        SourceMap::Regular(InnerSourceMap::new(CrateMap::Regular(map)))
+        Self::new_decoded(DecodedMap::Regular(map))
+    }
+
+    /// Creates a new SourceMap::Decoded Vc out of a [DecodedMap] instance.
+    pub fn new_decoded(map: DecodedMap) -> Self {
+        SourceMap::Decoded(InnerSourceMap::new(map))
     }
 
     /// Creates a new SourceMap::Sectioned Vc out of a collection of source map
@@ -175,17 +183,17 @@ impl SourceMap {
         let Some(contents) = read.as_content() else {
             return Ok(None);
         };
-        let Ok(map) = CrateMap::from_reader(contents.read()) else {
+        let Ok(map) = DecodedMap::from_reader(contents.read()) else {
             return Ok(None);
         };
-        Ok(Some(SourceMap::Regular(InnerSourceMap::new(map))))
+        Ok(Some(SourceMap::Decoded(InnerSourceMap::new(map))))
     }
 }
 
 impl SourceMap {
     pub fn to_source_map(&self) -> Option<Arc<CrateMapWrapper>> {
         match self {
-            Self::Regular(m) => Some(m.map.clone()),
+            Self::Decoded(m) => Some(m.map.clone()),
             Self::Sectioned(_) => None,
         }
     }
@@ -209,7 +217,7 @@ impl SourceMap {
     pub async fn to_rope(self: Vc<Self>) -> Result<Vc<Rope>> {
         let this = self.await?;
         let rope = match &*this {
-            SourceMap::Regular(r) => {
+            SourceMap::Decoded(r) => {
                 let mut bytes = vec![];
                 r.0.to_writer(&mut bytes)?;
                 Rope::from(bytes)
@@ -274,7 +282,7 @@ impl SourceMap {
         column: usize,
     ) -> Result<Vc<OptionToken>> {
         let token = match &*self.await? {
-            SourceMap::Regular(map) => {
+            SourceMap::Decoded(map) => {
                 map.lookup_token(line as u32, column as u32)
                     // The sourcemap crate incorrectly returns a previous line's token when there's
                     // not a match on this line.
@@ -343,7 +351,7 @@ pub struct InnerSourceMap {
 }
 
 impl InnerSourceMap {
-    pub fn new(map: CrateMap) -> Self {
+    pub fn new(map: DecodedMap) -> Self {
         InnerSourceMap {
             map: Arc::new(CrateMapWrapper(map)),
         }
@@ -365,27 +373,27 @@ impl PartialEq for InnerSourceMap {
     }
 }
 
-/// Wraps the CrateMap struct so that it can be cached in a Vc.
+/// Wraps the DecodedMap struct so that it can be cached in a Vc.
 #[derive(Debug)]
-pub struct CrateMapWrapper(CrateMap);
+pub struct CrateMapWrapper(DecodedMap);
 
-// Safety: CrateMap contains a raw pointer, which isn't Send, which is required
-// to cache in a Vc. So, we have wrap it in 4 layers of cruft to do it.
+// Safety: DecodedMap contains a raw pointer, which isn't Send, which is
+// required to cache in a Vc. So, we have wrap it in 4 layers of cruft to do it.
 unsafe impl Send for CrateMapWrapper {}
 unsafe impl Sync for CrateMapWrapper {}
 
 impl CrateMapWrapper {
     pub fn as_regular_source_map(&self) -> Option<Cow<'_, RegularMap>> {
         match &self.0 {
-            CrateMap::Regular(m) => Some(Cow::Borrowed(m)),
-            CrateMap::Index(m) => m.flatten().map(Cow::Owned).ok(),
+            DecodedMap::Regular(m) => Some(Cow::Borrowed(m)),
+            DecodedMap::Index(m) => m.flatten().map(Cow::Owned).ok(),
             _ => None,
         }
     }
 }
 
 impl Deref for CrateMapWrapper {
-    type Target = CrateMap;
+    type Target = DecodedMap;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -405,7 +413,7 @@ impl<'de> Deserialize<'de> for CrateMapWrapper {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         use serde::de::Error;
         let bytes = <&[u8]>::deserialize(deserializer)?;
-        let map = CrateMap::from_reader(bytes).map_err(Error::custom)?;
+        let map = DecodedMap::from_reader(bytes).map_err(Error::custom)?;
         Ok(CrateMapWrapper(map))
     }
 }
