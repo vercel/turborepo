@@ -3,7 +3,7 @@ use std::{collections::HashMap, mem::transmute, sync::Arc};
 use anyhow::{Context, Result};
 use indexmap::IndexMap;
 use lightningcss::{
-    css_modules::{CssModuleExport, CssModuleExports, Pattern, Segment},
+    css_modules::{CssModuleExport, CssModuleExports, CssModuleReference, Pattern, Segment},
     dependencies::{Dependency, DependencyOptions},
     error::PrinterErrorKind,
     stylesheet::{ParserOptions, PrinterOptions, StyleSheet, ToCssResult},
@@ -159,16 +159,29 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                     let mut map = CssModuleExports::default();
 
                     for (k, export_class_names) in output.renamed {
+                        let mut e = map.entry(k.to_string()).or_insert_with(|| CssModuleExport {
+                            name: k.to_string(),
+                            composes: Vec::new(),
+                            is_referenced: true,
+                        });
+
                         for export_class_name in export_class_names {
                             match export_class_name {
                                 CssClassName::Local { name } => {
-                                    todo!()
+                                    e.composes.push(CssModuleReference::Local {
+                                        name: name.value.to_string(),
+                                    });
                                 }
                                 CssClassName::Global { name } => {
-                                    todo!()
+                                    e.composes.push(CssModuleReference::Global {
+                                        name: name.value.to_string(),
+                                    });
                                 }
                                 CssClassName::Import { name, from } => {
-                                    todo!()
+                                    e.composes.push(CssModuleReference::Dependency {
+                                        name: name.value.to_string(),
+                                        specifier: from.to_string(),
+                                    });
                                 }
                             }
                         }
