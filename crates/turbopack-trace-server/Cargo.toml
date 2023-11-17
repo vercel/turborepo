@@ -14,6 +14,7 @@ bench = false
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
 clap = { workspace = true, features = ["derive", "env"] }
+either = "1.9.0"
 futures = { workspace = true }
 indexmap = { workspace = true }
 intervaltree = "0.2.7"

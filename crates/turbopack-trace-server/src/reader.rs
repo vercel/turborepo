@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 
+use indexmap::IndexMap;
 use turbopack_trace_utils::tracing::TraceRow;
 
 use crate::{
@@ -219,7 +220,7 @@ fn process(store: &mut StoreWriteGuard, state: &mut ReaderState, row: TraceRow<'
             }
         }
         TraceRow::Event { ts, parent, values } => {
-            let _parent = if let Some(parent) = parent {
+            let parent = if let Some(parent) = parent {
                 if let Some(parent) = state.active_ids.get(&parent) {
                     Some(*parent)
                 } else {
@@ -240,6 +241,32 @@ fn process(store: &mut StoreWriteGuard, state: &mut ReaderState, row: TraceRow<'
             } else {
                 None
             };
+            let mut values = values.into_iter().collect::<IndexMap<_, _>>();
+            let duration = values
+                .remove("duration")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let name = values
+                .remove("name")
+                .and_then(|v| v.as_str().map(|s| s.to_string().into()))
+                .unwrap_or("event".into());
+            let id = store.add_span(
+                parent,
+                ts,
+                "event".into(),
+                name,
+                values
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+                &mut state.outdated_spans,
+            );
+            store.add_self_time(
+                id,
+                ts.saturating_sub(duration),
+                ts,
+                &mut state.outdated_spans,
+            );
         }
     }
 }

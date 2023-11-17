@@ -1,5 +1,10 @@
-use std::{cmp::max, collections::HashMap};
+use std::{
+    cmp::{max, Reverse},
+    collections::HashMap,
+};
 
+use either::Either;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -15,15 +20,15 @@ pub struct Viewer {
     span_options: HashMap<SpanId, SpanOptions>,
 }
 
-pub enum ExpandedState {
-    Expanded,
-    AllExpanded,
-    Collapsed,
+#[derive(Clone, Copy)]
+pub enum ViewMode {
+    RawSpans { sorted: bool },
+    Aggregated { sorted: bool },
 }
 
 #[derive(Default)]
 struct SpanOptions {
-    expanded: Option<ExpandedState>,
+    view_mode: Option<(ViewMode, bool)>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -75,7 +80,7 @@ struct QueueItemWithState<'a> {
     line_index: usize,
     start: u64,
     placeholder: bool,
-    expanded: bool,
+    view_mode: ViewMode,
 }
 
 impl Viewer {
@@ -83,8 +88,8 @@ impl Viewer {
         Self::default()
     }
 
-    pub fn set_expanded_state(&mut self, id: SpanId, expanded: Option<ExpandedState>) {
-        self.span_options.entry(id).or_default().expanded = expanded;
+    pub fn set_view_mode(&mut self, id: SpanId, view_mode: Option<(ViewMode, bool)>) {
+        self.span_options.entry(id).or_default().view_mode = view_mode;
     }
 
     pub fn compute_update(&mut self, store: &Store, view_rect: &ViewRect) -> Vec<ViewLineUpdate> {
@@ -108,7 +113,7 @@ impl Viewer {
                 line_index: 0,
                 start: current,
                 placeholder: false,
-                expanded: false,
+                view_mode: ViewMode::RawSpans { sorted: false },
             });
             current += width;
         }
@@ -121,7 +126,7 @@ impl Viewer {
             line_index,
             start,
             placeholder,
-            expanded,
+            view_mode,
         }) = queue.pop()
         {
             // filter by view rect (vertical)
@@ -155,7 +160,7 @@ impl Viewer {
                 current: &mut u64,
                 view_rect: &ViewRect,
                 line_index: usize,
-                expanded: bool,
+                view_mode: ViewMode,
                 child: QueueItem<'a>,
             ) {
                 let child_width = child.corrected_total_time();
@@ -170,7 +175,7 @@ impl Viewer {
                         line_index: line_index + 1,
                         start: *current,
                         placeholder: false,
-                        expanded,
+                        view_mode,
                     },
                     max_depth,
                     (pixel1, pixel2),
@@ -179,29 +184,48 @@ impl Viewer {
             }
             match &span {
                 QueueItem::Span(span) => {
-                    let (show_children, expanded) = match self
+                    let (selected_view_mode, inherit) = self
                         .span_options
                         .get(&span.id())
-                        .and_then(|o| o.expanded.as_ref())
-                    {
-                        None => (expanded, expanded),
-                        Some(ExpandedState::Expanded) => (true, expanded),
-                        Some(ExpandedState::AllExpanded) => (true, true),
-                        Some(ExpandedState::Collapsed) => (false, false),
+                        .and_then(|o| o.view_mode)
+                        .unwrap_or((view_mode, false));
+
+                    let (show_children, sorted) = match selected_view_mode {
+                        ViewMode::RawSpans { sorted } => (true, sorted),
+                        ViewMode::Aggregated { sorted } => (false, sorted),
+                    };
+                    let view_mode = if inherit {
+                        selected_view_mode
+                    } else {
+                        view_mode
                     };
                     if show_children {
-                        for child in span.children() {
+                        let spans = if sorted {
+                            Either::Left(span.children().sorted_by_cached_key(|child| {
+                                Reverse(child.corrected_total_time())
+                            }))
+                        } else {
+                            Either::Right(span.children())
+                        };
+                        for child in spans {
                             handle_child(
                                 &mut children,
                                 &mut current,
                                 view_rect,
                                 line_index,
-                                expanded,
+                                view_mode,
                                 QueueItem::Span(child),
                             );
                         }
                     } else {
-                        for event in span.graph() {
+                        let events = if sorted {
+                            Either::Left(span.graph().sorted_by_cached_key(|child| {
+                                Reverse(child.corrected_total_time())
+                            }))
+                        } else {
+                            Either::Right(span.graph())
+                        };
+                        for event in events {
                             match event {
                                 SpanGraphEventRef::SelfTime { duration: _ } => {}
                                 SpanGraphEventRef::Child { graph } => {
@@ -210,7 +234,7 @@ impl Viewer {
                                         &mut current,
                                         view_rect,
                                         line_index,
-                                        expanded,
+                                        view_mode,
                                         QueueItem::SpanGraph(graph),
                                     );
                                 }
@@ -219,35 +243,54 @@ impl Viewer {
                     }
                 }
                 QueueItem::SpanGraph(span_graph) => {
-                    let (show_spans, expanded) = match self
+                    let (selected_view_mode, inherit) = self
                         .span_options
                         .get(&span_graph.id())
-                        .and_then(|o| o.expanded.as_ref())
-                    {
-                        None => (expanded, expanded),
-                        Some(ExpandedState::Expanded) => (true, expanded),
-                        Some(ExpandedState::AllExpanded) => (true, true),
-                        Some(ExpandedState::Collapsed) => (false, false),
+                        .and_then(|o| o.view_mode)
+                        .unwrap_or((view_mode, false));
+
+                    let (show_spans, sorted) = match selected_view_mode {
+                        ViewMode::RawSpans { sorted } => (true, sorted),
+                        ViewMode::Aggregated { sorted } => (false, sorted),
+                    };
+                    let view_mode = if inherit {
+                        selected_view_mode
+                    } else {
+                        view_mode
                     };
                     if show_spans && span_graph.count() > 1 {
-                        for child in span_graph.root_spans() {
+                        let spans = if sorted {
+                            Either::Left(span_graph.root_spans().sorted_by_cached_key(|child| {
+                                Reverse(child.corrected_total_time())
+                            }))
+                        } else {
+                            Either::Right(span_graph.root_spans())
+                        };
+                        for child in spans {
                             handle_child(
                                 &mut children,
                                 &mut current,
                                 view_rect,
                                 line_index,
-                                expanded,
+                                view_mode,
                                 QueueItem::Span(child),
                             );
                         }
                     } else {
-                        for child in span_graph.children() {
+                        let events = if sorted {
+                            Either::Left(span_graph.children().sorted_by_cached_key(|child| {
+                                Reverse(child.corrected_total_time())
+                            }))
+                        } else {
+                            Either::Right(span_graph.children())
+                        };
+                        for child in events {
                             handle_child(
                                 &mut children,
                                 &mut current,
                                 view_rect,
                                 line_index,
-                                expanded,
+                                view_mode,
                                 QueueItem::SpanGraph(child),
                             );
                         }

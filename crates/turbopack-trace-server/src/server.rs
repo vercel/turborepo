@@ -5,10 +5,10 @@ use std::{
         Arc, Mutex,
     },
     thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use websocket::{
     server::upgrade::WsUpgrade,
@@ -19,7 +19,7 @@ use websocket::{
 use crate::{
     store::SpanId,
     store_container::StoreContainer,
-    viewer::{ExpandedState, ViewLineUpdate, Viewer},
+    viewer::{ViewLineUpdate, ViewMode, Viewer},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -51,16 +51,12 @@ pub enum ClientToServerMessage {
     ViewRect {
         view_rect: ViewRect,
     },
-    Expand {
+    ViewMode {
         id: SpanId,
+        mode: String,
+        inherit: bool,
     },
-    ExpandAll {
-        id: SpanId,
-    },
-    Collapse {
-        id: SpanId,
-    },
-    ResetExpand {
+    ResetViewMode {
         id: SpanId,
     },
     Query {
@@ -170,23 +166,39 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                                 ClientToServerMessage::ViewRect { view_rect } => {
                                     state.view_rect = view_rect;
                                 }
-                                ClientToServerMessage::Expand { id } => {
-                                    state
-                                        .viewer
-                                        .set_expanded_state(id, Some(ExpandedState::Expanded));
-                                }
-                                ClientToServerMessage::ExpandAll { id } => {
-                                    state
-                                        .viewer
-                                        .set_expanded_state(id, Some(ExpandedState::AllExpanded));
-                                }
-                                ClientToServerMessage::Collapse { id } => {
-                                    state
-                                        .viewer
-                                        .set_expanded_state(id, Some(ExpandedState::Collapsed));
-                                }
-                                ClientToServerMessage::ResetExpand { id } => {
-                                    state.viewer.set_expanded_state(id, None);
+                                ClientToServerMessage::ViewMode { id, mode, inherit } => match mode
+                                    .as_str()
+                                {
+                                    "raw-spans" => {
+                                        state.viewer.set_view_mode(
+                                            id,
+                                            Some((ViewMode::RawSpans { sorted: false }, inherit)),
+                                        );
+                                    }
+                                    "raw-spans-sorted" => {
+                                        state.viewer.set_view_mode(
+                                            id,
+                                            Some((ViewMode::RawSpans { sorted: true }, inherit)),
+                                        );
+                                    }
+                                    "aggregated" => {
+                                        state.viewer.set_view_mode(
+                                            id,
+                                            Some((ViewMode::Aggregated { sorted: false }, inherit)),
+                                        );
+                                    }
+                                    "aggregated-sorted" => {
+                                        state.viewer.set_view_mode(
+                                            id,
+                                            Some((ViewMode::Aggregated { sorted: true }, inherit)),
+                                        );
+                                    }
+                                    _ => {
+                                        bail!("unknown view mode: {}", mode)
+                                    }
+                                },
+                                ClientToServerMessage::ResetViewMode { id } => {
+                                    state.viewer.set_view_mode(id, None);
                                 }
                                 ClientToServerMessage::Query { id } => {
                                     let message = if let Some((span, is_graph)) =

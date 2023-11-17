@@ -378,6 +378,15 @@ pub enum SpanGraphEventRef<'a> {
     Child { graph: SpanGraphRef<'a> },
 }
 
+impl<'a> SpanGraphEventRef<'a> {
+    pub fn corrected_total_time(&self) -> u64 {
+        match self {
+            SpanGraphEventRef::SelfTime { duration } => *duration,
+            SpanGraphEventRef::Child { graph } => graph.corrected_total_time(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct SpanGraphRef<'a> {
     graph: Arc<SpanGraph>,
