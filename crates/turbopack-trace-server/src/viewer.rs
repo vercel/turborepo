@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     server::ViewRect,
     store::{SpanGraphEventRef, SpanGraphRef, SpanId, SpanRef, Store},
+    u64_empty_string,
 };
 
 const EXTRA_WIDTH_PERCENTAGE: u64 = 20;
@@ -41,6 +42,7 @@ pub struct ViewLineUpdate {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewSpan {
+    #[serde(with = "u64_empty_string")]
     id: u64,
     #[serde(rename = "x")]
     start: u64,

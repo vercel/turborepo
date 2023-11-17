@@ -9,6 +9,8 @@ mod server;
 mod span;
 mod store;
 mod store_container;
+mod u64_empty_string;
+mod u64_string;
 mod viewer;
 
 fn main() {

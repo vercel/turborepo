@@ -19,6 +19,7 @@ use websocket::{
 use crate::{
     store::SpanId,
     store_container::StoreContainer,
+    u64_string,
     viewer::{ViewLineUpdate, ViewMode, Viewer},
 };
 
@@ -35,6 +36,7 @@ pub enum ServerToClientMessage {
     },
     #[serde(rename_all = "camelCase")]
     QueryResult {
+        #[serde(with = "u64_string")]
         id: SpanId,
         is_graph: bool,
         start: u64,
@@ -48,18 +50,19 @@ pub enum ServerToClientMessage {
 #[serde(rename_all = "kebab-case")]
 pub enum ClientToServerMessage {
     #[serde(rename_all = "camelCase")]
-    ViewRect {
-        view_rect: ViewRect,
-    },
+    ViewRect { view_rect: ViewRect },
     ViewMode {
+        #[serde(with = "u64_string")]
         id: SpanId,
         mode: String,
         inherit: bool,
     },
     ResetViewMode {
+        #[serde(with = "u64_string")]
         id: SpanId,
     },
     Query {
+        #[serde(with = "u64_string")]
         id: SpanId,
     },
 }
