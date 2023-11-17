@@ -33,6 +33,7 @@ if [[ "$OSTYPE" == "msys" && $FIXTURE_NAME == "linked" ]]; then
   rm -rf node_modules/turbo
   cd node_modules
   cmd //c mklink turbo .pnpm\turbo@1.0.0\node_modules\turbo
+  cd ..
 fi
 
 
