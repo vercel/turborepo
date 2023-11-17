@@ -61,7 +61,7 @@ turbopack = [
   "path:crates/node-file-trace",
 ]
 
-[lints.clippy]
+[workspace.lints.clippy]
 too_many_arguments = "allow"
 
 [profile.dev.package.turbo-tasks-macros]
