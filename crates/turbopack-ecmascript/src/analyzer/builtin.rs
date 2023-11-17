@@ -469,9 +469,11 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
             if test.is_truthy() == Some(true) {
                 *value = take(cons);
                 true
-            } else {
+            } else if test.is_falsy() == Some(true) {
                 *value = take(alt);
                 true
+            } else {
+                false
             }
         }
         // match a binary operator like `a == b`
