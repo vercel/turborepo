@@ -159,33 +159,31 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
 
                     let mut map = CssModuleExports::default();
 
-                    for (k, export_class_names) in output.renamed {
-                        for export_class_name in export_class_names {
-                            let e = map.entry(k.to_string());
+                    for (class_name, export_class_names) in output.renamed {
+                        let e =
+                            map.entry(class_name.to_string())
+                                .or_insert_with(|| CssModuleExport {
+                                    name: String::from("__where__does__this__goes__to__"),
+                                    composes: Vec::new(),
+                                    is_referenced: true,
+                                });
 
+                        for export_class_name in export_class_names {
                             match export_class_name {
                                 CssClassName::Local { name } => {
-                                    e.or_insert_with(|| CssModuleExport {
+                                    e.composes.push(CssModuleReference::Local {
                                         name: name.value.to_string(),
-                                        composes: Vec::new(),
-                                        is_referenced: true,
                                     });
                                 }
                                 CssClassName::Global { name } => {
-                                    e.or_insert_with(|| CssModuleExport {
+                                    e.composes.push(CssModuleReference::Global {
                                         name: name.value.to_string(),
-                                        composes: Vec::new(),
-                                        is_referenced: true,
                                     });
                                 }
                                 CssClassName::Import { name, from } => {
-                                    e.or_insert_with(|| CssModuleExport {
+                                    e.composes.push(CssModuleReference::Dependency {
                                         name: name.value.to_string(),
-                                        composes: vec![CssModuleReference::Dependency {
-                                            name: name.value.to_string(),
-                                            specifier: from.to_string(),
-                                        }],
-                                        is_referenced: true,
+                                        specifier: from.to_string(),
                                     });
                                 }
                             }
