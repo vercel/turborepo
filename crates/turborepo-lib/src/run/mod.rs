@@ -18,7 +18,7 @@ pub use cache::{RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
-use tracing::{debug, info};
+use tracing::debug;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
@@ -83,8 +83,9 @@ impl<'a> Run<'a> {
     ) -> Option<(AnalyticsSender, AnalyticsHandle)> {
         // If there's no API auth, we don't want to record analytics
         let api_auth = api_auth?;
-
-        Some(start_analytics(api_auth, api_client))
+        api_auth
+            .is_linked()
+            .then(|| start_analytics(api_auth, api_client))
     }
 
     fn print_run_prelude(&self, opts: &Opts<'_>, filtered_pkgs: &HashSet<WorkspaceName>) {
@@ -123,6 +124,7 @@ impl<'a> Run<'a> {
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
             turbo_version = %TurboState::version(),
+            numcpus = num_cpus::get(),
             "performing run on {:?}",
             TurboState::platform_name(),
         );
@@ -161,7 +163,9 @@ impl<'a> Run<'a> {
         let config = self.base.config()?;
 
         // Pulled from initAnalyticsClient in run.go
-        let is_linked = api_auth.is_some();
+        let is_linked = api_auth
+            .as_ref()
+            .map_or(false, |api_auth| api_auth.is_linked());
         if !is_linked {
             opts.cache_opts.skip_remote = true;
         } else if let Some(enabled) = config.enabled {
@@ -204,9 +208,9 @@ impl<'a> Run<'a> {
         // There's some warning handling code in Go that I'm ignoring
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
 
-        let mut daemon = None;
-        if is_ci_or_not_tty && !opts.run_opts.no_daemon {
-            info!("skipping turbod since we appear to be in a non-interactive context");
+        let daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
+            debug!("skipping turbod since we appear to be in a non-interactive context");
+            None
         } else if !opts.run_opts.no_daemon {
             let connector = DaemonConnector {
                 can_start_server: true,
@@ -215,10 +219,20 @@ impl<'a> Run<'a> {
                 sock_file: self.base.daemon_file_root().join_component("turbod.sock"),
             };
 
-            let client = connector.connect().await?;
-            debug!("running in daemon mode");
-            daemon = Some(client);
-        }
+            match connector.connect().await {
+                Ok(client) => {
+                    debug!("running in daemon mode");
+                    Some(client)
+                }
+                Err(e) => {
+                    debug!("failed to connect to daemon {e}");
+                    None
+                }
+            }
+        } else {
+            // We are opted out of using the daemon
+            None
+        };
 
         pkg_dep_graph.validate()?;
 
@@ -259,8 +273,6 @@ impl<'a> Run<'a> {
             api_auth.clone(),
             analytics_sender,
         )?;
-
-        info!("created cache");
 
         let mut engine =
             self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
@@ -305,9 +317,8 @@ impl<'a> Run<'a> {
             color_selector,
             daemon,
             self.base.ui,
+            opts.run_opts.dry_run.is_some(),
         ));
-
-        info!("created cache");
 
         let mut global_env_mode = opts.run_opts.env_mode;
         if matches!(global_env_mode, EnvMode::Infer)
@@ -412,8 +423,13 @@ impl<'a> Run<'a> {
             // We hit some error, it shouldn't be exit code 0
             .unwrap_or(if errors.is_empty() { 0 } else { 1 });
 
+        let error_prefix = if opts.run_opts.is_github_actions {
+            "::error::"
+        } else {
+            ""
+        };
         for err in &errors {
-            writeln!(std::io::stderr(), "{err}").ok();
+            writeln!(std::io::stderr(), "{error_prefix}{err}").ok();
         }
 
         visitor
@@ -561,6 +577,8 @@ impl<'a> Run<'a> {
             color_selector,
             None,
             self.base.ui,
+            // Always dry run when getting hashes
+            true,
         ));
 
         let run_tracker = RunTracker::new(

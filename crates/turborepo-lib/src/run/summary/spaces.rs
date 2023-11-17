@@ -140,13 +140,15 @@ impl SpacesClient {
     ) -> Option<Self> {
         // If space_id is empty, we don't build a client
         let space_id = space_id?;
-        let Some(api_auth) = api_auth else {
+        let is_linked = api_auth.as_ref().map_or(false, |auth| auth.is_linked());
+        if !is_linked {
             eprintln!(
                 "Error: experimentalSpaceId is enabled, but repo is not linked to API. Run `turbo \
                  link` or `turbo login` first"
             );
             return None;
-        };
+        }
+        let api_auth = api_auth.expect("presence of api auth was just checked");
 
         Some(Self {
             space_id,
@@ -342,7 +344,7 @@ mod tests {
 
         let api_auth = Some(APIAuth {
             token: EXPECTED_TOKEN.to_string(),
-            team_id: EXPECTED_TEAM_ID.to_string(),
+            team_id: Some(EXPECTED_TEAM_ID.to_string()),
             team_slug: Some(EXPECTED_TEAM_SLUG.to_string()),
         });
 

@@ -19,10 +19,10 @@ Check
   Tasks to Run
   build
     Task                           = build\s* (re)
-    Hash                           = 273cd179351c6ef3\s* (re)
+    Hash                           = f09bf783beacf5c9\s* (re)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
-    Command                        = echo 'building' > foo.txt\s* (re)
+    Command                        = echo building > foo.txt\s* (re)
     Outputs                        = foo.txt\s* (re)
     Log File                       = .turbo/turbo-build.log\s* (re)
     Dependencies                   =\s* (re)
