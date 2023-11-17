@@ -93,14 +93,20 @@ impl VisitMut for ModuleReferencesVisitor<'_> {
     fn visit_mut_import_prelude(&mut self, i: &mut swc_core::css::ast::ImportPrelude) {
         i.visit_mut_children_with(self);
 
-        let src = &*i.url;
+        let src = match &*i.href {
+            swc_core::css::ast::ImportHref::Url(v) => match v.value.as_deref().unwrap() {
+                UrlValue::Str(v) => v.value.clone(),
+                UrlValue::Raw(v) => v.value.clone(),
+            },
+            swc_core::css::ast::ImportHref::Str(v) => v.value.clone(),
+        };
 
         let issue_span = i.span;
 
         self.references.push(Vc::upcast(ImportAssetReference::new(
             self.origin,
             Request::parse(Value::new(src.to_string().into())),
-            ImportAttributes::new_from_prelude(&i.clone().into_owned()).into(),
+            ImportAttributes::new_from_swc(&i.clone()).into(),
             IssueSource::from_swc_offsets(
                 Vc::upcast(self.source),
                 issue_span.lo.0 as _,
@@ -120,7 +126,6 @@ impl VisitMut for ModuleReferencesVisitor<'_> {
 
         // let res = i.visit_children(self);
         // res
-        Ok(())
     }
 
     fn visit_mut_url(&mut self, u: &mut swc_core::css::ast::Url) {
@@ -169,7 +174,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                 self.references.push(Vc::upcast(ImportAssetReference::new(
                     self.origin,
                     Request::parse(Value::new(src.to_string().into())),
-                    ImportAttributes::new_from_prelude(&i.clone().into_owned()).into(),
+                    ImportAttributes::new_from_lightningcss(&i.clone().into_owned()).into(),
                     IssueSource::from_line_col(
                         Vc::upcast(self.source),
                         SourcePos {
