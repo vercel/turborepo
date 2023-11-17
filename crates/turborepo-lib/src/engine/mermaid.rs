@@ -66,7 +66,7 @@ fn render_graph<W: io::Write>(
         .collect::<Vec<_>>();
     edges.sort();
 
-    write!(writer, "graph TD\n")?;
+    writeln!(writer, "graph TD")?;
     let mut name_cache = HashMap::<String, String>::new();
     for (src, target) in edges {
         let src_name = name_cache
@@ -76,7 +76,7 @@ fn render_graph<W: io::Write>(
         let target_name = name_cache
             .entry(target.clone())
             .or_insert_with(|| generate_id(&mut rng));
-        write!(writer, "{target_name}(\"{target}\")\n")?;
+        writeln!(writer, "{target_name}(\"{target}\")")?;
     }
     Ok(())
 }

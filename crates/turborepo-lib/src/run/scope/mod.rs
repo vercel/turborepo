@@ -24,8 +24,6 @@ pub fn resolve_packages(
         PackageInference::calculate(turbo_root, pkg_inference_path, pkg_graph)
     });
 
-    Ok(
-        FilterResolver::new(opts, pkg_graph, turbo_root, pkg_inference, scm)
-            .resolve(&opts.get_filters())?,
-    )
+    FilterResolver::new(opts, pkg_graph, turbo_root, pkg_inference, scm)
+        .resolve(&opts.get_filters())
 }

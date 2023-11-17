@@ -1,5 +1,4 @@
 use thiserror::Error;
-use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::package_graph;
 
 use super::graph_visualizer;

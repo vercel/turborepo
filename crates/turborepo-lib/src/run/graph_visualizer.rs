@@ -12,7 +12,7 @@ use which::which;
 use crate::{engine::Engine, opts::GraphOpts, spawn_child};
 
 #[derive(Debug, Error)]
-pub(crate) enum Error {
+pub enum Error {
     #[error("failed to produce graph output: {0}")]
     GraphOutput(#[source] std::io::Error),
     #[error("invalid graph filename {raw_filename}: {reason}")]
@@ -39,20 +39,18 @@ pub(crate) fn write_graph(
                 render_mermaid_graph(&filename, engine, single_package)?;
             } else if extension == "html" {
                 render_html(&filename, engine, single_package)?;
+            } else if let Ok(dot_path) = which("dot") {
+                let mut cmd = Command::new(dot_path);
+                cmd.stdin(Stdio::piped())
+                    .args(["-T", extension.as_str(), "-o", filename.as_str()])
+                    .current_dir(cwd);
+                let child = spawn_child(cmd).map_err(Error::Graphviz)?;
+                let stdin = child.take_stdin().expect("graphviz should have a stdin");
+                render_dot_graph(stdin, engine, single_package)?;
+                child.wait().map_err(Error::Graphviz)?;
             } else {
-                if let Ok(dot_path) = which("dot") {
-                    let mut cmd = Command::new(dot_path);
-                    cmd.stdin(Stdio::piped())
-                        .args(&["-T", extension.as_str(), "-o", filename.as_str()])
-                        .current_dir(cwd);
-                    let child = spawn_child(cmd).map_err(|e| Error::Graphviz(e))?;
-                    let stdin = child.take_stdin().expect("graphviz should have a stdin");
-                    render_dot_graph(stdin, engine, single_package)?;
-                    child.wait().map_err(|e| Error::Graphviz(e))?;
-                } else {
-                    write_graphviz_warning(ui);
-                    render_dot_graph(std::io::stdout(), engine, single_package)?;
-                }
+                write_graphviz_warning(ui).map_err(Error::GraphOutput)?;
+                render_dot_graph(std::io::stdout(), engine, single_package)?;
             }
             print!("\n✔ Generated task graph in ");
             cprintln!(ui, BOLD, "{filename}");
@@ -61,10 +59,11 @@ pub(crate) fn write_graph(
     Ok(())
 }
 
-fn write_graphviz_warning(ui: UI) {
+fn write_graphviz_warning(ui: UI) -> Result<(), io::Error> {
     let stderr = io::stderr();
-    cwrite!(&stderr, ui, BOLD_YELLOW_REVERSE, " WARNING ");
-    cwriteln!(&stderr, ui, YELLOW, " `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer.");
+    cwrite!(&stderr, ui, BOLD_YELLOW_REVERSE, " WARNING ")?;
+    cwriteln!(&stderr, ui, YELLOW, " `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer.")?;
+    Ok(())
 }
 
 fn render_mermaid_graph(
