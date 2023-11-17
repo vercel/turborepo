@@ -124,6 +124,7 @@ impl<'a> Run<'a> {
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
             turbo_version = %TurboState::version(),
+            numcpus = num_cpus::get(),
             "performing run on {:?}",
             TurboState::platform_name(),
         );
@@ -162,7 +163,9 @@ impl<'a> Run<'a> {
         let config = self.base.config()?;
 
         // Pulled from initAnalyticsClient in run.go
-        let is_linked = api_auth.is_some();
+        let is_linked = api_auth
+            .as_ref()
+            .map_or(false, |api_auth| api_auth.is_linked());
         if !is_linked {
             opts.cache_opts.skip_remote = true;
         } else if let Some(enabled) = config.enabled {
@@ -314,6 +317,7 @@ impl<'a> Run<'a> {
             color_selector,
             daemon,
             self.base.ui,
+            opts.run_opts.dry_run.is_some(),
         ));
 
         let mut global_env_mode = opts.run_opts.env_mode;
@@ -573,6 +577,8 @@ impl<'a> Run<'a> {
             color_selector,
             None,
             self.base.ui,
+            // Always dry run when getting hashes
+            true,
         ));
 
         let run_tracker = RunTracker::new(

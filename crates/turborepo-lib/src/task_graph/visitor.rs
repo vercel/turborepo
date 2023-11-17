@@ -199,12 +199,6 @@ impl<'a> Visitor<'a> {
             )?;
 
             debug!("task {} hash is {}", info, task_hash);
-            if self.dry {
-                self.run_tracker.track_task(info.clone()).dry_run().await;
-                callback.send(Ok(())).ok();
-                continue;
-            }
-
             // We do this calculation earlier than we do in Go due to the `task_hasher`
             // being !Send. In the future we can look at doing this right before
             // task execution instead.
@@ -219,38 +213,54 @@ impl<'a> Visitor<'a> {
                 &task_hash,
             );
 
-            // TODO(gsoltis): if/when we fix https://github.com/vercel/turbo/issues/937
-            // the following block should never get hit. In the meantime, keep it after
-            // hashing so that downstream tasks can count on the hash existing
-            //
-            // bail if the script doesn't exist
-            let Some(_command) = command else { continue };
+            // here is where we do the logic split
+            match self.dry {
+                true => {
+                    let dry_run_exec_context =
+                        factory.dry_run_exec_context(info.clone(), task_cache);
+                    let tracker = self.run_tracker.track_task(info.into_owned());
+                    tasks.push(tokio::spawn(async move {
+                        dry_run_exec_context.execute_dry_run(tracker).await;
+                    }));
+                }
+                false => {
+                    // TODO(gsoltis): if/when we fix https://github.com/vercel/turbo/issues/937
+                    // the following block should never get hit. In the meantime, keep it after
+                    // hashing so that downstream tasks can count on the hash existing
+                    //
+                    // bail if the script doesn't exist
+                    if command.is_none() {
+                        continue;
+                    }
 
-            let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
+                    let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
 
-            let mut exec_context = factory.exec_context(
-                info.clone(),
-                task_hash,
-                task_cache,
-                workspace_directory,
-                execution_env,
-            );
+                    let mut exec_context = factory.exec_context(
+                        info.clone(),
+                        task_hash,
+                        task_cache,
+                        workspace_directory,
+                        execution_env,
+                    );
 
-            let output_client = self.output_client(&info);
-            let tracker = self.run_tracker.track_task(info.clone().into_owned());
-            let spaces_client = self.run_tracker.spaces_task_client();
-            let parent_span = Span::current();
-            tasks.push(tokio::spawn(async move {
-                exec_context
-                    .execute(
-                        parent_span.id(),
-                        tracker,
-                        output_client,
-                        callback,
-                        spaces_client,
-                    )
-                    .await;
-            }));
+                    let output_client = self.output_client(&info);
+                    let tracker = self.run_tracker.track_task(info.clone().into_owned());
+                    let spaces_client = self.run_tracker.spaces_task_client();
+                    let parent_span = Span::current();
+
+                    tasks.push(tokio::spawn(async move {
+                        exec_context
+                            .execute(
+                                parent_span.id(),
+                                tracker,
+                                output_client,
+                                callback,
+                                spaces_client,
+                            )
+                            .await;
+                    }));
+                }
+            }
         }
 
         // Wait for the engine task to finish and for all of our tasks to finish
@@ -563,6 +573,18 @@ impl<'a> ExecContextFactory<'a> {
             errors: self.errors.clone(),
         }
     }
+
+    pub fn dry_run_exec_context(
+        &self,
+        task_id: TaskId<'static>,
+        task_cache: TaskCache,
+    ) -> DryRunExecContext {
+        DryRunExecContext {
+            task_id,
+            task_cache,
+            hash_tracker: self.visitor.task_hasher.task_hash_tracker(),
+        }
+    }
 }
 
 struct ExecContext {
@@ -602,6 +624,14 @@ enum SuccessOutcome {
 }
 
 impl ExecContext {
+    pub async fn execute_dry_run(&mut self, tracker: TaskTracker<()>) {
+        if let Ok(Some(status)) = self.task_cache.exists().await {
+            self.hash_tracker
+                .insert_cache_status(self.task_id.clone(), status);
+        }
+
+        tracker.dry_run().await;
+    }
     pub async fn execute(
         &mut self,
         parent_span_id: Option<tracing::Id>,
@@ -852,5 +882,22 @@ impl ExecContext {
             dependencies,
             dependents,
         }
+    }
+}
+
+struct DryRunExecContext {
+    task_id: TaskId<'static>,
+    task_cache: TaskCache,
+    hash_tracker: TaskHashTracker,
+}
+
+impl DryRunExecContext {
+    pub async fn execute_dry_run(&self, tracker: TaskTracker<()>) {
+        // may also need to do framework & command stuff?
+        if let Ok(Some(status)) = self.task_cache.exists().await {
+            self.hash_tracker
+                .insert_cache_status(self.task_id.clone(), status);
+        }
+        tracker.dry_run().await;
     }
 }
