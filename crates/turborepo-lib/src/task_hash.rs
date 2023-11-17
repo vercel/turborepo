@@ -392,9 +392,16 @@ impl<'a> TaskHasher<'a> {
         match task_env_mode {
             ResolvedEnvMode::Strict => {
                 let mut pass_through_env = EnvironmentVariableMap::default();
-                let default_env_var_pass_through_map = self
-                    .env_at_execution_start
-                    .from_wildcards(&["PATH", "SHELL", "SYSTEMROOT"])?;
+                let default_env_var_pass_through_map =
+                    self.env_at_execution_start.from_wildcards(&[
+                        "SHELL",
+                        // Command Prompt casing of env variables
+                        "PATH",
+                        "SYSTEMROOT",
+                        // Powershell casing of env variables
+                        "Path",
+                        "SystemRoot",
+                    ])?;
                 let tracker_env = self
                     .task_hash_tracker
                     .env_vars(task_id)
