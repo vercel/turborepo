@@ -160,24 +160,32 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                     let mut map = CssModuleExports::default();
 
                     for (k, export_class_names) in output.renamed {
-                        let e = map.entry(k.to_string()).or_insert_with(|| CssModuleExport {
-                            name: k.to_string(),
-                            composes: Vec::new(),
-                            is_referenced: true,
-                        });
-
                         for export_class_name in export_class_names {
+                            let mut e = map.entry(k.to_string());
+
                             match export_class_name {
                                 CssClassName::Local { name } => {
-                                    e.name = name.value.to_string();
+                                    e.or_insert_with(|| CssModuleExport {
+                                        name: name.value.to_string(),
+                                        composes: Vec::new(),
+                                        is_referenced: true,
+                                    });
                                 }
                                 CssClassName::Global { name } => {
-                                    e.name = name.value.to_string();
+                                    e.or_insert_with(|| CssModuleExport {
+                                        name: name.value.to_string(),
+                                        composes: Vec::new(),
+                                        is_referenced: true,
+                                    });
                                 }
                                 CssClassName::Import { name, from } => {
-                                    e.composes.push(CssModuleReference::Dependency {
+                                    e.or_insert_with(|| CssModuleExport {
                                         name: name.value.to_string(),
-                                        specifier: from.to_string(),
+                                        composes: vec![CssModuleReference::Dependency {
+                                            name: name.value.to_string(),
+                                            specifier: from.to_string(),
+                                        }],
+                                        is_referenced: true,
                                     });
                                 }
                             }
