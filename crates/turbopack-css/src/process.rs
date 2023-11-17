@@ -336,15 +336,9 @@ pub async fn process_css_with_placeholder(
             url_references,
             options,
         } => {
-            dbg!("process_css_with_placeholder => start");
-
             let stylesheet = stylesheet.to_static(options.clone());
 
-            dbg!("process_css_with_placeholder => after stylesheet_into_static");
-
             let (result, _) = stylesheet.to_css(cm.clone(), false, false, false)?;
-
-            dbg!("process_css_with_placeholder => after StyleSheet::to_css");
 
             let exports = result.exports.map(|exports| {
                 let mut exports = exports.into_iter().collect::<IndexMap<_, _>>();
@@ -353,8 +347,6 @@ pub async fn process_css_with_placeholder(
 
                 exports
             });
-
-            dbg!("process_css_with_placeholder => after sorting exports");
 
             Ok(CssWithPlaceholderResult::Ok {
                 cm: cm.clone(),
