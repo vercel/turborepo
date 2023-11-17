@@ -90,7 +90,38 @@ impl<'a> ModuleReferencesVisitor<'a> {
 }
 
 impl VisitMut for ModuleReferencesVisitor<'_> {
-    // TODO: visit_import_prelude
+    fn visit_mut_import_prelude(&mut self, i: &mut swc_core::css::ast::ImportPrelude) {
+        i.visit_mut_children_with(self);
+
+        let src = &*i.url;
+
+        let issue_span = i.span;
+
+        self.references.push(Vc::upcast(ImportAssetReference::new(
+            self.origin,
+            Request::parse(Value::new(src.to_string().into())),
+            ImportAttributes::new_from_prelude(&i.clone().into_owned()).into(),
+            IssueSource::from_swc_offsets(
+                Vc::upcast(self.source),
+                issue_span.lo.0 as _,
+                issue_span.hi.0 as _,
+            ),
+        )));
+        let vc = UrlAssetReference::new(
+            self.origin,
+            Request::parse(Value::new(src.to_string().into())),
+            IssueSource::from_swc_offsets(
+                Vc::upcast(self.source),
+                issue_span.lo.0 as _,
+                issue_span.hi.0 as _,
+            ),
+        );
+        self.urls.push((src.to_string(), vc));
+
+        // let res = i.visit_children(self);
+        // res
+        Ok(())
+    }
 
     fn visit_mut_url(&mut self, u: &mut swc_core::css::ast::Url) {
         u.visit_mut_children_with(self);
