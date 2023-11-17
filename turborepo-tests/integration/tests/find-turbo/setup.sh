@@ -33,8 +33,10 @@ if [[ "$OSTYPE" == "msys" && $FIXTURE_NAME == "linked" ]]; then
   rm -rf node_modules/turbo
   pushd node_modules > /dev/null || exit 1
   cmd //c mklink turbo .pnpm\\turbo@1.0.0\\node_modules\\turbo
+  ls -al
   popd > /dev/null || exit 1
   echo "PWD: $PWD"
+  ls -al
 fi
 
 # Copy fixtures to target directory.
