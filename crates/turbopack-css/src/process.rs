@@ -169,14 +169,10 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
                         for export_class_name in export_class_names {
                             match export_class_name {
                                 CssClassName::Local { name } => {
-                                    e.composes.push(CssModuleReference::Local {
-                                        name: name.value.to_string(),
-                                    });
+                                    e.name = name.value.to_string();
                                 }
                                 CssClassName::Global { name } => {
-                                    e.composes.push(CssModuleReference::Global {
-                                        name: name.value.to_string(),
-                                    });
+                                    e.name = name.value.to_string();
                                 }
                                 CssClassName::Import { name, from } => {
                                     e.composes.push(CssModuleReference::Dependency {
