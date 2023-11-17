@@ -768,7 +768,7 @@ jobs:
 
       - name: Run cargo clippy
         run: |
-          RUSTFLAGS="-D warnings -A deprecated -Aclippy::too_many_arguments" cargo groups clippy turbopack --features rustls-tls
+          RUSTFLAGS="-D warnings -A deprecated" cargo groups clippy turbopack --features rustls-tls
 
       - name: Run ast-grep lints
         run: |
