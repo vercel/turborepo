@@ -19,7 +19,7 @@ execSync(`python3 -m venv ${VENV_NAME}`);
 execSync(`${getVenvBin("python3")} -m pip install --quiet --upgrade pip`);
 
 // Install prysk
-execSync(`${getVenvBin("pip")} install "prysk"`);
+execSync(`${getVenvBin("pip")} install "prysk==0.15.2"`);
 
 // Which tests do we want to run?
 let testArg = process.argv[2] ? process.argv[2] : "";
