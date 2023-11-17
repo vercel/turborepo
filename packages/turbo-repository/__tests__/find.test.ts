@@ -1,8 +1,8 @@
 import * as path from "node:path";
 import { PackageManagerRoot } from "../js/dist/index.js";
 
-describe("detect", () => {
-  it("detects a repo", async () => {
+describe("find", () => {
+  it("finds a package manager root", async () => {
     const packageManagerRoot = await PackageManagerRoot.find();
     console.log(packageManagerRoot);
     const expectedRoot = path.resolve(__dirname, "../../..");
