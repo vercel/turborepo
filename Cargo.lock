@@ -1905,7 +1905,7 @@ dependencies = [
  "cssparser-macros",
  "dtoa-short",
  "itoa",
- "phf 0.10.1",
+ "phf 0.11.2",
  "serde",
  "smallvec",
 ]
@@ -4075,9 +4075,9 @@ dependencies = [
 
 [[package]]
 name = "lightningcss"
-version = "1.0.0-alpha.50"
+version = "1.0.0-alpha.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2999490cc10a59ad8a87d731791a5d438d2d025e3f137aa7d4c23e1827985b0"
+checksum = "99d6ad516c08b24c246b339159dc2ee2144c012e8ebdf4db4bddefb8734b2b69"
 dependencies = [
  "ahash 0.7.6",
  "bitflags 2.4.0",
@@ -5264,9 +5264,7 @@ version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fabbf1ead8a5bcbc20f5f8b939ee3f5b0f6f281b6ad3468b84656b658b455259"
 dependencies = [
- "phf_macros 0.10.0",
  "phf_shared 0.10.0",
- "proc-macro-hack",
 ]
 
 [[package]]
@@ -5275,7 +5273,7 @@ version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ade2d8b8f33c7333b51bcf0428d37e217e9f32192ae4772156f65063b8ce03dc"
 dependencies = [
- "phf_macros 0.11.2",
+ "phf_macros",
  "phf_shared 0.11.2",
 ]
 
@@ -5307,20 +5305,6 @@ checksum = "48e4cc64c2ad9ebe670cb8fd69dd50ae301650392e81c05f9bfcb2d5bdbc24b0"
 dependencies = [
  "phf_shared 0.11.2",
  "rand 0.8.5",
-]
-
-[[package]]
-name = "phf_macros"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58fdf3184dd560f160dd73922bea2d5cd6e8f064bf4b13110abd81b03697b4e0"
-dependencies = [
- "phf_generator 0.10.0",
- "phf_shared 0.10.0",
- "proc-macro-hack",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -7025,9 +7009,9 @@ dependencies = [
 
 [[package]]
 name = "static-self"
-version = "0.1.1"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "253e76c8c993a7b1b201b0539228b334582153cd4364292822d2c30776d469c7"
+checksum = "e2978fa810a31711d7162d0bb843df1f36d84e393e335ce31ec2c485b2464c44"
 dependencies = [
  "smallvec",
  "static-self-derive",
@@ -7035,9 +7019,9 @@ dependencies = [
 
 [[package]]
 name = "static-self-derive"
-version = "0.1.1"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5268c96d4b907c558a9a52d8492522d6c7b559651a5e1d8f2d551e461b9425d5"
+checksum = "bc53c080b79432d9babd26457df68fb4b002cc7d2ce36a1a5195091cf9fecc14"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10804,8 +10788,8 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
- "rand 0.4.6",
+ "cfg-if 1.0.0",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
