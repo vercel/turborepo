@@ -367,9 +367,9 @@ impl LocalTurboState {
         println!("parent: {:?}", parent);
 
         let canonical_parent = fs_canonicalize(parent);
-        println!("canonical_parent: {:?}", secondpass);
+        println!("canonical_parent: {:?}", canonical_parent);
 
-        AbsoluteSystemPathBuf::try_from(secondpass).ok()
+        AbsoluteSystemPathBuf::try_from(canonical_parent).ok()
     }
 
     // The unplugged directory doesn't have a fixed path.
