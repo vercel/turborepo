@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
-    io::Read,
+    io::{Read, Seek, SeekFrom},
     path::PathBuf,
     sync::Arc,
     thread::{self, JoinHandle},
@@ -14,8 +14,6 @@ use crate::{
     span::SpanIndex,
     store_container::{StoreContainer, StoreWriteGuard},
 };
-
-const MAX_ROWS_PER_LOCK: usize = 100 * 1024;
 
 pub struct TraceReader {
     store: Arc<StoreContainer>,
@@ -30,9 +28,7 @@ impl TraceReader {
 
     pub fn run(&mut self) {
         loop {
-            if self.try_read() {
-                self.store.write().reset();
-            }
+            self.try_read();
             thread::sleep(Duration::from_millis(500));
         }
     }
@@ -41,20 +37,48 @@ impl TraceReader {
         let Ok(mut file) = File::open(&self.path) else {
             return false;
         };
+        println!("Trace file opened");
+
+        {
+            let mut store = self.store.write();
+            store.reset();
+        }
 
         let mut reader_state = ReaderState::default();
-        let mut total_rows = 0;
 
         let mut buffer = Vec::new();
         let mut index = 0;
 
+        let mut chunk = vec![0; 10 * 1024 * 1024];
         loop {
-            let mut chunk = [0; 1024 * 1024];
             match file.read(&mut chunk) {
                 Ok(bytes_read) => {
                     if bytes_read == 0 {
+                        let Ok(pos) = file.seek(std::io::SeekFrom::Current(0)) else {
+                            return true;
+                        };
+                        drop(file);
                         // No more data to read, sleep for a while to wait for more data
                         thread::sleep(Duration::from_millis(100));
+                        let Ok(file_again) = File::open(&self.path) else {
+                            return true;
+                        };
+                        file = file_again;
+                        let Ok(end) = file.seek(SeekFrom::End(0)) else {
+                            return true;
+                        };
+                        if end < pos {
+                            return true;
+                        } else if end != pos {
+                            // Seek to the same position. This will fail when the file was
+                            // truncated.
+                            let Ok(new_pos) = file.seek(SeekFrom::Start(pos)) else {
+                                return true;
+                            };
+                            if new_pos != pos {
+                                return true;
+                            }
+                        }
                     } else {
                         // If we have partially consumed some data, and we are at buffer capacity,
                         // remove the consumed data to make more space.
@@ -74,25 +98,28 @@ impl TraceReader {
                                     if matches!(err, postcard::Error::DeserializeUnexpectedEnd) {
                                         break;
                                     }
-                                    println!("error: {:?}", err);
+                                    return true;
                                 }
                             }
                         }
                         if !rows.is_empty() {
-                            let mut store = self.store.write();
-                            total_rows += rows.len();
-                            for row in rows {
-                                process(&mut store, &mut reader_state, row);
+                            let mut iter = rows.into_iter();
+                            {
+                                let mut store = self.store.write();
+                                for row in iter.by_ref() {
+                                    process(&mut store, &mut reader_state, row);
+                                }
+                                store.invalidate_outdated_spans(&reader_state.outdated_spans);
+                                reader_state.outdated_spans.clear();
                             }
-                            store.invalidate_outdated_spans(&reader_state.outdated_spans);
-                            reader_state.outdated_spans.clear();
+                            if self.store.want_to_read() {
+                                thread::yield_now();
+                            }
                         }
                     }
                 }
                 Err(_) => {
                     // Error reading file, maybe it was removed
-                    let mut store = self.store.write();
-                    store.reset();
                     return true;
                 }
             }

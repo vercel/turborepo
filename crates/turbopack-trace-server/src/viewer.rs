@@ -91,10 +91,18 @@ impl Viewer {
         let mut queue = Vec::new();
 
         let mut current = 0;
-        for span in store.root_spans() {
-            let start = span.start();
+        let mut root_spans = store
+            .root_spans()
+            .map(|span| {
+                let start = span.start();
+                let end = span.end();
+                let width = span.corrected_total_time();
+                (span, start, end, width)
+            })
+            .collect::<Vec<_>>();
+        root_spans.sort_by_key(|(_, _, end, _)| *end);
+        for (span, start, _, width) in root_spans {
             current = max(current, start);
-            let width = span.corrected_total_time();
             queue.push(QueueItemWithState {
                 item: QueueItem::Span(span),
                 line_index: 0,
@@ -221,8 +229,8 @@ impl Viewer {
                         Some(ExpandedState::AllExpanded) => (true, true),
                         Some(ExpandedState::Collapsed) => (false, false),
                     };
-                    if show_spans {
-                        for child in span_graph.spans() {
+                    if show_spans && span_graph.count() > 1 {
+                        for child in span_graph.root_spans() {
                             handle_child(
                                 &mut children,
                                 &mut current,

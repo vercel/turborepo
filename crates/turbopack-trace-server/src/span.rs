@@ -10,6 +10,7 @@ pub struct Span {
     pub index: SpanIndex,
     pub parent: Option<SpanIndex>,
     pub start: u64,
+    pub ignore_self_time: bool,
     pub category: String,
     pub name: String,
     pub args: Vec<(String, String)>,
@@ -18,10 +19,11 @@ pub struct Span {
     pub events: Vec<SpanEvent>,
 
     // These values are computed automatically:
-    pub end: u64,
+    pub self_end: u64,
     pub self_time: u64,
 
     // These values are computed when accessed (and maybe deleted during writing):
+    pub end: OnceLock<u64>,
     pub nice_name: OnceLock<(String, String)>,
     pub group_name: OnceLock<String>,
     pub max_depth: OnceLock<u32>,
@@ -45,7 +47,8 @@ pub enum SpanGraphEvent {
 
 pub struct SpanGraph {
     // These values won't change after creation:
-    pub spans: Vec<SpanIndex>,
+    pub root_spans: Vec<SpanIndex>,
+    pub recursive_spans: Vec<SpanIndex>,
 
     // These values are computed when accessed:
     pub max_depth: OnceLock<u32>,

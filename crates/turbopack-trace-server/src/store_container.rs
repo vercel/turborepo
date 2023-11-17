@@ -1,12 +1,16 @@
 use std::{
     ops::{Deref, DerefMut},
-    sync::{RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        RwLock, RwLockReadGuard, RwLockWriteGuard,
+    },
 };
 
 use crate::store::Store;
 
 pub struct StoreContainer {
     store: RwLock<StoreWithGeneration>,
+    want_to_read: AtomicBool,
 }
 
 struct StoreWithGeneration {
@@ -21,19 +25,27 @@ impl StoreContainer {
                 store: Store::new(),
                 generation: 0,
             }),
+            want_to_read: AtomicBool::new(false),
         }
     }
 
     pub fn read(&self) -> StoreReadGuard<'_> {
-        StoreReadGuard {
+        self.want_to_read.store(true, Ordering::Relaxed);
+        let guard = StoreReadGuard {
             guard: self.store.read().unwrap(),
-        }
+        };
+        self.want_to_read.store(false, Ordering::Relaxed);
+        guard
     }
 
     pub fn write(&self) -> StoreWriteGuard<'_> {
         let mut guard = self.store.write().unwrap();
         guard.generation += 1;
         StoreWriteGuard { guard }
+    }
+
+    pub fn want_to_read(&self) -> bool {
+        self.want_to_read.load(Ordering::Relaxed)
     }
 }
 

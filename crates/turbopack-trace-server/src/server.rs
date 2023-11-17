@@ -5,7 +5,7 @@ use std::{
         Arc, Mutex,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::Result;
@@ -33,6 +33,14 @@ pub enum ServerToClientMessage {
     ViewLinesCount {
         count: usize,
     },
+    #[serde(rename_all = "camelCase")]
+    QueryResult {
+        id: SpanId,
+        is_graph: bool,
+        start: u64,
+        args: Vec<(String, String)>,
+        path: Vec<String>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -55,6 +63,18 @@ pub enum ClientToServerMessage {
     ResetExpand {
         id: SpanId,
     },
+    Query {
+        id: SpanId,
+    },
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SpanViewEvent {
+    pub start: u64,
+    pub duration: u64,
+    pub name: String,
+    pub id: Option<SpanId>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -78,12 +98,9 @@ struct ConnectionState {
 pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
     let mut server = Server::bind("127.0.0.1:57475")?;
     loop {
-        println!("waiting for connection");
         let Ok(connection) = server.accept() else {
-            println!("failed to accept connection");
             continue;
         };
-        println!("accepted connection");
         let store = store.clone();
         thread::spawn(move || {
             fn handle_connection(
@@ -97,7 +114,7 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                         return Err(error.into());
                     }
                 };
-                println!("accepted connection2");
+                println!("client connected");
                 let (mut reader, writer) = connection.split()?;
                 let state = Arc::new(Mutex::new(ConnectionState {
                     writer,
@@ -113,10 +130,10 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                     last_update_generation: 0,
                 }));
                 let should_shutdown = Arc::new(AtomicBool::new(false));
-                fn send_update(state: &mut ConnectionState, force_send: bool) {
+                fn send_update(state: &mut ConnectionState, force_send: bool) -> Result<()> {
                     let store = state.store.read();
                     if !force_send && state.last_update_generation == store.generation() {
-                        return;
+                        return Ok(());
                     }
                     state.last_update_generation = store.generation();
                     let updates = state.viewer.compute_update(&*store, &state.view_rect);
@@ -124,17 +141,12 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                     for update in updates {
                         let message = ServerToClientMessage::ViewLine { update };
                         let message = serde_json::to_string(&message).unwrap();
-                        state
-                            .writer
-                            .send_message(&OwnedMessage::Text(message))
-                            .unwrap();
+                        state.writer.send_message(&OwnedMessage::Text(message))?;
                     }
                     let message = ServerToClientMessage::ViewLinesCount { count };
                     let message = serde_json::to_string(&message).unwrap();
-                    state
-                        .writer
-                        .send_message(&OwnedMessage::Text(message))
-                        .unwrap();
+                    state.writer.send_message(&OwnedMessage::Text(message))?;
+                    Ok(())
                 }
                 let inner_thread = {
                     let should_shutdown = should_shutdown.clone();
@@ -143,7 +155,9 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                         if should_shutdown.load(Ordering::SeqCst) {
                             return;
                         }
-                        send_update(&mut *state.lock().unwrap(), false);
+                        if send_update(&mut *state.lock().unwrap(), false).is_err() {
+                            break;
+                        }
                         thread::sleep(Duration::from_millis(500));
                     })
                 };
@@ -174,8 +188,44 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                                 ClientToServerMessage::ResetExpand { id } => {
                                     state.viewer.set_expanded_state(id, None);
                                 }
+                                ClientToServerMessage::Query { id } => {
+                                    let message = if let Some((span, is_graph)) =
+                                        state.store.read().span(id)
+                                    {
+                                        let span_start = span.start();
+                                        let args = span
+                                            .args()
+                                            .map(|(k, v)| (k.to_string(), v.to_string()))
+                                            .collect();
+                                        let mut path = Vec::new();
+                                        let mut current = span;
+                                        while let Some(parent) = current.parent() {
+                                            path.push(parent.nice_name().1.to_string());
+                                            current = parent;
+                                        }
+                                        path.reverse();
+                                        ServerToClientMessage::QueryResult {
+                                            id,
+                                            is_graph,
+                                            start: span_start,
+                                            args,
+                                            path,
+                                        }
+                                    } else {
+                                        ServerToClientMessage::QueryResult {
+                                            id,
+                                            is_graph: false,
+                                            start: 0,
+                                            args: Vec::new(),
+                                            path: Vec::new(),
+                                        }
+                                    };
+                                    let message = serde_json::to_string(&message).unwrap();
+                                    state.writer.send_message(&OwnedMessage::Text(message))?;
+                                    continue;
+                                }
                             }
-                            send_update(&mut *state, true);
+                            send_update(&mut *state, true)?;
                         }
                         OwnedMessage::Binary(_) => {
                             // This doesn't happen
