@@ -356,20 +356,19 @@ impl LocalTurboState {
     #[cfg(target_os = "windows")]
     fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
         println!("joining root path with node_modules and turbo");
+
         let joined = root_path.as_path().join("node_modules").join("turbo");
+        println!("joined: {:?}", joined);
 
-        println!("before first pass");
         let firstpass = fs_canonicalize(joined).expect("Failed to canonicalize path");
+        println!("first pass: {:?}", firstpass);
 
-        println!("first pass output: {:?}", firstpass);
+        let parent = firstpass.parent().expect("Failed to get parent");
+        println!("parent: {:?}", parent);
 
-        let secondpass = firstpass
-            .parent()
-            .and_then(|parent| fs_canonicalize(parent).ok())
-            .expect("Failed to canonicalize parent");
+        let canonical_parent = fs_canonicalize(parent);
+        println!("canonical_parent: {:?}", secondpass);
 
-        println!("after second pass");
-        println!("canonical_path: {:?}", secondpass);
         AbsoluteSystemPathBuf::try_from(secondpass).ok()
     }
 
