@@ -161,7 +161,7 @@ impl<'i, 'o> StyleSheetLike<'i, 'o> {
 
                     for (k, export_class_names) in output.renamed {
                         for export_class_name in export_class_names {
-                            let mut e = map.entry(k.to_string());
+                            let e = map.entry(k.to_string());
 
                             match export_class_name {
                                 CssClassName::Local { name } => {
