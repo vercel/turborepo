@@ -9,7 +9,6 @@ Graph to stdout
   \tcompound = "true" (esc)
   \tnewrank = "true" (esc)
   \tsubgraph "root" { (esc)
-  \t\t"[root] //#build" -> "[root] ___ROOT___" (esc)
   \t\t"[root] my-app#build" -> "[root] util#build" (esc)
   \t\t"[root] util#build" -> "[root] ___ROOT___" (esc)
   \t} (esc)
@@ -20,27 +19,23 @@ Graph to stdout
   .*Generated task graph in .*graph\.dot.* (re)
   $ cat graph.dot
   digraph {
-  \tgraph [bb="0,0,300.79,180", (esc)
+  \tgraph [bb="0,0,174.36,180", (esc)
   \t\tcompound=true, (esc)
   \t\tnewrank=true (esc)
   \t]; (esc)
   \tnode [label="\\N"]; (esc)
   \tsubgraph root { (esc)
-  \t\t"[root] //#build"\t[height=0.5, (esc)
-  \t\t\tpos="63.123,90", (esc)
-  \t\t\twidth=1.7534]; (esc)
-  \t\t"[root] ___ROOT___"\t[height=0.5, (esc)
-  \t\t\tpos="138.12,18", (esc)
-  \t\t\twidth=2.4216]; (esc)
-  \t\t"[root] //#build" -> "[root] ___ROOT___"\t[pos="e,119.96,35.956 80.897,72.411 90.194,63.734 101.75,52.946 112.04,43.342"]; (esc)
   \t\t"[root] my-app#build"\t[height=0.5, (esc)
-  \t\t\tpos="214.12,162", (esc)
+  \t\t\tpos="87.178,162", (esc)
   \t\t\twidth=2.4074]; (esc)
   \t\t"[root] util#build"\t[height=0.5, (esc)
-  \t\t\tpos="214.12,90", (esc)
+  \t\t\tpos="87.178,90", (esc)
   \t\t\twidth=1.9525]; (esc)
-  \t\t"[root] my-app#build" -> "[root] util#build"\t[pos="e,214.12,108.1 214.12,143.7 214.12,136.24 214.12,127.32 214.12,118.97"]; (esc)
-  \t\t"[root] util#build" -> "[root] ___ROOT___"\t[pos="e,156.53,35.956 196.11,72.411 186.69,63.734 174.98,52.946 164.55,43.342"]; (esc)
+  \t\t"[root] my-app#build" -> "[root] util#build"\t[pos="e,87.178,108.1 87.178,143.7 87.178,136.24 87.178,127.32 87.178,118.97"]; (esc)
+  \t\t"[root] ___ROOT___"\t[height=0.5, (esc)
+  \t\t\tpos="87.178,18", (esc)
+  \t\t\twidth=2.4216]; (esc)
+  \t\t"[root] util#build" -> "[root] ___ROOT___"\t[pos="e,87.178,36.104 87.178,71.697 87.178,64.237 87.178,55.322 87.178,46.965"]; (esc)
   \t} (esc)
   }
 
@@ -50,6 +45,7 @@ Graph to stdout
   $ cat graph.html | grep --quiet "DOCTYPE"
 
   $ ${TURBO} build -F my-app --graph=graph.mermaid
+  
   .*Generated task graph in .*graph\.mermaid.* (re)
 
   $ cat graph.mermaid

@@ -19,13 +19,13 @@ pub fn resolve_packages(
     turbo_root: &AbsoluteSystemPath,
     pkg_graph: &PackageGraph,
     scm: &SCM,
-) -> Result<HashSet<WorkspaceName>, ResolutionError> {
+) -> Result<(HashSet<WorkspaceName>, bool), ResolutionError> {
     let pkg_inference = opts.pkg_inference_root.as_ref().map(|pkg_inference_path| {
         PackageInference::calculate(turbo_root, pkg_inference_path, pkg_graph)
     });
 
-    let filtered_packages = FilterResolver::new(opts, pkg_graph, turbo_root, pkg_inference, scm)
-        .resolve(&opts.get_filters())?;
-
-    Ok(filtered_packages)
+    Ok(
+        FilterResolver::new(opts, pkg_graph, turbo_root, pkg_inference, scm)
+            .resolve(&opts.get_filters())?,
+    )
 }
