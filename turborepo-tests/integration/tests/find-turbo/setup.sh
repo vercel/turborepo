@@ -29,12 +29,10 @@ echo "cp cmd: cp -a ${FIXTURE_DIR}/. ${DESTINATION}/"
 cp -a "${FIXTURE_DIR}/." "${DESTINATION}/"
 # turbo -> .pnpm/turbo@1.0.0/node_modules/turbo
 
-if [[ $FIXTURE_NAME == "linked" ]]; then
-  if [[ "$OSTYPE" == "msys" ]]; then
-    rm -rf node_modules/turbo
-    cd node_modules
-    cmd //c mklink turbo .pnpm\turbo@1.0.0\node_modules\turbo
-  fi
+if [[ "$OSTYPE" == "msys" && $FIXTURE_NAME == "linked" ]]; then
+  rm -rf node_modules/turbo
+  cd node_modules
+  cmd //c mklink turbo .pnpm\turbo@1.0.0\node_modules\turbo
 fi
 
 
