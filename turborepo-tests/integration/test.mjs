@@ -26,7 +26,6 @@ let testArg = process.argv[2] ? process.argv[2] : "";
 testArg = isWindows ? testArg.replaceAll("/", path.sep) : testArg;
 const tests = path.join("tests", testArg);
 
-// What flags to pass to prysk?
 const flags = [
   "--shell=bash",
   process.env.PRYSK_INTERACTIVE === "true" ? "--interactive" : "",
