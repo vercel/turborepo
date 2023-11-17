@@ -26,6 +26,9 @@ assert_cmd = { workspace = true }
 itertools = { workspace = true }
 pretty_assertions = { workspace = true }
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
 clap = { workspace = true, features = ["derive"] }
