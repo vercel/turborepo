@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { getTTFTData } from "./helpers";
+import { getTTFTData } from "../helpers";
 
 const runID = process.argv[2];
 
@@ -28,6 +28,9 @@ const data = {
   ubuntu: `${microToSeconds(ubuntu.durationMicroseconds)}s`,
   windows: `${microToSeconds(windows.durationMicroseconds)}s`,
   macos: `${microToSeconds(macos.durationMicroseconds)}s`,
+  "ubuntu-cpus": ubuntu.cpus,
+  "windows-cpus": windows.cpus,
+  "macos-cpus": macos.cpus,
 };
 
 fs.writeFileSync(slackPayloadPath, JSON.stringify(data));

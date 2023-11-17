@@ -1,5 +1,5 @@
 {
-  "name": "benchmark",
+  "name": "@turbo/benchmark",
   "version": "1.0.0",
   "dependencies": {
     "esbuild": "^0.15.0",
@@ -10,7 +10,7 @@
   },
   "scripts": {
     "benchmark": "node -r esbuild-register src/index.ts",
-    "ttft": "node -r esbuild-register src/ttft.ts",
+    "ttft": "node -r esbuild-register src/ttft/index.ts",
     "lint": "eslint src",
     "lint:prettier": "prettier -c src --cache --ignore-path=../.prettierignore",
     "check-types": "tsc --noEmit"

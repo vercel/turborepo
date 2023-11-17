@@ -18,7 +18,7 @@ pub use cache::{RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
-use tracing::{debug, info};
+use tracing::debug;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
@@ -124,6 +124,7 @@ impl<'a> Run<'a> {
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
             turbo_version = %TurboState::version(),
+            numcpus = num_cpus::get(),
             "performing run on {:?}",
             TurboState::platform_name(),
         );
@@ -422,8 +423,13 @@ impl<'a> Run<'a> {
             // We hit some error, it shouldn't be exit code 0
             .unwrap_or(if errors.is_empty() { 0 } else { 1 });
 
+        let error_prefix = if opts.run_opts.is_github_actions {
+            "::error::"
+        } else {
+            ""
+        };
         for err in &errors {
-            writeln!(std::io::stderr(), "{err}").ok();
+            writeln!(std::io::stderr(), "{error_prefix}{err}").ok();
         }
 
         visitor

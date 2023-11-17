@@ -111,46 +111,6 @@ importers:
         specifier: ^0.36.0
         version: 0.36.0
 
-  benchmark:
-    dependencies:
-      esbuild:
-        specifier: ^0.15.0
-        version: 0.15.6
-      esbuild-register:
-        specifier: ^3.3.2
-        version: 3.3.3(esbuild@0.15.6)
-      fs-extra:
-        specifier: ^10.0.0
-        version: 10.1.0
-      ndjson:
-        specifier: ^2.0.0
-        version: 2.0.0
-      node-fetch:
-        specifier: ^2.6.8
-        version: 2.6.11
-    devDependencies:
-      '@turbo/eslint-config':
-        specifier: workspace:*
-        version: link:../packages/eslint-config
-      '@turbo/tsconfig':
-        specifier: workspace:*
-        version: link:../packages/tsconfig
-      '@types/fs-extra':
-        specifier: ^9.0.13
-        version: 9.0.13
-      '@types/ndjson':
-        specifier: ^2.0.2
-        version: 2.0.2
-      '@types/node':
-        specifier: ^18.17.4
-        version: 18.17.4
-      '@types/node-fetch':
-        specifier: ^2.6.6
-        version: 2.6.6
-      typescript:
-        specifier: ^5.2.2
-        version: 5.2.2
-
   cli:
     devDependencies:
       copy-template-dir:
@@ -649,6 +609,46 @@ importers:
   packages/node-module-trace: {}
 
   packages/tsconfig: {}
+
+  packages/turbo-benchmark:
+    dependencies:
+      esbuild:
+        specifier: ^0.15.0
+        version: 0.15.6
+      esbuild-register:
+        specifier: ^3.3.2
+        version: 3.3.3(esbuild@0.15.6)
+      fs-extra:
+        specifier: ^10.0.0
+        version: 10.1.0
+      ndjson:
+        specifier: ^2.0.0
+        version: 2.0.0
+      node-fetch:
+        specifier: ^2.6.8
+        version: 2.6.11
+    devDependencies:
+      '@turbo/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@turbo/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/fs-extra':
+        specifier: ^9.0.13
+        version: 9.0.13
+      '@types/ndjson':
+        specifier: ^2.0.2
+        version: 2.0.2
+      '@types/node':
+        specifier: ^18.17.4
+        version: 18.17.4
+      '@types/node-fetch':
+        specifier: ^2.6.6
+        version: 2.6.6
+      typescript:
+        specifier: ^5.2.2
+        version: 5.2.2
 
   packages/turbo-codemod:
     dependencies:
@@ -3583,7 +3583,7 @@ packages:
   /@types/ndjson@2.0.2:
     resolution: {integrity: sha512-bvLIjknQTfXdWoJ2iljOpZXNB14d8VOH6NMXAlDle9T8jdpMsKqQs4M5+F7NnlU8WMPErtuGnJsLfERO8W9Oow==}
     dependencies:
-      '@types/node': 20.8.5
+      '@types/node': 18.17.4
       '@types/through': 0.0.30
     dev: true
 
@@ -3617,6 +3617,7 @@ packages:
     resolution: {integrity: sha512-SPlobFgbidfIeOYlzXiEjSYeIJiOCthv+9tSQVpvk4PAdIIc+2SmjNVzWXk9t0Y7dl73Zdf+OgXKHX9XtkqUpw==}
     dependencies:
       undici-types: 5.25.3
+    dev: true
 
   /@types/normalize-package-data@2.4.1:
     resolution: {integrity: sha512-Gj7cI7z+98M282Tqmp2K5EIsoouUEzbBJhQQzDE3jSIRk6r9gsz0oUokqIUR4u1R3dMHo0pDHM7sNOHyhulypw==}
@@ -3686,7 +3687,7 @@ packages:
   /@types/through@0.0.30:
     resolution: {integrity: sha512-FvnCJljyxhPM3gkRgWmxmDZyAQSiBQQWLI0A0VFL0K7W1oRUrPJSqNO0NvTnLkBcotdlp3lKvaT0JrnyRDkzOg==}
     dependencies:
-      '@types/node': 20.8.5
+      '@types/node': 18.17.4
 
   /@types/tinycolor2@1.4.3:
     resolution: {integrity: sha512-Kf1w9NE5HEgGxCRyIcRXR/ZYtDv0V8FVPtYHwLxl0O+maGX0erE77pQlD0gpP+/KByMZ87mOA79SjifhSB3PjQ==}
@@ -6103,7 +6104,7 @@ packages:
     resolution: {integrity: sha512-QHTXI/sZQmko1cbDoNAa3mJ5qhWUUNAq3vR0/YiD379fWQrcfuoX1+HW2S0MTt7XmoPLapdaDKUtelUSPic7hQ==}
     engines: {node: '>=10.13.0'}
     dependencies:
-      graceful-fs: 4.2.10
+      graceful-fs: 4.2.11
       tapable: 2.2.1
     dev: true
 
@@ -14570,6 +14571,7 @@ packages:
 
   /undici-types@5.25.3:
     resolution: {integrity: sha512-Ga1jfYwRn7+cP9v8auvEXN1rX3sWqlayd4HP7OKk4mZWylEmu3KzXDUGrQUN6Ol7qo1gPvB2e5gX6udnyEPgdA==}
+    dev: true
 
   /unified@10.1.2:
     resolution: {integrity: sha512-pUSWAi/RAnVy1Pif2kAoeWNBa3JVrx0MId2LASj8G+7AiHWoKZNTomq6LG326T68U7/e263X6fTdcXIy7XnF7Q==}

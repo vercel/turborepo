@@ -829,7 +829,9 @@ jobs:
         run: npm install
 
       - name: Install nextest
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.61
 
       - name: Build nextest
         timeout-minutes: 120
@@ -906,7 +908,9 @@ jobs:
         run: npm install
 
       - name: Install nextest
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.61
 
       - name: Build nextest
         timeout-minutes: 120
@@ -931,6 +935,33 @@ jobs:
         with:
           name: test_reports
           path: target/nextest/**/*.xml
+
+  turbopack_rust_test_bench1:
+    needs: [determine_jobs, turbopack_rust_check]
+    name: Turbopack Rust testing benchmarks on linux
+    uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
+    with:
+      runner: ubuntu-latest-16-core-oss
+      os: linux
+      all: ${{ needs.determine_jobs.outputs.turbopack_bench == 'true' }}
+
+  turbopack_rust_test_bench2:
+    needs: [determine_jobs, turbopack_rust_check]
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: macos
+            runner: macos-latest
+          # Temporarily disable windows bench due to consistent timeouts
+          # - name: windows
+          #   runner: windows-2019
+    name: Turbopack Rust testing benchmarks on ${{ matrix.os.name }}
+    uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
+    with:
+      runner: ${{ matrix.os.runner }}
+      os: ${{ matrix.os.name }}
+      all: ${{ needs.determine_jobs.outputs.turbopack_bench == 'true' }}
 
   format_lint:
     name: Formatting
@@ -971,6 +1002,7 @@ jobs:
       - turbopack_rust_check
       - turbopack_rust_clippy
       - turbopack_rust_test1
+      - turbopack_rust_test_bench1
       - turbopack_typescript
       - turborepo_rust_test
       - format_lint
@@ -1009,6 +1041,7 @@ jobs:
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
           subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
+          subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
           subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
           subjob ${{needs.turborepo_rust_test.result}} "Turborepo Rust tests"
           subjob ${{needs.format_lint.result}} "Formatting"
@@ -1123,6 +1156,8 @@ jobs:
       - turbopack_rust_clippy
       - turbopack_rust_test1
       - turbopack_rust_test2
+      - turbopack_rust_test_bench1
+      - turbopack_rust_test_bench2
       - turbopack_typescript
       - turborepo_rust_test
       - format_lint
@@ -1162,6 +1197,8 @@ jobs:
           subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
           subjob ${{needs.turbopack_rust_test2.result}} "Turbopack Rust tests (mac/win, non-blocking)"
+          subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
+          subjob ${{needs.turbopack_rust_test_bench2.result}} "Turbopack Rust benchmark tests (mac/win, non-blocking)"
           subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
           subjob ${{needs.turborepo_rust_test.result}} "TurboRepo Rust tests"
           subjob ${{needs.format_lint.result}} "Formatting"
