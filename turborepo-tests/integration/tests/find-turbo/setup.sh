@@ -24,27 +24,43 @@ echo "READLINK_FIXTURE_DIR2: $(readlink -f "$FIXTURE_DIR2")"
 echo "READLINK_TARGET_DIR: $(readlink -f "$TARGET_DIR")"
 echo "-----------"
 
+DESTINATION="${TARGET_DIR}"
+echo "cp cmd: cp -a ${FIXTURE_DIR}/. ${DESTINATION}/"
+cp -a "${FIXTURE_DIR}/." "${DESTINATION}/"
+# turbo -> .pnpm/turbo@1.0.0/node_modules/turbo
+
+if [[ $FIXTURE_NAME == "linked" ]]; then
+  if [[ "$OSTYPE" == "msys" ]]; then
+    rm -rf node_modules/turbo
+    cd node_modules
+    cmd //c mklink turbo .pnpm\turbo@1.0.0\node_modules\turbo
+  fi
+fi
+
+
 # Copy fixtures to target directory.
 # On Windows, we use rsync because cp isn't preserving symlinks. We could use rsync
 # on all platforms, but want to limit the changes.
-if [[ "$OSTYPE" == "msys" ]]; then
-  echo "runing rsync cmd on windows"
+# if [[ "$OSTYPE" == "msys" ]]; then
+#   echo "runing rsync cmd on windows"
 
-  REL_TARGET_DIR="$(realpath --relative-to="$PWD" "$TARGET_DIR")"
-  REL_FIXTURE_DIR="$(realpath --relative-to="$PWD" "$FIXTURE_DIR")"
-  REL_FIXTURE_DIR2="$(realpath --relative-to="$PWD" "$FIXTURE_DIR2")"
+#   REL_TARGET_DIR="$(realpath --relative-to="$PWD" "$TARGET_DIR")"
+#   REL_FIXTURE_DIR="$(realpath --relative-to="$PWD" "$FIXTURE_DIR")"
+#   REL_FIXTURE_DIR2="$(realpath --relative-to="$PWD" "$FIXTURE_DIR2")"
 
-  echo "REL_TARGET_DIR: $REL_TARGET_DIR"
-  echo "REL_FIXTURE_DIR: $REL_FIXTURE_DIR"
-  echo "REL_FIXTURE_DIR2: $REL_FIXTURE_DIR2"
+#   echo "REL_TARGET_DIR: $REL_TARGET_DIR"
+#   echo "REL_FIXTURE_DIR: $REL_FIXTURE_DIR"
+#   echo "REL_FIXTURE_DIR2: $REL_FIXTURE_DIR2"
 
-  echo "rsync -a $REL_FIXTURE_DIR2/. $REL_TARGET_DIR"
-  rsync -a "$REL_FIXTURE_DIR2/." "$REL_TARGET_DIR"
-else
-  DESTINATION="${TARGET_DIR}"
-  echo "cp cmd: cp -a ${FIXTURE_DIR}/. ${DESTINATION}/"
-  cp -a "${FIXTURE_DIR}/." "${DESTINATION}/"
-fi
+#   echo "rsync -a $REL_FIXTURE_DIR2/. $REL_TARGET_DIR"
+#   rsync -a "$REL_FIXTURE_DIR2/." "$REL_TARGET_DIR"
+
+
+# else
+#   DESTINATION="${TARGET_DIR}"
+#   echo "cp cmd: cp -a ${FIXTURE_DIR}/. ${DESTINATION}/"
+#   cp -a "${FIXTURE_DIR}/." "${DESTINATION}/"
+# fi
 
 
 # TODO: copy over the stub instead of having a duplicate in each fixture
