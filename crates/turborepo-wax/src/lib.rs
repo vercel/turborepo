@@ -38,6 +38,30 @@ mod rule;
 mod token;
 pub mod walk;
 
+/// Re-exports of commonly used items.
+///
+/// This module anonymously re-exports traits for matching [`Program`]s against
+/// file paths and directory trees. A glob import of this module can be used
+/// instead of individual imports of these traits.
+///
+/// # Examples
+///
+/// ```rust,no_run,ignore
+/// use wax::prelude::*;
+/// use wax::Glob;
+///
+/// // This code requires the `Entry` and `FileIterator` traits.
+/// let glob = Glob::new("**/*.(?i){jpg,jpeg}").unwrap();
+/// for entry in glob.walk("textures").not(["**/.*/**"]).unwrap().flatten() {
+///     println!("JPEG: {:?}", entry.path());
+/// }
+/// ```
+pub mod prelude {
+    #[cfg(feature = "walk")]
+    pub use crate::walk::{Entry as _, FileIterator as _, PathExt as _};
+    pub use crate::{LocatedError as _, Program as _};
+}
+
 use std::{
     borrow::{Borrow, Cow},
     convert::Infallible,
