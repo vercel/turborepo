@@ -336,36 +336,46 @@ impl LocalTurboState {
     // Linked strategy:
     // - `pnpm install`
     // - `npm install --install-strategy=linked`
-    #[cfg(not(target_os = "windows"))]
-    fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
-        let canonical_path = fs_canonicalize(
-            root_path
-                .as_path()
-                .join("node_modules")
-                .join("turbo")
-                .join(".."),
-        )
-        .ok()?;
-        println!("canonical_path: {:?}", canonical_path);
-        AbsoluteSystemPathBuf::try_from(canonical_path).ok()
-    }
+    // #[cfg(not(target_os = "windows"))]
+    // fn generate_linked_path(root_path: &AbsoluteSystemPath) ->
+    // Option<AbsoluteSystemPathBuf> {     let canonical_path = fs_canonicalize(
+    //         root_path
+    //             .as_path()
+    //             .join("node_modules")
+    //             .join("turbo")
+    //             .join(".."),
+    //     )
+    //     .ok()?;
+    //     println!("canonical_path: {:?}", canonical_path);
+    //     AbsoluteSystemPathBuf::try_from(canonical_path).ok()
+    // }
 
     // Linked strategy:
     // - `pnpm install`
     // - `npm install --install-strategy=linked`
-    #[cfg(target_os = "windows")]
+    // #[cfg(target_os = "windows")]
     fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
         let thing1 = root_path.as_path().join("node_modules").join("turbo");
         println!("thing1: {:?}", thing1);
 
-        let canonical_path = fs_canonicalize(thing1).expect("Fialed to canonicalize path");
-        println!("canonical_path: {:?}", canonical_path);
+        // let canonical_path = fs_canonicalize(thing1);
+        match fs_canonicalize(&thing1) {
+            Ok(canonical_path) => {
+                println!("Canonicalized Path: {:?}", canonical_path);
+                // Further processing with the canonicalized path
+                println!("canonical_path: {:?}", canonical_path);
 
-        let can_path_parent = canonical_path.join("..");
+                let can_path_parent = canonical_path.join("..");
 
-        println!("parent: {:?}", can_path_parent);
+                println!("parent: {:?}", can_path_parent);
 
-        AbsoluteSystemPathBuf::try_from(can_path_parent).ok()
+                AbsoluteSystemPathBuf::try_from(can_path_parent).ok()
+            }
+            Err(error) => {
+                eprintln!("Error while canonicalizing path: {}", error);
+                return None;
+            }
+        }
     }
 
     // The unplugged directory doesn't have a fixed path.
