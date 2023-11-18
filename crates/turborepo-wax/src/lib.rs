@@ -314,10 +314,10 @@ impl<'t> Pattern<'t> for &'t str {
 /// them into a `GlobError` via `?`.
 ///
 /// ```rust,no_run,ignore
-/// use std::path::Path;
+/// use std::path::PathBuf;
 /// use wax::{Glob, GlobError};
 ///
-/// fn read_all(directory: impl AsRef<Path>) -> Result<Vec<u8>, GlobError> {
+/// fn read_all(directory: impl Into<PathBuf>) -> Result<Vec<u8>, GlobError> {
 ///     let mut data = Vec::new();
 ///     let glob = Glob::new("**/*.data.bin")?;
 ///     for entry in glob.walk(directory) {
