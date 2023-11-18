@@ -355,21 +355,17 @@ impl LocalTurboState {
     // - `npm install --install-strategy=linked`
     #[cfg(target_os = "windows")]
     fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
-        println!("joining root path with node_modules and turbo");
+        let thing1 = root_path.as_path().join("node_modules").join("turbo");
+        println!("thing1: {:?}", thing1);
 
-        let joined = root_path.as_path().join("node_modules").join("turbo");
-        println!("joined: {:?}", joined);
+        let canonical_path = fs_canonicalize(thing1).expect("Fialed to canonicalize path");
+        println!("canonical_path: {:?}", canonical_path);
 
-        let firstpass = fs_canonicalize(joined).expect("Failed to canonicalize path");
-        println!("first pass: {:?}", firstpass);
+        let can_path_parent = canonical_path.join("..");
 
-        let parent = firstpass.parent().expect("Failed to get parent");
-        println!("parent: {:?}", parent);
+        println!("parent: {:?}", can_path_parent);
 
-        let canonical_parent = fs_canonicalize(parent);
-        println!("canonical_parent: {:?}", canonical_parent);
-
-        AbsoluteSystemPathBuf::try_from(canonical_parent).ok()
+        AbsoluteSystemPathBuf::try_from(can_path_parent).ok()
     }
 
     // The unplugged directory doesn't have a fixed path.
