@@ -355,24 +355,40 @@ impl LocalTurboState {
     // - `npm install --install-strategy=linked`
     // #[cfg(target_os = "windows")]
     fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
-        let thing1 = root_path.as_path().join("node_modules").join("turbo");
-        println!("thing1: {:?}", thing1);
+        let orig_path = root_path
+            .as_path()
+            .join("node_modules")
+            .join("turbo")
+            .join("..");
 
-        // let canonical_path = fs_canonicalize(thing1);
-        match fs_canonicalize(&thing1) {
-            Ok(canonical_path) => {
-                println!("Canonicalized Path: {:?}", canonical_path);
-                // Further processing with the canonicalized path
-                println!("canonical_path: {:?}", canonical_path);
+        let orig_canonical_path = fs_canonicalize(&orig_path).ok()?;
+        println!("orig_path: {:?}", orig_path);
+        println!("orig_canonical_path: {:?}", orig_canonical_path);
 
-                let can_path_parent = canonical_path.join("..");
+        let orig_abs_path = AbsoluteSystemPathBuf::try_from(orig_canonical_path).ok()?;
+        println!("orig_abs_path: {:?}", orig_abs_path);
 
-                println!("parent: {:?}", can_path_parent);
+        ////////////////////////////////////////////
 
-                AbsoluteSystemPathBuf::try_from(can_path_parent).ok()
+        let new_path = root_path.as_path().join("node_modules").join("turbo");
+
+        println!("new_path: {:?}", new_path);
+
+        match fs_canonicalize(&new_path) {
+            Ok(new_canonical_path) => {
+                println!("new_canonical_path: {:?}", new_canonical_path);
+                let new_canonical_path_parent = new_canonical_path.join("..");
+                println!("parent: {:?}", new_canonical_path_parent);
+
+                let new_abs_path =
+                    AbsoluteSystemPathBuf::try_from(new_canonical_path_parent).ok()?;
+
+                println!("new_abs_path: {:?}", new_abs_path);
+
+                Some(new_abs_path)
             }
             Err(error) => {
-                eprintln!("Error while canonicalizing path: {}", error);
+                println!("Error while canonicalizing path: {}", error);
                 return None;
             }
         }
