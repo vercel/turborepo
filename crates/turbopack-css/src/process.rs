@@ -16,7 +16,7 @@ use smallvec::smallvec;
 use swc_core::{
     atoms::Atom,
     base::sourcemap::SourceMapBuilder,
-    common::{BytePos, FileName, LineCol, DUMMY_SP},
+    common::{BytePos, FileName, LineCol},
     css::{
         ast::UrlValue,
         codegen::{writer::basic::BasicCssWriter, CodeGenerator},
