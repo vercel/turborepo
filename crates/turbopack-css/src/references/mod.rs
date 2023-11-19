@@ -99,8 +99,6 @@ impl VisitMut for ModuleReferencesVisitor<'_> {
             swc_core::css::ast::ImportHref::Str(v) => v.value.clone(),
         };
 
-        dbg!(&src);
-
         let issue_span = i.span;
 
         self.references.push(Vc::upcast(ImportAssetReference::new(
@@ -125,7 +123,6 @@ impl VisitMut for ModuleReferencesVisitor<'_> {
             UrlValue::Str(v) => v.value.clone(),
             UrlValue::Raw(v) => v.value.clone(),
         };
-        dbg!(&src);
 
         // ignore internal urls like `url(#noiseFilter)`
         // ignore server-relative urls like `url(/foo)`
