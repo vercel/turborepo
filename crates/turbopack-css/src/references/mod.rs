@@ -91,8 +91,6 @@ impl<'a> ModuleReferencesVisitor<'a> {
 
 impl VisitMut for ModuleReferencesVisitor<'_> {
     fn visit_mut_import_prelude(&mut self, i: &mut swc_core::css::ast::ImportPrelude) {
-        i.visit_mut_children_with(self);
-
         let src = match &*i.href {
             swc_core::css::ast::ImportHref::Url(v) => match v.value.as_deref().unwrap() {
                 UrlValue::Str(v) => v.value.clone(),
