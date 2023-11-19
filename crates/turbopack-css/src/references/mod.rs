@@ -113,16 +113,6 @@ impl VisitMut for ModuleReferencesVisitor<'_> {
                 issue_span.hi.0 as _,
             ),
         )));
-        let vc = UrlAssetReference::new(
-            self.origin,
-            Request::parse(Value::new(src.to_string().into())),
-            IssueSource::from_swc_offsets(
-                Vc::upcast(self.source),
-                issue_span.lo.0 as _,
-                issue_span.hi.0 as _,
-            ),
-        );
-        self.urls.push((src.to_string(), vc));
 
         // let res = i.visit_children(self);
         // res
@@ -188,22 +178,6 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
                         },
                     ),
                 )));
-                let vc = UrlAssetReference::new(
-                    self.origin,
-                    Request::parse(Value::new(src.to_string().into())),
-                    IssueSource::from_line_col(
-                        Vc::upcast(self.source),
-                        SourcePos {
-                            line: issue_span.line as _,
-                            column: issue_span.column as _,
-                        },
-                        SourcePos {
-                            line: issue_span.line as _,
-                            column: issue_span.column as _,
-                        },
-                    ),
-                );
-                self.urls.push((src.to_string(), vc));
 
                 // let res = i.visit_children(self);
                 // res
