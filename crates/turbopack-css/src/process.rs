@@ -691,6 +691,20 @@ struct SwcDepColllector<'a> {
 }
 
 impl VisitMut for SwcDepColllector<'_> {
+    fn visit_mut_rules(&mut self, n: &mut Vec<swc_core::css::ast::Rule>) {
+        n.visit_mut_children_with(self);
+
+        if self.remove_imports {
+            n.retain(|v| match v {
+                swc_core::css::ast::Rule::AtRule(v) => match &v.name {
+                    swc_core::css::ast::AtRuleName::DashedIdent(_) => true,
+                    swc_core::css::ast::AtRuleName::Ident(name) => name.value != "import",
+                },
+                _ => true,
+            });
+        }
+    }
+
     fn visit_mut_at_rule_prelude(&mut self, node: &mut swc_core::css::ast::AtRulePrelude) {
         match node {
             swc_core::css::ast::AtRulePrelude::ImportPrelude(i) => {
@@ -713,15 +727,6 @@ impl VisitMut for SwcDepColllector<'_> {
                         end: Location { line: 0, column: 0 },
                     },
                 }));
-
-                if self.remove_imports {
-                    *node = swc_core::css::ast::AtRulePrelude::ListOfComponentValues(
-                        swc_core::css::ast::ListOfComponentValues {
-                            span: DUMMY_SP,
-                            children: Default::default(),
-                        },
-                    )
-                }
             }
 
             _ => {
