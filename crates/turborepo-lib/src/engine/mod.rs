@@ -2,6 +2,7 @@ mod builder;
 mod execute;
 
 mod dot;
+mod mermaid;
 
 use std::{
     collections::{HashMap, HashSet},
