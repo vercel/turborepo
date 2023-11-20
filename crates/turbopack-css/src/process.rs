@@ -464,6 +464,7 @@ async fn process_content(
     ty: CssModuleAssetType,
     use_lightningcss: bool,
 ) -> Result<Vc<ParseCssResult>> {
+    #[allow(clippy::needless_lifetimes)]
     fn without_warnings<'o, 'i>(config: ParserOptions<'o, 'i>) -> ParserOptions<'o, 'static> {
         ParserOptions {
             filename: config.filename,
