@@ -36,7 +36,7 @@ jobs:
         run: cd cli && make turbo-prod
 
       - name: Run benchmarks
-        run: pnpm -F benchmark benchmark
+        run: pnpm -F @turbo/benchmark benchmark
 
       - name: Save to Tinybird
         run: |
@@ -92,7 +92,7 @@ jobs:
       - name: Run benchmarks
         shell: bash
         # ttft script will normalize filepath and place the profile in the benchmark directory.
-        run: pnpm -F benchmark ttft "${{ steps.filename.outputs.filename }}"
+        run: pnpm -F @turbo/benchmark ttft "${{ steps.filename.outputs.filename }}"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3

@@ -106,7 +106,8 @@ switch (platform) {
 
 nativeBinding = loadViaSuffix(suffix);
 
-const { Repository, PackageManager } = nativeBinding;
+const { PackageManagerRoot, PackageManager, Workspace } = nativeBinding;
 
-module.exports.Repository = Repository;
+module.exports.PackageManagerRoot = PackageManagerRoot;
 module.exports.PackageManager = PackageManager;
+module.exports.Workspace = Workspace;

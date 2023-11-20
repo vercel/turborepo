@@ -11,6 +11,9 @@ insta = { version = "1.34.0", features = ["json"] }
 serde_json = { workspace = true }
 test-case = { workspace = true }
 
+[lints]
+workspace = true
+
 [dependencies]
 chrono = { workspace = true, features = ["serde"] }
 serde = { workspace = true }

@@ -335,10 +335,19 @@
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
 
-0 -> 119 conditional = ((???*0* | {}) !== ???*1*)
+0 -> 119 conditional = ((???*0* | ???*1*) !== ???*6*)
 - *0* arguments[1]
   ⚠️  function calls are not analysed yet
-- *1* unsupported expression
+- *1* (???*2* ? ???*5* : {})
+  ⚠️  nested operation
+- *2* (???*3* !== ???*4*)
+  ⚠️  nested operation
+- *3* options
+  ⚠️  circular variable reference
+- *4* unsupported expression
+- *5* options
+  ⚠️  circular variable reference
+- *6* unsupported expression
 
 0 -> 120 call = (...) => {"type": "literal", "text": text, "ignoreCase": ignoreCase}("*", false)
 
@@ -1846,9 +1855,17 @@
 0 -> 633 conditional = ((???*0* | "-" | {} | null | {"type": "number_constant", "value": ???*1*}) !== {})
 - *0* s1
   ⚠️  pattern without value
-- *1* ???*2*(text())
+- *1* ((???*2* | "0x" | {} | null) ? ???*3* : ???*5*)
+  ⚠️  nested operation
+- *2* s2
+  ⚠️  pattern without value
+- *3* ???*4*(text(), 16)
   ⚠️  unknown callee
-- *2* FreeVar(parseFloat)
+- *4* FreeVar(parseInt)
+  ⚠️  unknown global
+- *5* ???*6*(text())
+  ⚠️  unknown callee
+- *6* FreeVar(parseFloat)
   ⚠️  unknown global
 
 633 -> 635 member call = ???*0*["substr"](???*1*, 2)
@@ -7222,8 +7239,13 @@
 - *0* max number of linking steps reached
 - *1* max number of linking steps reached
 
-2237 -> 2248 call = (...) => ???*0*([], null, ???*1*)
+2237 -> 2248 call = (...) => ???*0*([], (???*1* ? ???*2* : null), ???*4*)
 - *0* unknown new expression
-- *1* max number of linking steps reached
+- *1* unsupported expression
+- *2* ???*3*["charAt"](peg$maxFailPos)
+  ⚠️  unknown callee object
+- *3* arguments[0]
+  ⚠️  function calls are not analysed yet
+- *4* max number of linking steps reached
 
 0 -> 2250 free var = FreeVar(module)

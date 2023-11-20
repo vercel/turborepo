@@ -6,7 +6,6 @@
 #![feature(hash_set_entry)]
 #![recursion_limit = "256"]
 #![feature(arbitrary_self_types)]
-#![feature(async_fn_in_trait)]
 
 pub mod condition;
 pub mod evaluate_context;
@@ -171,11 +170,14 @@ async fn apply_module_type(
             source,
             Vc::upcast(module_asset_context),
         )),
-        ModuleType::Css { ty, transforms } => Vc::upcast(CssModuleAsset::new(
+        ModuleType::Css {
+            ty,
+            use_lightningcss,
+        } => Vc::upcast(CssModuleAsset::new(
             source,
             Vc::upcast(module_asset_context),
-            *transforms,
             *ty,
+            *use_lightningcss,
         )),
         ModuleType::Static => Vc::upcast(StaticModuleAsset::new(
             source,
@@ -457,7 +459,12 @@ impl AssetContext for ModuleAssetContext {
     ) -> Result<Vc<ModuleResolveResult>> {
         let context_path = origin_path.parent().resolve().await?;
 
-        let result = resolve(context_path, request, resolve_options);
+        let result = resolve(
+            context_path,
+            reference_type.clone(),
+            request,
+            resolve_options,
+        );
         let mut result = self.process_resolve_result(result.resolve().await?, reference_type);
 
         if *self.is_types_resolving_enabled().await? {
