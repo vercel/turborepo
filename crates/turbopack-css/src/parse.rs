@@ -1,10 +1,6 @@
 use swc_core::common::{source_map::SourceMapGenConfig, FileName};
 use turbopack_core::SOURCE_MAP_ROOT_NAME;
 
-// // Capture up until the first "."
-// static BASENAME_RE: Lazy<Regex> = Lazy::new(||
-// Regex::new(r"^[^.]*").unwrap());
-
 /// A config to generate a source map which includes the source content of every
 /// source file. SWC doesn't inline sources content by default when generating a
 /// sourcemap, so we need to provide a custom config to do it.
