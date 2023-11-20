@@ -10,6 +10,7 @@ on:
   push:
     branches:
       - main
+      - mk/fix-benchmarking
     paths:
       - "cli/**"
       - crates/turborepo*/**
@@ -101,8 +102,8 @@ jobs:
           if-no-files-found: error
           # cwd is root of the repository, so we need the benchmark/ prefixed path
           path: |
-            benchmark/${{ steps.filename.outputs.filename }}
-            benchmark/${{ steps.filename.outputs.file_basename }}-ttft.json
+            packages/turbo-benchmark/${{ steps.filename.outputs.filename }}
+            packages/turbo-benchmark/${{ steps.filename.outputs.file_basename }}-ttft.json
 
   # Send each of the profiles generated from the previous job to TinyBird
   # We'll wait for all profiles to complete before sending.
@@ -131,14 +132,14 @@ jobs:
       - name: Display TTFT Data
         shell: bash
         run: |
-          cat benchmark/profiles/ubuntu-ttft.json
-          cat benchmark/profiles/macos-ttft.json
-          cat benchmark/profiles/windows-ttft.json
+          cat packages/turbo-benchmark/profiles/ubuntu-ttft.json
+          cat packages/turbo-benchmark/profiles/macos-ttft.json
+          cat packages/turbo-benchmark/profiles/windows-ttft.json
 
       - name: Send data to TinyBird
         shell: bash
         run: |
-          cd benchmark
+          cd packages/turbo-benchmark
           node -r esbuild-register ./src/ttft/tinybird.ts profiles/ubuntu-ttft.json ${{github.run_id}}
           node -r esbuild-register ./src/ttft/tinybird.ts profiles/macos-ttft.json ${{github.run_id}}
           node -r esbuild-register ./src/ttft/tinybird.ts profiles/windows-ttft.json ${{github.run_id}}
