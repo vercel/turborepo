@@ -1,7 +1,7 @@
 use thiserror::Error;
-use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::package_graph;
 
+use super::graph_visualizer;
 use crate::{
     config, daemon, engine, opts,
     run::{global_hash, scope},
@@ -10,10 +10,8 @@ use crate::{
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("failed to open graph file {0}")]
-    OpenGraphFile(#[source] std::io::Error, AbsoluteSystemPathBuf),
-    #[error("failed to produce graph output")]
-    GraphOutput(#[source] std::io::Error),
+    #[error(transparent)]
+    Graph(#[from] graph_visualizer::Error),
     #[error("error preparing engine: Invalid persistent task configuration:\n{0}")]
     EngineValidation(String),
     #[error(transparent)]
