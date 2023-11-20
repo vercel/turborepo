@@ -50,7 +50,9 @@ pub enum ServerToClientMessage {
 #[serde(rename_all = "kebab-case")]
 pub enum ClientToServerMessage {
     #[serde(rename_all = "camelCase")]
-    ViewRect { view_rect: ViewRect },
+    ViewRect {
+        view_rect: ViewRect,
+    },
     ViewMode {
         #[serde(with = "u64_string")]
         id: SpanId,
@@ -65,6 +67,7 @@ pub enum ClientToServerMessage {
         #[serde(with = "u64_string")]
         id: SpanId,
     },
+    Ack,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -129,7 +132,20 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                     last_update_generation: 0,
                 }));
                 let should_shutdown = Arc::new(AtomicBool::new(false));
-                fn send_update(state: &mut ConnectionState, force_send: bool) -> Result<()> {
+                let update_skipped = Arc::new(AtomicBool::new(false));
+                let ready_for_update = Arc::new(AtomicBool::new(true));
+                fn send_update(
+                    state: &mut ConnectionState,
+                    force_send: bool,
+                    ready_for_update: &AtomicBool,
+                    update_skipped: &AtomicBool,
+                ) -> Result<()> {
+                    if !ready_for_update.load(Ordering::SeqCst) {
+                        if force_send {
+                            update_skipped.store(true, Ordering::SeqCst);
+                        }
+                        return Ok(());
+                    }
                     let store = state.store.read();
                     if !force_send && state.last_update_generation == store.generation() {
                         return Ok(());
@@ -145,16 +161,26 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                     let message = ServerToClientMessage::ViewLinesCount { count };
                     let message = serde_json::to_string(&message).unwrap();
                     state.writer.send_message(&OwnedMessage::Text(message))?;
+                    ready_for_update.store(false, Ordering::SeqCst);
                     Ok(())
                 }
                 let inner_thread = {
                     let should_shutdown = should_shutdown.clone();
+                    let ready_for_update = ready_for_update.clone();
+                    let update_skipped = update_skipped.clone();
                     let state = state.clone();
                     thread::spawn(move || loop {
                         if should_shutdown.load(Ordering::SeqCst) {
                             return;
                         }
-                        if send_update(&mut *state.lock().unwrap(), false).is_err() {
+                        if send_update(
+                            &mut *state.lock().unwrap(),
+                            false,
+                            &ready_for_update,
+                            &update_skipped,
+                        )
+                        .is_err()
+                        {
                             break;
                         }
                         thread::sleep(Duration::from_millis(500));
@@ -239,8 +265,20 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                                     state.writer.send_message(&OwnedMessage::Text(message))?;
                                     continue;
                                 }
+                                ClientToServerMessage::Ack => {
+                                    ready_for_update.store(true, Ordering::SeqCst);
+                                    if update_skipped.load(Ordering::SeqCst) {
+                                        update_skipped.store(false, Ordering::SeqCst);
+                                        send_update(
+                                            &mut *state,
+                                            true,
+                                            &ready_for_update,
+                                            &update_skipped,
+                                        )?;
+                                    }
+                                }
                             }
-                            send_update(&mut *state, true)?;
+                            send_update(&mut *state, true, &ready_for_update, &update_skipped)?;
                         }
                         OwnedMessage::Binary(_) => {
                             // This doesn't happen
