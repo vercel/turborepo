@@ -286,9 +286,6 @@ pub enum CssWithPlaceholderResult {
 
         #[turbo_tasks(trace_ignore)]
         placeholders: HashMap<String, Url<'static>>,
-
-        #[turbo_tasks(trace_ignore)]
-        options: ParserOptions<'static, 'static>,
     },
     Unparseable,
     NotFound,
@@ -333,7 +330,7 @@ pub async fn process_css_with_placeholder(
             stylesheet,
             references,
             url_references,
-            options,
+            ..
         } => {
             let (result, _) = stylesheet.to_css(cm.clone(), false, false, false)?;
 
@@ -352,7 +349,6 @@ pub async fn process_css_with_placeholder(
                 references: *references,
                 url_references: *url_references,
                 placeholders: HashMap::new(),
-                options: options.clone(),
             }
             .into())
         }
@@ -372,11 +368,14 @@ pub async fn finalize_css(
             cm,
             parse_result,
             url_references,
-            options,
             ..
         } => {
             let mut stylesheet = match &*parse_result.await? {
-                ParseCssResult::Ok { stylesheet, .. } => stylesheet.to_static(options.clone()),
+                ParseCssResult::Ok {
+                    stylesheet,
+                    options,
+                    ..
+                } => stylesheet.to_static(options.clone()),
                 ParseCssResult::Unparseable => return Ok(FinalCssResult::Unparseable.into()),
                 ParseCssResult::NotFound => return Ok(FinalCssResult::NotFound.into()),
             };
