@@ -7,7 +7,7 @@ import tar from "tar";
 // @ts-ignore-next-line
 import { ZstdCodec } from "zstd-codec";
 import { Monorepo } from "./monorepo";
-import type { DryRun, PackageManager } from "./types";
+import type { DryRun } from "./types";
 
 export const matchTask =
   <T, V>(predicate: (dryRun: DryRun, val: T) => V) =>
@@ -36,42 +36,6 @@ export const taskHashPredicate = (dryRun: DryRun, taskId: string): string => {
   throw new Error(`missing task with id ${taskId}`);
 };
 
-// getLockfileForPackageManager returns the name of the lockfile for the given package manager
-export function getLockfileForPackageManager(ws: PackageManager) {
-  switch (ws) {
-    case "yarn":
-      return "yarn.lock";
-    case "pnpm":
-      return "pnpm-lock.yaml";
-    case "pnpm6":
-      return "pnpm-lock.yaml";
-    case "npm":
-      return "package-lock.json";
-    case "berry":
-      return "yarn.lock";
-    default:
-      throw new Error(`Unknown package manager: ${ws}`);
-  }
-}
-
-export function getImmutableInstallForPackageManager(
-  ws: PackageManager
-): string[] {
-  switch (ws) {
-    case "yarn":
-      return ["install", "--frozen-lockfile"];
-    case "pnpm":
-      return ["install", "--frozen-lockfile"];
-    case "pnpm6":
-      return ["install", "--frozen-lockfile"];
-    case "npm":
-      return ["ci"];
-    case "berry":
-      return ["install", "--immutable"];
-    default:
-      throw new Error(`Unknown package manager: ${ws}`);
-  }
-}
 export function getCommandOutputAsArray(
   results: execa.ExecaSyncReturnValue<string>
 ): string[] {
