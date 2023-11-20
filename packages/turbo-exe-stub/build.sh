@@ -9,14 +9,15 @@ fi
 echo "Building stub turbo.exe for windows platform"
 g++ turbo.cpp -o turbo.exe
 
-echo "PWD: $PWD"
 
 SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
+UP_ONE="$SCRIPT_DIR/.."
 ROOT_DIR="$SCRIPT_DIR/../.."
-
-
 FIND_TURBO_FIXTURES_DIR="${ROOT_DIR}/turborepo-tests/integration/tests/_fixtures/find_turbo"
 
+echo "PWD: $PWD"
+echo "ROOT_DIR: $ROOT_DIR"
+echo "UP_ONE: $UP_ONE"
 echo "FIND_TURBO_FIXTURES_DIR: ${FIND_TURBO_FIXTURES_DIR}"
 
 cp turbo.exe "${FIND_TURBO_FIXTURES_DIR}/hoisted/node_modules/turbo-windows-64/bin/"
