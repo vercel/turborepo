@@ -328,7 +328,8 @@ jobs:
         with:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
       - name: Cache Prysk
         id: cache-prysk
         uses: actions/cache@v3
@@ -362,7 +363,8 @@ jobs:
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
       - name: Cache Prysk
         id: cache-prysk
         uses: actions/cache@v3
