@@ -272,11 +272,10 @@ impl PartialEq for ParseCssResult {
 #[turbo_tasks::value(shared, serialization = "none", eq = "manual")]
 pub enum CssWithPlaceholderResult {
     Ok {
+        parse_result: Vc<ParseCssResult>,
+
         #[turbo_tasks(debug_ignore, trace_ignore)]
         cm: Arc<swc_core::common::SourceMap>,
-
-        #[turbo_tasks(trace_ignore)]
-        stylesheet: StyleSheetLike<'static, 'static>,
 
         references: Vc<ModuleReferences>,
 
@@ -324,9 +323,9 @@ impl PartialEq for FinalCssResult {
 
 #[turbo_tasks::function]
 pub async fn process_css_with_placeholder(
-    result: Vc<ParseCssResult>,
+    parse_result: Vc<ParseCssResult>,
 ) -> Result<Vc<CssWithPlaceholderResult>> {
-    let result = result.await?;
+    let result = parse_result.await?;
 
     match &*result {
         ParseCssResult::Ok {
@@ -336,8 +335,6 @@ pub async fn process_css_with_placeholder(
             url_references,
             options,
         } => {
-            let stylesheet = stylesheet.to_static(options.clone());
-
             let (result, _) = stylesheet.to_css(cm.clone(), false, false, false)?;
 
             let exports = result.exports.map(|exports| {
@@ -349,12 +346,12 @@ pub async fn process_css_with_placeholder(
             });
 
             Ok(CssWithPlaceholderResult::Ok {
+                parse_result,
                 cm: cm.clone(),
                 exports,
                 references: *references,
                 url_references: *url_references,
                 placeholders: HashMap::new(),
-                stylesheet,
                 options: options.clone(),
             }
             .into())
@@ -373,12 +370,16 @@ pub async fn finalize_css(
     match &*result {
         CssWithPlaceholderResult::Ok {
             cm,
-            stylesheet,
+            parse_result,
             url_references,
             options,
             ..
         } => {
-            let mut stylesheet = stylesheet.to_static(options.clone());
+            let mut stylesheet = match &*parse_result.await? {
+                ParseCssResult::Ok { stylesheet, .. } => stylesheet.to_static(options.clone()),
+                ParseCssResult::Unparseable => return Ok(FinalCssResult::Unparseable.into()),
+                ParseCssResult::NotFound => return Ok(FinalCssResult::NotFound.into()),
+            };
 
             let url_references = *url_references;
 
