@@ -4,19 +4,10 @@
   "private": true,
   "license": "MIT",
   "exports": {
-    "./card": {
-      "types": "./src/card.tsx",
-      "development": "./src/card.tsx",
-      "default": "./dist/card.js"
-    },
-    "./code": {
-      "types": "./src/code.tsx",
-      "development": "./src/code.tsx",
-      "default": "./dist/code.js"
-    }
+    "./card": "./src/card.tsx",
+    "./code": "./src/code.tsx"
   },
   "scripts": {
-    "build": "tsc",
     "lint": "eslint . --max-warnings 0",
     "generate:component": "turbo gen react-component"
   },
