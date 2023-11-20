@@ -123,15 +123,17 @@ jobs:
       - name: Download profiles
         uses: actions/download-artifact@v3
         with:
-          path: benchmark
+          name: profiles
+          path: packages/turbo-benchmark/profiles/
 
       - name: List Downloaded Profiles
         shell: bash
-        run: ls benchmark/profiles
+        run: ls packages/turbo-benchmark/profiles
 
       - name: Display TTFT Data
         shell: bash
         run: |
+          ls -al packages/turbo-benchmark/profiles
           cat packages/turbo-benchmark/profiles/ubuntu-ttft.json
           cat packages/turbo-benchmark/profiles/macos-ttft.json
           cat packages/turbo-benchmark/profiles/windows-ttft.json
