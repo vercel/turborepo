@@ -4,7 +4,7 @@
   $ pnpm run build lint -- --output-logs=errors-only
   
   \> my-turborepo@ build (.*)/test.t (re)
-  \> turbo run build "lint" "--output-logs=errors-only" (re)
+  \> turbo build "lint" "--output-logs=errors-only" (re)
   
   \xe2\x80\xa2 Packages in scope: @repo/eslint-config, @repo/typescript-config, @repo/ui, docs, web (esc)
   \xe2\x80\xa2 Running build, lint in 5 packages (esc)
@@ -17,7 +17,7 @@
   $ pnpm run build lint -- --output-logs=errors-only
   
   \> my-turborepo@ build (.*)/test.t (re)
-  \> turbo run build "lint" "--output-logs=errors-only" (re)
+  \> turbo build "lint" "--output-logs=errors-only" (re)
   
   \xe2\x80\xa2 Packages in scope: @repo/eslint-config, @repo/typescript-config, @repo/ui, docs, web (esc)
   \xe2\x80\xa2 Running build, lint in 5 packages (esc)
