@@ -3,7 +3,7 @@ use std::{io::Write, sync::Arc, time::Duration};
 use console::StyledObject;
 use tracing::{debug, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
-use turborepo_cache::{AsyncCache, CacheHitMetadata, CacheSource};
+use turborepo_cache::{AsyncCache, CacheError, CacheHitMetadata, CacheSource};
 use turborepo_repository::package_graph::WorkspaceInfo;
 use turborepo_ui::{
     color, replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI,
@@ -50,9 +50,15 @@ impl RunCache {
         color_selector: ColorSelector,
         daemon_client: Option<DaemonClient<DaemonConnector>>,
         ui: UI,
+        is_dry_run: bool,
     ) -> Self {
+        let task_output_mode = if is_dry_run {
+            Some(OutputLogsMode::None)
+        } else {
+            opts.task_output_mode_override
+        };
         RunCache {
-            task_output_mode: opts.task_output_mode_override,
+            task_output_mode,
             cache,
             reads_disabled: opts.skip_reads,
             writes_disabled: opts.skip_writes,
@@ -149,14 +155,18 @@ impl TaskCache {
 
         log_writer.with_log_file(&self.log_file_path)?;
 
-        if matches!(
+        if !matches!(
             self.task_output_mode,
-            OutputLogsMode::Full | OutputLogsMode::NewOnly
+            OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly
         ) {
             log_writer.with_prefixed_writer(prefixed_writer);
         }
 
         Ok(log_writer)
+    }
+
+    pub async fn exists(&self) -> Result<Option<CacheHitMetadata>, CacheError> {
+        self.run_cache.cache.exists(&self.hash).await
     }
 
     pub async fn restore_outputs(
@@ -212,10 +222,15 @@ impl TaskCache {
                 .await?;
 
             let Some((cache_hit_metadata, restored_files)) = cache_status else {
-                prefixed_ui.output(format!(
-                    "cache miss, executing {}",
-                    color!(self.ui, GREY, "{}", self.hash)
-                ));
+                if !matches!(
+                    self.task_output_mode,
+                    OutputLogsMode::None | OutputLogsMode::ErrorsOnly
+                ) {
+                    prefixed_ui.output(format!(
+                        "cache miss, executing {}",
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ));
+                }
 
                 return Ok(None);
             };
@@ -288,7 +303,7 @@ impl TaskCache {
         prefixed_ui: &mut PrefixedUI<impl Write>,
         duration: Duration,
     ) -> Result<(), Error> {
-        if self.caching_disabled || self.run_cache.reads_disabled {
+        if self.caching_disabled || self.run_cache.writes_disabled {
             return Ok(());
         }
 

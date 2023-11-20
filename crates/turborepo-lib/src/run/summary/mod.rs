@@ -10,14 +10,14 @@ mod scm;
 mod spaces;
 mod task;
 mod task_factory;
-
 use std::{collections::HashSet, io, io::Write};
 
 use chrono::{DateTime, Local};
-pub use execution::TaskTracker;
+pub use execution::{TaskExecutionSummary, TaskTracker};
 pub use global_hash::GlobalHashSummary;
 use itertools::Itertools;
 use serde::Serialize;
+pub use spaces::{SpacesTaskClient, SpacesTaskInformation};
 use svix_ksuid::{Ksuid, KsuidLike};
 use tabwriter::TabWriter;
 use thiserror::Error;
@@ -155,32 +155,31 @@ impl RunTracker {
     ) -> Self {
         let scm = SCMState::get(env_at_execution_start, repo_root);
 
-        let mut run_tracker = RunTracker {
-            scm: scm.clone(),
+        let spaces_client_handle =
+            SpacesClient::new(spaces_id.clone(), spaces_api_client, api_auth).and_then(
+                |spaces_client| {
+                    let payload = CreateSpaceRunPayload::new(
+                        started_at,
+                        synthesized_command.clone(),
+                        package_inference_root,
+                        scm.branch.clone(),
+                        scm.sha.clone(),
+                        version.to_string(),
+                        user.clone(),
+                    );
+                    spaces_client.start(payload).ok()
+                },
+            );
+
+        RunTracker {
+            scm,
             version,
             started_at,
             execution_tracker: ExecutionTracker::new(),
-            spaces_client_handle: None,
-            user: user.clone(),
-            synthesized_command: synthesized_command.to_string(),
-        };
-
-        if let Some(spaces_client) =
-            SpacesClient::new(spaces_id.clone(), spaces_api_client, api_auth)
-        {
-            let payload = CreateSpaceRunPayload::new(
-                started_at,
-                synthesized_command,
-                package_inference_root,
-                scm.branch,
-                scm.sha,
-                version.to_string(),
-                user,
-            );
-            run_tracker.spaces_client_handle = spaces_client.start(payload).ok();
+            user,
+            synthesized_command,
+            spaces_client_handle,
         }
-
-        run_tracker
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -250,7 +249,16 @@ impl RunTracker {
         })
     }
 
-    #[tracing::instrument(skip(pkg_dep_graph, ui, engine, hash_tracker))]
+    #[tracing::instrument(skip(
+        pkg_dep_graph,
+        ui,
+        run_opts,
+        packages,
+        global_hash_summary,
+        engine,
+        hash_tracker,
+        env_at_execution_start
+    ))]
     #[allow(clippy::too_many_arguments)]
     pub async fn finish<'a>(
         self,
@@ -299,6 +307,16 @@ impl RunTracker {
 
     pub fn track_task(&self, task_id: TaskId<'static>) -> TaskTracker<()> {
         self.execution_tracker.task_tracker(task_id)
+    }
+
+    pub fn spaces_enabled(&self) -> bool {
+        self.spaces_client_handle.is_some()
+    }
+
+    pub fn spaces_task_client(&self) -> Option<SpacesTaskClient> {
+        self.spaces_client_handle
+            .as_ref()
+            .map(|handle| handle.task_client())
     }
 }
 
@@ -351,6 +369,7 @@ impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
 }
 
 impl<'a> RunSummary<'a> {
+    #[tracing::instrument(skip(self, pkg_dep_graph, ui))]
     async fn finish(
         mut self,
         end_time: DateTime<Local>,

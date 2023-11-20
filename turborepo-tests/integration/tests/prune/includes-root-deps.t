@@ -4,7 +4,7 @@ Setup
 
 Make sure that the internal util package is part of the prune output
   $ ${TURBO} prune web
-  Generating pruned monorepo for web in .*/out (re)
+  Generating pruned monorepo for web in .*(\/|\\)out (re)
    - Added shared
    - Added util
    - Added web

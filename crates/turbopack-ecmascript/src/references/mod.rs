@@ -51,7 +51,7 @@ use turbo_tasks_fs::{FileJsonContent, FileSystemPath};
 use turbopack_core::{
     compile_time_info::{CompileTimeInfo, FreeVarReference},
     error::PrettyPrintError,
-    issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, LazyIssueSource},
+    issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, IssueSource, StyledString},
     module::Module,
     reference::{ModuleReference, ModuleReferences, SourceMapReference},
     reference_type::{CommonJsReferenceSubType, ReferenceType},
@@ -644,7 +644,10 @@ pub(crate) async fn analyze_ecmascript_module(
             AnalyzeIssue {
                 code: None,
                 category: Vc::cell("analyze".to_string()),
-                message: Vc::cell("top level await is only supported in ESM modules.".to_string()),
+                message: StyledString::Text(
+                    "top level await is only supported in ESM modules.".to_string(),
+                )
+                .cell(),
                 source_ident: source.ident(),
                 severity: IssueSeverity::Error.into(),
                 source: Some(issue_source(source, span)),
@@ -963,15 +966,11 @@ pub(crate) async fn analyze_ecmascript_module(
                     Request::parse(Value::new(pat)),
                     compile_time_info.environment().rendering(),
                     Vc::cell(ast_path),
-                    LazyIssueSource::from_swc_offsets(
-                        source,
-                        span.lo.to_usize(),
-                        span.hi.to_usize(),
-                    ),
+                    IssueSource::from_swc_offsets(source, span.lo.to_usize(), span.hi.to_usize()),
                     in_try,
                     options
                         .url_rewrite_behavior
-                        .unwrap_or(UrlRewriteBehavior::Full)
+                        .unwrap_or(UrlRewriteBehavior::Relative)
                         .cell(),
                 ));
             }
@@ -1460,7 +1459,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
         JsValue::WellKnownFunction(WellKnownFunctionKind::NodeExpressSet) => {
             let args = linked_args(args).await?;
             if args.len() == 2 {
-                if let Some(s) = args.get(0).and_then(|arg| arg.as_str()) {
+                if let Some(s) = args.first().and_then(|arg| arg.as_str()) {
                     let pkg_or_dir = args.get(1).unwrap();
                     let pat = js_value_to_pattern(pkg_or_dir);
                     if !pat.has_constant_parts() {
@@ -1532,7 +1531,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
         }
         JsValue::WellKnownFunction(WellKnownFunctionKind::NodeStrongGlobalizeSetRootDir) => {
             let args = linked_args(args).await?;
-            if let Some(p) = args.get(0).and_then(|arg| arg.as_str()) {
+            if let Some(p) = args.first().and_then(|arg| arg.as_str()) {
                 let abs_pattern = if p.starts_with("/ROOT/") {
                     Pattern::Constant(format!("{p}/intl"))
                 } else {
@@ -1764,7 +1763,7 @@ async fn handle_free_var_reference(
                     ))
                 }),
                 Request::parse(Value::new(request.clone().into())),
-                Some(LazyIssueSource::from_swc_offsets(
+                Some(IssueSource::from_swc_offsets(
                     state.source,
                     span.lo.to_usize(),
                     span.hi.to_usize(),
@@ -1792,8 +1791,8 @@ async fn handle_free_var_reference(
     Ok(true)
 }
 
-fn issue_source(source: Vc<Box<dyn Source>>, span: Span) -> Vc<LazyIssueSource> {
-    LazyIssueSource::from_swc_offsets(source, span.lo.to_usize(), span.hi.to_usize())
+fn issue_source(source: Vc<Box<dyn Source>>, span: Span) -> Vc<IssueSource> {
+    IssueSource::from_swc_offsets(source, span.lo.to_usize(), span.hi.to_usize())
 }
 
 fn analyze_amd_define(
@@ -2586,6 +2585,7 @@ async fn resolve_as_webpack_runtime(
 
     let resolved = resolve(
         origin.origin_path().parent().resolve().await?,
+        Value::new(ReferenceType::CommonJs(CommonJsReferenceSubType::Undefined)),
         request,
         options,
     );

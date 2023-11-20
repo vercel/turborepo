@@ -5,14 +5,15 @@ use swc_core::{
 };
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
-    chunk::{ChunkableModuleReference, ChunkingType, ChunkingTypeOption},
-    issue::LazyIssueSource,
+    chunk::{ChunkableModuleReference, ChunkingContext, ChunkingType, ChunkingTypeOption},
+    environment::ChunkLoading,
+    issue::IssueSource,
     reference::ModuleReference,
     reference_type::EcmaScriptModulesReferenceSubType,
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
 
-use super::super::pattern_mapping::{PatternMapping, ResolveType::EsmAsync};
+use super::super::pattern_mapping::{PatternMapping, ResolveType};
 use crate::{
     chunk::EcmascriptChunkingContext,
     code_gen::{CodeGenerateable, CodeGeneration},
@@ -27,7 +28,7 @@ pub struct EsmAsyncAssetReference {
     pub origin: Vc<Box<dyn ResolveOrigin>>,
     pub request: Vc<Request>,
     pub path: Vc<AstPath>,
-    pub issue_source: Vc<LazyIssueSource>,
+    pub issue_source: Vc<IssueSource>,
     pub in_try: bool,
 }
 
@@ -38,7 +39,7 @@ impl EsmAsyncAssetReference {
         origin: Vc<Box<dyn ResolveOrigin>>,
         request: Vc<Request>,
         path: Vc<AstPath>,
-        issue_source: Vc<LazyIssueSource>,
+        issue_source: Vc<IssueSource>,
         in_try: bool,
     ) -> Vc<Self> {
         Self::cell(EsmAsyncAssetReference {
@@ -102,7 +103,14 @@ impl CodeGenerateable for EsmAsyncAssetReference {
                 try_to_severity(self.in_try),
                 Some(self.issue_source),
             ),
-            Value::new(EsmAsync),
+            if matches!(
+                *chunking_context.environment().chunk_loading().await?,
+                ChunkLoading::None
+            ) {
+                Value::new(ResolveType::ChunkItem)
+            } else {
+                Value::new(ResolveType::AsyncChunkLoader)
+            },
         )
         .await?;
 

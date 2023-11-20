@@ -12,7 +12,7 @@ Setup
       "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
       "files": {
         "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-        "package.json": "c38e07c8d8d5f851dec8cdbc3d103deed82bc960",
+        "package.json": "5519edda652c463054307421a3c05ff49f080328",
         "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
       },
       "hashOfExternalDependencies": "",
@@ -33,11 +33,11 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "273cd179351c6ef3",
+        "hash": "f09bf783beacf5c9",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-          "package.json": "c38e07c8d8d5f851dec8cdbc3d103deed82bc960",
+          "package.json": "5519edda652c463054307421a3c05ff49f080328",
           "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
           "turbo.json": "bf9ddbce36808b6ea5a0ea2b7ceb400ee6c42c4c"
         },
@@ -48,13 +48,13 @@ Setup
           "status": "MISS",
           "timeSaved": 0
         },
-        "command": "echo 'building' > foo.txt",
+        "command": "echo building > foo.txt",
         "cliArguments": [],
         "outputs": [
           "foo.txt"
         ],
         "excludedOutputs": null,
-        "logFile": ".turbo/turbo-build.log",
+        "logFile": "\.turbo(\/|\\\\)turbo-build\.log", (re)
         "dependencies": [],
         "dependents": [
           "test"
@@ -89,11 +89,11 @@ Setup
       {
         "taskId": "test",
         "task": "test",
-        "hash": "f21d7ac37c171ce7",
+        "hash": "8bfab5dc6b4ccb3b",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
-          "package.json": "c38e07c8d8d5f851dec8cdbc3d103deed82bc960",
+          "package.json": "5519edda652c463054307421a3c05ff49f080328",
           "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
           "turbo.json": "bf9ddbce36808b6ea5a0ea2b7ceb400ee6c42c4c"
         },
@@ -108,7 +108,7 @@ Setup
         "cliArguments": [],
         "outputs": null,
         "excludedOutputs": null,
-        "logFile": ".turbo/turbo-test.log",
+        "logFile": "\.turbo(\/|\\\\)turbo-test\.log", (re)
         "dependencies": [
           "build"
         ],

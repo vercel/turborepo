@@ -10,9 +10,9 @@ Setup
   $ cat tmp-1.txt
   Packages in Scope
   Name    Path\s* (re)
-  another packages/another\s* (re)
-  my-app  apps/my-app\s* (re)
-  util    packages/util\s* (re)
+  another packages(\/|\\)another\s* (re)
+  my-app  apps(\/|\\)my-app\s* (re)
+  util    packages(\/|\\)util\s* (re)
 
 # Part 2 of the logs are Global Hash INputs
   $ cat tmp-2.txt
@@ -32,13 +32,13 @@ Setup
   my-app#build
     Task                           = build\s* (re)
     Package                        = my-app\s* (re)
-    Hash                           = b42768856d16033a\s* (re)
+    Hash                           = f5b905676d8a275c\s* (re)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
-    Directory                      = apps\/my-app\s* (re)
-    Command                        = echo 'building'\s* (re)
+    Directory                      = apps(\/|\\)my-app\s* (re)
+    Command                        = echo building\s* (re)
     Outputs                        = apple.json, banana.txt\s* (re)
-    Log File                       = apps/my-app/.turbo/turbo-build.log\s* (re)
+    Log File                       = apps(\/|\\)my-app(\/|\\)\.turbo(\/|\\)turbo-build\.log\s* (re)
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
     Inputs Files Considered        = 2\s* (re)
@@ -53,13 +53,13 @@ Setup
   util#build
     Task                           = build\s* (re)
     Package                        = util\s* (re)
-    Hash                           = 9b9969f14caa05a4\s* (re)
+    Hash                           = 1ce33e04f265f95c\s* (re)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
-    Directory                      = packages/util\s* (re)
-    Command                        = echo 'building'\s* (re)
+    Directory                      = packages(\/|\\)util\s* (re)
+    Command                        = echo building\s* (re)
     Outputs                        =\s* (re)
-    Log File                       = packages/util/.turbo/turbo-build.log\s* (re)
+    Log File                       = packages(\/|\\)util(\/|\\)\.turbo(\/|\\)turbo-build\.log\s* (re)
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
     Inputs Files Considered        = 1\s* (re)

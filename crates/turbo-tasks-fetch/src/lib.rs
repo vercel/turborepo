@@ -1,11 +1,10 @@
 #![feature(min_specialization)]
 #![feature(arbitrary_self_types)]
-#![feature(async_fn_in_trait)]
 
 use anyhow::Result;
 use turbo_tasks::Vc;
 use turbo_tasks_fs::FileSystemPath;
-use turbopack_core::issue::{Issue, IssueSeverity};
+use turbopack_core::issue::{Issue, IssueSeverity, StyledString};
 
 pub fn register() {
     turbo_tasks::register();
@@ -154,11 +153,11 @@ impl Issue for FetchIssue {
     }
 
     #[turbo_tasks::function]
-    async fn description(&self) -> Result<Vc<String>> {
+    async fn description(&self) -> Result<Vc<StyledString>> {
         let url = &*self.url.await?;
         let kind = &*self.kind.await?;
 
-        Ok(Vc::cell(match kind {
+        Ok(StyledString::Text(match kind {
             FetchErrorKind::Connect => format!(
                 "There was an issue establishing a connection while requesting {}.",
                 url
@@ -171,7 +170,8 @@ impl Issue for FetchIssue {
             }
             FetchErrorKind::Timeout => format!("Connection timed out when requesting {}", url),
             FetchErrorKind::Other => format!("There was an issue requesting {}", url),
-        }))
+        })
+        .cell())
     }
 
     #[turbo_tasks::function]

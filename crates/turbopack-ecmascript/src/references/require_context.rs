@@ -22,7 +22,7 @@ use turbopack_core::{
         ChunkingContext,
     },
     ident::AssetIdent,
-    issue::{IssueSeverity, LazyIssueSource},
+    issue::{IssueSeverity, IssueSource},
     module::Module,
     reference::{ModuleReference, ModuleReferences},
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
@@ -37,7 +37,7 @@ use crate::{
     code_gen::CodeGeneration,
     create_visitor,
     references::{
-        pattern_mapping::{PatternMapping, ResolveType::Cjs},
+        pattern_mapping::{PatternMapping, ResolveType},
         AstPath,
     },
     resolve::{cjs_resolve, try_to_severity},
@@ -165,7 +165,7 @@ impl RequireContextMap {
         dir: Vc<FileSystemPath>,
         recursive: bool,
         filter: Vc<Regex>,
-        issue_source: Option<Vc<LazyIssueSource>>,
+        issue_source: Option<Vc<IssueSource>>,
         issue_severity: Vc<IssueSeverity>,
     ) -> Result<Vc<Self>> {
         let origin_path = &*origin.origin_path().parent().await?;
@@ -206,7 +206,7 @@ pub struct RequireContextAssetReference {
     pub include_subdirs: bool,
 
     pub path: Vc<AstPath>,
-    pub issue_source: Option<Vc<LazyIssueSource>>,
+    pub issue_source: Option<Vc<IssueSource>>,
     pub in_try: bool,
 }
 
@@ -220,7 +220,7 @@ impl RequireContextAssetReference {
         include_subdirs: bool,
         filter: Vc<Regex>,
         path: Vc<AstPath>,
-        issue_source: Option<Vc<LazyIssueSource>>,
+        issue_source: Option<Vc<IssueSource>>,
         in_try: bool,
     ) -> Vc<Self> {
         let map = RequireContextMap::generate(
@@ -439,7 +439,7 @@ impl EcmascriptChunkItem for RequireContextChunkItem {
                 self.origin,
                 Vc::upcast(self.chunking_context),
                 entry.result,
-                Value::new(Cjs),
+                Value::new(ResolveType::ChunkItem),
             )
             .await?;
 

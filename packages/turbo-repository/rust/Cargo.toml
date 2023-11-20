@@ -7,6 +7,9 @@ license = "MPL-2.0"
 [lib]
 crate-type = ["cdylib"]
 
+[lints]
+workspace = true
+
 [dependencies]
 napi = { version = "2.14.0", features = ["tokio_rt"] }
 napi-derive = "2.14.0"

@@ -15,12 +15,12 @@ use turbo_tasks::{
 };
 use turbopack_core::{
     chunk::ChunkableModuleReference,
-    issue::LazyIssueSource,
+    issue::IssueSource,
     reference::ModuleReference,
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
 
-use super::pattern_mapping::{PatternMapping, ResolveType::Cjs};
+use super::pattern_mapping::{PatternMapping, ResolveType::ChunkItem};
 use crate::{
     chunk::EcmascriptChunkingContext,
     code_gen::{CodeGenerateable, CodeGeneration},
@@ -34,7 +34,7 @@ use crate::{
 pub struct AmdDefineAssetReference {
     origin: Vc<Box<dyn ResolveOrigin>>,
     request: Vc<Request>,
-    issue_source: Vc<LazyIssueSource>,
+    issue_source: Vc<IssueSource>,
     in_try: bool,
 }
 
@@ -44,7 +44,7 @@ impl AmdDefineAssetReference {
     pub fn new(
         origin: Vc<Box<dyn ResolveOrigin>>,
         request: Vc<Request>,
-        issue_source: Vc<LazyIssueSource>,
+        issue_source: Vc<IssueSource>,
         in_try: bool,
     ) -> Vc<Self> {
         Self::cell(AmdDefineAssetReference {
@@ -109,7 +109,7 @@ pub struct AmdDefineWithDependenciesCodeGen {
     origin: Vc<Box<dyn ResolveOrigin>>,
     path: Vc<AstPath>,
     factory_type: AmdDefineFactoryType,
-    issue_source: Vc<LazyIssueSource>,
+    issue_source: Vc<IssueSource>,
     in_try: bool,
 }
 
@@ -119,7 +119,7 @@ impl AmdDefineWithDependenciesCodeGen {
         origin: Vc<Box<dyn ResolveOrigin>>,
         path: Vc<AstPath>,
         factory_type: AmdDefineFactoryType,
-        issue_source: Vc<LazyIssueSource>,
+        issue_source: Vc<IssueSource>,
         in_try: bool,
     ) -> Vc<Self> {
         Self::cell(AmdDefineWithDependenciesCodeGen {
@@ -159,7 +159,7 @@ impl CodeGenerateable for AmdDefineWithDependenciesCodeGen {
                                     Some(self.issue_source),
                                     try_to_severity(self.in_try),
                                 ),
-                                Value::new(Cjs),
+                                Value::new(ChunkItem),
                             )
                             .await?,
                             request.await?.request(),

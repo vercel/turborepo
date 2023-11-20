@@ -93,6 +93,15 @@ impl Vendor {
     }
 }
 
+pub fn github_header_footer(package: Option<&str>, task: &str) -> (String, String) {
+    let header = if let Some(package) = package {
+        format!("::group::{package}:{task}\n")
+    } else {
+        format!("::group::{task}\n")
+    };
+    (header, "::endgroup::\n".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use tracing::info;

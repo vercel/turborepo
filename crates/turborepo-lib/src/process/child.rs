@@ -29,7 +29,7 @@ use tokio::{
     join,
     sync::{mpsc, watch, RwLock},
 };
-use tracing::{debug, info};
+use tracing::debug;
 
 #[derive(Debug)]
 pub enum ChildState {
@@ -38,9 +38,9 @@ pub enum ChildState {
 }
 
 impl ChildState {
-    pub fn command_channel(&self) -> Option<&ChildCommandChannel> {
+    pub fn command_channel(&self) -> Option<ChildCommandChannel> {
         match self {
-            ChildState::Running(c) => Some(c),
+            ChildState::Running(c) => Some(c.clone()),
             ChildState::Exited(_) => None,
         }
     }
@@ -104,14 +104,14 @@ impl ShutdownStyle {
                         }
                     };
 
-                    info!("starting shutdown");
+                    debug!("starting shutdown");
 
                     let result = tokio::time::timeout(*timeout, fut).await;
                     match result {
                         Ok(Ok(result)) => ChildState::Exited(ChildExit::Finished(result)),
                         Ok(Err(_)) => ChildState::Exited(ChildExit::Failed),
                         Err(_) => {
-                            info!("graceful shutdown timed out, killing child");
+                            debug!("graceful shutdown timed out, killing child");
                             match child.kill().await {
                                 Ok(_) => ChildState::Exited(ChildExit::Killed),
                                 Err(_) => ChildState::Exited(ChildExit::Failed),
@@ -153,7 +153,7 @@ pub struct Child {
     label: String,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ChildCommandChannel(mpsc::Sender<ChildCommand>);
 
 impl ChildCommandChannel {
@@ -215,14 +215,14 @@ impl Child {
         let task_state = state.clone();
 
         let _task = tokio::spawn(async move {
-            info!("waiting for task");
+            debug!("waiting for task");
             tokio::select! {
                 command = command_rx.recv() => {
                     let state = match command {
                         // we received a command to stop the child process, or the channel was closed.
                         // in theory this happens when the last child is dropped, however in practice
                         // we will always get a `Permit` from the recv call before the channel can be
-                        // dropped, and the cnannel is not closed while there are still permits
+                        // dropped, and the channel is not closed while there are still permits
                         Some(ChildCommand::Stop) | None => {
                             debug!("stopping child process");
                             shutdown_style.process(&mut child).await
@@ -296,10 +296,13 @@ impl Child {
         let mut watch = self.exit_channel.clone();
 
         let fut = async {
-            let state = self.state.read().await;
-            let child = match state.command_channel() {
-                Some(child) => child,
-                None => return,
+            let child = {
+                let state = self.state.read().await;
+
+                match state.command_channel() {
+                    Some(child) => child,
+                    None => return,
+                }
             };
 
             // if this fails, it's because the channel is dropped (toctou)
@@ -435,6 +438,7 @@ impl Child {
 mod test {
     use std::{assert_matches::assert_matches, process::Stdio, time::Duration};
 
+    use futures::{stream::FuturesUnordered, StreamExt};
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         process::Command,
@@ -763,5 +767,26 @@ mod test {
         let exit = child.stop().await;
 
         assert_matches!(exit, Some(ChildExit::Finished(None)));
+    }
+
+    #[tokio::test]
+    async fn test_multistop() {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+
+        let mut stops = FuturesUnordered::new();
+        for _ in 1..10 {
+            let mut child = child.clone();
+            stops.push(async move {
+                child.stop().await;
+            });
+        }
+
+        while let Some(_) = tokio::time::timeout(Duration::from_secs(5), stops.next())
+            .await
+            .expect("timed out")
+        {}
     }
 }

@@ -51,10 +51,10 @@ Setup
     "taskId": "my-app#build",
     "task": "build",
     "package": "my-app",
-    "hash": "b42768856d16033a",
+    "hash": "f5b905676d8a275c",
     "inputs": {
       ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
+      "package.json": "1746e0db2361085b5953a6a3beab08c24af5bc08"
     },
     "hashOfExternalDependencies": "459c029558afe716",
     "cache": {
@@ -63,15 +63,15 @@ Setup
       "status": "MISS",
       "timeSaved": 0
     },
-    "command": "echo 'building'",
+    "command": "echo building",
     "cliArguments": [],
     "outputs": [
       "apple.json",
       "banana.txt"
     ],
     "excludedOutputs": null,
-    "logFile": "apps/my-app/.turbo/turbo-build.log",
-    "directory": "apps/my-app",
+    "logFile": "apps(\/|\\\\)my-app(\/|\\\\)\.turbo(\/|\\\\)turbo-build\.log", (re)
+    "directory": "apps(\/|\\\\)my-app", (re)
     "dependencies": [],
     "dependents": [],
     "resolvedTaskDefinition": {
@@ -113,9 +113,9 @@ Setup
     "taskId": "util#build",
     "task": "build",
     "package": "util",
-    "hash": "9b9969f14caa05a4",
+    "hash": "1ce33e04f265f95c",
     "inputs": {
-      "package.json": "4d57bb28c9967640d812981198a743b3188f713e"
+      "package.json": "e755064fd7893809d10fc067bb409c7ae516327f"
     },
     "hashOfExternalDependencies": "459c029558afe716",
     "cache": {
@@ -124,12 +124,12 @@ Setup
       "status": "MISS",
       "timeSaved": 0
     },
-    "command": "echo 'building'",
+    "command": "echo building",
     "cliArguments": [],
     "outputs": null,
     "excludedOutputs": null,
-    "logFile": "packages/util/.turbo/turbo-build.log",
-    "directory": "packages/util",
+    "logFile": "packages(\/|\\\\)util(\/|\\\\)\.turbo(\/|\\\\)turbo-build\.log", (re)
+    "directory": "packages(\/|\\\\)util", (re)
     "dependencies": [],
     "dependents": [],
     "resolvedTaskDefinition": {
@@ -180,5 +180,5 @@ Run again with NODE_ENV set and see the value in the summary. --filter=util work
 
 Tasks that don't exist throw an error
   $ ${TURBO} run doesnotexist --dry=json
-  Error: Could not find the following tasks in project: doesnotexist
+  (Error:| ERROR  run failed:) Could not find the following tasks in project: doesnotexist (re)
   [1]

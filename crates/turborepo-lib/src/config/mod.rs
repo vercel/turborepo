@@ -10,6 +10,7 @@ pub use turbo::{
 pub use turbo_config::{ConfigurationOptions, TurborepoConfigBuilder};
 use turbopath::AbsoluteSystemPathBuf;
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Global config path not found")]

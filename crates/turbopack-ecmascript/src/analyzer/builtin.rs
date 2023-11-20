@@ -332,7 +332,7 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                             }
                             // The Array.prototype.map method
                             "map" => {
-                                if let Some(func) = args.get(0) {
+                                if let Some(func) = args.first() {
                                     *value = JsValue::array(
                                         take(items)
                                             .into_iter()
@@ -463,6 +463,17 @@ pub fn replace_builtin(value: &mut JsValue) -> bool {
                 // If not, we know that it will be one of the remaining values.
                 *value = JsValue::alternatives(take(parts));
                 true
+            }
+        }
+        JsValue::Tenary(_, test, cons, alt) => {
+            if test.is_truthy() == Some(true) {
+                *value = take(cons);
+                true
+            } else if test.is_falsy() == Some(true) {
+                *value = take(alt);
+                true
+            } else {
+                false
             }
         }
         // match a binary operator like `a == b`

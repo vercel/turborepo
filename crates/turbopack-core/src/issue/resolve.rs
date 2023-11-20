@@ -4,10 +4,10 @@ use anyhow::Result;
 use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 
-use super::{Issue, OptionIssueSource};
+use super::{Issue, IssueSource, OptionIssueSource, StyledString};
 use crate::{
     error::PrettyPrintError,
-    issue::{IssueSeverity, LazyIssueSource},
+    issue::IssueSeverity,
     resolve::{options::ResolveOptions, parse::Request},
 };
 
@@ -19,7 +19,7 @@ pub struct ResolvingIssue {
     pub file_path: Vc<FileSystemPath>,
     pub resolve_options: Vc<ResolveOptions>,
     pub error_message: Option<String>,
-    pub source: Option<Vc<LazyIssueSource>>,
+    pub source: Option<Vc<IssueSource>>,
 }
 
 #[turbo_tasks::value_impl]
@@ -48,11 +48,19 @@ impl Issue for ResolvingIssue {
     }
 
     #[turbo_tasks::function]
-    async fn description(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(format!(
-            "unable to resolve {module_name}",
-            module_name = self.request.to_string().await?
-        )))
+    async fn description(&self) -> Result<Vc<StyledString>> {
+        let module_not_found = StyledString::Strong("Module not found".to_string());
+
+        Ok(match self.request.await?.request() {
+            Some(request) => StyledString::Line(vec![
+                module_not_found,
+                StyledString::Text(": Can't resolve '".to_string()),
+                StyledString::Code(request),
+                StyledString::Text("'".to_string()),
+            ]),
+            None => module_not_found,
+        }
+        .cell())
     }
 
     #[turbo_tasks::function]
@@ -102,7 +110,7 @@ impl Issue for ResolvingIssue {
 
     #[turbo_tasks::function]
     fn source(&self) -> Vc<OptionIssueSource> {
-        Vc::cell(self.source.map(|s| s.to_issue_source()))
+        Vc::cell(self.source)
     }
 
     // TODO add sub_issue for a description of resolve_options
