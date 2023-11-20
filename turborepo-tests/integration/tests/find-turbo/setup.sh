@@ -32,11 +32,11 @@ cp -a "${FIXTURE_DIR}/." "${DESTINATION}/"
 if [[ "$OSTYPE" == "msys" && $FIXTURE_NAME == "linked" ]]; then
   rm -rf node_modules/turbo
   pushd node_modules > /dev/null || exit 1
-  cmd //c mklink turbo .pnpm\\turbo@1.0.0\\node_modules\\turbo
+  cmd //c mklink turbo "${PWD}\\.pnpm\\turbo@1.0.0\\node_modules\\turbo"
   echo "running chmod on new symlink turbo"
   chmod +rwx turbo
   echo "running icacls on new symlink turbo"
-  cmd //c icacls turbo \/grant Everyone:\(F\)
+  cmd //c icacls "turbo /grant Everyone:(F)"
   ls -al
   popd > /dev/null || exit 1
   echo "PWD: $PWD"
