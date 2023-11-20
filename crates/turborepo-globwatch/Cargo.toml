@@ -5,6 +5,9 @@ edition = "2021"
 description = "Watch a set of globs efficiently"
 license = "MIT OR Apache-2.0"
 
+[lints]
+workspace = true
+
 [dependencies]
 camino = "1.1.4"
 futures = { version = "0.3.26" }

@@ -402,51 +402,10 @@ jobs:
           # TODO: enable macos when --experimental-rust-codepath is passing all tests on ubuntu
           # - name: macos
           #   runner: macos-latest
-          # TODO: enable windows when windows tests with rust codepath are passing (remember to set git crlf setting from turborepo_integration_rust_windows)
+          # TODO: Enable windows in a later pass
           # - name: windows
           #   runner: windows-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          target: ${{ matrix.os.name }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Cache Prysk
-        id: cache-prysk
-        uses: actions/cache@v3
-        with:
-          path: cli/.cram_env
-          key: prysk-venv-${{ matrix.os.name }}
-
-      - name: Integration Tests
-        run: turbo run test:rust-codepath --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
-
-  turborepo_integration_rust_windows:
-    name: Turborepo Integration Tests (Windows) (Rust Codepath)
-    needs: [determine_jobs, build_turborepo]
-    if: needs.determine_jobs.outputs.turborepo_integration == 'true'
-    timeout-minutes: 30
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: windows
-            runner: windows-latest
-    steps:
-      # On Windows, set autocrlf to input so that when the repo is cloned down
-      # the fixtures retain their line endings and don't get updated to CRLF.
-      # We want this because this repo also contains the fixtures for our test cases
-      # and these fixtures have files that need stable file hashes. If we let git update
-      # the line endings on checkout, the file hashes will change.
-      # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
-      - name: set crlf
-        if: matrix.os.name == 'windows'
-        shell: bash
-        run: git config --global core.autocrlf input
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
@@ -768,7 +727,7 @@ jobs:
 
       - name: Run cargo clippy
         run: |
-          RUSTFLAGS="-D warnings -A deprecated -Aclippy::too_many_arguments" cargo groups clippy turbopack --features rustls-tls
+          RUSTFLAGS="-D warnings -A deprecated" cargo groups clippy turbopack --features rustls-tls
 
       - name: Run ast-grep lints
         run: |

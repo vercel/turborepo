@@ -32,6 +32,9 @@ tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 tracing.workspace = true
 turborepo-vercel-api-mock = { workspace = true }
 
+[lints]
+workspace = true
+
 [dependencies]
 atty = { workspace = true }
 axum = { workspace = true }
