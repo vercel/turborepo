@@ -66,15 +66,15 @@ func Test_GetWorkspaces(t *testing.T) {
 		"nodejs-pnpm": {
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/docs/package.json")),
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/web/package.json")),
-			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/eslint-config-custom/package.json")),
-			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/tsconfig/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/eslint-config/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/typescript-config/package.json")),
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/ui/package.json")),
 		},
 		"nodejs-pnpm6": {
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/docs/package.json")),
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/apps/web/package.json")),
-			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/eslint-config-custom/package.json")),
-			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/tsconfig/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/eslint-config/package.json")),
+			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/typescript-config/package.json")),
 			filepath.ToSlash(filepath.Join(cwd, "../../../examples/basic/packages/ui/package.json")),
 		},
 	}
