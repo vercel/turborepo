@@ -10,10 +10,6 @@ use crate::{
 
 #[derive(Debug, Error)]
 pub enum Error {
-    // #[error("failed to open graph file {0}")]
-    // OpenGraphFile(#[source] std::io::Error, AbsoluteSystemPathBuf),
-    // #[error("failed to produce graph output")]
-    // GraphOutput(#[source] std::io::Error),
     #[error(transparent)]
     Graph(#[from] graph_visualizer::Error),
     #[error("error preparing engine: Invalid persistent task configuration:\n{0}")]
