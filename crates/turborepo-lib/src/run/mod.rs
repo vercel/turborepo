@@ -349,25 +349,6 @@ impl<'a> Run<'a> {
                 opts.run_opts.single_package,
                 self.base.cwd(),
             )?;
-            // match graph_opts {
-            //     GraphOpts::File(graph_file) => {
-            //         // let mut graph_file =
-            //         //     AbsoluteSystemPathBuf::from_unknown(self.base.cwd(),
-            // graph_file);         // let file = graph_file
-            //         //     .open()
-            //         //     .map_err(|e| Error::OpenGraphFile(e, graph_file.clone()))?;
-            //         // match graph_file.extension() {
-
-            //         // }
-            //         // let _writer = BufWriter::new(file);
-            //         // todo!("Need to implement different format support");
-            //     }
-            //     GraphOpts::Stdout => {
-            //         engine
-            //             .dot_graph(std::io::stdout(), opts.run_opts.single_package)
-            //             .map_err(Error::GraphOutput)?;
-            //     }
-            // }
             return Ok(0);
         }
 
