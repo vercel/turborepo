@@ -556,6 +556,7 @@ impl PackageManager {
 mod tests {
     use std::{collections::HashSet, fs::File};
 
+    use pretty_assertions::assert_eq;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
 
@@ -604,16 +605,18 @@ mod tests {
         }
 
         let basic = examples.join_component("basic");
-        let basic_expected: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter([
+        let mut basic_expected = Vec::from_iter([
             basic.join_components(&["apps", "docs", "package.json"]),
             basic.join_components(&["apps", "web", "package.json"]),
-            basic.join_components(&["packages", "eslint-config-custom", "package.json"]),
-            basic.join_components(&["packages", "tsconfig", "package.json"]),
+            basic.join_components(&["packages", "eslint-config", "package.json"]),
+            basic.join_components(&["packages", "typescript-config", "package.json"]),
             basic.join_components(&["packages", "ui", "package.json"]),
         ]);
+        basic_expected.sort();
         for mgr in &[PackageManager::Pnpm, PackageManager::Pnpm6] {
             let found = mgr.get_package_jsons(&basic).unwrap();
-            let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found);
+            let mut found = Vec::from_iter(found);
+            found.sort();
             assert_eq!(found, basic_expected, "{}", mgr);
         }
     }
