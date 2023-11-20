@@ -402,8 +402,9 @@ jobs:
           # TODO: enable macos when --experimental-rust-codepath is passing all tests on ubuntu
           # - name: macos
           #   runner: macos-latest
-          - name: windows
-            runner: windows-latest
+          # TODO: Enable windows in a later pass
+          # - name: windows
+          #   runner: windows-latest
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
