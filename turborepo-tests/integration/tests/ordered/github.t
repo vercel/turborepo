@@ -68,7 +68,7 @@ Verify that errors are grouped properly
   npm ERR! Error: command failed 
   npm ERR!   in workspace: util 
   npm ERR\!   at location: (.*)(\/|\\)packages(\/|\\)util  (re)
-  \[ERROR\] command finished with error: command \((.*)/packages(\/|\\)util\) (.*)npm run fail exited \(1\) (re)
+  \[ERROR\] command finished with error: command \((.*)(\/|\\)packages(\/|\\)util\) (.*)npm run fail exited \(1\) (re)
   ::endgroup::
   ::error::util#fail: command \(.*(\/|\\)packages(\/|\\)util\) (.*)npm run fail exited \(1\) (re)
   
