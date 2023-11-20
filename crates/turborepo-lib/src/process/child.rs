@@ -438,6 +438,7 @@ impl Child {
 mod test {
     use std::{assert_matches::assert_matches, process::Stdio, time::Duration};
 
+    use futures::{stream::FuturesUnordered, StreamExt};
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         process::Command,
@@ -766,5 +767,26 @@ mod test {
         let exit = child.stop().await;
 
         assert_matches!(exit, Some(ChildExit::Finished(None)));
+    }
+
+    #[tokio::test]
+    async fn test_multistop() {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+
+        let mut stops = FuturesUnordered::new();
+        for _ in 1..10 {
+            let mut child = child.clone();
+            stops.push(async move {
+                child.stop().await;
+            });
+        }
+
+        while let Some(_) = tokio::time::timeout(Duration::from_secs(5), stops.next())
+            .await
+            .expect("timed out")
+        {}
     }
 }
