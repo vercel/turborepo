@@ -1008,6 +1008,7 @@ pub async fn resolve_raw(
 #[turbo_tasks::function]
 pub async fn resolve(
     lookup_path: Vc<FileSystemPath>,
+    reference_type: Value<ReferenceType>,
     request: Vc<Request>,
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
@@ -1015,12 +1016,14 @@ pub async fn resolve(
         .await?
         .resolve()
         .await?;
-    let result = handle_resolve_plugins(lookup_path, request, options, raw_result).await?;
+    let result =
+        handle_resolve_plugins(lookup_path, reference_type, request, options, raw_result).await?;
     Ok(result)
 }
 
 async fn handle_resolve_plugins(
     lookup_path: Vc<FileSystemPath>,
+    reference_type: Value<ReferenceType>,
     request: Vc<Request>,
     options: Vc<ResolveOptions>,
     result: Vc<ResolveResult>,
@@ -1028,13 +1031,17 @@ async fn handle_resolve_plugins(
     async fn apply_plugins_to_path(
         path: Vc<FileSystemPath>,
         lookup_path: Vc<FileSystemPath>,
+        reference_type: Value<ReferenceType>,
         request: Vc<Request>,
         options: Vc<ResolveOptions>,
     ) -> Result<Option<Vc<ResolveResult>>> {
         for plugin in &options.await?.plugins {
             let after_resolve_condition = plugin.after_resolve_condition().resolve().await?;
             if *after_resolve_condition.matches(path).await? {
-                if let Some(result) = *plugin.after_resolve(path, lookup_path, request).await? {
+                if let Some(result) = *plugin
+                    .after_resolve(path, lookup_path, reference_type.clone(), request)
+                    .await?
+                {
                     return Ok(Some(result));
                 }
             }
@@ -1052,7 +1059,8 @@ async fn handle_resolve_plugins(
         if let &ResolveResultItem::Source(source) = primary {
             let path = source.ident().path().resolve().await?;
             if let Some(new_result) =
-                apply_plugins_to_path(path, lookup_path, request, options).await?
+                apply_plugins_to_path(path, lookup_path, reference_type.clone(), request, options)
+                    .await?
             {
                 let new_result = new_result.await?;
                 changed = true;
