@@ -5,7 +5,7 @@ Test help flag
   $ ${TURBO} -h
   The build system that makes ship happen
   
-  Usage: turbo [OPTIONS] [COMMAND]
+  Usage: turbo(\.exe)? \[OPTIONS\] \[COMMAND\] (re)
   
   Commands:
     bin         Get the path to the Turbo binary
@@ -75,7 +75,7 @@ Test help flag
   $ ${TURBO} --help
   The build system that makes ship happen
   
-  Usage: turbo [OPTIONS] [COMMAND]
+  Usage: turbo(\.exe)? \[OPTIONS\] \[COMMAND\] (re)
   
   Commands:
     bin         Get the path to the Turbo binary
@@ -141,7 +141,7 @@ Test help flag for link command
   $ ${TURBO} link -h
   Link your local directory to a Vercel organization and enable remote caching
   
-  Usage: turbo link [OPTIONS]
+  Usage: turbo(\.exe)? link \[OPTIONS\] (re)
   
   Options:
         --no-gitignore                    Do not create or modify .gitignore (default false)
@@ -168,7 +168,7 @@ Test help flag for unlink command
   $ ${TURBO} unlink -h
   Unlink the current directory from your Vercel organization and disable Remote Caching
   
-  Usage: turbo unlink [OPTIONS]
+  Usage: turbo(\.exe)? unlink \[OPTIONS\] (re)
   
   Options:
         --target <TARGET>                 Specify what should be unlinked (default "remote cache") [default: remote-cache] [possible values: remote-cache, spaces]
@@ -194,7 +194,7 @@ Test help flag for login command
   $ ${TURBO} login -h
   Login to your Vercel account
   
-  Usage: turbo login [OPTIONS]
+  Usage: turbo(\.exe)? login \[OPTIONS\] (re)
   
   Options:
         --sso-team <SSO_TEAM>             
@@ -220,7 +220,7 @@ Test help flag for logout command
   $ ${TURBO} logout -h
   Logout to your Vercel account
   
-  Usage: turbo logout [OPTIONS]
+  Usage: turbo(\.exe)? logout \[OPTIONS\] (re)
   
   Options:
         --version                         
