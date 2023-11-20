@@ -14,8 +14,10 @@ echo "PWD: $PWD"
 SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 ROOT_DIR="$SCRIPT_DIR/../.."
 
+
 FIND_TURBO_FIXTURES_DIR="${ROOT_DIR}/turborepo-tests/integration/tests/_fixtures/find_turbo"
 
+echo "FIND_TURBO_FIXTURES_DIR: ${FIND_TURBO_FIXTURES_DIR}"
 
 cp turbo.exe "${FIND_TURBO_FIXTURES_DIR}/hoisted/node_modules/turbo-windows-64/bin/"
 cp turbo.exe "${FIND_TURBO_FIXTURES_DIR}/hoisted/node_modules/turbo-windows-arm64/bin/"
