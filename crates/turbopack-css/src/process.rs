@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem::transmute, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result};
 use indexmap::IndexMap;
@@ -464,21 +464,10 @@ async fn process_content(
     ty: CssModuleAssetType,
     use_lightningcss: bool,
 ) -> Result<Vc<ParseCssResult>> {
-    fn clone_options(config: ParserOptions) -> ParserOptions<'static, 'static> {
+    fn without_warnings<'o, 'i>(config: ParserOptions<'o, 'i>) -> ParserOptions<'o, 'static> {
         ParserOptions {
             filename: config.filename,
-            css_modules: config
-                .css_modules
-                .clone()
-                .map(|v| lightningcss::css_modules::Config {
-                    pattern: Pattern {
-                        segments: unsafe {
-                            // Safety: It's actually static (two `__``)
-                            transmute(v.pattern.segments.clone())
-                        },
-                    },
-                    dashed_idents: v.dashed_idents,
-                }),
+            css_modules: config.css_modules,
             source_index: config.source_index,
             error_recovery: config.error_recovery,
             warnings: None,
@@ -511,7 +500,7 @@ async fn process_content(
 
     let stylesheet = if use_lightningcss {
         StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
-            Ok(stylesheet) => stylesheet_into_static(&stylesheet, clone_options(config.clone())),
+            Ok(stylesheet) => stylesheet_into_static(&stylesheet, without_warnings(config.clone())),
             Err(_e) => {
                 // TODO(kdy1): Report errors
                 // e.to_diagnostics(&handler).emit();
@@ -581,7 +570,7 @@ async fn process_content(
         }
     };
 
-    let config = clone_options(config);
+    let config = without_warnings(config);
     let mut stylesheet = stylesheet.to_static(config.clone());
 
     let (references, url_references) = analyze_references(&mut stylesheet, source, origin)?;
