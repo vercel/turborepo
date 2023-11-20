@@ -474,7 +474,10 @@ async fn apply_typescript_types_options(
         .collect();
     resolve_options
         .into_package
-        .push(ResolveIntoPackage::MainField("types".to_string()));
+        .push(ResolveIntoPackage::MainField {
+            field: "types".to_string(),
+            extensions: Some(vec![".d.ts".to_string(), ".ts".to_string()]),
+        });
     resolve_options
         .into_package
         .push(ResolveIntoPackage::Default("index".to_string()));

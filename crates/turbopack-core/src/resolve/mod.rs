@@ -1341,11 +1341,20 @@ async fn resolve_into_folder(
                 return resolve_internal_inline(package_path, request.resolve().await?, options)
                     .await;
             }
-            ResolveIntoPackage::MainField(name) => {
+            ResolveIntoPackage::MainField {
+                field: name,
+                extensions,
+            } => {
                 if let Some(package_json) = &*read_package_json(package_json_path).await? {
                     if let Some(field_value) = package_json[name].as_str() {
                         let request =
                             Request::parse(Value::new(normalize_request(field_value).into()));
+
+                        let options = if let Some(extensions) = extensions {
+                            options.with_extensions(extensions.clone())
+                        } else {
+                            options
+                        };
 
                         let result = &*resolve_internal_inline(package_path, request, options)
                             .await?
@@ -1550,7 +1559,7 @@ async fn resolve_into_package(
     if could_match_others {
         for resolve_into_package in options_value.into_package.iter() {
             match resolve_into_package {
-                ResolveIntoPackage::Default(_) | ResolveIntoPackage::MainField(_) => {
+                ResolveIntoPackage::Default(_) | ResolveIntoPackage::MainField { .. } => {
                     // doesn't affect packages with subpath
                     if path.is_match("/") {
                         results.push(resolve_into_folder(package_path, options, query));
