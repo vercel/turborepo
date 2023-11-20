@@ -102,8 +102,8 @@ jobs:
           if-no-files-found: error
           # cwd is root of the repository, so we need the benchmark/ prefixed path
           path: |
-            packages/turbo-benchmark/${{ steps.filename.outputs.filename }}
-            packages/turbo-benchmark/${{ steps.filename.outputs.file_basename }}-ttft.json
+            packages/turbo-benchmark/profiles/${{ steps.filename.outputs.filename }}
+            packages/turbo-benchmark/profiles/${{ steps.filename.outputs.file_basename }}-ttft.json
 
   # Send each of the profiles generated from the previous job to TinyBird
   # We'll wait for all profiles to complete before sending.
