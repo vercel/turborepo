@@ -175,16 +175,16 @@ jobs:
       - name: Create Slack payload
         shell: bash
         run: |
-          cd benchmark
+          cd packages/turbo-benchmark
           node -r esbuild-register ./src/ttft/slack.ts ${{github.run_id}}
 
       - name: Debug Slack payload
         shell: bash
-        run: cat benchmark/slack-payload.json | jq
+        run: cat packages/turbo-benchmark/slack-payload.json | jq
 
       - name: Send payload to slack
         uses: slackapi/slack-github-action@v1.23.0
         with:
-          payload-file-path: "benchmark/slack-payload.json"
+          payload-file-path: "packages/turbo-benchmark/slack-payload.json"
         env:
           SLACK_WEBHOOK_URL: "${{ secrets.TURBOREPO_PERF_BENCHMARK_SLACK_WEBHOOK_URL }}"
