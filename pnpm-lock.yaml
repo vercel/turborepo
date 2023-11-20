@@ -759,6 +759,8 @@ importers:
         specifier: ^4.5.5
         version: 4.9.4
 
+  packages/turbo-exe-stub: {}
+
   packages/turbo-gen:
     dependencies:
       '@turbo/workspaces':
@@ -1224,6 +1226,9 @@ importers:
 
   turborepo-tests/integration:
     dependencies:
+      '@turbo/exe-stub':
+        specifier: workspace:*
+        version: link:../../packages/turbo-exe-stub
       turborepo-tests-helpers:
         specifier: workspace:*
         version: link:../helpers
