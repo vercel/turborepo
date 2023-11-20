@@ -205,7 +205,6 @@ impl<'a> Run<'a> {
             opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
         }
 
-        // There's some warning handling code in Go that I'm ignoring
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
 
         let daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
