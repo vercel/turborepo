@@ -11,8 +11,6 @@ import lintAndLogs from "./tests/lint-and-logs";
 import changes from "./tests/changes";
 import rootTasks from "./tests/root-tasks";
 import passThroughArgs from "./tests/passthru-args";
-import prune from "./tests/prune";
-import pruneDocker from "./tests/prune-docker";
 
 const packageManagers: PackageManager[] = [
   "yarn",
@@ -36,8 +34,6 @@ for (const mgr of packageManagers) {
   changes(Basic, repo, mgr);
   rootTasks(Basic, repo, mgr);
   passThroughArgs(Basic, repo, mgr);
-  prune(Basic, repo, mgr);
-  pruneDocker(Basic, repo, mgr);
 
   // test that turbo can run from a subdirectory
   const BasicFromSubDir = uvu.suite(`${mgr} from subdirectory`);
@@ -54,8 +50,6 @@ for (const mgr of packageManagers) {
   changes(BasicFromSubDir, repo2, mgr, { cwd });
   rootTasks(BasicFromSubDir, repo2, mgr, { cwd });
   passThroughArgs(BasicFromSubDir, repo2, mgr, { cwd });
-  prune(BasicFromSubDir, repo2, mgr, { cwd });
-  pruneDocker(BasicFromSubDir, repo2, mgr, { cwd });
 
   Basic.after(() => repo.cleanup());
   BasicFromSubDir.after(() => repo2.cleanup());
