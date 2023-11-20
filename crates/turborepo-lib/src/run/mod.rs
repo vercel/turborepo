@@ -361,9 +361,6 @@ impl<'a> Run<'a> {
             return Ok(0);
         }
 
-        // remove dead code warnings
-        let _proc_manager = ProcessManager::new();
-
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
 
