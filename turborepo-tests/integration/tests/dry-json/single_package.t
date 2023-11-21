@@ -71,7 +71,7 @@ Setup
           "dotEnv": null
         },
         "expandedOutputs": [],
-        "framework": "<NO FRAMEWORK DETECTED>",
+        "framework": "",
         "envMode": "loose",
         "environmentVariables": {
           "specified": {
