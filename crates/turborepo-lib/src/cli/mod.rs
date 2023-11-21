@@ -11,7 +11,10 @@ use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_ui::UI;
 
 use crate::{
-    commands::{bin, daemon, generate, info, link, login, logout, prune, unlink, CommandBase},
+    commands::{
+        bin, daemon, generate, info, link, login, logout, profile::profile, prune, unlink,
+        CommandBase,
+    },
     get_version,
     tracing::TurboSubscriber,
     Payload,
@@ -368,6 +371,8 @@ pub enum Command {
     },
     /// Logout to your Vercel account
     Logout {},
+    /// Use / switch Turbo profiles.
+    Profile {},
     /// Prepare a subset of your monorepo.
     Prune {
         #[clap(hide = true, long)]
@@ -849,6 +854,12 @@ pub async fn run(
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
 
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Profile { .. } => {
+            println!("Starting profile command");
+            let base = CommandBase::new(cli_args, repo_root, version, ui);
+            profile(&base).await?;
             Ok(Payload::Rust(Ok(0)))
         }
     }

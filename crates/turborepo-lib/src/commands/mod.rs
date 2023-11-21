@@ -18,6 +18,7 @@ pub(crate) mod info;
 pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
+pub(crate) mod profile;
 pub(crate) mod prune;
 pub(crate) mod run;
 pub(crate) mod unlink;
@@ -82,6 +83,9 @@ impl CommandBase {
         let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
         let global_config_path = config_dir.join("turborepo").join("config.json");
         AbsoluteSystemPathBuf::try_from(global_config_path).map_err(ConfigError::PathError)
+    }
+    fn profile_config_path(&self) -> AbsoluteSystemPathBuf {
+        self.repo_root.join_components(&[".turbo", "profiles.toml"])
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
