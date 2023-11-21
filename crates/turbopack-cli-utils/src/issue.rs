@@ -145,24 +145,20 @@ pub fn format_issue(
     let mut styled_issue = style_issue_source(plain_issue, &context_path);
     let description = &plain_issue.description;
     if let Some(description) = description {
-        if !description.is_empty() {
-            writeln!(
-                styled_issue,
-                "\n{}",
-                render_styled_string_to_ansi(description)
-            )
-            .unwrap();
-        }
+        writeln!(
+            styled_issue,
+            "\n{}",
+            render_styled_string_to_ansi(description)
+        )
+        .unwrap();
     }
 
     if log_detail {
         styled_issue.push('\n');
         let detail = &plain_issue.detail;
         if let Some(detail) = detail {
-            if !detail.is_empty() {
-                for line in render_styled_string_to_ansi(detail).split('\n') {
-                    writeln!(styled_issue, "| {line}").unwrap();
-                }
+            for line in render_styled_string_to_ansi(detail).split('\n') {
+                writeln!(styled_issue, "| {line}").unwrap();
             }
         }
         let documentation_link = &plain_issue.documentation_link;
@@ -395,23 +391,19 @@ impl IssueReporter for ConsoleUi {
             let mut styled_issue = style_issue_source(&plain_issue, &context_path);
             let description = &plain_issue.description;
             if let Some(description) = description {
-                if !description.is_empty() {
-                    writeln!(
-                        &mut styled_issue,
-                        "\n{}",
-                        render_styled_string_to_ansi(description)
-                    )?;
-                }
+                writeln!(
+                    &mut styled_issue,
+                    "\n{}",
+                    render_styled_string_to_ansi(description)
+                )?;
             }
 
             if log_detail {
                 styled_issue.push('\n');
                 let detail = &plain_issue.detail;
                 if let Some(detail) = detail {
-                    if !detail.is_empty() {
-                        for line in render_styled_string_to_ansi(detail).split('\n') {
-                            writeln!(&mut styled_issue, "| {line}")?;
-                        }
+                    for line in render_styled_string_to_ansi(detail).split('\n') {
+                        writeln!(&mut styled_issue, "| {line}")?;
                     }
                 }
                 let documentation_link = &plain_issue.documentation_link;

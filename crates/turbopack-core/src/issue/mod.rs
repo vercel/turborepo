@@ -95,19 +95,6 @@ pub enum StyledString {
     Strong(String),
 }
 
-impl StyledString {
-    pub fn is_empty(&self) -> bool {
-        match self {
-            StyledString::Line(parts) | StyledString::Stack(parts) => {
-                parts.iter().all(|part| part.is_empty())
-            }
-            StyledString::Text(string)
-            | StyledString::Code(string)
-            | StyledString::Strong(string) => string.is_empty(),
-        }
-    }
-}
-
 #[turbo_tasks::value_trait]
 pub trait Issue {
     /// Severity allows the user to filter out unimportant issues, with Bug
