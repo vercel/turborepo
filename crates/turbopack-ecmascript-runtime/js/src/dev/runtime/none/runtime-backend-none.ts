@@ -49,11 +49,6 @@ async function loadWebAssemblyModule(
   throw new Error("loading WebAssembly is not supported");
 }
 
-// [TODO] should this behaves same as dom runtime?
-function resolveAbsolutePath(modulePath?: string) {
-  throw new Error("resolveAbsolutePath is not implemented");
-}
-
 (() => {
   BACKEND = {
     // The "none" runtime expects all chunks within the same chunk group to be
