@@ -13,7 +13,7 @@ use std::{
     collections::HashSet,
     io::{IsTerminal, Write},
     sync::Arc,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
 pub use cache::{RunCache, TaskCache};
@@ -27,6 +27,7 @@ use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::{
+    discovery::{FallbackPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscoveryBuilder},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
 };
@@ -43,7 +44,10 @@ use crate::{
     engine::{Engine, EngineBuilder},
     opts::Opts,
     process::ProcessManager,
-    run::{global_hash::get_global_hash_inputs, summary::RunTracker},
+    run::{
+        global_hash::get_global_hash_inputs, package_discovery::DaemonPackageDiscovery,
+        summary::RunTracker,
+    },
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
     task_graph::Visitor,
@@ -189,36 +193,10 @@ impl<'a> Run<'a> {
 
         let is_single_package = opts.run_opts.single_package;
 
-        let mut pkg_dep_graph =
-            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-                .with_single_package_mode(opts.run_opts.single_package)
-                .build()
-                .await?;
-
-        let root_turbo_json =
-            TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
-
-        let team_id = root_turbo_json
-            .remote_cache
-            .as_ref()
-            .and_then(|configuration_options| configuration_options.team_id.clone())
-            .unwrap_or_default();
-
-        let signature = root_turbo_json
-            .remote_cache
-            .as_ref()
-            .and_then(|configuration_options| configuration_options.signature)
-            .unwrap_or_default();
-
-        opts.cache_opts.remote_cache_opts = Some(RemoteCacheOpts::new(team_id, signature));
-
-        if opts.run_opts.experimental_space_id.is_none() {
-            opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
-        }
-
+        // There's some warning handling code in Go that I'm ignoring
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
 
-        let daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
+        let mut daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
             debug!("skipping turbod since we appear to be in a non-interactive context");
             None
         } else if !opts.run_opts.no_daemon {
@@ -243,6 +221,38 @@ impl<'a> Run<'a> {
             // We are opted out of using the daemon
             None
         };
+
+        let mut pkg_dep_graph =
+            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+                .with_single_package_mode(opts.run_opts.single_package)
+                .with_package_discovery(FallbackPackageDiscovery::new(
+                    daemon.as_mut().map(DaemonPackageDiscovery::new),
+                    LocalPackageDiscoveryBuilder::new(self.base.repo_root.clone(), None).build()?,
+                    Duration::from_millis(10),
+                ))
+                .build()
+                .await?;
+
+        let root_turbo_json =
+            TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
+
+        let team_id = root_turbo_json
+            .remote_cache
+            .as_ref()
+            .and_then(|configuration_options| configuration_options.team_id.clone())
+            .unwrap_or_default();
+
+        let signature = root_turbo_json
+            .remote_cache
+            .as_ref()
+            .and_then(|configuration_options| configuration_options.signature)
+            .unwrap_or_default();
+
+        opts.cache_opts.remote_cache_opts = Some(RemoteCacheOpts::new(team_id, signature));
+
+        if opts.run_opts.experimental_space_id.is_none() {
+            opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
+        }
 
         pkg_dep_graph.validate()?;
 

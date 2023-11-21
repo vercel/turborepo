@@ -701,13 +701,19 @@ mod test {
         let exit_signal = rx.map(|_result| CloseReason::Interrupt);
 
         let server = TurboGrpcService::new(
-            repo_root,
+            repo_root.clone(),
             daemon_root,
             log_file,
             Duration::from_millis(10),
             exit_signal,
         )
         .with_package_discovery_backup(MockDiscovery);
+
+        // the package watcher reads data from the package.json file
+        // so we need to create it
+        repo_root.create_dir_all().unwrap();
+        let package_json = repo_root.join_component("package.json");
+        std::fs::write(package_json, r#"{"workspaces": ["packages/*"]}"#).unwrap();
 
         let close_reason = server.serve().await;
 
