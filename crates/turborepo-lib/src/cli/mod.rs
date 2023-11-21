@@ -106,6 +106,9 @@ pub struct Args {
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
     pub cwd: Option<Utf8PathBuf>,
+    #[serde(skip)]
+    #[clap(long, global = true, hide = true)]
+    pub go_fallback: bool,
     /// Specify a file to save a pprof heap profile
     #[clap(long, global = true, value_parser)]
     pub heap: Option<String>,
@@ -821,7 +824,9 @@ pub async fn run(
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
-            if env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false") {
+            let should_use_go = cli_args.go_fallback
+                || env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false");
+            if should_use_go {
                 Ok(Payload::Go(Box::new(base)))
             } else {
                 use crate::commands::run;
