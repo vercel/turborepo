@@ -42,7 +42,7 @@ jobs:
         run: |
           curl \
             -i \
-            -F "ndjson=@./benchmark/tinybird.ndjson" \
+            -F "ndjson=@./packages/turbo-benchmark/tinybird.ndjson" \
             -X POST \
             -H 'Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}' \
             'https://api.us-east.tinybird.co/v0/datasources?format=ndjson&name=turbo_benchmarks&mode=append'
