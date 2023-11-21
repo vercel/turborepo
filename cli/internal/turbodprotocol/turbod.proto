@@ -16,6 +16,26 @@ service Turbod {
 message HelloRequest {
   string version = 1;
   string session_id = 2;
+
+  // The version compatibility range that the client requests.
+  // For example, if the client requests Patch level compatibility,
+  // then the server should trigger a failed precondition if the
+  // server's version is not identical down to the patch level.
+  VersionRange supported_version_range = 3;
+}
+
+enum VersionRange {
+  // Default to match old behaviour. Requires exact string match,
+  // performing no compatibility checks.
+  Exact = 0;
+  // The Major and Minor version must match, and the Patch version
+  // must be greater than or equal to the client's Patch version.
+  Patch = 1;
+  // The Major version must match, and the Minor version must be
+  // greater than or equal to the client's Minor version.
+  Minor = 2;
+  // The Major version must match. This is the most lenient check.
+  Major = 3;
 }
 
 message HelloResponse {}
