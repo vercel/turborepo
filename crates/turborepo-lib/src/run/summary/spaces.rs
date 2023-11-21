@@ -6,6 +6,7 @@ use std::{
 };
 
 use chrono::{DateTime, Local};
+use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use serde::Serialize;
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
@@ -175,18 +176,23 @@ impl SpacesClient {
 
             debug!("created run: {:?}", run);
 
+            let mut requests = FuturesUnordered::new();
             while let Some(req) = rx.recv().await {
-                let resp = match req {
+                let request = match req {
                     SpaceRequest::FinishedRun {
                         end_time,
                         exit_code,
-                    } => self.finish_run_handler(&run, end_time, exit_code).await,
+                    } => self.finish_run_handler(&run, end_time, exit_code),
                     SpaceRequest::FinishedTask { summary } => {
-                        self.finish_task_handler(*summary, &run).await
+                        self.finish_task_handler(*summary, &run)
                     }
                 };
+                requests.push(request)
+            }
 
-                if let Err(e) = resp {
+            while let Some(response) = requests.next().await {
+                let response = response.expect("spaces request panicked");
+                if let Err(e) = response {
                     errors.push(e);
                 }
             }
@@ -209,42 +215,45 @@ impl SpacesClient {
         .await??)
     }
 
-    async fn finish_task_handler(
+    fn finish_task_handler(
         &self,
         task_summary: SpaceTaskSummary,
         run: &SpaceRun,
-    ) -> Result<(), Error> {
+    ) -> JoinHandle<Result<(), Error>> {
         debug!("sending task: {task_summary:?}");
-        Ok(tokio::time::timeout(
-            self.request_timeout,
-            self.api_client.create_task_summary(
-                &self.space_id,
-                &run.id,
-                &self.api_auth,
-                task_summary,
-            ),
-        )
-        .await??)
+        let timeout = self.request_timeout;
+        let api_client = self.api_client.clone();
+        let space_id = self.space_id.clone();
+        let run_id = run.id.clone();
+        let api_auth = self.api_auth.clone();
+        tokio::spawn(async move {
+            Ok(tokio::time::timeout(
+                timeout,
+                api_client.create_task_summary(&space_id, &run_id, &api_auth, task_summary),
+            )
+            .await??)
+        })
     }
 
     // Called by the worker thread upon receiving a SpaceRequest::FinishedRun
-    async fn finish_run_handler(
+    fn finish_run_handler(
         &self,
         run: &SpaceRun,
         end_time: i64,
         exit_code: i32,
-    ) -> Result<(), Error> {
-        Ok(tokio::time::timeout(
-            self.request_timeout,
-            self.api_client.finish_space_run(
-                &self.space_id,
-                &run.id,
-                &self.api_auth,
-                end_time,
-                exit_code,
-            ),
-        )
-        .await??)
+    ) -> JoinHandle<Result<(), Error>> {
+        let timeout = self.request_timeout;
+        let api_client = self.api_client.clone();
+        let space_id = self.space_id.clone();
+        let run_id = run.id.clone();
+        let api_auth = self.api_auth.clone();
+        tokio::spawn(async move {
+            Ok(tokio::time::timeout(
+                timeout,
+                api_client.finish_space_run(&space_id, &run_id, &api_auth, end_time, exit_code),
+            )
+            .await??)
+        })
     }
 }
 
