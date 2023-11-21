@@ -274,7 +274,7 @@ impl CodeGenerateable for EsmAssetReference {
                                 )
                             } else {
                                 quote!(
-                                    "var $name = __turbopack_external_require__($id);" as Stmt,
+                                    "var $name = __turbopack_external_require__($id, true);" as Stmt,
                                     name = Ident::new(ident.clone().into(), DUMMY_SP),
                                     id: Expr = Expr::Lit(request.clone().into())
                                 )

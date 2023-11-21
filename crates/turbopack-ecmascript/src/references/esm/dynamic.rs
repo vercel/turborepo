@@ -181,7 +181,7 @@ impl CodeGenerateable for EsmAsyncAssetReference {
                         call_expr.callee = Callee::Expr(quote_expr!("Promise.resolve().then"));
                         call_expr.args = vec![
                             ExprOrSpread { spread: None, expr: quote_expr!(
-                                "() => __turbopack_external_require__($arg)",
+                                "() => __turbopack_external_require__($arg, true)",
                                 arg: Expr = expr
                             ) },
                         ];
