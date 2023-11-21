@@ -15,18 +15,21 @@ use turborepo_lockfiles::Lockfile;
 
 use super::{PackageGraph, WorkspaceInfo, WorkspaceName, WorkspaceNode};
 use crate::{
+    discovery::{
+        CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
+        PackageDiscoveryBuilder,
+    },
     package_graph::{PackageName, PackageVersion},
     package_json::PackageJson,
-    package_manager::PackageManager,
 };
 
-pub struct PackageGraphBuilder<'a> {
+pub struct PackageGraphBuilder<'a, T> {
     repo_root: &'a AbsoluteSystemPath,
     root_package_json: PackageJson,
     is_single_package: bool,
-    package_manager: Option<PackageManager>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     lockfile: Option<Box<dyn Lockfile>>,
+    package_discovery: T,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -55,28 +58,26 @@ pub enum Error {
     InvalidPackageGraph(#[source] graph::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
+    #[error(transparent)]
+    Discovery(#[from] crate::discovery::Error),
 }
 
-impl<'a> PackageGraphBuilder<'a> {
+impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
     pub fn new(repo_root: &'a AbsoluteSystemPath, root_package_json: PackageJson) -> Self {
         Self {
+            package_discovery: LocalPackageDiscoveryBuilder::new(repo_root.to_owned(), None),
             repo_root,
             root_package_json,
             is_single_package: false,
-            package_manager: None,
             package_jsons: None,
             lockfile: None,
         }
     }
+}
 
+impl<'a, P> PackageGraphBuilder<'a, P> {
     pub fn with_single_package_mode(mut self, is_single: bool) -> Self {
         self.is_single_package = is_single;
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn with_package_manger(mut self, package_manager: Option<PackageManager>) -> Self {
-        self.package_manager = package_manager;
         self
     }
 
@@ -95,31 +96,58 @@ impl<'a> PackageGraphBuilder<'a> {
         self
     }
 
+    /// Set the package discovery strategy to use. Note that whatever strategy
+    /// selected here will be wrapped in a `CachingPackageDiscovery` to
+    /// prevent unnecessary work during building.
+    #[allow(dead_code)]
+    pub fn with_package_discovery<P2: PackageDiscoveryBuilder>(
+        self,
+        discovery: P2,
+    ) -> PackageGraphBuilder<'a, P2> {
+        PackageGraphBuilder {
+            repo_root: self.repo_root,
+            root_package_json: self.root_package_json,
+            is_single_package: self.is_single_package,
+            package_jsons: self.package_jsons,
+            lockfile: self.lockfile,
+            package_discovery: discovery,
+        }
+    }
+}
+
+impl<'a, T> PackageGraphBuilder<'a, T>
+where
+    T: PackageDiscoveryBuilder,
+    T::Output: Send,
+    T::Error: Into<crate::package_manager::Error>,
+{
+    /// Build the `PackageGraph`.
     #[tracing::instrument(skip(self))]
-    pub fn build(self) -> Result<PackageGraph, Error> {
+    pub async fn build(self) -> Result<PackageGraph, Error> {
         let is_single_package = self.is_single_package;
         let state = BuildState::new(self)?;
+
         match is_single_package {
-            true => Ok(state.build_single_package_graph()),
+            true => Ok(state.build_single_package_graph().await),
             false => {
-                let state = state.parse_package_jsons()?;
-                let state = state.resolve_lockfile()?;
-                Ok(state.build_inner())
+                let state = state.parse_package_jsons().await?;
+                let state = state.resolve_lockfile().await?;
+                Ok(state.build_inner().await)
             }
         }
     }
 }
 
-struct BuildState<'a, S> {
+struct BuildState<'a, S, T> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
-    package_manager: PackageManager,
     workspaces: HashMap<WorkspaceName, WorkspaceInfo>,
     workspace_graph: Graph<WorkspaceNode, ()>,
     node_lookup: HashMap<WorkspaceNode, NodeIndex>,
     lockfile: Option<Box<dyn Lockfile>>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     state: std::marker::PhantomData<S>,
+    package_discovery: T,
 }
 
 // Allows us to perform workspace discovery and parse package jsons
@@ -131,7 +159,7 @@ enum ResolvedWorkspaces {}
 // Allows us to collect all transitive deps
 enum ResolvedLockfile {}
 
-impl<'a, S> BuildState<'a, S> {
+impl<'a, S, T> BuildState<'a, S, T> {
     fn add_node(&mut self, node: WorkspaceNode) -> NodeIndex {
         let idx = self.workspace_graph.add_node(node.clone());
         self.node_lookup.insert(node, idx);
@@ -146,22 +174,27 @@ impl<'a, S> BuildState<'a, S> {
     }
 }
 
-impl<'a> BuildState<'a, ResolvedPackageManager> {
+impl<'a, T> BuildState<'a, ResolvedPackageManager, T>
+where
+    T: PackageDiscoveryBuilder,
+    T::Output: Send,
+    T::Error: Into<crate::package_manager::Error>,
+{
     fn new(
-        builder: PackageGraphBuilder<'a>,
-    ) -> Result<BuildState<'a, ResolvedPackageManager>, crate::package_manager::Error> {
+        builder: PackageGraphBuilder<'a, T>,
+    ) -> Result<
+        BuildState<'a, ResolvedPackageManager, CachingPackageDiscovery<T::Output>>,
+        crate::package_manager::Error,
+    > {
         let PackageGraphBuilder {
             repo_root,
             root_package_json,
             is_single_package: single,
-            package_manager,
+
             package_jsons,
             lockfile,
+            package_discovery,
         } = builder;
-        let package_manager = package_manager.map_or_else(
-            || PackageManager::get_package_manager(repo_root, Some(&root_package_json)),
-            Ok,
-        )?;
         let mut workspaces = HashMap::new();
         workspaces.insert(
             WorkspaceName::Root,
@@ -175,16 +208,21 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
         Ok(BuildState {
             repo_root,
             single,
-            package_manager,
+
             workspaces,
             lockfile,
             package_jsons,
             workspace_graph: Graph::new(),
             node_lookup: HashMap::new(),
             state: std::marker::PhantomData,
+            package_discovery: CachingPackageDiscovery::new(
+                package_discovery.build().map_err(Into::into)?,
+            ),
         })
     }
+}
 
+impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
     fn add_json(
         &mut self,
         package_json_path: AbsoluteSystemPathBuf,
@@ -221,22 +259,22 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
 
     // need our own type
     #[tracing::instrument(skip(self))]
-    fn parse_package_jsons(mut self) -> Result<BuildState<'a, ResolvedWorkspaces>, Error> {
+    async fn parse_package_jsons(mut self) -> Result<BuildState<'a, ResolvedWorkspaces, T>, Error> {
         // The root workspace will be present
         // we either read from disk or just read the map
         self.add_root_workspace();
-        let package_jsons = self.package_jsons.take().map_or_else(
-            || {
-                // we need to parse the package jsons
+
+        let package_jsons = match self.package_jsons.take() {
+            Some(jsons) => Ok(jsons),
+            None => {
                 let mut jsons = HashMap::new();
-                for path in self.package_manager.get_package_jsons(self.repo_root)? {
-                    let json = PackageJson::load(&path)?;
-                    jsons.insert(path, json);
+                for path in self.package_discovery.discover_packages().await?.workspaces {
+                    let json = PackageJson::load(&path.package_json)?;
+                    jsons.insert(path.package_json, json);
                 }
-                Ok(jsons)
-            },
-            Result::<_, Error>::Ok,
-        )?;
+                Ok::<_, Error>(jsons)
+            }
+        }?;
 
         for (path, json) in package_jsons {
             self.add_json(path, json)?;
@@ -245,49 +283,56 @@ impl<'a> BuildState<'a, ResolvedPackageManager> {
         let Self {
             repo_root,
             single,
-            package_manager,
             workspaces,
             workspace_graph,
             node_lookup,
             lockfile,
+            package_discovery,
             ..
         } = self;
         Ok(BuildState {
             repo_root,
             single,
-            package_manager,
             workspaces,
             workspace_graph,
             node_lookup,
             lockfile,
+            package_discovery,
             package_jsons: None,
             state: std::marker::PhantomData,
         })
     }
 
-    fn build_single_package_graph(mut self) -> PackageGraph {
+    async fn build_single_package_graph(mut self) -> PackageGraph {
         self.add_root_workspace();
         let Self {
             single,
-            package_manager,
             workspaces,
             workspace_graph,
             node_lookup,
             lockfile,
+            mut package_discovery,
             ..
         } = self;
+
+        let package_manager = package_discovery
+            .discover_packages()
+            .await
+            .unwrap()
+            .package_manager;
+
         debug_assert!(single, "expected single package graph");
         PackageGraph {
             workspace_graph,
             node_lookup,
             workspaces,
-            package_manager,
             lockfile,
+            package_manager,
         }
     }
 }
 
-impl<'a> BuildState<'a, ResolvedWorkspaces> {
+impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
     #[tracing::instrument(skip(self))]
     fn connect_internal_dependencies(&mut self) -> Result<(), Error> {
         let split_deps = self
@@ -338,11 +383,17 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
     }
 
     #[tracing::instrument(skip(self))]
-    fn populate_lockfile(&mut self) -> Result<Box<dyn Lockfile>, Error> {
+    async fn populate_lockfile(&mut self) -> Result<Box<dyn Lockfile>, Error> {
+        let package_manager = self
+            .package_discovery
+            .discover_packages()
+            .await?
+            .package_manager;
+
         match self.lockfile.take() {
             Some(lockfile) => Ok(lockfile),
             None => {
-                let lockfile = self.package_manager.read_lockfile(
+                let lockfile = package_manager.read_lockfile(
                     self.repo_root,
                     self.workspaces
                         .get(&WorkspaceName::Root)
@@ -356,10 +407,10 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
     }
 
     #[tracing::instrument(skip(self))]
-    fn resolve_lockfile(mut self) -> Result<BuildState<'a, ResolvedLockfile>, Error> {
+    async fn resolve_lockfile(mut self) -> Result<BuildState<'a, ResolvedLockfile, T>, Error> {
         self.connect_internal_dependencies()?;
 
-        let lockfile = match self.populate_lockfile() {
+        let lockfile = match self.populate_lockfile().await {
             Ok(lockfile) => Some(lockfile),
             Err(e) => {
                 warn!(
@@ -374,27 +425,27 @@ impl<'a> BuildState<'a, ResolvedWorkspaces> {
         let Self {
             repo_root,
             single,
-            package_manager,
             workspaces,
             workspace_graph,
             node_lookup,
+            package_discovery,
             ..
         } = self;
         Ok(BuildState {
             repo_root,
             single,
-            package_manager,
             workspaces,
             workspace_graph,
             node_lookup,
             lockfile,
             package_jsons: None,
             state: std::marker::PhantomData,
+            package_discovery,
         })
     }
 }
 
-impl<'a> BuildState<'a, ResolvedLockfile> {
+impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
     fn all_external_dependencies(&self) -> Result<HashMap<String, HashMap<String, String>>, Error> {
         self.workspaces
             .values()
@@ -435,12 +486,17 @@ impl<'a> BuildState<'a, ResolvedLockfile> {
     }
 
     #[tracing::instrument(skip(self))]
-    fn build_inner(mut self) -> PackageGraph {
+    async fn build_inner(mut self) -> PackageGraph {
         if let Err(e) = self.populate_transitive_dependencies() {
             warn!("Unable to calculate transitive closures: {}", e);
         }
+        let package_manager = self
+            .package_discovery
+            .discover_packages()
+            .await
+            .unwrap()
+            .package_manager;
         let Self {
-            package_manager,
             workspaces,
             workspace_graph,
             node_lookup,
@@ -695,8 +751,8 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_duplicate_package_names() {
+    #[tokio::test]
+    async fn test_duplicate_package_names() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let builder = PackageGraphBuilder::new(
@@ -706,7 +762,7 @@ mod test {
                 ..Default::default()
             },
         )
-        .with_package_manger(Some(PackageManager::Npm))
+        .with_package_manager(Some(PackageManager::Npm))
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
@@ -726,7 +782,7 @@ mod test {
             map
         }));
         assert!(matches!(
-            builder.build(),
+            builder.build().await,
             Err(Error::DuplicateWorkspace { .. })
         ))
     }

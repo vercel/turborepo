@@ -757,7 +757,7 @@ pub async fn run(
             let json = *json;
             let workspace = workspace.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
-            info::run(&mut base, workspace.as_deref(), json)?;
+            info::run(&mut base, workspace.as_deref(), json).await?;
 
             Ok(Payload::Rust(Ok(0)))
         }
@@ -853,7 +853,7 @@ pub async fn run(
             let docker = *docker;
             let output_dir = output_dir.clone();
             let base = CommandBase::new(cli_args, repo_root, version, ui);
-            prune::prune(&base, &scope, docker, &output_dir)?;
+            prune::prune(&base, &scope, docker, &output_dir).await?;
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Completion { shell } => {

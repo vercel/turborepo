@@ -191,7 +191,8 @@ impl<'a> Run<'a> {
         let mut pkg_dep_graph =
             PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
                 .with_single_package_mode(opts.run_opts.single_package)
-                .build()?;
+                .build()
+                .await?;
 
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
@@ -466,7 +467,8 @@ impl<'a> Run<'a> {
         let mut pkg_dep_graph =
             PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
                 .with_single_package_mode(opts.run_opts.single_package)
-                .build()?;
+                .build()
+                .await?;
 
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
