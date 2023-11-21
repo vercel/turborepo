@@ -451,6 +451,11 @@ jobs:
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
+      - name: E2E Tests
+        run: turbo run test:rust-codepath --filter=turborepo-tests-e2e --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --color --env-mode=strict
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
+
   turborepo_examples:
     name: Turborepo Examples
     needs: [determine_jobs]
