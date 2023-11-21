@@ -44,14 +44,6 @@ func DryRun(
 			taskSummary.Command = runsummary.MissingTaskLabel
 		}
 
-		if taskSummary.Framework == "" {
-			if rs.Opts.runOpts.FrameworkInference {
-				taskSummary.Framework = runsummary.NoFrameworkDetected
-			} else {
-				taskSummary.Framework = runsummary.FrameworkDetectionSkipped
-			}
-		}
-
 		// This mutex is not _really_ required, since we are using Concurrency: 1 as an execution
 		// option, but we add it here to match the shape of RealRuns execFunc.
 		mu.Lock()

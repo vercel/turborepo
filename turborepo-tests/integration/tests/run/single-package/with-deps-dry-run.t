@@ -35,7 +35,7 @@ Check
     Passed Through Env Vars        =\s* (re)
     Passed Through Env Vars Values =\s* (re)
     Resolved Task Definition       = {"outputs":\["foo.txt"],"cache":true,"dependsOn":\[],"inputs":\[],"outputMode":"full","persistent":false,"env":\[],"passThroughEnv":null,"dotEnv":null}\s* (re)
-    Framework                      = <NO FRAMEWORK DETECTED>\s* (re)
+    Framework                      =\s* (re)
   test
     Task                           = test\s* (re)
     Hash                           = 8bfab5dc6b4ccb3b\s* (re)
@@ -54,4 +54,4 @@ Check
     Passed Through Env Vars        =\s* (re)
     Passed Through Env Vars Values =\s* (re)
     Resolved Task Definition       = {"outputs":\[],"cache":true,"dependsOn":\["build"],"inputs":\[],"outputMode":"full","persistent":false,"env":\[],"passThroughEnv":null,"dotEnv":null}\s* (re)
-    Framework                      = <NO FRAMEWORK DETECTED>\s* (re)
+    Framework                      =\s* (re)
