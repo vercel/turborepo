@@ -11,6 +11,8 @@ service Turbod {
   // Implement cache watching
   rpc NotifyOutputsWritten (NotifyOutputsWrittenRequest) returns (NotifyOutputsWrittenResponse);
   rpc GetChangedOutputs (GetChangedOutputsRequest) returns (GetChangedOutputsResponse);
+
+  rpc DiscoverPackages (DiscoverPackagesRequest) returns (DiscoverPackagesResponse);
 }
 
 message HelloRequest {
@@ -72,4 +74,28 @@ message GetChangedOutputsResponse {
 message DaemonStatus {
   string log_file = 1;
   uint64 uptime_msec = 2;
+}
+
+message DiscoverPackagesRequest {
+
+}
+
+message DiscoverPackagesResponse {
+  repeated PackageFiles package_files = 1;
+  PackageManager package_manager = 2;
+}
+
+message PackageFiles {
+  string package_json = 1;
+  optional string turbo_json = 2;
+
+}
+
+enum PackageManager {
+  Berry = 0;
+  Npm = 1;
+  Pnpm = 2;
+  Pnpm6 = 3;
+  Yarn = 4;
+  Bun = 5;
 }

@@ -26,7 +26,7 @@ use semver::Version;
 use thiserror::Error;
 use tokio::{
     select,
-    sync::{mpsc, oneshot, watch},
+    sync::{mpsc, oneshot, watch, Mutex as AsyncMutex},
 };
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
@@ -35,7 +35,11 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
     cookie_jar::CookieJar,
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
+    package_watcher::PackageWatcher,
     FileSystemWatcher, WatchError,
+};
+use turborepo_repository::discovery::{
+    LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
 };
 
 use super::{
@@ -43,7 +47,10 @@ use super::{
     endpoint::SocketOpenError,
     proto::{self},
 };
-use crate::daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket};
+use crate::{
+    daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket},
+    run::package_discovery::WatchingPackageDiscovery,
+};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -56,9 +63,10 @@ pub enum CloseReason {
     SocketOpenError(SocketOpenError),
 }
 
-struct FileWatching {
+pub struct FileWatching {
     _watcher: FileSystemWatcher,
-    glob_watcher: GlobWatcher,
+    pub glob_watcher: GlobWatcher,
+    pub package_watcher: PackageWatcher,
 }
 
 #[derive(Debug, Error)]
@@ -86,9 +94,10 @@ impl From<RpcError> for tonic::Status {
     }
 }
 
-async fn start_filewatching(
+async fn start_filewatching<PD: PackageDiscovery + Send + 'static>(
     repo_root: AbsoluteSystemPathBuf,
     watcher_tx: watch::Sender<Option<Arc<FileWatching>>>,
+    backup_discovery: PD,
 ) -> Result<(), WatchError> {
     let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).await?;
     let cookie_jar = CookieJar::new(
@@ -97,11 +106,16 @@ async fn start_filewatching(
         watcher.subscribe(),
     );
     let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
+    let package_watcher =
+        PackageWatcher::new(repo_root.clone(), watcher.subscribe(), backup_discovery)
+            .await
+            .map_err(|e| WatchError::Setup(format!("{:?}", e)))?;
     // We can ignore failures here, it means the server is shutting down and
     // receivers have gone out of scope.
     let _ = watcher_tx.send(Some(Arc::new(FileWatching {
         _watcher: watcher,
         glob_watcher,
+        package_watcher,
     })));
     Ok(())
 }
@@ -109,125 +123,206 @@ async fn start_filewatching(
 /// Timeout for every RPC the server handles
 const REQUEST_TIMEOUT: Duration = Duration::from_millis(100);
 
-/// run a gRPC server providing the Turbod interface. external_shutdown
-/// can be used to deliver a signal to shutdown the server. This is expected
-/// to be wired to signal handling.
-pub async fn serve<S>(
-    repo_root: &AbsoluteSystemPath,
-    daemon_root: &AbsoluteSystemPath,
+pub struct TurboGrpcService<S, PDA, PDB> {
+    watcher_tx: watch::Sender<Option<Arc<FileWatching>>>,
+    watcher_rx: watch::Receiver<Option<Arc<FileWatching>>>,
+    repo_root: AbsoluteSystemPathBuf,
+    daemon_root: AbsoluteSystemPathBuf,
     log_file: AbsoluteSystemPathBuf,
     timeout: Duration,
     external_shutdown: S,
-) -> CloseReason
+
+    package_discovery: PDA,
+    package_discovery_backup: PDB,
+}
+
+impl<S> TurboGrpcService<S, WatchingPackageDiscovery, LocalPackageDiscoveryBuilder>
 where
     S: Future<Output = CloseReason>,
 {
-    let running = Arc::new(AtomicBool::new(true));
-    let (_pid_lock, stream) = match listen_socket(daemon_root, running.clone()).await {
-        Ok((pid_lock, stream)) => (pid_lock, stream),
-        Err(e) => return CloseReason::SocketOpenError(e),
-    };
-    trace!("acquired connection stream for socket");
+    /// Create a gRPC server providing the Turbod interface. external_shutdown
+    /// can be used to deliver a signal to shutdown the server. This is expected
+    /// to be wired to signal handling. By default, the server will set up a
+    /// file system watcher for the purposes of managing package discovery
+    /// state, and use a `LocalPackageDiscovery` instance to refresh the
+    /// state if the filewatcher encounters errors.
+    pub fn new(
+        repo_root: AbsoluteSystemPathBuf,
+        daemon_root: AbsoluteSystemPathBuf,
+        log_file: AbsoluteSystemPathBuf,
+        timeout: Duration,
+        external_shutdown: S,
+    ) -> Self {
+        let (watcher_tx, watcher_rx) = watch::channel(None);
 
-    let watcher_repo_root = repo_root.to_owned();
-    // watcher_rx holds the filewatching instance once it has initialized. This
-    // allows us to start the gRPC server without waiting for the potentially
-    // expensive filewatching startup time.
-    let (watcher_tx, watcher_rx) = watch::channel(None);
-    // A channel to trigger the shutdown of the gRPC server. This is handed out
-    // to components internal to the server process such as root watching, as
-    // well as available to the gRPC server itself to handle the shutdown RPC.
-    let (trigger_shutdown, mut shutdown_signal) = mpsc::channel::<()>(1);
+        let package_discovery = WatchingPackageDiscovery::new(watcher_rx.clone());
+        let package_discovery_backup = LocalPackageDiscoveryBuilder::new(repo_root.clone(), None);
 
-    // watch receivers as a group own the filewatcher, which will exit when
-    // all references are dropped.
-    let fw_shutdown = trigger_shutdown.clone();
-    let fw_handle = tokio::task::spawn(async move {
-        if let Err(e) = start_filewatching(watcher_repo_root, watcher_tx).await {
-            error!("filewatching failed to start: {}", e);
-            let _ = fw_shutdown.send(()).await;
+        // Run the actual service. It takes ownership of the struct given to it,
+        // so we use a private struct with just the pieces of state needed to handle
+        // RPCs.
+        TurboGrpcService {
+            watcher_tx,
+            watcher_rx,
+            repo_root,
+            daemon_root,
+            log_file,
+            timeout,
+            external_shutdown,
+            package_discovery,
+            package_discovery_backup,
         }
-        info!("filewatching started");
-    });
-    // exit_root_watch delivers a signal to the root watch loop to exit.
-    // In the event that the server shuts down via some other mechanism, this
-    // cleans up root watching task.
-    let (exit_root_watch, root_watch_exit_signal) = oneshot::channel();
-    let watch_root_handle = tokio::task::spawn(watch_root(
-        watcher_rx.clone(),
-        repo_root.to_owned(),
-        trigger_shutdown.clone(),
-        root_watch_exit_signal,
-    ));
-
-    let bump_timeout = Arc::new(BumpTimeout::new(timeout));
-    let timeout_fut = bump_timeout.wait();
-
-    // when one of these futures complete, let the server gracefully shutdown
-    let (grpc_shutdown_tx, shutdown_reason) = oneshot::channel();
-    let shutdown_fut = async move {
-        select! {
-            _ = shutdown_signal.recv() => grpc_shutdown_tx.send(CloseReason::Shutdown).ok(),
-            _ = timeout_fut => grpc_shutdown_tx.send(CloseReason::Timeout).ok(),
-            reason = external_shutdown => grpc_shutdown_tx.send(reason).ok(),
-        };
-    };
-
-    // Run the actual service. It takes ownership of the struct given to it,
-    // so we use a private struct with just the pieces of state needed to handle
-    // RPCs.
-    let service = TurboGrpcService {
-        shutdown: trigger_shutdown,
-        watcher_rx,
-        times_saved: Arc::new(Mutex::new(HashMap::new())),
-        start_time: Instant::now(),
-        log_file,
-    };
-    let server_fut = {
-        let service = ServiceBuilder::new()
-            .layer(BumpTimeoutLayer::new(bump_timeout.clone()))
-            .service(crate::daemon::proto::turbod_server::TurbodServer::new(
-                service,
-            ));
-
-        Server::builder()
-            // set a max timeout for RPCs
-            .timeout(REQUEST_TIMEOUT)
-            .add_service(service)
-            .serve_with_incoming_shutdown(stream, shutdown_fut)
-    };
-    // Wait for the server to exit.
-    // This can be triggered by timeout, root watcher, or an RPC
-    let _ = server_fut.await;
-    info!("gRPC server exited");
-    // Ensure our timer will exit
-    running.store(false, Ordering::SeqCst);
-    // We expect to have a signal from the grpc server on what triggered the exit
-    let close_reason = shutdown_reason.await.unwrap_or(CloseReason::ServerClosed);
-    // Now that the server has exited, the TurboGrpcService instance should be
-    // dropped. The root watcher still has a reference to a receiver, keeping
-    // the filewatcher alive. Trigger the root watcher to exit. We don't care
-    // if we fail to send, root watching may have exited already
-    let _ = exit_root_watch.send(());
-    let _ = watch_root_handle.await;
-    trace!("root watching exited");
-    // Clean up the filewatching handle in the event that we never even got
-    // started with filewatching. Again, we don't care about the error here.
-    let _ = fw_handle.await;
-    trace!("filewatching handle joined");
-    close_reason
+    }
 }
 
-struct TurboGrpcService {
+impl<S, PDA, PDB> TurboGrpcService<S, PDA, PDB>
+where
+    S: Future<Output = CloseReason>,
+    PDA: PackageDiscoveryBuilder,
+    PDB: PackageDiscoveryBuilder,
+    PDA::Output: Send + 'static,
+    PDB::Output: Send + 'static,
+{
+    /// If errors are encountered when loading the package discovery, this
+    /// builder will be used as a backup to refresh the state.
+    pub fn with_package_discovery_backup<PDB2: PackageDiscoveryBuilder>(
+        self,
+        package_discovery_backup: PDB2,
+    ) -> TurboGrpcService<S, PDA, PDB2> {
+        TurboGrpcService {
+            package_discovery: self.package_discovery,
+            daemon_root: self.daemon_root,
+            external_shutdown: self.external_shutdown,
+            log_file: self.log_file,
+            repo_root: self.repo_root,
+            timeout: self.timeout,
+            watcher_rx: self.watcher_rx,
+            watcher_tx: self.watcher_tx,
+            package_discovery_backup,
+        }
+    }
+
+    pub async fn serve(self) -> CloseReason {
+        let Self {
+            watcher_tx,
+            watcher_rx,
+            daemon_root,
+            external_shutdown,
+            log_file,
+            repo_root,
+            timeout,
+            package_discovery,
+            package_discovery_backup,
+        } = self;
+
+        let running = Arc::new(AtomicBool::new(true));
+        let (_pid_lock, stream) = match listen_socket(&daemon_root, running.clone()).await {
+            Ok((pid_lock, stream)) => (pid_lock, stream),
+            Err(e) => return CloseReason::SocketOpenError(e),
+        };
+        trace!("acquired connection stream for socket");
+
+        let watcher_repo_root = repo_root.to_owned();
+        // A channel to trigger the shutdown of the gRPC server. This is handed out
+        // to components internal to the server process such as root watching, as
+        // well as available to the gRPC server itself to handle the shutdown RPC.
+        let (trigger_shutdown, mut shutdown_signal) = mpsc::channel::<()>(1);
+
+        // watch receivers as a group own the filewatcher, which will exit when
+        // all references are dropped.
+        let backup_discovery = package_discovery_backup.build().unwrap();
+        let fw_shutdown = trigger_shutdown.clone();
+        let fw_handle = tokio::task::spawn(async move {
+            if let Err(e) =
+                start_filewatching(watcher_repo_root, watcher_tx, backup_discovery).await
+            {
+                error!("filewatching failed to start: {}", e);
+                let _ = fw_shutdown.send(()).await;
+            }
+            info!("filewatching started");
+        });
+        // exit_root_watch delivers a signal to the root watch loop to exit.
+        // In the event that the server shuts down via some other mechanism, this
+        // cleans up root watching task.
+        let (exit_root_watch, root_watch_exit_signal) = oneshot::channel();
+        let watch_root_handle = tokio::task::spawn(watch_root(
+            watcher_rx.clone(),
+            repo_root.to_owned(),
+            trigger_shutdown.clone(),
+            root_watch_exit_signal,
+        ));
+
+        let bump_timeout = Arc::new(BumpTimeout::new(timeout));
+        let timeout_fut = bump_timeout.wait();
+
+        // when one of these futures complete, let the server gracefully shutdown
+        let (grpc_shutdown_tx, shutdown_reason) = oneshot::channel();
+        let shutdown_fut = async move {
+            select! {
+                _ = shutdown_signal.recv() => grpc_shutdown_tx.send(CloseReason::Shutdown).ok(),
+                _ = timeout_fut => grpc_shutdown_tx.send(CloseReason::Timeout).ok(),
+                reason = external_shutdown => grpc_shutdown_tx.send(reason).ok(),
+            };
+        };
+
+        // Run the actual service. It takes ownership of the struct given to it,
+        // so we use a private struct with just the pieces of state needed to handle
+        // RPCs.
+        let service = TurboGrpcServiceInner {
+            package_discovery: AsyncMutex::new(package_discovery.build().unwrap()),
+            shutdown: trigger_shutdown,
+            watcher_rx,
+            times_saved: Arc::new(Mutex::new(HashMap::new())),
+            start_time: Instant::now(),
+            log_file: log_file.to_owned(),
+        };
+        let server_fut = {
+            let service = ServiceBuilder::new()
+                .layer(BumpTimeoutLayer::new(bump_timeout.clone()))
+                .service(crate::daemon::proto::turbod_server::TurbodServer::new(
+                    service,
+                ));
+
+            Server::builder()
+                // set a max timeout for RPCs
+                .timeout(REQUEST_TIMEOUT)
+                .add_service(service)
+                .serve_with_incoming_shutdown(stream, shutdown_fut)
+        };
+        // Wait for the server to exit.
+        // This can be triggered by timeout, root watcher, or an RPC
+        let _ = server_fut.await;
+        info!("gRPC server exited");
+        // Ensure our timer will exit
+        running.store(false, Ordering::SeqCst);
+        // We expect to have a signal from the grpc server on what triggered the exit
+        let close_reason = shutdown_reason.await.unwrap_or(CloseReason::ServerClosed);
+        // Now that the server has exited, the TurboGrpcService instance should be
+        // dropped. The root watcher still has a reference to a receiver, keeping
+        // the filewatcher alive. Trigger the root watcher to exit. We don't care
+        // if we fail to send, root watching may have exited already
+        let _ = exit_root_watch.send(());
+        let _ = watch_root_handle.await;
+        trace!("root watching exited");
+        // Clean up the filewatching handle in the event that we never even got
+        // started with filewatching. Again, we don't care about the error here.
+        let _ = fw_handle.await;
+        trace!("filewatching handle joined");
+        close_reason
+    }
+}
+
+struct TurboGrpcServiceInner<PD> {
     //shutdown: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     shutdown: mpsc::Sender<()>,
     watcher_rx: watch::Receiver<Option<Arc<FileWatching>>>,
     times_saved: Arc<Mutex<HashMap<String, u64>>>,
     start_time: Instant,
     log_file: AbsoluteSystemPathBuf,
+    package_discovery: AsyncMutex<PD>,
 }
 
-impl TurboGrpcService {
+impl<PD> TurboGrpcServiceInner<PD> {
     async fn trigger_shutdown(&self) {
         info!("triggering shutdown");
         let _ = self.shutdown.send(()).await;
@@ -274,21 +369,12 @@ async fn wait_for_filewatching(
     mut rx: watch::Receiver<Option<Arc<FileWatching>>>,
     timeout: Duration,
 ) -> Result<Arc<FileWatching>, RpcError> {
-    if let Some(fw) = rx.borrow().as_ref().cloned() {
-        return Ok(fw);
-    }
-    tokio::time::timeout(timeout, rx.changed())
+    let fw = tokio::time::timeout(timeout, rx.wait_for(|opt| opt.is_some()))
         .await
         .map_err(|_| RpcError::DeadlineExceeded)? // timeout case
-        .map_err(|_| RpcError::NoFileWatching)?; // sender dropped with no receivers
-    let result = rx
-        .borrow()
-        .as_ref()
-        .cloned()
-        // This error should never happen, we got the change notification
-        // above, and we only ever go from None to Some filewatcher
-        .ok_or_else(|| RpcError::NoFileWatching)?;
-    Ok(result)
+        .map_err(|_| RpcError::NoFileWatching)?; // sender dropped
+
+    return Ok(fw.as_ref().expect("guaranteed some above").clone());
 }
 
 async fn watch_root(
@@ -335,7 +421,10 @@ async fn watch_root(
 }
 
 #[tonic::async_trait]
-impl proto::turbod_server::Turbod for TurboGrpcService {
+impl<PD> proto::turbod_server::Turbod for TurboGrpcServiceInner<PD>
+where
+    PD: PackageDiscovery + Send + 'static,
+{
     async fn hello(
         &self,
         request: tonic::Request<proto::HelloRequest>,
@@ -418,6 +507,31 @@ impl proto::turbod_server::Turbod for TurboGrpcService {
             time_saved,
         }))
     }
+
+    async fn discover_packages(
+        &self,
+        _request: tonic::Request<proto::DiscoverPackagesRequest>,
+    ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
+        self.package_discovery
+            .lock()
+            .await
+            .discover_packages()
+            .await
+            .map(|packages| {
+                tonic::Response::new(proto::DiscoverPackagesResponse {
+                    package_files: packages
+                        .workspaces
+                        .into_iter()
+                        .map(|d| proto::PackageFiles {
+                            package_json: d.package_json.to_string(),
+                            turbo_json: d.turbo_json.map(|t| t.to_string()),
+                        })
+                        .collect(),
+                    package_manager: proto::PackageManager::from(packages.package_manager).into(),
+                })
+            })
+            .map_err(|e| tonic::Status::internal(format!("{}", e)))
+    }
 }
 
 /// Determine whether a server can serve a client's request based on its
@@ -443,7 +557,7 @@ fn compare_versions(client: Version, server: Version, constraint: proto::Version
     }
 }
 
-impl NamedService for TurboGrpcService {
+impl<T> NamedService for TurboGrpcServiceInner<T> {
     const NAME: &'static str = "turborepo.Daemon";
 }
 
@@ -459,9 +573,13 @@ mod test {
     use test_case::test_case;
     use tokio::sync::oneshot;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_repository::{
+        discovery::{DiscoveryResponse, PackageDiscovery},
+        package_manager::PackageManager,
+    };
 
     use super::compare_versions;
-    use crate::daemon::{proto::VersionRange, server::serve, CloseReason};
+    use crate::daemon::{proto::VersionRange, CloseReason, TurboGrpcService};
 
     #[test_case("1.2.3", "1.2.3", VersionRange::Exact, true ; "exact match")]
     #[test_case("1.2.3", "1.2.3", VersionRange::Patch, true ; "patch match")]
@@ -490,6 +608,21 @@ mod test {
         )
     }
 
+    struct MockDiscovery;
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(
+            &mut self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            Ok(DiscoveryResponse {
+                package_manager: PackageManager::Yarn,
+                workspaces: vec![],
+            })
+        }
+    }
+
     // the windows runner starts a new thread to accept uds requests,
     // so we need a multi-threaded runtime
     #[tokio::test(flavor = "multi_thread")]
@@ -510,19 +643,30 @@ mod test {
 
         let (tx, rx) = oneshot::channel::<CloseReason>();
         let exit_signal = rx.map(|_result| CloseReason::Interrupt);
-        let handle = tokio::task::spawn(async move {
-            serve(
-                &repo_root,
-                &daemon_root,
-                log_file,
-                Duration::from_secs(60 * 60),
-                exit_signal,
-            )
-            .await
-        });
+
+        let service = TurboGrpcService::new(
+            repo_root.clone(),
+            daemon_root,
+            log_file,
+            Duration::from_secs(60 * 60),
+            exit_signal,
+        )
+        .with_package_discovery_backup(MockDiscovery);
+
+        // the package watcher reads data from the package.json file
+        // so we need to create it
+        repo_root.create_dir_all().unwrap();
+        let package_json = repo_root.join_component("package.json");
+        std::fs::write(package_json, r#"{"workspaces": ["packages/*"]}"#).unwrap();
+
+        let handle = tokio::task::spawn(service.serve());
 
         tokio::time::sleep(Duration::from_millis(2000)).await;
-        assert!(pid_path.exists(), "pid file must be present");
+        assert!(
+            pid_path.exists(),
+            "pid file must be present at {:?}",
+            pid_path
+        );
         // signal server exit
         tx.send(CloseReason::Interrupt).unwrap();
         handle.await.unwrap();
@@ -555,17 +699,20 @@ mod test {
         let now = Instant::now();
         let (_tx, rx) = oneshot::channel::<CloseReason>();
         let exit_signal = rx.map(|_result| CloseReason::Interrupt);
-        let close_reason = serve(
-            &repo_root,
-            &daemon_root,
+
+        let server = TurboGrpcService::new(
+            repo_root,
+            daemon_root,
             log_file,
-            Duration::from_millis(5),
+            Duration::from_millis(10),
             exit_signal,
         )
-        .await;
+        .with_package_discovery_backup(MockDiscovery);
+
+        let close_reason = server.serve().await;
 
         assert!(
-            now.elapsed() >= Duration::from_millis(5),
+            now.elapsed() >= Duration::from_millis(10),
             "must wait at least 5ms"
         );
         assert_matches::assert_matches!(
@@ -593,18 +740,16 @@ mod test {
         let (_tx, rx) = oneshot::channel::<CloseReason>();
         let exit_signal = rx.map(|_result| CloseReason::Interrupt);
 
-        let server_repo_root = repo_root.clone();
-        let handle = tokio::task::spawn(async move {
-            let repo_root = server_repo_root;
-            serve(
-                &repo_root,
-                &daemon_root,
-                log_file,
-                Duration::from_secs(60 * 60),
-                exit_signal,
-            )
-            .await
-        });
+        let server = TurboGrpcService::new(
+            repo_root.clone(),
+            daemon_root,
+            log_file,
+            Duration::from_secs(60 * 60),
+            exit_signal,
+        )
+        .with_package_discovery_backup(MockDiscovery);
+
+        let handle = tokio::task::spawn(server.serve());
 
         // give filewatching some time to bootstrap
         tokio::time::sleep(Duration::from_secs(1)).await;

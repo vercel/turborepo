@@ -8,17 +8,38 @@ use turbopath::AbsoluteSystemPathBuf;
 use super::{
     connector::{DaemonConnector, DaemonConnectorError},
     endpoint::SocketOpenError,
-    proto,
+    proto::DiscoverPackagesResponse,
 };
-use crate::globwatcher::HashGlobSetupError;
+use crate::{daemon::proto, globwatcher::HashGlobSetupError};
 
 #[derive(Debug, Clone)]
-pub struct DaemonClient<T: Clone> {
+pub struct DaemonClient<T> {
     client: proto::turbod_client::TurbodClient<tonic::transport::Channel>,
     connect_settings: T,
 }
 
-impl<T: Clone> DaemonClient<T> {
+impl DaemonClient<()> {
+    pub fn new(client: proto::turbod_client::TurbodClient<tonic::transport::Channel>) -> Self {
+        Self {
+            client,
+            connect_settings: (),
+        }
+    }
+
+    /// Augment the client with the connect settings, allowing it to be
+    /// restarted.
+    pub fn with_connect_settings(
+        self,
+        connect_settings: DaemonConnector,
+    ) -> DaemonClient<DaemonConnector> {
+        DaemonClient {
+            client: self.client,
+            connect_settings,
+        }
+    }
+}
+
+impl<T> DaemonClient<T> {
     /// Interrogate the server for its version.
     #[tracing::instrument(skip(self))]
     pub(super) async fn handshake(&mut self) -> Result<(), DaemonError> {
@@ -45,34 +66,6 @@ impl<T: Clone> DaemonClient<T> {
         info!("Stopping daemon");
         self.client.shutdown(proto::ShutdownRequest {}).await?;
         Ok(self.connect_settings)
-    }
-}
-
-impl DaemonClient<()> {
-    pub fn new(client: proto::turbod_client::TurbodClient<tonic::transport::Channel>) -> Self {
-        Self {
-            client,
-            connect_settings: (),
-        }
-    }
-
-    /// Augment the client with the connect settings, allowing it to be
-    /// restarted.
-    pub fn with_connect_settings(
-        self,
-        connect_settings: DaemonConnector,
-    ) -> DaemonClient<DaemonConnector> {
-        DaemonClient {
-            client: self.client,
-            connect_settings,
-        }
-    }
-}
-
-impl DaemonClient<DaemonConnector> {
-    /// Stops the daemon, closes the connection, and opens a new connection.
-    pub async fn restart(self) -> Result<DaemonClient<DaemonConnector>, DaemonError> {
-        self.stop().await?.connect().await.map_err(Into::into)
     }
 
     pub async fn get_changed_outputs(
@@ -127,6 +120,23 @@ impl DaemonClient<DaemonConnector> {
             .into_inner()
             .daemon_status
             .ok_or(DaemonError::MalformedResponse)
+    }
+
+    pub async fn discover_packages(&mut self) -> Result<DiscoverPackagesResponse, DaemonError> {
+        let response = self
+            .client
+            .discover_packages(proto::DiscoverPackagesRequest {})
+            .await?
+            .into_inner();
+
+        Ok(response)
+    }
+}
+
+impl DaemonClient<DaemonConnector> {
+    /// Stops the daemon, closes the connection, and opens a new connection.
+    pub async fn restart(self) -> Result<DaemonClient<DaemonConnector>, DaemonError> {
+        self.stop().await?.connect().await.map_err(Into::into)
     }
 
     pub fn pid_file(&self) -> &turbopath::AbsoluteSystemPathBuf {
