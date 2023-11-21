@@ -6,6 +6,12 @@
       "output": [],
       // For github actions
       "env": ["RUNNER_OS"]
+    },
+    "test:rust-codepath": {
+      "dependsOn": ["cli#build", "^build"],
+      "output": [],
+      // For github actions
+      "env": ["RUNNER_OS"]
     }
   }
 }
