@@ -28,7 +28,6 @@ pub struct SpacesClient {
     api_client: APIClient,
     api_auth: APIAuth,
     request_timeout: Duration,
-    errors: Vec<Error>,
 }
 
 /// Once the client is done, we return any errors
@@ -155,25 +154,22 @@ impl SpacesClient {
             api_client,
             api_auth,
             request_timeout: Duration::from_secs(10),
-            errors: Vec::new(),
         })
     }
 
     pub fn start(
-        mut self,
+        self,
         create_run_payload: CreateSpaceRunPayload,
     ) -> Result<SpacesClientHandle, Error> {
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let handle = tokio::spawn(async move {
+            let mut errors = Vec::new();
             let run = match self.create_run(create_run_payload).await {
                 Ok(run) => run,
                 Err(e) => {
                     debug!("error creating space run: {}", e);
-                    self.errors.push(e);
-                    return Ok(SpacesClientResult {
-                        errors: self.errors,
-                        run: None,
-                    });
+                    errors.push(e);
+                    return Ok(SpacesClientResult { errors, run: None });
                 }
             };
 
@@ -191,12 +187,12 @@ impl SpacesClient {
                 };
 
                 if let Err(e) = resp {
-                    self.errors.push(e);
+                    errors.push(e);
                 }
             }
 
             Ok(SpacesClientResult {
-                errors: self.errors,
+                errors,
                 run: Some(run),
             })
         });
