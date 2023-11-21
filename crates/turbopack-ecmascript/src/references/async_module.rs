@@ -46,6 +46,7 @@ pub struct AsyncModule {
     pub placeable: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     pub references: IndexSet<Vc<EsmAssetReference>>,
     pub has_top_level_await: bool,
+    pub import_externals: bool,
 }
 
 /// Option<[AsyncModule]>.
@@ -93,7 +94,11 @@ impl AsyncModule {
                 let referenced_asset = r.get_referenced_asset().await?;
                 Ok(match &*referenced_asset {
                     ReferencedAsset::OriginalReferenceTypeExternal(_) => {
-                        referenced_asset.get_ident().await?
+                        if self.import_externals {
+                            referenced_asset.get_ident().await?
+                        } else {
+                            None
+                        }
                     }
                     ReferencedAsset::Some(placeable) => {
                         let chunk_item = placeable
@@ -125,19 +130,21 @@ impl AsyncModule {
         }
 
         Ok(Vc::cell(
-            self.references
-                .iter()
-                .map(|r| async {
-                    let referenced_asset = r.get_referenced_asset().await?;
-                    Ok(matches!(
-                        &*referenced_asset,
-                        ReferencedAsset::OriginalReferenceTypeExternal(_)
-                    ))
-                })
-                .try_join()
-                .await?
-                .iter()
-                .any(|&b| b),
+            self.import_externals
+                && self
+                    .references
+                    .iter()
+                    .map(|r| async {
+                        let referenced_asset = r.get_referenced_asset().await?;
+                        Ok(matches!(
+                            &*referenced_asset,
+                            ReferencedAsset::OriginalReferenceTypeExternal(_)
+                        ))
+                    })
+                    .try_join()
+                    .await?
+                    .iter()
+                    .any(|&b| b),
         ))
     }
 
