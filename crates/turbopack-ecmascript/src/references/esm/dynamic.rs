@@ -165,7 +165,8 @@ impl CodeGenerateable for EsmAsyncAssetReference {
                     ];
                 })
             }
-            PatternMapping::OriginalReferenceTypeExternal(_) => {
+            PatternMapping::OriginalReferenceTypeExternal(_)
+            | PatternMapping::OriginalReferenceExternal => {
                 create_visitor!(exact path, visit_mut_call_expr(call_expr: &mut CallExpr) {
                     let old_args = std::mem::take(&mut call_expr.args);
                     let expr = match old_args.into_iter().next() {
