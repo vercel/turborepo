@@ -18,10 +18,6 @@ use crate::{
     task_hash::{get_external_deps_hash, TaskHashTracker},
 };
 
-const NO_FRAMEWORK_DETECTED: &str = "<NO FRAMEWORK DETECTED>";
-
-const NO_FRAMEWORK_INFERENCE: &str = "<FRAMEWORK DETECTION SKIPPED>";
-
 pub struct TaskSummaryFactory<'a> {
     package_graph: &'a PackageGraph,
     engine: &'a Engine,
@@ -129,18 +125,7 @@ impl<'a> TaskSummaryFactory<'a> {
             .expanded_outputs(task_id)
             .unwrap_or_default();
 
-        let framework = self.hash_tracker.framework(task_id).unwrap_or_else(|| {
-            if matches!(self.run_opts.dry_run, Some(DryRunMode::Json)) {
-                ""
-            } else {
-                if self.run_opts.framework_inference {
-                    NO_FRAMEWORK_DETECTED
-                } else {
-                    NO_FRAMEWORK_INFERENCE
-                }
-            }
-            .to_string()
-        });
+        let framework = self.hash_tracker.framework(task_id).unwrap_or_default();
         let hash = self
             .hash_tracker
             .hash(task_id)
