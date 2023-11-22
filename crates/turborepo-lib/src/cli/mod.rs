@@ -336,7 +336,7 @@ pub enum Command {
         #[clap(short = 'r', long)]
         root: Option<String>,
         /// Answers passed directly to generator
-        #[clap(short = 'a', long, value_delimiter = ' ', num_args = 1..)]
+        #[clap(short = 'a', long, num_args = 1..)]
         args: Vec<String>,
 
         #[clap(subcommand)]
@@ -821,12 +821,12 @@ pub async fn run(
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
-            if env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("true") {
+            if env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false") {
+                Ok(Payload::Go(Box::new(base)))
+            } else {
                 use crate::commands::run;
                 let exit_code = run::run(base).await?;
                 Ok(Payload::Rust(Ok(exit_code)))
-            } else {
-                Ok(Payload::Go(Box::new(base)))
             }
         }
         Command::Prune {
