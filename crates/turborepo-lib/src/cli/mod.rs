@@ -336,7 +336,7 @@ pub enum Command {
         #[clap(short = 'r', long)]
         root: Option<String>,
         /// Answers passed directly to generator
-        #[clap(short = 'a', long, value_delimiter = ' ', num_args = 1..)]
+        #[clap(short = 'a', long, num_args = 1..)]
         args: Vec<String>,
 
         #[clap(subcommand)]
