@@ -966,7 +966,11 @@ jobs:
     name: Turbopack Rust testing benchmarks on linux
     uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
     with:
-      runner: ubuntu-latest-16-core-oss
+      runs-on:
+        - 'self-hosted'
+        - 'linux'
+        - 'x64'
+        - 'metal'
       os: linux
       all: ${{ needs.determine_jobs.outputs.turbopack_bench == 'true' }}
 
