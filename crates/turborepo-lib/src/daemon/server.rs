@@ -22,6 +22,7 @@ use std::{
 };
 
 use futures::Future;
+use semver::Version;
 use thiserror::Error;
 use tokio::{
     select,
@@ -42,10 +43,7 @@ use super::{
     endpoint::SocketOpenError,
     proto::{self},
 };
-use crate::{
-    daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket},
-    get_version,
-};
+use crate::daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -342,15 +340,28 @@ impl proto::turbod_server::Turbod for TurboGrpcService {
         &self,
         request: tonic::Request<proto::HelloRequest>,
     ) -> Result<tonic::Response<proto::HelloResponse>, tonic::Status> {
-        let client_version = request.into_inner().version;
-        let server_version = get_version();
-        if client_version != server_version {
-            return Err(tonic::Status::failed_precondition(format!(
+        let request = request.into_inner();
+
+        let client_version = request.version;
+        let server_version = proto::VERSION;
+
+        let passes_version_check = match (
+            proto::VersionRange::from_i32(request.supported_version_range),
+            Version::parse(&client_version),
+            Version::parse(server_version),
+        ) {
+            // if we fail to parse, or the constraint is invalid, we have a version mismatch
+            (_, Err(_), _) | (_, _, Err(_)) | (None, _, _) => false,
+            (Some(range), Ok(client), Ok(server)) => compare_versions(client, server, range),
+        };
+
+        if passes_version_check {
+            Ok(tonic::Response::new(proto::HelloResponse {}))
+        } else {
+            Err(tonic::Status::failed_precondition(format!(
                 "version mismatch. Client {} Server {}",
                 client_version, server_version
-            )));
-        } else {
-            Ok(tonic::Response::new(proto::HelloResponse {}))
+            )))
         }
     }
 
@@ -409,6 +420,29 @@ impl proto::turbod_server::Turbod for TurboGrpcService {
     }
 }
 
+/// Determine whether a server can serve a client's request based on its
+/// version.
+///
+/// When the `proto::VersionRange` is anything other than `Exact` it means that
+/// the server's version must exceed the client's version. For example, if the
+/// client is `1.2.3` and the server is `1.2.4`, then the client's request can
+/// be served if the `proto::VersionRange` is `Patch`, `Minor`, or `Major`.
+/// However, if the server is `1.3.0`, then the client's request can only be
+/// served if the `proto::VersionRange` is `Minor` or `Major`.
+fn compare_versions(client: Version, server: Version, constraint: proto::VersionRange) -> bool {
+    match constraint {
+        proto::VersionRange::Exact => client == server,
+        proto::VersionRange::Patch => {
+            client.major == server.major
+                && client.minor == server.minor
+                && client.patch <= server.patch
+        }
+        proto::VersionRange::Minor => client.major == server.major && client.minor <= server.minor,
+        // changes to major version is always incompatible
+        proto::VersionRange::Major => client.major == server.major,
+    }
+}
+
 impl NamedService for TurboGrpcService {
     const NAME: &'static str = "turborepo.Daemon";
 }
@@ -421,10 +455,40 @@ mod test {
     };
 
     use futures::FutureExt;
+    use semver::Version;
+    use test_case::test_case;
     use tokio::sync::oneshot;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::daemon::{server::serve, CloseReason};
+    use super::compare_versions;
+    use crate::daemon::{proto::VersionRange, server::serve, CloseReason};
+
+    #[test_case("1.2.3", "1.2.3", VersionRange::Exact, true ; "exact match")]
+    #[test_case("1.2.3", "1.2.3", VersionRange::Patch, true ; "patch match")]
+    #[test_case("1.2.3", "1.2.3", VersionRange::Minor, true ; "minor match")]
+    #[test_case("1.2.3", "1.2.3", VersionRange::Major, true ; "major match")]
+    #[test_case("1.2.3", "1.2.4", VersionRange::Exact, false ; "exact mismatch")]
+    #[test_case("1.2.3", "1.2.4", VersionRange::Patch, true ; "patch greater match")]
+    #[test_case("1.2.3", "1.2.4", VersionRange::Minor, true ; "minor greater match")]
+    #[test_case("1.2.3", "1.2.4", VersionRange::Major, true ; "major greater match")]
+    #[test_case("1.2.3", "1.2.2", VersionRange::Patch, false ; "patch lesser mismatch")]
+    #[test_case("1.2.3", "1.1.3", VersionRange::Patch, false ; "patch lesser minor mismatch")]
+    #[test_case("1.2.3", "1.1.0", VersionRange::Minor, false ; "minor lesser mismatch")]
+    #[test_case("1.2.3", "0.1.0", VersionRange::Major, false ; "major lesser mismatch")]
+    #[test_case("1.10.17-canary.0", "1.10.17-canary.1", VersionRange::Exact, false ; "canary mismatch")]
+    #[test_case("1.10.17-canary.0", "1.10.17-canary.1", VersionRange::Patch, true ; "canary match")]
+    #[test_case("1.0.0", "2.0.0", VersionRange::Major, false ; "major breaking changes")]
+
+    fn version_match(a: &str, b: &str, constraint: VersionRange, expected: bool) {
+        assert_eq!(
+            compare_versions(
+                Version::parse(a).unwrap(),
+                Version::parse(b).unwrap(),
+                constraint
+            ),
+            expected
+        )
+    }
 
     // the windows runner starts a new thread to accept uds requests,
     // so we need a multi-threaded runtime

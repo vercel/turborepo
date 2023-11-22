@@ -5,20 +5,16 @@ use tonic::{Code, Status};
 use tracing::info;
 use turbopath::AbsoluteSystemPathBuf;
 
-use self::proto::turbod_client::TurbodClient;
 use super::{
     connector::{DaemonConnector, DaemonConnectorError},
     endpoint::SocketOpenError,
+    proto,
 };
-use crate::{get_version, globwatcher::HashGlobSetupError};
-
-pub mod proto {
-    tonic::include_proto!("turbodprotocol");
-}
+use crate::globwatcher::HashGlobSetupError;
 
 #[derive(Debug, Clone)]
 pub struct DaemonClient<T: Clone> {
-    client: TurbodClient<tonic::transport::Channel>,
+    client: proto::turbod_client::TurbodClient<tonic::transport::Channel>,
     connect_settings: T,
 }
 
@@ -29,7 +25,12 @@ impl<T: Clone> DaemonClient<T> {
         let _ret = self
             .client
             .hello(proto::HelloRequest {
-                version: get_version().to_string(),
+                version: proto::VERSION.to_string(),
+                // minor version means that we need the daemon server to have at least the
+                // same features as us, but it can have more. it is unlikely that we will
+                // ever want to change the version range but we can tune it if, for example,
+                // we need to lock to a specific minor version.
+                supported_version_range: proto::VersionRange::Minor.into(),
                 // todo(arlyon): add session id
                 ..Default::default()
             })
@@ -48,7 +49,7 @@ impl<T: Clone> DaemonClient<T> {
 }
 
 impl DaemonClient<()> {
-    pub fn new(client: TurbodClient<tonic::transport::Channel>) -> Self {
+    pub fn new(client: proto::turbod_client::TurbodClient<tonic::transport::Channel>) -> Self {
         Self {
             client,
             connect_settings: (),

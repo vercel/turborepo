@@ -14,7 +14,7 @@ use tokio::{sync::mpsc, time::timeout};
 use tonic::transport::Endpoint;
 use tracing::debug;
 
-use super::{client::proto::turbod_client::TurbodClient, DaemonClient};
+use super::{proto::turbod_client::TurbodClient, DaemonClient};
 use crate::daemon::DaemonError;
 
 #[derive(Error, Debug)]
@@ -408,7 +408,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
-    use crate::daemon::client::proto;
+    use crate::daemon::proto;
 
     #[cfg(not(target_os = "windows"))]
     const NODE_EXE: &str = "node";
