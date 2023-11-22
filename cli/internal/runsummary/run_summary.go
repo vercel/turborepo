@@ -23,12 +23,6 @@ import (
 // the RunSummary will print this, instead of the script (e.g. `next build`).
 const MissingTaskLabel = "<NONEXISTENT>"
 
-// NoFrameworkDetected is a string to identify when a workspace doesn't detect a framework
-const NoFrameworkDetected = "<NO FRAMEWORK DETECTED>"
-
-// FrameworkDetectionSkipped is a string to identify when framework detection was skipped
-const FrameworkDetectionSkipped = "<FRAMEWORK DETECTION SKIPPED>"
-
 // NOTE: When changing this, please ensure that the server side is updated to handle the new version on vercel.com
 // this is required to ensure safe handling of env vars (unknown run summary versions will be ignored on the server)
 const runSummarySchemaVersion = "1"
