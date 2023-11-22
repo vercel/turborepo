@@ -128,7 +128,10 @@ mod tests {
         for (input, prefix, (expected_filename, expect_delete)) in tests {
             let prefix = RelativeUnixPathBuf::new(*prefix).unwrap();
             let mut hashes = to_hash_map(&[(expected_filename, "some-hash")]);
-            let to_hash = read_status(input.as_bytes(), &root_path, &prefix, &mut hashes).unwrap();
+            let (to_hash, to_remove) = read_status(input.as_bytes(), &root_path, &prefix).unwrap();
+            for path in to_remove {
+                hashes.remove(&path);
+            }
             if *expect_delete {
                 assert_eq!(hashes.len(), 0, "input: {}", input);
             } else {
