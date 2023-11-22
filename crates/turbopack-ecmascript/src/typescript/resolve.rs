@@ -40,6 +40,7 @@ async fn json_only(resolve_options: Vc<ResolveOptions>) -> Result<Vc<ResolveOpti
     Ok(opts.cell())
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn read_tsconfigs(
     mut data: Vc<FileContent>,
     mut tsconfig: Vc<Box<dyn Source>>,
@@ -102,6 +103,7 @@ pub async fn read_tsconfigs(
 
 /// Resolves tsconfig files according to TS's implementation:
 /// https://github.com/microsoft/TypeScript/blob/611a912d/src/compiler/commandLineParser.ts#L3294-L3326
+#[tracing::instrument(skip_all)]
 async fn resolve_extends(
     tsconfig: Vc<Box<dyn Source>>,
     extends: &str,
