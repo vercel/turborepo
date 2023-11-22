@@ -792,7 +792,7 @@ impl FileSystem for DiskFileSystem {
                 }
                 let full_path_to_write = full_path.clone();
                 retry_future(move || {
-                    let mut full_path = full_path_to_write.clone();
+                    let full_path = full_path_to_write.clone();
                     async move {
                         let mut f = fs::File::create(&full_path).await?;
                         tokio::io::copy(&mut file.read(), &mut f).await?;
@@ -800,6 +800,7 @@ impl FileSystem for DiskFileSystem {
                         f.set_permissions(file.meta.permissions.into()).await?;
                         #[cfg(feature = "write_version")]
                         {
+                            let mut full_path = full_path;
                             let hash = hash_xxh3_hash64(file);
                             let ext = full_path.extension();
                             let ext = if let Some(ext) = ext {
