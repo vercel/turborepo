@@ -101,6 +101,9 @@ impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
                     event = self.rx.recv() => {
                         if let Some(event) = event {
                             self.buffer.push(event);
+                        } else {
+                            // There are no senders left so we can shut down
+                            break;
                         }
                         if self.buffer.len() == BUFFER_THRESHOLD {
                             self.flush_events();
@@ -114,14 +117,14 @@ impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
                         timeout = tokio::time::sleep(NO_TIMEOUT);
                     }
                     _ = self.exit_ch.closed() => {
-                        self.flush_events();
-                        while let Some(result) = self.senders.next().await {
-                            if let Err(err) = result {
-                                debug!("failed to send analytics event. error: {}", err)
-                            }
-                        }
-                        return;
+                        break;
                     }
+                }
+            }
+            self.flush_events();
+            while let Some(result) = self.senders.next().await {
+                if let Err(err) = result {
+                    debug!("failed to send analytics event. error: {}", err)
                 }
             }
         })
