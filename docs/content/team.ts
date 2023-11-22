@@ -50,7 +50,7 @@ const TURBO_TEAM: Record<string, AuthorDetails> = {
     xUsername: "alexkirsz",
   },
   anthonyshew: {
-    name: "Anthony Shew",
+    name: "Anthony Schew",
     picture: "/images/people/anthonyshew.png",
     xUsername: "anthonysheww",
   },
@@ -71,10 +71,10 @@ const TURBO_TEAM: Record<string, AuthorDetails> = {
 };
 
 export type Author = keyof typeof TURBO_TEAM;
-export interface AuthorDetails {
+export type AuthorDetails = {
   name: string;
   picture: string;
   xUsername?: string;
-}
+};
 
 export default TURBO_TEAM;
