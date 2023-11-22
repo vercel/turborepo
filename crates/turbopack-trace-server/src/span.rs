@@ -41,8 +41,14 @@ pub enum SpanEvent {
 
 #[derive(Clone)]
 pub enum SpanGraphEvent {
-    SelfTime { duration: u64 },
-    Child { child: Arc<SpanGraph> },
+    // TODO(sokra) use events instead of children for visualizing span graphs
+    #[allow(dead_code)]
+    SelfTime {
+        duration: u64,
+    },
+    Child {
+        child: Arc<SpanGraph>,
+    },
 }
 
 pub struct SpanGraph {

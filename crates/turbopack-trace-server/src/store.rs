@@ -179,14 +179,6 @@ impl<'a> SpanRef<'a> {
         })
     }
 
-    pub fn category(&self) -> &'a str {
-        &self.span.category
-    }
-
-    pub fn name(&self) -> &'a str {
-        &self.span.name
-    }
-
     pub fn nice_name(&self) -> (&'a str, &'a str) {
         let (category, title) = self.span.nice_name.get_or_init(|| {
             if let Some(name) = self
@@ -250,10 +242,14 @@ impl<'a> SpanRef<'a> {
         self.span.self_time
     }
 
+    // TODO(sokra) use events instead of children for visualizing span graphs
+    #[allow(dead_code)]
     pub fn events_count(&self) -> usize {
         self.span.events.len()
     }
 
+    // TODO(sokra) use events instead of children for visualizing span graphs
+    #[allow(dead_code)]
     pub fn events(&self) -> impl Iterator<Item = SpanEventRef<'a>> {
         self.span.events.iter().map(|event| match event {
             &SpanEvent::SelfTime { start, end } => SpanEventRef::SelfTime {
@@ -372,6 +368,8 @@ pub enum SpanEventRef<'a> {
     Child { span: SpanRef<'a> },
 }
 
+// TODO(sokra) use events instead of children for visualizing span graphs
+#[allow(dead_code)]
 #[derive(Clone)]
 pub enum SpanGraphEventRef<'a> {
     SelfTime { duration: u64 },
@@ -379,6 +377,8 @@ pub enum SpanGraphEventRef<'a> {
 }
 
 impl<'a> SpanGraphEventRef<'a> {
+    // TODO(sokra) use events instead of children for visualizing span graphs
+    #[allow(dead_code)]
     pub fn corrected_total_time(&self) -> u64 {
         match self {
             SpanGraphEventRef::SelfTime { duration } => *duration,
@@ -403,10 +403,6 @@ impl<'a> SpanGraphRef<'a> {
 
     pub fn id(&self) -> SpanId {
         unsafe { SpanId::new_unchecked(self.first_span().span.index.get() << 1 | 1) }
-    }
-
-    pub fn name(&self) -> &'a str {
-        self.first_span().name()
     }
 
     pub fn nice_name(&self) -> (&str, &str) {
@@ -518,6 +514,8 @@ impl<'a> SpanGraphRef<'a> {
         })
     }
 
+    // TODO(sokra) show self time in details
+    #[allow(dead_code)]
     pub fn self_time(&self) -> u64 {
         *self.graph.self_time.get_or_init(|| {
             self.recursive_spans()
@@ -527,6 +525,8 @@ impl<'a> SpanGraphRef<'a> {
         })
     }
 
+    // TODO(sokra) show total time in details
+    #[allow(dead_code)]
     pub fn total_time(&self) -> u64 {
         *self.graph.total_time.get_or_init(|| {
             self.children()

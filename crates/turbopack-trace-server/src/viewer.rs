@@ -414,15 +414,3 @@ enum LineEntryType<'a> {
     Span(SpanRef<'a>),
     SpanGraph(SpanGraphRef<'a>),
 }
-
-fn nice_name(span: &SpanRef<'_>) -> (String, String) {
-    if let Some(name) = span
-        .args()
-        .find(|&(k, _)| k == "name")
-        .map(|(_, v)| v.to_string())
-    {
-        (format!("{} {}", span.name(), span.category()), name)
-    } else {
-        (span.category().to_string(), span.name().to_string())
-    }
-}

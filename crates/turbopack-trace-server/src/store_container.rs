@@ -71,12 +71,6 @@ pub struct StoreWriteGuard<'a> {
     guard: RwLockWriteGuard<'a, StoreWithGeneration>,
 }
 
-impl<'a> StoreWriteGuard<'a> {
-    pub fn generation(&self) -> usize {
-        self.guard.generation
-    }
-}
-
 impl<'a> Deref for StoreWriteGuard<'a> {
     type Target = Store;
 
