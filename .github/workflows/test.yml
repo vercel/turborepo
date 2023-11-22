@@ -706,9 +706,6 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - name: tune linux network
-        run: sudo ethtool -K eth0 tx off rx off
-
       - name: Checkout Next.js
         uses: actions/checkout@v3
         with:
