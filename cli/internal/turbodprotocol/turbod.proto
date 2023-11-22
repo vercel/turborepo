@@ -12,6 +12,9 @@ service Turbod {
   rpc NotifyOutputsWritten (NotifyOutputsWrittenRequest) returns (NotifyOutputsWrittenResponse);
   rpc GetChangedOutputs (GetChangedOutputsRequest) returns (GetChangedOutputsResponse);
 
+  // Request the list of packages that the daemon is aware of.
+  //
+  // Since 1.11.0
   rpc DiscoverPackages (DiscoverPackagesRequest) returns (DiscoverPackagesResponse);
 }
 

@@ -26,7 +26,7 @@ pub(crate) mod proto {
     /// - Bump the minor version if adding new features, such that clients can
     ///   mandate at least some set of features on the target server.
     /// - Bump the patch version if making backwards compatible bug fixes.
-    pub const VERSION: &str = "1.10.17";
+    pub const VERSION: &str = "1.11.0";
 
     impl From<PackageManager> for turborepo_repository::package_manager::PackageManager {
         fn from(pm: PackageManager) -> Self {
