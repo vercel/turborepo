@@ -431,6 +431,7 @@ mod test {
 
     // Only used to prevent package graph construction from attempting to read
     // lockfile from disk
+    #[derive(Debug)]
     struct MockLockfile;
     impl Lockfile for MockLockfile {
         fn resolve_package(

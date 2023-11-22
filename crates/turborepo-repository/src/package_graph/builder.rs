@@ -682,6 +682,8 @@ impl WorkspaceInfo {
 
 #[cfg(test)]
 mod test {
+    use std::assert_matches::assert_matches;
+
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
@@ -751,6 +753,18 @@ mod test {
         );
     }
 
+    struct MockDiscovery;
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(
+            &mut self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            Ok(crate::discovery::DiscoveryResponse {
+                package_manager: crate::package_manager::PackageManager::Npm,
+                workspaces: vec![],
+            })
+        }
+    }
+
     #[tokio::test]
     async fn test_duplicate_package_names() {
         let root =
@@ -762,7 +776,7 @@ mod test {
                 ..Default::default()
             },
         )
-        .with_package_manager(Some(PackageManager::Npm))
+        .with_package_discovery(MockDiscovery)
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
@@ -781,9 +795,6 @@ mod test {
             );
             map
         }));
-        assert!(matches!(
-            builder.build().await,
-            Err(Error::DuplicateWorkspace { .. })
-        ))
+        assert_matches!(builder.build().await, Err(Error::DuplicateWorkspace { .. }))
     }
 }

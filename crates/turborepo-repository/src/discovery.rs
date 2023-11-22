@@ -214,29 +214,33 @@ mod fallback_tests {
 
     use super::*;
 
-    struct MockPrimaryDiscovery {
+    struct MockDiscovery {
         should_fail: bool,
+        calls: usize,
     }
 
-    impl PackageDiscovery for MockPrimaryDiscovery {
-        async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
-            if self.should_fail {
-                Err(Error::Failed)
-            } else {
-                // Simulate successful package discovery
-                Ok(DiscoveryResponse {})
+    impl MockDiscovery {
+        fn new(should_fail: bool) -> Self {
+            Self {
+                should_fail,
+                calls: 0,
             }
         }
     }
 
-    struct MockFallbackDiscovery;
-
-    impl PackageDiscovery for MockFallbackDiscovery {
+    impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
-            // Simulate successful package discovery
-            Ok(DiscoveryResponse {
-                // Mocked response
-            })
+            if self.should_fail {
+                Err(Error::Failed)
+            } else {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                self.calls += 1;
+                // Simulate successful package discovery
+                Ok(DiscoveryResponse {
+                    package_manager: PackageManager::Npm,
+                    workspaces: vec![],
+                })
+            }
         }
     }
 
@@ -244,8 +248,8 @@ mod fallback_tests {
     fn test_fallback_on_primary_failure() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
-            let primary = MockPrimaryDiscovery { should_fail: true };
-            let fallback = MockFallbackDiscovery;
+            let primary = MockDiscovery::new(true);
+            let fallback = MockDiscovery::new(false);
 
             let mut discovery =
                 FallbackPackageDiscovery::new(primary, fallback, Duration::from_secs(5));
@@ -255,6 +259,71 @@ mod fallback_tests {
 
             // Assert that the fallback was used and successful
             assert!(result.is_ok());
+
+            // Assert that the fallback was used
+            assert_eq!(discovery.primary.calls, 0);
+            assert_eq!(discovery.fallback.calls, 1);
+        });
+    }
+
+    #[test]
+    fn test_fallback_on_primary_timeout() {
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            let primary = MockDiscovery::new(false);
+            let fallback = MockDiscovery::new(false);
+
+            let mut discovery =
+                FallbackPackageDiscovery::new(primary, fallback, Duration::from_secs(0));
+
+            // Invoke the method under test
+            let result = discovery.discover_packages().await;
+
+            // Assert that the fallback was used and successful
+            assert!(result.is_ok());
+
+            // Assert that the fallback was used
+            assert_eq!(discovery.primary.calls, 0);
+            assert_eq!(discovery.fallback.calls, 1);
+        });
+    }
+}
+
+#[cfg(test)]
+mod caching_tests {
+    use tokio::runtime::Runtime;
+
+    use super::*;
+
+    struct MockPackageDiscovery {
+        call_count: usize,
+    }
+
+    impl PackageDiscovery for MockPackageDiscovery {
+        async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+            self.call_count += 1;
+            // Simulate successful package discovery
+            Ok(DiscoveryResponse {
+                package_manager: PackageManager::Npm,
+                workspaces: vec![],
+            })
+        }
+    }
+
+    #[test]
+    fn test_caching_package_discovery() {
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            let primary = MockPackageDiscovery { call_count: 0 };
+            let mut discovery = CachingPackageDiscovery::new(primary);
+
+            // First call should use primary discovery
+            let _first_result = discovery.discover_packages().await.unwrap();
+            assert_eq!(discovery.primary.call_count, 1);
+
+            // Second call should use cached data and not increase call count
+            let _second_result = discovery.discover_packages().await.unwrap();
+            assert_eq!(discovery.primary.call_count, 1);
         });
     }
 }

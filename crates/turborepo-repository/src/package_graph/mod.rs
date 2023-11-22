@@ -20,6 +20,7 @@ pub use builder::{Error, PackageGraphBuilder};
 
 pub const ROOT_PKG_NAME: &str = "//";
 
+#[derive(Debug)]
 pub struct PackageGraph {
     workspace_graph: petgraph::Graph<WorkspaceNode, ()>,
     #[allow(dead_code)]
@@ -414,13 +415,26 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
+    use crate::discovery::PackageDiscovery;
+
+    struct MockDiscovery;
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(
+            &mut self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            Ok(crate::discovery::DiscoveryResponse {
+                package_manager: PackageManager::Npm,
+                workspaces: vec![],
+            })
+        }
+    }
 
     #[tokio::test]
     async fn test_single_package_is_depends_on_root() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let pkg_graph = PackageGraph::builder(&root, PackageJson::default())
-            .with_package_manager(Some(PackageManager::Npm))
+            .with_package_discovery(MockDiscovery)
             .with_single_package_mode(true)
             .build()
             .await
@@ -440,7 +454,7 @@ mod test {
             &root,
             PackageJson::from_value(json!({ "name": "root" })).unwrap(),
         )
-        .with_package_manager(Some(PackageManager::Npm))
+        .with_package_discovery(MockDiscovery)
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
@@ -493,6 +507,7 @@ mod test {
         assert_eq!(pkg_version, "1.2.3");
     }
 
+    #[derive(Debug)]
     struct MockLockfile {}
     impl turborepo_lockfiles::Lockfile for MockLockfile {
         fn resolve_package(
@@ -558,7 +573,7 @@ mod test {
             &root,
             PackageJson::from_value(json!({ "name": "root" })).unwrap(),
         )
-        .with_package_manager(Some(PackageManager::Npm))
+        .with_package_discovery(MockDiscovery)
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
@@ -625,7 +640,7 @@ mod test {
             &root,
             PackageJson::from_value(json!({ "name": "root" })).unwrap(),
         )
-        .with_package_manager(Some(PackageManager::Npm))
+        .with_package_discovery(MockDiscovery)
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
@@ -681,7 +696,7 @@ mod test {
             &root,
             PackageJson::from_value(json!({ "name": "root" })).unwrap(),
         )
-        .with_package_manager(Some(PackageManager::Npm))
+        .with_package_discovery(MockDiscovery)
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(

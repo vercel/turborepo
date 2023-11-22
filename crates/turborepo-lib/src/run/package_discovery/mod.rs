@@ -79,28 +79,3 @@ impl PackageDiscovery for WatchingPackageDiscovery {
         })
     }
 }
-
-#[cfg(test)]
-mod test {
-    use turbopath::AbsoluteSystemPathBuf;
-
-    use crate::daemon::DaemonConnector;
-
-    #[tokio::test]
-    async fn test_daemon_package_discovery() {
-        let connector = DaemonConnector {
-            can_start_server: true,
-            can_kill_server: true,
-            pid_file: AbsoluteSystemPathBuf::new("/tmp/turbod/6c5948bd4171b931/turbod.pid")
-                .unwrap(),
-            sock_file: AbsoluteSystemPathBuf::new("/tmp/turbod/6c5948bd4171b931/turbod.sock")
-                .unwrap(),
-        };
-
-        let mut client = connector.connect().await.unwrap();
-
-        let packages = client.discover_packages().await.unwrap();
-
-        println!("{:#?}", packages);
-    }
-}
