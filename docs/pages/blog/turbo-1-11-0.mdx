@@ -1,6 +1,6 @@
 ---
 title: Turborepo 1.11
-date: 2023/11/21
+date: 2023/11/27
 description: Turborepo 1.11 sets the Rust-based foundation for the future of Turborepo.
 tag: "web development"
 ogImage: /images/blog/turbo-1-11-0/x-card.png
@@ -10,11 +10,11 @@ ogImage: /images/blog/turbo-1-11-0/x-card.png
 
 import { Authors } from '../../components/Authors'
 import { ExperimentalBadge } from '../../components/ExperimentalBadge'
-import Image from 'next/image'
+import ThemeAwareImage from '../../components/ThemeAwareImage'
 import Date from "../../components/blog/Date";
 
 <Date>
-  Monday, April 11th, 2023
+  Monday, November 27th, 2023
 </Date>
 
 <Authors authors={[
@@ -26,16 +26,16 @@ import Date from "../../components/blog/Date";
 
 Turborepo 1.11 completes the core's [carcinisation](https://en.wikipedia.org/wiki/Carcinisation) and ships several developer experience improvements:
 
-- [**All Rust core**](#shipping-an-all-rust-core): Finish the port from Go to lay groundwork for better performance and improved stability.
-- [**Group logs for improved readability**](#group-logs-for-improved-readability): You can now specify `--log-order=group` to organize your logs into distinct sections separated by tasks.
-- [**Updated examples**](#updated-examples): Use one of the revitalized set of examples including Next.js, Svelte, Nuxt, and more.
+- [**Rust port completed**](#shipping-an-all-rust-core): Finish the port from Go to lay groundwork for better performance, improved stability, and new features.
+- [**Group logs for improved readability**](#group-logs-for-improved-readability): You can now specify `--log-order=grouped` to organize your logs into distinct sections separated by tasks.
+- [**Updated examples**](#updated-examples): Use one of the revitalized examples including Next.js, Svelte, Nuxt, and more.
 - [**Tighter feedback loops in your editor** <ExperimentalBadge isLink={false} />](#tighter-feedback-loops-in-your-editor-experimental): Find errors in your Turborepo configuration without leaving your IDE.
 
 Update today by running `npx @turbo/codemod migrate`.
 
 ## Shipping an all-Rust core
 
-As we wrote about in [our blog post about the migration](https://vercel.com/blog/turborepo-migration-go-rust), we're excited to start seeing the benefits of our porting effort for Turborepo users. By surfacing more complexity in _our_ codebase for ourselves, we're able to create a better experience in _your_ codebase in a variety of ways:
+As we wrote about in [our blog post about the migration](https://vercel.com/blog/turborepo-migration-go-rust), we're excited to start seeing the benefits of our porting effort for Turborepo users. By surfacing more complexity in _our_ code, we're able to create a better experience in _your_ codebase in a variety of ways:
 
 - We've noticed a slight performance improvement for the majority of use cases, even without doing much performance tuning in our code yet. We look forward to diving deeper into making `turbo` even faster soon.
 - We've been able to catch possible bugs much sooner, as Rust forces us to think about the differences between platforms and environments much more closely than Go.
@@ -43,11 +43,31 @@ As we wrote about in [our blog post about the migration](https://vercel.com/blog
 
 ## Group logs for improved readability
 
-To make it easier to review your task logs, we've introduced the `--log-order` flag to output all logs from a task **after it finishes** rather than _as it writes to STDOUT_. This results in logs that are separated per-task, improving legibility on a specific task's logs.
+To make it easier to review your task logs, we've introduced the `--log-order` flag to output all logs from a task **after it finishes** rather than _as it writes_. This results in logs that are separated per-task, improving legibility on a specific task's logs.
 
-<Image alt="Using `--log-order=group` to output task logs to the terminal as separated chunks separated by task." />
+<ThemeAwareImage
+  className="my-4 flex justify-center"
+  light={{
+    alt: 'Using `--log-order=grouped` to output task logs to the terminal as separated chunks separated by task.',
+    src: '/images/blog/turbo-1-11-0/log-order-groups-light.png',
+    props: {
+      width: 682,
+      height: 746.5,
+      className: "dark:hidden block rounded-xl"
+    }
+  }}
+  dark={{
+    alt: 'Using `--log-order=grouped` to output task logs to the terminal as separated chunks separated by task.',
+    src: '/images/blog/turbo-1-11-0/log-order-groups-dark.png',
+    props: {
+      width: 682,
+      height: 746.5,
+      className: "hidden dark:block rounded-xl"
+    }
+  }}
+/>
 
-Enable this behavior using `--log-order=group`.
+Enable this behavior using `--log-order=grouped`.
 
 ## Updated examples
 
@@ -70,11 +90,21 @@ npx create-turbo@latest -e kitchen-sink
 npx create-turbo@latest -e with-vue-nuxt
 ```
 
-Find more examples in [the examples folder](https://github.com/vercel/turbo/tree/main/examples).
+Check out [the examples folder](https://github.com/vercel/turbo/tree/main/examples) for more.
 
 ## Tighter feedback loops in your editor <ExperimentalBadge>Experimental</ExperimentalBadge>
 
-Hit us with some notes, Dr. Lyon!
+A language server protocol (LSP) gives you the earliest feedback possible by showing you possible issues in your code while you write it.
+
+TODO: demo photo
+
+Today, we're shipping an experimental version of Turbo LSP, helping you get the most out of Turborepo with in-editor tips like:
+
+- Intellisense for packages and tasks
+- Warning diagnostics on missing tasks and packages
+- A codemod to quickly fix deprecated syntax in `turbo.json`
+
+Try it out today by...TODO.
 
 ## Community
 
