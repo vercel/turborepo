@@ -109,7 +109,7 @@ impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
                             self.flush_events();
                             timeout = tokio::time::sleep(NO_TIMEOUT);
                         } else {
-                            timeout = tokio::time::sleep(REQUEST_TIMEOUT);
+                            timeout = tokio::time::sleep(EVENT_TIMEOUT);
                         }
                     }
                     _ = timeout => {
