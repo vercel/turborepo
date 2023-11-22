@@ -165,6 +165,7 @@ mod tests {
     use std::{
         cell::RefCell,
         sync::{Arc, Mutex},
+        time::Duration,
     };
 
     use async_trait::async_trait;
@@ -324,7 +325,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_closing() {
-        let (tx, _) = mpsc::unbounded_channel();
+        let (tx, _rx) = mpsc::unbounded_channel();
 
         let client = DummyClient {
             events: Default::default(),
@@ -351,11 +352,15 @@ mod tests {
                 })
                 .unwrap();
         }
+        drop(analytics_sender);
 
         let found = client.events();
         assert!(found.is_empty());
 
-        analytics_handle.close().await.unwrap();
+        tokio::time::timeout(Duration::from_millis(5), analytics_handle.close())
+            .await
+            .expect("timeout before close")
+            .expect("analytics worker panicked");
         let found = client.events();
         assert_eq!(found.len(), 1);
         let payloads = &found[0];
