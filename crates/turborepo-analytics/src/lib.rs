@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use futures::stream::FuturesUnordered;
+use futures::{stream::FuturesUnordered, StreamExt};
 use thiserror::Error;
 use tokio::{
     select,
@@ -114,9 +114,9 @@ impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
                         timeout = tokio::time::sleep(NO_TIMEOUT);
                     }
                     _ = self.exit_ch.closed() => {
-                                                self.flush_events();
-                        for handle in self.senders {
-                            if let Err(err) = handle.await {
+                        self.flush_events();
+                        while let Some(result) = self.senders.next().await {
+                            if let Err(err) = result {
                                 debug!("failed to send analytics event. error: {}", err)
                             }
                         }
