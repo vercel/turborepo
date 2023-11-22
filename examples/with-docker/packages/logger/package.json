@@ -12,7 +12,7 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "dev": "tsc -w",
-    "lint": "eslint \"src/**/*.ts*\"",
+    "lint": "eslint \"src/**/*.ts*\" --max-warnings 0",
     "test": "jest"
   },
   "jest": {
@@ -21,7 +21,7 @@
   "devDependencies": {
     "@types/jest": "^29.5.10",
     "eslint": "^8.54.0",
-    "eslint-config-custom": "*",
+    "@repo/eslint-config": "*",
     "jest": "^29.7.0",
     "@repo/jest-presets": "*",
     "@repo/typescript-config": "*",

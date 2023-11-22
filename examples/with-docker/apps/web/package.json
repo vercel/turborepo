@@ -5,7 +5,7 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
-    "lint": "next lint",
+    "lint": "eslint . --max-warnings 0",
     "start": "next start"
   },
   "dependencies": {
@@ -15,6 +15,7 @@
     "@repo/ui": "*"
   },
   "devDependencies": {
+    "@next/eslint-plugin-next": "^14.0.2",
     "@types/node": "^20.9.4",
     "@types/react": "^18.2.38",
     "@types/react-dom": "^18.2.17",

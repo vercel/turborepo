@@ -6,7 +6,7 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "dev": "nodemon --exec \"node -r esbuild-register ./src/index.ts\" -e .ts",
-    "lint": "tsc --noEmit && eslint \"src/**/*.ts*\"",
+    "lint": "tsc --noEmit && eslint \"src/**/*.ts*\" --max-warnings 0",
     "start": "node -r esbuild-register ./src/index.ts",
     "test": "jest --detectOpenHandles"
   },
@@ -14,13 +14,16 @@
     "preset": "@repo/jest-presets/jest/node"
   },
   "dependencies": {
+    "@repo/logger": "*",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "@repo/logger": "*",
     "morgan": "^1.10.0"
   },
   "devDependencies": {
+    "@repo/eslint-config": "*",
+    "@repo/jest-presets": "*",
+    "@repo/typescript-config": "*",
     "@types/body-parser": "^1.19.5",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
@@ -31,12 +34,9 @@
     "esbuild": "^0.19.7",
     "esbuild-register": "^3.5.0",
     "eslint": "^8.54.0",
-    "@repo/eslint-config": "*",
     "jest": "^29.7.0",
-    "@repo/jest-presets": "*",
     "nodemon": "^3.0.1",
     "supertest": "^6.3.3",
-    "@repo/typescript-config": "*",
     "typescript": "^5.3.2"
   }
 }
