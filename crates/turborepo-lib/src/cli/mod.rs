@@ -106,8 +106,9 @@ pub struct Args {
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
     pub cwd: Option<Utf8PathBuf>,
+    /// Fallback to use Go for task execution
     #[serde(skip)]
-    #[clap(long, global = true, hide = true)]
+    #[clap(long, global = true)]
     pub go_fallback: bool,
     /// Specify a file to save a pprof heap profile
     #[clap(long, global = true, value_parser)]
