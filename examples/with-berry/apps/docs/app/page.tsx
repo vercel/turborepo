@@ -1,4 +1,5 @@
-import { Button, Header } from "ui";
+import { Button } from "ui/button";
+import { Header } from "ui/header";
 
 export default function Page() {
   return (
