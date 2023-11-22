@@ -7,18 +7,18 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "turbo run build",
-    "clean": "turbo run clean",
-    "dev": "turbo run dev",
+    "build": "turbo build",
+    "clean": "turbo clean",
+    "dev": "turbo dev",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "lint": "turbo run lint",
-    "test": "turbo run test"
+    "lint": "turbo lint",
+    "test": "turbo test"
   },
   "dependencies": {},
   "devDependencies": {
     "eslint-config-custom": "*",
-    "prettier": "^2.8.8",
-    "turbo": "^1.9.3"
+    "prettier": "^3.1.0",
+    "turbo": "^1.10.16"
   },
   "packageManager": "yarn@1.22.19",
   "engines": {
