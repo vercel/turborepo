@@ -128,7 +128,10 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
         // respond to changes
         loop {
             tokio::select! {
-                _ = &mut self.exit_rx => return,
+                _ = &mut self.exit_rx => {
+                    tracing::info!("exiting package watcher");
+                    return
+                },
                 file_event = self.recv.recv().into_future() => match file_event {
                     Ok(Ok(event)) => self.handle_file_event(event).await,
                     // if we get an error, we need to re-discover the packages
@@ -183,19 +186,39 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
             .iter()
             .any(|p| self.package_json_path.eq(p))
         {
-            tracing::debug!("package.json changed");
             // if the package.json changed, we need to re-infer the package manager
             // and update the glob list
-            let new_manager =
-                PackageManager::get_package_manager(&self.repo_root, None).and_then(|manager| {
-                    Self::update_package_manager(&manager, &self.repo_root)
-                        .map(|(a, b, c)| (manager, a, b, c))
-                });
+            tracing::debug!("package.json changed");
+
+            let resp = match self.backup_discovery.discover_packages().await {
+                Ok(pm) => pm,
+                Err(e) => {
+                    tracing::error!("error discovering package manager: {}", e);
+                    return;
+                }
+            };
+
+            let new_manager = Self::update_package_manager(&resp.package_manager, &self.repo_root)
+                .map(|(a, b, c)| (resp, a, b, c));
 
             match new_manager {
                 Ok((new_manager, package_json_path, workspace_config_path, filter)) => {
+                    tracing::debug!(
+                        "new package manager data: {:?}, {:?}, {:?}",
+                        new_manager.package_manager,
+                        package_json_path,
+                        filter
+                    );
                     // if this fails, we are closing anyways so ignore
-                    self.manager_tx.send(new_manager).ok();
+                    self.manager_tx.send(new_manager.package_manager).ok();
+                    {
+                        let mut data = self.package_data.lock().unwrap();
+                        *data = new_manager
+                            .workspaces
+                            .into_iter()
+                            .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
+                            .collect();
+                    }
                     self.package_json_path = package_json_path;
                     self.workspace_config_path = workspace_config_path;
                     self.filter = filter;
@@ -306,4 +329,303 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
 }
 
 #[cfg(test)]
-mod test {}
+mod test {
+    use std::sync::{Arc, Mutex};
+
+    use itertools::Itertools;
+    use tokio::sync::broadcast;
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_repository::{
+        discovery::{self, DiscoveryResponse, PackageDiscovery, WorkspaceData},
+        package_manager::{self, PackageManager},
+    };
+
+    use super::Subscriber;
+
+    #[derive(Debug)]
+    struct MockDiscovery {
+        pub manager: PackageManager,
+        pub package_data: Arc<Mutex<Vec<WorkspaceData>>>,
+    }
+
+    impl super::PackageDiscovery for MockDiscovery {
+        async fn discover_packages(&mut self) -> Result<DiscoveryResponse, discovery::Error> {
+            Ok(DiscoveryResponse {
+                package_manager: self.manager.clone(),
+                workspaces: self.package_data.lock().unwrap().clone(),
+            })
+        }
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn subscriber_test() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let (tx, rx) = broadcast::channel(10);
+        let (_exit_tx, exit_rx) = tokio::sync::oneshot::channel();
+
+        let root = AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy()).unwrap();
+        let manager = PackageManager::Yarn;
+
+        let package_data = vec![
+            WorkspaceData {
+                package_json: root.join_component("package.json"),
+                turbo_json: None,
+            },
+            WorkspaceData {
+                package_json: root
+                    .join_component("packages")
+                    .join_component("foo")
+                    .join_component("package.json"),
+                turbo_json: None,
+            },
+        ];
+
+        // create folders and files
+        for data in &package_data {
+            tokio::fs::create_dir_all(data.package_json.parent().unwrap())
+                .await
+                .unwrap();
+            tokio::fs::write(&data.package_json, b"{}").await.unwrap();
+        }
+
+        // write workspaces to root
+        tokio::fs::write(
+            root.join_component("package.json"),
+            r#"{"workspaces":["packages/*"]}"#,
+        )
+        .await;
+
+        let mock_discovery = MockDiscovery {
+            manager: manager.clone(),
+            package_data: Arc::new(Mutex::new(package_data)),
+        };
+
+        let subscriber = Subscriber::new(exit_rx, root.clone(), rx, mock_discovery)
+            .await
+            .unwrap();
+
+        let package_data = subscriber.package_data();
+
+        let _handle = tokio::spawn(subscriber.watch());
+
+        tx.send(Ok(notify::Event {
+            kind: notify::EventKind::Create(notify::event::CreateKind::File),
+            paths: vec![root.join_component("package.json").as_std_path().to_owned()],
+            ..Default::default()
+        }))
+        .unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        assert_eq!(
+            package_data
+                .lock()
+                .unwrap()
+                .values()
+                .cloned()
+                .sorted_by_key(|f| f.package_json.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                WorkspaceData {
+                    package_json: root.join_component("package.json"),
+                    turbo_json: None,
+                },
+                WorkspaceData {
+                    package_json: root
+                        .join_component("packages")
+                        .join_component("foo")
+                        .join_component("package.json"),
+                    turbo_json: None,
+                },
+            ]
+        );
+
+        tracing::info!("removing subpackage");
+
+        // delete package.json in foo
+        tokio::fs::remove_file(
+            root.join_component("packages")
+                .join_component("foo")
+                .join_component("package.json"),
+        )
+        .await
+        .unwrap();
+
+        tx.send(Ok(notify::Event {
+            kind: notify::EventKind::Remove(notify::event::RemoveKind::File),
+            paths: vec![root
+                .join_component("packages")
+                .join_component("foo")
+                .join_component("package.json")
+                .as_std_path()
+                .to_owned()],
+            ..Default::default()
+        }))
+        .unwrap();
+
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        assert_eq!(
+            package_data
+                .lock()
+                .unwrap()
+                .values()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![WorkspaceData {
+                package_json: root.join_component("package.json"),
+                turbo_json: None,
+            },]
+        );
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn subscriber_update_workspaces() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        let (tx, rx) = broadcast::channel(10);
+        let (_exit_tx, exit_rx) = tokio::sync::oneshot::channel();
+
+        let root = AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy()).unwrap();
+        let manager = PackageManager::Yarn;
+
+        let package_data = vec![
+            WorkspaceData {
+                package_json: root.join_component("package.json"),
+                turbo_json: None,
+            },
+            WorkspaceData {
+                package_json: root
+                    .join_component("packages")
+                    .join_component("foo")
+                    .join_component("package.json"),
+                turbo_json: None,
+            },
+            WorkspaceData {
+                package_json: root
+                    .join_component("packages2")
+                    .join_component("bar")
+                    .join_component("package.json"),
+                turbo_json: None,
+            },
+        ];
+
+        // create folders and files
+        for data in &package_data {
+            tokio::fs::create_dir_all(data.package_json.parent().unwrap())
+                .await
+                .unwrap();
+            tokio::fs::write(&data.package_json, b"{}").await.unwrap();
+        }
+
+        // write workspaces to root
+        tokio::fs::write(
+            root.join_component("package.json"),
+            r#"{"workspaces":["packages/*", "packages2/*"]}"#,
+        )
+        .await
+        .unwrap();
+
+        let package_data_raw = Arc::new(Mutex::new(package_data));
+
+        let mock_discovery = MockDiscovery {
+            manager: manager.clone(),
+            package_data: package_data_raw.clone(),
+        };
+
+        let subscriber = Subscriber::new(exit_rx, root.clone(), rx, mock_discovery)
+            .await
+            .unwrap();
+
+        let package_data = subscriber.package_data();
+
+        let _handle = tokio::spawn(subscriber.watch());
+
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        assert_eq!(
+            package_data
+                .lock()
+                .unwrap()
+                .values()
+                .cloned()
+                .sorted_by_key(|f| f.package_json.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                WorkspaceData {
+                    package_json: root.join_component("package.json"),
+                    turbo_json: None,
+                },
+                WorkspaceData {
+                    package_json: root
+                        .join_component("packages")
+                        .join_component("foo")
+                        .join_component("package.json"),
+                    turbo_json: None,
+                },
+                WorkspaceData {
+                    package_json: root
+                        .join_component("packages2")
+                        .join_component("bar")
+                        .join_component("package.json"),
+                    turbo_json: None,
+                },
+            ]
+        );
+
+        // update workspaces
+        tracing::info!("updating workspaces");
+        *package_data_raw.lock().unwrap() = vec![
+            WorkspaceData {
+                package_json: root.join_component("package.json"),
+                turbo_json: None,
+            },
+            WorkspaceData {
+                package_json: root
+                    .join_component("packages")
+                    .join_component("foo")
+                    .join_component("package.json"),
+                turbo_json: None,
+            },
+        ];
+        tokio::fs::write(
+            root.join_component("package.json"),
+            r#"{"workspaces":["packages/*"]}"#,
+        )
+        .await
+        .unwrap();
+
+        tx.send(Ok(notify::Event {
+            kind: notify::EventKind::Modify(notify::event::ModifyKind::Any),
+            paths: vec![root.join_component("package.json").as_std_path().to_owned()],
+            ..Default::default()
+        }))
+        .unwrap();
+
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        assert_eq!(
+            package_data
+                .lock()
+                .unwrap()
+                .values()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![
+                WorkspaceData {
+                    package_json: root.join_component("package.json"),
+                    turbo_json: None,
+                },
+                WorkspaceData {
+                    package_json: root
+                        .join_component("packages")
+                        .join_component("foo")
+                        .join_component("package.json"),
+                    turbo_json: None,
+                }
+            ]
+        );
+    }
+}
