@@ -1,6 +1,6 @@
 use std::{
     cmp::{max, Reverse},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
 };
 
 use either::Either;
@@ -13,7 +13,7 @@ use crate::{
     u64_empty_string,
 };
 
-const EXTRA_WIDTH_PERCENTAGE: u64 = 20;
+const EXTRA_WIDTH_PERCENTAGE: u64 = 50;
 const EXTRA_HEIGHT: u64 = 5;
 
 #[derive(Default)]
@@ -54,6 +54,8 @@ pub struct ViewSpan {
     text: String,
     #[serde(rename = "c")]
     count: u64,
+    #[serde(rename = "k")]
+    kind: u8,
 }
 
 #[derive(Debug)]
@@ -76,6 +78,13 @@ impl<'a> QueueItem<'a> {
             QueueItem::SpanGraph(span_graph) => span_graph.max_depth(),
         }
     }
+
+    fn id(&self) -> SpanId {
+        match self {
+            QueueItem::Span(span) => span.id(),
+            QueueItem::SpanGraph(span_graph) => span_graph.id(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -85,6 +94,13 @@ struct QueueItemWithState<'a> {
     start: u64,
     placeholder: bool,
     view_mode: ViewMode,
+    filtered: bool,
+}
+
+struct ChildItem<'a> {
+    item: QueueItemWithState<'a>,
+    depth: u32,
+    pixel_range: (u64, u64),
 }
 
 impl Viewer {
@@ -97,6 +113,9 @@ impl Viewer {
     }
 
     pub fn compute_update(&mut self, store: &Store, view_rect: &ViewRect) -> Vec<ViewLineUpdate> {
+        let mut highlighted_spans: HashSet<SpanId> = HashSet::new();
+        let search_mode = !view_rect.query.is_empty();
+
         let mut queue = Vec::new();
 
         let mut root_spans = store.root_spans().collect::<Vec<_>>();
@@ -106,18 +125,36 @@ impl Viewer {
         for span in root_spans {
             // Move current to start if needed.
             current = max(current, span.start());
-            add_child_item(
+            if add_child_item(
                 &mut children,
                 &mut current,
                 view_rect,
                 0,
-                if span.is_complete() {
+                if span.is_complete() && view_rect.query.is_empty() {
                     ViewMode::Aggregated { sorted: false }
                 } else {
                     ViewMode::RawSpans { sorted: false }
                 },
                 QueueItem::Span(span),
-            );
+                false,
+            ) {
+                if search_mode {
+                    let mut has_results = false;
+                    for mut result in span.search(&view_rect.query) {
+                        has_results = true;
+                        highlighted_spans.insert(result.id());
+                        while let Some(parent) = result.parent() {
+                            result = parent;
+                            if !highlighted_spans.insert(result.id()) {
+                                break;
+                            }
+                        }
+                    }
+                    if !has_results {
+                        children.last_mut().unwrap().item.filtered = true;
+                    }
+                }
+            }
         }
         enqueue_children(children, &mut queue);
 
@@ -129,30 +166,11 @@ impl Viewer {
             start,
             placeholder,
             view_mode,
+            filtered,
         }) = queue.pop()
         {
-            // filter by view rect (vertical)
-            if line_index > (view_rect.y + view_rect.height + EXTRA_HEIGHT) as usize {
-                continue;
-            }
-
-            // offset by last entry if needed
             let line = get_line(&mut lines, line_index);
             let width = span.corrected_total_time();
-
-            if line_index > 0 {
-                // filter by view rect (horizontal)
-                if start > view_rect.x + view_rect.width * (100 + EXTRA_WIDTH_PERCENTAGE) / 100 {
-                    continue;
-                }
-                if start + width
-                    < view_rect
-                        .x
-                        .saturating_sub(view_rect.width * EXTRA_WIDTH_PERCENTAGE / 100)
-                {
-                    continue;
-                }
-            }
 
             // compute children
             let mut children = Vec::new();
@@ -183,6 +201,7 @@ impl Viewer {
                             Either::Right(span.children())
                         };
                         for child in spans {
+                            let filtered = search_mode && !highlighted_spans.contains(&child.id());
                             add_child_item(
                                 &mut children,
                                 &mut current,
@@ -190,6 +209,7 @@ impl Viewer {
                                 line_index + 1,
                                 view_mode,
                                 QueueItem::Span(child),
+                                filtered,
                             );
                         }
                     } else {
@@ -211,6 +231,7 @@ impl Viewer {
                                         line_index + 1,
                                         view_mode,
                                         QueueItem::SpanGraph(graph),
+                                        false,
                                     );
                                 }
                             }
@@ -242,6 +263,7 @@ impl Viewer {
                             Either::Right(span_graph.root_spans())
                         };
                         for child in spans {
+                            let filtered = search_mode && !highlighted_spans.contains(&child.id());
                             add_child_item(
                                 &mut children,
                                 &mut current,
@@ -249,6 +271,7 @@ impl Viewer {
                                 line_index + 1,
                                 view_mode,
                                 QueueItem::Span(child),
+                                filtered,
                             );
                         }
                     } else {
@@ -267,6 +290,7 @@ impl Viewer {
                                 line_index + 1,
                                 view_mode,
                                 QueueItem::SpanGraph(child),
+                                false,
                             );
                         }
                     }
@@ -275,8 +299,12 @@ impl Viewer {
 
             // When span size is smaller than a pixel, we only show the deepest child.
             if placeholder {
-                if let Some((mut entry, _, _)) =
-                    children.into_iter().max_by_key(|(_, depth, _)| *depth)
+                let child = children
+                    .into_iter()
+                    .max_by_key(|ChildItem { item, depth, .. }| (!item.filtered, *depth));
+                if let Some(ChildItem {
+                    item: mut entry, ..
+                }) = child
                 {
                     entry.placeholder = true;
                     queue.push(entry);
@@ -286,7 +314,7 @@ impl Viewer {
                 line.push(LineEntry {
                     start,
                     width,
-                    ty: LineEntryType::Placeholder,
+                    ty: LineEntryType::Placeholder(filtered),
                 });
             } else {
                 // add children to queue
@@ -297,8 +325,10 @@ impl Viewer {
                     start,
                     width,
                     ty: match span {
-                        QueueItem::Span(span) => LineEntryType::Span(span),
-                        QueueItem::SpanGraph(span_graph) => LineEntryType::SpanGraph(span_graph),
+                        QueueItem::Span(span) => LineEntryType::Span(span, filtered),
+                        QueueItem::SpanGraph(span_graph) => {
+                            LineEntryType::SpanGraph(span_graph, filtered)
+                        }
                     },
                 });
             }
@@ -312,15 +342,16 @@ impl Viewer {
                 spans: line
                     .into_iter()
                     .map(|entry| match entry.ty {
-                        LineEntryType::Placeholder => ViewSpan {
+                        LineEntryType::Placeholder(filtered) => ViewSpan {
                             id: 0,
                             start: entry.start,
                             width: entry.width,
                             category: String::new(),
                             text: String::new(),
                             count: 1,
+                            kind: if filtered { 3 } else { 1 },
                         },
-                        LineEntryType::Span(span) => {
+                        LineEntryType::Span(span, filtered) => {
                             let (category, text) = span.nice_name();
                             ViewSpan {
                                 id: span.id().get() as u64,
@@ -329,9 +360,10 @@ impl Viewer {
                                 category: category.to_string(),
                                 text: text.to_string(),
                                 count: 1,
+                                kind: if filtered { 2 } else { 0 },
                             }
                         }
-                        LineEntryType::SpanGraph(graph) => {
+                        LineEntryType::SpanGraph(graph, filtered) => {
                             let (category, text) = graph.nice_name();
                             ViewSpan {
                                 id: graph.id().get() as u64,
@@ -340,6 +372,7 @@ impl Viewer {
                                 category: category.to_string(),
                                 text: text.to_string(),
                                 count: graph.count() as u64,
+                                kind: if filtered { 2 } else { 0 },
                             }
                         }
                     })
@@ -350,42 +383,69 @@ impl Viewer {
 }
 
 fn add_child_item<'a>(
-    children: &mut Vec<(QueueItemWithState<'a>, u32, (u64, u64))>,
+    children: &mut Vec<ChildItem<'a>>,
     current: &mut u64,
     view_rect: &ViewRect,
     line_index: usize,
     view_mode: ViewMode,
     child: QueueItem<'a>,
-) {
+    filtered: bool,
+) -> bool {
     let child_width = child.corrected_total_time();
     let max_depth = child.max_depth();
     let pixel1 = *current * view_rect.horizontal_pixels / view_rect.width;
     let pixel2 = ((*current + child_width) * view_rect.horizontal_pixels + view_rect.width - 1)
         / view_rect.width;
-    children.push((
-        QueueItemWithState {
+    let start = *current;
+    *current += child_width;
+
+    // filter by view rect (vertical)
+    if line_index > (view_rect.y + view_rect.height + EXTRA_HEIGHT) as usize {
+        return false;
+    }
+
+    if line_index > 0 {
+        // filter by view rect (horizontal)
+        if start > view_rect.x + view_rect.width * (100 + EXTRA_WIDTH_PERCENTAGE) / 100 {
+            return false;
+        }
+        if *current
+            < view_rect
+                .x
+                .saturating_sub(view_rect.width * EXTRA_WIDTH_PERCENTAGE / 100)
+        {
+            return false;
+        }
+    }
+
+    children.push(ChildItem {
+        item: QueueItemWithState {
             item: child,
             line_index: line_index,
-            start: *current,
+            start,
             placeholder: false,
             view_mode,
+            filtered,
         },
-        max_depth,
-        (pixel1, pixel2),
-    ));
-    *current += child_width;
+        depth: max_depth,
+        pixel_range: (pixel1, pixel2),
+    });
+
+    true
 }
 
 const MIN_VISIBLE_PIXEL_SIZE: u64 = 3;
 
-fn enqueue_children<'a>(
-    mut children: Vec<(QueueItemWithState<'a>, u32, (u64, u64))>,
-    queue: &mut Vec<QueueItemWithState<'a>>,
-) {
+fn enqueue_children<'a>(mut children: Vec<ChildItem<'a>>, queue: &mut Vec<QueueItemWithState<'a>>) {
     children.reverse();
     let mut last_pixel = u64::MAX;
     let mut last_max_depth = 0;
-    for (mut entry, max_depth, (pixel1, pixel2)) in children {
+    for ChildItem {
+        item: mut entry,
+        depth: max_depth,
+        pixel_range: (pixel1, pixel2),
+    } in children
+    {
         if last_pixel <= pixel1 + MIN_VISIBLE_PIXEL_SIZE {
             if last_max_depth < max_depth {
                 queue.pop();
@@ -417,7 +477,7 @@ struct LineEntry<'a> {
 }
 
 enum LineEntryType<'a> {
-    Placeholder,
-    Span(SpanRef<'a>),
-    SpanGraph(SpanGraphRef<'a>),
+    Placeholder(bool),
+    Span(SpanRef<'a>, bool),
+    SpanGraph(SpanGraphRef<'a>, bool),
 }

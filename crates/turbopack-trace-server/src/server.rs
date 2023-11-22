@@ -87,6 +87,7 @@ pub struct ViewRect {
     pub width: u64,
     pub height: u64,
     pub horizontal_pixels: u64,
+    pub query: String,
 }
 
 struct ConnectionState {
@@ -128,6 +129,7 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                         width: 1,
                         height: 1,
                         horizontal_pixels: 1,
+                        query: String::new(),
                     },
                     last_update_generation: 0,
                 }));

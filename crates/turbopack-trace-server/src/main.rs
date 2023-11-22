@@ -1,4 +1,5 @@
 #![feature(iter_intersperse)]
+#![feature(hash_raw_entry)]
 
 use std::{collections::HashSet, sync::Arc};
 

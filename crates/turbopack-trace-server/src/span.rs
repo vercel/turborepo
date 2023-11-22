@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     num::NonZeroUsize,
     sync::{Arc, OnceLock},
 };
@@ -32,6 +33,7 @@ pub struct Span {
     pub corrected_self_time: OnceLock<u64>,
     pub corrected_total_time: OnceLock<u64>,
     pub graph: OnceLock<Vec<SpanGraphEvent>>,
+    pub search_index: OnceLock<HashMap<String, Vec<SpanIndex>>>,
 }
 
 #[derive(Copy, Clone)]

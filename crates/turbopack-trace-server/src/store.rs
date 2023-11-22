@@ -1,6 +1,6 @@
 use std::{
     cmp::max,
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     fmt::{Debug, Formatter},
     num::NonZeroUsize,
     sync::{Arc, OnceLock},
@@ -40,6 +40,7 @@ impl Store {
                 total_time: OnceLock::new(),
                 corrected_self_time: OnceLock::new(),
                 corrected_total_time: OnceLock::new(),
+                search_index: OnceLock::new(),
             }],
         }
     }
@@ -80,6 +81,7 @@ impl Store {
             total_time: OnceLock::new(),
             corrected_self_time: OnceLock::new(),
             corrected_total_time: OnceLock::new(),
+            search_index: OnceLock::new(),
         });
         let parent = if let Some(parent) = parent {
             outdated_spans.insert(parent);
@@ -122,6 +124,7 @@ impl Store {
                 span.corrected_self_time.take();
                 span.corrected_total_time.take();
                 span.graph.take();
+                span.search_index.take();
                 let Some(parent) = span.parent else {
                     break;
                 };
@@ -374,6 +377,50 @@ impl<'a> SpanRef<'a> {
                 },
             })
     }
+
+    pub fn search(&self, query: &str) -> impl Iterator<Item = SpanRef<'a>> {
+        let index = self.search_index();
+        let mut result = HashSet::new();
+        for (key, spans) in index {
+            if key.contains(query) {
+                result.extend(spans.iter().copied());
+            }
+        }
+        let store = self.store;
+        return result.into_iter().map(move |index| SpanRef {
+            span: &store.spans[index.get()],
+            store: store,
+        });
+    }
+
+    fn search_index(&self) -> &HashMap<String, Vec<SpanIndex>> {
+        self.span.search_index.get_or_init(|| {
+            let mut index: HashMap<String, Vec<SpanIndex>> = HashMap::new();
+            let mut queue = VecDeque::with_capacity(8);
+            queue.push_back(self.clone());
+            while let Some(span) = queue.pop_front() {
+                let (cat, name) = span.nice_name();
+                if !cat.is_empty() {
+                    index
+                        .raw_entry_mut()
+                        .from_key(cat)
+                        .and_modify(|_, v| v.push(span.span.index))
+                        .or_insert_with(|| (cat.to_string(), vec![span.span.index]));
+                }
+                if !name.is_empty() {
+                    index
+                        .raw_entry_mut()
+                        .from_key(name)
+                        .and_modify(|_, v| v.push(span.span.index))
+                        .or_insert_with(|| (name.to_string(), vec![span.span.index]));
+                }
+                for child in span.children() {
+                    queue.push_back(child);
+                }
+            }
+            index
+        })
+    }
 }
 
 impl<'a> Debug for SpanRef<'a> {
@@ -431,7 +478,7 @@ impl<'a> SpanGraphRef<'a> {
     }
 
     pub fn id(&self) -> SpanId {
-        unsafe { SpanId::new_unchecked(self.first_span().span.index.get() << 1 | 1) }
+        unsafe { SpanId::new_unchecked((self.first_span().span.index.get() << 1) | 1) }
     }
 
     pub fn nice_name(&self) -> (&str, &str) {
