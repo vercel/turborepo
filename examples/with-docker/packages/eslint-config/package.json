@@ -1,15 +1,14 @@
 {
-  "name": "eslint-config-custom",
+  "name": "@repo/eslint-config",
   "version": "0.0.0",
-  "license": "MIT",
-  "main": "index.js",
+  "files": [
+    "index.js",
+    "server.js"
+  ],
   "dependencies": {
     "eslint-config-next": "^14.0.3",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-react": "^7.33.2",
     "eslint-config-turbo": "^1.10.16"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }
