@@ -21,7 +21,7 @@ pub struct Viewer {
     span_options: HashMap<SpanId, SpanOptions>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ViewMode {
     RawSpans { sorted: bool },
     Aggregated { sorted: bool },
@@ -56,6 +56,7 @@ pub struct ViewSpan {
     count: u64,
 }
 
+#[derive(Debug)]
 enum QueueItem<'a> {
     Span(SpanRef<'a>),
     SpanGraph(SpanGraphRef<'a>),
@@ -77,6 +78,7 @@ impl<'a> QueueItem<'a> {
     }
 }
 
+#[derive(Debug)]
 struct QueueItemWithState<'a> {
     item: QueueItem<'a>,
     line_index: usize,
@@ -97,29 +99,27 @@ impl Viewer {
     pub fn compute_update(&mut self, store: &Store, view_rect: &ViewRect) -> Vec<ViewLineUpdate> {
         let mut queue = Vec::new();
 
+        let mut root_spans = store.root_spans().collect::<Vec<_>>();
+        root_spans.sort_by_key(|span| span.start());
+        let mut children = Vec::new();
         let mut current = 0;
-        let mut root_spans = store
-            .root_spans()
-            .map(|span| {
-                let start = span.start();
-                let end = span.end();
-                let width = span.corrected_total_time();
-                (span, start, end, width)
-            })
-            .collect::<Vec<_>>();
-        root_spans.sort_by_key(|(_, _, end, _)| *end);
-        for (span, start, _, width) in root_spans {
-            current = max(current, start);
-            queue.push(QueueItemWithState {
-                item: QueueItem::Span(span),
-                line_index: 0,
-                start: current,
-                placeholder: false,
-                view_mode: ViewMode::RawSpans { sorted: false },
-            });
-            current += width;
+        for span in root_spans {
+            // Move current to start if needed.
+            current = max(current, span.start());
+            add_child_item(
+                &mut children,
+                &mut current,
+                view_rect,
+                0,
+                if span.is_complete() {
+                    ViewMode::Aggregated { sorted: false }
+                } else {
+                    ViewMode::RawSpans { sorted: false }
+                },
+                QueueItem::Span(span),
+            );
         }
-        queue.reverse();
+        enqueue_children(children, &mut queue);
 
         let mut lines: Vec<Vec<LineEntry<'_>>> = vec![];
 
@@ -157,33 +157,6 @@ impl Viewer {
             // compute children
             let mut children = Vec::new();
             let mut current = start;
-            fn handle_child<'a>(
-                children: &mut Vec<(QueueItemWithState<'a>, u32, (u64, u64))>,
-                current: &mut u64,
-                view_rect: &ViewRect,
-                line_index: usize,
-                view_mode: ViewMode,
-                child: QueueItem<'a>,
-            ) {
-                let child_width = child.corrected_total_time();
-                let max_depth = child.max_depth();
-                let pixel1 = *current * view_rect.horizontal_pixels / view_rect.width;
-                let pixel2 =
-                    ((*current + child_width) * view_rect.horizontal_pixels + view_rect.width - 1)
-                        / view_rect.width;
-                children.push((
-                    QueueItemWithState {
-                        item: child,
-                        line_index: line_index + 1,
-                        start: *current,
-                        placeholder: false,
-                        view_mode,
-                    },
-                    max_depth,
-                    (pixel1, pixel2),
-                ));
-                *current += child_width;
-            }
             match &span {
                 QueueItem::Span(span) => {
                     let (selected_view_mode, inherit) = self
@@ -210,11 +183,11 @@ impl Viewer {
                             Either::Right(span.children())
                         };
                         for child in spans {
-                            handle_child(
+                            add_child_item(
                                 &mut children,
                                 &mut current,
                                 view_rect,
-                                line_index,
+                                line_index + 1,
                                 view_mode,
                                 QueueItem::Span(child),
                             );
@@ -231,11 +204,11 @@ impl Viewer {
                             match event {
                                 SpanGraphEventRef::SelfTime { duration: _ } => {}
                                 SpanGraphEventRef::Child { graph } => {
-                                    handle_child(
+                                    add_child_item(
                                         &mut children,
                                         &mut current,
                                         view_rect,
-                                        line_index,
+                                        line_index + 1,
                                         view_mode,
                                         QueueItem::SpanGraph(graph),
                                     );
@@ -269,11 +242,11 @@ impl Viewer {
                             Either::Right(span_graph.root_spans())
                         };
                         for child in spans {
-                            handle_child(
+                            add_child_item(
                                 &mut children,
                                 &mut current,
                                 view_rect,
-                                line_index,
+                                line_index + 1,
                                 view_mode,
                                 QueueItem::Span(child),
                             );
@@ -287,11 +260,11 @@ impl Viewer {
                             Either::Right(span_graph.children())
                         };
                         for child in events {
-                            handle_child(
+                            add_child_item(
                                 &mut children,
                                 &mut current,
                                 view_rect,
-                                line_index,
+                                line_index + 1,
                                 view_mode,
                                 QueueItem::SpanGraph(child),
                             );
@@ -299,8 +272,6 @@ impl Viewer {
                     }
                 }
             }
-
-            const MIN_VISIBLE_PIXEL_SIZE: u64 = 3;
 
             // When span size is smaller than a pixel, we only show the deepest child.
             if placeholder {
@@ -319,25 +290,7 @@ impl Viewer {
                 });
             } else {
                 // add children to queue
-                children.reverse();
-                let mut last_pixel = u64::MAX;
-                let mut last_max_depth = 0;
-                for (mut entry, max_depth, (pixel1, pixel2)) in children {
-                    if last_pixel <= pixel1 + MIN_VISIBLE_PIXEL_SIZE {
-                        if last_max_depth < max_depth {
-                            queue.pop();
-                            entry.placeholder = true;
-                        } else {
-                            if let Some(entry) = queue.last_mut() {
-                                entry.placeholder = true;
-                            }
-                            continue;
-                        }
-                    };
-                    queue.push(entry);
-                    last_max_depth = max_depth;
-                    last_pixel = pixel2;
-                }
+                enqueue_children(children, &mut queue);
 
                 // add span to line
                 line.push(LineEntry {
@@ -393,6 +346,60 @@ impl Viewer {
                     .collect(),
             })
             .collect()
+    }
+}
+
+fn add_child_item<'a>(
+    children: &mut Vec<(QueueItemWithState<'a>, u32, (u64, u64))>,
+    current: &mut u64,
+    view_rect: &ViewRect,
+    line_index: usize,
+    view_mode: ViewMode,
+    child: QueueItem<'a>,
+) {
+    let child_width = child.corrected_total_time();
+    let max_depth = child.max_depth();
+    let pixel1 = *current * view_rect.horizontal_pixels / view_rect.width;
+    let pixel2 = ((*current + child_width) * view_rect.horizontal_pixels + view_rect.width - 1)
+        / view_rect.width;
+    children.push((
+        QueueItemWithState {
+            item: child,
+            line_index: line_index,
+            start: *current,
+            placeholder: false,
+            view_mode,
+        },
+        max_depth,
+        (pixel1, pixel2),
+    ));
+    *current += child_width;
+}
+
+const MIN_VISIBLE_PIXEL_SIZE: u64 = 3;
+
+fn enqueue_children<'a>(
+    mut children: Vec<(QueueItemWithState<'a>, u32, (u64, u64))>,
+    queue: &mut Vec<QueueItemWithState<'a>>,
+) {
+    children.reverse();
+    let mut last_pixel = u64::MAX;
+    let mut last_max_depth = 0;
+    for (mut entry, max_depth, (pixel1, pixel2)) in children {
+        if last_pixel <= pixel1 + MIN_VISIBLE_PIXEL_SIZE {
+            if last_max_depth < max_depth {
+                queue.pop();
+                entry.placeholder = true;
+            } else {
+                if let Some(entry) = queue.last_mut() {
+                    entry.placeholder = true;
+                }
+                continue;
+            }
+        };
+        queue.push(entry);
+        last_max_depth = max_depth;
+        last_pixel = pixel2;
     }
 }
 

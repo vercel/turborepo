@@ -17,6 +17,7 @@ pub struct Span {
 
     // This might change during writing:
     pub events: Vec<SpanEvent>,
+    pub is_complete: bool,
 
     // These values are computed automatically:
     pub self_end: u64,

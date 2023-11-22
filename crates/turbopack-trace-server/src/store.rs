@@ -1,6 +1,7 @@
 use std::{
     cmp::max,
     collections::{HashSet, VecDeque},
+    fmt::{Debug, Formatter},
     num::NonZeroUsize,
     sync::{Arc, OnceLock},
     vec,
@@ -29,6 +30,7 @@ impl Store {
                 name: "(root)".into(),
                 args: vec![],
                 events: vec![],
+                is_complete: false,
                 end: OnceLock::new(),
                 nice_name: OnceLock::new(),
                 group_name: OnceLock::new(),
@@ -68,6 +70,7 @@ impl Store {
             name,
             args,
             events: vec![],
+            is_complete: false,
             end: OnceLock::new(),
             nice_name: OnceLock::new(),
             group_name: OnceLock::new(),
@@ -103,6 +106,11 @@ impl Store {
         span.self_time += end - start;
         span.events.push(SpanEvent::SelfTime { start, end });
         span.self_end = max(span.self_end, end);
+    }
+
+    pub fn complete_span(&mut self, span_index: SpanIndex) {
+        let span = &mut self.spans[span_index.get()];
+        span.is_complete = true;
     }
 
     pub fn invalidate_outdated_spans(&mut self, outdated_spans: &HashSet<SpanId>) {
@@ -167,6 +175,8 @@ impl<'a> SpanRef<'a> {
         self.span.start
     }
 
+    // TODO(sokra) show end in details
+    #[allow(dead_code)]
     pub fn end(&self) -> u64 {
         *self.span.end.get_or_init(|| {
             max(
@@ -177,6 +187,10 @@ impl<'a> SpanRef<'a> {
                     .unwrap_or_default(),
             )
         })
+    }
+
+    pub fn is_complete(&self) -> bool {
+        self.span.is_complete
     }
 
     pub fn nice_name(&self) -> (&'a str, &'a str) {
@@ -359,6 +373,21 @@ impl<'a> SpanRef<'a> {
                     },
                 },
             })
+    }
+}
+
+impl<'a> Debug for SpanRef<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SpanRef")
+            .field("id", &self.id())
+            .field("name", &self.nice_name())
+            .field("start", &self.start())
+            .field("end", &self.end())
+            .field("is_complete", &self.is_complete())
+            .field("self_time", &self.self_time())
+            .field("total_time", &self.total_time())
+            .field("max_depth", &self.max_depth())
+            .finish()
     }
 }
 
@@ -554,5 +583,18 @@ impl<'a> SpanGraphRef<'a> {
                 .unwrap_or_default()
                 + self.corrected_self_time()
         })
+    }
+}
+
+impl<'a> Debug for SpanGraphRef<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SpanGraphRef")
+            .field("id", &self.id())
+            .field("name", &self.nice_name())
+            .field("count", &self.count())
+            .field("max_depth", &self.max_depth())
+            .field("self_time", &self.self_time())
+            .field("total_time", &self.total_time())
+            .finish()
     }
 }

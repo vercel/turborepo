@@ -177,7 +177,10 @@ fn process(store: &mut StoreWriteGuard, state: &mut ReaderState, row: TraceRow<'
         }
         TraceRow::End { ts: _, id } => {
             // id might be reused
-            state.active_ids.remove(&id);
+            let index = state.active_ids.remove(&id);
+            if let Some(index) = index {
+                store.complete_span(index);
+            }
         }
         TraceRow::Enter { ts, id, thread_id } => {
             let Some(&id) = state.active_ids.get(&id) else {
