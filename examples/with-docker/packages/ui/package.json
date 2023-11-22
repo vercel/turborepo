@@ -1,9 +1,9 @@
 {
-  "name": "ui",
+  "name": "@repo/ui",
   "version": "0.0.0",
-  "license": "MIT",
-  "main": "./index.tsx",
-  "types": "./index.tsx",
+  "exports": {
+    "./button": "./src/button.tsx"
+  },
   "scripts": {
     "lint": "eslint \"**/*.ts*\""
   },
