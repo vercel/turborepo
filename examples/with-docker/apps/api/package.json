@@ -11,7 +11,7 @@
     "test": "jest --detectOpenHandles"
   },
   "jest": {
-    "preset": "jest-presets/jest/node"
+    "preset": "@repo/jest-presets/jest/node"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
@@ -33,7 +33,7 @@
     "eslint": "^8.54.0",
     "eslint-config-custom-server": "*",
     "jest": "^29.7.0",
-    "jest-presets": "*",
+    "@repo/jest-presets": "*",
     "nodemon": "^3.0.1",
     "supertest": "^6.3.3",
     "@repo/typescript-config": "*",
