@@ -1,19 +1,17 @@
 {
+  "name": "with-yarn",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "build": "turbo build",
-    "dev": "turbo dev --parallel",
-    "lint": "turbo lint"
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "eslint-config-custom": "*",
-    "eslint": "7.32.0",
-    "prettier": "^2.5.1",
-    "turbo": "^1.9.3"
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "prettier": "^3.1.0",
+    "turbo": "latest"
   },
-  "packageManager": "yarn@1.22.19"
+  "packageManager": "pnpm@8.9.0"
 }

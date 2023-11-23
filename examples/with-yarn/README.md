@@ -1,4 +1,4 @@
-# Turborepo starter with yarn
+# Turborepo starter
 
 This is an official starter Turborepo.
 
@@ -7,12 +7,12 @@ This is an official starter Turborepo.
 Run the following command:
 
 ```sh
-npx create-turbo@latest -e with-yarn
+npx create-turbo@latest
 ```
 
 ## What's inside?
 
-This Turborepo uses [yarn](https://classic.yarnpkg.com/lang/en/) as a packages manager. It includes the following packages/apps:
+This Turborepo includes the following packages/apps:
 
 ### Apps and Packages
 
@@ -38,7 +38,7 @@ To build all apps and packages, run the following command:
 
 ```
 cd my-turborepo
-yarn build
+pnpm build
 ```
 
 ### Develop
@@ -47,7 +47,7 @@ To develop all apps and packages, run the following command:
 
 ```
 cd my-turborepo
-yarn dev
+pnpm dev
 ```
 
 ### Remote Caching
@@ -63,7 +63,7 @@ npx turbo login
 
 This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your turborepo:
+Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
 
 ```
 npx turbo link
