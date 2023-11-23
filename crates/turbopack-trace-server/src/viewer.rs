@@ -78,13 +78,6 @@ impl<'a> QueueItem<'a> {
             QueueItem::SpanGraph(span_graph) => span_graph.max_depth(),
         }
     }
-
-    fn id(&self) -> SpanId {
-        match self {
-            QueueItem::Span(span) => span.id(),
-            QueueItem::SpanGraph(span_graph) => span_graph.id(),
-        }
-    }
 }
 
 #[derive(Debug)]
