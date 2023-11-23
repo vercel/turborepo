@@ -1,6 +1,7 @@
 {
   "name": "@repo/docs",
   "version": "0.0.0",
+  "type": "module",
   "private": true,
   "scripts": {
     "dev": "storybook dev -p 6006",
@@ -10,11 +11,12 @@
     "lint": "eslint ./stories/*.stories.tsx"
   },
   "dependencies": {
+    "@acme/ui": "workspace:*",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@repo/ui": "workspace:*"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
     "@storybook/addon-actions": "^7.5.3",
     "@storybook/addon-docs": "^7.5.3",
     "@storybook/addon-essentials": "^7.5.3",
@@ -22,7 +24,7 @@
     "@storybook/react": "^7.5.3",
     "@storybook/react-vite": "^7.5.3",
     "@vitejs/plugin-react": "^4.2.0",
-    "eslint-config-custom": "workspace:*",
+    "eslint": "^8.54.0",
     "serve": "^14.2.1",
     "storybook": "^7.5.3",
     "@repo/typescript-config": "workspace:*",
