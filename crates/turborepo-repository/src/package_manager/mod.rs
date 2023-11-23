@@ -381,8 +381,12 @@ impl PackageManager {
         )
     }
 
-    // TODO: consider if this method should not need an Option, and possibly be a
-    // method on PackageJSON
+    /// Try to detect the package manager by inspecting the repository.
+    /// This method does not read the package.json, instead looking for
+    /// lockfiles and other files that indicate the package manager.
+    ///
+    /// TODO: consider if this method should not need an Option, and possibly be
+    /// a method on PackageJSON
     pub fn get_package_manager(
         repo_root: &AbsoluteSystemPath,
         pkg: Option<&PackageJson>,

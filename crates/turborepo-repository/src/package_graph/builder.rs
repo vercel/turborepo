@@ -65,7 +65,11 @@ pub enum Error {
 impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
     pub fn new(repo_root: &'a AbsoluteSystemPath, root_package_json: PackageJson) -> Self {
         Self {
-            package_discovery: LocalPackageDiscoveryBuilder::new(repo_root.to_owned(), None),
+            package_discovery: LocalPackageDiscoveryBuilder::new(
+                repo_root.to_owned(),
+                None,
+                Some(root_package_json.clone()),
+            ),
             repo_root,
             root_package_json,
             is_single_package: false,

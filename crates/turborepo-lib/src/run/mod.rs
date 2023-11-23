@@ -227,7 +227,12 @@ impl<'a> Run<'a> {
                 .with_single_package_mode(opts.run_opts.single_package)
                 .with_package_discovery(FallbackPackageDiscovery::new(
                     daemon.as_mut().map(DaemonPackageDiscovery::new),
-                    LocalPackageDiscoveryBuilder::new(self.base.repo_root.clone(), None).build()?,
+                    LocalPackageDiscoveryBuilder::new(
+                        self.base.repo_root.clone(),
+                        None,
+                        Some(root_package_json.clone()),
+                    )
+                    .build()?,
                     Duration::from_millis(10),
                 ))
                 .build()

@@ -156,7 +156,8 @@ where
         let (watcher_tx, watcher_rx) = watch::channel(None);
 
         let package_discovery = WatchingPackageDiscovery::new(watcher_rx.clone());
-        let package_discovery_backup = LocalPackageDiscoveryBuilder::new(repo_root.clone(), None);
+        let package_discovery_backup =
+            LocalPackageDiscoveryBuilder::new(repo_root.clone(), None, None);
 
         // Run the actual service. It takes ownership of the struct given to it,
         // so we use a private struct with just the pieces of state needed to handle

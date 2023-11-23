@@ -12,7 +12,10 @@
 use tokio_stream::{iter, StreamExt};
 use turbopath::AbsoluteSystemPathBuf;
 
-use crate::package_manager::{self, PackageManager};
+use crate::{
+    package_json::PackageJson,
+    package_manager::{self, PackageManager},
+};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct WorkspaceData {
@@ -80,13 +83,19 @@ impl LocalPackageDiscovery {
 pub struct LocalPackageDiscoveryBuilder {
     repo_root: AbsoluteSystemPathBuf,
     package_manager: Option<PackageManager>,
+    package_json: Option<PackageJson>,
 }
 
 impl LocalPackageDiscoveryBuilder {
-    pub fn new(repo_root: AbsoluteSystemPathBuf, package_manager: Option<PackageManager>) -> Self {
+    pub fn new(
+        repo_root: AbsoluteSystemPathBuf,
+        package_manager: Option<PackageManager>,
+        package_json: Option<PackageJson>,
+    ) -> Self {
         Self {
             repo_root,
             package_manager,
+            package_json,
         }
     }
 }
@@ -98,7 +107,9 @@ impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
     fn build(self) -> Result<Self::Output, Self::Error> {
         let package_manager = match self.package_manager {
             Some(pm) => pm,
-            None => PackageManager::get_package_manager(&self.repo_root, None)?,
+            None => {
+                PackageManager::get_package_manager(&self.repo_root, self.package_json.as_ref())?
+            }
         };
 
         Ok(LocalPackageDiscovery {
