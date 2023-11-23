@@ -202,6 +202,9 @@ pub enum DaemonError {
 
     #[error("failed to setup cookie dir {1}: {0}")]
     CookieDir(io::Error, AbsoluteSystemPathBuf),
+
+    #[error("failed to determine package manager: {0}")]
+    PackageManager(#[from] turborepo_repository::package_manager::Error),
 }
 
 impl From<Status> for DaemonError {

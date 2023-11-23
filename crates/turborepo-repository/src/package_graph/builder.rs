@@ -16,7 +16,7 @@ use turborepo_lockfiles::Lockfile;
 use super::{PackageGraph, WorkspaceInfo, WorkspaceName, WorkspaceNode};
 use crate::{
     discovery::{
-        CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
+        self, CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
         PackageDiscoveryBuilder,
     },
     package_graph::{PackageName, PackageVersion},
@@ -128,11 +128,11 @@ where
         let state = BuildState::new(self)?;
 
         match is_single_package {
-            true => Ok(state.build_single_package_graph().await),
+            true => Ok(state.build_single_package_graph().await?),
             false => {
                 let state = state.parse_package_jsons().await?;
                 let state = state.resolve_lockfile().await?;
-                Ok(state.build_inner().await)
+                Ok(state.build_inner().await?)
             }
         }
     }
@@ -303,7 +303,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
         })
     }
 
-    async fn build_single_package_graph(mut self) -> PackageGraph {
+    async fn build_single_package_graph(mut self) -> Result<PackageGraph, discovery::Error> {
         self.add_root_workspace();
         let Self {
             single,
@@ -315,20 +315,16 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             ..
         } = self;
 
-        let package_manager = package_discovery
-            .discover_packages()
-            .await
-            .unwrap()
-            .package_manager;
+        let package_manager = package_discovery.discover_packages().await?.package_manager;
 
         debug_assert!(single, "expected single package graph");
-        PackageGraph {
+        Ok(PackageGraph {
             workspace_graph,
             node_lookup,
             workspaces,
             lockfile,
             package_manager,
-        }
+        })
     }
 }
 
@@ -486,15 +482,14 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn build_inner(mut self) -> PackageGraph {
+    async fn build_inner(mut self) -> Result<PackageGraph, discovery::Error> {
         if let Err(e) = self.populate_transitive_dependencies() {
             warn!("Unable to calculate transitive closures: {}", e);
         }
         let package_manager = self
             .package_discovery
             .discover_packages()
-            .await
-            .unwrap()
+            .await?
             .package_manager;
         let Self {
             workspaces,
@@ -503,13 +498,13 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             lockfile,
             ..
         } = self;
-        PackageGraph {
+        Ok(PackageGraph {
             workspace_graph,
             node_lookup,
             workspaces,
             package_manager,
             lockfile,
-        }
+        })
     }
 }
 

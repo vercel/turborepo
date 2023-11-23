@@ -30,8 +30,8 @@ pub struct DiscoveryResponse {
 pub enum Error {
     #[error("discovery unavailable")]
     Unavailable,
-    #[error("discovery failed")]
-    Failed,
+    #[error("discovery failed: {0}")]
+    Failed(Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// Defines a strategy for discovering packages on the filesystem.
@@ -113,7 +113,7 @@ impl PackageDiscovery for LocalPackageDiscovery {
         iter(
             self.package_manager
                 .get_package_jsons(&self.repo_root)
-                .map_err(|_e| Error::Failed)?,
+                .map_err(|e| Error::Failed(Box::new(e)))?,
         )
         .then(|a| async move {
             let potential_turbo = a.parent().expect("non-root").join_component("turbo.json");
@@ -130,7 +130,7 @@ impl PackageDiscovery for LocalPackageDiscovery {
         .await
         .map(|workspaces| DiscoveryResponse {
             workspaces,
-            package_manager: self.package_manager.clone(),
+            package_manager: self.package_manager,
         })
     }
 }
@@ -231,7 +231,10 @@ mod fallback_tests {
     impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
             if self.should_fail {
-                Err(Error::Failed)
+                Err(Error::Failed(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "mock error",
+                ))))
             } else {
                 tokio::time::sleep(Duration::from_millis(10)).await;
                 self.calls += 1;

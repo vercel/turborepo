@@ -178,10 +178,9 @@ where
 impl<S, PDA, PDB> TurboGrpcService<S, PDA, PDB>
 where
     S: Future<Output = CloseReason>,
-    PDA: PackageDiscoveryBuilder,
+    PDA: PackageDiscovery + Send + 'static,
     PDB: PackageDiscoveryBuilder,
-    PDA::Output: Send + 'static,
-    PDB::Output: Send + 'static,
+    PDB::Output: PackageDiscovery + Send + 'static,
 {
     /// If errors are encountered when loading the package discovery, this
     /// builder will be used as a backup to refresh the state.
@@ -228,9 +227,12 @@ where
         // well as available to the gRPC server itself to handle the shutdown RPC.
         let (trigger_shutdown, mut shutdown_signal) = mpsc::channel::<()>(1);
 
+        let backup_discovery = package_discovery_backup
+            .build()
+            .expect("the backup discovery builder cannot fail");
+
         // watch receivers as a group own the filewatcher, which will exit when
         // all references are dropped.
-        let backup_discovery = package_discovery_backup.build().unwrap();
         let fw_shutdown = trigger_shutdown.clone();
         let fw_handle = tokio::task::spawn(async move {
             if let Err(e) =
@@ -269,7 +271,7 @@ where
         // so we use a private struct with just the pieces of state needed to handle
         // RPCs.
         let service = TurboGrpcServiceInner {
-            package_discovery: AsyncMutex::new(package_discovery.build().unwrap()),
+            package_discovery: AsyncMutex::new(package_discovery),
             shutdown: trigger_shutdown,
             watcher_rx,
             times_saved: Arc::new(Mutex::new(HashMap::new())),

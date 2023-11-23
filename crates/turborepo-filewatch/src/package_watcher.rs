@@ -99,7 +99,7 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
         recv: broadcast::Receiver<Result<Event, NotifyError>>,
         mut discovery: T,
     ) -> Result<Self, Error> {
-        let manager = discovery.discover_packages().await.unwrap().package_manager;
+        let manager = discovery.discover_packages().await?.package_manager;
 
         let (package_json_path, workspace_config_path, filter) =
             Self::update_package_manager(&manager, &repo_root)?;
@@ -395,7 +395,8 @@ mod test {
             root.join_component("package.json"),
             r#"{"workspaces":["packages/*"]}"#,
         )
-        .await;
+        .await
+        .unwrap();
 
         let mock_discovery = MockDiscovery {
             manager: manager.clone(),
@@ -612,6 +613,7 @@ mod test {
                 .unwrap()
                 .values()
                 .cloned()
+                .sorted_by_key(|f| f.package_json.clone())
                 .collect::<Vec<_>>(),
             vec![
                 WorkspaceData {

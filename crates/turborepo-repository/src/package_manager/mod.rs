@@ -22,6 +22,7 @@ use wax::{Any, Glob, Pattern};
 use which::which;
 
 use crate::{
+    discovery,
     package_json::PackageJson,
     package_manager::{bun::BunDetector, npm::NpmDetector, pnpm::PnpmDetector, yarn::YarnDetector},
 };
@@ -272,6 +273,9 @@ pub enum Error {
     Glob(String, #[source] Box<wax::BuildError>),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
+
+    #[error("discovering workspace: {0}")]
+    WorkspaceDiscovery(#[from] discovery::Error),
 }
 
 impl From<std::convert::Infallible> for Error {

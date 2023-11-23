@@ -22,7 +22,7 @@ impl<'a, C: Clone + Send> PackageDiscovery for DaemonPackageDiscovery<'a, C> {
             .daemon
             .discover_packages()
             .await
-            .map_err(|_| Error::Failed)?;
+            .map_err(|e| Error::Failed(Box::new(e)))?;
 
         Ok(DiscoveryResponse {
             workspaces: response
@@ -69,7 +69,7 @@ impl PackageDiscovery for WatchingPackageDiscovery {
                 .watcher
                 .wait_for(|opt| opt.is_some())
                 .await
-                .map_err(|_| Error::Failed)?;
+                .map_err(|e| Error::Failed(Box::new(e)))?;
             watcher.as_ref().expect("guaranteed some above").clone()
         };
 
