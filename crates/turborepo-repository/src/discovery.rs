@@ -110,28 +110,37 @@ impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
 
 impl PackageDiscovery for LocalPackageDiscovery {
     async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
-        iter(
-            self.package_manager
-                .get_package_jsons(&self.repo_root)
-                .map_err(|e| Error::Failed(Box::new(e)))?,
-        )
-        .then(|a| async move {
-            let potential_turbo = a.parent().expect("non-root").join_component("turbo.json");
-            let potential_turbo_exists = tokio::fs::try_exists(potential_turbo.as_path()).await;
+        let packages = match self.package_manager.get_package_jsons(&self.repo_root) {
+            Ok(packages) => packages,
+            // if there is not a list of workspaces, it is not necessarily an error. just report no
+            // workspaces
+            Err(package_manager::Error::Workspace(_)) => {
+                return Ok(DiscoveryResponse {
+                    workspaces: vec![],
+                    package_manager: self.package_manager,
+                })
+            }
+            Err(e) => return Err(Error::Failed(Box::new(e))),
+        };
 
-            Ok(WorkspaceData {
-                package_json: a,
-                turbo_json: potential_turbo_exists
-                    .ok()
-                    .and_then(|pe| pe.then_some(potential_turbo)),
+        iter(packages)
+            .then(|a| async move {
+                let potential_turbo = a.parent().expect("non-root").join_component("turbo.json");
+                let potential_turbo_exists = tokio::fs::try_exists(potential_turbo.as_path()).await;
+
+                Ok(WorkspaceData {
+                    package_json: a,
+                    turbo_json: potential_turbo_exists
+                        .ok()
+                        .and_then(|pe| pe.then_some(potential_turbo)),
+                })
             })
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .await
-        .map(|workspaces| DiscoveryResponse {
-            workspaces,
-            package_manager: self.package_manager,
-        })
+            .collect::<Result<Vec<_>, _>>()
+            .await
+            .map(|workspaces| DiscoveryResponse {
+                workspaces,
+                package_manager: self.package_manager,
+            })
     }
 }
 
