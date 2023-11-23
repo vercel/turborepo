@@ -24,22 +24,22 @@ import Date from "../../components/blog/Date";
   "alexanderlyon",
 ]} />
 
-Turborepo 1.11 completes the core's [carcinisation](https://en.wikipedia.org/wiki/Carcinisation) and ships several developer experience improvements:
+Turborepo 1.11 completes the migration to Rust and ships several developer experience improvements:
 
-- [**Rust port completed**](#shipping-an-all-rust-core): Finish the port from Go to lay groundwork for better performance, improved stability, and new features.
+- [**Rust port completed**](#unlocking-the-future-of-turbo-with-rust): We've finished the port from Go to lay groundwork for better performance, improved stability, and new features.
 - [**Group logs for improved readability**](#group-logs-for-improved-readability): You can now specify `--log-order=grouped` to organize your logs into distinct sections separated by tasks.
-- [**Updated examples**](#updated-examples): Use one of the revitalized examples including Next.js, Svelte, Nuxt, and more.
+- [**Updated examples**](#updated-examples): Start with an example for Next.js, Svelte, Remix, Nuxt, and more.
 - [**Tighter feedback loops in your editor** <ExperimentalBadge isLink={false} />](#tighter-feedback-loops-in-your-editor-experimental): Find errors in your Turborepo configuration without leaving your IDE.
 
 Update today by running `npx @turbo/codemod migrate`.
 
-## Shipping an all-Rust core
+## Unlocking the future of `turbo` with Rust
 
-As we wrote about in [our blog post about the migration](https://vercel.com/blog/turborepo-migration-go-rust), we're excited to start seeing the benefits of our porting effort for Turborepo users. By surfacing more complexity in _our_ code, we're able to create a better experience in _your_ codebase in a variety of ways:
+As we wrote about in [our blog post about the migration](https://vercel.com/blog/turborepo-migration-go-rust), we're excited to start seeing the benefits of our porting effort for Turborepo users. Rust has allowed us to surface more complexity in _our_ code so we're able to create a better experience in _your_ codebase in several ways:
 
 - We've noticed a slight performance improvement for the majority of use cases, even without doing much performance tuning in our code yet. We look forward to diving deeper into making `turbo` even faster soon.
 - We've been able to catch possible bugs much sooner, as Rust forces us to think about the differences between platforms and environments much more closely than Go.
-- The Rust ecosystem has many powerful crates that served our needs well, showcasing the ecosystem alignment that we were lacking in the Go ecosystem.
+- The Rust ecosystem has many powerful crates that served our needs well, showcasing the ecosystem alignment we were lacking in Go.
 
 ## Group logs for improved readability
 
