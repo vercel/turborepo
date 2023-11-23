@@ -6,7 +6,6 @@
 #![feature(hash_set_entry)]
 #![recursion_limit = "256"]
 #![feature(arbitrary_self_types)]
-#![feature(async_fn_in_trait)]
 
 pub mod condition;
 pub mod evaluate_context;
@@ -39,7 +38,7 @@ use turbopack_core::{
     compile_time_info::CompileTimeInfo,
     context::AssetContext,
     ident::AssetIdent,
-    issue::{Issue, IssueExt, StyledString},
+    issue::{Issue, IssueExt, OptionStyledString, StyledString},
     module::Module,
     output::OutputAsset,
     raw_module::RawModule,
@@ -66,7 +65,7 @@ use self::{
 #[turbo_tasks::value]
 struct ModuleIssue {
     ident: Vc<AssetIdent>,
-    title: Vc<String>,
+    title: Vc<StyledString>,
     description: Vc<StyledString>,
 }
 
@@ -83,13 +82,13 @@ impl Issue for ModuleIssue {
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> Vc<String> {
+    fn title(&self) -> Vc<StyledString> {
         self.title
     }
 
     #[turbo_tasks::function]
-    fn description(&self) -> Vc<StyledString> {
-        self.description
+    fn description(&self) -> Vc<OptionStyledString> {
+        Vc::cell(Some(self.description))
     }
 }
 
@@ -171,11 +170,14 @@ async fn apply_module_type(
             source,
             Vc::upcast(module_asset_context),
         )),
-        ModuleType::Css { ty, transforms } => Vc::upcast(CssModuleAsset::new(
+        ModuleType::Css {
+            ty,
+            use_lightningcss,
+        } => Vc::upcast(CssModuleAsset::new(
             source,
             Vc::upcast(module_asset_context),
-            *transforms,
             *ty,
+            *use_lightningcss,
         )),
         ModuleType::Static => Vc::upcast(StaticModuleAsset::new(
             source,
@@ -371,7 +373,8 @@ async fn process_default(
                             Some(module_type) => {
                                 ModuleIssue {
                                     ident,
-                                    title: Vc::cell("Invalid module type".to_string()),
+                                    title: StyledString::Text("Invalid module type".to_string())
+                                        .cell(),
                                     description: StyledString::Text(
                                         "The module type must be Ecmascript or Typescript to add \
                                          Ecmascript transforms"
@@ -386,7 +389,8 @@ async fn process_default(
                             None => {
                                 ModuleIssue {
                                     ident,
-                                    title: Vc::cell("Missing module type".to_string()),
+                                    title: StyledString::Text("Missing module type".to_string())
+                                        .cell(),
                                     description: StyledString::Text(
                                         "The module type effect must be applied before adding \
                                          Ecmascript transforms"
@@ -457,7 +461,12 @@ impl AssetContext for ModuleAssetContext {
     ) -> Result<Vc<ModuleResolveResult>> {
         let context_path = origin_path.parent().resolve().await?;
 
-        let result = resolve(context_path, request, resolve_options);
+        let result = resolve(
+            context_path,
+            reference_type.clone(),
+            request,
+            resolve_options,
+        );
         let mut result = self.process_resolve_result(result.resolve().await?, reference_type);
 
         if *self.is_types_resolving_enabled().await? {

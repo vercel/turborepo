@@ -10,6 +10,8 @@ const VENV_NAME = ".cram_env";
 // disable package manager update notifiers
 process.env.NO_UPDATE_NOTIFIER = 1;
 
+const isWindows = process.platform === "win32";
+
 // Make virtualenv
 execSync(`python3 -m venv ${VENV_NAME}`);
 
@@ -17,15 +19,17 @@ execSync(`python3 -m venv ${VENV_NAME}`);
 execSync(`${getVenvBin("python3")} -m pip install --quiet --upgrade pip`);
 
 // Install prysk
-execSync(`${getVenvBin("pip")} install "prysk==0.15.0"`);
+execSync(`${getVenvBin("pip")} install "prysk==0.15.2"`);
 
 // Which tests do we want to run?
-const testArg = process.argv[2] ? process.argv[2] : "";
+let testArg = process.argv[2] ? process.argv[2] : "";
+testArg = isWindows ? testArg.replaceAll("/", path.sep) : testArg;
 const tests = path.join("tests", testArg);
 
 const flags = [
-  "--shell=$(which bash)",
-  process.env.PRYSK_INTERACTIVE ? "--interactive" : "",
+  "--shell=bash",
+  process.env.PRYSK_INTERACTIVE === "true" ? "--interactive" : "",
+  isWindows ? "--dos2unix" : "",
 ].join(" ");
 
 const cmd = [getVenvBin("prysk"), flags, tests].join(" ");
@@ -46,8 +50,12 @@ function getVenvBin(tool) {
     throw new Error(`Tool not allowed: ${tool}`);
   }
 
-  const venvPath = path.join(__dirname, VENV_NAME);
-  const venvBin = path.join(venvPath, "bin");
+  const suffix = isWindows ? ".exe" : "";
 
-  return path.join(venvBin, tool);
+  const venvPath = path.join(__dirname, VENV_NAME);
+  const venvBin = isWindows
+    ? path.join(venvPath, "Scripts")
+    : path.join(venvPath, "bin");
+
+  return path.join(venvBin, tool + suffix);
 }

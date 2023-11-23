@@ -5,7 +5,7 @@ Make sure exit code is 2 when no args are passed
   $ ${TURBO}
   The build system that makes ship happen
   
-  Usage: turbo [OPTIONS] [COMMAND]
+  Usage: turbo(\.exe)? \[OPTIONS\] \[COMMAND\] (re)
   
   Commands:
     bin         Get the path to the Turbo binary
@@ -27,6 +27,7 @@ Make sure exit code is 2 when no args are passed
         --color                           Force color usage in the terminal
         --cpuprofile <CPU_PROFILE>        Specify a file to save a cpu profile
         --cwd <CWD>                       The directory in which to run turbo
+        --go-fallback                     Fallback to use Go for task execution
         --heap <HEAP>                     Specify a file to save a pprof heap profile
         --login <LOGIN>                   Override the login endpoint
         --no-color                        Suppress color usage in the terminal

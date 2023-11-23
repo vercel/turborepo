@@ -17,5 +17,5 @@ Setup
     Tasks:    1 successful, 1 total
    Cached:    0 cached, 1 total
      Time:\s*[\.0-9]+m?s  (re)
-  Summary:    .+\.turbo\/runs\/[a-zA-Z0-9]+.json (re)
+  Summary:    .+\.turbo(\/|\\)runs(\/|\\)[a-zA-Z0-9]+.json (re)
   

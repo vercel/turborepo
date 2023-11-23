@@ -138,6 +138,7 @@ func (g *GraphVisualizer) GenerateGraphFile(outputName string) error {
 		if err := g.generateMermaid(f); err != nil {
 			return err
 		}
+		g.ui.Output("")
 		g.ui.Output(fmt.Sprintf("✔ Generated task graph in %s", ui.Bold(outputFilename.ToString())))
 		return nil
 	}

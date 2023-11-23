@@ -54,7 +54,7 @@ Setup
           "foo.txt"
         ],
         "excludedOutputs": null,
-        "logFile": ".turbo/turbo-build.log",
+        "logFile": "\.turbo(\/|\\\\)turbo-build\.log", (re)
         "dependencies": [],
         "dependents": [
           "test"
@@ -73,7 +73,7 @@ Setup
           "dotEnv": null
         },
         "expandedOutputs": [],
-        "framework": "<NO FRAMEWORK DETECTED>",
+        "framework": "",
         "envMode": "loose",
         "environmentVariables": {
           "specified": {
@@ -108,7 +108,7 @@ Setup
         "cliArguments": [],
         "outputs": null,
         "excludedOutputs": null,
-        "logFile": ".turbo/turbo-test.log",
+        "logFile": "\.turbo(\/|\\\\)turbo-test\.log", (re)
         "dependencies": [
           "build"
         ],
@@ -127,7 +127,7 @@ Setup
           "dotEnv": null
         },
         "expandedOutputs": [],
-        "framework": "<NO FRAMEWORK DETECTED>",
+        "framework": "",
         "envMode": "loose",
         "environmentVariables": {
           "specified": {

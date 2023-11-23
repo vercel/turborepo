@@ -140,7 +140,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
     pub(crate) fn resolve(
         &self,
         patterns: &Vec<String>,
-    ) -> Result<HashSet<WorkspaceName>, ResolutionError> {
+    ) -> Result<(HashSet<WorkspaceName>, bool), ResolutionError> {
         // inference is None only if we are in the root
         let is_all_packages = patterns.is_empty() && self.inference.is_none();
 
@@ -155,7 +155,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             self.get_packages_from_patterns(patterns)?
         };
 
-        Ok(filter_patterns)
+        Ok((filter_patterns, is_all_packages))
     }
 
     fn get_packages_from_patterns(

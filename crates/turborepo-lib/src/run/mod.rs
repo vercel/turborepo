@@ -3,13 +3,14 @@
 mod cache;
 mod error;
 pub(crate) mod global_hash;
+mod graph_visualizer;
 mod scope;
 pub(crate) mod summary;
 pub mod task_id;
 
 use std::{
     collections::HashSet,
-    io::{BufWriter, IsTerminal, Write},
+    io::{IsTerminal, Write},
     sync::Arc,
     time::SystemTime,
 };
@@ -19,7 +20,6 @@ use chrono::{DateTime, Local};
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tracing::debug;
-use turbopath::AbsoluteSystemPathBuf;
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
@@ -40,7 +40,7 @@ use crate::{
     config::TurboJson,
     daemon::DaemonConnector,
     engine::{Engine, EngineBuilder},
-    opts::{GraphOpts, Opts},
+    opts::Opts,
     process::ProcessManager,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker},
     shim::TurboState,
@@ -205,7 +205,6 @@ impl<'a> Run<'a> {
             opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
         }
 
-        // There's some warning handling code in Go that I'm ignoring
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
 
         let daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
@@ -239,14 +238,14 @@ impl<'a> Run<'a> {
         let scm = SCM::new(&self.base.repo_root);
 
         let filtered_pkgs = {
-            let mut filtered_pkgs = scope::resolve_packages(
+            let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
                 &opts.scope_opts,
                 &self.base.repo_root,
                 &pkg_dep_graph,
                 &scm,
             )?;
 
-            if filtered_pkgs.len() != pkg_dep_graph.len() {
+            if is_all_packages {
                 for target in self.targets() {
                     let mut task_name = TaskName::from(target.as_str());
                     // If it's not a package task, we convert to a root task
@@ -342,27 +341,15 @@ impl<'a> Run<'a> {
         }
 
         if let Some(graph_opts) = opts.run_opts.graph {
-            match graph_opts {
-                GraphOpts::File(graph_file) => {
-                    let graph_file =
-                        AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
-                    let file = graph_file
-                        .open()
-                        .map_err(|e| Error::OpenGraphFile(e, graph_file.clone()))?;
-                    let _writer = BufWriter::new(file);
-                    todo!("Need to implement different format support");
-                }
-                GraphOpts::Stdout => {
-                    engine
-                        .dot_graph(std::io::stdout(), opts.run_opts.single_package)
-                        .map_err(Error::GraphOutput)?;
-                }
-            }
+            graph_visualizer::write_graph(
+                self.base.ui,
+                graph_opts,
+                &engine,
+                opts.run_opts.single_package,
+                self.base.cwd(),
+            )?;
             return Ok(0);
         }
-
-        // remove dead code warnings
-        let _proc_manager = ProcessManager::new();
 
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
@@ -491,14 +478,14 @@ impl<'a> Run<'a> {
         let scm = SCM::new(&self.base.repo_root);
 
         let filtered_pkgs = {
-            let mut filtered_pkgs = scope::resolve_packages(
+            let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
                 &opts.scope_opts,
                 &self.base.repo_root,
                 &pkg_dep_graph,
                 &scm,
             )?;
 
-            if filtered_pkgs.len() != pkg_dep_graph.len() {
+            if is_all_packages {
                 for target in self.targets() {
                     let task_name = TaskName::from(target.as_str()).into_root_task();
 

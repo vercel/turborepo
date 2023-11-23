@@ -267,8 +267,21 @@ function asyncModule(module, body, hasAwait) {
 function commonJsRequireContext(entry, sourceModule) {
     return entry.external ? externalRequire(entry.id(), false) : commonJsRequire(sourceModule, entry.id());
 }
-function externalImport(id) {
-    return import(id);
+async function externalImport(id) {
+    let raw;
+    try {
+        raw = await import(id);
+    } catch (err) {
+        // TODO(alexkirsz) This can happen when a client-side module tries to load
+        // an external module we don't provide a shim for (e.g. querystring, url).
+        // For now, we fail semi-silently, but in the future this should be a
+        // compilation error.
+        throw new Error(`Failed to load external module ${id}: ${err}`);
+    }
+    if (raw && raw.__esModule && raw.default && "default" in raw.default) {
+        return interopEsm(raw.default, {}, true);
+    }
+    return raw;
 }
 function externalRequire(id, esm = false) {
     let raw;
@@ -355,7 +368,7 @@ const moduleCache = Object.create(null);
  * This is largely based on the webpack's existing implementation at
  * https://github.com/webpack/webpack/blob/87660921808566ef3b8796f8df61bd79fc026108/lib/runtime/RelativeUrlRuntimeModule.js
  */ var relativeURL = function(inputUrl) {
-    const outputUrl = inputUrl.replace(ASSET_PREFIX, OUTPUT_ROOT);
+    const outputUrl = inputUrl;
     const realUrl = new URL(outputUrl, "x:/");
     const values = {};
     for(var key in realUrl)values[key] = realUrl[key];
