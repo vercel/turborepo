@@ -24,9 +24,9 @@ const profileExt = path.extname(profileFile); // Should always be .json, but we'
 
 const ttftFileName = `${profileName}-ttft${profileExt}`;
 
-// process.cwd() should be benchmark/ here.
-const fullProfilePath = path.join(process.cwd(), profileFile);
-const ttftFilePath = path.join(process.cwd(), ttftFileName);
+// process.cwd() should be packages/turbo-benchmark/ here.
+const fullProfilePath = path.join(process.cwd(), "profiles", profileFile);
+const ttftFilePath = path.join(process.cwd(), "profiles", ttftFileName);
 
 console.log(`Profile will be saved to ${fullProfilePath}`);
 console.log(`TTFT data will be saved to ${ttftFilePath}`);
@@ -110,5 +110,5 @@ fs.writeFileSync(ttftFilePath, JSON.stringify(ttftData, null, 2));
 // -----------------------
 
 function printUsageMessage() {
-  console.log("Usage:\n\npnpm -F benchmark ttft <path>");
+  console.log("Usage:\n\npnpm -F @turbo/benchmark ttft <path>");
 }
