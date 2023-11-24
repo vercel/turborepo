@@ -1,6 +1,6 @@
 use chrono::{DateTime, Local};
 
-type GroupPrefixFn = fn(group_name: &str, time: DateTime<Local>) -> String;
+type GroupPrefixFn = fn(group_name: &str, time: &DateTime<Local>) -> String;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VendorBehavior {
@@ -12,7 +12,7 @@ impl VendorBehavior {
     pub fn get_vendor_group_prefix(
         vendor_behavior: Option<&VendorBehavior>,
         task_prefix: &str,
-        task_start_time: DateTime<Local>,
+        task_start_time: &DateTime<Local>,
     ) -> Option<String> {
         return vendor_behavior.and_then(|vendor_behavior| {
             let factory = vendor_behavior.group_prefix;
@@ -24,7 +24,7 @@ impl VendorBehavior {
     pub fn get_vendor_group_suffix(
         vendor_behavior: Option<&VendorBehavior>,
         task_prefix: &str,
-        task_finish_time: DateTime<Local>,
+        task_finish_time: &DateTime<Local>,
     ) -> Option<String> {
         return vendor_behavior.and_then(|vendor_behavior| {
             let factory = vendor_behavior.group_suffix;
@@ -84,12 +84,12 @@ mod tests {
         let group_prefix = VendorBehavior::get_vendor_group_prefix(
             github_vendor.behavior.as_ref(),
             task_prefix,
-            Local.timestamp_nanos(0),
+            &Local.timestamp_nanos(0),
         );
         let group_suffix = VendorBehavior::get_vendor_group_suffix(
             github_vendor.behavior.as_ref(),
             task_prefix,
-            Local.timestamp_nanos(0),
+            &Local.timestamp_nanos(0),
         );
 
         assert_eq!(group_prefix, Some(String::from(expected_group_prefix)));
