@@ -220,7 +220,7 @@ fn main() {
                 let name = get_name(name, &values, collapse_names && parent.is_some());
                 let internal_id = ensure_span(&mut active_ids, &mut spans, id);
                 spans[internal_id].name = name.clone();
-                spans[internal_id].target = target.into();
+                spans[internal_id].target = target;
                 spans[internal_id].start = ts;
                 spans[internal_id].end = ts;
                 spans[internal_id].values = values;
