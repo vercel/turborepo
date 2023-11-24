@@ -15,9 +15,18 @@ console.log("Executing turbo build in child process", {
   slackPayloadPath,
 });
 
-const ubuntu = getTTFTData("profiles/ubuntu-ttft.json", runID);
-const macos = getTTFTData("profiles/macos-ttft.json", runID);
-const windows = getTTFTData("profiles/windows-ttft.json", runID);
+const ubuntu = getTTFTData(
+  path.join(process.cwd(), "profiles", "ubuntu-ttft.json"),
+  runID
+);
+const macos = getTTFTData(
+  path.join(process.cwd(), "profiles", "macos-ttft.json"),
+  runID
+);
+const windows = getTTFTData(
+  path.join(process.cwd(), "profiles", "windows-ttft.json"),
+  runID
+);
 
 // For commitSha and runURL, we use the ubuntu data because it's the same for all platforms
 // In the future, we could modify getTTFTData to not include this data and augment it
