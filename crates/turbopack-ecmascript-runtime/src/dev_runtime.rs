@@ -66,7 +66,17 @@ pub async fn get_dev_runtime_code(
 
     if *environment.supports_commonjs_externals().await? {
         code.push_code(
-            &*embed_static_code(asset_context, "shared-node/node-utils.ts".to_string()).await?,
+            &*embed_static_code(
+                asset_context,
+                "shared-node/node-externals-utils.ts".to_string(),
+            )
+            .await?,
+        );
+    }
+    if *environment.supports_wasm().await? {
+        code.push_code(
+            &*embed_static_code(asset_context, "shared-node/node-wasm-utils.ts".to_string())
+                .await?,
         );
     }
 

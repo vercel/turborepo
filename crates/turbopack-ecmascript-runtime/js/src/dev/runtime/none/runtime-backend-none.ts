@@ -6,7 +6,7 @@
  */
 
 /// <reference path="../base/runtime-base.ts" />
-/// <reference path="../../../shared-node/node-utils.ts" />
+/// <reference path="../../../shared-node/node-externals-utils.ts" />
 
 type ChunkRunner = {
   requiredChunks: Set<ChunkPath>;
@@ -32,13 +32,6 @@ function augmentContext(context: TurbopackDevBaseContext): TurbopackDevContext {
   nodejsContext.x = externalRequire;
   nodejsContext.y = externalImport;
   return nodejsContext;
-}
-
-function commonJsRequireContext(
-  entry: RequireContextEntry,
-  sourceModule: Module
-): Exports {
-  return commonJsRequire(sourceModule, entry.id());
 }
 
 async function loadWebAssembly(
