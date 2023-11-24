@@ -8,12 +8,12 @@ importers:
 
   .:
     devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:packages/config-eslint
       eslint:
         specifier: ^8.54.0
         version: 8.54.0
-      eslint-config-custom:
-        specifier: workspace:*
-        version: link:packages/eslint-config-custom
       prettier:
         specifier: ^3.1.0
         version: 3.1.0
@@ -27,15 +27,15 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/config-eslint
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../../packages/config-typescript
       eslint:
         specifier: ^8.54.0
         version: 8.54.0
-      eslint-config-custom:
-        specifier: workspace:*
-        version: link:../../packages/eslint-config-custom
-      tsconfig:
-        specifier: workspace:*
-        version: link:../../packages/tsconfig
       typescript:
         specifier: ^5.3.2
         version: 5.3.2
@@ -49,15 +49,15 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/config-eslint
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../../packages/config-typescript
       eslint:
         specifier: ^8.54.0
         version: 8.54.0
-      eslint-config-custom:
-        specifier: workspace:*
-        version: link:../../packages/eslint-config-custom
-      tsconfig:
-        specifier: workspace:*
-        version: link:../../packages/tsconfig
       typescript:
         specifier: ^5.3.2
         version: 5.3.2
@@ -65,7 +65,7 @@ importers:
         specifier: ^5.0.2
         version: 5.0.2
 
-  packages/eslint-config-custom:
+  packages/config-eslint:
     dependencies:
       '@typescript-eslint/eslint-plugin':
         specifier: ^6.12.0
@@ -77,19 +77,19 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0(eslint@8.54.0)
 
-  packages/tsconfig: {}
+  packages/config-typescript: {}
 
   packages/ui:
     devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@repo/typescript-config':
+        specifier: workspace:*
+        version: link:../config-typescript
       eslint:
         specifier: ^8.54.0
         version: 8.54.0
-      eslint-config-custom:
-        specifier: workspace:*
-        version: link:../eslint-config-custom
-      tsconfig:
-        specifier: workspace:*
-        version: link:../tsconfig
       typescript:
         specifier: ^5.3.2
         version: 5.3.2
