@@ -9,19 +9,23 @@
     "seed": "tsx packages/database/src/seed.ts"
   },
   "scripts": {
-    "build": "turbo run build",
-    "db:migrate:deploy": "turbo run db:migrate:deploy",
-    "db:push": "turbo run db:push",
-    "db:seed": "turbo run db:seed",
-    "dev": "turbo run dev",
+    "build": "turbo build",
+    "db:migrate:deploy": "turbo db:migrate:deploy",
+    "db:push": "turbo db:push",
+    "db:seed": "turbo db:seed",
+    "dev": "turbo dev",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "generate": "turbo run generate",
-    "lint": "turbo run lint"
+    "generate": "turbo generate",
+    "lint": "turbo lint"
   },
   "devDependencies": {
-    "prettier": "^2.5.1",
-    "tsx": "^3.7.1",
-    "turbo": "^1.9.3"
+    "@repo/eslint-config": "*",
+    "prettier": "^3.1.0",
+    "tsx": "^4.4.0",
+    "turbo": "^1.10.16"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "packageManager": "yarn@1.22.19"
 }
