@@ -130,22 +130,21 @@ impl Viewer {
                 },
                 QueueItem::Span(span),
                 false,
-            ) {
-                if search_mode {
-                    let mut has_results = false;
-                    for mut result in span.search(&view_rect.query) {
-                        has_results = true;
-                        highlighted_spans.insert(result.id());
-                        while let Some(parent) = result.parent() {
-                            result = parent;
-                            if !highlighted_spans.insert(result.id()) {
-                                break;
-                            }
+            ) && search_mode
+            {
+                let mut has_results = false;
+                for mut result in span.search(&view_rect.query) {
+                    has_results = true;
+                    highlighted_spans.insert(result.id());
+                    while let Some(parent) = result.parent() {
+                        result = parent;
+                        if !highlighted_spans.insert(result.id()) {
+                            break;
                         }
                     }
-                    if !has_results {
-                        children.last_mut().unwrap().item.filtered = true;
-                    }
+                }
+                if !has_results {
+                    children.last_mut().unwrap().item.filtered = true;
                 }
             }
         }
@@ -414,7 +413,7 @@ fn add_child_item<'a>(
     children.push(ChildItem {
         item: QueueItemWithState {
             item: child,
-            line_index: line_index,
+            line_index,
             start,
             placeholder: false,
             view_mode,

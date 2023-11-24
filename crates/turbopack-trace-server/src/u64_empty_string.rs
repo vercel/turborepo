@@ -16,7 +16,7 @@ where
     D: Deserializer<'de>,
 {
     let str = &String::deserialize(deserializer)?;
-    if str == "" {
+    if str.is_empty() {
         Ok(0)
     } else {
         str.parse().map_err(de::Error::custom)

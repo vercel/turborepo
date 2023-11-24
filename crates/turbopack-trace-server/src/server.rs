@@ -153,7 +153,7 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                         return Ok(());
                     }
                     state.last_update_generation = store.generation();
-                    let updates = state.viewer.compute_update(&*store, &state.view_rect);
+                    let updates = state.viewer.compute_update(&store, &state.view_rect);
                     let count = updates.len();
                     for update in updates {
                         let message = ServerToClientMessage::ViewLine { update };
@@ -176,7 +176,7 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                             return;
                         }
                         if send_update(
-                            &mut *state.lock().unwrap(),
+                            &mut state.lock().unwrap(),
                             false,
                             &ready_for_update,
                             &update_skipped,
@@ -272,7 +272,7 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                                     if update_skipped.load(Ordering::SeqCst) {
                                         update_skipped.store(false, Ordering::SeqCst);
                                         send_update(
-                                            &mut *state,
+                                            &mut state,
                                             true,
                                             &ready_for_update,
                                             &update_skipped,
@@ -280,7 +280,7 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                                     }
                                 }
                             }
-                            send_update(&mut *state, true, &ready_for_update, &update_skipped)?;
+                            send_update(&mut state, true, &ready_for_update, &update_skipped)?;
                         }
                         OwnedMessage::Binary(_) => {
                             // This doesn't happen

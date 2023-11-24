@@ -55,7 +55,7 @@ impl TraceReader {
             match file.read(&mut chunk) {
                 Ok(bytes_read) => {
                     if bytes_read == 0 {
-                        let Ok(pos) = file.seek(std::io::SeekFrom::Current(0)) else {
+                        let Ok(pos) = file.stream_position() else {
                             return true;
                         };
                         drop(file);
@@ -251,7 +251,7 @@ fn process(store: &mut StoreWriteGuard, state: &mut ReaderState, row: TraceRow<'
                 .unwrap_or(0);
             let name = values
                 .remove("name")
-                .and_then(|v| v.as_str().map(|s| s.to_string().into()))
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
                 .unwrap_or("event".into());
             let id = store.add_span(
                 parent,

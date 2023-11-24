@@ -269,10 +269,7 @@ impl<'a> SpanRef<'a> {
     #[allow(dead_code)]
     pub fn events(&self) -> impl Iterator<Item = SpanEventRef<'a>> {
         self.span.events.iter().map(|event| match event {
-            &SpanEvent::SelfTime { start, end } => SpanEventRef::SelfTime {
-                start: start,
-                end: end,
-            },
+            &SpanEvent::SelfTime { start, end } => SpanEventRef::SelfTime { start, end },
             SpanEvent::Child { id } => SpanEventRef::Child {
                 span: SpanRef {
                     span: &self.store.spans[id.get()],
@@ -387,17 +384,17 @@ impl<'a> SpanRef<'a> {
             }
         }
         let store = self.store;
-        return result.into_iter().map(move |index| SpanRef {
+        result.into_iter().map(move |index| SpanRef {
             span: &store.spans[index.get()],
-            store: store,
-        });
+            store,
+        })
     }
 
     fn search_index(&self) -> &HashMap<String, Vec<SpanIndex>> {
         self.span.search_index.get_or_init(|| {
             let mut index: HashMap<String, Vec<SpanIndex>> = HashMap::new();
             let mut queue = VecDeque::with_capacity(8);
-            queue.push_back(self.clone());
+            queue.push_back(*self);
             while let Some(span) = queue.pop_front() {
                 let (cat, name) = span.nice_name();
                 if !cat.is_empty() {
