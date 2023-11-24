@@ -486,7 +486,7 @@ impl EvalContext {
                 let mut seq = e.exprs.iter().map(|e| self.eval(e)).peekable();
                 let mut side_effects = false;
                 let mut last = seq.next().unwrap();
-                while let Some(e) = seq.next() {
+                for e in seq {
                     side_effects |= last.has_side_effects();
                     last = e;
                 }
