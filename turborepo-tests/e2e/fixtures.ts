@@ -29,35 +29,3 @@ export const basicPipeline = {
   },
   globalEnv: ["GLOBAL_ENV_DEPENDENCY"],
 };
-
-export const prunePipeline = {
-  ...basicPipeline,
-  pipeline: {
-    ...basicPipeline.pipeline,
-    // add some package specific pipeline tasks to test pruning
-    "a#build": {
-      outputs: ["dist/**", "!dist/cache/**"],
-    },
-    "c#build": {
-      outputs: ["dist/**", "!dist/cache/**"],
-    },
-  },
-};
-
-export const explicitPrunePipeline = {
-  ...basicPipeline,
-  pipeline: {
-    ...basicPipeline.pipeline,
-    // add some package specific pipeline tasks to test pruning
-    "a#build": {
-      dependsOn: ["b#build"],
-      outputs: ["dist/**", "!dist/cache/**"],
-    },
-    "b#build": {
-      outputs: ["dist/**", "!dist/cache/**"],
-    },
-    "c#build": {
-      outputs: ["dist/**", "!dist/cache/**"],
-    },
-  },
-};

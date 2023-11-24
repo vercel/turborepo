@@ -214,7 +214,7 @@ mod test {
 
         let api_client = APIClient::new(format!("http://localhost:{}", port), 200, "2.0.0", true)?;
         let api_auth = APIAuth {
-            team_id: "my-team".to_string(),
+            team_id: Some("my-team".to_string()),
             token: "my-token".to_string(),
             team_slug: None,
         };

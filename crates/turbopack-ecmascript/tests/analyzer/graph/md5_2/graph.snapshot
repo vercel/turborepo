@@ -62,10 +62,11 @@
             Add(
                 3,
                 [
-                    Unknown(
-                        None,
-                        "unsupported expression",
-                    ),
+                    Unknown {
+                        original_value: None,
+                        reason: "unsupported expression",
+                        has_side_effects: true,
+                    },
                     Variable(
                         (
                             "b",
@@ -84,10 +85,11 @@
             Add(
                 3,
                 [
-                    Unknown(
-                        None,
-                        "unsupported expression",
-                    ),
+                    Unknown {
+                        original_value: None,
+                        reason: "unsupported expression",
+                        has_side_effects: true,
+                    },
                     Variable(
                         (
                             "b",
@@ -106,10 +108,11 @@
             Add(
                 3,
                 [
-                    Unknown(
-                        None,
-                        "unsupported expression",
-                    ),
+                    Unknown {
+                        original_value: None,
+                        reason: "unsupported expression",
+                        has_side_effects: true,
+                    },
                     Variable(
                         (
                             "b",
@@ -128,10 +131,11 @@
             Add(
                 3,
                 [
-                    Unknown(
-                        None,
-                        "unsupported expression",
-                    ),
+                    Unknown {
+                        original_value: None,
+                        reason: "unsupported expression",
+                        has_side_effects: true,
+                    },
                     Variable(
                         (
                             "b",
@@ -145,16 +149,73 @@
     (
         "*anonymous function 5685*",
         Function(
-            11,
+            22,
             5685,
-            Alternatives(
-                10,
-                [
-                    Variable(
-                        (
-                            "digestbytes",
-                            #11,
+            Tenary(
+                21,
+                Logical(
+                    5,
+                    And,
+                    [
+                        Variable(
+                            (
+                                "options",
+                                #11,
+                            ),
                         ),
+                        Member(
+                            3,
+                            Variable(
+                                (
+                                    "options",
+                                    #11,
+                                ),
+                            ),
+                            Constant(
+                                Str(
+                                    Atom(
+                                        "asBytes",
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ],
+                ),
+                Variable(
+                    (
+                        "digestbytes",
+                        #11,
+                    ),
+                ),
+                Tenary(
+                    14,
+                    Logical(
+                        5,
+                        And,
+                        [
+                            Variable(
+                                (
+                                    "options",
+                                    #11,
+                                ),
+                            ),
+                            Member(
+                                3,
+                                Variable(
+                                    (
+                                        "options",
+                                        #11,
+                                    ),
+                                ),
+                                Constant(
+                                    Str(
+                                        Atom(
+                                            "asString",
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ],
                     ),
                     MemberCall(
                         4,
@@ -204,7 +265,7 @@
                             ),
                         ],
                     ),
-                ],
+                ),
             ),
         ),
     ),
@@ -370,10 +431,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -443,10 +505,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -668,10 +731,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -741,10 +805,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -890,10 +955,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -963,10 +1029,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -1036,10 +1103,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -1185,10 +1253,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -1258,10 +1327,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -1483,16 +1553,18 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
             ],
         ),
     ),
@@ -1538,10 +1610,11 @@
         Alternatives(
             210,
             [
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
                 Call(
                     13,
                     Variable(
@@ -1609,10 +1682,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -1682,10 +1756,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -1755,10 +1830,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -1904,10 +1980,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -1977,10 +2054,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -2126,10 +2204,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -2199,10 +2278,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -2272,10 +2352,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -2421,10 +2502,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -2494,10 +2576,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -2567,10 +2650,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -2716,10 +2800,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
             ],
@@ -2795,10 +2880,11 @@
         Alternatives(
             210,
             [
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
                 Call(
                     13,
                     Variable(
@@ -2942,10 +3028,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -3015,10 +3102,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -3088,10 +3176,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -3237,10 +3326,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -3310,10 +3400,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -3535,10 +3626,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -3608,10 +3700,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -3757,10 +3850,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -3830,10 +3924,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -3903,10 +3998,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -4122,10 +4218,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -4271,10 +4368,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -4344,10 +4442,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -4417,10 +4516,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -4566,10 +4666,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -4639,10 +4740,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -4712,10 +4814,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -4861,10 +4964,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -4934,10 +5038,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -5083,10 +5188,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -5156,10 +5262,11 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
                 Call(
@@ -5229,16 +5336,18 @@
                                 ),
                             ),
                         ),
-                        Unknown(
-                            None,
-                            "unsupported expression",
-                        ),
+                        Unknown {
+                            original_value: None,
+                            reason: "unsupported expression",
+                            has_side_effects: true,
+                        },
                     ],
                 ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
             ],
         ),
     ),
@@ -5328,10 +5437,11 @@
                         ),
                     ),
                 ),
-                Unknown(
-                    None,
-                    "updated with update expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "updated with update expression",
+                    has_side_effects: true,
+                },
                 Add(
                     3,
                     [
@@ -5373,10 +5483,11 @@
     ),
     (
         "l",
-        Unknown(
-            None,
-            "unsupported expression",
-        ),
+        Unknown {
+            original_value: None,
+            reason: "unsupported expression",
+            has_side_effects: true,
+        },
     ),
     (
         "m",
@@ -5557,14 +5668,16 @@
                         #10,
                     ),
                 ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
                 Variable(
                     (
                         "t",
@@ -5585,14 +5698,16 @@
                         #7,
                     ),
                 ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
                 Variable(
                     (
                         "t",
@@ -5613,14 +5728,16 @@
                         #8,
                     ),
                 ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
                 Variable(
                     (
                         "t",
@@ -5641,14 +5758,16 @@
                         #9,
                     ),
                 ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
-                Unknown(
-                    None,
-                    "unsupported expression",
-                ),
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
+                Unknown {
+                    original_value: None,
+                    reason: "unsupported expression",
+                    has_side_effects: true,
+                },
                 Variable(
                     (
                         "t",

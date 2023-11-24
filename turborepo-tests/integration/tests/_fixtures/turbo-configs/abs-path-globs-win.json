@@ -1,0 +1,10 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["C:\\an\\absolute\\path", "some\\file"],
+  "pipeline": {
+    "build": {
+      "inputs": ["another\\file", "C:\\some\\absolute\\path"],
+      "outputs": ["C:\\another\\absolute\\path", "a\\relative\\path"]
+    }
+  }
+}

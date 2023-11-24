@@ -1,10 +1,10 @@
 use chrono::{DateTime, Local};
-use reqwest::{Method, RequestBuilder};
+use reqwest::Method;
 use serde::Serialize;
 use turbopath::AnchoredSystemPath;
 use turborepo_vercel_api::SpaceRun;
 
-use crate::{retry, APIAuth, APIClient, Client, Error};
+use crate::{retry, APIAuth, APIClient, Error};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -20,14 +20,31 @@ pub struct SpaceClientSummary {
     pub version: String,
 }
 
-#[derive(Default, Debug, Serialize)]
+#[derive(Debug, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct SpacesCacheStatus {
-    pub status: String,
-    pub source: Option<String>,
-    pub time_saved: u32,
+    pub status: CacheStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<CacheSource>,
+    pub time_saved: u64,
+}
+
+#[derive(Debug, Serialize, Copy, Clone)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum CacheStatus {
+    Hit,
+    Miss,
+}
+
+#[derive(Debug, Serialize, Copy, Clone)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum CacheSource {
+    Local,
+    Remote,
 }
 
 #[derive(Default, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpaceTaskSummary {
     pub key: String,
     pub name: String,
@@ -36,9 +53,10 @@ pub struct SpaceTaskSummary {
     pub start_time: i64,
     pub end_time: i64,
     pub cache: SpacesCacheStatus,
-    pub exit_code: u32,
+    pub exit_code: Option<i32>,
     pub dependencies: Vec<String>,
     pub dependents: Vec<String>,
+    #[serde(rename = "log")]
     pub logs: String,
 }
 
@@ -70,7 +88,7 @@ pub struct CreateSpaceRunPayload {
 impl CreateSpaceRunPayload {
     pub fn new(
         start_time: DateTime<Local>,
-        synthesized_command: &str,
+        synthesized_command: String,
         package_inference_root: Option<&AnchoredSystemPath>,
         git_branch: Option<String>,
         git_sha: Option<String>,
@@ -84,7 +102,7 @@ impl CreateSpaceRunPayload {
         CreateSpaceRunPayload {
             start_time,
             status: RunStatus::Running,
-            command: synthesized_command.to_string(),
+            command: synthesized_command,
             package_inference_root: package_inference_root
                 .map(|p| p.to_string())
                 .unwrap_or_default(),
@@ -185,5 +203,55 @@ impl APIClient {
             .error_for_status()?;
 
         Ok(())
+    }
+}
+
+impl Default for CacheStatus {
+    fn default() -> Self {
+        Self::Miss
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use serde_json::json;
+    use test_case::test_case;
+
+    use super::*;
+
+    #[test_case(CacheStatus::Hit, json!("HIT") ; "hit")]
+    #[test_case(CacheStatus::Miss, json!("MISS") ; "miss")]
+    #[test_case(CacheSource::Local, json!("LOCAL") ; "local")]
+    #[test_case(CacheSource::Remote, json!("REMOTE") ; "remote")]
+    #[test_case(SpacesCacheStatus {
+        source: None,
+        status: CacheStatus::Miss,
+        time_saved: 0,
+    },
+    json!({ "status": "MISS", "timeSaved": 0 })
+    ; "cache miss")]
+    #[test_case(SpaceTaskSummary{
+        key: "foo#build".into(),
+        exit_code: Some(0),
+        ..Default::default()},
+    json!({
+       "key": "foo#build",
+       "name": "",
+       "workspace": "",
+       "hash": "",
+       "startTime": 0,
+       "endTime": 0,
+       "cache": {
+            "timeSaved": 0,
+            "status": "MISS"
+       },
+       "exitCode": 0,
+       "dependencies": [],
+       "dependents": [],
+       "log": "",
+    })
+    ; "spaces task summary")]
+    fn test_serialization(value: impl serde::Serialize, expected: serde_json::Value) {
+        assert_eq!(serde_json::to_value(value).unwrap(), expected);
     }
 }

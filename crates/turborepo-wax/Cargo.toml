@@ -22,6 +22,9 @@ miette = ["dep:miette", "dep:tardar"]
 # Provides APIs for matching globs against directory trees.
 walk = ["dep:walkdir"]
 
+[lints]
+workspace = true
+
 [dependencies]
 const_format = "^0.2.0"
 itertools = "^0.10.0"

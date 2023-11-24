@@ -3,13 +3,14 @@
 mod cache;
 mod error;
 pub(crate) mod global_hash;
+mod graph_visualizer;
 mod scope;
 pub(crate) mod summary;
 pub mod task_id;
 
 use std::{
     collections::HashSet,
-    io::{BufWriter, IsTerminal, Write},
+    io::{IsTerminal, Write},
     sync::Arc,
     time::SystemTime,
 };
@@ -18,8 +19,7 @@ pub use cache::{RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
-use tracing::{debug, info};
-use turbopath::AbsoluteSystemPathBuf;
+use tracing::debug;
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
@@ -35,12 +35,12 @@ use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY};
 use self::task_id::TaskName;
 pub use crate::run::error::Error;
 use crate::{
-    cli::EnvMode,
+    cli::{DryRunMode, EnvMode},
     commands::CommandBase,
     config::TurboJson,
     daemon::DaemonConnector,
     engine::{Engine, EngineBuilder},
-    opts::{GraphOpts, Opts},
+    opts::Opts,
     process::ProcessManager,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker},
     shim::TurboState,
@@ -83,8 +83,9 @@ impl<'a> Run<'a> {
     ) -> Option<(AnalyticsSender, AnalyticsHandle)> {
         // If there's no API auth, we don't want to record analytics
         let api_auth = api_auth?;
-
-        Some(start_analytics(api_auth, api_client))
+        api_auth
+            .is_linked()
+            .then(|| start_analytics(api_auth, api_client))
     }
 
     fn print_run_prelude(&self, opts: &Opts<'_>, filtered_pkgs: &HashSet<WorkspaceName>) {
@@ -123,6 +124,7 @@ impl<'a> Run<'a> {
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
             turbo_version = %TurboState::version(),
+            numcpus = num_cpus::get(),
             "performing run on {:?}",
             TurboState::platform_name(),
         );
@@ -161,7 +163,9 @@ impl<'a> Run<'a> {
         let config = self.base.config()?;
 
         // Pulled from initAnalyticsClient in run.go
-        let is_linked = api_auth.is_some();
+        let is_linked = api_auth
+            .as_ref()
+            .map_or(false, |api_auth| api_auth.is_linked());
         if !is_linked {
             opts.cache_opts.skip_remote = true;
         } else if let Some(enabled) = config.enabled {
@@ -170,7 +174,8 @@ impl<'a> Run<'a> {
             opts.cache_opts.skip_remote = !enabled;
         }
 
-        let _is_structured_output = opts.run_opts.graph.is_some() || opts.run_opts.dry_run_json;
+        let _is_structured_output = opts.run_opts.graph.is_some()
+            || matches!(opts.run_opts.dry_run, Some(DryRunMode::Json));
 
         let is_single_package = opts.run_opts.single_package;
 
@@ -200,12 +205,11 @@ impl<'a> Run<'a> {
             opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
         }
 
-        // There's some warning handling code in Go that I'm ignoring
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
 
-        let mut daemon = None;
-        if is_ci_or_not_tty && !opts.run_opts.no_daemon {
-            info!("skipping turbod since we appear to be in a non-interactive context");
+        let daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
+            debug!("skipping turbod since we appear to be in a non-interactive context");
+            None
         } else if !opts.run_opts.no_daemon {
             let connector = DaemonConnector {
                 can_start_server: true,
@@ -214,24 +218,34 @@ impl<'a> Run<'a> {
                 sock_file: self.base.daemon_file_root().join_component("turbod.sock"),
             };
 
-            let client = connector.connect().await?;
-            debug!("running in daemon mode");
-            daemon = Some(client);
-        }
+            match connector.connect().await {
+                Ok(client) => {
+                    debug!("running in daemon mode");
+                    Some(client)
+                }
+                Err(e) => {
+                    debug!("failed to connect to daemon {e}");
+                    None
+                }
+            }
+        } else {
+            // We are opted out of using the daemon
+            None
+        };
 
         pkg_dep_graph.validate()?;
 
         let scm = SCM::new(&self.base.repo_root);
 
         let filtered_pkgs = {
-            let mut filtered_pkgs = scope::resolve_packages(
+            let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
                 &opts.scope_opts,
                 &self.base.repo_root,
                 &pkg_dep_graph,
                 &scm,
             )?;
 
-            if filtered_pkgs.len() != pkg_dep_graph.len() {
+            if is_all_packages {
                 for target in self.targets() {
                     let mut task_name = TaskName::from(target.as_str());
                     // If it's not a package task, we convert to a root task
@@ -259,12 +273,10 @@ impl<'a> Run<'a> {
             analytics_sender,
         )?;
 
-        info!("created cache");
-
         let mut engine =
             self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
 
-        if !opts.run_opts.dry_run && opts.run_opts.graph.is_none() {
+        if opts.run_opts.dry_run.is_none() && opts.run_opts.graph.is_none() {
             self.print_run_prelude(&opts, &filtered_pkgs);
         }
 
@@ -304,9 +316,8 @@ impl<'a> Run<'a> {
             color_selector,
             daemon,
             self.base.ui,
+            opts.run_opts.dry_run.is_some(),
         ));
-
-        info!("created cache");
 
         let mut global_env_mode = opts.run_opts.env_mode;
         if matches!(global_env_mode, EnvMode::Infer)
@@ -330,27 +341,15 @@ impl<'a> Run<'a> {
         }
 
         if let Some(graph_opts) = opts.run_opts.graph {
-            match graph_opts {
-                GraphOpts::File(graph_file) => {
-                    let graph_file =
-                        AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
-                    let file = graph_file
-                        .open()
-                        .map_err(|e| Error::OpenGraphFile(e, graph_file.clone()))?;
-                    let _writer = BufWriter::new(file);
-                    todo!("Need to implement different format support");
-                }
-                GraphOpts::Stdout => {
-                    engine
-                        .dot_graph(std::io::stdout(), opts.run_opts.single_package)
-                        .map_err(Error::GraphOutput)?;
-                }
-            }
+            graph_visualizer::write_graph(
+                self.base.ui,
+                graph_opts,
+                &engine,
+                opts.run_opts.single_package,
+                self.base.cwd(),
+            )?;
             return Ok(0);
         }
-
-        // remove dead code warnings
-        let _proc_manager = ProcessManager::new();
 
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
@@ -367,7 +366,7 @@ impl<'a> Run<'a> {
 
         let run_tracker = RunTracker::new(
             start_at,
-            "todo",
+            opts.synthesize_command(),
             opts.scope_opts.pkg_inference_root.as_deref(),
             &env_at_execution_start,
             &self.base.repo_root,
@@ -394,7 +393,7 @@ impl<'a> Run<'a> {
             global_env,
         );
 
-        if opts.run_opts.dry_run {
+        if opts.run_opts.dry_run.is_some() {
             visitor.dry_run();
         }
 
@@ -411,8 +410,13 @@ impl<'a> Run<'a> {
             // We hit some error, it shouldn't be exit code 0
             .unwrap_or(if errors.is_empty() { 0 } else { 1 });
 
+        let error_prefix = if opts.run_opts.is_github_actions {
+            "::error::"
+        } else {
+            ""
+        };
         for err in &errors {
-            writeln!(std::io::stderr(), "{err}").ok();
+            writeln!(std::io::stderr(), "{error_prefix}{err}").ok();
         }
 
         visitor
@@ -474,14 +478,14 @@ impl<'a> Run<'a> {
         let scm = SCM::new(&self.base.repo_root);
 
         let filtered_pkgs = {
-            let mut filtered_pkgs = scope::resolve_packages(
+            let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
                 &opts.scope_opts,
                 &self.base.repo_root,
                 &pkg_dep_graph,
                 &scm,
             )?;
 
-            if filtered_pkgs.len() != pkg_dep_graph.len() {
+            if is_all_packages {
                 for target in self.targets() {
                     let task_name = TaskName::from(target.as_str()).into_root_task();
 
@@ -560,11 +564,13 @@ impl<'a> Run<'a> {
             color_selector,
             None,
             self.base.ui,
+            // Always dry run when getting hashes
+            true,
         ));
 
         let run_tracker = RunTracker::new(
             started_at,
-            "todo",
+            opts.synthesize_command(),
             opts.scope_opts.pkg_inference_root.as_deref(),
             &env_at_execution_start,
             &self.base.repo_root,

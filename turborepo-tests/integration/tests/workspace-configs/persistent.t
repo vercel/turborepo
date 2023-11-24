@@ -13,8 +13,6 @@ This test covers:
   $ ${TURBO} run persistent-task-1-parent --filter=persistent
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "persistent#persistent-task-1" is a persistent task, "persistent#persistent-task-1-parent" cannot depend on it
-  Turbo error: error preparing engine: Invalid persistent task configuration:
-  "persistent#persistent-task-1" is a persistent task, "persistent#persistent-task-1-parent" cannot depend on it
   [1]
 
 # persistent-task-2-parent dependsOn persistent-task-2
@@ -23,16 +21,16 @@ This test covers:
   \xe2\x80\xa2 Packages in scope: persistent (esc)
   \xe2\x80\xa2 Running persistent-task-2-parent in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  persistent:persistent-task-2: cache miss, executing 899791c2225002f8
+  persistent:persistent-task-2: cache miss, executing 37375b286d724c01
   persistent:persistent-task-2: 
   persistent:persistent-task-2: > persistent-task-2
-  persistent:persistent-task-2: > echo 'persistent-task-2'
+  persistent:persistent-task-2: > echo persistent-task-2
   persistent:persistent-task-2: 
   persistent:persistent-task-2: persistent-task-2
-  persistent:persistent-task-2-parent: cache miss, executing 5e7bc170d610664e
+  persistent:persistent-task-2-parent: cache miss, executing dfc8c20283d7826a
   persistent:persistent-task-2-parent: 
   persistent:persistent-task-2-parent: > persistent-task-2-parent
-  persistent:persistent-task-2-parent: > echo 'persistent-task-2-parent'
+  persistent:persistent-task-2-parent: > echo persistent-task-2-parent
   persistent:persistent-task-2-parent: 
   persistent:persistent-task-2-parent: persistent-task-2-parent
   
@@ -46,15 +44,11 @@ This test covers:
   $ ${TURBO} run persistent-task-3-parent --filter=persistent
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "persistent#persistent-task-3" is a persistent task, "persistent#persistent-task-3-parent" cannot depend on it
-  Turbo error: error preparing engine: Invalid persistent task configuration:
-  "persistent#persistent-task-3" is a persistent task, "persistent#persistent-task-3-parent" cannot depend on it
   [1]
 
 # persistent-task-4-parent dependsOn persistent-task-4
 # persistent-task-4 has no config in the root workspace, and is set to true in the workspace
   $ ${TURBO} run persistent-task-4-parent --filter=persistent
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
-  "persistent#persistent-task-4" is a persistent task, "persistent#persistent-task-4-parent" cannot depend on it
-  Turbo error: error preparing engine: Invalid persistent task configuration:
   "persistent#persistent-task-4" is a persistent task, "persistent#persistent-task-4-parent" cannot depend on it
   [1]

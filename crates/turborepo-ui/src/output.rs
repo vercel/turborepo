@@ -22,6 +22,8 @@ pub struct OutputClient<W> {
     // Any locals held across an await must implement Sync and RwLock lets us achieve this
     buffer: Option<RwLock<Vec<SinkBytes<'static>>>>,
     writers: Arc<Mutex<SinkWriters<W>>>,
+    header: Option<String>,
+    footer: Option<String>,
 }
 
 pub struct OutputWriter<'a, W> {
@@ -80,11 +82,18 @@ impl<W: Write> OutputSink<W> {
             behavior,
             buffer,
             writers,
+            header: None,
+            footer: None,
         }
     }
 }
 
 impl<W: Write> OutputClient<W> {
+    pub fn with_header_footer(&mut self, header: Option<String>, footer: Option<String>) {
+        self.header = header;
+        self.footer = footer;
+    }
+
     /// A writer that will write to the underlying sink's out writer according
     /// to this client's behavior.
     pub fn stdout(&self) -> OutputWriter<W> {
@@ -112,6 +121,8 @@ impl<W: Write> OutputClient<W> {
             behavior,
             buffer,
             writers,
+            header,
+            footer,
         } = self;
         let buffers = buffer.map(|cell| cell.into_inner().expect("lock poisoned"));
 
@@ -122,6 +133,9 @@ impl<W: Write> OutputClient<W> {
             // We hold the mutex until we write all of the bytes associated for the client
             // to ensure that the bytes aren't interspersed.
             let mut writers = writers.lock().expect("lock poisoned");
+            if let Some(prefix) = header {
+                writers.out.write_all(prefix.as_bytes())?;
+            }
             for SinkBytes {
                 buffer,
                 destination,
@@ -132,6 +146,9 @@ impl<W: Write> OutputClient<W> {
                     Destination::Stderr => &mut writers.err,
                 };
                 writer.write_all(buffer)?;
+            }
+            if let Some(suffix) = footer {
+                writers.out.write_all(suffix.as_bytes())?;
             }
         }
 

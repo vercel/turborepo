@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, path::Path, sync::Mutex};
+use std::{io::Stderr, marker::PhantomData, path::Path, sync::Mutex};
 
 use chrono::Local;
 use owo_colors::{
@@ -14,7 +14,7 @@ use tracing_subscriber::{
     fmt::{
         self,
         format::{DefaultFields, Writer},
-        FmtContext, FormatEvent, FormatFields,
+        FmtContext, FormatEvent, FormatFields, MakeWriter,
     },
     layer,
     prelude::*,
@@ -26,28 +26,40 @@ use turborepo_ui::UI;
 
 // a lot of types to make sure we record the right relationships
 
-/// A basic logger that logs to stdout using the TurboFormatter.
+/// Note that we cannot express the type of `std::io::stderr` directly, so
+/// use zero-size wrapper to call the function.
+struct StdErrWrapper {}
+
+impl<'a> MakeWriter<'a> for StdErrWrapper {
+    type Writer = Stderr;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        std::io::stderr()
+    }
+}
+
+/// A basic logger that logs to stderr using the TurboFormatter.
 /// The first generic parameter refers to the previous layer, which
 /// is in this case the default layer (`Registry`).
-type StdOutLog = fmt::Layer<Registry, DefaultFields, TurboFormatter>;
+type StdErrLog = fmt::Layer<Registry, DefaultFields, TurboFormatter, StdErrWrapper>;
 /// We filter this using an EnvFilter.
-type StdOutLogFiltered = Filtered<StdOutLog, EnvFilter, Registry>;
-/// When the `StdOutLogFiltered` is applied to the `Registry`, we get a
-/// `StdOutLogLayered`, which forms the base for the next layer.
-type StdOutLogLayered = layer::Layered<StdOutLogFiltered, Registry>;
+type StdErrLogFiltered = Filtered<StdErrLog, EnvFilter, Registry>;
+/// When the `StdErrLogFiltered` is applied to the `Registry`, we get a
+/// `StdErrLogLayered`, which forms the base for the next layer.
+type StdErrLogLayered = layer::Layered<StdErrLogFiltered, Registry>;
 
 /// A logger that spits lines into a file, using the standard formatter.
-/// It is applied on top of the `StdOutLogLayered` layer.
-type DaemonLog = fmt::Layer<StdOutLogLayered, DefaultFields, fmt::format::Format, NonBlocking>;
+/// It is applied on top of the `StdErrLogLayered` layer.
+type DaemonLog = fmt::Layer<StdErrLogLayered, DefaultFields, fmt::format::Format, NonBlocking>;
 /// This layer can be reloaded. `None` means the layer is disabled.
-type DaemonReload = reload::Layer<Option<DaemonLog>, StdOutLogLayered>;
+type DaemonReload = reload::Layer<Option<DaemonLog>, StdErrLogLayered>;
 /// We filter this using a custom filter that only logs events
 /// - with evel `TRACE` or higher for the `turborepo` target
 /// - with level `INFO` or higher for all other targets
-type DaemonLogFiltered = Filtered<DaemonReload, Targets, StdOutLogLayered>;
-/// When the `DaemonLogFiltered` is applied to the `StdOutLogLayered`, we get a
+type DaemonLogFiltered = Filtered<DaemonReload, Targets, StdErrLogLayered>;
+/// When the `DaemonLogFiltered` is applied to the `StdErrLogLayered`, we get a
 /// `DaemonLogLayered`, which forms the base for the next layer.
-type DaemonLogLayered = layer::Layered<DaemonLogFiltered, StdOutLogLayered>;
+type DaemonLogLayered = layer::Layered<DaemonLogFiltered, StdErrLogLayered>;
 
 /// A logger that converts events to chrome tracing format and writes them
 /// to a file. It is applied on top of the `DaemonLogLayered` layer.
@@ -61,7 +73,7 @@ type ChromeLogFiltered = Filtered<ChromeReload, EnvFilter, DaemonLogLayered>;
 type ChromeLogLayered = layer::Layered<ChromeLogFiltered, DaemonLogLayered>;
 
 pub struct TurboSubscriber {
-    daemon_update: Handle<Option<DaemonLog>, StdOutLogLayered>,
+    daemon_update: Handle<Option<DaemonLog>, StdErrLogLayered>,
 
     /// The non-blocking file logger only continues to log while this guard is
     /// held. We keep it here so that it doesn't get dropped.
@@ -75,7 +87,7 @@ pub struct TurboSubscriber {
 }
 
 impl TurboSubscriber {
-    /// Sets up the tracing subscriber, with a default stdout layer using the
+    /// Sets up the tracing subscriber, with a default stderr layer using the
     /// TurboFormatter.
     ///
     /// ## Logging behaviour:
@@ -118,7 +130,8 @@ impl TurboSubscriber {
             .with_default(Level::INFO)
             .with_target("turborepo", Level::TRACE);
 
-        let stdout = fmt::layer()
+        let stderr = fmt::layer()
+            .with_writer(StdErrWrapper {})
             .event_format(TurboFormatter::new_with_ansi(!ui.should_strip_ansi))
             .with_filter(env_filter());
 
@@ -130,7 +143,7 @@ impl TurboSubscriber {
         let chrome: ChromeLogFiltered = chrome.with_filter(env_filter());
 
         let registry = Registry::default()
-            .with(stdout)
+            .with(stderr)
             .with(logrotate)
             .with(chrome);
 

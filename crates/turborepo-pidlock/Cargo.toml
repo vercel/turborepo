@@ -21,6 +21,9 @@ include = [
 default = ["strict"]
 strict = []          # Warnings are errors
 
+[lints]
+workspace = true
+
 [dependencies]
 libc = "0.2.40"
 log = "0.4.1"

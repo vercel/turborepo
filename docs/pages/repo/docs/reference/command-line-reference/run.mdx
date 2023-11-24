@@ -159,10 +159,9 @@ turbo run build test lint --graph=my-graph.mermaid
 <Callout type="info">
   **Known Bug**: All possible pipeline task nodes will be added to the graph at
   the moment, even if that pipeline task does not actually exist in a given
-  workspace. This has no impact on execution, it means that 1) the terminal
-  output may overstate the number of workspaces in which a task is running and
-  2) your dot viz graph may contain additional nodes that represents tasks that
-  do not exist.
+  workspace. This has no impact on execution, it means that
+  1. the terminal output may overstate the number of workspaces in which a task is running
+  2. the dot viz graph may contain nodes that represent tasks that do not exist.
 </Callout>
 
 ### `--force`
@@ -234,7 +233,7 @@ Set type of task output order. Defaults to "auto" which lets
 | option  | description                               |
 | ------- | ----------------------------------------- |
 | auto    | Turbo decides based on its own heuristics |
-| stream  | show output as soon as it is available    |
+| stream  | Show output as soon as it is available    |
 | grouped | Show output grouped by task               |
 
 **Example**
