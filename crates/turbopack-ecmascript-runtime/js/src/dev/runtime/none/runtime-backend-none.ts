@@ -6,6 +6,7 @@
  */
 
 /// <reference path="../base/runtime-base.ts" />
+/// <reference path="../../../shared-node/node-utils.ts" />
 
 type ChunkRunner = {
   requiredChunks: Set<ChunkPath>;
@@ -15,8 +16,22 @@ type ChunkRunner = {
 
 let BACKEND: RuntimeBackend;
 
+type ExternalRequire = (
+  id: ModuleId,
+  esm?: boolean
+) => Exports | EsmNamespaceObject;
+type ExternalImport = (id: ModuleId) => Promise<Exports | EsmNamespaceObject>;
+
+interface TurbopackDevContext extends TurbopackDevBaseContext {
+  x: ExternalRequire;
+  y: ExternalImport;
+}
+
 function augmentContext(context: TurbopackDevBaseContext): TurbopackDevContext {
-  return context;
+  const nodejsContext = context as TurbopackDevContext;
+  nodejsContext.x = externalRequire;
+  nodejsContext.y = externalImport;
+  return nodejsContext;
 }
 
 function commonJsRequireContext(
@@ -36,14 +51,14 @@ async function loadWebAssembly(
 
 async function loadWebAssemblyModule(
   _source: SourceInfo,
-  _id: ModuleId,
+  _id: ModuleId
 ): Promise<any> {
   throw new Error("loading WebAssembly is not supported");
 }
 
 // [TODO] should this behaves same as dom runtime?
 function resolveAbsolutePath(modulePath?: string) {
-  throw new Error('resolveAbsolutePath is not implemented');
+  throw new Error("resolveAbsolutePath is not implemented");
 }
 
 (() => {
