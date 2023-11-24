@@ -5,9 +5,9 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "turbo build",
-    "dev": "turbo dev",
-    "lint": "turbo lint"
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint"
   },
   "devDependencies": {
     "eslint": "7.32.0",
@@ -15,5 +15,8 @@
     "prettier": "^2.5.1",
     "turbo": "^1.10.16"
   },
-  "packageManager": "yarn@3.6.3"
+  "packageManager": "yarn@3.6.3",
+  "engines": {
+    "node": ">=18"
+  }
 }
