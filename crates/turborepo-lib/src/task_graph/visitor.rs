@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use chrono::Local;
+use chrono::{DateTime, Local};
 use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
@@ -17,7 +17,7 @@ use tokio::{
 };
 use tracing::{debug, error, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_ci::{github_header_footer, VendorBehavior};
+use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_repository::{
     package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
@@ -29,8 +29,7 @@ use which::which;
 use crate::{
     cli::EnvMode,
     engine::{Engine, ExecutionOptions, StopExecution},
-    opts::{Opts, ResolvedLogOrder},
-    package_graph::{PackageGraph, WorkspaceName},
+    opts::Opts,
     process::{ChildExit, ProcessManager},
     run::{
         global_hash::GlobalHashableInputs,
@@ -245,7 +244,12 @@ impl<'a> Visitor<'a> {
                         execution_env,
                     );
 
-                    let output_client = self.output_client(&info);
+                    let task_start_time = Local::now();
+                    let vendor_behavior =
+                        Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
+
+                    let output_client =
+                        self.output_client(&info, vendor_behavior, &task_start_time);
                     let tracker = self.run_tracker.track_task(info.clone().into_owned());
                     let spaces_client = self.run_tracker.spaces_task_client();
                     let parent_span = Span::current();
@@ -340,7 +344,12 @@ impl<'a> Visitor<'a> {
         OutputSink::new(out, err)
     }
 
-    fn output_client(&self, task_id: &TaskId) -> OutputClient<impl std::io::Write> {
+    fn output_client(
+        &self,
+        task_id: &TaskId,
+        vendor_behavior: Option<&VendorBehavior>,
+        task_start_time: &DateTime<Local>,
+    ) -> OutputClient<impl std::io::Write> {
         let behavior = match self.opts.run_opts.log_order {
             crate::opts::ResolvedLogOrder::Stream if self.run_tracker.spaces_enabled() => {
                 turborepo_ui::OutputClientBehavior::InMemoryBuffer
@@ -352,13 +361,16 @@ impl<'a> Visitor<'a> {
         };
 
         let mut logger = self.sink.logger(behavior);
-        if self.opts.run_opts.is_github_actions {
-            let package = if self.opts.run_opts.single_package {
-                None
+        if let Some(vendor_behavior) = vendor_behavior {
+            let group_name = if self.opts.run_opts.single_package {
+                ""
             } else {
-                Some(task_id.package())
+                task_id.package()
             };
-            let (header, footer) = github_header_footer(package, task_id.task());
+            let (header, footer) = (
+                (vendor_behavior.group_prefix)(group_name, task_start_time),
+                (vendor_behavior.group_suffix)(group_name, task_start_time),
+            );
             logger.with_header_footer(Some(header), Some(footer));
         }
         logger
