@@ -170,19 +170,6 @@ impl CommandBase {
             .map_err(ConfigError::ApiClient)
     }
 
-    pub fn daemon_file_root(&self) -> AbsoluteSystemPathBuf {
-        AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
-            .expect("temp dir is valid")
-            .join_component("turbod")
-            .join_component(self.repo_hash().as_str())
-    }
-
-    fn repo_hash(&self) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(self.repo_root.as_bytes());
-        hex::encode(&hasher.finalize()[..8])
-    }
-
     /// Current working directory for the turbo command
     pub fn cwd(&self) -> &AbsoluteSystemPath {
         // Earlier in execution
@@ -192,8 +179,45 @@ impl CommandBase {
         &self.repo_root
     }
 
+    pub fn daemon_file_root(&self) -> AbsoluteSystemPathBuf {
+        DaemonRootHasher(&self.repo_root).daemon_file_root()
+    }
+
+    fn repo_hash(&self) -> String {
+        DaemonRootHasher(&self.repo_root).repo_hash()
+    }
+
     pub fn version(&self) -> &'static str {
         self.version
+    }
+}
+
+pub struct DaemonRootHasher<'a>(&'a AbsoluteSystemPath);
+
+impl<'a> DaemonRootHasher<'a> {
+    pub fn new(repo_root: &'a AbsoluteSystemPath) -> Self {
+        Self(repo_root)
+    }
+
+    pub fn daemon_file_root(&self) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::new(std::env::temp_dir().to_str().expect("UTF-8 path"))
+            .expect("temp dir is valid")
+            .join_component("turbod")
+            .join_component(self.repo_hash().as_str())
+    }
+
+    pub fn sock_path(&self) -> AbsoluteSystemPathBuf {
+        self.daemon_file_root().join_component("turbod.sock")
+    }
+
+    pub fn lock_path(&self) -> AbsoluteSystemPathBuf {
+        self.daemon_file_root().join_component("turbod.pid")
+    }
+
+    fn repo_hash(&self) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(self.0.as_bytes());
+        hex::encode(&hasher.finalize()[..8])
     }
 }
 

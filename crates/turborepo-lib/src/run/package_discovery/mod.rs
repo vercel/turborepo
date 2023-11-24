@@ -6,6 +6,7 @@ use turborepo_repository::discovery::{DiscoveryResponse, Error, PackageDiscovery
 
 use crate::daemon::{proto::PackageManager, DaemonClient, FileWatching};
 
+#[derive(Debug)]
 pub struct DaemonPackageDiscovery<'a, C: Clone> {
     daemon: &'a mut DaemonClient<C>,
 }
