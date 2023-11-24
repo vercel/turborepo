@@ -1,4 +1,10 @@
 module.exports = {
   root: true,
-  extends: ["@repo/eslint-config/index.js"],
+  // This tells ESLint to load the config from the package `eslint-config-custom`
+  extends: ["custom"],
+  settings: {
+    next: {
+      rootDir: ["apps/*/"],
+    },
+  },
 };
