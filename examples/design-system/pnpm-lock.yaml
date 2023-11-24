@@ -84,6 +84,9 @@ importers:
       eslint-plugin-mdx:
         specifier: ^2.2.0
         version: 2.2.0(eslint@8.54.0)
+      eslint-plugin-only-warn:
+        specifier: ^1.1.0
+        version: 1.1.0
       eslint-plugin-storybook:
         specifier: ^0.6.13
         version: 0.6.13(eslint@8.54.0)(typescript@5.3.2)
@@ -6384,6 +6387,11 @@ packages:
       vfile: 5.3.7
     transitivePeerDependencies:
       - supports-color
+    dev: true
+
+  /eslint-plugin-only-warn@1.1.0:
+    resolution: {integrity: sha512-2tktqUAT+Q3hCAU0iSf4xAN1k9zOpjK5WO8104mB0rT/dGhOa09582HN5HlbxNbPRZ0THV7nLGvzugcNOSjzfA==}
+    engines: {node: '>=6'}
     dev: true
 
   /eslint-plugin-playwright@0.16.0(eslint-plugin-jest@27.2.3)(eslint@8.54.0):

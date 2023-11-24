@@ -20,6 +20,7 @@ module.exports = {
   parserOptions: {
     project,
   },
+  plugins: ["only-warn"],
   globals: {
     JSX: true,
   },
