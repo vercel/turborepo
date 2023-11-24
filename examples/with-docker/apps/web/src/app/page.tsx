@@ -1,7 +1,7 @@
 "use client";
 
+import { Button } from "@repo/ui/button";
 import { useEffect, useState } from "react";
-import { Button } from "ui";
 
 const API_HOST = process.env.NEXT_PUBLIC_API_HOST || "http://localhost:3001";
 
