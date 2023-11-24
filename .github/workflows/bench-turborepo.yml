@@ -17,7 +17,7 @@ on:
 
 jobs:
   benchmark:
-    name: Run Benchmarks
+    name: Benchmark turbo run
     timeout-minutes: 60
     runs-on: ubuntu-latest
 
@@ -42,7 +42,7 @@ jobs:
         run: |
           curl \
             -i \
-            -F "ndjson=@./benchmark/tinybird.ndjson" \
+            -F "ndjson=@./packages/turbo-benchmark/tinybird.ndjson" \
             -X POST \
             -H 'Authorization: Bearer ${{ secrets.TINYBIRD_TOKEN }}' \
             'https://api.us-east.tinybird.co/v0/datasources?format=ndjson&name=turbo_benchmarks&mode=append'
@@ -101,8 +101,8 @@ jobs:
           if-no-files-found: error
           # cwd is root of the repository, so we need the benchmark/ prefixed path
           path: |
-            benchmark/${{ steps.filename.outputs.filename }}
-            benchmark/${{ steps.filename.outputs.file_basename }}-ttft.json
+            packages/turbo-benchmark/profiles/${{ steps.filename.outputs.filename }}
+            packages/turbo-benchmark/profiles/${{ steps.filename.outputs.file_basename }}-ttft.json
 
   # Send each of the profiles generated from the previous job to TinyBird
   # We'll wait for all profiles to complete before sending.
@@ -122,23 +122,21 @@ jobs:
       - name: Download profiles
         uses: actions/download-artifact@v3
         with:
-          path: benchmark
-
-      - name: List Downloaded Profiles
-        shell: bash
-        run: ls benchmark/profiles
+          name: profiles
+          path: packages/turbo-benchmark/profiles/
 
       - name: Display TTFT Data
         shell: bash
         run: |
-          cat benchmark/profiles/ubuntu-ttft.json
-          cat benchmark/profiles/macos-ttft.json
-          cat benchmark/profiles/windows-ttft.json
+          ls -al packages/turbo-benchmark/profiles
+          cat packages/turbo-benchmark/profiles/ubuntu-ttft.json
+          cat packages/turbo-benchmark/profiles/macos-ttft.json
+          cat packages/turbo-benchmark/profiles/windows-ttft.json
 
       - name: Send data to TinyBird
         shell: bash
         run: |
-          cd benchmark
+          cd packages/turbo-benchmark
           node -r esbuild-register ./src/ttft/tinybird.ts profiles/ubuntu-ttft.json ${{github.run_id}}
           node -r esbuild-register ./src/ttft/tinybird.ts profiles/macos-ttft.json ${{github.run_id}}
           node -r esbuild-register ./src/ttft/tinybird.ts profiles/windows-ttft.json ${{github.run_id}}
@@ -156,33 +154,31 @@ jobs:
       - name: Download profiles
         uses: actions/download-artifact@v3
         with:
-          path: benchmark
+          name: profiles
+          path: packages/turbo-benchmark/profiles/
 
-      - name: List downloaded profiles
-        shell: bash
-        run: ls benchmark/profiles
-
-      - name: Display TTFT data
+      - name: Display TTFT Data
         shell: bash
         run: |
-          cat benchmark/profiles/ubuntu-ttft.json
-          cat benchmark/profiles/macos-ttft.json
-          cat benchmark/profiles/windows-ttft.json
+          ls -al packages/turbo-benchmark/profiles
+          cat packages/turbo-benchmark/profiles/ubuntu-ttft.json
+          cat packages/turbo-benchmark/profiles/macos-ttft.json
+          cat packages/turbo-benchmark/profiles/windows-ttft.json
 
       # TODO: compare results to previous data and only post regressions
       - name: Create Slack payload
         shell: bash
         run: |
-          cd benchmark
+          cd packages/turbo-benchmark
           node -r esbuild-register ./src/ttft/slack.ts ${{github.run_id}}
 
       - name: Debug Slack payload
         shell: bash
-        run: cat benchmark/slack-payload.json | jq
+        run: cat packages/turbo-benchmark/slack-payload.json | jq
 
       - name: Send payload to slack
         uses: slackapi/slack-github-action@v1.23.0
         with:
-          payload-file-path: "benchmark/slack-payload.json"
+          payload-file-path: "packages/turbo-benchmark/slack-payload.json"
         env:
           SLACK_WEBHOOK_URL: "${{ secrets.TURBOREPO_PERF_BENCHMARK_SLACK_WEBHOOK_URL }}"

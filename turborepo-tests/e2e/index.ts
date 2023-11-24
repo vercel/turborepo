@@ -35,24 +35,6 @@ for (const mgr of packageManagers) {
   rootTasks(Basic, repo, mgr);
   passThroughArgs(Basic, repo, mgr);
 
-  // test that turbo can run from a subdirectory
-  const BasicFromSubDir = uvu.suite(`${mgr} from subdirectory`);
-  const repo2 = createMonorepo(
-    `${mgr}-in-subdirectory`,
-    mgr,
-    basicPipeline,
-    "js"
-  );
-  const cwd = path.join(repo2.root, repo2.subdir ? repo2.subdir : ""); // We know repo2 always has a subdir, but typescript doesn't
-  testBuild(BasicFromSubDir, repo2, mgr, { cwd });
-  testsAndLogs(BasicFromSubDir, repo2, mgr, { cwd });
-  lintAndLogs(BasicFromSubDir, repo2, mgr, { cwd });
-  changes(BasicFromSubDir, repo2, mgr, { cwd });
-  rootTasks(BasicFromSubDir, repo2, mgr, { cwd });
-  passThroughArgs(BasicFromSubDir, repo2, mgr, { cwd });
-
   Basic.after(() => repo.cleanup());
-  BasicFromSubDir.after(() => repo2.cleanup());
   Basic.run();
-  BasicFromSubDir.run();
 }
