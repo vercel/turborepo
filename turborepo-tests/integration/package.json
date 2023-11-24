@@ -1,7 +1,7 @@
 {
   "name": "turborepo-tests-integration",
   "scripts": {
-    "test": "cross-env EXPERIMENTAL_RUST_CODEPATH=false node ./test.mjs",
+    "test": "cross-env EXPERIMENTAL_RUST_CODEPATH=false node ./test.mjs run/absolute-path-warning.t",
     "test:rust-codepath": "cross-env EXPERIMENTAL_RUST_CODEPATH=true node ./test.mjs",
     "test:interactive": "EXPERIMENTAL_RUST_CODEPATH=false PRYSK_INTERACTIVE=true node ./test.mjs",
     "test:parallel": ".cram_env/bin/pytest -n auto tests --prysk-shell=`which bash`",
