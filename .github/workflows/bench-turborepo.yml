@@ -158,11 +158,12 @@ jobs:
       - name: Download profiles
         uses: actions/download-artifact@v3
         with:
-          path: benchmark
+          name: profiles
+          path: packages/turbo-benchmark/profiles/
 
-      - name: List downloaded profiles
+      - name: List Downloaded Profiles
         shell: bash
-        run: ls benchmark/profiles
+        run: ls packages/turbo-benchmark/profiles
 
       - name: Display TTFT data
         shell: bash
