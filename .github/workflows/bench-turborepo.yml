@@ -125,10 +125,6 @@ jobs:
           name: profiles
           path: packages/turbo-benchmark/profiles/
 
-      - name: List Downloaded Profiles
-        shell: bash
-        run: ls packages/turbo-benchmark/profiles
-
       - name: Display TTFT Data
         shell: bash
         run: |
@@ -160,10 +156,6 @@ jobs:
         with:
           name: profiles
           path: packages/turbo-benchmark/profiles/
-
-      - name: List Downloaded Profiles
-        shell: bash
-        run: ls packages/turbo-benchmark/profiles
 
       - name: Display TTFT Data
         shell: bash
