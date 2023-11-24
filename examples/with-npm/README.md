@@ -7,12 +7,12 @@ This is an official starter Turborepo.
 Run the following command:
 
 ```sh
-npx create-turbo@latest
+npx create-turbo@latest -e with-npm
 ```
 
 ## What's inside?
 
-This Turborepo includes the following packages/apps:
+This Turborepo uses [npm](https://www.npmjs.com/) as a packages manager. It includes the following packages/apps:
 
 ### Apps and Packages
 
@@ -38,7 +38,7 @@ To build all apps and packages, run the following command:
 
 ```
 cd my-turborepo
-pnpm build
+npm run build
 ```
 
 ### Develop
@@ -47,7 +47,7 @@ To develop all apps and packages, run the following command:
 
 ```
 cd my-turborepo
-pnpm dev
+npm run dev
 ```
 
 ### Remote Caching
