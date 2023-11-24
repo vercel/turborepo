@@ -25,20 +25,17 @@ interface MonorepoOptions {
   root: string;
   pm: PackageManager;
   pipeline: any;
-  subdir?: string;
 }
 
 export function createMonorepo(
   name: string,
   pkgManager: PackageManager,
-  pipeline: any,
-  subdir?: string
+  pipeline: any
 ): Monorepo {
   const repo = new Monorepo({
     root: name,
     pm: pkgManager,
     pipeline,
-    subdir,
   });
   repo.init();
   repo.install();
@@ -53,16 +50,13 @@ export class Monorepo {
   static tmpdir = os.tmpdir();
   static yarnCache = path.join(__dirname, "yarn-cache-");
   root: string;
-  subdir?: string;
   turboConfig: any;
   // @ts-ignore-next-line
   name: string;
   npmClient: PackageManager;
 
   get nodeModulesPath() {
-    return this.subdir
-      ? path.join(this.root, this.subdir, "node_modules")
-      : path.join(this.root, "node_modules");
+    return path.join(this.root, "node_modules");
   }
 
   constructor(options: MonorepoOptions) {
@@ -71,16 +65,11 @@ export class Monorepo {
     );
     this.npmClient = options.pm;
     this.turboConfig = options.pipeline;
-    this.subdir = options.subdir;
   }
 
   init() {
     fs.removeSync(path.join(this.root, ".git"));
     fs.ensureDirSync(path.join(this.root, ".git"));
-
-    if (this.subdir) {
-      fs.ensureDirSync(path.join(this.root, this.subdir));
-    }
 
     fs.writeFileSync(
       path.join(this.root, ".git", "config"),
@@ -120,7 +109,7 @@ export class Monorepo {
   }
 
   _linkNpmPackages() {
-    const cwd = this.subdir ? path.join(this.root, this.subdir) : this.root;
+    const cwd = this.root;
     this.updatePackageManagerInPackageJson(cwd);
     execa.sync("npm", ["install"], { cwd });
     this.commitAll();
@@ -130,7 +119,7 @@ export class Monorepo {
    * Simulates a "yarn" call by linking internal packages and generates a yarn.lock file
    */
   _linkPnpmPackages() {
-    const cwd = this.subdir ? path.join(this.root, this.subdir) : this.root;
+    const cwd = this.root;
 
     this.updatePackageManagerInPackageJson(cwd);
 
@@ -166,7 +155,7 @@ importers:
    * Simulates a "yarn" call by linking internal packages and generates a yarn.lock file
    */
   _linkYarnPackages() {
-    const cwd = this.subdir ? path.join(this.root, this.subdir) : this.root;
+    const cwd = this.root;
     const pkgs = fs.readdirSync(path.join(cwd, "packages"));
 
     this.updatePackageManagerInPackageJson(cwd);
@@ -326,10 +315,7 @@ fs.copyFileSync(
         out = contents;
       }
 
-      const fullPath =
-        this.subdir != null
-          ? path.join(this.root, this.subdir, file)
-          : path.join(this.root, file);
+      const fullPath = path.join(this.root, file);
 
       if (!fs.existsSync(path.dirname(fullPath))) {
         fs.mkdirSync(path.dirname(fullPath), { recursive: true });
@@ -343,14 +329,7 @@ fs.copyFileSync(
     this.modifyFiles(files);
     execa.sync(
       "git",
-      [
-        "add",
-        ...Object.keys(files).map((f) =>
-          this.subdir != null
-            ? path.join(this.root, this.subdir, f)
-            : path.join(this.root, f)
-        ),
-      ],
+      ["add", ...Object.keys(files).map((f) => path.join(this.root, f))],
       {
         cwd: this.root,
       }
