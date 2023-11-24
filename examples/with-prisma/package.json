@@ -9,14 +9,14 @@
     "seed": "tsx packages/database/src/seed.ts"
   },
   "scripts": {
-    "build": "turbo build",
-    "db:migrate:deploy": "turbo db:migrate:deploy",
-    "db:push": "turbo db:push",
-    "db:seed": "turbo db:seed",
-    "dev": "turbo dev",
+    "build": "turbo run build",
+    "db:migrate:deploy": "turbo run db:migrate:deploy",
+    "db:push": "turbo run db:push",
+    "db:seed": "turbo run db:seed",
+    "dev": "turbo run dev",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "generate": "turbo generate",
-    "lint": "turbo lint"
+    "generate": "turbo run generate",
+    "lint": "turbo run lint"
   },
   "devDependencies": {
     "@repo/eslint-config": "*",
