@@ -2,10 +2,10 @@ use chrono::{DateTime, Local};
 
 type GroupPrefixFn = fn(group_name: &str, time: DateTime<Local>) -> String;
 
-#[derive(Clone, Default, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VendorBehavior {
-    pub group_prefix: Option<GroupPrefixFn>,
-    pub group_suffix: Option<GroupPrefixFn>,
+    pub group_prefix: GroupPrefixFn,
+    pub group_suffix: GroupPrefixFn,
 }
 
 impl VendorBehavior {
@@ -15,9 +15,9 @@ impl VendorBehavior {
         task_start_time: DateTime<Local>,
     ) -> Option<String> {
         return vendor_behavior.and_then(|vendor_behavior| {
-            vendor_behavior
-                .group_prefix
-                .map(|f| f(task_prefix, task_start_time))
+            let factory = vendor_behavior.group_prefix;
+
+            Some(factory(task_prefix, task_start_time))
         });
     }
 
@@ -27,9 +27,9 @@ impl VendorBehavior {
         task_finish_time: DateTime<Local>,
     ) -> Option<String> {
         return vendor_behavior.and_then(|vendor_behavior| {
-            vendor_behavior
-                .group_suffix
-                .map(|f| f(task_prefix, task_finish_time))
+            let factory = vendor_behavior.group_suffix;
+
+            Some(factory(task_prefix, task_finish_time))
         });
     }
 }

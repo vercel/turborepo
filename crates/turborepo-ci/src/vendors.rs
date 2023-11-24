@@ -78,8 +78,8 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     branch_env_var: None,
                     username_env_var: None,
                     behavior: Some(VendorBehavior {
-                        group_prefix: Some(|group_name, _| format!("##[group]{group_name}\r\n")),
-                        group_suffix: Some(|_, _| String::from("##[endgroup]\r\n")),
+                        group_prefix: |group_name, _| format!("##[group]{group_name}\r\n"),
+                        group_suffix: |_, _| String::from("##[endgroup]\r\n"),
                     }),
                 },
                 Vendor {
@@ -267,8 +267,8 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     branch_env_var: Some("GITHUB_REF_NAME"),
                     username_env_var: Some("GITHUB_ACTOR"),
                     behavior: Some(VendorBehavior {
-                        group_prefix: Some(|group_name, _| format!("::group::{group_name}")),
-                        group_suffix: Some(|_, _| String::from("::endgroup::")),
+                        group_prefix: |group_name, _| format!("::group::{group_name}"),
+                        group_suffix: |_, _| String::from("::endgroup::"),
                     }),
                 },
                 Vendor {
@@ -283,17 +283,17 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     branch_env_var: None,
                     username_env_var: None,
                     behavior: Some(VendorBehavior {
-                        group_prefix: Some(|group_name, task_start_time| {
+                        group_prefix: |group_name, task_start_time| {
                             let unix_timestamp = task_start_time.timestamp();
                             return format!(
                                 "\\e[0Ksection_start:{unix_timestamp}:{group_name}\\r\\\
                                  e[0K{group_name}"
                             );
-                        }),
-                        group_suffix: Some(|group_name, task_end_time| {
+                        },
+                        group_suffix: |group_name, task_end_time| {
                             let unix_timestamp = task_end_time.timestamp();
                             format!("\\e[0Ksection_end:{unix_timestamp}:{group_name}\\r\\e[0K")
-                        }),
+                        },
                     }),
                 },
                 Vendor {
@@ -559,12 +559,12 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     branch_env_var: None,
                     username_env_var: None,
                     behavior: Some(VendorBehavior {
-                        group_prefix: Some(|group_name, _| {
+                        group_prefix: |group_name, _| {
                             format!("##teamcity[blockOpened name='{group_name}']")
-                        }),
-                        group_suffix: Some(|group_name, _| {
+                        },
+                        group_suffix: |group_name, _| {
                             format!("##teamcity[blockClosed name='{group_name}']")
-                        }),
+                        },
                     }),
                 },
                 Vendor {
@@ -579,12 +579,8 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                     branch_env_var: None,
                     username_env_var: None,
                     behavior: Some(VendorBehavior {
-                        group_prefix: Some(|group_name, _| {
-                            format!("travis_fold:start:{group_name}\r\n")
-                        }),
-                        group_suffix: Some(|group_name, _| {
-                            format!("travis_fold:end:{group_name}\r\n")
-                        }),
+                        group_prefix: |group_name, _| format!("travis_fold:start:{group_name}\r\n"),
+                        group_suffix: |group_name, _| format!("travis_fold:end:{group_name}\r\n"),
                     }),
                 },
                 Vendor {
