@@ -25,6 +25,9 @@ pub struct ResolveOptionsContext {
     #[serde(default)]
     pub enable_node_native_modules: bool,
     #[serde(default)]
+    // Enable resolving of .mjs files without the .mjs extension
+    pub enable_mjs_extension: bool,
+    #[serde(default)]
     /// Enable resolving of the node_modules folder when within the provided
     /// directory
     pub enable_node_modules: Option<Vc<FileSystemPath>>,
@@ -32,6 +35,9 @@ pub struct ResolveOptionsContext {
     /// Mark well-known Node.js modules as external imports and load them using
     /// native `require`. e.g. url, querystring, os
     pub enable_node_externals: bool,
+    /// Mark well-known Edge modules as external imports and load them using
+    /// native `require`. e.g. buffer, events, assert
+    pub enable_edge_node_externals: bool,
     #[serde(default)]
     /// Enables the "browser" field and export condition in package.json
     pub browser: bool,
