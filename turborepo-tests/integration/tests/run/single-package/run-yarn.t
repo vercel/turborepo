@@ -3,6 +3,8 @@ Setup
   $ . ${TESTDIR}/../../_helpers/setup_monorepo.sh $(pwd) single_package "yarn@1.22.17"
   $ rm -rf package-lock.json || true # exists because of setup.sh script above
   $ yarn install > /dev/null 2>&1
+Run dos2unix on Windows for newly generated lockfile.
+  $ if [[ "$OSTYPE" == "msys" ]]; then dos2unix --quiet yarn.lock; fi
   $ git commit --quiet -am "Update lockfile" # clean git state
 
 Check
@@ -19,7 +21,6 @@ Check
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
   
-
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

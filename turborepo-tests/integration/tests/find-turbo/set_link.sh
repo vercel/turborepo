@@ -3,7 +3,11 @@
 TARGET_DIR=$1
 TURBO_PATH=$2
 
-FILES=$(find $TARGET_DIR -type f -name turbo)
+if [[ "$OSTYPE" == "msys" ]]; then
+  FILES=$(find $TARGET_DIR -type f -name turbo.exe)
+else
+  FILES=$(find $TARGET_DIR -type f -name turbo)
+fi
 
 for FILE in $FILES
 do

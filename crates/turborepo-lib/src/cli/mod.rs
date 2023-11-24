@@ -106,6 +106,10 @@ pub struct Args {
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
     pub cwd: Option<Utf8PathBuf>,
+    /// Fallback to use Go for task execution
+    #[serde(skip)]
+    #[clap(long, global = true)]
+    pub go_fallback: bool,
     /// Specify a file to save a pprof heap profile
     #[clap(long, global = true, value_parser)]
     pub heap: Option<String>,
@@ -336,7 +340,7 @@ pub enum Command {
         #[clap(short = 'r', long)]
         root: Option<String>,
         /// Answers passed directly to generator
-        #[clap(short = 'a', long, value_delimiter = ' ', num_args = 1..)]
+        #[clap(short = 'a', long, num_args = 1..)]
         args: Vec<String>,
 
         #[clap(subcommand)]
@@ -821,12 +825,14 @@ pub async fn run(
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
-            if env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("true") {
+            let should_use_go = cli_args.go_fallback
+                || env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false");
+            if should_use_go {
+                Ok(Payload::Go(Box::new(base)))
+            } else {
                 use crate::commands::run;
                 let exit_code = run::run(base).await?;
                 Ok(Payload::Rust(Ok(exit_code)))
-            } else {
-                Ok(Payload::Go(Box::new(base)))
             }
         }
         Command::Prune {

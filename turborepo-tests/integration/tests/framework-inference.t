@@ -34,4 +34,4 @@ Confirm that the right values appear in the run summary when framework inference
   $ cat output.json | jq -r '.frameworkInference'
   false
   $ cat output.json | jq -r '.tasks[].framework'
-  <FRAMEWORK DETECTION SKIPPED>
+  

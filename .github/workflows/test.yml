@@ -320,7 +320,58 @@ jobs:
             runner: ubuntu-latest
           - name: macos
             runner: macos-latest
+          # Enable this once all tests on windows are passing (rememeber to copy over crlf fix from turborepo_integration_windows)
+          # - name: winodws
+          #   runner: windows-latest
     steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
+      - name: Cache Prysk
+        id: cache-prysk
+        uses: actions/cache@v3
+        with:
+          path: cli/.cram_env
+          key: prysk-venv-${{ matrix.os.name }}
+
+      - name: Integration Tests
+        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
+
+  # This is the same as turborepo_integration, but it runs on windows.
+  # Separate entry so it's not required for merge.
+  turborepo_integration_windows:
+    name: Turborepo Integration Tests (Windows)
+    needs: [determine_jobs, build_turborepo]
+    if: needs.determine_jobs.outputs.turborepo_integration == 'true'
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+    steps:
+      # On Windows, set autocrlf to input so that when the repo is cloned down
+      # the fixtures retain their line endings and don't get updated to CRLF.
+      # We want this because this repo also contains the fixtures for our test cases
+      # and these fixtures have files that need stable file hashes. If we let git update
+      # the line endings on checkout, the file hashes will change.
+      # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
+      - name: set crlf
+        if: matrix.os.name == 'windows'
+        shell: bash
+        run: git config --global core.autocrlf input
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
@@ -354,13 +405,21 @@ jobs:
           # TODO: enable macos when --experimental-rust-codepath is passing all tests on ubuntu
           # - name: macos
           #   runner: macos-latest
+          # TODO: Enable windows in a later pass
+          # - name: windows
+          #   runner: windows-latest
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
           target: ${{ matrix.os.name }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
       - name: Cache Prysk
         id: cache-prysk
         uses: actions/cache@v3

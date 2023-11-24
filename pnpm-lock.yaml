@@ -759,6 +759,8 @@ importers:
         specifier: ^4.5.5
         version: 4.9.4
 
+  packages/turbo-exe-stub: {}
+
   packages/turbo-gen:
     dependencies:
       '@turbo/workspaces':
@@ -1216,6 +1218,9 @@ importers:
       '@types/node':
         specifier: ^20.8.5
         version: 20.8.5
+      cross-env:
+        specifier: ^7.0.3
+        version: 7.0.3
       typescript:
         specifier: ^5.2.2
         version: 5.2.2
@@ -1224,9 +1229,16 @@ importers:
 
   turborepo-tests/integration:
     dependencies:
+      '@turbo/exe-stub':
+        specifier: workspace:*
+        version: link:../../packages/turbo-exe-stub
       turborepo-tests-helpers:
         specifier: workspace:*
         version: link:../helpers
+    devDependencies:
+      cross-env:
+        specifier: ^7.0.3
+        version: 7.0.3
 
 packages:
 

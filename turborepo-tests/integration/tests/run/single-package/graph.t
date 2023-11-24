@@ -13,4 +13,9 @@ Graph
   \t} (esc)
   }
   
-
+Graph file
+  $ ${TURBO} build --graph=graph.dot
+  
+  .*Generated task graph in .*graph\.dot.* (re)
+  $ cat graph.dot | grep -o "\"[^\"]*\" -> \"[^\"]*\""
+  "[root] build" -> "[root] ___ROOT___"
