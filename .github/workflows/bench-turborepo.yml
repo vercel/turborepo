@@ -165,12 +165,13 @@ jobs:
         shell: bash
         run: ls packages/turbo-benchmark/profiles
 
-      - name: Display TTFT data
+      - name: Display TTFT Data
         shell: bash
         run: |
-          cat benchmark/profiles/ubuntu-ttft.json
-          cat benchmark/profiles/macos-ttft.json
-          cat benchmark/profiles/windows-ttft.json
+          ls -al packages/turbo-benchmark/profiles
+          cat packages/turbo-benchmark/profiles/ubuntu-ttft.json
+          cat packages/turbo-benchmark/profiles/macos-ttft.json
+          cat packages/turbo-benchmark/profiles/windows-ttft.json
 
       # TODO: compare results to previous data and only post regressions
       - name: Create Slack payload
