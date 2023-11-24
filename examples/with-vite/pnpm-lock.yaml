@@ -23,7 +23,7 @@ importers:
 
   apps/docs:
     dependencies:
-      ui:
+      '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
@@ -45,7 +45,7 @@ importers:
 
   apps/web:
     dependencies:
-      ui:
+      '@repo/ui':
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
