@@ -11,19 +11,19 @@
     "start": "next start"
   },
   "dependencies": {
-    "logger": "workspace:*",
+    "@repo/logger": "workspace:*",
     "next": "^14.0.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "ui": "workspace:*"
+    "@repo/ui": "workspace:*"
   },
   "devDependencies": {
     "@next/eslint-plugin-next": "^14.0.3",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.38",
     "@types/react-dom": "^18.2.17",
-    "eslint-config-custom": "workspace:*",
-    "tsconfig": "workspace:*",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
     "typescript": "^5.3.2"
   }
 }

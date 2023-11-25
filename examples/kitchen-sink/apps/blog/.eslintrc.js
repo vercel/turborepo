@@ -1,3 +1,3 @@
 module.exports = {
-  extends: ["custom/remix"],
+  extends: ["@repo/eslint-config/remix.js"],
 };
