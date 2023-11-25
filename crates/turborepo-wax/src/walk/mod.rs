@@ -992,6 +992,23 @@ mod tests {
         Glob,
     };
 
+    macro_rules! assert_set_eq {
+        ($left:expr, $right:expr $(,)?) => {{
+            match (&$left, &$right) {
+                (left, right) if !(*left == *right) => {
+                    let lrdiff: Vec<_> = left.difference(right).collect();
+                    let rldiff: Vec<_> = right.difference(left).collect();
+                    panic!(
+                        "assertion `left == right` failed\nleft: {:#?}\nright: {:#?}\nleft - \
+                         right: {:#?}\nright - left: {:#?}",
+                        left, right, lrdiff, rldiff,
+                    )
+                }
+                _ => {}
+            }
+        }};
+    }
+
     /// Writes a testing directory tree to a temporary location on the file
     /// system.
     fn temptree() -> (TempDir, PathBuf) {

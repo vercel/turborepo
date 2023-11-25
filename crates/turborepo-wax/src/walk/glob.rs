@@ -447,24 +447,7 @@ impl FilterAny {
             .into_iter()
             .partition::<Vec<_>, _>(|tree| token::is_exhaustive(tree.as_ref().tokens()));
         Ok(FilterAny {
-            // TODO: This kind of expression is a bit unfortunate. `FilterAnyProgram` is necessary,
-            //       because empty token sequences yield the regular expression `^()$`, which
-            //       matches empty strings and therefore empty `CandidatePath`s. Note that
-            //       sometimes the relative path of an `Entry` is empty (when the entry represents
-            //       the root). Alternatively, a program type that bypasses `Regex` and matches
-            //       nothing when it is empty could be used instead. Then there would be no need to
-            //       match against only non-empty patterns.
-            program: match (exhaustive.is_empty(), nonexhaustive.is_empty()) {
-                (false, false) => FilterAnyProgram::Partitioned {
-                    exhaustive: crate::any(exhaustive)?.program,
-                    nonexhaustive: crate::any(nonexhaustive)?.program,
-                },
-                (false, true) => FilterAnyProgram::Exhaustive(crate::any(exhaustive)?.program),
-                (true, false) => {
-                    FilterAnyProgram::Nonexhaustive(crate::any(nonexhaustive)?.program)
-                }
-                (true, true) => FilterAnyProgram::Empty,
-            },
+            program: FilterAnyProgram::from_partitions(exhaustive, nonexhaustive)?,
         })
     }
 
