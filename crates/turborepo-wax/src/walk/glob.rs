@@ -6,6 +6,7 @@ use std::{
 use itertools::Itertools;
 use regex::Regex;
 
+use super::SplitAtDepth;
 use crate::{
     capture::MatchedText,
     encode::CompileError,
@@ -44,7 +45,7 @@ impl<'t> Glob<'t> {
     /// like `.` and `..` that precede variant patterns interact with the
     /// base directory semantically. This means that expressions like
     /// `../**` escape the base directory as expected on Unix and Windows, for
-    /// example.
+    /// example. To query the root directory of the walk, see [`Glob::walker`].
     ///
     /// This function uses the default [`WalkBehavior`]. To configure the
     /// behavior of the traversal, see [`Glob::walk_with_behavior`].
@@ -89,6 +90,7 @@ impl<'t> Glob<'t> {
     ///
     /// [`Any`]: crate::Any
     /// [`Glob::walk_with_behavior`]: crate::Glob::walk_with_behavior
+    /// [`Glob::walker`]: crate::Glob::walker
     /// [`GlobEntry`]: crate::walk::GlobEntry
     /// [`has_root`]: crate::Glob::has_root
     /// [`FileIterator`]: crate::walk::FileIterator
@@ -158,14 +160,36 @@ impl<'t> Glob<'t> {
         self.walker(directory).walk_with_behavior(behavior)
     }
 
-    fn walker(&self, directory: impl Into<PathBuf>) -> GlobWalker {
+    /// Gets an iterator builder over matching files in a directory tree.
+    ///
+    /// This function gets an intermediate walker that describes iteration over
+    /// matching files and provides paths prior to iteration. In particular,
+    /// `walker` can be used when the root directory of the walk is needed.
+    /// **The root directory may differ from the directory passed to walking
+    /// functions.**
+    ///
+    /// See [`Glob::walk`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use wax::walk::Entry;
+    /// use wax::Glob;
+    ///
+    /// let glob = Glob::new("**/*.{log,txt}").unwrap();
+    /// let walker = glob.walker("/var/log");
+    /// let root = walker.root_prefix_paths().0.to_path_buf();
+    /// for entry in walker.walk() {
+    ///     let entry = entry.unwrap();
+    ///     println!("Log: {:?}", entry.path());
+    /// }
+    /// ```
+    ///
+    /// [`Glob::walk`]: crate::Glob::walk
+    pub fn walker(&self, directory: impl Into<PathBuf>) -> GlobWalker {
         GlobWalker {
             anchor: self.anchor(directory),
-            program: WalkProgram {
-                complete: self.program.clone(),
-                components: compile(self.tree.as_ref().tokens())
-                    .expect("failed to compile glob sub-expressions"),
-            },
+            program: WalkProgram::from_glob(self),
         }
     }
 
@@ -208,12 +232,19 @@ impl<'t> Glob<'t> {
 struct Anchor {
     /// The root (starting) directory of the walk.
     root: PathBuf,
+    // TODO: Is there a better name for this? This is a prefix w.r.t. a glob but is a suffix w.r.t.
+    //       the root directory. This can be a bit confusing since either perspective is reasonable
+    //       (and in some contexts one may be more intuitive than the other).
     /// The number of components from the end of `root` that are present in the
     /// `Glob`'s expression.
     prefix: usize,
 }
 
 impl Anchor {
+    pub fn root_prefix_paths(&self) -> (&Path, &Path) {
+        self.root.split_at_depth(self.prefix)
+    }
+
     pub fn walk_with_behavior(self, behavior: impl Into<WalkBehavior>) -> WalkTree {
         WalkTree::with_prefix_and_behavior(self.root, self.prefix, behavior)
     }
@@ -225,13 +256,99 @@ struct WalkProgram {
     components: Vec<Regex>,
 }
 
+impl WalkProgram {
+    fn compile<'t, I>(tokens: I) -> Result<Vec<Regex>, CompileError>
+    where
+        I: IntoIterator<Item = &'t Token<'t>>,
+        I::IntoIter: Clone,
+    {
+        let mut regexes = Vec::new();
+        for component in token::components(tokens) {
+            if component
+                .tokens()
+                .iter()
+                .any(|token| token.has_component_boundary())
+            {
+                // Stop at component boundaries, such as tree wildcards or any boundary within a
+                // group token.
+                break;
+            }
+            regexes.push(Glob::compile(component.tokens().iter().copied())?);
+        }
+        Ok(regexes)
+    }
+
+    fn from_glob(glob: &Glob<'_>) -> Self {
+        WalkProgram {
+            complete: glob.program.clone(),
+            components: WalkProgram::compile(glob.tree.as_ref().tokens())
+                .expect("failed to compile glob sub-expressions"),
+        }
+    }
+}
+
+/// Describes iteration over matching files in a directory tree.
+///
+/// A walker provides the paths walked by a [`Glob`] prior to iteration, most
+/// notably the [root path][`GlobWalker::root_prefix_paths`], which may differ
+/// from the directory passed to walking functions. When ready, it can be
+/// converted into an iterator over matching files.
+///
+/// See [`Glob::walker`].
+///
+/// [`Glob`]: crate::Glob
+/// [`Glob::walker`]: crate::Glob::walker
+/// [`GlobWalker::root_prefix_paths`]: crate::walk::GlobWalker::root_prefix_paths
 #[derive(Clone, Debug)]
-struct GlobWalker {
+pub struct GlobWalker {
     anchor: Anchor,
     program: WalkProgram,
 }
 
 impl GlobWalker {
+    /// Gets the root and prefix paths.
+    ///
+    /// The root path is the path to the walked directory tree. **This path may
+    /// differ from the directory passed to walking functions like
+    /// [`Glob::walk`]**, because it may incorporate an invariant path
+    /// prefix from the glob expression.
+    ///
+    /// The prefix path is the invariant path prefix of the glob expression.
+    /// This path may be empty and is always a suffix of the root path.
+    ///
+    /// The following table describes some example paths when using
+    /// [`Glob::walk`].
+    ///
+    /// | Glob Expression           | Directory    | Root         | Prefix     |
+    /// |---------------------------|--------------|--------------|------------|
+    /// | `**/*.txt`                | `/home/user` | `/home/user` |            |
+    /// | `projects/**/src/**/*.rs` | `.`          | `./projects` | `projects` |
+    /// | `/var/log/**/*.log`       | `.`          | `/var/log`   | `/var/log` |
+    ///
+    /// See also [`Entry::root_relative_paths`].
+    ///
+    /// [`Entry::root_relative_paths`]: crate::walk::Entry::root_relative_paths
+    /// [`Glob::walk`]: crate::Glob::walk
+    pub fn root_prefix_paths(&self) -> (&Path, &Path) {
+        self.anchor.root_prefix_paths()
+    }
+
+    /// Converts a walker into an iterator over matching files in its directory
+    /// tree.
+    ///
+    /// See [`Glob::walk`].
+    ///
+    /// [`Glob::walk`]: crate::Glob::walk
+    pub fn walk(self) -> impl 'static + FileIterator<Entry = GlobEntry> {
+        self.walk_with_behavior(WalkBehavior::default())
+    }
+
+    /// Converts a walker into an iterator over matching files in its directory
+    /// tree.
+    ///
+    /// See [`Glob::walk_with_behavior`].
+    ///
+    /// [`Glob::walk_with_behavior`]: crate::Glob::walk_with_behavior
     pub fn walk_with_behavior(
         self,
         behavior: impl Into<WalkBehavior>,
@@ -533,25 +650,4 @@ impl From<GlobEntry> for TreeEntry {
     fn from(entry: GlobEntry) -> Self {
         entry.entry
     }
-}
-
-fn compile<'t, I>(tokens: I) -> Result<Vec<Regex>, CompileError>
-where
-    I: IntoIterator<Item = &'t Token<'t>>,
-    I::IntoIter: Clone,
-{
-    let mut regexes = Vec::new();
-    for component in token::components(tokens) {
-        if component
-            .tokens()
-            .iter()
-            .any(|token| token.has_component_boundary())
-        {
-            // Stop at component boundaries, such as tree wildcards or any boundary within a
-            // group token.
-            break;
-        }
-        regexes.push(Glob::compile(component.tokens().iter().copied())?);
-    }
-    Ok(regexes)
 }

@@ -79,7 +79,7 @@ use std::{
 use thiserror::Error;
 use walkdir::{self, DirEntry, WalkDir};
 
-pub use crate::walk::glob::GlobEntry;
+pub use crate::walk::glob::{GlobEntry, GlobWalker};
 use crate::{
     walk::{
         filter::{
@@ -177,15 +177,6 @@ impl WalkError {
 
     /// Gets the depth at which the error occurred from the root directory of
     /// the traversal.
-    ///
-    /// For any given [`Entry`], the depth is relative to the root path of
-    /// [`root_relative_paths`].
-    ///
-    /// [`Entry`]: crate::walk::Entry
-    /// [`Glob`]: crate::Glob
-    /// [`Path`]: std::path::Path
-    /// [`PathExt`]: crate::walk::PathExt
-    /// [`root_relative_paths`]: crate::walk::Entry::root_relative_paths
     pub fn depth(&self) -> usize {
         self.depth
     }
@@ -461,22 +452,25 @@ pub trait Entry {
     ///
     /// The root path is the path to the walked directory from which the file
     /// entry has been read. The relative path is the remainder of the file
-    /// path of the entry (the path relative to the root directory). The
-    /// relative path may be empty.
+    /// path of the entry (the path relative to the root directory). Both the
+    /// root and relative paths may be empty.
     ///
     /// The root and relative paths can differ significantly depending on the
     /// way a directory is walked, in particular when using a [`Glob`]. The
     /// following table describes some example paths when using
     /// [`Glob::walk`].
     ///
-    /// | Glob Expression           | Directory    | Path                               | Root         | Relative                         |
+    /// | Glob Expression           | Directory    | Entry Path                               | Root         | Relative                         |
     /// |---------------------------|--------------|------------------------------------|--------------|----------------------------------|
     /// | `**/*.txt`                | `/home/user` | `/home/user/notes.txt`             | `/home/user` | `notes.txt`                      |
     /// | `projects/**/src/**/*.rs` | `.`          | `./projects/fibonacci/src/main.rs` | `.`          | `projects/fibonacci/src/main.rs` |
     /// | `/var/log/**/*.log`       | `.`          | `/var/log/pacman.log`              |              | `/var/log/pacman.log`            |
     ///
+    /// See also [`GlobWalker::root_prefix_paths`]
+    ///
     /// [`Glob`]: crate::Glob
     /// [`Glob::walk`]: crate::Glob::walk
+    /// [`GlobWalker::root_prefix_paths`]: crate::walk::GlobWalker::root_prefix_paths
     fn root_relative_paths(&self) -> (&Path, &Path);
 
     /// Gets the [`Metadata`] of the file.
