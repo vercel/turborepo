@@ -19,5 +19,5 @@ We omit duplicates as Go with debug assertions enabled parses turbo.json twice
   $ cat tmp.logs
 
   $ grep -o "\[WARNING\].*" tmp.logs | sort -u
-  \[WARNING] Using an absolute path in "globalDependencies" \(([A-Z]:\\\\|\/)an(\\\\|\/)absolute(\\\\|\/)path\) will not work and will be an error in a future version (re)
-  \[WARNING] Using an absolute path in "outputs" \(([A-Z]:\\\\|\/)another(\\\\|\/)absolute(\\\\|\/)path\) will not work and will be an error in a future version (re)
+  \[WARNING] Using an absolute path in \"globalDependencies\" \(([A-Z]:\\an\\absolute\\path|/an/absolute/path)\) will not work and will be an error in a future version (re)
+  \[WARNING] Using an absolute path in \"outputs\" \([Cc]:\\(?:[^)]*\\)*another\\absolute\\path\)|\(/(?:[^/]+/)*another/absolute/path\) will not work and will be an error in a future version (re)
