@@ -350,6 +350,49 @@ enum FilterAnyProgram {
 }
 
 impl FilterAnyProgram {
+    fn compile<'t, I>(tokens: I) -> Result<Option<Regex>, BuildError>
+    where
+        I: IntoIterator,
+        I::Item: Pattern<'t>,
+        I::IntoIter: ExactSizeIterator,
+    {
+        let tokens = tokens.into_iter();
+        if 0 == tokens.len() {
+            Ok(None)
+        } else {
+            crate::any(tokens).map(|any| Some(any.program))
+        }
+    }
+
+    fn from_partitions<'t, I>(exhaustive: I, nonexhaustive: I) -> Result<Self, BuildError>
+    where
+        I: IntoIterator,
+        I::Item: Pattern<'t>,
+        I::IntoIter: ExactSizeIterator,
+    {
+        use FilterAnyProgram::{Empty, Exhaustive, Nonexhaustive, Partitioned};
+
+        // It is important to distinguish between empty _partitions_ and empty
+        // _expressions_ here. `FilterAnyProgram::compile` discards empty
+        // partitions. When matching against an empty path, an explicit empty
+        // _expression_ must match but an empty _partition_ must not (such
+        // a partition must never match anything).
+        Ok(
+            match (
+                FilterAnyProgram::compile(exhaustive)?,
+                FilterAnyProgram::compile(nonexhaustive)?,
+            ) {
+                (Some(exhaustive), Some(nonexhaustive)) => Partitioned {
+                    exhaustive,
+                    nonexhaustive,
+                },
+                (Some(exhaustive), None) => Exhaustive(exhaustive),
+                (None, Some(nonexhaustive)) => Nonexhaustive(nonexhaustive),
+                (None, None) => Empty,
+            },
+        )
+    }
+
     pub fn residue(&self, candidate: CandidatePath<'_>) -> Option<EntryResidue> {
         use FilterAnyProgram::{Exhaustive, Nonexhaustive, Partitioned};
 

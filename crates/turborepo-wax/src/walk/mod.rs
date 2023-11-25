@@ -1048,7 +1048,7 @@ mod tests {
             .flatten()
             .map(|entry| entry.root_relative_paths().1.to_path_buf())
             .collect();
-        assert_eq!(
+        assert_set_eq!(
             paths,
             [
                 PathBuf::from(""),
@@ -1079,7 +1079,7 @@ mod tests {
             .flatten()
             .map(Entry::into_path)
             .collect();
-        assert_eq!(
+        assert_set_eq!(
             paths,
             [
                 #[allow(clippy::redundant_clone)]
@@ -1097,12 +1097,44 @@ mod tests {
     }
 
     #[test]
+    fn walk_tree_with_empty_not() {
+        let (_root, path) = temptree();
+
+        let paths: HashSet<_> = path
+            .walk()
+            .not([""])
+            .unwrap()
+            .flatten()
+            .map(Entry::into_path)
+            .collect();
+        assert_set_eq!(
+            paths,
+            // The root directory (`path.join("")` or `path.to_path_buf()`) must not be present,
+            // because the empty `not` pattern matches the empty relative path at the root.
+            [
+                path.join("doc"),
+                path.join("doc/guide.md"),
+                path.join("src"),
+                path.join("src/glob.rs"),
+                path.join("src/lib.rs"),
+                path.join("tests"),
+                path.join("tests/harness"),
+                path.join("tests/harness/mod.rs"),
+                path.join("tests/walk.rs"),
+                path.join("README.md"),
+            ]
+            .into_iter()
+            .collect(),
+        );
+    }
+
+    #[test]
     fn walk_glob_with_unbounded_tree() {
         let (_root, path) = temptree();
 
         let glob = Glob::new("**").unwrap();
         let paths: HashSet<_> = glob.walk(&path).flatten().map(Entry::into_path).collect();
-        assert_eq!(
+        assert_set_eq!(
             paths,
             [
                 #[allow(clippy::redundant_clone)]
@@ -1129,7 +1161,7 @@ mod tests {
 
         let glob = Glob::new("**/*.md").unwrap();
         let paths: HashSet<_> = glob.walk(&path).flatten().map(Entry::into_path).collect();
-        assert_eq!(
+        assert_set_eq!(
             paths,
             [path.join("doc/guide.md"), path.join("README.md"),]
                 .into_iter()
@@ -1143,7 +1175,7 @@ mod tests {
 
         let glob = Glob::new("**/src/**/*.rs").unwrap();
         let paths: HashSet<_> = glob.walk(&path).flatten().map(Entry::into_path).collect();
-        assert_eq!(
+        assert_set_eq!(
             paths,
             [path.join("src/glob.rs"), path.join("src/lib.rs"),]
                 .into_iter()
@@ -1157,7 +1189,7 @@ mod tests {
 
         let glob = Glob::new("src/lib.rs").unwrap();
         let paths: HashSet<_> = glob.walk(&path).flatten().map(Entry::into_path).collect();
-        assert_eq!(paths, [path.join("src/lib.rs")].into_iter().collect());
+        assert_set_eq!(paths, [path.join("src/lib.rs")].into_iter().collect());
     }
 
     #[test]
@@ -1170,7 +1202,7 @@ mod tests {
             .flatten()
             .map(Entry::into_path)
             .collect();
-        assert_eq!(paths, [path.join("src/lib.rs")].into_iter().collect());
+        assert_set_eq!(paths, [path.join("src/lib.rs")].into_iter().collect());
     }
 
     #[test]
@@ -1215,7 +1247,7 @@ mod tests {
                 separation
             })
             .for_each(drop);
-        assert_eq!(
+        assert_set_eq!(
             paths,
             [
                 Residue(Node(path.to_path_buf())),
@@ -1255,7 +1287,7 @@ mod tests {
             .flatten()
             .map(Entry::into_path)
             .collect();
-        assert_eq!(
+        assert_set_eq!(
             paths,
             [
                 #[allow(clippy::redundant_clone)]
@@ -1281,7 +1313,7 @@ mod tests {
             .flatten()
             .map(Entry::into_path)
             .collect();
-        assert_eq!(
+        assert_set_eq!(
             paths,
             [
                 #[allow(clippy::redundant_clone)]

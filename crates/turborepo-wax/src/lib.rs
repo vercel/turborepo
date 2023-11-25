@@ -1636,11 +1636,14 @@ mod tests {
     #[test]
     fn match_glob_with_empty_class_tokens() {
         // A character class is "empty" if it only matches separators on the target
-        // platform. Such a character class only matches `NUL` and so
-        // effectively matches nothing.
+        // platform. Such a character class never matches anything.
         let glob = Glob::new("a[/]b").unwrap();
 
         assert!(!glob.is_match(Path::new("a/b")));
+        assert!(!glob.is_match(Path::new("ab")));
+        assert!(!glob.is_match(Path::new("a")));
+        assert!(!glob.is_match(Path::new("b")));
+        assert!(!glob.is_match(Path::new("")));
     }
 
     #[test]
