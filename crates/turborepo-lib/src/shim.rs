@@ -36,7 +36,7 @@ pub enum Error {
     Cli(#[from] cli::Error),
     #[error(transparent)]
     Inference(#[from] turborepo_repository::inference::Error),
-    #[error("failed to execute local turbo process")]
+    #[error("failed to execute local turbo processes")]
     LocalTurboProcess(#[source] std::io::Error),
     #[error("failed to resolve local turbo path: {0}")]
     LocalTurboPath(String),
