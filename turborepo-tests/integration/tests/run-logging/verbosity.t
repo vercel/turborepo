@@ -45,7 +45,7 @@ Make sure users can only use one verbosity flag
   $ ${TURBO} build -v --verbosity=1
    ERROR  the argument '-v...' cannot be used with '--verbosity <COUNT>'
   
-  Usage: turbo(\.exe)? [OPTIONS] [COMMAND]
+  Usage: turbo(\.exe)? \[OPTIONS\] \[COMMAND\] (re)
   
   For more information, try '--help'.
   
