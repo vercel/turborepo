@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 
 const currentModuleURL = import.meta.url;
 const currentModulePath = fileURLToPath(currentModuleURL);
-const currentDirectory = new URL(".", "file://" + currentModulePath).pathname;
+const currentDirectory = path.dirname(currentModulePath);
 
 function getPrettyName(example) {
   return `./examples/${example}`;
