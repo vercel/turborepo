@@ -21,7 +21,7 @@ pub use spaces::{SpacesTaskClient, SpacesTaskInformation};
 use svix_ksuid::{Ksuid, KsuidLike};
 use tabwriter::TabWriter;
 use thiserror::Error;
-use tracing::log::warn;
+use tracing::{error, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
@@ -395,8 +395,14 @@ impl<'a> RunSummary<'a> {
 
         if let Some(spaces_client_handle) = self.spaces_client_handle.take() {
             println!("Sending to space");
-            self.send_to_space(spaces_client_handle, end_time, exit_code)
-                .await?;
+            // We log the error here but don't fail because
+            // failing to send the space shouldn't fail the run.
+            if let Err(err) = self
+                .send_to_space(spaces_client_handle, end_time, exit_code)
+                .await
+            {
+                warn!("Error sending to space: {}", err);
+            }
         }
 
         Ok(())
