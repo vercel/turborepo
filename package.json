@@ -17,7 +17,7 @@
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
     "prepare": "husky install",
     "test": "turbo run test",
-    "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going"
+    "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going || true"
   },
   "devDependencies": {
     "@taplo/cli": "^0.5.2",

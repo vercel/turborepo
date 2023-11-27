@@ -12,10 +12,10 @@ fn main() {
     }
 }
 
-#[cfg(not(feature = "go-binary"))]
+#[cfg(any(not(feature = "go-binary"), doc))]
 fn build_local_go_binary(_: String) {}
 
-#[cfg(feature = "go-binary")]
+#[cfg(all(feature = "go-binary", not(doc)))]
 fn build_local_go_binary(profile: String) {
     let cli_path = cli_path();
     let target = build_target::target().unwrap();
