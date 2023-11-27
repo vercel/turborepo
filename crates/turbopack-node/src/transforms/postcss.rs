@@ -151,17 +151,13 @@ async fn extra_configs(
         .map(|path| async move {
             Ok(
                 if matches!(&*path.get_type().await?, FileSystemEntryType::File) {
-                    if let Some(module) = *asset_context
+                    asset_context
                         .process(
                             Vc::upcast(FileSource::new(path)),
                             Value::new(ReferenceType::Internal(InnerAssets::empty())),
                         )
                         .await?
-                    {
-                        Some(any_content_changed_of_module(module))
-                    } else {
-                        None
-                    }
+                        .map(any_content_changed_of_module)
                 } else {
                     None
                 },
