@@ -202,7 +202,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - 'self-hosted'
+              - 'linux'
+              - 'x64'
+              - 'metal'
           - name: macos
             runner: macos-latest
           - name: windows
@@ -239,7 +243,11 @@ jobs:
 
   go_lint:
     name: Go linting
-    runs-on: ubuntu-latest
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     needs: determine_jobs
     if: needs.determine_jobs.outputs.turborepo_go_lint == 'true'
     steps:
@@ -278,7 +286,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - 'self-hosted'
+              - 'linux'
+              - 'x64'
+              - 'metal'
           - name: macos
             runner: macos-latest
           - name: windows
@@ -305,9 +317,61 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - 'self-hosted'
+              - 'linux'
+              - 'x64'
+              - 'metal'
           - name: macos
             runner: macos-latest
+          - name: windows
+            runner: windows-latest
+    steps:
+      # On Windows, set autocrlf to input so that when the repo is cloned down
+      # the fixtures retain their line endings and don't get updated to CRLF.
+      # We want this because this repo also contains the fixtures for our test cases
+      # and these fixtures have files that need stable file hashes. If we let git update
+      # the line endings on checkout, the file hashes will change.
+      # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
+      - name: set crlf
+        if: matrix.os.name == 'windows'
+        shell: bash
+        run: git config --global core.autocrlf input
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
+      - name: Cache Prysk
+        id: cache-prysk
+        uses: actions/cache@v3
+        with:
+          path: cli/.cram_env
+          key: prysk-venv-${{ matrix.os.name }}
+
+      - name: Integration Tests
+        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
+
+  # This is the same as turborepo_integration, but it runs on windows.
+  # Separate entry so it's not required for merge.
+  turborepo_integration_windows:
+    name: Turborepo Integration Tests (Windows)
+    needs: [determine_jobs, build_turborepo]
+    if: needs.determine_jobs.outputs.turborepo_integration == 'true'
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
           - name: windows
             runner: windows-latest
     steps:
@@ -356,7 +420,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - 'self-hosted'
+              - 'linux'
+              - 'x64'
+              - 'metal'
           - name: macos
             runner: macos-latest
           - name: windows
@@ -409,7 +477,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - 'self-hosted'
+              - 'linux'
+              - 'x64'
+              - 'metal'
           - name: macos
             runner: macos-latest
     runs-on: ${{ matrix.os.runner }}
@@ -475,7 +547,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - 'self-hosted'
+              - 'linux'
+              - 'x64'
+              - 'metal'
           - name: macos
             runner: macos-latest
     env:
@@ -511,7 +587,11 @@ jobs:
 
   turbopack_typescript:
     name: Turbopack TypeScript files
-    runs-on: ubuntu-latest
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     needs: determine_jobs
     if: needs.determine_jobs.outputs.turbopack_typescript == 'true'
     steps:
@@ -540,7 +620,11 @@ jobs:
     needs: [determine_jobs]
     if: needs.determine_jobs.outputs.rust == 'true'
     name: Rust lints
-    runs-on: ubuntu-latest
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -775,7 +859,7 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: 
+            runner:
               - 'self-hosted'
               - 'linux'
               - 'x64'
@@ -984,7 +1068,11 @@ jobs:
 
   format_lint:
     name: Formatting
-    runs-on: ubuntu-latest
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     needs: determine_jobs
     if: needs.determine_jobs.outputs.format == 'true'
     env:
@@ -994,9 +1082,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
       - uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Lint
         # Filters some workspaces out:
         # - `cli` because it runs golangci-lint and this Job doesn't have all the dependencies for that.
