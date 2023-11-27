@@ -72,6 +72,15 @@ pub async fn get_dev_runtime_code(
         code.push_code(
             &*embed_static_code(
                 asset_context,
+                "shared-node/base-externals-utils.ts".to_string(),
+            )
+            .await?,
+        );
+    }
+    if *environment.node_externals().await? {
+        code.push_code(
+            &*embed_static_code(
+                asset_context,
                 "shared-node/node-externals-utils.ts".to_string(),
             )
             .await?,

@@ -6,7 +6,7 @@
  */
 
 /// <reference path="../base/runtime-base.ts" />
-/// <reference path="../../../shared-node/node-externals-utils.ts" />
+/// <reference path="../../../shared-node/base-externals-utils.ts" />
 
 type ChunkRunner = {
   requiredChunks: Set<ChunkPath>;
