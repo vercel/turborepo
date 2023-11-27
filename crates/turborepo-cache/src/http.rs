@@ -1,5 +1,6 @@
 use std::{backtrace::Backtrace, io::Write};
 
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{
@@ -144,6 +145,7 @@ impl HTTPCache {
                 hash: hash.to_string(),
                 duration,
             };
+            debug!("logging fetch: {analytics_event:?}");
             let _ = analytics_recorder.send(analytics_event);
         }
     }

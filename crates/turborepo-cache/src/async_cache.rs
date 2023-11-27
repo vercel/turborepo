@@ -5,6 +5,7 @@ use tokio::{
     sync::{mpsc, Semaphore},
     task::JoinHandle,
 };
+use tracing::error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
@@ -63,7 +64,11 @@ impl AsyncCache {
                         let permit = semaphore.clone().acquire_owned().await.unwrap();
                         let real_cache = real_cache.clone();
                         workers.push(tokio::spawn(async move {
-                            let _ = real_cache.put(&anchor, &key, &files, duration).await;
+                            if let Err(err) = real_cache.put(&anchor, &key, &files, duration).await
+                            {
+                                // how do we signal this?
+                                error!("{err}");
+                            }
                             // Release permit once we're done with the write
                             drop(permit);
                         }))
