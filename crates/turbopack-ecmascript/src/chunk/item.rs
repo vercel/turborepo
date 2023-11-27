@@ -36,7 +36,10 @@ impl EcmascriptChunkItemContent {
         async_module_options: Vc<OptionAsyncModuleOptions>,
     ) -> Result<Vc<Self>> {
         let refresh = *chunking_context.has_react_refresh().await?;
-        let externals = *chunking_context.environment().node_externals().await?;
+        let externals = *chunking_context
+            .environment()
+            .supports_commonjs_externals()
+            .await?;
 
         let content = content.await?;
         Ok(EcmascriptChunkItemContent {
@@ -238,7 +241,8 @@ async fn module_factory_with_code_generation_issue(
                 CodeGenerationIssue {
                     severity: IssueSeverity::Error.cell(),
                     path: chunk_item.asset_ident().path(),
-                    title: Vc::cell("Code generation for chunk item errored".to_string()),
+                    title: StyledString::Text("Code generation for chunk item errored".to_string())
+                        .cell(),
                     message: StyledString::Text(error_message).cell(),
                 }
                 .cell()

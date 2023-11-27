@@ -9,7 +9,7 @@ use turbopack_core::{
     context::AssetContext,
     file_source::FileSource,
     ident::AssetIdent,
-    issue::{Issue, IssueExt, IssueSeverity, StyledString},
+    issue::{Issue, IssueExt, IssueSeverity, OptionStyledString, StyledString},
     reference::ModuleReference,
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
     resolve::{
@@ -40,11 +40,14 @@ async fn json_only(resolve_options: Vc<ResolveOptions>) -> Result<Vc<ResolveOpti
     Ok(opts.cell())
 }
 
+type TsConfigs = Vec<(Vc<FileJsonContent>, Vc<Box<dyn Source>>)>;
+
+#[tracing::instrument(skip_all)]
 pub async fn read_tsconfigs(
     mut data: Vc<FileContent>,
     mut tsconfig: Vc<Box<dyn Source>>,
     resolve_options: Vc<ResolveOptions>,
-) -> Result<Vec<(Vc<FileJsonContent>, Vc<Box<dyn Source>>)>> {
+) -> Result<TsConfigs> {
     let mut configs = Vec::new();
     let resolve_options = json_only(resolve_options);
     loop {
@@ -87,7 +90,7 @@ pub async fn read_tsconfigs(
                         TsConfigIssue {
                             severity: IssueSeverity::Error.into(),
                             source_ident: tsconfig.ident(),
-                            message: "extends doesn't resolve correctly".to_string(),
+                            message: format!("extends: \"{}\" doesn't resolve correctly", extends),
                         }
                         .cell()
                         .emit();
@@ -102,6 +105,7 @@ pub async fn read_tsconfigs(
 
 /// Resolves tsconfig files according to TS's implementation:
 /// https://github.com/microsoft/TypeScript/blob/611a912d/src/compiler/commandLineParser.ts#L3294-L3326
+#[tracing::instrument(skip_all)]
 async fn resolve_extends(
     tsconfig: Vc<Box<dyn Source>>,
     extends: &str,
@@ -497,10 +501,11 @@ impl Issue for TsConfigIssue {
     }
 
     #[turbo_tasks::function]
-    async fn title(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(
-            "An issue occurred while parsing a tsconfig.json file.".to_string(),
-        ))
+    async fn title(&self) -> Result<Vc<StyledString>> {
+        Ok(
+            StyledString::Text("An issue occurred while parsing a tsconfig.json file.".to_string())
+                .cell(),
+        )
     }
 
     #[turbo_tasks::function]
@@ -514,7 +519,7 @@ impl Issue for TsConfigIssue {
     }
 
     #[turbo_tasks::function]
-    fn description(&self) -> Vc<StyledString> {
-        StyledString::Text(self.message.clone()).cell()
+    fn description(&self) -> Vc<OptionStyledString> {
+        Vc::cell(Some(StyledString::Text(self.message.clone()).cell()))
     }
 }

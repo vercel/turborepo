@@ -331,6 +331,10 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
       - name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v1
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
       - name: Cache Prysk
         id: cache-prysk
         uses: actions/cache@v3
@@ -412,6 +416,10 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
       - name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v1
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
       - name: Cache Prysk
         id: cache-prysk
         uses: actions/cache@v3
