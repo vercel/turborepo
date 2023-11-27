@@ -16,8 +16,7 @@
     "turbo-prebuilt": "node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
     "prepare": "husky install",
-    "test": "turbo run test",
-    "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going"
+    "test": "turbo run test"
   },
   "devDependencies": {
     "@taplo/cli": "^0.5.2",

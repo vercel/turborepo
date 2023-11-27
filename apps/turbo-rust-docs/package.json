@@ -1,0 +1,6 @@
+{
+  "name": "turbo-rust-docs",
+  "scripts": {
+    "build": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --manifest-path=../../Cargo.toml --target-dir=."
+  }
+}
