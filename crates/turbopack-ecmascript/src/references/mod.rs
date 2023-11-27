@@ -103,6 +103,9 @@ use super::{
     },
     EcmascriptModuleAssetType,
 };
+pub use crate::references::esm::export::{
+    follow_reexports, is_marked_as_side_effect_free, FollowExportsResult,
+};
 use crate::{
     analyzer::{
         builtin::early_replace_builtin,
@@ -338,16 +341,15 @@ pub(crate) async fn analyse_ecmascript_module_internal(
         parse(source, ty, transforms)
     };
 
+    let find_package_json = find_context_file(path.parent(), package_json()).await?;
     let specified_type = match options.specified_module_type {
-        SpecifiedModuleType::Automatic => {
-            match *find_context_file(path.parent(), package_json()).await? {
-                FindContextFileResult::Found(package_json, _) => {
-                    analysis.add_reference(PackageJsonReference::new(package_json));
-                    *specified_module_type(package_json).await?
-                }
-                FindContextFileResult::NotFound(_) => SpecifiedModuleType::Automatic,
+        SpecifiedModuleType::Automatic => match *find_package_json {
+            FindContextFileResult::Found(package_json, _) => {
+                analysis.add_reference(PackageJsonReference::new(package_json));
+                *specified_module_type(package_json).await?
             }
-        }
+            FindContextFileResult::NotFound(_) => SpecifiedModuleType::Automatic,
+        },
         SpecifiedModuleType::EcmaScript => SpecifiedModuleType::EcmaScript,
         SpecifiedModuleType::CommonJs => SpecifiedModuleType::CommonJs,
     };
@@ -455,6 +457,11 @@ pub(crate) async fn analyse_ecmascript_module_internal(
             Value::new(r.annotations.clone()),
             match options.tree_shaking_mode {
                 Some(TreeShakingMode::ModuleFragments) => match &r.imported_symbol {
+                    ImportedSymbol::ModuleEvaluation => Some(ModulePart::module_evaluation()),
+                    ImportedSymbol::Symbol(name) => Some(ModulePart::export(name.to_string())),
+                    ImportedSymbol::Namespace => None,
+                },
+                Some(TreeShakingMode::ReexportsOnly) => match &r.imported_symbol {
                     ImportedSymbol::ModuleEvaluation => Some(ModulePart::module_evaluation()),
                     ImportedSymbol::Symbol(name) => Some(ModulePart::export(name.to_string())),
                     ImportedSymbol::Namespace => None,
@@ -1793,7 +1800,8 @@ async fn handle_free_var_reference(
                 )),
                 Default::default(),
                 match state.tree_shaking_mode {
-                    Some(TreeShakingMode::ModuleFragments) => export
+                    Some(TreeShakingMode::ModuleFragments)
+                    | Some(TreeShakingMode::ReexportsOnly) => export
                         .as_ref()
                         .map(|export| ModulePart::export(export.to_string())),
                     None => None,

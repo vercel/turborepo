@@ -160,7 +160,7 @@ impl ModuleReference for EsmAssetReference {
     async fn resolve_reference(&self) -> Result<Vc<ModuleResolveResult>> {
         let ty = Value::new(match &self.export_name {
             Some(part) => EcmaScriptModulesReferenceSubType::ImportPart(*part),
-            None => EcmaScriptModulesReferenceSubType::Undefined,
+            None => EcmaScriptModulesReferenceSubType::Import,
         });
 
         Ok(esm_resolve(

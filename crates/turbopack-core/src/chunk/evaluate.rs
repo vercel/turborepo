@@ -41,10 +41,15 @@ async fn to_evaluatable(
     asset: Vc<Box<dyn Source>>,
     asset_context: Vc<Box<dyn AssetContext>>,
 ) -> Result<Vc<Box<dyn EvaluatableAsset>>> {
-    let asset = asset_context.process(
-        asset,
-        Value::new(ReferenceType::Entry(EntryReferenceSubType::Runtime)),
-    );
+    let Some(asset) = *asset_context
+        .process(
+            asset,
+            Value::new(ReferenceType::Entry(EntryReferenceSubType::Runtime)),
+        )
+        .await?
+    else {
+        bail!("{} is not a valid entry", asset.ident().to_string().await?)
+    };
     let Some(entry) = Vc::try_resolve_downcast::<Box<dyn EvaluatableAsset>>(asset).await? else {
         bail!(
             "{} is not a valid evaluated entry",

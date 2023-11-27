@@ -72,12 +72,14 @@ impl WebAssemblyModuleAsset {
             instantiating_loader_source(self.source)
         };
 
-        let module = self.asset_context.process(
+        let Some(module) = *self.asset_context.process(
             loader_source,
             Value::new(ReferenceType::Internal(Vc::cell(indexmap! {
                 "WASM_PATH".to_string() => Vc::upcast(RawWebAssemblyModuleAsset::new(self.source, self.asset_context)),
             }))),
-        );
+        ).await? else {
+            bail!("WASM loader was not processed successfully");
+        };
 
         let Some(esm_asset) =
             Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(module).await?

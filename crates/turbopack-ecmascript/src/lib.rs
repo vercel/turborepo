@@ -101,9 +101,20 @@ pub enum SpecifiedModuleType {
     Deserialize,
     TraceRawVcs,
 )]
+#[serde(rename_all = "kebab-case")]
 pub enum TreeShakingMode {
     #[default]
     ModuleFragments,
+    ReexportsOnly,
+}
+
+impl TreeShakingMode {
+    pub fn skip_over_side_effect_free_reexports(&self) -> bool {
+        match self {
+            TreeShakingMode::ModuleFragments => true,
+            TreeShakingMode::ReexportsOnly => true,
+        }
+    }
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input")]

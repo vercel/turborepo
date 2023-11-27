@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
@@ -76,13 +76,19 @@ impl ModuleReference for TsReferencePathAssetReference {
                 .try_join(self.path.clone())
                 .await?
             {
-                ModuleResolveResult::module(Vc::upcast(self.origin.asset_context().process(
+                let process_result = self.origin.asset_context().process(
                     Vc::upcast(FileSource::new(*path)),
                     Value::new(ReferenceType::TypeScript(
                         TypeScriptReferenceSubType::Undefined,
                     )),
-                )))
-                .cell()
+                );
+                let Some(module) = *process_result.await? else {
+                    bail!(
+                        "{} is not a valid typescript module",
+                        path.to_string().await?
+                    )
+                };
+                ModuleResolveResult::module(module).cell()
             } else {
                 ModuleResolveResult::unresolveable().cell()
             },

@@ -3,7 +3,7 @@ use turbo_tasks_fs::FileSystemPath;
 
 use crate::{
     compile_time_info::CompileTimeInfo,
-    module::Module,
+    module::OptionModule,
     reference_type::ReferenceType,
     resolve::{options::ResolveOptions, parse::Request, ModuleResolveResult, ResolveResult},
     source::Source,
@@ -32,7 +32,7 @@ pub trait AssetContext {
         self: Vc<Self>,
         asset: Vc<Box<dyn Source>>,
         reference_type: Value<ReferenceType>,
-    ) -> Vc<Box<dyn Module>>;
+    ) -> Vc<OptionModule>;
     fn process_resolve_result(
         self: Vc<Self>,
         result: Vc<ResolveResult>,

@@ -317,10 +317,15 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
         .copied()
         .collect();
 
-    let entry_module = asset_context.process(
-        Vc::upcast(FileSource::new(entry_asset)),
-        Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
-    );
+    let Some(entry_module) = *asset_context
+        .process(
+            Vc::upcast(FileSource::new(entry_asset)),
+            Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
+        )
+        .await?
+    else {
+        bail!("Entry module was not processed successfully");
+    };
 
     let chunks = if let Some(ecmascript) =
         Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(entry_module).await?

@@ -501,7 +501,7 @@ impl ResolveResult {
     ) -> Result<ModuleResolveResult>
     where
         A: Fn(Vc<Box<dyn Source>>) -> AF,
-        AF: Future<Output = Result<Vc<Box<dyn Module>>>>,
+        AF: Future<Output = Result<Option<Vc<Box<dyn Module>>>>>,
         R: Fn(Vc<Box<dyn Source>>) -> RF,
         RF: Future<Output = Result<Vc<Box<dyn ModuleReference>>>>,
     {
@@ -514,9 +514,11 @@ impl ResolveResult {
                     let asset_fn = &source_fn;
                     async move {
                         Ok(match item {
-                            ResolveResultItem::Source(source) => {
-                                ModuleResolveResultItem::Module(Vc::upcast(asset_fn(source).await?))
-                            }
+                            ResolveResultItem::Source(source) => asset_fn(source)
+                                .await?
+                                .map_or(ModuleResolveResultItem::Ignore, |m| {
+                                    ModuleResolveResultItem::Module(Vc::upcast(m))
+                                }),
                             ResolveResultItem::OriginalReferenceExternal => {
                                 ModuleResolveResultItem::OriginalReferenceExternal
                             }
@@ -552,7 +554,7 @@ impl ResolveResult {
         Ok(
             self.await?
                 .map_module(
-                    |asset| async move { Ok(Vc::upcast(RawModule::new(asset))) },
+                    |asset| async move { Ok(Some(Vc::upcast(RawModule::new(asset)))) },
                     |source| async move {
                         Ok(Vc::upcast(AffectingResolvingAssetReference::new(source)))
                     },
