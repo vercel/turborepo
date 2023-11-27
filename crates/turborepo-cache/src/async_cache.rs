@@ -24,7 +24,6 @@ enum WorkerRequest {
         duration: u64,
         files: Vec<AnchoredSystemPathBuf>,
     },
-    #[cfg(test)]
     Flush(tokio::sync::oneshot::Sender<()>),
 }
 
@@ -69,7 +68,6 @@ impl AsyncCache {
                             drop(permit);
                         }))
                     }
-                    #[cfg(test)]
                     WorkerRequest::Flush(callback) => {
                         // Wait on all workers to finish writing
                         while let Some(worker) = workers.next().await {
@@ -131,7 +129,6 @@ impl AsyncCache {
 
     // Used for testing to ensure that the workers resolve
     // before checking the cache.
-    #[cfg(test)]
     pub async fn wait(&self) {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.writer_sender

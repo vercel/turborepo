@@ -139,7 +139,13 @@ impl<'a> Run<'a> {
             Self::initialize_analytics(api_auth.clone(), api_client.clone()).unzip();
 
         let result = self
-            .run_with_analytics(start_at, api_auth, api_client, analytics_sender)
+            .run_with_analytics(
+                start_at,
+                api_auth,
+                api_client,
+                analytics_sender,
+                signal_handler,
+            )
             .await;
 
         if let Some(analytics_handle) = analytics_handle {
@@ -157,6 +163,7 @@ impl<'a> Run<'a> {
         api_auth: Option<APIAuth>,
         api_client: APIClient,
         analytics_sender: Option<AnalyticsSender>,
+        signal_handler: &SignalHandler,
     ) -> Result<i32, Error> {
         let package_json_path = self.base.repo_root.join_component("package.json");
         let root_package_json = PackageJson::load(&package_json_path)?;
@@ -320,6 +327,15 @@ impl<'a> Run<'a> {
             self.base.ui,
             opts.run_opts.dry_run.is_some(),
         ));
+        if let Some(subscriber) = signal_handler.subscribe() {
+            let runcache = runcache.clone();
+            tokio::spawn(async move {
+                let _guard = subscriber.listen().await;
+                let spinner = turborepo_ui::start_spinner("...Finishing writing to cache...");
+                runcache.wait_for_cache().await;
+                spinner.finish_and_clear();
+            });
+        }
 
         let mut global_env_mode = opts.run_opts.env_mode;
         if matches!(global_env_mode, EnvMode::Infer)
