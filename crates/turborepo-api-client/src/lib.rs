@@ -43,6 +43,7 @@ pub trait Client {
     ) -> Result<CachingStatusResponse>;
     async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse>;
     async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
+    #[allow(clippy::too_many_arguments)]
     async fn put_artifact(
         &self,
         hash: &str,
@@ -50,6 +51,8 @@ pub trait Client {
         duration: u64,
         tag: Option<&str>,
         token: &str,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
     ) -> Result<()>;
     async fn handle_403(response: Response) -> Error;
     async fn fetch_artifact(
@@ -224,6 +227,8 @@ impl Client for APIClient {
         duration: u64,
         tag: Option<&str>,
         token: &str,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
     ) -> Result<()> {
         let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
         let mut allow_auth = true;
@@ -253,6 +258,8 @@ impl Client for APIClient {
         if allow_auth {
             request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
         }
+
+        request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
         request_builder = Self::add_ci_header(request_builder);
 

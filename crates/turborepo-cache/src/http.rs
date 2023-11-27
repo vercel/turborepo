@@ -79,6 +79,8 @@ impl HTTPCache {
                 duration,
                 tag.as_deref(),
                 &self.api_auth.token,
+                self.api_auth.team_id.as_deref(),
+                self.api_auth.team_slug.as_deref(),
             )
             .await?;
 
