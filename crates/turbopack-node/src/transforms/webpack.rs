@@ -154,10 +154,9 @@ impl WebpackLoadersProcessedAsset {
         let content = content.content().to_str()?;
         let evaluate_context = transform.evaluate_context;
 
-        let Some(webpack_loaders_executor) = *webpack_loaders_executor(evaluate_context).await?
-        else {
-            bail!("Webpack loaders executor was not processed successfully");
-        };
+        let webpack_loaders_executor = webpack_loaders_executor(evaluate_context)
+            .await?
+            .context("Webpack loaders executor was not processed successfully")?;
         let resource_fs_path = this.source.ident().path().await?;
         let resource_path = resource_fs_path.path.as_str();
         let loaders = transform.loaders.await?;

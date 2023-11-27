@@ -153,13 +153,14 @@ impl ModuleCssAsset {
 
     #[turbo_tasks::function]
     async fn classes(self: Vc<Self>) -> Result<Vc<ModuleCssClasses>> {
-        let Some(inner) = *self.inner().await? else {
-            bail!("inner asset should be CSS processable");
-        };
+        let inner = self
+            .inner()
+            .await?
+            .context("inner asset should be CSS processable")?;
 
-        let Some(inner) = Vc::try_resolve_sidecast::<Box<dyn ProcessCss>>(inner).await? else {
-            bail!("inner asset should be CSS processable");
-        };
+        let inner = Vc::try_resolve_sidecast::<Box<dyn ProcessCss>>(inner)
+            .await?
+            .context("inner asset should be CSS processable")?;
 
         let result = inner.get_css_with_placeholder().await?;
         let mut classes = IndexMap::default();

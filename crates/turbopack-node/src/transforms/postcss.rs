@@ -261,9 +261,9 @@ impl PostCssTransformedAsset {
         // This invalidates the transform when the config changes.
         let extra_configs_changed = extra_configs(evaluate_context, config_path);
 
-        let Some(postcss_executor) = *postcss_executor(evaluate_context, config_path).await? else {
-            bail!("Unable to find PostCSS transform executor");
-        };
+        let postcss_executor = postcss_executor(evaluate_context, config_path)
+            .await?
+            .context("Unable to find PostCSS transform executor")?;
         let css_fs_path = this.source.ident().path().await?;
         let css_path = css_fs_path.path.as_str();
 
