@@ -132,6 +132,15 @@
       "cwd": "${workspaceRoot}/examples/basic"
     },
     {
+      "name": "Generators",
+      "type": "lldb",
+      "request": "launch",
+      "preLaunchTask": "prepare turbo",
+      "program": "${workspaceRoot}/target/debug/turbo",
+      "args": ["gen", "blog - release post", "--args", "1.11.0", "1.10.0", "_", "tagline about my really cool release"],
+      "cwd": "${workspaceRoot}"
+    },
+    {
       "name": "Daemon",
       "type": "lldb",
       "request": "launch",

@@ -37,7 +37,7 @@ Check
     Passed Through Env Vars        =\s* (re)
     Passed Through Env Vars Values =\s* (re)
     Resolved Task Definition       = {"outputs":\[],"cache":false,"dependsOn":\[],"inputs":\[],"outputMode":"full","persistent":false,"env":\[],"passThroughEnv":null,"dotEnv":null}\s* (re)
-    Framework                      = <NO FRAMEWORK DETECTED>\s* (re)
+    Framework                      =\s* (re)
 
   $ ${TURBO} run build --graph
   

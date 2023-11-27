@@ -329,8 +329,14 @@ jobs:
         with:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v1
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
+
       - name: Cache Prysk
         id: cache-prysk
         uses: actions/cache@v3
@@ -374,6 +380,13 @@ jobs:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
+
       - name: Cache Prysk
         id: cache-prysk
         uses: actions/cache@v3
@@ -401,17 +414,33 @@ jobs:
           # TODO: enable macos when --experimental-rust-codepath is passing all tests on ubuntu
           # - name: macos
           #   runner: macos-latest
-          # TODO: Enable windows in a later pass
-          # - name: windows
-          #   runner: windows-latest
+          - name: windows
+            runner: windows-latest
     steps:
+      # On Windows, set autocrlf to input so that when the repo is cloned down
+      # the fixtures retain their line endings and don't get updated to CRLF.
+      # We want this because this repo also contains the fixtures for our test cases
+      # and these fixtures have files that need stable file hashes. If we let git update
+      # the line endings on checkout, the file hashes will change.
+      # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
+      - name: set crlf
+        if: matrix.os.name == 'windows'
+        shell: bash
+        run: git config --global core.autocrlf input
+
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          target: ${{ matrix.os.name }}
+          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v1
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
+
       - name: Cache Prysk
         id: cache-prysk
         uses: actions/cache@v3
