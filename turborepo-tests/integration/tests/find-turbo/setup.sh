@@ -46,9 +46,10 @@ if [[ "$OSTYPE" == "msys" && $FIXTURE_NAME == "linked" ]]; then
   # echo "running icacls on new symlink turbo"
   # cmd //c icacls "turbo /grant Everyone:(F)"
 
-  pnpm setup # needed for global installs (maybe we could do pnpx instead?)
-  pnpm add --global symlink-dir
-  symlink-dir turbo .pnpm/turbo@1.0.0/node_modules/turbo
+  # Use pnpx to run symlnk-dir because installing globally doesn't work with pnpm
+  # TODO, should we install this as a dependency in this workspace so we can use it or
+  # something else to avoid hitting the network in the middle of the test setup?
+  pnpx symlink-dir turbo .pnpm/turbo@1.0.0/node_modules/turbo
 
 
   ls -al
