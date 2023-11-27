@@ -44,7 +44,7 @@ use crate::{
     process::ProcessManager,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker},
     shim::TurboState,
-    signal::SignalSubscriber,
+    signal::{SignalHandler, SignalSubscriber},
     task_graph::Visitor,
     task_hash::{get_external_deps_hash, PackageInputsHashes, TaskHashTrackerState},
 };
@@ -118,8 +118,8 @@ impl<'a> Run<'a> {
         }
     }
 
-    #[tracing::instrument(skip(self, signal_subscriber))]
-    pub async fn run(&mut self, signal_subscriber: SignalSubscriber) -> Result<i32, Error> {
+    #[tracing::instrument(skip(self, signal_handler))]
+    pub async fn run(&mut self, signal_handler: &SignalHandler) -> Result<i32, Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
@@ -129,7 +129,9 @@ impl<'a> Run<'a> {
             TurboState::platform_name(),
         );
         let start_at = Local::now();
-        self.connect_process_manager(signal_subscriber);
+        if let Some(subscriber) = signal_handler.subscribe() {
+            self.connect_process_manager(subscriber);
+        }
 
         let api_auth = self.base.api_auth()?;
         let api_client = self.base.api_client()?;
