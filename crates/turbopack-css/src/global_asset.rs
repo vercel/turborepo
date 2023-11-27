@@ -63,8 +63,8 @@ impl Module for GlobalCssAsset {
         Ok(Vc::cell(
             self.inner()
                 .await?
+                .map(|inner| Vc::upcast(InternalCssAssetReference::new(inner)))
                 .into_iter()
-                .map(|&inner| Vc::upcast(InternalCssAssetReference::new(inner)))
                 .collect(),
         ))
     }

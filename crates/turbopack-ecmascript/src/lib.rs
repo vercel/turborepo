@@ -108,15 +108,6 @@ pub enum TreeShakingMode {
     ReexportsOnly,
 }
 
-impl TreeShakingMode {
-    pub fn skip_over_side_effect_free_reexports(&self) -> bool {
-        match self {
-            TreeShakingMode::ModuleFragments => true,
-            TreeShakingMode::ReexportsOnly => true,
-        }
-    }
-}
-
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Debug, Default, Copy, Clone)]
 pub struct EcmascriptOptions {

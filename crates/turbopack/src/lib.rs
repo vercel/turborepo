@@ -165,21 +165,14 @@ async fn apply_module_type(
                 None => {}
             }
 
-            let module = builder.build();
+            let mut module = builder.build();
 
-            if options
-                .tree_shaking_mode
-                .as_ref()
-                .map(TreeShakingMode::skip_over_side_effect_free_reexports)
-                .unwrap_or(false)
-            {
+            if options.tree_shaking_mode.is_some() {
                 if let Some(part) = part {
                     match *part.await? {
                         ModulePart::ModuleEvaluation => {
                             if *is_marked_as_side_effect_free(module).await? {
                                 return Ok(Vc::cell(None));
-                            } else {
-                                module
                             }
                         }
                         ModulePart::Export(export) => {
@@ -196,27 +189,20 @@ async fn apply_module_type(
                                 } = &*follow_reexports(placeable, export.clone_value()).await?;
                                 if let Some(new_export) = new_export {
                                     if *new_export == *export {
-                                        Vc::upcast(*final_module)
+                                        module = Vc::upcast(*final_module)
                                     } else {
                                         // TODO: create a remapping module
-                                        module
                                     }
                                 } else {
                                     // TODO: create a remapping module
-                                    module
                                 }
-                            } else {
-                                module
                             }
                         }
-                        _ => module,
+                        _ => {}
                     }
-                } else {
-                    module
                 }
-            } else {
-                module
             }
+            module
         }
         ModuleType::Json => Vc::upcast(JsonModuleAsset::new(source)),
         ModuleType::Raw => Vc::upcast(RawModule::new(source)),

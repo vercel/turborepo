@@ -1,6 +1,7 @@
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashSet},
+    ops::ControlFlow,
 };
 
 use anyhow::Result;
@@ -57,25 +58,20 @@ pub struct FollowExportsResult {
 pub async fn is_marked_as_side_effect_free(module: Vc<Box<dyn Module>>) -> Result<Vc<bool>> {
     let find_package_json =
         find_context_file(module.ident().path().parent(), package_json()).await?;
-    Ok(Vc::cell(match *find_package_json {
-        FindContextFileResult::Found(package_json, _) => {
-            if let FileJsonContent::Content(content) = &*package_json.read_json().await? {
-                if let Some(side_effects) = content.get("sideEffects") {
-                    if let Some(side_effects) = side_effects.as_bool() {
-                        !side_effects
-                    } else {
-                        // TODO it might be a glob too, handle that case too
-                        false
-                    }
+
+    if let FindContextFileResult::Found(package_json, _) = *find_package_json {
+        if let FileJsonContent::Content(content) = &*package_json.read_json().await? {
+            if let Some(side_effects) = content.get("sideEffects") {
+                if let Some(side_effects) = side_effects.as_bool() {
+                    return Ok(Vc::cell(!side_effects));
                 } else {
-                    false
+                    // TODO it might be a glob too, handle that case too
                 }
-            } else {
-                false
             }
         }
-        _ => false,
-    }))
+    }
+
+    Ok(Vc::cell(false))
 }
 
 #[turbo_tasks::function]
@@ -101,83 +97,107 @@ pub async fn follow_reexports_internal(
 ) -> Result<Vc<FollowExportsResult>> {
     loop {
         let exports = module.get_exports().await?;
-        if let EcmascriptExports::EsmExports(exports) = &*exports {
-            let exports = exports.await?;
+        let EcmascriptExports::EsmExports(exports) = &*exports else {
+            return Ok(FollowExportsResult::cell(FollowExportsResult {
+                module,
+                export_name: Some(export_name),
+                ty: FoundExportType::Dynamic,
+            }));
+        };
 
-            // Try to find the export in the local exports
-            if let Some(export) = exports.exports.get(&export_name) {
-                match export {
-                    EsmExport::ImportedBinding(reference, name) => {
-                        if let ReferencedAsset::Some(m) = *reference.get_referenced_asset().await? {
-                            module = m;
-                            export_name = name.clone();
-                            if !*is_marked_as_side_effect_free(Vc::upcast(module)).await? {
-                                return Ok(FollowExportsResult::cell(FollowExportsResult {
-                                    module,
-                                    export_name: Some(export_name),
-                                    ty: FoundExportType::SideEffects,
-                                }));
-                            }
-                            continue;
-                        }
-                    }
-                    EsmExport::ImportedNamespace(reference) => {
-                        if let ReferencedAsset::Some(m) = *reference.get_referenced_asset().await? {
-                            return Ok(FollowExportsResult::cell(FollowExportsResult {
-                                module: m,
-                                export_name: None,
-                                ty: FoundExportType::Found,
-                            }));
-                        }
-                    }
-                    EsmExport::LocalBinding(_) => {
-                        return Ok(FollowExportsResult::cell(FollowExportsResult {
-                            module,
-                            export_name: Some(export_name),
-                            ty: FoundExportType::Found,
-                        }));
-                    }
-                    EsmExport::Error => {
-                        return Ok(FollowExportsResult::cell(FollowExportsResult {
-                            module,
-                            export_name: Some(export_name),
-                            ty: FoundExportType::Unknown,
-                        }));
-                    }
+        let exports = exports.await?;
+
+        // Try to find the export in the local exports
+        if let Some(export) = exports.exports.get(&export_name) {
+            match handle_declared_export(module, export_name, export).await? {
+                ControlFlow::Continue((m, n)) => {
+                    module = m;
+                    export_name = n;
+                    continue;
                 }
-                return Ok(FollowExportsResult::cell(FollowExportsResult {
-                    module,
-                    export_name: Some(export_name),
-                    ty: FoundExportType::Unknown,
+                ControlFlow::Break(result) => {
+                    return Ok(result.cell());
+                }
+            }
+        }
+
+        // Try to find the export in the star exports
+        return handle_star_reexports(module, export_name, &exports.star_exports).await;
+    }
+}
+
+async fn handle_declared_export(
+    module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
+    export_name: String,
+    export: &EsmExport,
+) -> Result<ControlFlow<FollowExportsResult, (Vc<Box<dyn EcmascriptChunkPlaceable>>, String)>> {
+    match export {
+        EsmExport::ImportedBinding(reference, name) => {
+            if let ReferencedAsset::Some(module) = *reference.get_referenced_asset().await? {
+                if *is_marked_as_side_effect_free(Vc::upcast(module)).await? {
+                    return Ok(ControlFlow::Continue((module, name.to_string())));
+                } else {
+                    return Ok(ControlFlow::Break(FollowExportsResult {
+                        module,
+                        export_name: Some(name.to_string()),
+                        ty: FoundExportType::SideEffects,
+                    }));
+                }
+            }
+        }
+        EsmExport::ImportedNamespace(reference) => {
+            if let ReferencedAsset::Some(m) = *reference.get_referenced_asset().await? {
+                return Ok(ControlFlow::Break(FollowExportsResult {
+                    module: m,
+                    export_name: None,
+                    ty: FoundExportType::Found,
                 }));
             }
+        }
+        EsmExport::LocalBinding(_) => {
+            return Ok(ControlFlow::Break(FollowExportsResult {
+                module,
+                export_name: Some(export_name),
+                ty: FoundExportType::Found,
+            }));
+        }
+        EsmExport::Error => {
+            return Ok(ControlFlow::Break(FollowExportsResult {
+                module,
+                export_name: Some(export_name),
+                ty: FoundExportType::Unknown,
+            }));
+        }
+    }
+    Ok(ControlFlow::Break(FollowExportsResult {
+        module,
+        export_name: Some(export_name),
+        ty: FoundExportType::Unknown,
+    }))
+}
 
-            // Try to find the export in the star exports
-            let mut potential_modules = Vec::new();
-            for star_export in exports.star_exports.iter() {
-                if let ReferencedAsset::Some(m) = *star_export.get_referenced_asset().await? {
-                    let result = follow_reexports(m, export_name.clone());
-                    let result_ref = result.await?;
-                    match result_ref.ty {
-                        FoundExportType::Found => {
-                            return Ok(result);
-                        }
-                        FoundExportType::SideEffects => {
-                            return Ok(result);
-                        }
-                        FoundExportType::Dynamic => {
-                            potential_modules.push(result);
-                        }
-                        FoundExportType::NotFound => {}
-                        FoundExportType::Unknown => {
-                            return Ok(FollowExportsResult::cell(FollowExportsResult {
-                                module,
-                                export_name: Some(export_name),
-                                ty: FoundExportType::Unknown,
-                            }));
-                        }
-                    }
-                } else {
+async fn handle_star_reexports(
+    module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
+    export_name: String,
+    star_exports: &[Vc<EsmAssetReference>],
+) -> Result<Vc<FollowExportsResult>> {
+    let mut potential_modules = Vec::new();
+    for star_export in star_exports {
+        if let ReferencedAsset::Some(m) = *star_export.get_referenced_asset().await? {
+            let result = follow_reexports(m, export_name.clone());
+            let result_ref = result.await?;
+            match result_ref.ty {
+                FoundExportType::Found => {
+                    return Ok(result);
+                }
+                FoundExportType::SideEffects => {
+                    return Ok(result);
+                }
+                FoundExportType::Dynamic => {
+                    potential_modules.push(result);
+                }
+                FoundExportType::NotFound => {}
+                FoundExportType::Unknown => {
                     return Ok(FollowExportsResult::cell(FollowExportsResult {
                         module,
                         export_name: Some(export_name),
@@ -185,32 +205,26 @@ pub async fn follow_reexports_internal(
                     }));
                 }
             }
-            match potential_modules.len() {
-                0 => {
-                    return Ok(FollowExportsResult::cell(FollowExportsResult {
-                        module,
-                        export_name: Some(export_name),
-                        ty: FoundExportType::NotFound,
-                    }));
-                }
-                1 => {
-                    return Ok(potential_modules.into_iter().next().unwrap());
-                }
-                _ => {
-                    return Ok(FollowExportsResult::cell(FollowExportsResult {
-                        module,
-                        export_name: Some(export_name),
-                        ty: FoundExportType::Dynamic,
-                    }));
-                }
-            }
         } else {
             return Ok(FollowExportsResult::cell(FollowExportsResult {
                 module,
                 export_name: Some(export_name),
-                ty: FoundExportType::Dynamic,
+                ty: FoundExportType::Unknown,
             }));
         }
+    }
+    match potential_modules.len() {
+        0 => Ok(FollowExportsResult::cell(FollowExportsResult {
+            module,
+            export_name: Some(export_name),
+            ty: FoundExportType::NotFound,
+        })),
+        1 => Ok(potential_modules.into_iter().next().unwrap()),
+        _ => Ok(FollowExportsResult::cell(FollowExportsResult {
+            module,
+            export_name: Some(export_name),
+            ty: FoundExportType::Dynamic,
+        })),
     }
 }
 
