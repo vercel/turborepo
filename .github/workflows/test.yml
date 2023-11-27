@@ -1,4 +1,4 @@
-name: Test
+qname: Test
 on:
   push:
     branches: [main]
@@ -310,7 +310,6 @@ jobs:
     name: Turborepo Integration Tests
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
-    timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -355,7 +354,6 @@ jobs:
     name: Turborepo Integration Tests (Windows)
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
-    timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -403,7 +401,6 @@ jobs:
     name: Turborepo Integration Tests (Rust Codepath)
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
-    timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
