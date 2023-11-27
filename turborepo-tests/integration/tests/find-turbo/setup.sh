@@ -27,19 +27,39 @@ echo "-----------"
 DESTINATION="${TARGET_DIR}"
 echo "cp cmd: cp -a ${FIXTURE_DIR}/. ${DESTINATION}/"
 cp -a "${FIXTURE_DIR}/." "${DESTINATION}/"
-# turbo -> .pnpm/turbo@1.0.0/node_modules/turbo
 
+# We need to symlink: turbo -> .pnpm/turbo@1.0.0/node_modules/turbo
+# where `turbo` is the symlink
+# and `.pnpm/turbo@1.0.0/node_modules/turbo` is the path to symlink to
 if [[ "$OSTYPE" == "msys" && $FIXTURE_NAME == "linked" ]]; then
+  # Delete the existing turbo directory or file, whatever exists there
   rm -rf node_modules/turbo
+
+  # Let's enter the node_modules directory
   pushd node_modules > /dev/null || exit 1
-  cmd //c mklink turbo "${PWD}\\.pnpm\\turbo@1.0.0\\node_modules\\turbo"
-  echo "running chmod on new symlink turbo"
-  chmod +rwx turbo
-  echo "running icacls on new symlink turbo"
-  cmd //c icacls "turbo /grant Everyone:(F)"
+
+
+  ######## Create the symlink
+  # cmd //c mklink turbo "${PWD}\\.pnpm\\turbo@1.0.0\\node_modules\\turbo"
+  # echo "running chmod on new symlink turbo"
+  # chmod +rwx turbo
+  # echo "running icacls on new symlink turbo"
+  # cmd //c icacls "turbo /grant Everyone:(F)"
+
+  pnpm setup # needed for global installs (maybe we could do pnpx instead?)
+  pnpm add --global symlink-dir
+  symlink-dir turbo .pnpm/turbo@1.0.0/node_modules/turbo
+
+
   ls -al
+
+  # Get outta there
   popd > /dev/null || exit 1
+
+  # Make sure we got outta there.
   echo "PWD: $PWD"
+
+  # Debug what we have
   ls -al
   ls -al node_modules/turbo/../turbo-windows-64/bin
 fi
