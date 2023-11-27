@@ -37,6 +37,7 @@ use parse::{parse, ParseResult};
 use path_visitor::ApplyVisitors;
 use references::esm::UrlRewriteBehavior;
 pub use references::{AnalyzeEcmascriptModuleResult, TURBOPACK_HELPER};
+use serde::{Deserialize, Serialize};
 pub use static_code::StaticEcmascriptCode;
 use swc_core::{
     common::GLOBALS,
@@ -86,14 +87,30 @@ pub enum SpecifiedModuleType {
     EcmaScript,
 }
 
+#[derive(
+    PartialOrd,
+    Ord,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    Serialize,
+    Deserialize,
+    TraceRawVcs,
+)]
+pub enum TreeShakingMode {
+    #[default]
+    ModuleFragments,
+}
+
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Debug, Default, Copy, Clone)]
 pub struct EcmascriptOptions {
-    /// module is split into smaller module parts which can be selectively
-    /// imported
-    pub split_into_parts: bool,
-    /// imports will import parts of modules
-    pub import_parts: bool,
+    /// variant of tree shaking to use
+    pub tree_shaking_mode: Option<TreeShakingMode>,
     /// module is forced to a specific type (happens e. g. for .cjs and .mjs)
     pub specified_module_type: SpecifiedModuleType,
     /// Determines how to treat `new URL(...)` rewrites.
