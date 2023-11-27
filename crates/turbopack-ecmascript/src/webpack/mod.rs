@@ -11,7 +11,7 @@ use turbopack_core::{
     resolve::{
         origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
-        resolve, AffectingResolvingAssetReference, ModuleResolveResult,
+        resolve, AffectingResolvingAssetReference, ModuleResolveResult, ModuleResolveResultItem,
     },
     source::Source,
 };
@@ -180,11 +180,9 @@ impl ModuleReference for WebpackRuntimeAssetReference {
             .await?
             .map_module(
                 |source| async move {
-                    Ok(Some(Vc::upcast(WebpackModuleAsset::new(
-                        source,
-                        self.runtime,
-                        self.transforms,
-                    ))))
+                    Ok(ModuleResolveResultItem::Module(Vc::upcast(
+                        WebpackModuleAsset::new(source, self.runtime, self.transforms),
+                    )))
                 },
                 |r| async move { Ok(Vc::upcast(AffectingResolvingAssetReference::new(r))) },
             )

@@ -28,16 +28,13 @@ impl StaticEcmascriptCode {
         asset_context: Vc<Box<dyn AssetContext>>,
         asset_path: Vc<FileSystemPath>,
     ) -> Result<Vc<Self>> {
-        let Some(asset) = *asset_context
+        let module = asset_context
             .process(
                 Vc::upcast(FileSource::new(asset_path)),
                 Value::new(ReferenceType::Undefined),
             )
-            .await?
-        else {
-            bail!("asset is not an Ecmascript module")
-        };
-        let Some(asset) = Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(asset).await?
+            .module();
+        let Some(asset) = Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(module).await?
         else {
             bail!("asset is not an Ecmascript module")
         };

@@ -6,10 +6,9 @@ use turbo_tasks_bytes::stream::SingleValue;
 use turbo_tasks_fs::{json::parse_json_with_source_context, File, FileContent};
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    context::AssetContext,
+    context::{AssetContext, ProcessResult},
     file_source::FileSource,
     ident::AssetIdent,
-    module::OptionModule,
     reference_type::{InnerAssets, ReferenceType},
     source::Source,
     source_transform::SourceTransform,
@@ -119,7 +118,7 @@ struct ProcessWebpackLoadersResult {
 }
 
 #[turbo_tasks::function]
-fn webpack_loaders_executor(evaluate_context: Vc<Box<dyn AssetContext>>) -> Vc<OptionModule> {
+fn webpack_loaders_executor(evaluate_context: Vc<Box<dyn AssetContext>>) -> Vc<ProcessResult> {
     evaluate_context.process(
         Vc::upcast(FileSource::new(embed_file_path(
             "transforms/webpack-loaders.ts".to_string(),
@@ -154,9 +153,7 @@ impl WebpackLoadersProcessedAsset {
         let content = content.content().to_str()?;
         let evaluate_context = transform.evaluate_context;
 
-        let webpack_loaders_executor = webpack_loaders_executor(evaluate_context)
-            .await?
-            .context("Webpack loaders executor was not processed successfully")?;
+        let webpack_loaders_executor = webpack_loaders_executor(evaluate_context).module();
         let resource_fs_path = this.source.ident().path().await?;
         let resource_path = resource_fs_path.path.as_str();
         let loaders = transform.loaders.await?;

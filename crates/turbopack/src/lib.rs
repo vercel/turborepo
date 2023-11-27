@@ -39,16 +39,16 @@ use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::Asset,
     compile_time_info::CompileTimeInfo,
-    context::AssetContext,
+    context::{AssetContext, ProcessResult},
     ident::AssetIdent,
     issue::{Issue, IssueExt, OptionStyledString, StyledString},
-    module::OptionModule,
     output::OutputAsset,
     raw_module::RawModule,
     reference_type::{EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType},
     resolve::{
         options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve,
-        AffectingResolvingAssetReference, ModulePart, ModuleResolveResult, ResolveResult,
+        AffectingResolvingAssetReference, ModulePart, ModuleResolveResult, ModuleResolveResultItem,
+        ResolveResult,
     },
     source::Source,
 };
@@ -102,9 +102,9 @@ async fn apply_module_type(
     module_type: Vc<ModuleType>,
     part: Option<Vc<ModulePart>>,
     inner_assets: Option<Vc<InnerAssets>>,
-) -> Result<Vc<OptionModule>> {
+) -> Result<Vc<ProcessResult>> {
     let module_type = &*module_type.await?;
-    Ok(Vc::cell(Some(match module_type {
+    Ok(ProcessResult::Module(match module_type {
         ModuleType::Ecmascript {
             transforms,
             options,
@@ -172,7 +172,7 @@ async fn apply_module_type(
                     match *part.await? {
                         ModulePart::ModuleEvaluation => {
                             if *is_marked_as_side_effect_free(module).await? {
-                                return Ok(Vc::cell(None));
+                                return Ok(ProcessResult::Ignore.cell());
                             }
                         }
                         ModulePart::Export(export) => {
@@ -241,7 +241,8 @@ async fn apply_module_type(
             Vc::upcast(module_asset_context),
         )),
         ModuleType::Custom(custom) => custom.create_module(source, module_asset_context, part),
-    })))
+    })
+    .cell())
 }
 
 #[turbo_tasks::value]
@@ -333,7 +334,7 @@ impl ModuleAssetContext {
         self: Vc<Self>,
         source: Vc<Box<dyn Source>>,
         reference_type: Value<ReferenceType>,
-    ) -> Vc<OptionModule> {
+    ) -> Vc<ProcessResult> {
         process_default(self, source, reference_type, Vec::new())
     }
 }
@@ -344,7 +345,7 @@ async fn process_default(
     source: Vc<Box<dyn Source>>,
     reference_type: Value<ReferenceType>,
     processed_rules: Vec<usize>,
-) -> Result<Vc<OptionModule>> {
+) -> Result<Vc<ProcessResult>> {
     let span = tracing::info_span!(
         "process module",
         name = *source.ident().to_string().await?,
@@ -365,7 +366,7 @@ async fn process_default_internal(
     source: Vc<Box<dyn Source>>,
     reference_type: Value<ReferenceType>,
     processed_rules: Vec<usize>,
-) -> Result<Vc<OptionModule>> {
+) -> Result<Vc<ProcessResult>> {
     let ident = source.ident().resolve().await?;
     let options = ModuleOptions::new(
         ident.path().parent(),
@@ -567,16 +568,17 @@ impl AssetContext for ModuleAssetContext {
                 |source| {
                     let reference_type = reference_type.clone();
                     async move {
-                        let option_module = if let Some(transition) = transition {
+                        let process_result = if let Some(transition) = transition {
                             transition.process(source, self, reference_type)
                         } else {
                             self.process_default(source, reference_type)
                         };
-                        if let Some(module) = *option_module.await? {
-                            Ok(Some(Vc::upcast(module)))
-                        } else {
-                            Ok(None)
-                        }
+                        Ok(match *process_result.await? {
+                            ProcessResult::Module(m) => {
+                                ModuleResolveResultItem::Module(Vc::upcast(m))
+                            }
+                            ProcessResult::Ignore => ModuleResolveResultItem::Ignore,
+                        })
                     }
                 },
                 |i| async move { Ok(Vc::upcast(AffectingResolvingAssetReference::new(i))) },
@@ -590,7 +592,7 @@ impl AssetContext for ModuleAssetContext {
         self: Vc<Self>,
         asset: Vc<Box<dyn Source>>,
         reference_type: Value<ReferenceType>,
-    ) -> Result<Vc<OptionModule>> {
+    ) -> Result<Vc<ProcessResult>> {
         let this = self.await?;
         if let Some(transition) = this.transition {
             Ok(transition.process(asset, self, reference_type))

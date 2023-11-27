@@ -5,7 +5,7 @@ mod util;
 
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use dunce::canonicalize;
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
@@ -26,11 +26,10 @@ use turbopack_core::{
     chunk::{EvaluatableAssetExt, EvaluatableAssets},
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
-    context::AssetContext,
+    context::{AssetContext, ProcessResult},
     environment::{Environment, ExecutionEnvironment, NodeJsEnvironment},
     file_source::FileSource,
     issue::{Issue, IssueDescriptionExt},
-    module::OptionModule,
     reference_type::{EntryReferenceSubType, ReferenceType},
     source::Source,
 };
@@ -300,10 +299,7 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
     )
     .build();
 
-    let Some(jest_entry_asset) = *process_path_to_asset(jest_entry_path, asset_context).await?
-    else {
-        bail!("jest entry asset is not correctly processed")
-    };
+    let jest_entry_asset = process_path_to_asset(jest_entry_path, asset_context).module();
     let jest_runtime_asset = FileSource::new(jest_runtime_path);
     let test_source = FileSource::new(test_path);
     let test_evaluatable = test_source.to_evaluatable(asset_context);
@@ -383,7 +379,7 @@ async fn snapshot_issues(
 fn process_path_to_asset(
     path: Vc<FileSystemPath>,
     asset_context: Vc<Box<dyn AssetContext>>,
-) -> Vc<OptionModule> {
+) -> Vc<ProcessResult> {
     asset_context.process(
         Vc::upcast(FileSource::new(path)),
         Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),

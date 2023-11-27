@@ -438,8 +438,7 @@ fn node_file_trace<B: Backend + 'static>(
                 );
                 let module = module_asset_context
                     .process(Vc::upcast(source), Value::new(ReferenceType::Undefined))
-                    .await?
-                    .unwrap();
+                    .module();
                 let rebased = RebasedAsset::new(Vc::upcast(module), input_dir, output_dir);
 
                 #[cfg(not(feature = "bench_against_node_nft"))]

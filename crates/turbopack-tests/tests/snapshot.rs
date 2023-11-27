@@ -322,8 +322,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
             Vc::upcast(FileSource::new(entry_asset)),
             Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
         )
-        .await?
-        .context("Entry module was not processed successfully")?;
+        .module();
 
     let chunks = if let Some(ecmascript) =
         Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(entry_module).await?

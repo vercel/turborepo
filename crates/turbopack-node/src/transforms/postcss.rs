@@ -9,13 +9,12 @@ use turbo_tasks_fs::{
 use turbopack_core::{
     asset::{Asset, AssetContent},
     changed::any_content_changed_of_module,
-    context::AssetContext,
+    context::{AssetContext, ProcessResult},
     file_source::FileSource,
     ident::AssetIdent,
     issue::{
         Issue, IssueDescriptionExt, IssueExt, IssueSeverity, OptionStyledString, StyledString,
     },
-    module::OptionModule,
     reference_type::{EntryReferenceSubType, InnerAssets, ReferenceType},
     resolve::{find_context_file, FindContextFileResult},
     source::Source,
@@ -151,13 +150,18 @@ async fn extra_configs(
         .map(|path| async move {
             Ok(
                 if matches!(&*path.get_type().await?, FileSystemEntryType::File) {
-                    asset_context
+                    match *asset_context
                         .process(
                             Vc::upcast(FileSource::new(path)),
                             Value::new(ReferenceType::Internal(InnerAssets::empty())),
                         )
                         .await?
-                        .map(any_content_changed_of_module)
+                    {
+                        ProcessResult::Module(module) => {
+                            Some(any_content_changed_of_module(module))
+                        }
+                        ProcessResult::Ignore => None,
+                    }
                 } else {
                     None
                 },
@@ -173,16 +177,13 @@ async fn extra_configs(
 async fn postcss_executor(
     asset_context: Vc<Box<dyn AssetContext>>,
     postcss_config_path: Vc<FileSystemPath>,
-) -> Result<Vc<OptionModule>> {
-    let Some(config_asset) = *asset_context
+) -> Result<Vc<ProcessResult>> {
+    let config_asset = asset_context
         .process(
             Vc::upcast(FileSource::new(postcss_config_path)),
             Value::new(ReferenceType::Entry(EntryReferenceSubType::Undefined)),
         )
-        .await?
-    else {
-        return Ok(Vc::cell(None));
-    };
+        .module();
 
     Ok(asset_context.process(
         Vc::upcast(VirtualSource::new(
@@ -261,9 +262,7 @@ impl PostCssTransformedAsset {
         // This invalidates the transform when the config changes.
         let extra_configs_changed = extra_configs(evaluate_context, config_path);
 
-        let postcss_executor = postcss_executor(evaluate_context, config_path)
-            .await?
-            .context("Unable to find PostCSS transform executor")?;
+        let postcss_executor = postcss_executor(evaluate_context, config_path).module();
         let css_fs_path = this.source.ident().path().await?;
         let css_path = css_fs_path.path.as_str();
 

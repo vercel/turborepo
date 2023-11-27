@@ -1,13 +1,31 @@
+use anyhow::{bail, Result};
 use turbo_tasks::{Value, Vc};
 use turbo_tasks_fs::FileSystemPath;
 
 use crate::{
     compile_time_info::CompileTimeInfo,
-    module::OptionModule,
+    module::Module,
     reference_type::ReferenceType,
     resolve::{options::ResolveOptions, parse::Request, ModuleResolveResult, ResolveResult},
     source::Source,
 };
+
+#[turbo_tasks::value(shared)]
+pub enum ProcessResult {
+    Module(Vc<Box<dyn Module>>),
+    Ignore,
+}
+
+#[turbo_tasks::value_impl]
+impl ProcessResult {
+    #[turbo_tasks::function]
+    pub async fn module(&self) -> Result<Vc<Box<dyn Module>>> {
+        match *self {
+            ProcessResult::Module(m) => Ok(m),
+            ProcessResult::Ignore => bail!("Expected a module"),
+        }
+    }
+}
 
 /// A context for building an asset graph. It's passed through the assets while
 /// creating them. It's needed to resolve assets and upgrade assets to a higher
@@ -43,7 +61,7 @@ pub trait AssetContext {
         self: Vc<Self>,
         asset: Vc<Box<dyn Source>>,
         reference_type: Value<ReferenceType>,
-    ) -> Vc<OptionModule>;
+    ) -> Vc<ProcessResult>;
 
     /// Process an [ResolveResult] into an [ModuleResolveResult].
     fn process_resolve_result(

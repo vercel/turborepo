@@ -10,10 +10,10 @@ use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkItem, ChunkItemExt, ChunkType, ChunkableModule, ChunkingContext},
-    context::AssetContext,
+    context::{AssetContext, ProcessResult},
     ident::AssetIdent,
     issue::{Issue, IssueExt, IssueSeverity, OptionStyledString, StyledString},
-    module::{Module, OptionModule},
+    module::Module,
     reference::{ModuleReference, ModuleReferences},
     reference_type::{CssReferenceSubType, ReferenceType},
     resolve::{origin::ResolveOrigin, parse::Request},
@@ -76,13 +76,13 @@ impl Module for ModuleCssAsset {
         // This affects the order in which the resulting CSS chunks will be loaded:
         // later references are processed first in the post-order traversal of the
         // reference tree, and as such they will be loaded first in the resulting HTML.
-        let references = self
-            .inner()
-            .await?
-            .into_iter()
-            .map(|&inner| Vc::upcast(InternalCssAssetReference::new(inner)))
-            .chain(self.module_references().await?.iter().copied())
-            .collect();
+        let references = match *self.inner().await? {
+            ProcessResult::Module(inner) => Some(Vc::upcast(InternalCssAssetReference::new(inner))),
+            ProcessResult::Ignore => None,
+        }
+        .into_iter()
+        .chain(self.module_references().await?.iter().copied())
+        .collect();
 
         Ok(Vc::cell(references))
     }
@@ -143,7 +143,7 @@ struct ModuleCssClasses(IndexMap<String, Vec<ModuleCssClass>>);
 #[turbo_tasks::value_impl]
 impl ModuleCssAsset {
     #[turbo_tasks::function]
-    async fn inner(self: Vc<Self>) -> Result<Vc<OptionModule>> {
+    async fn inner(self: Vc<Self>) -> Result<Vc<ProcessResult>> {
         let this = self.await?;
         Ok(this.asset_context.process(
             this.source,
@@ -153,10 +153,7 @@ impl ModuleCssAsset {
 
     #[turbo_tasks::function]
     async fn classes(self: Vc<Self>) -> Result<Vc<ModuleCssClasses>> {
-        let inner = self
-            .inner()
-            .await?
-            .context("inner asset should be CSS processable")?;
+        let inner = self.inner().module();
 
         let inner = Vc::try_resolve_sidecast::<Box<dyn ProcessCss>>(inner)
             .await?

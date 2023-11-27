@@ -6,10 +6,8 @@ use anyhow::Result;
 pub use context_transition::ContextTransition;
 use turbo_tasks::{Value, ValueDefault, Vc};
 use turbopack_core::{
-    compile_time_info::CompileTimeInfo,
-    module::{Module, OptionModule},
-    reference_type::ReferenceType,
-    source::Source,
+    compile_time_info::CompileTimeInfo, context::ProcessResult, module::Module,
+    reference_type::ReferenceType, source::Source,
 };
 
 use crate::{
@@ -85,14 +83,17 @@ pub trait Transition {
         asset: Vc<Box<dyn Source>>,
         module_asset_context: Vc<ModuleAssetContext>,
         reference_type: Value<ReferenceType>,
-    ) -> Result<Vc<OptionModule>> {
+    ) -> Result<Vc<ProcessResult>> {
         let asset = self.process_source(asset);
         let module_asset_context = self.process_context(module_asset_context);
         let m = module_asset_context.process_default(asset, reference_type);
-        Ok(Vc::cell(
-            m.await?
-                .map(|m| self.process_module(m, module_asset_context)),
-        ))
+        Ok(match *m.await? {
+            ProcessResult::Module(m) => {
+                ProcessResult::Module(self.process_module(m, module_asset_context))
+            }
+            ProcessResult::Ignore => ProcessResult::Ignore,
+        }
+        .cell())
     }
 }
 

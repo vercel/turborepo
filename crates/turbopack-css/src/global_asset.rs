@@ -3,9 +3,9 @@ use turbo_tasks::{Value, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::PassthroughModule,
-    context::AssetContext,
+    context::{AssetContext, ProcessResult},
     ident::AssetIdent,
-    module::{Module, OptionModule},
+    module::Module,
     reference::ModuleReferences,
     reference_type::{CssReferenceSubType, ReferenceType},
     source::Source,
@@ -35,7 +35,7 @@ impl GlobalCssAsset {
 #[turbo_tasks::value_impl]
 impl GlobalCssAsset {
     #[turbo_tasks::function]
-    async fn inner(self: Vc<Self>) -> Result<Vc<OptionModule>> {
+    async fn inner(self: Vc<Self>) -> Result<Vc<ProcessResult>> {
         let this = self.await?;
         // The underlying CSS is processed through an internal CSS reference.
         // This can then be picked up by other rules to treat CSS assets in
@@ -60,13 +60,10 @@ impl Module for GlobalCssAsset {
 
     #[turbo_tasks::function]
     async fn references(self: Vc<Self>) -> Result<Vc<ModuleReferences>> {
-        Ok(Vc::cell(
-            self.inner()
-                .await?
-                .map(|inner| Vc::upcast(InternalCssAssetReference::new(inner)))
-                .into_iter()
-                .collect(),
-        ))
+        Ok(Vc::cell(match *self.inner().await? {
+            ProcessResult::Module(inner) => vec![Vc::upcast(InternalCssAssetReference::new(inner))],
+            ProcessResult::Ignore => vec![],
+        }))
     }
 }
 

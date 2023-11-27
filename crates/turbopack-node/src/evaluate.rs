@@ -1,6 +1,6 @@
 use std::{borrow::Cow, ops::ControlFlow, thread::available_parallelism, time::Duration};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Result};
 use async_stream::try_stream as generator;
 use futures::{
     channel::mpsc::{unbounded, UnboundedSender},
@@ -110,8 +110,7 @@ pub async fn get_evaluate_pool(
             ))),
             Value::new(ReferenceType::Internal(InnerAssets::empty())),
         )
-        .await?
-        .context("Evaluate runtime code is not correctly processed")?;
+        .module();
 
     let module_path = module_asset.ident().path().await?;
     let file_name = module_path.file_name();
@@ -140,8 +139,7 @@ pub async fn get_evaluate_pool(
                 "RUNTIME".to_string() => runtime_asset
             }))),
         )
-        .await?
-        .context("Evaluate runtime code is not correctly processed")?;
+        .module();
 
     let Some(entry_module) =
         Vc::try_resolve_sidecast::<Box<dyn EvaluatableAsset>>(entry_module).await?
@@ -159,8 +157,7 @@ pub async fn get_evaluate_pool(
                 Vc::upcast(FileSource::new(embed_file_path("globals.ts".to_string()))),
                 Value::new(ReferenceType::Internal(InnerAssets::empty())),
             )
-            .await?
-            .context("Globals module is not correctly processed")?;
+            .module();
 
         let Some(globals_module) =
             Vc::try_resolve_sidecast::<Box<dyn EvaluatableAsset>>(globals_module).await?
