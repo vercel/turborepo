@@ -5,7 +5,7 @@ use tokio::{
     sync::{mpsc, Semaphore},
     task::JoinHandle,
 };
-use tracing::error;
+use tracing::warn;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
@@ -66,8 +66,7 @@ impl AsyncCache {
                         workers.push(tokio::spawn(async move {
                             if let Err(err) = real_cache.put(&anchor, &key, &files, duration).await
                             {
-                                // how do we signal this?
-                                error!("{err}");
+                                warn!("{err}");
                             }
                             // Release permit once we're done with the write
                             drop(permit);
