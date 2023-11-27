@@ -9,6 +9,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 pub use reqwest::Response;
 use reqwest::{Method, RequestBuilder, StatusCode};
+use serde::Deserialize;
 use turborepo_ci::{is_ci, Vendor};
 use turborepo_vercel_api::{
     APIError, CachingStatus, CachingStatusResponse, PreflightResponse, SpacesResponse, Team,
@@ -270,7 +271,11 @@ impl Client for APIClient {
     }
 
     async fn handle_403(response: Response) -> Error {
-        let api_error: APIError = match response.json().await {
+        #[derive(Deserialize)]
+        struct WrappedAPIError {
+            error: APIError,
+        }
+        let WrappedAPIError { error: api_error } = match response.json().await {
             Ok(api_error) => api_error,
             Err(e) => return Error::ReqwestError(e),
         };
