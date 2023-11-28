@@ -14,124 +14,120 @@ By configuring your `turbo.json` correctly, you'll notice how
 
 1. **Install `turbo` globally**
 
-  <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
-    <Tab>
-      ```bash
-      npm install turbo --global
-      ```
-    </Tab>
-    <Tab>
-      ```bash
-      yarn global add turbo
-      ```
-    </Tab>
-    <Tab>
-      ```bash
-      pnpm add turbo --global
-      ```
-    </Tab>
-  </Tabs>
+    <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+      <Tab>
+        ```bash
+        npm install turbo --global
+        ```
+      </Tab>
+      <Tab>
+        ```bash
+        yarn global add turbo
+        ```
+      </Tab>
+      <Tab>
+        ```bash
+        pnpm add turbo --global
+        ```
+      </Tab>
+    </Tabs>
 
-For more details about installation, see [Installing Turborepo](../installing)
+    For more details about installation, see [Installing Turborepo](../installing)
 
 2. **Add a `turbo.json` file at the base of your repository:**
 
-   For more information on configuring your `turbo.json`, see the [Configuration Options](/repo/docs/reference/configuration) documentation.
+    For more information on configuring your `turbo.json`, see the [Configuration Options](/repo/docs/reference/configuration) documentation.
 
     <Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
-<Tab>
+      <Tab>
+        ```json filename="turbo.json"
+        {
+          "$schema": "https://turbo.build/schema.json",
+          "pipeline": {
+            "build": {
+              "outputs": [".next/**", "!.next/cache/**"]
+            },
+            "type-check": {}
+          }
+        }
+        ```
+      </Tab>
+      <Tab>
+        ```json filename="turbo.json"
+        {
+          "$schema": "https://turbo.build/schema.json",
+          "pipeline": {
+            "build": {
+              "outputs": ["dist/**"]
+            },
+            "type-check": {}
+          }
+        }
+        ```
 
-```json filename="turbo.json"
-{
-  "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
-    "build": {
-      "outputs": [".next/**", "!.next/cache/**"]
-    },
-    "lint": {}
-  }
-}
-```
+        Some Vite starters ship with a `package.json` that looks like this:
 
-  </Tab>
-  <Tab>
-```json filename="turbo.json"
-{
-  "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
-    "build": {
-      "outputs": ["dist/**"]
-    },
-    "lint": {}
-  }
-}
-```
+        ```json filename="package.json"
+        {
+          "scripts": {
+            "build": "tsc && vite build"
+          }
+        }
+        ```
 
-Some Vite starters ship with a `package.json` that looks like this:
+        We recommend splitting these into a `type-check` and `build` script.
 
-```json filename="package.json"
-{
-  "scripts": {
-    "build": "tsc && vite build"
-  }
-}
-```
+        ```json filename="package.json"
+        {
+          "scripts": {
+            "build": "vite build",
+            "type-check": "tsc"
+          }
+        }
+        ```
 
-We recommend splitting these into a `lint` and `build` script.
-
-```json filename="package.json"
-{
-  "scripts": {
-    "build": "vite build",
-    "lint": "tsc"
-  }
-}
-```
-
-This means that Turbo can schedule them separately.
-
-     </Tab>
-
-</Tabs>
+        This means that Turbo can schedule them separately.
+      </Tab>
+    </Tabs>
 
 3. **Edit `.gitignore`**
 
-   Add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and certain task outputs.
+    Add `.turbo` to your `.gitignore` file. The CLI uses these folders for logs and certain task outputs.
 
-   ```diff
-   + .turbo
-   ```
+    ```diff
+    + .turbo
+    ```
 
 4. **Run the `build` and `lint` tasks with `turbo`:**
 
-   ```bash
-   turbo build lint
-   ```
+    ```bash
+    turbo type-check build
+    ```
 
-   This runs `build` and `lint` at the same time.
+    This runs `build` and `lint` at the same time.
 
 5. **Without making any changes to the code, try running `build` and `lint` again:**
 
-   ```bash
-   turbo build lint
-   ```
+    ```bash
+    turbo type-check build
+    ```
 
-   You should see terminal output like this:
+    You should see terminal output like this:
 
-   ```
-   Tasks:    2 successful, 2 total
-   Cached:    2 cached, 2 total
-     Time:    185ms >>> FULL TURBO
-   ```
+    ```bash
+      Tasks:    2 successful, 2 total
+    Cached:    2 cached, 2 total
+      Time:    185ms >>> FULL TURBO
+    ```
 
-   Congratulations - **you just completed a build and lint in under 200ms**.
+    Congratulations - **you just completed a build and lint in under 200ms**.
 
-   To learn how this is possible, check out our [core concepts docs](/repo/docs/core-concepts/caching).
+    To learn how this is possible, check out our [core concepts docs](/repo/docs/core-concepts/caching).
 
 6. **Try running `dev` with `turbo`:**
 
-   ```bash
-   turbo dev
-   ```
+    ```bash
+    turbo dev
+    ```
 
-   You'll notice that your `dev` script starts up. You can use `turbo` to run any script in your `package.json`.
+    You'll notice that your `dev` script starts up. You can use `turbo` to run any script in your `package.json`.
