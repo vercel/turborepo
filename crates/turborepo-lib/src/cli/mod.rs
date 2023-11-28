@@ -1905,4 +1905,72 @@ mod test {
         );
         Ok(())
     }
+    #[test]
+    fn test_parse_gen() {
+        let default_gen = Command::Generate {
+            tag: "latest".to_string(),
+            generator_name: None,
+            config: None,
+            root: None,
+            args: vec![],
+            command: None,
+        };
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "gen"]).unwrap(),
+            Args {
+                command: Some(default_gen.clone()),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo",
+                "gen",
+                "--args",
+                "my long arg string",
+                "my-second-arg"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Generate {
+                    tag: "latest".to_string(),
+                    generator_name: None,
+                    config: None,
+                    root: None,
+                    args: vec![
+                        "my long arg string".to_string(),
+                        "my-second-arg".to_string()
+                    ],
+                    command: None,
+                }),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo",
+                "gen",
+                "--tag",
+                "canary",
+                "--config",
+                "~/custom-gen-config/gen",
+                "my-generator"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Generate {
+                    tag: "canary".to_string(),
+                    generator_name: Some("my-generator".to_string()),
+                    config: Some("~/custom-gen-config/gen".to_string()),
+                    root: None,
+                    args: vec![],
+                    command: None,
+                }),
+                ..Args::default()
+            }
+        );
+    }
 }

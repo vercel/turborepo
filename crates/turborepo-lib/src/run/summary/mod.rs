@@ -21,7 +21,7 @@ pub use spaces::{SpacesTaskClient, SpacesTaskInformation};
 use svix_ksuid::{Ksuid, KsuidLike};
 use tabwriter::TabWriter;
 use thiserror::Error;
-use tracing::log::warn;
+use tracing::{error, log::warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
@@ -394,9 +394,8 @@ impl<'a> RunSummary<'a> {
         }
 
         if let Some(spaces_client_handle) = self.spaces_client_handle.take() {
-            println!("Sending to space");
             self.send_to_space(spaces_client_handle, end_time, exit_code)
-                .await?;
+                .await;
         }
 
         Ok(())
@@ -407,22 +406,27 @@ impl<'a> RunSummary<'a> {
         spaces_client_handle: SpacesClientHandle,
         ended_at: DateTime<Local>,
         exit_code: i32,
-    ) -> Result<(), Error> {
-        let spinner = turborepo_ui::start_spinner("...sending run summary...");
+    ) {
+        let spinner = tokio::spawn(async {
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            turborepo_ui::start_spinner("...sending run summary...");
+        });
 
-        spaces_client_handle.finish_run(exit_code, ended_at).await?;
+        // We log the error here but don't fail because
+        // failing to send the space shouldn't fail the run.
+        if let Err(err) = spaces_client_handle.finish_run(exit_code, ended_at).await {
+            warn!("Error sending to space: {}", err);
+        };
 
         let result = spaces_client_handle.close().await;
 
-        spinner.finish_and_clear();
+        spinner.abort();
 
         Self::print_errors(&result.errors);
 
         if let Some(run) = result.run {
             println!("Run: {}\n", run.url);
         }
-
-        Ok(())
     }
 
     fn print_errors(errors: &[Error]) {

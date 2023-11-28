@@ -1,5 +1,4 @@
   $ . ${TESTDIR}/../setup.sh non-monorepo yarn
-  \d+\.\d+\.\d+ (re)
 
 # run twice and make sure it works
   $ yarn turbo build lint --output-logs=errors-only

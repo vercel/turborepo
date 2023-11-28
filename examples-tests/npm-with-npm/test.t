@@ -1,12 +1,12 @@
   $ . ${TESTDIR}/../setup.sh with-npm npm
-  \d+\.\d+\.\d+ (re)
+
 # run twice and make sure it works
   $ npm run build lint -- --output-logs=errors-only
   
   \> build (re)
   \> turbo run build lint --output-logs=errors-only (re)
   
-  \xe2\x80\xa2 Packages in scope: docs, eslint-config-custom, tsconfig, ui, web (esc)
+  \xe2\x80\xa2 Packages in scope: @repo/eslint-config, @repo/typescript-config, @repo/ui, docs, web (esc)
   \xe2\x80\xa2 Running build, lint in 5 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
@@ -19,7 +19,7 @@
   \> build (re)
   \> turbo run build lint --output-logs=errors-only (re)
   
-  \xe2\x80\xa2 Packages in scope: docs, eslint-config-custom, tsconfig, ui, web (esc)
+  \xe2\x80\xa2 Packages in scope: @repo/eslint-config, @repo/typescript-config, @repo/ui, docs, web (esc)
   \xe2\x80\xa2 Running build, lint in 5 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   

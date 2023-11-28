@@ -30,11 +30,6 @@ if [ "$TURBO_TAG" == "canary" ]; then
   mv package.json.new package.json
 fi
 
-function set_package_manager() {
-  jq --arg pm "$1" '.packageManager = $pm' package.json > package.json.new
-  mv package.json.new package.json
-}
-
 # Enable corepack so that when we set the packageManager in package.json it actually makes a diference.
 if [ "$PRYSK_TEMP" == "" ]; then
   COREPACK_INSTALL_DIR_CMD=
@@ -46,27 +41,11 @@ else
 fi
 corepack enable "${COREPACK_INSTALL_DIR_CMD}"
 
-# Set the packageManger version
-NPM_PACKAGE_MANAGER_VALUE="npm@8.1.2"
-PNPM_PACKAGE_MANAGER_VALUE="pnpm@6.26.1"
-YARN_PACKAGE_MANAGER_VALUE="yarn@1.22.17"
-
 if [ "$pkgManager" == "npm" ]; then
-  # Note! We will packageManager for npm, but it doesn't actually change the version
-  # We are effectively just removing any packageManager that's already set.
-  # https://nodejs.org/api/corepack.html#how-does-corepack-interact-with-npm
-  # > "While npm is a valid option in the "packageManager" property, the lack of shim will cause the global npm to be used."
-  set_package_manager "$NPM_PACKAGE_MANAGER_VALUE"
-
-  npm --version
   npm install > /dev/null 2>&1
 elif [ "$pkgManager" == "pnpm" ]; then
-  set_package_manager "$PNPM_PACKAGE_MANAGER_VALUE"
-  pnpm --version
   pnpm install > /dev/null 2>&1
 elif [ "$pkgManager" == "yarn" ]; then
-  set_package_manager "$YARN_PACKAGE_MANAGER_VALUE"
-  yarn --version
   # Pass a --cache-folder here because yarn seems to have trouble
   # running multiple yarn installs at the same time and we are running
   # examples tests in parallel. https://github.com/yarnpkg/yarn/issues/1275
