@@ -9,6 +9,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 pub use reqwest::Response;
 use reqwest::{Method, RequestBuilder, StatusCode};
+use serde::Deserialize;
 use turborepo_ci::{is_ci, Vendor};
 use turborepo_vercel_api::{
     APIError, CachingStatus, CachingStatusResponse, PreflightResponse, SpacesResponse, Team,
@@ -42,6 +43,7 @@ pub trait Client {
     ) -> Result<CachingStatusResponse>;
     async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse>;
     async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
+    #[allow(clippy::too_many_arguments)]
     async fn put_artifact(
         &self,
         hash: &str,
@@ -49,6 +51,8 @@ pub trait Client {
         duration: u64,
         tag: Option<&str>,
         token: &str,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
     ) -> Result<()>;
     async fn handle_403(response: Response) -> Error;
     async fn fetch_artifact(
@@ -223,6 +227,8 @@ impl Client for APIClient {
         duration: u64,
         tag: Option<&str>,
         token: &str,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
     ) -> Result<()> {
         let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
         let mut allow_auth = true;
@@ -253,6 +259,8 @@ impl Client for APIClient {
             request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
         }
 
+        request_builder = Self::add_team_params(request_builder, team_id, team_slug);
+
         request_builder = Self::add_ci_header(request_builder);
 
         if let Some(tag) = tag {
@@ -270,7 +278,11 @@ impl Client for APIClient {
     }
 
     async fn handle_403(response: Response) -> Error {
-        let api_error: APIError = match response.json().await {
+        #[derive(Deserialize)]
+        struct WrappedAPIError {
+            error: APIError,
+        }
+        let WrappedAPIError { error: api_error } = match response.json().await {
             Ok(api_error) => api_error,
             Err(e) => return Error::ReqwestError(e),
         };
