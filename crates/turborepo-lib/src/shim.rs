@@ -444,7 +444,7 @@ impl LocalTurboState {
             Self::generate_unplugged_path,
         ];
 
-        println!("root_path: {:?}", root_path);
+        // println!("root_path: {:?}", root_path);
 
         // Detecting the package manager is more expensive than just doing an exhaustive
         // search.
