@@ -1,3 +1,6 @@
+/// Types for interacting with the Vercel API. Used for both
+/// the client (`turborepo-api-client`) and for the
+/// mock server (`turborepo-vercel-api-mock`)
 use serde::{Deserialize, Serialize};
 use url::Url;
 
