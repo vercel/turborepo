@@ -3,7 +3,6 @@ module.exports = {
   rules: {
     // Most of these rules should probably be on. Turning them off because they fail in many places
     // and we need to set aside time to make them work.
-    "@typescript-eslint/naming-convention": "warn",
     "@typescript-eslint/no-explicit-any": "warn",
     "@typescript-eslint/no-floating-promises": "warn",
     "@typescript-eslint/no-implied-eval": "warn",

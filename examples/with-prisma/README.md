@@ -17,9 +17,9 @@ This turborepo includes the following packages/apps:
 ### Apps and Packages
 
 - `web`: a [Next.js](https://nextjs.org/) app
-- `config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `database`: [Prisma](https://prisma.io/) ORM wrapper to manage & access your database
-- `tsconfig`: `tsconfig.json`s used throughout the monorepo
+- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
+- `@repo/database`: [Prisma](https://prisma.io/) ORM wrapper to manage & access your database
+- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
