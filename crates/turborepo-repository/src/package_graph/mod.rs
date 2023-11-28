@@ -329,7 +329,7 @@ impl PackageGraph {
             self.workspaces
                 .iter()
                 .filter(|(_name, info)| {
-                    closures.get(info.package_path().as_str())
+                    closures.get(info.package_path().to_unix().as_str())
                         != info.transitive_dependencies.as_ref()
                 })
                 .map(|(name, _info)| match name {
