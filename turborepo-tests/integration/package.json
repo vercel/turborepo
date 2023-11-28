@@ -1,7 +1,7 @@
 {
   "name": "turborepo-tests-integration",
   "scripts": {
-    "test": "cross-env EXPERIMENTAL_RUST_CODEPATH=false node ./test.mjs find-turbo/linked.t",
+    "test": "cross-env EXPERIMENTAL_RUST_CODEPATH=false node ./test.mjs",
     "test:rust-codepath": "cross-env EXPERIMENTAL_RUST_CODEPATH=true node ./test.mjs",
     "test:rust-codepath:interactive": "cross-env EXPERIMENTAL_RUST_CODEPATH=true PRYSK_INTERACTIVE=true node ./test.mjs",
     "test:interactive": "EXPERIMENTAL_RUST_CODEPATH=false PRYSK_INTERACTIVE=true node ./test.mjs",

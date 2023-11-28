@@ -337,47 +337,21 @@ impl LocalTurboState {
     // - `pnpm install`
     // - `npm install --install-strategy=linked`
     fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
-        ///////////// Original Implementation ///////////////////////////////
-        let orig_path = root_path
-            .as_path()
-            .join("node_modules")
-            .join("turbo")
-            .join("..");
+        // turbo_path is a symlink in this install strategy. Get path to the symlink
+        let turbo_path = root_path.as_path().join("node_modules").join("turbo");
 
-        let orig_canonical_path = fs_canonicalize(&orig_path).ok()?;
-        // println!("O path 1: {:?}", orig_path);
-        // println!("O path C: {:?}", orig_canonical_path);
+        // Canonoicalize the symlink to what it points to. We do this _before_
+        // traversing up to the parent, because on Windows, if you canonicalize
+        // a path that ends with `/..` it follows that path _before_ it follows
+        // the symlink, leading to the wrong place. We could separate the
+        // Windnows implementaiton here, but this workaround worksf or other
+        // platforms as well.
+        let canonical_path = fs_canonicalize(&turbo_path).ok()?;
 
-        let orig_abs_path = AbsoluteSystemPathBuf::try_from(orig_canonical_path).ok()?;
-        // println!("O path A: {:?}", orig_abs_path);
+        // Go up the parent
+        let parent_canonical_path = canonical_path.join("..");
 
-        // println!("\n");
-
-        ///////////// New Implementation ///////////////////////////////
-        let new_path = root_path.as_path().join("node_modules").join("turbo");
-
-        println!("N path 1: {:?}", new_path);
-
-        match fs_canonicalize(&new_path) {
-            Ok(new_canonical_path) => {
-                // println!("N path C: {:?}", new_canonical_path);
-                let new_canonical_path_parent = new_canonical_path.join("..");
-                // println!("N path P: {:?}", new_canonical_path_parent);
-
-                let new_abs_path =
-                    AbsoluteSystemPathBuf::try_from(new_canonical_path_parent).ok()?;
-
-                // println!("N path A: {:?}", new_abs_path);
-
-                // println!("\n");
-
-                Some(new_abs_path)
-            }
-            Err(error) => {
-                println!("Error while canonicalizing path: {}", error);
-                return None;
-            }
-        }
+        AbsoluteSystemPathBuf::try_from(parent_canonical_path).ok()
     }
 
     // The unplugged directory doesn't have a fixed path.
@@ -444,8 +418,6 @@ impl LocalTurboState {
             Self::generate_unplugged_path,
         ];
 
-        // println!("root_path: {:?}", root_path);
-
         // Detecting the package manager is more expensive than just doing an exhaustive
         // search.
         for root in search_functions
@@ -455,21 +427,12 @@ impl LocalTurboState {
             // Needs borrow because of the loop.
             #[allow(clippy::needless_borrow)]
             let bin_path = root.join_components(&platform_package_executable_path_components);
-            // println!("canonicalized root path: {}", root);
-            // println!(
-            //     "platform_package_executable_path_components is: {:?}",
-            //     platform_package_executable_path_components
-            // );
-            // println!("bin path is: {}", bin_path);
-
             match fs_canonicalize(&bin_path) {
                 Ok(bin_path) => {
                     let resolved_package_json_path =
                         root.join_components(&platform_package_json_path_components);
-
                     let platform_package_json =
                         PackageJson::load(&resolved_package_json_path).ok()?;
-
                     let local_version = platform_package_json.version?;
 
                     debug!("Local turbo path: {}", bin_path.display());
