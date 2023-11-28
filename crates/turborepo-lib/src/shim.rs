@@ -345,13 +345,13 @@ impl LocalTurboState {
             .join("..");
 
         let orig_canonical_path = fs_canonicalize(&orig_path).ok()?;
-        println!("O path 1: {:?}", orig_path);
-        println!("O path C: {:?}", orig_canonical_path);
+        // println!("O path 1: {:?}", orig_path);
+        // println!("O path C: {:?}", orig_canonical_path);
 
         let orig_abs_path = AbsoluteSystemPathBuf::try_from(orig_canonical_path).ok()?;
-        println!("O path A: {:?}", orig_abs_path);
+        // println!("O path A: {:?}", orig_abs_path);
 
-        println!("\n");
+        // println!("\n");
 
         ///////////// New Implementation ///////////////////////////////
         let new_path = root_path.as_path().join("node_modules").join("turbo");
@@ -360,16 +360,16 @@ impl LocalTurboState {
 
         match fs_canonicalize(&new_path) {
             Ok(new_canonical_path) => {
-                println!("N path C: {:?}", new_canonical_path);
+                // println!("N path C: {:?}", new_canonical_path);
                 let new_canonical_path_parent = new_canonical_path.join("..");
-                println!("N path P: {:?}", new_canonical_path_parent);
+                // println!("N path P: {:?}", new_canonical_path_parent);
 
                 let new_abs_path =
                     AbsoluteSystemPathBuf::try_from(new_canonical_path_parent).ok()?;
 
-                println!("N path A: {:?}", new_abs_path);
+                // println!("N path A: {:?}", new_abs_path);
 
-                println!("\n");
+                // println!("\n");
 
                 Some(new_abs_path)
             }
@@ -438,10 +438,10 @@ impl LocalTurboState {
 
         // These are lazy because the last two are more expensive.
         let search_functions = [
-            // Self::generate_hoisted_path,
-            // Self::generate_nested_path,
+            Self::generate_hoisted_path,
+            Self::generate_nested_path,
             Self::generate_linked_path,
-            // Self::generate_unplugged_path,
+            Self::generate_unplugged_path,
         ];
 
         println!("root_path: {:?}", root_path);
@@ -455,12 +455,12 @@ impl LocalTurboState {
             // Needs borrow because of the loop.
             #[allow(clippy::needless_borrow)]
             let bin_path = root.join_components(&platform_package_executable_path_components);
-            println!("canonicalized root path: {}", root);
-            println!(
-                "platform_package_executable_path_components is: {:?}",
-                platform_package_executable_path_components
-            );
-            println!("bin path is: {}", bin_path);
+            // println!("canonicalized root path: {}", root);
+            // println!(
+            //     "platform_package_executable_path_components is: {:?}",
+            //     platform_package_executable_path_components
+            // );
+            // println!("bin path is: {}", bin_path);
 
             match fs_canonicalize(&bin_path) {
                 Ok(bin_path) => {
