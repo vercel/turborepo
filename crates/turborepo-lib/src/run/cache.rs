@@ -104,6 +104,10 @@ impl RunCache {
             ui: self.ui,
         }
     }
+
+    pub async fn wait_for_cache(&self) {
+        self.cache.wait().await
+    }
 }
 
 pub struct TaskCache {

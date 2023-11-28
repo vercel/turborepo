@@ -1,5 +1,5 @@
   $ . ${TESTDIR}/../setup.sh basic pnpm
-  6.26.1
+
 # run twice and make sure it works
   $ pnpm run build lint -- --output-logs=errors-only
   
