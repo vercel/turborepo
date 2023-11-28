@@ -3,6 +3,7 @@
   "scripts": {
     "test": "cross-env EXPERIMENTAL_RUST_CODEPATH=false node ./test.mjs find-turbo/linked.t",
     "test:rust-codepath": "cross-env EXPERIMENTAL_RUST_CODEPATH=true node ./test.mjs",
+    "test:rust-codepath:interactive": "cross-env EXPERIMENTAL_RUST_CODEPATH=true PRYSK_INTERACTIVE=true node ./test.mjs",
     "test:interactive": "EXPERIMENTAL_RUST_CODEPATH=false PRYSK_INTERACTIVE=true node ./test.mjs",
     "test:parallel": ".cram_env/bin/pytest -n auto tests --prysk-shell=`which bash`",
     "pretest:parallel": ".cram_env/bin/pip3 install --quiet pytest \"prysk[pytest-plugin]\" pytest-xdist"
