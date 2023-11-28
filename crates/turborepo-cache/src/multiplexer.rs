@@ -90,16 +90,18 @@ impl CacheMultiplexer {
             _ => None,
         };
 
-        if let Some(Err(CacheError::ApiClientError(
-            box turborepo_api_client::Error::CacheDisabled { .. },
-            ..,
-        ))) = http_result
-        {
-            warn!("failed to put to http cache: cache disabled");
-            self.should_use_http_cache.store(false, Ordering::Relaxed);
+        match http_result {
+            Some(Err(CacheError::ApiClientError(
+                box turborepo_api_client::Error::CacheDisabled { .. },
+                ..,
+            ))) => {
+                warn!("failed to put to http cache: cache disabled");
+                self.should_use_http_cache.store(false, Ordering::Relaxed);
+                Ok(())
+            }
+            Some(Err(e)) => Err(e),
+            None | Some(Ok(())) => Ok(()),
         }
-
-        Ok(())
     }
 
     pub async fn fetch(
