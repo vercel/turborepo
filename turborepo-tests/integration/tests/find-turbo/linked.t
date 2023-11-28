@@ -2,6 +2,8 @@ Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) "linked"
 
+  $ ${TURBO} build --filter foo -vv
+
 Make sure we use local, but do not pass --skip-infer to old binary
   $ ${TESTDIR}/set_version.sh $(pwd) "1.0.0"
   $ ${TURBO} build --filter foo -vv > out.log 2>&1
