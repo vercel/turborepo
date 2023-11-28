@@ -80,6 +80,18 @@ directions even if you aren't planning to make a contribution.
 Turborepo does not support nested workspaces. Therefore, if you have a workspace that contains another workspace,
 you may see unexpected behavior. We recommend flattening your workspace structure to avoid this issue.
 
+### Root Dependencies
+
+If you have a workspace that is used by several other workspaces in the monorepo, say a standard ESLint configuration,
+you may be tempted to list it as a root dependency by declaring it in the `package.json` at the root of your monorepo.
+This lets you use the dependency throughout your monorepo without having to declare it in each workspace's `package.json`.
+However, this can lead to unexpected cache hits, because Turbo does **not** include root internal dependencies, i.e. a
+dependency declared in the root `package.json` of a workspace that internal to your monorepo, in its
+cache signature. Therefore, if a root internal dependency changes, none of the other packages will get rebuilt.
+
+To solve this, always explicitly add a workspace's internal dependencies to its `package.json`.
+[Here is](/repo/docs/handbook/workspaces#workspaces-which-depend-on-each-other) an explanation of how to do that.
+
 ### The `.turbo` directory
 
 One of the [core concepts][2] behind Turbo is that when a declared input
