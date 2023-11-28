@@ -77,4 +77,10 @@ if [[ "$OSTYPE" == "msys" && $FIXTURE_NAME == "linked" ]]; then
 
   echo "ls -al node_modules/turbo/../turbo-windows-64/bin"
   ls -al node_modules/turbo/../turbo-windows-64/bin
+
+  echo "REAL PATH: ls -al node_modules/.pnpm/turbo@1.0.0/node_modules/turbo-windows-64/bin"
+  ls -al node_modules/.pnpm/turbo@1.0.0/node_modules/turbo-windows-64/bin
+
+  echo "ls -al node_modules/.pnpm/turbo-windows-64@1.0.0/node_modules/turbo-windows-64/bin/"
+  ls -al node_modules/.pnpm/turbo-windows-64@1.0.0/node_modules/turbo-windows-64/bin/
 fi
