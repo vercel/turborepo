@@ -228,6 +228,8 @@ mod tests {
             _duration: u64,
             _tag: Option<&str>,
             _token: &str,
+            _team_id: Option<&str>,
+            _team_slug: Option<&str>,
         ) -> turborepo_api_client::Result<()> {
             unimplemented!("put_artifact")
         }
