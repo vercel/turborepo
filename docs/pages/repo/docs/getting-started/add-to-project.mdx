@@ -2,10 +2,11 @@ import { Tabs, Tab } from '../../../../components/Tabs'
 
 # Add Turborepo to your existing project
 
-Turborepo can be used in any project to speed up the execution of scripts in your `package.json`.
+Turborepo can be used in any project to speed up the execution of scripts in
+your `package.json`.
 
-After you install `turbo`, you'll be able to run your `package.json` tasks
-using `turbo` instead of your package manager.
+After you install `turbo`, you'll be able to run all your `package.json` tasks
+from `turbo` instead of your package manager.
 
 By configuring your `turbo.json` correctly, you'll notice how
 [caching](/repo/docs/core-concepts/caching) helps your tasks run a lot faster.
@@ -40,28 +41,26 @@ For more information on configuring your `turbo.json`, see the [Configuration Op
 
 <Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
   <Tab>
-  ```json filename="turbo.json"
-  {
-    "$schema": "https://turbo.build/schema.json",
-    "pipeline": {
-      "build": {
-        "outputs": [".next/**", "!.next/cache/**"]
-      },
-      "type-check": {}
-    }
+```json filename="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "type-check": {}
   }
   ```
   </Tab>
   <Tab>
-  ```json filename="turbo.json"
-  {
-    "$schema": "https://turbo.build/schema.json",
-    "pipeline": {
-      "build": {
-        "outputs": ["dist/**"]
-      },
-      "type-check": {}
-    }
+```json filename="turbo.json"
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "type-check": {}
   }
   ```
 
