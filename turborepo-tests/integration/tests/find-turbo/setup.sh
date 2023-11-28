@@ -51,7 +51,7 @@ if [[ "$OSTYPE" == "msys" && $FIXTURE_NAME == "linked" ]]; then
   # TODO, should we install this as a dependency in this workspace so we can use it or
   # something else to avoid hitting the network in the middle of the test setup?
   echo "pnpx symlink-dir turbo .pnpm/turbo@1.0.0/node_modules/turbo"
-  pnpx symlink-dir turbo .pnpm/turbo@1.0.0/node_modules/turbo
+  pnpx symlink-dir .pnpm/turbo@1.0.0/node_modules/turbo turbo
 
   # Get outta there
   echo "leaving node_modules directory"
