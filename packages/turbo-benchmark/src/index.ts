@@ -1,8 +1,17 @@
 import cp from "node:child_process";
-import fs from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  rmSync,
+  mkdirSync,
+  closeSync,
+  openSync,
+  writeSync,
+} from "node:fs";
 import path from "node:path";
-import fse from "fs-extra";
-import ndjson from "ndjson";
+import { copySync } from "fs-extra";
+import { stringify } from "ndjson";
 import {
   DEFAULT_EXEC_OPTS,
   getCommitDetails,
@@ -46,9 +55,9 @@ interface TBirdEvent {
 }
 
 function cleanTurboCache(): void {
-  if (fs.existsSync(DEFAULT_CACHE_PATH)) {
+  if (existsSync(DEFAULT_CACHE_PATH)) {
     console.log("clearing cache");
-    fs.rmSync(DEFAULT_CACHE_PATH, { recursive: true });
+    rmSync(DEFAULT_CACHE_PATH, { recursive: true });
   }
 }
 
@@ -85,25 +94,25 @@ function cachedBuild(): Array<Timing> {
 
 function saveCache() {
   // Remove any existing backup
-  if (fs.existsSync(ALT_CACHE_PATH)) {
-    fs.rmSync(ALT_CACHE_PATH, { recursive: true });
+  if (existsSync(ALT_CACHE_PATH)) {
+    rmSync(ALT_CACHE_PATH, { recursive: true });
   }
   // copy the current cache to the backup
-  if (fs.existsSync(DEFAULT_CACHE_PATH)) {
-    fse.copySync(DEFAULT_CACHE_PATH, ALT_CACHE_PATH, { recursive: true });
+  if (existsSync(DEFAULT_CACHE_PATH)) {
+    copySync(DEFAULT_CACHE_PATH, ALT_CACHE_PATH, { recursive: true });
   } else {
     // make an empty cache
-    fs.mkdirSync(ALT_CACHE_PATH, { recursive: true });
+    mkdirSync(ALT_CACHE_PATH, { recursive: true });
   }
 }
 
 function restoreSavedCache() {
   // Remove any existing cache
-  if (fs.existsSync(DEFAULT_CACHE_PATH)) {
-    fs.rmSync(DEFAULT_CACHE_PATH, { recursive: true });
+  if (existsSync(DEFAULT_CACHE_PATH)) {
+    rmSync(DEFAULT_CACHE_PATH, { recursive: true });
   }
   // Copy the backed-up cache to the real cache
-  fse.copySync(ALT_CACHE_PATH, DEFAULT_CACHE_PATH, { recursive: true });
+  copySync(ALT_CACHE_PATH, DEFAULT_CACHE_PATH, { recursive: true });
 }
 
 function cachedBuildWithDelta(): Array<Timing> {
@@ -121,10 +130,10 @@ function cachedBuildWithDelta(): Array<Timing> {
     "important-component-0",
     "important-component-0.tsx"
   );
-  const contents = fs.readFileSync(file).toString("utf-8");
+  const contents = readFileSync(file).toString("utf-8");
   // make a small edit
   const updated = contents.replace("-0!", "-0!!");
-  fs.writeFileSync(file, updated);
+  writeFileSync(file, updated);
 
   const timings: Array<Timing> = [];
   for (let i = 0; i < REPETITIONS; i++) {
@@ -145,9 +154,11 @@ function cachedBuildWithDependencyChange(): Array<Timing> {
 
   // Edit a dependency
   const file = path.join(REPO_PATH, "apps", "navigation", "package.json");
-  const contents = JSON.parse(fs.readFileSync(file).toString("utf-8"));
+  const contents = JSON.parse(readFileSync(file).toString("utf-8")) as {
+    dependencies: Record<string, string>;
+  };
   contents.dependencies["crew-important-feature-0"] = "*";
-  fs.writeFileSync(file, JSON.stringify(contents, null, 2));
+  writeFileSync(file, JSON.stringify(contents, null, 2));
 
   const timings: Array<Timing> = [];
   for (let i = 0; i < REPETITIONS; i++) {
@@ -199,20 +210,17 @@ class Benchmarks {
 
   flush() {
     console.log(JSON.stringify(this.benchmarks, null, 2));
-    fs.writeFileSync(
-      this.benchmarkFile,
-      JSON.stringify(this.benchmarks, null, 2)
-    );
-    const stream = ndjson.stringify();
-    const fd = fs.openSync(this.tinybirdFile, "w");
+    writeFileSync(this.benchmarkFile, JSON.stringify(this.benchmarks, null, 2));
+    const stream = stringify();
+    const fd = openSync(this.tinybirdFile, "w");
     stream.on("data", (line) => {
-      fs.writeSync(fd, line as string);
+      writeSync(fd, line as string);
     });
     this.tbirdEvents.forEach((t) => {
       stream.write(t);
     });
     stream.end();
-    fs.closeSync(fd);
+    closeSync(fd);
   }
 }
 
