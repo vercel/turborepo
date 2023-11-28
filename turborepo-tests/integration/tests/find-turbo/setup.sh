@@ -19,10 +19,7 @@ if [[ "$OSTYPE" == "msys" ]]; then
     # echo "entering node_modules directory"
     pushd node_modules > /dev/null || exit 1
 
-
-    # Use pnpx to run symlnk-dir because installing globally doesn't work with pnpm
-    # TODO, should we install this as a dependency in this workspace so we can use it or
-    # something else to avoid hitting the network in the middle of the test setup?
+    # Use pnpx to run symlnk-dir because installing globally doesn't work with pnpm.
     pnpx symlink-dir .pnpm/turbo@1.0.0/node_modules/turbo turbo > /dev/null 2>&1
 
     # Get outta there
