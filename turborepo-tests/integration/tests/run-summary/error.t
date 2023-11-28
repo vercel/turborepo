@@ -80,7 +80,7 @@ Validate that we got a full task summary for the failed task with an error in .e
     "execution": {
       "startTime": [0-9]+, (re)
       "endTime": [0-9]+, (re)
-      "error": "command .*npm run maybefails exited \(1\)", (re)
+      "error": "command .*npm(?:\.cmd)? run maybefails exited \(1\)", (re)
       "exitCode": 1
     }
   }
