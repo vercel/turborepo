@@ -340,12 +340,12 @@ impl LocalTurboState {
         // turbo_path is a symlink in this install strategy. Get path to the symlink
         let turbo_path = root_path.as_path().join("node_modules").join("turbo");
 
-        // Canonoicalize the symlink to what it points to. We do this _before_
+        // Canonicalize the symlink to what it points to. We do this _before_
         // traversing up to the parent, because on Windows, if you canonicalize
-        // a path that ends with `/..` it follows that path _before_ it follows
-        // the symlink, leading to the wrong place. We could separate the
-        // Windnows implementaiton here, but this workaround worksf or other
-        // platforms as well.
+        // a path that ends with `/..` it traverses to the parent directory before it
+        // follows the symlink, leading to the wrong place. We could separate
+        // the Windows implementation, but this workaround works for other platforms as
+        // well.
         let canonical_path = fs_canonicalize(&turbo_path).ok()?;
 
         // Go up the parent
