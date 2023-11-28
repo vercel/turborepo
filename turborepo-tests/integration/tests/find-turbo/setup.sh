@@ -36,6 +36,7 @@ if [[ "$OSTYPE" == "msys" && $FIXTURE_NAME == "linked" ]]; then
   rm -rf node_modules/turbo
 
   # Let's enter the node_modules directory
+  echo "entering node_modules directory"
   pushd node_modules > /dev/null || exit 1
 
 
@@ -49,19 +50,33 @@ if [[ "$OSTYPE" == "msys" && $FIXTURE_NAME == "linked" ]]; then
   # Use pnpx to run symlnk-dir because installing globally doesn't work with pnpm
   # TODO, should we install this as a dependency in this workspace so we can use it or
   # something else to avoid hitting the network in the middle of the test setup?
+  echo "pnpx symlink-dir turbo .pnpm/turbo@1.0.0/node_modules/turbo"
   pnpx symlink-dir turbo .pnpm/turbo@1.0.0/node_modules/turbo
 
-
-  ls -al
-
   # Get outta there
+  echo "leaving node_modules directory"
   popd > /dev/null || exit 1
 
   # Make sure we got outta there.
-  echo "PWD: $PWD"
+  echo "PWD now is: $PWD"
 
   # Debug what we have
+  echo "ls -al"
   ls -al
+
+  echo "ls -al node_modules/"
+  ls -al node_modules/
+
+  echo "ls -al node_modules/turbo/"
+  ls -al node_modules/turbo/
+
+  echo "ls -al node_modules/turbo/../"
+  ls -al node_modules/turbo/../
+
+  echo "ls -al node_modules/turbo/../turbo-windows-64"
+  ls -al node_modules/turbo/../turbo-windows-64
+
+  echo "ls -al node_modules/turbo/../turbo-windows-64/bin"
   ls -al node_modules/turbo/../turbo-windows-64/bin
 fi
 
