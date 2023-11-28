@@ -1,4 +1,4 @@
-  $ . ${TESTDIR}/../setup.sh kitchen-sink pnpm
+  $ . ${TESTDIR}/../helpers/examples_setup.sh kitchen-sink pnpm
 
 # run twice and make sure it works
   $ pnpm run build lint -- --output-logs=errors-only

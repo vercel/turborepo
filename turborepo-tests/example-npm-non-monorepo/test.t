@@ -1,4 +1,4 @@
-  $ . ${TESTDIR}/../setup.sh non-monorepo npm
+  $ . ${TESTDIR}/../helpers/examples_setup.sh non-monorepo npm
 
 # run twice and make sure it works
   $ npx turbo build lint --output-logs=errors-only

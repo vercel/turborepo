@@ -1,10 +1,10 @@
-  $ . ${TESTDIR}/../setup.sh with-npm npm
+  $ . ${TESTDIR}/../helpers/examples_setup.sh basic pnpm
 
 # run twice and make sure it works
-  $ npm run build lint -- --output-logs=errors-only
+  $ pnpm run build lint -- --output-logs=errors-only
   
-  \> build (re)
-  \> turbo run build lint --output-logs=errors-only (re)
+  \> my-turborepo@ build (.*)/test.t (re)
+  \> turbo build "lint" "--output-logs=errors-only" (re)
   
   \xe2\x80\xa2 Packages in scope: @repo/eslint-config, @repo/typescript-config, @repo/ui, docs, web (esc)
   \xe2\x80\xa2 Running build, lint in 5 packages (esc)
@@ -14,10 +14,10 @@
   Cached:    0 cached, 5 total
     Time:\s*[\.0-9ms]+  (re)
   
-  $ npm run build lint -- --output-logs=errors-only
+  $ pnpm run build lint -- --output-logs=errors-only
   
-  \> build (re)
-  \> turbo run build lint --output-logs=errors-only (re)
+  \> my-turborepo@ build (.*)/test.t (re)
+  \> turbo build "lint" "--output-logs=errors-only" (re)
   
   \xe2\x80\xa2 Packages in scope: @repo/eslint-config, @repo/typescript-config, @repo/ui, docs, web (esc)
   \xe2\x80\xa2 Running build, lint in 5 packages (esc)

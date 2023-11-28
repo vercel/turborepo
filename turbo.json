@@ -222,7 +222,7 @@
     "example-test": {
       "dependsOn": [
         "topo",
-        "@turborepo-examples-tests/helpers#setup",
+        "turborepo-tests-helpers#setup",
         "cli#build"
       ],
       "inputs": ["*.t", "../setup.sh"]

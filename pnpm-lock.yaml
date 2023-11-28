@@ -298,128 +298,6 @@ importers:
 
   examples: {}
 
-  examples-tests/helpers: {}
-
-  examples-tests/npm-non-monorepo:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/npm-with-npm:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/npm-with-yarn:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/pnpm-basic:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/pnpm-gatsby:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/pnpm-kitchen-sink:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/pnpm-with-svelte:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/yarn-non-monorepo:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/yarn-with-npm:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/yarn-with-yarn:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
   packages/create-turbo:
     dependencies:
       chalk:
@@ -1228,6 +1106,96 @@ importers:
       typescript:
         specifier: ^5.2.2
         version: 5.2.2
+
+  turborepo-tests/example-npm-non-monorepo:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-npm-with-npm:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-npm-with-yarn:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-pnpm-basic:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-pnpm-gatsby:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-pnpm-kitchen-sink:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-pnpm-with-svelte:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-yarn-non-monorepo:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-yarn-with-npm:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-yarn-with-yarn:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
 
   turborepo-tests/helpers: {}
 

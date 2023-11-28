@@ -1,4 +1,4 @@
-  $ . ${TESTDIR}/../setup.sh with-yarn yarn
+  $ . ${TESTDIR}/../helpers/examples_setup.sh with-yarn yarn
 
 # run twice and make sure it works
   $ yarn turbo build lint --output-logs=errors-only
