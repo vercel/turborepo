@@ -25,7 +25,7 @@ FIXTURE_DIR="${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_NAME"
 # echo "-----------"
 
 DESTINATION="${TARGET_DIR}"
-echo "cp cmd: cp -a ${FIXTURE_DIR}/. ${DESTINATION}/"
+# echo "cp cmd: cp -a ${FIXTURE_DIR}/. ${DESTINATION}/"
 cp -a "${FIXTURE_DIR}/." "${DESTINATION}/"
 
 # We need to symlink: turbo -> .pnpm/turbo@1.0.0/node_modules/turbo
