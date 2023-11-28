@@ -532,12 +532,31 @@ impl PackageManager {
     pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
         turbo_root.join_component(self.lockfile_name())
     }
+
+    pub fn arg_separator(&self, user_args: &[String]) -> Option<&str> {
+        match self {
+            PackageManager::Yarn | PackageManager::Bun => {
+                // Yarn and bun warn and swallows a "--" token. If the user is passing "--", we
+                // need to prepend our own so that the user's doesn't get
+                // swallowed. If they are not passing their own, we don't need
+                // the "--" token and can avoid the warning.
+                if user_args.iter().any(|arg| arg == "--") {
+                    Some("--")
+                } else {
+                    None
+                }
+            }
+            PackageManager::Npm | PackageManager::Pnpm6 => Some("--"),
+            PackageManager::Pnpm | PackageManager::Berry => None,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::{collections::HashSet, fs::File};
 
+    use pretty_assertions::assert_eq;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
 
@@ -586,16 +605,18 @@ mod tests {
         }
 
         let basic = examples.join_component("basic");
-        let basic_expected: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter([
+        let mut basic_expected = Vec::from_iter([
             basic.join_components(&["apps", "docs", "package.json"]),
             basic.join_components(&["apps", "web", "package.json"]),
-            basic.join_components(&["packages", "eslint-config-custom", "package.json"]),
-            basic.join_components(&["packages", "tsconfig", "package.json"]),
+            basic.join_components(&["packages", "eslint-config", "package.json"]),
+            basic.join_components(&["packages", "typescript-config", "package.json"]),
             basic.join_components(&["packages", "ui", "package.json"]),
         ]);
+        basic_expected.sort();
         for mgr in &[PackageManager::Pnpm, PackageManager::Pnpm6] {
             let found = mgr.get_package_jsons(&basic).unwrap();
-            let found: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter(found);
+            let mut found = Vec::from_iter(found);
+            found.sort();
             assert_eq!(found, basic_expected, "{}", mgr);
         }
     }

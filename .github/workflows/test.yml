@@ -241,6 +241,7 @@ jobs:
           CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          EXPERIMENTAL_RUST_CODEPATH: true
 
       - name: Run sccache stat for check
         shell: bash
@@ -302,12 +303,13 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: turbo run test --filter=cli --color
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
   turborepo_integration:
     name: Turborepo Integration Tests
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
-    timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -317,12 +319,22 @@ jobs:
             runner: ubuntu-latest
           - name: macos
             runner: macos-latest
+          # Enable this once all tests on windows are passing (rememeber to copy over crlf fix from turborepo_integration_windows)
+          # - name: winodws
+          #   runner: windows-latest
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
           windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
 
       - name: Cache Prysk
         id: cache-prysk
@@ -333,12 +345,62 @@ jobs:
 
       - name: Integration Tests
         run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
+
+  # This is the same as turborepo_integration, but it runs on windows.
+  # Separate entry so it's not required for merge.
+  turborepo_integration_windows:
+    name: Turborepo Integration Tests (Windows)
+    needs: [determine_jobs, build_turborepo]
+    if: needs.determine_jobs.outputs.turborepo_integration == 'true'
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+    steps:
+      # On Windows, set autocrlf to input so that when the repo is cloned down
+      # the fixtures retain their line endings and don't get updated to CRLF.
+      # We want this because this repo also contains the fixtures for our test cases
+      # and these fixtures have files that need stable file hashes. If we let git update
+      # the line endings on checkout, the file hashes will change.
+      # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
+      - name: set crlf
+        if: matrix.os.name == 'windows'
+        shell: bash
+        run: git config --global core.autocrlf input
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
+
+      - name: Cache Prysk
+        id: cache-prysk
+        uses: actions/cache@v3
+        with:
+          path: cli/.cram_env
+          key: prysk-venv-${{ matrix.os.name }}
+
+      - name: Integration Tests
+        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
   turborepo_integration_rust:
     name: Turborepo Integration Tests (Rust Codepath)
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
-    timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -349,12 +411,32 @@ jobs:
           # TODO: enable macos when --experimental-rust-codepath is passing all tests on ubuntu
           # - name: macos
           #   runner: macos-latest
+          - name: windows
+            runner: windows-latest
     steps:
+      # On Windows, set autocrlf to input so that when the repo is cloned down
+      # the fixtures retain their line endings and don't get updated to CRLF.
+      # We want this because this repo also contains the fixtures for our test cases
+      # and these fixtures have files that need stable file hashes. If we let git update
+      # the line endings on checkout, the file hashes will change.
+      # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
+      - name: set crlf
+        if: matrix.os.name == 'windows'
+        shell: bash
+        run: git config --global core.autocrlf input
+
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          target: ${{ matrix.os.name }}
+          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
 
       - name: Cache Prysk
         id: cache-prysk
@@ -365,6 +447,8 @@ jobs:
 
       - name: Integration Tests
         run: turbo run test:rust-codepath --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
   turborepo_e2e:
     name: Turborepo E2E Tests
@@ -391,6 +475,8 @@ jobs:
 
       - name: E2E Tests
         run: turbo run test --filter=turborepo-tests-e2e --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --color --env-mode=strict
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
   turborepo_examples:
     name: Turborepo Examples
@@ -448,6 +534,8 @@ jobs:
         # envs var would apply to the actual tests that exercise turbo also,
         # making test output non-deterministic.
         run: turbo run example-test --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
       # Re-enable corepack, actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it here. The "Post" step
@@ -497,7 +585,9 @@ jobs:
 
       - name: Run tests
         run: |
-          turbo run check-types test --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color
+          turbo run check-types test --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
   turbopack_typescript:
     name: Turbopack TypeScript files
@@ -662,7 +752,7 @@ jobs:
 
       - name: Run cargo clippy
         run: |
-          RUSTFLAGS="-D warnings -A deprecated -Aclippy::too_many_arguments" cargo groups clippy turbopack --features rustls-tls
+          RUSTFLAGS="-D warnings -A deprecated" cargo groups clippy turbopack --features rustls-tls
 
       - name: Run ast-grep lints
         run: |
@@ -813,7 +903,9 @@ jobs:
         run: npm install
 
       - name: Install nextest
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.61
 
       - name: Build nextest
         timeout-minutes: 120
@@ -890,7 +982,9 @@ jobs:
         run: npm install
 
       - name: Install nextest
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest@0.9.61
 
       - name: Build nextest
         timeout-minutes: 120
@@ -916,6 +1010,33 @@ jobs:
           name: test_reports
           path: target/nextest/**/*.xml
 
+  turbopack_rust_test_bench1:
+    needs: [determine_jobs, turbopack_rust_check]
+    name: Turbopack Rust testing benchmarks on linux
+    uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
+    with:
+      runner: ubuntu-latest-16-core-oss
+      os: linux
+      all: ${{ needs.determine_jobs.outputs.turbopack_bench == 'true' }}
+
+  turbopack_rust_test_bench2:
+    needs: [determine_jobs, turbopack_rust_check]
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: macos
+            runner: macos-latest
+          # Temporarily disable windows bench due to consistent timeouts
+          # - name: windows
+          #   runner: windows-2019
+    name: Turbopack Rust testing benchmarks on ${{ matrix.os.name }}
+    uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
+    with:
+      runner: ${{ matrix.os.runner }}
+      os: ${{ matrix.os.name }}
+      all: ${{ needs.determine_jobs.outputs.turbopack_bench == 'true' }}
+
   format_lint:
     name: Formatting
     runs-on: ubuntu-latest
@@ -935,7 +1056,9 @@ jobs:
         # Filters some workspaces out:
         # - `cli` because it runs golangci-lint and this Job doesn't have all the dependencies for that.
         # - Other `@vercel/*` packages because ??
-        run: turbo run lint --filter=!cli --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat
+        run: turbo run lint --filter=!cli --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat --env-mode=strict
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
   final:
     name: Ok
@@ -953,6 +1076,7 @@ jobs:
       - turbopack_rust_check
       - turbopack_rust_clippy
       - turbopack_rust_test1
+      - turbopack_rust_test_bench1
       - turbopack_typescript
       - turborepo_rust_test
       - format_lint
@@ -991,6 +1115,7 @@ jobs:
           subjob ${{needs.turbopack_rust_check.result}} "Turbopack Rust checks"
           subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
+          subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
           subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
           subjob ${{needs.turborepo_rust_test.result}} "Turborepo Rust tests"
           subjob ${{needs.format_lint.result}} "Formatting"
@@ -1105,6 +1230,8 @@ jobs:
       - turbopack_rust_clippy
       - turbopack_rust_test1
       - turbopack_rust_test2
+      - turbopack_rust_test_bench1
+      - turbopack_rust_test_bench2
       - turbopack_typescript
       - turborepo_rust_test
       - format_lint
@@ -1144,6 +1271,8 @@ jobs:
           subjob ${{needs.turbopack_rust_clippy.result}} "Turbopack Rust clippy"
           subjob ${{needs.turbopack_rust_test1.result}} "Turbopack Rust tests (linux)"
           subjob ${{needs.turbopack_rust_test2.result}} "Turbopack Rust tests (mac/win, non-blocking)"
+          subjob ${{needs.turbopack_rust_test_bench1.result}} "Turbopack Rust benchmark tests (linux)"
+          subjob ${{needs.turbopack_rust_test_bench2.result}} "Turbopack Rust benchmark tests (mac/win, non-blocking)"
           subjob ${{needs.turbopack_typescript.result}} "Turbopack Typescript checks"
           subjob ${{needs.turborepo_rust_test.result}} "TurboRepo Rust tests"
           subjob ${{needs.format_lint.result}} "Formatting"

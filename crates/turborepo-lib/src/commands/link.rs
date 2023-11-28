@@ -119,7 +119,7 @@ pub(crate) async fn verify_caching_enabled<'a>(
     });
 
     let response = api_client
-        .get_caching_status(token, team_id, team_slug)
+        .get_caching_status(token, Some(team_id), team_slug)
         .await
         .map_err(Error::CachingStatusNotFound)?;
 

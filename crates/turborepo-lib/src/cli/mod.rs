@@ -106,6 +106,10 @@ pub struct Args {
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
     pub cwd: Option<Utf8PathBuf>,
+    /// Fallback to use Go for task execution
+    #[serde(skip)]
+    #[clap(long, global = true)]
+    pub go_fallback: bool,
     /// Specify a file to save a pprof heap profile
     #[clap(long, global = true, value_parser)]
     pub heap: Option<String>,
@@ -336,7 +340,7 @@ pub enum Command {
         #[clap(short = 'r', long)]
         root: Option<String>,
         /// Answers passed directly to generator
-        #[clap(short = 'a', long, value_delimiter = ' ', num_args = 1..)]
+        #[clap(short = 'a', long, num_args = 1..)]
         args: Vec<String>,
 
         #[clap(subcommand)]
@@ -821,12 +825,14 @@ pub async fn run(
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
-            if env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("true") {
+            let should_use_go = cli_args.go_fallback
+                || env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false");
+            if should_use_go {
+                Ok(Payload::Go(Box::new(base)))
+            } else {
                 use crate::commands::run;
                 let exit_code = run::run(base).await?;
                 Ok(Payload::Rust(Ok(exit_code)))
-            } else {
-                Ok(Payload::Go(Box::new(base)))
             }
         }
         Command::Prune {
@@ -1895,5 +1901,73 @@ mod test {
             "3"
         );
         Ok(())
+    }
+    #[test]
+    fn test_parse_gen() {
+        let default_gen = Command::Generate {
+            tag: "latest".to_string(),
+            generator_name: None,
+            config: None,
+            root: None,
+            args: vec![],
+            command: None,
+        };
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "gen"]).unwrap(),
+            Args {
+                command: Some(default_gen.clone()),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo",
+                "gen",
+                "--args",
+                "my long arg string",
+                "my-second-arg"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Generate {
+                    tag: "latest".to_string(),
+                    generator_name: None,
+                    config: None,
+                    root: None,
+                    args: vec![
+                        "my long arg string".to_string(),
+                        "my-second-arg".to_string()
+                    ],
+                    command: None,
+                }),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo",
+                "gen",
+                "--tag",
+                "canary",
+                "--config",
+                "~/custom-gen-config/gen",
+                "my-generator"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Generate {
+                    tag: "canary".to_string(),
+                    generator_name: Some("my-generator".to_string()),
+                    config: Some("~/custom-gen-config/gen".to_string()),
+                    root: None,
+                    args: vec![],
+                    command: None,
+                }),
+                ..Args::default()
+            }
+        );
     }
 }

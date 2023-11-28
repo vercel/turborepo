@@ -5,7 +5,7 @@ use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     reference_type::ReferenceType, source::Source, source_transform::SourceTransforms,
 };
-use turbopack_css::{CssInputTransforms, CssModuleAssetType};
+use turbopack_css::CssModuleAssetType;
 use turbopack_ecmascript::{EcmascriptInputTransforms, EcmascriptOptions};
 use turbopack_mdx::MdxTransformOptions;
 use turbopack_wasm::source::WebAssemblySourceType;
@@ -114,6 +114,9 @@ pub enum ModuleType {
     },
     Json,
     Raw,
+    // [TODO] We want to consolidate mdx as a type of ecma|typescript module types with
+    // its source transform. Refer `turbopack-mdx::into_ecmascript_module_asset` for the reason
+    // why we keep this separately.
     Mdx {
         transforms: Vc<EcmascriptInputTransforms>,
         options: Vc<MdxTransformOptions>,
@@ -122,7 +125,7 @@ pub enum ModuleType {
     CssModule,
     Css {
         ty: CssModuleAssetType,
-        transforms: Vc<CssInputTransforms>,
+        use_lightningcss: bool,
     },
     Static,
     WebAssembly {

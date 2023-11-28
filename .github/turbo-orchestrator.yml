@@ -82,7 +82,5 @@ labeler:
 events:
   onPublish:
     turbo:
-      - runWorkflow: turborepo-smoke-published.yml
-        when: any
       - runWorkflow: bench-turborepo.yml
         when: any

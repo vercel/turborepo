@@ -338,6 +338,7 @@ function instantiateModule(id: ModuleId, source: SourceInfo): Module {
           w: loadWebAssembly.bind(null, sourceInfo),
           u: loadWebAssemblyModule.bind(null, sourceInfo),
           g: globalThis,
+          U: relativeURL,
           k: refresh,
           __dirname: module.id.replace(/(^|\/)\/+$/, ""),
         })
@@ -1290,7 +1291,10 @@ function getOrInstantiateRuntimeModule(
  * Returns the URL relative to the origin where a chunk can be fetched from.
  */
 function getChunkRelativeUrl(chunkPath: ChunkPath): string {
-  return `${CHUNK_BASE_PATH}${chunkPath}`;
+  return `${CHUNK_BASE_PATH}${chunkPath}`
+    .split("/")
+    .map((p) => encodeURIComponent(p))
+    .join("/");
 }
 
 /**

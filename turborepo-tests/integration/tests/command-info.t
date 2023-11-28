@@ -7,9 +7,9 @@ Run info
   You are not logged in
   3 packages found in workspace
   
-  - another packages/another
-  - my-app apps/my-app
-  - util packages/util
+  - another packages(\/|\\)another (re)
+  - my-app apps(\/|\\)my-app (re)
+  - util packages(\/|\\)util (re)
 
 
 Run info on package `another`

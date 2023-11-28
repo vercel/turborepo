@@ -17,9 +17,9 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 pub struct TaskCacheSummary {
     // Deprecated, but keeping around for --dry=json
-    local: bool,
+    pub local: bool,
     // Deprecated, but keeping around for --dry=json
-    remote: bool,
+    pub remote: bool,
     status: CacheStatus,
     // Present unless a cache miss
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -80,11 +80,11 @@ pub(crate) struct SharedTaskSummary<T> {
     pub resolved_task_definition: TaskSummaryTaskDefinition,
     pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
     pub framework: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub execution: Option<TaskExecutionSummary>,
     pub env_mode: EnvMode,
     pub environment_variables: TaskEnvVarSummary,
     pub dot_env: Option<Vec<RelativeUnixPathBuf>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution: Option<TaskExecutionSummary>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -112,7 +112,6 @@ pub struct TaskSummaryTaskDefinition {
 #[serde(rename_all = "camelCase")]
 pub struct TaskEnvVarSummary {
     pub specified: TaskEnvConfiguration,
-
     pub configured: Vec<String>,
     pub inferred: Vec<String>,
     #[serde(rename = "passthrough")]
@@ -131,9 +130,6 @@ impl TaskCacheSummary {
     }
 }
 
-// This is an `Option<Option<CacheHitMetadata>>` because we could fail
-// to fetch from cache (giving `None`), and we could also get a miss
-// `Some(None)`
 impl From<Option<CacheHitMetadata>> for TaskCacheSummary {
     fn from(response: Option<CacheHitMetadata>) -> Self {
         match response {
@@ -182,14 +178,16 @@ impl TaskEnvVarSummary {
         // TODO: this operation differs from the actual env that gets passed in during
         // task execution it should be unified, but first we should copy Go's
         // behavior as we try to match the implementations
-        let pass_through = env_at_execution_start
-            .from_wildcards(
-                task_definition
-                    .pass_through_env
-                    .as_deref()
-                    .unwrap_or_default(),
-            )?
-            .to_secret_hashable();
+        let pass_through = task_definition
+            .pass_through_env
+            .as_deref()
+            .map(|pass_through_env| -> Result<_, turborepo_env::Error> {
+                Ok(env_at_execution_start
+                    .from_wildcards(pass_through_env)?
+                    .to_secret_hashable())
+            })
+            .transpose()?;
+
         Ok(Self {
             specified: TaskEnvConfiguration {
                 env: task_definition.env.clone(),
@@ -197,10 +195,7 @@ impl TaskEnvVarSummary {
             },
             configured: env_vars.by_source.explicit.to_secret_hashable(),
             inferred: env_vars.by_source.matching.to_secret_hashable(),
-            pass_through: match pass_through.is_empty() {
-                false => Some(pass_through),
-                true => None,
-            },
+            pass_through,
         })
     }
 }

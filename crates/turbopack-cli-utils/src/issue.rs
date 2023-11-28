@@ -15,7 +15,7 @@ use turbo_tasks::{RawVc, ReadRef, TransientInstance, TransientValue, TryJoinIter
 use turbo_tasks_fs::{source_context::get_source_context, FileLinesContent};
 use turbopack_core::issue::{
     CapturedIssues, Issue, IssueReporter, IssueSeverity, PlainIssue, PlainIssueProcessingPathItem,
-    PlainIssueSource,
+    PlainIssueSource, StyledString,
 };
 
 use crate::source_context::format_source_context_lines;
@@ -144,15 +144,20 @@ pub fn format_issue(
 
     let mut styled_issue = style_issue_source(plain_issue, &context_path);
     let description = &plain_issue.description;
-    if !description.is_empty() {
-        writeln!(styled_issue, "\n{description}").unwrap();
+    if let Some(description) = description {
+        writeln!(
+            styled_issue,
+            "\n{}",
+            render_styled_string_to_ansi(description)
+        )
+        .unwrap();
     }
 
     if log_detail {
         styled_issue.push('\n');
         let detail = &plain_issue.detail;
-        if !detail.is_empty() {
-            for line in detail.split('\n') {
+        if let Some(detail) = detail {
+            for line in render_styled_string_to_ansi(detail).split('\n') {
                 writeln!(styled_issue, "| {line}").unwrap();
             }
         }
@@ -385,15 +390,19 @@ impl IssueReporter for ConsoleUi {
 
             let mut styled_issue = style_issue_source(&plain_issue, &context_path);
             let description = &plain_issue.description;
-            if !description.is_empty() {
-                writeln!(&mut styled_issue, "\n{description}")?;
+            if let Some(description) = description {
+                writeln!(
+                    &mut styled_issue,
+                    "\n{}",
+                    render_styled_string_to_ansi(description)
+                )?;
             }
 
             if log_detail {
                 styled_issue.push('\n');
                 let detail = &plain_issue.detail;
-                if !detail.is_empty() {
-                    for line in detail.split('\n') {
+                if let Some(detail) = detail {
+                    for line in render_styled_string_to_ansi(detail).split('\n') {
                         writeln!(&mut styled_issue, "| {line}")?;
                     }
                 }
@@ -539,8 +548,36 @@ fn show_all_message_with_shown_count(
     }
 }
 
+fn render_styled_string_to_ansi(styled_string: &StyledString) -> String {
+    match styled_string {
+        StyledString::Line(parts) => {
+            let mut string = String::new();
+            for part in parts {
+                string.push_str(&render_styled_string_to_ansi(part));
+            }
+            string.push('\n');
+            string
+        }
+        StyledString::Stack(parts) => {
+            let mut string = String::new();
+            for part in parts {
+                string.push_str(&render_styled_string_to_ansi(part));
+                string.push('\n');
+            }
+            string
+        }
+        StyledString::Text(string) => string.to_string(),
+        StyledString::Code(string) => string.blue().to_string(),
+        StyledString::Strong(string) => string.bold().to_string(),
+    }
+}
+
 fn style_issue_source(plain_issue: &PlainIssue, context_path: &str) -> String {
     let title = &plain_issue.title;
+    let formatted_title = match title {
+        StyledString::Text(text) => text.bold().to_string(),
+        _ => render_styled_string_to_ansi(title),
+    };
 
     if let Some(source) = &plain_issue.source {
         let mut styled_issue = match source.range {
@@ -549,14 +586,14 @@ fn style_issue_source(plain_issue: &PlainIssue, context_path: &str) -> String {
                 context_path,
                 start.line + 1,
                 start.column,
-                title.bold()
+                formatted_title
             ),
-            None => format!("{}  {}", context_path, title.bold()),
+            None => format!("{}  {}", context_path, formatted_title),
         };
         styled_issue.push('\n');
         format_source_content(source, &mut styled_issue);
         styled_issue
     } else {
-        format!("{}", title.bold())
+        formatted_title
     }
 }

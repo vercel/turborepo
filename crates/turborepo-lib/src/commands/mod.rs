@@ -124,10 +124,12 @@ impl CommandBase {
         let team_id = config.team_id();
         let team_slug = config.team_slug();
 
-        let token = config.token();
+        let Some(token) = config.token() else {
+            return Ok(None);
+        };
 
-        Ok(team_id.zip(token).map(|(team_id, token)| APIAuth {
-            team_id: team_id.to_string(),
+        Ok(Some(APIAuth {
+            team_id: team_id.map(|s| s.to_string()),
             token: token.to_string(),
             team_slug: team_slug.map(|s| s.to_string()),
         }))

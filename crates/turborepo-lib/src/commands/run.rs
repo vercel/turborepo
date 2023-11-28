@@ -4,14 +4,11 @@ use crate::{commands::CommandBase, run, run::Run, signal::SignalHandler};
 
 pub async fn run(base: CommandBase) -> Result<i32, run::Error> {
     let handler = SignalHandler::new(tokio::signal::ctrl_c());
-    let run_subscriber = handler
-        .subscribe()
-        .expect("handler shouldn't close immediately after opening");
 
     let mut run = Run::new(&base);
     debug!("using the experimental rust codepath");
     debug!("configured run struct: {:?}", run);
-    let run_fut = run.run(run_subscriber);
+    let run_fut = run.run(&handler);
     let handler_fut = handler.done();
     tokio::select! {
         biased;
@@ -25,7 +22,12 @@ pub async fn run(base: CommandBase) -> Result<i32, run::Error> {
             // Run finished so close the signal handler
             handler.close().await;
             match result {
-                Ok(code) => Ok(code),
+                Ok(code) => {
+                    if code != 0 {
+                        error!("run failed: command  exited ({code})")
+                    }
+                    Ok(code)
+                },
                 Err(err) => {
                     error!("run failed: {}", err);
                     Err(err)

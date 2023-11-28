@@ -6,10 +6,10 @@ Check
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache miss, executing 273cd179351c6ef3
+  build: cache miss, executing f09bf783beacf5c9
   build: 
   build: > build
-  build: > echo 'building' > foo.txt
+  build: > echo building > foo.txt
   build: 
   
    Tasks:    1 successful, 1 total
@@ -23,10 +23,10 @@ Run a second time, verify caching works because there is a config
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache hit, replaying logs 273cd179351c6ef3
+  build: cache hit, replaying logs f09bf783beacf5c9
   build: 
   build: > build
-  build: > echo 'building' > foo.txt
+  build: > echo building > foo.txt
   build: 
   
    Tasks:    1 successful, 1 total

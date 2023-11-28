@@ -1,5 +1,6 @@
 const RUNTIME_PUBLIC_PATH = "output/[turbopack]_runtime.js";
 const OUTPUT_ROOT = "crates/turbopack-tests/tests/snapshot/runtime/default_build_runtime";
+const ASSET_PREFIX = "";
 /**
  * This file contains runtime types and functions that are shared between all
  * TurboPack ECMAScript runtimes.
@@ -262,88 +263,6 @@ function asyncModule(module, body, hasAwait) {
         queue.resolved = false;
     }
 }
-/// <reference path="../shared/runtime-utils.ts" />
-function commonJsRequireContext(entry, sourceModule) {
-    return entry.external ? externalRequire(entry.id(), false) : commonJsRequire(sourceModule, entry.id());
-}
-function externalImport(id) {
-    return import(id);
-}
-function externalRequire(id, esm = false) {
-    let raw;
-    try {
-        raw = require(id);
-    } catch (err) {
-        // TODO(alexkirsz) This can happen when a client-side module tries to load
-        // an external module we don't provide a shim for (e.g. querystring, url).
-        // For now, we fail semi-silently, but in the future this should be a
-        // compilation error.
-        throw new Error(`Failed to load external module ${id}: ${err}`);
-    }
-    if (!esm || raw.__esModule) {
-        return raw;
-    }
-    return interopEsm(raw, {}, true);
-}
-externalRequire.resolve = (id, options)=>{
-    return require.resolve(id, options);
-};
-function readWebAssemblyAsResponse(path) {
-    const { createReadStream } = require("fs");
-    const { Readable } = require("stream");
-    const stream = createReadStream(path);
-    // @ts-ignore unfortunately there's a slight type mismatch with the stream.
-    return new Response(Readable.toWeb(stream), {
-        headers: {
-            "content-type": "application/wasm"
-        }
-    });
-}
-async function compileWebAssemblyFromPath(path) {
-    const response = readWebAssemblyAsResponse(path);
-    return await WebAssembly.compileStreaming(response);
-}
-async function instantiateWebAssemblyFromPath(path, importsObj) {
-    const response = readWebAssemblyAsResponse(path);
-    const { instance } = await WebAssembly.instantiateStreaming(response, importsObj);
-    return instance.exports;
-}
-/// <reference path="../shared/runtime-utils.ts" />
-/// <reference path="../shared-node/node-utils.ts" />
-let SourceType;
-(function(SourceType) {
-    /**
-   * The module was instantiated because it was included in an evaluated chunk's
-   * runtime.
-   */ SourceType[SourceType["Runtime"] = 0] = "Runtime";
-    /**
-   * The module was instantiated because a parent module imported it.
-   */ SourceType[SourceType["Parent"] = 1] = "Parent";
-})(SourceType || (SourceType = {}));
-const path = require("path");
-const relativePathToRuntimeRoot = path.relative(RUNTIME_PUBLIC_PATH, ".");
-// Compute the relative path to the `distDir`.
-const relativePathToDistRoot = path.relative(path.join(OUTPUT_ROOT, RUNTIME_PUBLIC_PATH), ".");
-const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
-// Compute the absolute path to the root, by stripping distDir from the absolute path to this file.
-const ABSOLUTE_ROOT = path.resolve(__filename, relativePathToDistRoot);
-const moduleFactories = Object.create(null);
-const moduleCache = Object.create(null);
-/**
- * Returns an absolute path to the given module path.
- * Module path should be relative, either path to a file or a directory.
- *
- * This fn allows to calculate an absolute path for some global static values, such as
- * `__dirname` or `import.meta.url` that Turbopack will not embeds in compile time.
- * See ImportMetaBinding::code_generation for the usage.
- */ function resolveAbsolutePath(modulePath) {
-    if (modulePath) {
-        // Module path can contain common relative path to the root, recalaute to avoid duplicated joined path.
-        const relativePathToRoot = path.relative(ABSOLUTE_ROOT, modulePath);
-        return path.join(ABSOLUTE_ROOT, relativePathToRoot);
-    }
-    return ABSOLUTE_ROOT;
-}
 /**
  * A pseudo, `fake` URL object to resolve to the its relative path.
  * When urlrewritebehavior is set to relative, calls to the `new URL()` will construct url without base using this
@@ -367,6 +286,122 @@ const moduleCache = Object.create(null);
     });
 };
 relativeURL.prototype = URL.prototype;
+/// <reference path="../shared/runtime-utils.ts" />
+/// A 'base' utilities to support runtime can have externals.
+/// Currently this is for node.js / edge runtime both.
+/// If a fn requires node.js specific behavior it should be placed in `node-external-utils` instead.
+function commonJsRequireContext(entry, sourceModule) {
+    return entry.external ? externalRequire(entry.id(), false) : commonJsRequire(sourceModule, entry.id());
+}
+async function externalImport(id) {
+    let raw;
+    try {
+        raw = await import(id);
+    } catch (err) {
+        // TODO(alexkirsz) This can happen when a client-side module tries to load
+        // an external module we don't provide a shim for (e.g. querystring, url).
+        // For now, we fail semi-silently, but in the future this should be a
+        // compilation error.
+        throw new Error(`Failed to load external module ${id}: ${err}`);
+    }
+    if (raw && raw.__esModule && raw.default && "default" in raw.default) {
+        return interopEsm(raw.default, {}, true);
+    }
+    return raw;
+}
+function externalRequire(id, esm = false) {
+    let raw;
+    try {
+        raw = require(id);
+    } catch (err) {
+        // TODO(alexkirsz) This can happen when a client-side module tries to load
+        // an external module we don't provide a shim for (e.g. querystring, url).
+        // For now, we fail semi-silently, but in the future this should be a
+        // compilation error.
+        throw new Error(`Failed to load external module ${id}: ${err}`);
+    }
+    if (!esm || raw.__esModule) {
+        return raw;
+    }
+    return interopEsm(raw, {}, true);
+}
+externalRequire.resolve = (id, options)=>{
+    return require.resolve(id, options);
+};
+const path = require("path");
+const relativePathToRuntimeRoot = path.relative(RUNTIME_PUBLIC_PATH, ".");
+// Compute the relative path to the `distDir`.
+const relativePathToDistRoot = path.relative(path.join(OUTPUT_ROOT, RUNTIME_PUBLIC_PATH), ".");
+const RUNTIME_ROOT = path.resolve(__filename, relativePathToRuntimeRoot);
+// Compute the absolute path to the root, by stripping distDir from the absolute path to this file.
+const ABSOLUTE_ROOT = path.resolve(__filename, relativePathToDistRoot);
+/**
+ * Returns an absolute path to the given module path.
+ * Module path should be relative, either path to a file or a directory.
+ *
+ * This fn allows to calculate an absolute path for some global static values, such as
+ * `__dirname` or `import.meta.url` that Turbopack will not embeds in compile time.
+ * See ImportMetaBinding::code_generation for the usage.
+ */ function resolveAbsolutePath(modulePath) {
+    if (modulePath) {
+        // Module path can contain common relative path to the root, recalaute to avoid duplicated joined path.
+        const relativePathToRoot = path.relative(ABSOLUTE_ROOT, modulePath);
+        return path.join(ABSOLUTE_ROOT, relativePathToRoot);
+    }
+    return ABSOLUTE_ROOT;
+}
+/// <reference path="../shared/runtime-utils.ts" />
+function readWebAssemblyAsResponse(path) {
+    const { createReadStream } = require("fs");
+    const { Readable } = require("stream");
+    const stream = createReadStream(path);
+    // @ts-ignore unfortunately there's a slight type mismatch with the stream.
+    return new Response(Readable.toWeb(stream), {
+        headers: {
+            "content-type": "application/wasm"
+        }
+    });
+}
+async function compileWebAssemblyFromPath(path) {
+    const response = readWebAssemblyAsResponse(path);
+    return await WebAssembly.compileStreaming(response);
+}
+async function instantiateWebAssemblyFromPath(path, importsObj) {
+    const response = readWebAssemblyAsResponse(path);
+    const { instance } = await WebAssembly.instantiateStreaming(response, importsObj);
+    return instance.exports;
+}
+/// <reference path="../shared/runtime-utils.ts" />
+/// <reference path="../shared-node/base-externals-utils.ts" />
+/// <reference path="../shared-node/node-externals-utils.ts" />
+/// <reference path="../shared-node/node-wasm-utils.ts" />
+let SourceType;
+(function(SourceType) {
+    /**
+   * The module was instantiated because it was included in an evaluated chunk's
+   * runtime.
+   */ SourceType[SourceType["Runtime"] = 0] = "Runtime";
+    /**
+   * The module was instantiated because a parent module imported it.
+   */ SourceType[SourceType["Parent"] = 1] = "Parent";
+})(SourceType || (SourceType = {}));
+const url = require("url");
+const moduleFactories = Object.create(null);
+const moduleCache = Object.create(null);
+/**
+ * Returns an absolute path to the given module's id.
+ */ function createResolvePathFromModule(resolver) {
+    return function resolvePathFromModule(moduleId) {
+        const exported = resolver(moduleId);
+        const exportedPath = exported?.default ?? exported;
+        if (typeof exportedPath !== "string") {
+            return exported;
+        }
+        const strippedAssetPrefix = exportedPath.slice(ASSET_PREFIX.length);
+        const resolved = path.resolve(ABSOLUTE_ROOT, OUTPUT_ROOT, strippedAssetPrefix);
+        return url.pathToFileURL(resolved);
+    };
+}
 function loadChunk(chunkData) {
     if (typeof chunkData === "string") {
         return loadChunkPath(chunkData);
@@ -449,10 +484,11 @@ function instantiateModule(id, source) {
     moduleCache[id] = module1;
     // NOTE(alexkirsz) This can fail when the module encounters a runtime error.
     try {
+        const r = commonJsRequire.bind(null, module1);
         moduleFactory.call(module1.exports, {
             a: asyncModule.bind(null, module1),
             e: module1.exports,
-            r: commonJsRequire.bind(null, module1),
+            r,
             t: runtimeRequire,
             x: externalRequire,
             y: externalImport,
@@ -473,6 +509,7 @@ function instantiateModule(id, source) {
             g: globalThis,
             p: resolveAbsolutePath,
             U: relativeURL,
+            R: createResolvePathFromModule(r),
             __dirname: module1.id.replace(/(^|\/)[\/]+$/, "")
         });
     } catch (error) {

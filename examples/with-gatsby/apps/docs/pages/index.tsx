@@ -1,4 +1,4 @@
-import { Button } from "ui";
+import { Button } from "@repo/ui/button";
 
 export default function Docs(): JSX.Element {
   return (

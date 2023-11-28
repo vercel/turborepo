@@ -67,11 +67,11 @@ impl PackageJson {
     }
 
     pub fn all_dependencies(&self) -> impl Iterator<Item = (&String, &String)> + '_ {
-        self.dependencies
+        self.dev_dependencies
             .iter()
             .flatten()
-            .chain(self.dev_dependencies.iter().flatten())
             .chain(self.optional_dependencies.iter().flatten())
+            .chain(self.dependencies.iter().flatten())
     }
 }
 
