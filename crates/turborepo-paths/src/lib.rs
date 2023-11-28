@@ -2,33 +2,33 @@
 #![feature(fs_try_exists)]
 #![deny(clippy::all)]
 
-/// Turborepo's path handling library
-/// Defines distinct path types for the different usecases of paths in turborepo
-///
-/// - `AbsoluteSystemPath(Buf)`: a path that is absolute and uses the system's
-///   path separator. Used for interacting with the filesystem
-/// - `RelativeUnixPath(Buf)`: a path that is relative and uses the unix path
-///   separator. Used when saving to a cache as a platform-independent path.
-/// - `AnchoredSystemPath(Buf)`: a path that is relative to a specific directory
-///   and uses the system's path separator. Used for handling files relative to
-///   the repository root.
-///
-/// NOTE: All paths contain UTF-8 strings and use `camino` as the underlying
-/// representation. For reasons why, see [the `camino` documentation](https://github.com/camino-rs/camino/).
-///
-/// As in `std::path`, there are `Path` and `PathBuf` variants of each path
-/// type, that indicate whether the path is borrowed or owned.
-///
-/// When initializing a path type, it is highly recommended that you use a
-/// method that validates the path. This will ensure that the path is in the
-/// correct format. For the -Buf variants, the `new` method will validate that
-/// the path is either absolute or relative, and then convert it to either
-/// system or unix. For the non-Buf variants, the `new` method will *only*
-/// validate and not convert (this is because conversion requires allocation).
-///
-/// The only case where initializing a path type without validation is
-/// recommended is inside turbopath itself. But that unchecked initialization
-/// should be considered unsafe
+//! Turborepo's path handling library
+//! Defines distinct path types for the different usecases of paths in turborepo
+//!
+//! - `AbsoluteSystemPath(Buf)`: a path that is absolute and uses the system's
+//!   path separator. Used for interacting with the filesystem
+//! - `RelativeUnixPath(Buf)`: a path that is relative and uses the unix path
+//!   separator. Used when saving to a cache as a platform-independent path.
+//! - `AnchoredSystemPath(Buf)`: a path that is relative to a specific directory
+//!   and uses the system's path separator. Used for handling files relative to
+//!   the repository root.
+//!
+//! NOTE: All paths contain UTF-8 strings and use `camino` as the underlying
+//! representation. For reasons why, see [the `camino` documentation](https://github.com/camino-rs/camino/).
+//!
+//! As in `std::path`, there are `Path` and `PathBuf` variants of each path
+//! type, that indicate whether the path is borrowed or owned.
+//!
+//! When initializing a path type, it is highly recommended that you use a
+//! method that validates the path. This will ensure that the path is in the
+//! correct format. For the -Buf variants, the `new` method will validate that
+//! the path is either absolute or relative, and then convert it to either
+//! system or unix. For the non-Buf variants, the `new` method will *only*
+//! validate and not convert (this is because conversion requires allocation).
+//!
+//! The only case where initializing a path type without validation is
+//! recommended is inside turbopath itself. But that unchecked initialization
+//! should be considered unsafe
 mod absolute_system_path;
 mod absolute_system_path_buf;
 mod anchored_system_path;
