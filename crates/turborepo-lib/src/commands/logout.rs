@@ -1,9 +1,8 @@
 use tracing::error;
-use turborepo_auth::{logout as auth_logout, read_or_create_auth_file};
+use turborepo_auth::{logout as auth_logout, read_or_create_auth_file, AuthToken};
 
 use crate::{cli::Error, commands::CommandBase};
 
-// TODO(voz): Move this to auth crate, more than likely.
 pub async fn logout(base: &mut CommandBase) -> Result<(), Error> {
     let client = base.api_client()?;
     let auth_path = base.global_auth_path()?;
@@ -17,23 +16,21 @@ pub async fn logout(base: &mut CommandBase) -> Result<(), Error> {
 
     // Don't prompt when there's only one token to logout for.
     if auth_file.tokens.len() <= 1 {
-        let token = &auth_file.tokens[0];
-        println!(
-            "Removing token: {} for {}",
-            token.friendly_token_display(),
-            token.friendly_api_display()
-        );
-        auth_file.tokens.remove(0);
+        auth_file.tokens.clear();
     } else {
         // Make a friendly display for the user to select from.
         let items = &auth_file
             .tokens
             .iter()
             .map(|t| {
+                let token = AuthToken {
+                    api: t.0.to_string(),
+                    token: t.1.to_string(),
+                };
                 format!(
                     "{} ({})",
-                    t.friendly_api_display(),
-                    t.friendly_token_display()
+                    token.friendly_api_display(),
+                    token.friendly_token_display()
                 )
             })
             .collect::<Vec<_>>();
@@ -42,13 +39,21 @@ pub async fn logout(base: &mut CommandBase) -> Result<(), Error> {
             .ui
             .display_selectable_items("Select api to log out of:", items)
             .unwrap();
-        let token = &auth_file.tokens[index];
-        println!(
-            "Removing token: {} for {}",
-            token.friendly_token_display(),
-            token.friendly_api_display()
-        );
-        auth_file.tokens.remove(index);
+
+        // Remove the token display from the api we're trying to remove.
+        let api = items[index].split_whitespace().next().unwrap();
+
+        if let Some(token) = auth_file.get_token(api) {
+            println!(
+                "Removing token: {} for {}",
+                token.friendly_token_display(),
+                token.friendly_api_display()
+            );
+            auth_file.tokens.remove(api);
+        } else {
+            // This should never happen, but just in case.
+            return Err(Error::Auth(turborepo_auth::Error::FailedToGetToken));
+        }
     }
 
     if let Err(err) = auth_file.write_to_disk(&auth_path) {

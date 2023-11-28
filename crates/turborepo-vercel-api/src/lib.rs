@@ -1,5 +1,35 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use url::Url;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenMetadataResponse {
+    pub token: TokenMetadata,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TokenMetadata {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub token_type: String,
+    pub origin: String,
+    pub scopes: Vec<TokenScope>,
+    pub active_at: Option<i64>,
+    #[serde(rename = "createdAt")]
+    pub created_at: Option<i64>,
+    #[serde(rename = "expiresAt")]
+    pub expires_at: Option<i64>,
+    #[serde(rename = "teamId")]
+    pub team_id: Option<String>,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct TokenScope {
+    pub r#type: String,
+    pub origin: String,
+    #[serde(flatten)]
+    pub extra: HashMap<String, serde_json::Value>,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct VerifiedSsoUser {

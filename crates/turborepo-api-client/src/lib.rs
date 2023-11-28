@@ -12,7 +12,8 @@ use reqwest::{Method, RequestBuilder, StatusCode};
 use turborepo_ci::{is_ci, Vendor};
 use turborepo_vercel_api::{
     APIError, CachingStatus, CachingStatusResponse, PreflightResponse, SpacesResponse, Team,
-    TeamsResponse, UserResponse, VerificationResponse, VerifiedSsoUser,
+    TeamsResponse, TokenMetadata, TokenMetadataResponse, UserResponse, VerificationResponse,
+    VerifiedSsoUser,
 };
 use url::Url;
 
@@ -48,6 +49,7 @@ pub trait Client {
     ) -> Result<CachingStatusResponse>;
     async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse>;
     async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
+    async fn get_token_metadata(&self, token: &str) -> Result<TokenMetadata>;
     async fn put_artifact(
         &self,
         hash: &str,
@@ -108,6 +110,22 @@ pub struct APIAuth {
 impl Client for APIClient {
     fn base_url(&self) -> &str {
         &self.base_url
+    }
+    async fn get_token_metadata(&self, token: &str) -> Result<TokenMetadata> {
+        let url = self.make_url("/v5/user/tokens/current");
+        let request_builder = self
+            .client
+            .get(url)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json");
+        let response = retry::make_retryable_request(request_builder)
+            .await?
+            .error_for_status()?;
+        let json: TokenMetadataResponse = response.json().await?;
+        println!("{:#?}", json);
+
+        Ok(json.token)
     }
     async fn get_user(&self, token: &str) -> Result<UserResponse> {
         let url = self.make_url("/v2/user");

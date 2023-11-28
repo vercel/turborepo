@@ -14,7 +14,7 @@ const DEFAULT_PORT: u16 = 9789;
 
 /// Fetches a raw token from the login server and converts it to an
 /// AuthToken.
-pub async fn login<'a>(
+pub async fn login(
     api_client: &impl Client,
     ui: &UI,
     login_url_configuration: &str,
@@ -43,9 +43,10 @@ pub async fn login<'a>(
     spinner.finish_and_clear();
 
     let token = token_cell.get().ok_or(Error::FailedToGetToken)?;
-    let auth_token = convert_to_auth_token(token, api_client, None).await?;
+    let auth_token = convert_to_auth_token(token, api_client).await?;
+    let response_user = api_client.get_user(&auth_token.token).await?;
 
-    ui::print_cli_authorized(&auth_token.user.email, ui);
+    ui::print_cli_authorized(&response_user.user.email, ui);
 
     Ok(auth_token)
 }

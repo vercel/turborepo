@@ -5,7 +5,7 @@ use reqwest::{Method, RequestBuilder, Response};
 use turborepo_api_client::Client;
 use turborepo_vercel_api::{
     CachingStatusResponse, Membership, PreflightResponse, Role, Space, SpacesResponse, Team,
-    TeamsResponse, User, UserResponse, VerifiedSsoUser,
+    TeamsResponse, TokenMetadata, User, UserResponse, VerifiedSsoUser,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -130,6 +130,12 @@ impl Client for MockApiClient {
             token: token.to_string(),
             team_id: Some("team_id".to_string()),
         })
+    }
+    async fn get_token_metadata(
+        &self,
+        _token: &str,
+    ) -> turborepo_api_client::Result<TokenMetadata> {
+        unimplemented!("get_token_metadata")
     }
     async fn put_artifact(
         &self,

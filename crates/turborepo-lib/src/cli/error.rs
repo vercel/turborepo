@@ -52,6 +52,8 @@ pub enum Error {
     #[error(transparent)]
     Auth(#[from] turborepo_auth::Error),
     #[error(transparent)]
+    Api(#[from] turborepo_api_client::Error),
+    #[error(transparent)]
     Daemon(#[from] DaemonError),
     #[error(transparent)]
     Generate(#[from] generate::Error),

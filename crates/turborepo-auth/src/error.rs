@@ -5,7 +5,6 @@ use turborepo_api_client::Error as APIError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    // For conversion from APIError
     #[error(transparent)]
     APIError(#[from] APIError),
 
@@ -14,6 +13,8 @@ pub enum Error {
 
     #[error("failed to fetch user: {0}")]
     FailedToFetchUser(turborepo_api_client::Error),
+    #[error("failed to fetch token metadata: {source}")]
+    FailedToFetchTokenMetadata { source: turborepo_api_client::Error },
     #[error(
         "loginUrl is configured to \"{value}\", but cannot be a base URL. This happens in \
          situations like using a `data:` URL."
@@ -29,6 +30,11 @@ pub enum Error {
     // File write errors
     #[error("failed to write to auth file at {auth_path}: {error}")]
     FailedToWriteAuth {
+        auth_path: turbopath::AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
+    #[error("failed to create auth file at {auth_path}: {error}")]
+    FailedToCreateAuthFile {
         auth_path: turbopath::AbsoluteSystemPathBuf,
         error: io::Error,
     },

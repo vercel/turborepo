@@ -8,11 +8,12 @@ mod error;
 mod login;
 mod login_server;
 mod logout;
-// Make this publicly avaliable for testing in other crates.
-pub mod mocks;
+pub(crate) mod mocks;
 mod sso;
 mod sso_server;
 mod ui;
+
+use std::collections::HashMap;
 
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::Client;
@@ -63,9 +64,9 @@ pub async fn read_or_create_auth_file(
         let config_token: ConfigToken = serde_json::from_str(&content)
             .map_err(|e| Error::FailedToDeserializeConfigToken { source: e })?;
 
-        let auth_token = convert_to_auth_token(&config_token.token, client, None).await?;
+        let auth_token = convert_to_auth_token(&config_token.token, client).await?;
         let auth_file = AuthFile {
-            tokens: vec![auth_token],
+            tokens: HashMap::from([(client.base_url().to_owned(), auth_token.token)]),
         };
         auth_file.write_to_disk(auth_file_path)?;
         return Ok(auth_file);
@@ -73,16 +74,21 @@ pub async fn read_or_create_auth_file(
 
     // If neither file exists, return an empty auth file and write a blank one to
     // disk.
-    let auth_file = AuthFile { tokens: Vec::new() };
+    let auth_file = AuthFile {
+        tokens: HashMap::new(),
+    };
     auth_file.write_to_disk(auth_file_path)?;
-    Ok(AuthFile { tokens: Vec::new() })
+    Ok(AuthFile {
+        tokens: HashMap::new(),
+    })
 }
+
+/// Promote a token with new scopes.
+pub async fn promote(_token: &str, _client: &impl Client) {}
 
 #[cfg(test)]
 mod tests {
     use std::{fs::File, io::Write};
-
-    use turborepo_vercel_api::{Membership, Role, Space, User};
 
     use super::*;
     use crate::mocks::MockApiClient;
@@ -99,30 +105,7 @@ mod tests {
 
         // Create auth file
         let mock_auth_file = AuthFile {
-            tokens: vec![AuthToken {
-                token: "mock-token".to_string(),
-                api: "mock-api".to_string(),
-                created_at: Some(0),
-                user: User {
-                    id: 0.to_string(),
-                    email: "mock-email".to_string(),
-                    username: "mock-username".to_string(),
-                    name: Some("mock-name".to_string()),
-                    created_at: Some(0),
-                },
-                teams: vec![Team {
-                    id: "team-id".to_string(),
-                    spaces: vec![Space {
-                        id: "space-id".to_string(),
-                        name: "space1 name".to_string(),
-                    }],
-                    slug: "team1 slug".to_string(),
-                    name: "maximum effort".to_string(),
-                    created_at: 0,
-                    created: chrono::Utc::now(),
-                    membership: Membership::new(Role::Developer),
-                }],
-            }],
+            tokens: HashMap::from([("mock-token".to_owned(), "mock-api".to_owned())]),
         };
         mock_auth_file.write_to_disk(&auth_file_path).unwrap();
 
@@ -183,6 +166,5 @@ mod tests {
 
         let auth_file = result.unwrap();
         assert_eq!(auth_file.tokens.len(), 1);
-        assert_eq!(auth_file.tokens[0].token, "mock-token");
     }
 }
