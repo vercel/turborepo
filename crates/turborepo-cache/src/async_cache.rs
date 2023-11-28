@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{atomic::AtomicU8, Arc};
 
 use futures::{stream::FuturesUnordered, StreamExt};
 use tokio::{
@@ -11,6 +11,8 @@ use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
 use crate::{multiplexer::CacheMultiplexer, CacheError, CacheHitMetadata, CacheOpts};
+
+const WARNING_CUTOFF: u8 = 4;
 
 pub struct AsyncCache {
     real_cache: Arc<CacheMultiplexer>,
@@ -52,6 +54,7 @@ impl AsyncCache {
             let semaphore = Arc::new(Semaphore::new(max_workers));
             let mut workers = FuturesUnordered::new();
             let real_cache = worker_real_cache;
+            let warnings = Arc::new(AtomicU8::new(0));
 
             while let Some(request) = write_consumer.recv().await {
                 match request {
@@ -63,10 +66,19 @@ impl AsyncCache {
                     } => {
                         let permit = semaphore.clone().acquire_owned().await.unwrap();
                         let real_cache = real_cache.clone();
+                        let warnings = warnings.clone();
                         workers.push(tokio::spawn(async move {
                             if let Err(err) = real_cache.put(&anchor, &key, &files, duration).await
                             {
-                                warn!("{err}");
+                                let num_warnings =
+                                    warnings.load(std::sync::atomic::Ordering::Acquire);
+                                if num_warnings <= WARNING_CUTOFF {
+                                    warnings.store(
+                                        num_warnings + 1,
+                                        std::sync::atomic::Ordering::Release,
+                                    );
+                                    warn!("{err}");
+                                }
                             }
                             // Release permit once we're done with the write
                             drop(permit);
