@@ -11,9 +11,9 @@ importers:
 
   .:
     dependencies:
-      rustc:
-        specifier: ^0.0.8
-        version: 0.0.8
+      rust:
+        specifier: nightly
+        version: 1.0.2-nightly
     devDependencies:
       '@taplo/cli':
         specifier: ^0.5.2
@@ -13071,8 +13071,8 @@ packages:
     dependencies:
       queue-microtask: 1.2.3
 
-  /rustc@0.0.8:
-    resolution: {integrity: sha512-Ko42rGqkCNXxePmJAiR/PCxaIfYil+rqhLukrLWgme7UqRNX/er9gcIv+cKslwxeBuY6yJcSRAXjsxppkwARXw==}
+  /rust@1.0.2-nightly:
+    resolution: {integrity: sha512-s/SSyYpcsvmpnDty/i/7kAfV67+x4dwVzlsmFIdIduY9uFFB8aYSijJ6GIkOdDqsN5RyIqaa3vycQ1pMbKxpIQ==}
     engines: {node: '>=14', npm: '>=6'}
     hasBin: true
     requiresBuild: true

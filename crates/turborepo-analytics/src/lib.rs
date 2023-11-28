@@ -1,5 +1,10 @@
 #![deny(clippy::all)]
 
+//! Turborepo's analytics library. Handles sending analytics events to the
+//! Vercel API in the background. Currently we only record cache usage events,
+//! so when the cache is hit or missed for the file system or the HTTP cache.
+//! Requires the user to be logged in to Vercel.
+
 use std::time::Duration;
 
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -28,16 +33,21 @@ pub enum Error {
     Join(#[from] JoinError),
 }
 
-// We have two different types because the AnalyticsSender should be shared
-// across threads (i.e. Clone + Send), while the AnalyticsHandle cannot be
-// shared since it contains the structs necessary to shut down the worker.
 pub type AnalyticsSender = mpsc::UnboundedSender<AnalyticsEvent>;
 
+/// The handle on the `Worker` tokio thread, along with a channel
+/// to indicate to the thread that it should shut down.
 pub struct AnalyticsHandle {
     exit_ch: oneshot::Receiver<()>,
     handle: JoinHandle<()>,
 }
 
+/// Starts the `Worker` on a separate tokio thread. Returns an `AnalyticsSender`
+/// and an `AnalyticsHandle`.
+///
+/// We have two different types because the AnalyticsSender should be shared
+/// across threads (i.e. Clone + Send), while the AnalyticsHandle cannot be
+/// shared since it contains the structs necessary to shut down the worker.
 pub fn start_analytics(
     api_auth: APIAuth,
     client: impl AnalyticsClient + Clone + Send + Sync + 'static,
@@ -72,6 +82,8 @@ impl AnalyticsHandle {
         Ok(())
     }
 
+    /// Closes the handle with an explicit timeout. If the handle fails to close
+    /// within that timeout, it will log an error and drop the handle.
     pub async fn close_with_timeout(self) {
         if let Err(err) = tokio::time::timeout(EVENT_TIMEOUT, self.close()).await {
             debug!("failed to close analytics handle. error: {}", err)
