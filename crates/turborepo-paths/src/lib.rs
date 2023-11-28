@@ -2,29 +2,39 @@
 #![feature(fs_try_exists)]
 #![deny(clippy::all)]
 
-//! Turborepo's path handling library
-//! Defines distinct path types for the different usecases of paths in turborepo
+//! Turborepo's path handling library.
+//! Defines distinct path types for the different uses of paths in Turborepo's
+//! codebase.
 //!
 //! - `AbsoluteSystemPath(Buf)`: a path that is absolute and uses the system's
 //!   path separator. Used for interacting with the filesystem
 //! - `RelativeUnixPath(Buf)`: a path that is relative and uses the unix path
-//!   separator. Used when saving to a cache as a platform-independent path.
+//!   separator, i.e. `/`. Used when saving to a cache as a platform-independent
+//!   path.
 //! - `AnchoredSystemPath(Buf)`: a path that is relative to a specific directory
 //!   and uses the system's path separator. Used for handling files relative to
 //!   the repository root.
 //!
-//! NOTE: All paths contain UTF-8 strings and use `camino` as the underlying
-//! representation. For reasons why, see [the `camino` documentation](https://github.com/camino-rs/camino/).
+//! NOTE: All paths contain UTF-8 strings. We use `camino` as the underlying
+//! representation for system paths. For reasons why, see [the `camino` documentation](https://github.com/camino-rs/camino/).
 //!
 //! As in `std::path`, there are `Path` and `PathBuf` variants of each path
 //! type, that indicate whether the path is borrowed or owned.
 //!
+//! # Validation
+//!
 //! When initializing a path type, it is highly recommended that you use a
 //! method that validates the path. This will ensure that the path is in the
-//! correct format. For the -Buf variants, the `new` method will validate that
-//! the path is either absolute or relative, and then convert it to either
-//! system or unix. For the non-Buf variants, the `new` method will *only*
-//! validate and not convert (this is because conversion requires allocation).
+//! correct format. It's important to note that the validation will only
+//! check for absolute or relative and valid Unicode. It will not check
+//! if the path is system or unix, since that is not always decidable.
+//! For example, is `foo\bar` a Windows system path or a Unix path?
+//! It has a backslash, which is simultaneously a valid character in a
+//! Unix file name and the Windows path delimiter.
+//!
+//! Therefore, it's very important to keep the context of the initialization
+//! in mind. The only case where we do more in depth validation is for cache
+//! restoration. See `AnchoredSystemPathBuf::from_system_path` for more details.
 //!
 //! The only case where initializing a path type without validation is
 //! recommended is inside turbopath itself. But that unchecked initialization
@@ -68,10 +78,6 @@ pub enum PathError {
     NotRelative(String),
     #[error("Path {0} is not parent of {1}")]
     NotParent(String, String),
-    #[error("Path {0} is not a unix path")]
-    NotUnix(String),
-    #[error("Path {0} is not a system path")]
-    NotSystem(String),
     #[error("IO Error {0}")]
     IO(#[from] io::Error),
     #[error("{0} is not a prefix for {1}")]

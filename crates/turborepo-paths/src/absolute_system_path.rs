@@ -61,10 +61,9 @@ impl AsRef<Path> for AbsoluteSystemPath {
 }
 
 impl AbsoluteSystemPath {
-    /// Creates a path that is known to be absolute and a system path.
-    /// If either of these conditions are not met, we error.
-    /// Does *not* do automatic conversion like `AbsoluteSystemPathBuf::new`
-    /// does
+    /// Validates that the path is absolute and creates an `AbsoluteSystemPath`.
+    /// Does *not* validate that the path is a system path. See module
+    /// documentation for an explanation why.
     ///
     /// # Arguments
     ///

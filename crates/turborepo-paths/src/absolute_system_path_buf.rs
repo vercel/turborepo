@@ -38,8 +38,9 @@ impl Deref for AbsoluteSystemPathBuf {
 
 impl AbsoluteSystemPathBuf {
     /// Create a new AbsoluteSystemPathBuf from `unchecked_path`.
-    /// Confirms that `unchecked_path` is absolute and converts it to a system
-    /// path.
+    /// Confirms that `unchecked_path` is absolute. Does *not* convert
+    /// to system path, since that is generally undecidable (see module
+    /// documentation)
     ///
     /// # Arguments
     ///
@@ -74,6 +75,8 @@ impl AbsoluteSystemPathBuf {
         Ok(AbsoluteSystemPathBuf(unchecked_path.into()))
     }
 
+    /// Takes in a system path of unknown type. If it's absolute, returns the
+    /// path, If it's relative, appends it to the base after cleaning it.
     pub fn from_unknown(base: &AbsoluteSystemPath, unknown: impl Into<Utf8PathBuf>) -> Self {
         // we have an absolute system path and an unknown kind of system path.
         let unknown: Utf8PathBuf = unknown.into();
