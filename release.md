@@ -46,36 +46,20 @@ You need to run `git push --follow-tags` to finish the release.
 
 ## Release Turborepo
 
-We have a multi step release process for Turborepo right now.
-
-**NOTE**: The steps below _must_ be run serially, in the order specified.
-
-1. Create a release branch by triggering the [1. Turborepo Release (release branch)][1] workflow
+1. Create a release by triggering the [1. Turborepo Release][1] workflow
 
    - Specify the semver increment using the SemVer Increment field (start with `prerelease`)
+   - Check the "Dry Run" box to run the full release workflow without publishing any packages.
 
-2. Build the Go Binary by triggering the [2. Turborepo Release (go binary)][2] workflow.
+2. A PR is automatically opened to merge the release branch created in step 1 back into `main`
 
-   1. Specify the release branch (example: `staging-1.7.0-canary.1`) in _both_ the "use workflow from", and "Staging branch to release from" fields.
-
-3. Build the Rust Wrapper by triggering the [3. Turborepo Release (rust binary & publish)][3] workflow.
-   1. Specify the release branch (example: `staging-1.7.0-canary.1`) in _both_ the "use workflow from", and "Staging branch to release from" fields. (this should match step 2.1 above)
-4. A PR is automatically opened to merge the release branch created in step 1 back into `main`
-
-   1. ⚠️ Merge this in! You don't need to wait for tests to pass.
-
-   It's important to merge this branch soon after the publish is succesful
-
-5. `turbo-orchestrator.yml` polls `npm` every 5 mins. When a new version is detected,
-   [`turborepo-smoke-published.yml`][4] runs against `@latest` and `@canary` tags.
+   - ⚠️ Merge this in! You don't need to wait for tests to pass. It's important to merge this branch soon after the publish is successful
 
 ### Notes
 
-- Github Release Notes are published on their own using config from `turborepo-release.yml`,
-  triggered by the `turbo-orchestrator` bot.
-- `eslint-plugin-turbo` and `eslint-config-turbo` need to be published separately.
+- Github Release Notes are published automatically using the config from [`turborepo-release.yml`][2],
+  triggered by the [`turbo-orchestrator`][3] bot.
 
-[1]: https://github.com/vercel/turbo/actions/workflows/turborepo-release-step-1.yml
-[2]: https://github.com/vercel/turbo/actions/workflows/turborepo-release-step-2.yml
-[3]: https://github.com/vercel/turbo/actions/workflows/turborepo-release-step-3.yml
-[3]: https://github.com/vercel/turbo/actions/workflows/turborepo-smoke-published.yml
+[1]: https://github.com/vercel/turbo/actions/workflows/turborepo-release.yml
+[2]: https://github.com/vercel/turbo/blob/main/.github/turborepo-release.yml
+[3]: https://github.com/apps/turbo-orchestrator
