@@ -1,10 +1,11 @@
 {
   "name": "@turborepo-examples-tests/yarn-non-monorepo",
   "scripts": {
-    "example-test": "../.cram_env/bin/prysk --shell=bash test.t"
+    "example-test": "./node_modules/.bin/prysk test.t"
   },
   "dependencies": {
     "turborepo-tests-helpers": "workspace:*",
-    "turborepo-examples": "workspace:*"
+    "turborepo-examples": "workspace:*",
+    "prysk": "workspace:*"
   }
 }
