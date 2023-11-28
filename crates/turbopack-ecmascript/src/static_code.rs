@@ -31,7 +31,7 @@ impl StaticEcmascriptCode {
         let module = asset_context
             .process(
                 Vc::upcast(FileSource::new(asset_path)),
-                Value::new(ReferenceType::Undefined),
+                Value::new(ReferenceType::Runtime),
             )
             .module();
         let Some(asset) = Vc::try_resolve_downcast_type::<EcmascriptModuleAsset>(module).await?

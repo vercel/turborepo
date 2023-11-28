@@ -103,9 +103,7 @@ use super::{
     },
     EcmascriptModuleAssetType,
 };
-pub use crate::references::esm::export::{
-    follow_reexports, is_marked_as_side_effect_free, FollowExportsResult,
-};
+pub use crate::references::esm::export::{follow_reexports, FollowExportsResult};
 use crate::{
     analyzer::{
         builtin::early_replace_builtin,
@@ -131,9 +129,11 @@ use crate::{
     EcmascriptInputTransforms, EcmascriptModuleAsset, SpecifiedModuleType, TreeShakingMode,
 };
 
+#[derive(Clone)]
 #[turbo_tasks::value(shared)]
 pub struct AnalyzeEcmascriptModuleResult {
     pub references: Vc<ModuleReferences>,
+    pub reexport_references: Vc<ModuleReferences>,
     pub code_generation: Vc<CodeGenerateables>,
     pub exports: Vc<EcmascriptExports>,
     pub async_module: Vc<OptionAsyncModule>,
@@ -145,6 +145,7 @@ pub struct AnalyzeEcmascriptModuleResult {
 /// `Vc<AnalyzeEcmascriptModuleResult>` eventually.
 pub(crate) struct AnalyzeEcmascriptModuleResultBuilder {
     references: IndexSet<Vc<Box<dyn ModuleReference>>>,
+    reexport_references: IndexSet<Vc<Box<dyn ModuleReference>>>,
     code_gens: Vec<CodeGen>,
     exports: EcmascriptExports,
     async_module: Vc<OptionAsyncModule>,
@@ -155,6 +156,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
     pub fn new() -> Self {
         Self {
             references: IndexSet::new(),
+            reexport_references: IndexSet::new(),
             code_gens: Vec::new(),
             exports: EcmascriptExports::None,
             async_module: Vc::cell(None),
@@ -168,6 +170,20 @@ impl AnalyzeEcmascriptModuleResultBuilder {
         R: Upcast<Box<dyn ModuleReference>>,
     {
         self.references.insert(Vc::upcast(reference));
+    }
+
+    /// Adds an asset reference to the analysis result.
+    pub fn add_import_reference(&mut self, reference: Vc<EsmAssetReference>) {
+        self.references.insert(Vc::upcast(reference));
+        self.reexport_references.insert(Vc::upcast(reference));
+    }
+
+    /// Flag a reference a non-candiate for side effect free reexports.
+    pub fn flag_non_reexport_reference<R>(&mut self, reference: Vc<R>)
+    where
+        R: Upcast<Box<dyn ModuleReference>>,
+    {
+        self.reexport_references.remove(&Vc::upcast(reference));
     }
 
     /// Adds a codegen to the analysis result.
@@ -208,11 +224,28 @@ impl AnalyzeEcmascriptModuleResultBuilder {
 
     /// Builds the final analysis result. Resolves internal Vcs for performance
     /// in using them.
-    pub async fn build(mut self) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
+    pub async fn build(
+        mut self,
+        track_reexport_references: bool,
+    ) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
         let mut references: Vec<_> = self.references.into_iter().collect();
         for r in references.iter_mut() {
             *r = r.resolve().await?;
         }
+        let reexport_references = if track_reexport_references {
+            let mut reexport_references = self.reexport_references.into_iter().collect::<Vec<_>>();
+            if !reexport_references.is_empty() {
+                let mut refs: IndexSet<_> = references.into_iter().collect();
+                for r in reexport_references.iter_mut() {
+                    *r = r.resolve().await?;
+                    refs.remove(r);
+                }
+                references = refs.into_iter().collect();
+            }
+            reexport_references
+        } else {
+            vec![]
+        };
         for c in self.code_gens.iter_mut() {
             match c {
                 CodeGen::CodeGenerateable(c) => {
@@ -226,6 +259,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
         Ok(AnalyzeEcmascriptModuleResult::cell(
             AnalyzeEcmascriptModuleResult {
                 references: Vc::cell(references),
+                reexport_references: Vc::cell(reexport_references),
                 code_generation: Vc::cell(self.code_gens),
                 exports: self.exports.into(),
                 async_module: self.async_module,
@@ -376,7 +410,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
         ..
     } = &*parsed
     else {
-        return analysis.build().await;
+        return analysis.build(false).await;
     };
 
     let mut import_references = Vec::new();
@@ -480,7 +514,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
     }
     for r in import_references.iter() {
         // `add_reference` will avoid adding duplicate references
-        analysis.add_reference(*r);
+        analysis.add_import_reference(*r);
     }
 
     let (webpack_runtime, webpack_entry, webpack_chunks, esm_exports, esm_star_exports) =
@@ -506,7 +540,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                     } => {
                         visitor.esm_exports.insert(
                             e.to_string(),
-                            EsmExport::ImportedBinding(import_ref, i.to_string()),
+                            EsmExport::ImportedBinding(Vc::upcast(import_ref), i.to_string()),
                         );
                     }
                 }
@@ -588,13 +622,12 @@ pub(crate) async fn analyse_ecmascript_module_internal(
         .cell();
         analysis.set_async_module(async_module);
 
-        let esm_exports: Vc<EsmExports> = EsmExports {
+        let esm_exports = EsmExports {
             exports: esm_exports,
             star_exports: esm_star_exports,
         }
         .cell();
 
-        analysis.add_code_gen(esm_exports);
         analysis.add_code_gen_with_availability_info(async_module);
 
         EcmascriptExports::EsmExports(esm_exports)
@@ -1006,7 +1039,12 @@ pub(crate) async fn analyse_ecmascript_module_internal(
 
     analysis.set_successful(true);
 
-    analysis.build().await
+    analysis
+        .build(matches!(
+            options.tree_shaking_mode,
+            Some(TreeShakingMode::ReexportsOnly)
+        ))
+        .await
 }
 
 fn handle_call_boxed<'a, G: Fn(Vec<Effect>) + Send + Sync + 'a>(
@@ -2424,8 +2462,9 @@ impl<'a> VisitAstPath for ModuleReferencesVisitor<'a> {
                             };
                             if let Some((index, export)) = imported_binding {
                                 let esm_ref = self.import_references[index];
+                                self.analysis.flag_non_reexport_reference(esm_ref);
                                 if let Some(export) = export {
-                                    EsmExport::ImportedBinding(esm_ref, export)
+                                    EsmExport::ImportedBinding(Vc::upcast(esm_ref), export)
                                 } else {
                                     EsmExport::ImportedNamespace(esm_ref)
                                 }

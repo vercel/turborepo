@@ -178,7 +178,16 @@ impl Module for MdxModuleAsset {
 
     #[turbo_tasks::function]
     async fn references(self: Vc<Self>) -> Result<Vc<ModuleReferences>> {
-        Ok(self.failsafe_analyze().await?.references)
+        let analyze = self.failsafe_analyze().await?;
+        let references = analyze
+            .references
+            .await?
+            .iter()
+            .chain(analyze.reexport_references.await?.iter())
+            .copied()
+            .collect();
+
+        Ok(Vc::cell(references))
     }
 }
 

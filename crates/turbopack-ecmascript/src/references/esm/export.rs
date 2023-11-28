@@ -15,11 +15,10 @@ use swc_core::{
     quote, quote_expr,
 };
 use turbo_tasks::{trace::TraceRawVcs, ValueToString, Vc};
-use turbo_tasks_fs::FileJsonContent;
 use turbopack_core::{
     issue::{analyze::AnalyzeIssue, IssueExt, IssueSeverity, StyledString},
     module::Module,
-    resolve::{find_context_file, package_json, FindContextFileResult},
+    reference::ModuleReference,
 };
 
 use super::{base::ReferencedAsset, EsmAssetReference};
@@ -32,9 +31,13 @@ use crate::{
 
 #[derive(Clone, Hash, Debug, PartialEq, Eq, Serialize, Deserialize, TraceRawVcs)]
 pub enum EsmExport {
+    /// A local binding that is exported (export { a } or export const a = 1)
     LocalBinding(String),
-    ImportedBinding(Vc<EsmAssetReference>, String),
+    /// An imported binding that is exported (export { a as b } from "...")
+    ImportedBinding(Vc<Box<dyn ModuleReference>>, String),
+    /// An imported namespace that is exported (export * from "...")
     ImportedNamespace(Vc<EsmAssetReference>),
+    /// An error occurred while resolving the export
     Error,
 }
 
@@ -55,31 +58,11 @@ pub struct FollowExportsResult {
 }
 
 #[turbo_tasks::function]
-pub async fn is_marked_as_side_effect_free(module: Vc<Box<dyn Module>>) -> Result<Vc<bool>> {
-    let find_package_json =
-        find_context_file(module.ident().path().parent(), package_json()).await?;
-
-    if let FindContextFileResult::Found(package_json, _) = *find_package_json {
-        if let FileJsonContent::Content(content) = &*package_json.read_json().await? {
-            if let Some(side_effects) = content.get("sideEffects") {
-                if let Some(side_effects) = side_effects.as_bool() {
-                    return Ok(Vc::cell(!side_effects));
-                } else {
-                    // TODO it might be a glob too, handle that case too
-                }
-            }
-        }
-    }
-
-    Ok(Vc::cell(false))
-}
-
-#[turbo_tasks::function]
 pub async fn follow_reexports(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: String,
 ) -> Result<Vc<FollowExportsResult>> {
-    if *is_marked_as_side_effect_free(Vc::upcast(module)).await? {
+    if *module.is_marked_as_side_effect_free().await? {
         Ok(follow_reexports_internal(module, export_name))
     } else {
         Ok(FollowExportsResult::cell(FollowExportsResult {
@@ -133,8 +116,10 @@ async fn handle_declared_export(
 ) -> Result<ControlFlow<FollowExportsResult, (Vc<Box<dyn EcmascriptChunkPlaceable>>, String)>> {
     match export {
         EsmExport::ImportedBinding(reference, name) => {
-            if let ReferencedAsset::Some(module) = *reference.get_referenced_asset().await? {
-                if *is_marked_as_side_effect_free(Vc::upcast(module)).await? {
+            if let ReferencedAsset::Some(module) =
+                *ReferencedAsset::from_resolve_result(reference.resolve_reference()).await?
+            {
+                if *module.is_marked_as_side_effect_free().await? {
                     return Ok(ControlFlow::Continue((module, name.to_string())));
                 } else {
                     return Ok(ControlFlow::Break(FollowExportsResult {
@@ -356,7 +341,10 @@ impl CodeGenerateable for EsmExports {
                     if !all_exports.contains_key(&Cow::<str>::Borrowed(export)) {
                         all_exports.insert(
                             Cow::Owned(export.clone()),
-                            Cow::Owned(EsmExport::ImportedBinding(*esm_ref, export.to_string())),
+                            Cow::Owned(EsmExport::ImportedBinding(
+                                Vc::upcast(*esm_ref),
+                                export.to_string(),
+                            )),
                         );
                     }
                 }
@@ -381,7 +369,8 @@ impl CodeGenerateable for EsmExports {
                     local = Ident::new((name as &str).into(), DUMMY_SP)
                 )),
                 EsmExport::ImportedBinding(esm_ref, name) => {
-                    let referenced_asset = esm_ref.get_referenced_asset().await?;
+                    let referenced_asset =
+                        ReferencedAsset::from_resolve_result(esm_ref.resolve_reference()).await?;
                     referenced_asset.get_ident().await?.map(|ident| {
                         quote!(
                             "(() => $expr)" as Expr,

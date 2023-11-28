@@ -26,7 +26,10 @@ use anyhow::Result;
 use css::{CssModuleAsset, GlobalCssAsset, ModuleCssAsset};
 use ecmascript::{
     chunk::EcmascriptChunkPlaceable,
-    references::{follow_reexports, is_marked_as_side_effect_free, FollowExportsResult},
+    references::{follow_reexports, FollowExportsResult},
+    side_effect_optimization::module::{
+        EcmascriptModuleReexportsPartModule, EcmascriptModuleReexportsPartModuleType,
+    },
     typescript::resolve::TypescriptTypesAssetReference,
     EcmascriptModuleAsset, EcmascriptModuleAssetType, TreeShakingMode,
 };
@@ -102,6 +105,7 @@ async fn apply_module_type(
     module_type: Vc<ModuleType>,
     part: Option<Vc<ModulePart>>,
     inner_assets: Option<Vc<InnerAssets>>,
+    runtime_code: bool,
 ) -> Result<Vc<ProcessResult>> {
     let module_type = &*module_type.await?;
     Ok(ProcessResult::Module(match module_type {
@@ -155,54 +159,32 @@ async fn apply_module_type(
                 builder = builder.with_inner_assets(inner_assets);
             }
 
-            match options.tree_shaking_mode {
-                Some(TreeShakingMode::ModuleFragments) => {
-                    if let Some(part) = part {
-                        builder = builder.with_part(part);
-                    }
-                }
-                Some(TreeShakingMode::ReexportsOnly) => {}
-                None => {}
-            }
-
-            let mut module = builder.build();
-
-            if options.tree_shaking_mode.is_some() {
-                if let Some(part) = part {
-                    match *part.await? {
-                        ModulePart::ModuleEvaluation => {
-                            if *is_marked_as_side_effect_free(module).await? {
-                                return Ok(ProcessResult::Ignore.cell());
-                            }
+            if runtime_code {
+                Vc::upcast(builder.build())
+            } else {
+                match options.tree_shaking_mode {
+                    Some(TreeShakingMode::ModuleFragments) => {
+                        if let Some(part) = part {
+                            Vc::upcast(builder.build_part(part))
+                        } else {
+                            Vc::upcast(builder.build_part(ModulePart::reexports_facade()))
                         }
-                        ModulePart::Export(export) => {
-                            if let Some(placeable) = Vc::try_resolve_sidecast::<
-                                Box<dyn EcmascriptChunkPlaceable>,
-                            >(module)
-                            .await?
-                            {
-                                let export = export.await?;
-                                let FollowExportsResult {
-                                    module: final_module,
-                                    export_name: new_export,
-                                    ..
-                                } = &*follow_reexports(placeable, export.clone_value()).await?;
-                                if let Some(new_export) = new_export {
-                                    if *new_export == *export {
-                                        module = Vc::upcast(*final_module)
-                                    } else {
-                                        // TODO: create a remapping module
-                                    }
-                                } else {
-                                    // TODO: create a remapping module
-                                }
-                            }
-                        }
-                        _ => {}
                     }
+                    Some(TreeShakingMode::ReexportsOnly) => {
+                        let module = builder.build();
+                        if *module.get_exports().has_static_reexports().await? {
+                            let module = EcmascriptModuleReexportsPartModule::new(
+                                module,
+                                EcmascriptModuleReexportsPartModuleType::ReexportsFacade,
+                            );
+                            return Ok(apply_reexport_tree_shaking(Vc::upcast(module), part));
+                        } else {
+                            return Ok(apply_reexport_tree_shaking(Vc::upcast(module), part));
+                        }
+                    }
+                    None => Vc::upcast(builder.build()),
                 }
             }
-            module
         }
         ModuleType::Json => Vc::upcast(JsonModuleAsset::new(source)),
         ModuleType::Raw => Vc::upcast(RawModule::new(source)),
@@ -243,6 +225,45 @@ async fn apply_module_type(
         ModuleType::Custom(custom) => custom.create_module(source, module_asset_context, part),
     })
     .cell())
+}
+
+#[turbo_tasks::function]
+async fn apply_reexport_tree_shaking(
+    module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
+    part: Option<Vc<ModulePart>>,
+) -> Result<Vc<ProcessResult>> {
+    if let Some(part) = part {
+        match *part.await? {
+            ModulePart::ModuleEvaluation => {
+                if *module.is_marked_as_side_effect_free().await? {
+                    return Ok(ProcessResult::Ignore.cell());
+                }
+            }
+            ModulePart::Export(export) => {
+                if let Some(placeable) =
+                    Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(module).await?
+                {
+                    let export = export.await?;
+                    let FollowExportsResult {
+                        module: final_module,
+                        export_name: new_export,
+                        ..
+                    } = &*follow_reexports(placeable, export.clone_value()).await?;
+                    if let Some(new_export) = new_export {
+                        if *new_export == *export {
+                            return Ok(ProcessResult::Module(Vc::upcast(*final_module)).cell());
+                        } else {
+                            // TODO: create a remapping module
+                        }
+                    } else {
+                        // TODO: create a remapping module
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(ProcessResult::Module(Vc::upcast(module)).cell())
 }
 
 #[turbo_tasks::value]
@@ -490,6 +511,7 @@ async fn process_default_internal(
         module_type,
         part,
         inner_assets,
+        matches!(reference_type, ReferenceType::Runtime),
     ))
 }
 

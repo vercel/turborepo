@@ -63,19 +63,9 @@ impl ReferencedAsset {
 #[turbo_tasks::value_impl]
 impl ReferencedAsset {
     #[turbo_tasks::function]
-    pub async fn from_resolve_result(
-        resolve_result: Vc<ModuleResolveResult>,
-        request: Vc<Request>,
-    ) -> Result<Vc<Self>> {
+    pub async fn from_resolve_result(resolve_result: Vc<ModuleResolveResult>) -> Result<Vc<Self>> {
         for result in resolve_result.await?.primary.iter() {
             match result {
-                ModuleResolveResultItem::OriginalReferenceExternal => {
-                    if let Some(request) = request.await?.request() {
-                        return Ok(ReferencedAsset::OriginalReferenceTypeExternal(request).cell());
-                    } else {
-                        return Ok(ReferencedAsset::cell(ReferencedAsset::None));
-                    }
-                }
                 ModuleResolveResultItem::OriginalReferenceTypeExternal(request) => {
                     return Ok(
                         ReferencedAsset::OriginalReferenceTypeExternal(request.clone()).cell(),
@@ -144,13 +134,8 @@ impl EsmAssetReference {
     }
 
     #[turbo_tasks::function]
-    pub(crate) async fn get_referenced_asset(self: Vc<Self>) -> Result<Vc<ReferencedAsset>> {
-        let this = self.await?;
-
-        Ok(ReferencedAsset::from_resolve_result(
-            self.resolve_reference(),
-            this.request,
-        ))
+    pub(crate) fn get_referenced_asset(self: Vc<Self>) -> Vc<ReferencedAsset> {
+        ReferencedAsset::from_resolve_result(self.resolve_reference())
     }
 }
 
