@@ -1,5 +1,5 @@
   $ . ${TESTDIR}/../setup.sh with-npm npm
-  \d+\.\d+\.\d+ (re)
+
 # run twice and make sure it works
   $ npm run build lint -- --output-logs=errors-only
   
