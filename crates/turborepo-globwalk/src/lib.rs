@@ -1,8 +1,6 @@
 #![feature(assert_matches)]
 #![deny(clippy::all)]
 
-mod empty_glob;
-
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -11,37 +9,18 @@ use std::{
     sync::OnceLock,
 };
 
-use empty_glob::InclusiveEmptyAny;
 use itertools::Itertools;
 use path_slash::PathExt;
 use regex::Regex;
 use tracing::{info_span, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
-use wax::{Any, BuildError, Glob, Pattern};
+use wax::{BuildError, Glob, Pattern};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WalkType {
     Files,
     Folders,
     All,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum MatchType {
-    Match,
-    PotentialMatch,
-    None,
-    Exclude,
-}
-
-impl WalkType {
-    fn should_emit(&self, is_dir: bool) -> bool {
-        match self {
-            WalkType::Files => !is_dir,
-            WalkType::Folders => is_dir,
-            WalkType::All => true,
-        }
-    }
 }
 
 pub use walkdir::Error as WalkDirError;
@@ -63,102 +42,6 @@ pub enum WalkError {
     InternalError { glob: String, error: String },
     #[error("IO Error: {0}")]
     IO(#[from] std::io::Error),
-}
-
-/// Performs a glob walk, yielding paths that _are_ included in the include list
-/// (if it is nonempty) and _not_ included in the exclude list.
-///
-/// In the case of an empty include, then all files are included.
-///
-/// note: the rough algorithm to achieve this is as follows:
-///       - prepend the slashified base_path to each include and exclude
-///       - collapse the path, and calculate the new base_path, which defined as
-///         the longest common prefix of all the includes
-///       - traversing above the root of the base_path is not allowed
-pub fn _globwalk(
-    base_path: &AbsoluteSystemPath,
-    include: &[String],
-    exclude: &[String],
-    walk_type: WalkType,
-) -> Result<impl Iterator<Item = Result<AbsoluteSystemPathBuf, WalkError>>, WalkError> {
-    let (base_path_new, include_paths, exclude_paths) =
-        preprocess_paths_and_globs(base_path, include, exclude)?;
-
-    let (include, exclude) = build_glob_matchers(include_paths, exclude_paths)?;
-
-    // we enable following symlinks but only because without it they are ignored
-    // completely (as opposed to yielded but not followed)
-    let walker = walkdir::WalkDir::new(base_path_new.as_path()).follow_links(false);
-    let mut iter = walker.into_iter();
-
-    Ok(std::iter::from_fn(move || loop {
-        let entry = iter.next()?;
-
-        let (is_symlink, path) = match entry {
-            Ok(entry) => (entry.path_is_symlink(), entry.into_path()),
-            Err(err) => match (err.io_error(), err.path()) {
-                // make sure to yield broken symlinks
-                (Some(io_err), Some(path))
-                    if io_err.kind() == ErrorKind::NotFound && path.is_symlink() =>
-                {
-                    (true, path.to_owned())
-                }
-                _ => return Some(Err(err.into())),
-            },
-        };
-
-        let relative_path = path.as_path(); // TODO
-        let is_directory = !path.is_symlink() && path.is_dir();
-
-        let match_type = do_match(relative_path, &include, &exclude);
-
-        if (match_type == MatchType::Exclude || is_symlink) && is_directory {
-            iter.skip_current_dir();
-        }
-
-        match match_type {
-            // if it is a perfect match, and our walk_type allows it, then we should yield it
-            MatchType::Match if walk_type.should_emit(is_directory) => {
-                return Some(Ok(
-                    AbsoluteSystemPathBuf::try_from(path.as_path()).expect("absolute")
-                ));
-            }
-            // we should yield potential matches if they are symlinks. we don't want to traverse
-            // into them, but simply say 'hey this is a symlink that could match'
-            // MatchType::PotentialMatch if is_symlink && walk_type.should_emit(is_directory) => {
-            // return Some(Ok(AbsoluteSystemPathBuf::new(path).expect("absolute")));
-            // }
-            // just skip and continue on with the loop
-            MatchType::None | MatchType::PotentialMatch | MatchType::Match | MatchType::Exclude => {
-            }
-        }
-    }))
-}
-
-/// Builds the include and exclude glob matchers
-///
-/// note: we could probably reduce the number of allocations here
-///       with a tasteful PR to wax, rather than having us convert
-///       to globs, calling into_owned, then collecting and erroring.
-///       really, `Any` should have an `into_owned` method
-///       additionally, `BuildError` currently has a lifetime, which
-///       prevents us from using ? here, since we must convert to str
-fn build_glob_matchers(
-    include_paths: Vec<String>,
-    exclude_paths: Vec<String>,
-) -> Result<(InclusiveEmptyAny<'static>, Any<'static>), WalkError> {
-    let inc_patterns = include_paths
-        .iter()
-        .map(glob_with_contextual_error)
-        .collect::<Result<Vec<_>, _>>()?;
-    let include =
-        InclusiveEmptyAny::new(inc_patterns, include_paths).map_err(Into::<WalkError>::into)?;
-    let ex_patterns = exclude_paths
-        .iter()
-        .map(glob_with_contextual_error)
-        .collect::<Result<Vec<_>, _>>()?;
-    let exclude = any_with_contextual_error(ex_patterns, exclude_paths)?;
-    Ok((include, exclude))
 }
 
 fn join_unix_like_paths(a: &str, b: &str) -> String {
@@ -271,21 +154,6 @@ pub fn fix_glob_pattern(pattern: &str) -> String {
     p3.to_string()
 }
 
-fn do_match(path: &Path, include: &InclusiveEmptyAny, exclude: &Any) -> MatchType {
-    let path_unix = match path.to_slash() {
-        Some(path) => path,
-        None => return MatchType::None, // you can't match a path that isn't valid unicode
-    };
-
-    let is_match = include.is_match(path_unix.as_ref());
-    let is_match2 = exclude.is_match(path_unix.as_ref());
-    match (is_match, is_match2) {
-        (_, true) => MatchType::Exclude, // exclude takes precedence
-        (true, false) => MatchType::Match,
-        (false, false) => MatchType::None,
-    }
-}
-
 /// collapse a path, returning a new path with all the dots and dotdots removed
 ///
 /// also returns the position in the path of the first encountered collapse,
@@ -343,16 +211,6 @@ fn glob_with_contextual_error<S: AsRef<str> + std::fmt::Debug>(
     Glob::new(raw)
         .map(|g| g.into_owned())
         .map_err(|e| WalkError::BadPattern(raw.to_string(), Box::new(e)))
-}
-
-pub(crate) fn any_with_contextual_error(
-    precompiled: Vec<Glob<'static>>,
-    text: Vec<String>,
-) -> Result<wax::Any<'static>, WalkError> {
-    wax::any(precompiled).map_err(|e| {
-        let text = text.iter().join(",");
-        WalkError::BadPattern(text, Box::new(e))
-    })
 }
 
 #[tracing::instrument]
@@ -443,16 +301,13 @@ pub fn globwalk(
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, path::Path};
+    use std::collections::HashSet;
 
     use itertools::Itertools;
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::{
-        collapse_path, empty_glob::InclusiveEmptyAny, glob_with_contextual_error, globwalk,
-        MatchType, WalkError, WalkType,
-    };
+    use crate::{collapse_path, globwalk, WalkError, WalkType};
 
     #[cfg(unix)]
     const ROOT: &str = "/";
@@ -543,54 +398,6 @@ mod test {
                     .as_slice()
             );
         }
-    }
-
-    #[test_case("a/b/c", "dist/**", "dist/js/**")]
-    fn exclude_prunes_subfolder(base_path: &str, include: &str, exclude: &str) {
-        let base_path = AbsoluteSystemPathBuf::new(format!("{}{}", ROOT, base_path)).unwrap();
-        let include = vec![include.to_string()];
-        let exclude = vec![exclude.to_string()];
-
-        let (_, include, exclude) =
-            super::preprocess_paths_and_globs(&base_path, &include, &exclude).unwrap();
-
-        let include_globs = include
-            .iter()
-            .map(glob_with_contextual_error)
-            .collect::<Result<Vec<_>, WalkError>>()
-            .unwrap();
-        let include_glob = InclusiveEmptyAny::new(include_globs, include).unwrap();
-        let exclude_glob = wax::any(exclude.iter().map(|s| s.as_ref())).unwrap();
-
-        assert_eq!(
-            super::do_match(
-                Path::new(&format!("{}{}", ROOT, "a/b/c/dist/js/test.js")),
-                &include_glob,
-                &exclude_glob
-            ),
-            MatchType::Exclude
-        );
-    }
-
-    #[test]
-    fn do_match_empty_include() {
-        let patterns: Vec<String> = vec![];
-        let empty: [&str; 0] = [];
-        let any = wax::any(empty).unwrap();
-        let compiled = patterns
-            .iter()
-            .map(glob_with_contextual_error)
-            .collect::<Result<Vec<_>, WalkError>>()
-            .unwrap();
-        let any_empty = InclusiveEmptyAny::new(compiled, patterns).unwrap();
-        assert_eq!(
-            super::do_match(
-                Path::new(&format!("{}{}", ROOT, "/a/b/c/d")),
-                &any_empty,
-                &any
-            ),
-            MatchType::Match
-        )
     }
 
     /// set up a globwalk test in a tempdir, returning the path to the tempdir
