@@ -1,5 +1,5 @@
   $ . ${TESTDIR}/../setup.sh non-monorepo npm
-  \d+\.\d+\.\d+ (re)
+
 # run twice and make sure it works
   $ npx turbo build lint --output-logs=errors-only
   \xe2\x80\xa2 Running build, lint (esc)

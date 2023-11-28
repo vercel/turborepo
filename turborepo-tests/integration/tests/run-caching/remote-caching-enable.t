@@ -15,7 +15,7 @@ The fixture does not have a `remoteCache` config at all, output should be null
   null
 
 Test that remote caching is enabled by default
-  $ ${TURBO} run build --team=vercel --token=hi --output-logs=none | grep "Remote caching"
+  $ ${TURBO} run build --team=vercel --token=hi --output-logs=none 2>/dev/null | grep "Remote caching"
   \xe2\x80\xa2 Remote caching enabled (esc)
 
 Set `remoteCache = {}` into turbo.json
