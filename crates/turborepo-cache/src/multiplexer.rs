@@ -57,7 +57,7 @@ impl CacheMultiplexer {
             });
 
         Ok(CacheMultiplexer {
-            should_print_skipping_remote_put: AtomicBool::new(false),
+            should_print_skipping_remote_put: AtomicBool::new(true),
             should_use_http_cache: AtomicBool::new(http_cache.is_some()),
             remote_cache_read_only: opts.remote_cache_read_only,
             fs: fs_cache,
@@ -90,14 +90,14 @@ impl CacheMultiplexer {
         let http_result = match self.get_http_cache() {
             Some(http) => {
                 if self.remote_cache_read_only {
-                    if !self
+                    if self
                         .should_print_skipping_remote_put
                         .load(Ordering::Relaxed)
                     {
                         // Warn once per build, not per task
                         warn!("Remote cache is read-only, skipping upload");
                         self.should_print_skipping_remote_put
-                            .store(true, Ordering::Relaxed);
+                            .store(false, Ordering::Relaxed);
                     }
                     // Cache is functional but running in read-only mode, so we don't want to try to
                     // write to it
