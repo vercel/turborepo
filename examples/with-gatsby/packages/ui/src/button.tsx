@@ -1,3 +1,5 @@
+// The Gatsby build needs this import.
+// eslint-disable-next-line no-redeclare
 import * as React from "react";
 
 export function Button(): JSX.Element {
