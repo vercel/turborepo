@@ -24,14 +24,14 @@ pub struct PackageManager {
 }
 
 #[napi]
-pub struct Workspace {
+pub struct Package {
     #[napi(readonly)]
     pub absolute_path: String,
     #[napi(readonly)]
     pub repo_path: String,
 }
 
-impl Workspace {
+impl Package {
     fn new(repo_root: &AbsoluteSystemPath, workspace_path: &AbsoluteSystemPath) -> Self {
         let repo_path = repo_root
             .anchor(workspace_path)
@@ -71,7 +71,7 @@ impl PackageManagerRoot {
     }
 
     #[napi]
-    pub async fn packages(&self) -> std::result::Result<Vec<Workspace>, napi::Error> {
+    pub async fn packages(&self) -> std::result::Result<Vec<Package>, napi::Error> {
         self.packages_internal().await.map_err(|e| e.into())
     }
 }
