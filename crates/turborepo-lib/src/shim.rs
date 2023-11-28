@@ -346,7 +346,7 @@ impl LocalTurboState {
         // follows the symlink, leading to the wrong place. We could separate
         // the Windows implementation, but this workaround works for other platforms as
         // well.
-        let canonical_path = fs_canonicalize(&turbo_path).ok()?;
+        let canonical_path = fs_canonicalize(turbo_path).ok()?;
 
         // Go up the parent
         let parent_canonical_path = canonical_path.join("..");
