@@ -337,21 +337,17 @@ impl LocalTurboState {
     // - `pnpm install`
     // - `npm install --install-strategy=linked`
     fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
-        // turbo_path is a symlink in this install strategy. Get path to the symlink
-        let turbo_path = root_path.as_path().join("node_modules").join("turbo");
-
-        // Canonicalize the symlink to what it points to. We do this _before_
-        // traversing up to the parent, because on Windows, if you canonicalize
-        // a path that ends with `/..` it traverses to the parent directory before it
-        // follows the symlink, leading to the wrong place. We could separate
-        // the Windows implementation, but this workaround works for other platforms as
+        // root_path/node_modules/turbo is a symlink. Canonicalize the symlink to what
+        // it points to. We do this _before_ traversing up to the parent,
+        // because on Windows, if you canonicalize a path that ends with `/..`
+        // it traverses to the parent directory before it follows the symlink,
+        // leading to the wrong place. We could separate the Windows
+        // implementation, but this workaround works for other platforms as
         // well.
-        let canonical_path = fs_canonicalize(turbo_path).ok()?;
+        let canonical_path =
+            fs_canonicalize(root_path.as_path().join("node_modules").join("turbo")).ok()?;
 
-        // Go up the parent
-        let parent_canonical_path = canonical_path.join("..");
-
-        AbsoluteSystemPathBuf::try_from(parent_canonical_path).ok()
+        AbsoluteSystemPathBuf::try_from(canonical_path.join("..")).ok()
     }
 
     // The unplugged directory doesn't have a fixed path.
