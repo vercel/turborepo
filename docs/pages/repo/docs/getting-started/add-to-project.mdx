@@ -14,32 +14,33 @@ By configuring your `turbo.json` correctly, you'll notice how
 
 1. **Install `turbo` globally**
 
-   <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
-  <Tab>
-    ```bash
-    npm install turbo --global
-    ```
-  </Tab>
-  <Tab>
-    ```bash
-    yarn global add turbo
-    ```
-  </Tab>
-  <Tab>
-    ```bash
-    pnpm add turbo --global
-    ```
-  </Tab>
-</Tabs>
+  <Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+    <Tab>
+      ```bash
+      npm install turbo --global
+      ```
+    </Tab>
+    <Tab>
+      ```bash
+      yarn global add turbo
+      ```
+    </Tab>
+    <Tab>
+      ```bash
+      pnpm add turbo --global
+      ```
+    </Tab>
+  </Tabs>
 
-   For more details about installation, see [Installing Turborepo](../installing)
+For more details about installation, see [Installing Turborepo](../installing)
 
 2. **Add a `turbo.json` file at the base of your repository:**
 
    For more information on configuring your `turbo.json`, see the [Configuration Options](/repo/docs/reference/configuration) documentation.
 
-   <Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
-  <Tab>
+    <Tabs items={['Next.js', 'Vite']} storageKey="selected-framework">
+<Tab>
+
 ```json filename="turbo.json"
 {
   "$schema": "https://turbo.build/schema.json",
@@ -51,6 +52,7 @@ By configuring your `turbo.json` correctly, you'll notice how
   }
 }
 ```
+
   </Tab>
   <Tab>
 ```json filename="turbo.json"
@@ -65,30 +67,31 @@ By configuring your `turbo.json` correctly, you'll notice how
 }
 ```
 
-   Some Vite starters ship with a `package.json` that looks like this:
+Some Vite starters ship with a `package.json` that looks like this:
 
-   ```json filename="package.json"
-   {
-     "scripts": {
-       "build": "tsc && vite build"
-     }
-   }
-   ```
+```json filename="package.json"
+{
+  "scripts": {
+    "build": "tsc && vite build"
+  }
+}
+```
 
-   We recommend splitting these into a `lint` and `build` script.
+We recommend splitting these into a `lint` and `build` script.
 
-   ```json filename="package.json"
-   {
-     "scripts": {
-       "build": "vite build",
-       "lint": "tsc"
-     }
-   }
-   ```
+```json filename="package.json"
+{
+  "scripts": {
+    "build": "vite build",
+    "lint": "tsc"
+  }
+}
+```
 
-   This means that Turbo can schedule them separately.
+This means that Turbo can schedule them separately.
 
      </Tab>
+
 </Tabs>
 
 3. **Edit `.gitignore`**
