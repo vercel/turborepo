@@ -336,25 +336,8 @@ impl LocalTurboState {
     // Linked strategy:
     // - `pnpm install`
     // - `npm install --install-strategy=linked`
-    // #[cfg(not(target_os = "windows"))]
-    // fn generate_linked_path(root_path: &AbsoluteSystemPath) ->
-    // Option<AbsoluteSystemPathBuf> {     let canonical_path = fs_canonicalize(
-    //         root_path
-    //             .as_path()
-    //             .join("node_modules")
-    //             .join("turbo")
-    //             .join(".."),
-    //     )
-    //     .ok()?;
-    //     println!("canonical_path: {:?}", canonical_path);
-    //     AbsoluteSystemPathBuf::try_from(canonical_path).ok()
-    // }
-
-    // Linked strategy:
-    // - `pnpm install`
-    // - `npm install --install-strategy=linked`
-    // #[cfg(target_os = "windows")]
     fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+        ///////////// Original Implementation ///////////////////////////////
         let orig_path = root_path
             .as_path()
             .join("node_modules")
@@ -362,28 +345,31 @@ impl LocalTurboState {
             .join("..");
 
         let orig_canonical_path = fs_canonicalize(&orig_path).ok()?;
-        println!("orig_path: {:?}", orig_path);
-        println!("orig_canonical_path: {:?}", orig_canonical_path);
+        println!("O path 1: {:?}", orig_path);
+        println!("O path C: {:?}", orig_canonical_path);
 
         let orig_abs_path = AbsoluteSystemPathBuf::try_from(orig_canonical_path).ok()?;
-        println!("orig_abs_path: {:?}", orig_abs_path);
+        println!("O path A: {:?}", orig_abs_path);
 
-        ////////////////////////////////////////////
+        println!("\n");
 
+        ///////////// New Implementation ///////////////////////////////
         let new_path = root_path.as_path().join("node_modules").join("turbo");
 
-        println!("new_path: {:?}", new_path);
+        println!("N path 1: {:?}", new_path);
 
         match fs_canonicalize(&new_path) {
             Ok(new_canonical_path) => {
-                println!("new_canonical_path: {:?}", new_canonical_path);
+                println!("N path C: {:?}", new_canonical_path);
                 let new_canonical_path_parent = new_canonical_path.join("..");
-                println!("parent: {:?}", new_canonical_path_parent);
+                println!("N path P: {:?}", new_canonical_path_parent);
 
                 let new_abs_path =
                     AbsoluteSystemPathBuf::try_from(new_canonical_path_parent).ok()?;
 
-                println!("new_abs_path: {:?}", new_abs_path);
+                println!("N path A: {:?}", new_abs_path);
+
+                println!("\n");
 
                 Some(new_abs_path)
             }
@@ -469,7 +455,7 @@ impl LocalTurboState {
             // Needs borrow because of the loop.
             #[allow(clippy::needless_borrow)]
             let bin_path = root.join_components(&platform_package_executable_path_components);
-            println!("canonicalized root path frm search function is: {}", root);
+            println!("canonicalized root path: {}", root);
             println!(
                 "platform_package_executable_path_components is: {:?}",
                 platform_package_executable_path_components
