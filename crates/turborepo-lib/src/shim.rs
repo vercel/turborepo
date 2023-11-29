@@ -347,7 +347,7 @@ impl LocalTurboState {
         let canonical_path =
             fs_canonicalize(root_path.as_path().join("node_modules").join("turbo")).ok()?;
 
-        AbsoluteSystemPathBuf::try_from(canonical_path.join("..")).ok()
+        AbsoluteSystemPathBuf::try_from(canonical_path.parent()?).ok()
     }
 
     // The unplugged directory doesn't have a fixed path.
