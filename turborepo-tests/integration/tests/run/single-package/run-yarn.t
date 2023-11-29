@@ -1,10 +1,5 @@
 Setup
   $ . ${TESTDIR}/../../../../helpers/setup_integration_test.sh $(pwd) single_package "yarn@1.22.17"
-  $ rm -rf package-lock.json || true # exists because of setup.sh script above
-  $ yarn install > /dev/null 2>&1
-Run dos2unix on Windows for newly generated lockfile.
-  $ if [[ "$OSTYPE" == "msys" ]]; then dos2unix --quiet yarn.lock; fi
-  $ git commit --quiet -am "Update lockfile" # clean git state
 
 Check
   $ ${TURBO} run build

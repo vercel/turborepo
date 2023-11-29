@@ -6,7 +6,7 @@ THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
 
 TARGET_DIR=$1
 FIXTURE_NAME="${2-basic_monorepo}"
-PACKAGE_MANAGER="${3-npm}"
+PACKAGE_MANAGER="$3"
 
 SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
 FIXTURE="_fixtures/${FIXTURE_NAME}"
@@ -17,8 +17,15 @@ cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
 
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" ${TARGET_DIR}
 
+# default package manager is npm
+PACKAGE_MANAGER_NAME="npm"
+
 # Update package manager if one was provided
 if [ "$PACKAGE_MANAGER" != "" ]; then
+
+  # If a package manager was provided, set the PACKAGE_MANAGER_NAME by removing the
+  # specific version from the argument.
+  PACKAGE_MANAGER_NAME=$(echo "$PACKAGE_MANAGER" | sed 's/@.*//')
   # Use jq to write a new file with a .packageManager field set and then
   # Overwrite original package.json. For some reason the command above won't send its output
   # directly to the original file.
@@ -31,11 +38,10 @@ if [ "$PACKAGE_MANAGER" != "" ]; then
     dos2unix --quiet "$TARGET_DIR/package.json"
   fi
 
-  git commit -am "Update package manager" --quiet
+  git commit -am "Updateed package manager to $PACKAGE_MANAGER_NAME" --quiet
 fi
-
 
 # Install dependencies
 pushd ${TARGET_DIR} > /dev/null || exit 1
-${SCRIPT_DIR}/install_deps.sh "$PACKAGE_MANAGER"
+${SCRIPT_DIR}/install_deps.sh "$PACKAGE_MANAGER_NAME"
 popd > /dev/null || exit 1
