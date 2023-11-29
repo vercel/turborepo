@@ -317,11 +317,7 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner:
-              - 'self-hosted'
-              - 'linux'
-              - 'x64'
-              - 'metal'
+            runner: ubuntu-latest
           - name: macos
             runner: macos-latest
           - name: windows
@@ -420,11 +416,7 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner:
-              - 'self-hosted'
-              - 'linux'
-              - 'x64'
-              - 'metal'
+            runner: ubuntu-latest
           - name: macos
             runner: macos-latest
           - name: windows
@@ -477,11 +469,7 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner:
-              - 'self-hosted'
-              - 'linux'
-              - 'x64'
-              - 'metal'
+            runner: ubuntu-latest
           - name: macos
             runner: macos-latest
     runs-on: ${{ matrix.os.runner }}
