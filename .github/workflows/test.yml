@@ -163,7 +163,7 @@ jobs:
         with:
           PATTERNS: |
             examples/**
-            examples-tests/**
+            turborepo-tests/examples/**
             !**.md
             !**.mdx
 
@@ -319,46 +319,6 @@ jobs:
             runner: ubuntu-latest
           - name: macos
             runner: macos-latest
-          # Enable this once all tests on windows are passing (rememeber to copy over crlf fix from turborepo_integration_windows)
-          # - name: winodws
-          #   runner: windows-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Setup Graphviz
-        uses: ts-graphviz/setup-graphviz@v1
-        with:
-          macos-skip-brew-update: "true"
-        env:
-          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
-
-      - name: Cache Prysk
-        id: cache-prysk
-        uses: actions/cache@v3
-        with:
-          path: cli/.cram_env
-          key: prysk-venv-${{ matrix.os.name }}
-
-      - name: Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
-
-  # This is the same as turborepo_integration, but it runs on windows.
-  # Separate entry so it's not required for merge.
-  turborepo_integration_windows:
-    name: Turborepo Integration Tests (Windows)
-    needs: [determine_jobs, build_turborepo]
-    if: needs.determine_jobs.outputs.turborepo_integration == 'true'
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
           - name: windows
             runner: windows-latest
     steps:
@@ -533,7 +493,7 @@ jobs:
         # Note: using CLI flags instead of env vars because
         # envs var would apply to the actual tests that exercise turbo also,
         # making test output non-deterministic.
-        run: turbo run example-test --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
+        run: turbo run test -F "@turborepo-examples-tests/*" --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
