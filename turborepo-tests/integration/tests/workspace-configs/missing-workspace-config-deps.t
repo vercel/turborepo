@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../../../helpers/setup_monorepo.sh $(pwd) composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
 
 # The missing-workspace-config-task-with-deps configures dependsOn in the root turbo.json.
 # The workspace does not have a turbo.json config. This test checks that both regular dependencies

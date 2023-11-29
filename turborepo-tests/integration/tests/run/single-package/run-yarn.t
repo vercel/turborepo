@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../../helpers/setup.sh
-  $ . ${TESTDIR}/../../../../helpers/setup_monorepo.sh $(pwd) single_package "yarn@1.22.17"
+  $ . ${TESTDIR}/../../../../helpers/setup_integration_test.sh $(pwd) single_package "yarn@1.22.17"
   $ rm -rf package-lock.json || true # exists because of setup.sh script above
   $ yarn install > /dev/null 2>&1
 Run dos2unix on Windows for newly generated lockfile.

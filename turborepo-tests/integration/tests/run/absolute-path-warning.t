@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../../../helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 Choose our custom config based on OS, since the input/output configs will be different  
   $ [[ "$OSTYPE" == "msys" ]] && CONFIG="abs-path-globs-win.json" || CONFIG="abs-path-globs.json"

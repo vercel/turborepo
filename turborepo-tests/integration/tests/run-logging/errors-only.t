@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../../../helpers/setup_monorepo.sh $(pwd) run_logging
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh run_logging
 
 # [ ] error exit
 # [ ] outputMode: errors-only

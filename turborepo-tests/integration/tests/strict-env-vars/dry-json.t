@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../../../helpers/setup_monorepo.sh $(pwd) strict_env_vars
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh strict_env_vars
 
 Empty passthroughs are null
   $ ${TURBO} build --dry=json | jq -r '.tasks[0].environmentVariables | { passthrough, globalPassthrough }'
