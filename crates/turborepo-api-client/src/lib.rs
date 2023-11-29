@@ -46,6 +46,7 @@ pub trait Client {
     async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse>;
     async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
     async fn get_token_metadata(&self, token: &str) -> Result<TokenMetadata>;
+    #[allow(clippy::too_many_arguments)]
     async fn put_artifact(
         &self,
         hash: &str,

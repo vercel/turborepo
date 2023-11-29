@@ -1,14 +1,14 @@
 use turborepo_api_client::{APIClient, Client};
 use turborepo_auth::{
     login as auth_login, read_or_create_auth_file, sso_login as auth_sso_login, DefaultLoginServer,
-    DefaultSSOLoginServer,
+    DefaultSSOLoginServer, UrlOpenStrategy,
 };
 use turborepo_ui::{BOLD, CYAN, UI};
 use turborepo_vercel_api::TokenMetadata;
 
 use crate::{cli::Error, commands::CommandBase};
 
-/// Entry point for `turbo login --sso`.
+/// Entry point for `turbo login --sso-team`.
 pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Error> {
     let api_client: APIClient = base.api_client()?;
     let ui = base.ui;
@@ -37,14 +37,18 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Err
         }
     }
 
-    let auth_token = auth_sso_login(
-        &api_client,
-        &ui,
-        &login_url_config,
-        sso_team,
-        &DefaultSSOLoginServer,
-    )
-    .await?;
+    // Note: Due to config test not being trasitive (cfg(test)), we state the
+    // browser opening strategy in the login server. If we're in a test
+    // environment, don't open a browser.
+    let browser_open_strategy = match cfg!(test) {
+        true => UrlOpenStrategy::Noop,
+        false => UrlOpenStrategy::Real,
+    };
+
+    let login_server = DefaultSSOLoginServer::new(browser_open_strategy);
+
+    let auth_token =
+        auth_sso_login(&api_client, &ui, &login_url_config, sso_team, &login_server).await?;
 
     auth_file.add_or_update_token(api_client.base_url().to_owned(), auth_token.token);
     auth_file.write_to_disk(&global_auth_path)?;
@@ -74,15 +78,25 @@ pub async fn login(base: &mut CommandBase) -> Result<(), Error> {
         // Non-SAML tokens have an origin of "manual", so we use that to make sure
         // existing token is correctly scoped.
         let metadata: TokenMetadata = api_client.get_token_metadata(&token.token).await?;
+        let user_response = api_client.get_user(&token.token).await?;
         if metadata.origin == "manual" {
             println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
-            // TODO(voz): Print out the user that the token is for instead of token itself.
-            print_cli_authorized(&token.token, &ui);
+            print_cli_authorized(&user_response.user.username, &ui);
             return Ok(());
         }
     }
 
-    let auth_token = auth_login(&api_client, &ui, &login_url_config, &DefaultLoginServer).await?;
+    // Note: Due to config test not being trasitive (cfg(test)), we state the
+    // browser opening strategy in the login server. If we're in a test
+    // environment, don't open a browser.
+    let browser_open_strategy = match cfg!(test) {
+        true => UrlOpenStrategy::Noop,
+        false => UrlOpenStrategy::Real,
+    };
+
+    let login_server = DefaultLoginServer::new(browser_open_strategy);
+
+    let auth_token = auth_login(&api_client, &ui, &login_url_config, &login_server).await?;
 
     auth_file.add_or_update_token(api_client.base_url().to_owned(), auth_token.token);
     auth_file.write_to_disk(&global_auth_path)?;
@@ -110,11 +124,13 @@ fn print_cli_authorized(user: &str, ui: &UI) {
 mod tests {
     use camino::Utf8PathBuf;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_auth::TURBOREPO_AUTH_FILE_NAME;
+    use turborepo_auth::{mocks::*, AuthFile, TURBOREPO_AUTH_FILE_NAME};
+    use turborepo_vercel_api_mock::start_test_server;
 
-    use crate::{cli::Verbosity, commands::CommandBase, Args};
+    use super::*;
+    use crate::{commands::CommandBase, Args};
 
-    fn setup_base() -> CommandBase {
+    fn setup_base(auth_path: &AbsoluteSystemPathBuf, port: u16) -> CommandBase {
         let temp_dir = tempfile::tempdir().unwrap();
         let auth_file_path =
             AbsoluteSystemPathBuf::try_from(temp_dir.path().join(TURBOREPO_AUTH_FILE_NAME))
@@ -124,117 +140,89 @@ mod tests {
             .expect("Failed to create cwd");
 
         let args = Args {
-            version: false,
-            skip_infer: false,
-            no_update_notifier: false,
-            api: Some("mock-api".to_string()),
-            color: false,
-            cpu_profile: None,
+            api: Some(format!("http://localhost:{}", port)),
             cwd: Some(cwd),
-            heap: None,
-            login: None,
+            login: Some(format!("http://localhost:{}", port)),
             no_color: true,
-            preflight: false,
-            remote_cache_timeout: None,
-            team: None,
-            token: None,
-            trace: None,
-            verbosity: Verbosity {
-                verbosity: Some(0),
-                v: 0,
-            },
-            check_for_update: false,
-            test_run: false,
-            run_args: None,
-            command: None,
+            ..Default::default()
         };
         let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path().to_path_buf()).unwrap();
         let ui = turborepo_ui::UI::new(false);
 
-        CommandBase::new(args, repo_root, "0.0.0", ui)
+        let mut base = CommandBase::new(args, repo_root, "0.0.0", ui)
             .with_global_auth_path(auth_file_path.clone())
-            .with_global_config_path(auth_file_path.clone())
+            .with_global_config_path(auth_file_path.clone());
+
+        base.config_init().unwrap();
+        base.global_auth_path = Some(auth_path.clone());
+        base
     }
 
-    // #[tokio::test]
-    // async fn test_login_with_existing_token() {
-    //     // Setup: Test dirs and mocks.
-    //     let temp_dir = tempfile::tempdir().unwrap();
-    //     let auth_file_path =
-    //         AbsoluteSystemPathBuf::try_from(temp_dir.path().
-    // join(TURBOREPO_AUTH_FILE_NAME))             .unwrap();
-    //     // Mock out the existing file.
-    //     let mock_auth_file = AuthFile {
-    //         tokens: vec![AuthToken {
-    //             token: "mock-token".to_string(),
-    //             api: "mock-api".to_string(),
-    //             // created_at: Some(0),
-    //             // user: turborepo_vercel_api::User {
-    //             //     id: 0.to_string(),
-    //             //     email: "mock-email".to_string(),
-    //             //     username: "mock-username".to_string(),
-    //             //     name: Some("mock-name".to_string()),
-    //             //     created_at: Some(0),
-    //             // },
-    //             // teams: vec![Team {
-    //             //     id: "team-id".to_string(),
-    //             //     spaces: vec![Space {
-    //             //         id: "space-id".to_string(),
-    //             //         name: "space1 name".to_string(),
-    //             //     }],
-    //             //     slug: "team slug".to_string(),
-    //             //     name: "team name".to_string(),
-    //             //     created_at: 0,
-    //             //     created: chrono::Utc::now(),
-    //             //     membership:
-    // Membership::new(turborepo_vercel_api::Role::Developer),             //
-    // }],         }],
-    //     };
-    //     mock_auth_file.write_to_disk(&auth_file_path).unwrap();
+    #[tokio::test]
+    async fn test_login_with_existing_token() {
+        // Setup: Test dirs and mocks.
+        let port = port_scanner::request_open_port().unwrap();
+        let api_server = tokio::spawn(start_test_server(port));
+        let temp_dir = tempfile::tempdir().unwrap();
+        let auth_file_path =
+            AbsoluteSystemPathBuf::try_from(temp_dir.path().join(TURBOREPO_AUTH_FILE_NAME))
+                .unwrap();
+        // Mock out the existing file.
+        let mut mock_auth_file = AuthFile::default();
+        mock_auth_file.add_or_update_token("mock-api".to_string(), "mock-token".to_string());
+        mock_auth_file.write_to_disk(&auth_file_path).unwrap();
 
-    //     let mock_api_client = MockApiClient::new();
+        let mock_api_client = MockApiClient::new();
 
-    //     let mut base = setup_base();
+        let mut base = setup_base(&auth_file_path, port);
 
-    //     // Test: Call login function and see if we got the existing token on
-    // the FS     // back.
-    //     let result = login(&mut base).await;
-    //     assert!(result.is_ok());
+        // Test: Call login function and see if we got the existing token on
+        // the FS back.
+        let result = login(&mut base).await;
+        assert!(result.is_ok());
 
-    //     // Since we don't return anything if the login found an existing
-    // token, we     // should read the FS for the auth token. Whatever we
-    // get back should be the     // same as the mock auth file.
-    //     // Pass in the auth file path for both possible paths becuase we
-    // should never     // read the config from here.
-    //     let found_auth_file =
-    //         read_or_create_auth_file(&auth_file_path, &auth_file_path,
-    // &mock_api_client)             .await
-    //             .unwrap();
-    //     assert_eq!(
-    //         mock_auth_file.get_token("mock-api"),
-    //         found_auth_file.get_token("mock-api")
-    //     )
-    // }
-    //     #[tokio::test]
-    //     async fn test_login_no_existing_token() {
-    //         // Setup: Test dirs and mocks.
-    //         let temp_dir = tempfile::tempdir().unwrap();
-    //         let auth_file_path =
-    //
-    // AbsoluteSystemPathBuf::try_from(temp_dir.path().
-    // join(TURBOREPO_AUTH_FILE_NAME))                 .unwrap();
+        // Since we don't return anything if the login found an existing
+        // token, we should read the FS for the auth token. Whatever we
+        // get back should be the same as the mock auth file.
+        // Pass in the auth file path for both possible paths becuase we
+        // should never read the config from here.
+        let found_auth_file =
+            read_or_create_auth_file(&auth_file_path, &auth_file_path, &mock_api_client)
+                .await
+                .unwrap();
 
-    //         let mock_api_client = MockApiClient::new();
+        api_server.abort();
+        assert_eq!(
+            mock_auth_file.get_token("mock-api"),
+            found_auth_file.get_token("mock-api")
+        )
+    }
 
-    //         let mut base = setup_base();
-    //         let result = login(&mut base).await;
-    //         assert!(result.is_ok());
+    #[tokio::test]
+    async fn test_login_no_existing_token() {
+        // Setup: Test dirs and mocks.
+        let port = port_scanner::request_open_port().unwrap();
+        let api_server = tokio::spawn(start_test_server(port));
+        let temp_dir = tempfile::tempdir().unwrap();
+        let auth_file_path =
+            AbsoluteSystemPathBuf::try_from(temp_dir.path().join(TURBOREPO_AUTH_FILE_NAME))
+                .unwrap();
 
-    //         let found_auth_file =
-    //             read_or_create_auth_file(&auth_file_path, &auth_file_path,
-    // &mock_api_client)                 .await
-    //                 .unwrap();
+        let mock_api_client = MockApiClient::new();
 
-    //         assert_eq!(found_auth_file.tokens.len(), 1);
-    //     }
+        let mut base = setup_base(&auth_file_path, port);
+
+        // Test: Call login function and see if we got the expected token.
+        let result = login(&mut base).await;
+        assert!(result.is_ok());
+
+        let found_auth_file =
+            read_or_create_auth_file(&auth_file_path, &auth_file_path, &mock_api_client)
+                .await
+                .unwrap();
+
+        api_server.abort();
+
+        assert_eq!(found_auth_file.tokens.len(), 1);
+    }
 }

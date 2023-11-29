@@ -91,17 +91,10 @@ impl Client for MockApiClient {
     fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
         unimplemented!("add_ci_header")
     }
-    fn add_team_params(
-        _request_builder: RequestBuilder,
-        _team_id: &str,
-        _team_slug: Option<&str>,
-    ) -> RequestBuilder {
-        unimplemented!("add_team_params")
-    }
     async fn get_caching_status(
         &self,
         _token: &str,
-        _team_id: &str,
+        _team_id: Option<&str>,
         _team_slug: Option<&str>,
     ) -> turborepo_api_client::Result<CachingStatusResponse> {
         unimplemented!("get_caching_status")
@@ -144,6 +137,8 @@ impl Client for MockApiClient {
         _duration: u64,
         _tag: Option<&str>,
         _token: &str,
+        _team_id: Option<&str>,
+        _team_slug: Option<&str>,
     ) -> turborepo_api_client::Result<()> {
         unimplemented!("put_artifact")
     }
@@ -154,7 +149,7 @@ impl Client for MockApiClient {
         &self,
         _hash: &str,
         _token: &str,
-        _team_id: &str,
+        _team_id: Option<&str>,
         _team_slug: Option<&str>,
     ) -> turborepo_api_client::Result<Option<Response>> {
         unimplemented!("fetch_artifact")
@@ -163,7 +158,7 @@ impl Client for MockApiClient {
         &self,
         _hash: &str,
         _token: &str,
-        _team_id: &str,
+        _team_id: Option<&str>,
         _team_slug: Option<&str>,
     ) -> turborepo_api_client::Result<Option<Response>> {
         unimplemented!("artifact_exists")
@@ -172,7 +167,7 @@ impl Client for MockApiClient {
         &self,
         _hash: &str,
         _token: &str,
-        _team_id: &str,
+        _team_id: Option<&str>,
         _team_slug: Option<&str>,
         _method: Method,
     ) -> turborepo_api_client::Result<Option<Response>> {

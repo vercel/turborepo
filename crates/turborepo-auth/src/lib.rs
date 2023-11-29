@@ -8,7 +8,7 @@ mod error;
 mod login;
 mod login_server;
 mod logout;
-pub(crate) mod mocks;
+pub mod mocks;
 mod sso;
 mod sso_server;
 mod ui;
