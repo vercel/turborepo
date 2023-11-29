@@ -4,6 +4,7 @@
 //! displaying it We have this split because the tracker representation is not
 //! exactly what we want to display to the user.
 #[allow(dead_code)]
+mod duration;
 mod execution;
 mod global_hash;
 mod scm;
@@ -13,6 +14,7 @@ mod task_factory;
 use std::{collections::HashSet, io, io::Write};
 
 use chrono::{DateTime, Local};
+pub use duration::TurboDuration;
 pub use execution::{TaskExecutionSummary, TaskTracker};
 pub use global_hash::GlobalHashSummary;
 use itertools::Itertools;
