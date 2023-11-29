@@ -1,6 +1,6 @@
 # Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) persistent_dependencies/1-topological
+  $ . ${TESTDIR}/../../../helpers/setup_monorepo.sh $(pwd) persistent_dependencies/1-topological
 
 // Workspace Graph
 // - app-a depends on pkg-a

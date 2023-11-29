@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../../../helpers/setup.sh
-  $ . ${TESTDIR}/../../_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../../../helpers/setup_monorepo.sh $(pwd)
 
   $ cp ${TESTDIR}/turbo.json $TARGET_DIR/turbo.json # overwrite
   $ git commit --quiet -am "Update turbo.json to include special inputs config"

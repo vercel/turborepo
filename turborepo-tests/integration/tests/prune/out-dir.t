@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) monorepo_with_root_dep
+  $ . ${TESTDIR}/../../../helpers/setup_monorepo.sh $(pwd) monorepo_with_root_dep
 
 Test that absolute paths can be passed as out-dir
   $ TMPFILE=$(mktemp -d)

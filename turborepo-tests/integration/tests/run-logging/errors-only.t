@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) run_logging
+  $ . ${TESTDIR}/../../../helpers/setup_monorepo.sh $(pwd) run_logging
 
 # [ ] error exit
 # [ ] outputMode: errors-only

@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../helpers/setup_monorepo.sh $(pwd)
 
 # Run all tests with --filter=util so we don't have any non-deterministic ordering
 

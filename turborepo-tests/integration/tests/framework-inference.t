@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd) framework_inference
+  $ . ${TESTDIR}/../../helpers/setup_monorepo.sh $(pwd) framework_inference
 
 Prove that we start with no inferred variables
   $ ${TURBO} run build --dry=json | jq -r '.tasks[].environmentVariables.inferred'

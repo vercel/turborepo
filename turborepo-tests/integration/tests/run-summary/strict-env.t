@@ -1,6 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) strict_env_vars
+  $ . ${TESTDIR}/../../../helpers/setup_monorepo.sh $(pwd) strict_env_vars
 
 Set the env vars
   $ export GLOBAL_VAR_PT=higlobalpt

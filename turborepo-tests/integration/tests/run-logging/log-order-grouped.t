@@ -1,6 +1,6 @@
 # Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) ordered
+  $ . ${TESTDIR}/../../../helpers/setup_monorepo.sh $(pwd) ordered
 
 # Build in grouped order.
   $ ${TURBO} run build --log-order grouped --force
