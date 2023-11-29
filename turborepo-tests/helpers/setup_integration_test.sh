@@ -6,7 +6,7 @@ THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
 
 TARGET_DIR=$1
 FIXTURE_NAME="${2-basic_monorepo}"
-PACKAGE_MANAGER="$3"
+PACKAGE_MANAGER="${3-npm}"
 
 SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
 FIXTURE="_fixtures/${FIXTURE_NAME}"
@@ -16,11 +16,6 @@ TURBOREPO_INTEGRATION_TESTS_DIR="${TURBOREPO_TESTS_DIR}/integration/tests"
 cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
 
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" ${TARGET_DIR}
-
-# Install dependencies
-pushd ${TARGET_DIR} > /dev/null || exit 1
-${SCRIPT_DIR}/install_deps.sh
-popd > /dev/null || exit 1
 
 # Update package manager if one was provided
 if [ "$PACKAGE_MANAGER" != "" ]; then
@@ -38,3 +33,9 @@ if [ "$PACKAGE_MANAGER" != "" ]; then
 
   git commit -am "Update package manager" --quiet
 fi
+
+
+# Install dependencies
+pushd ${TARGET_DIR} > /dev/null || exit 1
+${SCRIPT_DIR}/install_deps.sh "$PACKAGE_MANAGER"
+popd > /dev/null || exit 1
