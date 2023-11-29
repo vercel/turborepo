@@ -220,8 +220,7 @@
     // Since they also has a unique set of dependencies, we don't model example tests with the
     // test task, or we'd have to override the dependenies in each workspace.
     "example-test": {
-      "dependsOn": ["topo", "cli#build"],
-      "inputs": ["*.t", "../setup.sh"]
+      "dependsOn": ["topo", "cli#build"]
     }
   },
   "experimentalSpaces": {

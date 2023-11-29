@@ -1,11 +1,12 @@
 {
   "name": "@turborepo-examples-tests/yarn-non-monorepo",
   "scripts": {
-    "example-test": "./node_modules/.bin/prysk test.t"
+    "test": "./node_modules/.bin/prysk test.t"
   },
   "dependencies": {
     "turborepo-tests-helpers": "workspace:*",
     "turborepo-examples": "workspace:*",
-    "prysk": "workspace:*"
+    "prysk": "workspace:*",
+    "cli": "workspace:*"
   }
 }

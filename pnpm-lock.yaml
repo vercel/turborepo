@@ -1111,6 +1111,9 @@ importers:
 
   turborepo-tests/example-npm-non-monorepo:
     dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../cli
       prysk:
         specifier: workspace:*
         version: link:../../packages/prysk
@@ -1123,18 +1126,9 @@ importers:
 
   turborepo-tests/example-npm-with-npm:
     dependencies:
-      prysk:
+      cli:
         specifier: workspace:*
-        version: link:../../packages/prysk
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../helpers
-
-  turborepo-tests/example-npm-with-yarn:
-    dependencies:
+        version: link:../../cli
       prysk:
         specifier: workspace:*
         version: link:../../packages/prysk
@@ -1147,6 +1141,9 @@ importers:
 
   turborepo-tests/example-pnpm-basic:
     dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../cli
       prysk:
         specifier: workspace:*
         version: link:../../packages/prysk
@@ -1159,6 +1156,9 @@ importers:
 
   turborepo-tests/example-pnpm-gatsby:
     dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../cli
       prysk:
         specifier: workspace:*
         version: link:../../packages/prysk
@@ -1171,6 +1171,9 @@ importers:
 
   turborepo-tests/example-pnpm-kitchen-sink:
     dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../cli
       prysk:
         specifier: workspace:*
         version: link:../../packages/prysk
@@ -1183,6 +1186,9 @@ importers:
 
   turborepo-tests/example-pnpm-with-svelte:
     dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../cli
       prysk:
         specifier: workspace:*
         version: link:../../packages/prysk
@@ -1195,18 +1201,9 @@ importers:
 
   turborepo-tests/example-yarn-non-monorepo:
     dependencies:
-      prysk:
+      cli:
         specifier: workspace:*
-        version: link:../../packages/prysk
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../helpers
-
-  turborepo-tests/example-yarn-with-npm:
-    dependencies:
+        version: link:../../cli
       prysk:
         specifier: workspace:*
         version: link:../../packages/prysk
@@ -1219,6 +1216,9 @@ importers:
 
   turborepo-tests/example-yarn-with-yarn:
     dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../cli
       prysk:
         specifier: workspace:*
         version: link:../../packages/prysk
