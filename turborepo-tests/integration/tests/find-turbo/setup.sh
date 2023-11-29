@@ -11,7 +11,7 @@ cp -a ${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_DIR/. ${TARGET_DIR}/
 # and `.pnpm/turbo@1.0.0/node_modules/turbo` is the path to symlink to
 # Note: using a nested if so it's easy to find the Windows checks in scripts around the codebase.
 if [[ "$OSTYPE" == "msys" ]]; then
-   if [[ $FIXTURE_NAME == "linked" ]]; then
+   if [[ $FIXTURE_DIR == "linked" ]]; then
     # Delete the existing turbo directory or file, whatever exists there
     rm -rf node_modules/turbo
 
