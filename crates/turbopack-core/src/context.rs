@@ -12,7 +12,11 @@ use crate::{
 
 #[turbo_tasks::value(shared)]
 pub enum ProcessResult {
+    /// A module was created.
     Module(Vc<Box<dyn Module>>),
+
+    /// Reference is ignored. This should lead to no module being included by
+    /// the reference.
     Ignore,
 }
 
@@ -54,9 +58,7 @@ pub trait AssetContext {
         reference_type: Value<ReferenceType>,
     ) -> Vc<ModuleResolveResult>;
 
-    /// Process a source into a module. This might return None, if this should
-    /// lead to no module at all, e. g. in cases where side effect free module
-    /// is imported for its side effects.
+    /// Process a source into a module.
     fn process(
         self: Vc<Self>,
         asset: Vc<Box<dyn Source>>,

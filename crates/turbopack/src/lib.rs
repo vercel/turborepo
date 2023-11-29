@@ -27,9 +27,7 @@ use css::{CssModuleAsset, GlobalCssAsset, ModuleCssAsset};
 use ecmascript::{
     chunk::EcmascriptChunkPlaceable,
     references::{follow_reexports, FollowExportsResult},
-    side_effect_optimization::module::{
-        EcmascriptModuleReexportsPartModule, EcmascriptModuleReexportsPartModuleType,
-    },
+    side_effect_optimization::reexport_facade::module::EcmascriptModuleReexportsFacadeModule,
     typescript::resolve::TypescriptTypesAssetReference,
     EcmascriptModuleAsset, EcmascriptModuleAssetType, TreeShakingMode,
 };
@@ -172,11 +170,8 @@ async fn apply_module_type(
                     }
                     Some(TreeShakingMode::ReexportsOnly) => {
                         let module = builder.build();
-                        if *module.get_exports().has_static_reexports().await? {
-                            let module = EcmascriptModuleReexportsPartModule::new(
-                                module,
-                                EcmascriptModuleReexportsPartModuleType::ReexportsFacade,
-                            );
+                        if *module.get_exports().needs_reexports_facade().await? {
+                            let module = EcmascriptModuleReexportsFacadeModule::new(module);
                             return Ok(apply_reexport_tree_shaking(Vc::upcast(module), part));
                         } else {
                             return Ok(apply_reexport_tree_shaking(Vc::upcast(module), part));

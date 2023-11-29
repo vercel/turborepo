@@ -1,3 +1,2 @@
-pub(crate) mod chunk_item;
-pub mod module;
-pub(crate) mod reference;
+pub mod locals;
+pub mod reexport_facade;

@@ -4,24 +4,26 @@ use turbopack_core::{
     chunk::ChunkableModuleReference, reference::ModuleReference, resolve::ModuleResolveResult,
 };
 
-use super::module::{EcmascriptModuleReexportsPartModule, EcmascriptModuleReexportsPartModuleType};
+use super::module::EcmascriptModuleLocalsModule;
 use crate::EcmascriptModuleAsset;
 
+/// A reference to the [EcmascriptModuleLocalsModule] variant of an original
+/// [EcmascriptModuleAsset].
 #[turbo_tasks::value]
-pub struct EcmascriptModuleReexportsPartModuleLocalsReference {
+pub struct EcmascriptModuleLocalsReference {
     pub module: Vc<EcmascriptModuleAsset>,
 }
 
 #[turbo_tasks::value_impl]
-impl EcmascriptModuleReexportsPartModuleLocalsReference {
+impl EcmascriptModuleLocalsReference {
     #[turbo_tasks::function]
     pub fn new(module: Vc<EcmascriptModuleAsset>) -> Vc<Self> {
-        EcmascriptModuleReexportsPartModuleLocalsReference { module }.cell()
+        EcmascriptModuleLocalsReference { module }.cell()
     }
 }
 
 #[turbo_tasks::value_impl]
-impl ValueToString for EcmascriptModuleReexportsPartModuleLocalsReference {
+impl ValueToString for EcmascriptModuleLocalsReference {
     #[turbo_tasks::function]
     fn to_string(&self) -> Vc<String> {
         Vc::cell("locals".to_string())
@@ -29,16 +31,13 @@ impl ValueToString for EcmascriptModuleReexportsPartModuleLocalsReference {
 }
 
 #[turbo_tasks::value_impl]
-impl ModuleReference for EcmascriptModuleReexportsPartModuleLocalsReference {
+impl ModuleReference for EcmascriptModuleLocalsReference {
     #[turbo_tasks::function]
     async fn resolve_reference(self: Vc<Self>) -> Result<Vc<ModuleResolveResult>> {
-        let locals_module = EcmascriptModuleReexportsPartModule::new(
-            self.await?.module,
-            EcmascriptModuleReexportsPartModuleType::Locals,
-        );
+        let locals_module = EcmascriptModuleLocalsModule::new(self.await?.module);
         Ok(ModuleResolveResult::module(Vc::upcast(locals_module)).cell())
     }
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkableModuleReference for EcmascriptModuleReexportsPartModuleLocalsReference {}
+impl ChunkableModuleReference for EcmascriptModuleLocalsReference {}

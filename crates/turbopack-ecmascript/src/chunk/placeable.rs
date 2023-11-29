@@ -67,19 +67,18 @@ pub enum EcmascriptExports {
 #[turbo_tasks::value_impl]
 impl EcmascriptExports {
     #[turbo_tasks::function]
-    pub async fn has_static_reexports(&self) -> Result<Vc<bool>> {
+    pub async fn needs_reexports_facade(&self) -> Result<Vc<bool>> {
         Ok(match self {
             EcmascriptExports::EsmExports(exports) => {
                 let exports = exports.await?;
-                Vc::cell(
-                    !exports.star_exports.is_empty()
-                        || exports.exports.iter().any(|(_, export)| {
-                            matches!(
-                                export,
-                                EsmExport::ImportedBinding(..) | EsmExport::ImportedNamespace(_)
-                            )
-                        }),
-                )
+                let has_reexports = !exports.star_exports.is_empty()
+                    || exports.exports.iter().any(|(_, export)| {
+                        matches!(
+                            export,
+                            EsmExport::ImportedBinding(..) | EsmExport::ImportedNamespace(_)
+                        )
+                    });
+                Vc::cell(has_reexports)
             }
             _ => Vc::cell(false),
         })
