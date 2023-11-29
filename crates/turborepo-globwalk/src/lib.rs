@@ -115,7 +115,7 @@ fn preprocess_paths_and_globs(
 
 fn double_doublestar() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"\*\*/\*\*").unwrap())
+    RE.get_or_init(|| Regex::new(r"\*\*(/\*\*)+").unwrap())
 }
 
 fn leading_doublestar() -> &'static Regex {
@@ -307,7 +307,7 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::{collapse_path, globwalk, WalkError, WalkType};
+    use crate::{collapse_path, fix_glob_pattern, globwalk, WalkError, WalkType};
 
     #[cfg(unix)]
     const ROOT: &str = "/";
@@ -317,6 +317,16 @@ mod test {
     const GLOB_ROOT: &str = "/";
     #[cfg(windows)]
     const GLOB_ROOT: &str = "C\\:/"; // in globs, expect an escaped ':' token
+
+    #[test_case("a", "a" ; "no change")]
+    #[test_case("**/**", "**")]
+    #[test_case("**/**/**", "**" ; "Triple doublestar")]
+    #[test_case("**token/foo", "**/*token/foo")]
+    #[test_case("**token**", "**/*token*/**")]
+    fn test_fix_glob_pattern(input: &str, expected: &str) {
+        let output = fix_glob_pattern(input);
+        assert_eq!(output, expected);
+    }
 
     #[test_case("a/./././b", "a/b", 1 ; "test path with dot segments")]
     #[test_case("a/../b", "b", 0 ; "test path with dotdot segments")]
