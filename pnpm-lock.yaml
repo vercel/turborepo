@@ -324,18 +324,6 @@ importers:
         specifier: workspace:*
         version: link:../../turborepo-tests/helpers
 
-  examples-tests/npm-with-yarn:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
   examples-tests/pnpm-basic:
     dependencies:
       '@turborepo-examples-tests/helpers':
@@ -385,18 +373,6 @@ importers:
         version: link:../../turborepo-tests/helpers
 
   examples-tests/yarn-non-monorepo:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/yarn-with-npm:
     dependencies:
       '@turborepo-examples-tests/helpers':
         specifier: workspace:*
