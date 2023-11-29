@@ -8,8 +8,10 @@ if [ $# != 1 ]; then
 fi
 TARGET=$1
 
-SCRIPTS_DIR="$( dirname -- "${BASH_SOURCE[0]}" )"
-PKG_ROOT=$(realpath "${SCRIPTS_DIR}/..")
+# Note: BASH_SOURCE[0] is a _relative_ path, so grab
+# the full realpath right away before manipulating.
+SCRIPT_FILE="$( realpath "${BASH_SOURCE[0]}" )"
+PKG_ROOT=$(realpath "${SCRIPT_FILE}/../..")
 JS_PACKAGE_JSON="${PKG_ROOT}/js/package.json"
 
 echo "Version: ${TARGET}"
