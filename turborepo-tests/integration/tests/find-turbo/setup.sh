@@ -24,5 +24,31 @@ if [[ "$OSTYPE" == "msys" ]]; then
 
     # Get outta there
     popd > /dev/null || exit 1
+
+    # Debug what we have
+    echo "ls -al"
+    ls -al
+
+    echo "ls -al node_modules/"
+    ls -al node_modules/
+
+    echo "ls -al node_modules/turbo/"
+    ls -al node_modules/turbo/
+
+
+    echo "ls -al node_modules/turbo/../"
+    ls -al node_modules/turbo/../
+
+    echo "ls -al node_modules/turbo/../turbo-windows-64"
+    ls -al node_modules/turbo/../turbo-windows-64
+
+    echo "ls -al node_modules/turbo/../turbo-windows-64/bin"
+    ls -al node_modules/turbo/../turbo-windows-64/bin
+
+    echo "ls -al node_modules/.pnpm/turbo@1.0.0/node_modules/turbo-windows-64/bin"
+    ls -al node_modules/.pnpm/turbo@1.0.0/node_modules/turbo-windows-64/bin
+
+    echo "ls -al node_modules/.pnpm/turbo-windows-64@1.0.0/node_modules/turbo-windows-64/bin/"
+    ls -al node_modules/.pnpm/turbo-windows-64@1.0.0/node_modules/turbo-windows-64/bin/
   fi
 fi
