@@ -1,0 +1,10 @@
+{
+  "extends": ["//"],
+  "pipeline": {
+    "test": {
+      "output": [],
+      // For github actions
+      "env": ["RUNNER_OS"]
+    }
+  }
+}
