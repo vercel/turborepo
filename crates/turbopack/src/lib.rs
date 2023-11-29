@@ -22,7 +22,7 @@ use std::{
     mem::swap,
 };
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use css::{CssModuleAsset, GlobalCssAsset, ModuleCssAsset};
 use ecmascript::{
     chunk::EcmascriptChunkPlaceable,
@@ -43,6 +43,7 @@ use turbopack_core::{
     context::{AssetContext, ProcessResult},
     ident::AssetIdent,
     issue::{Issue, IssueExt, OptionStyledString, StyledString},
+    module::Module,
     output::OutputAsset,
     raw_module::RawModule,
     reference_type::{EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType},
@@ -170,11 +171,40 @@ async fn apply_module_type(
                     }
                     Some(TreeShakingMode::ReexportsOnly) => {
                         let module = builder.build();
-                        if *module.get_exports().needs_reexports_facade().await? {
-                            let module = EcmascriptModuleReexportsFacadeModule::new(module);
-                            return Ok(apply_reexport_tree_shaking(Vc::upcast(module), part));
+                        if let Some(part) = part {
+                            match *part.await? {
+                                ModulePart::ModuleEvaluation => {
+                                    if *module.is_marked_as_side_effect_free().await? {
+                                        return Ok(ProcessResult::Ignore.cell());
+                                    }
+                                    if *module.get_exports().needs_reexports_facade().await? {
+                                        Vc::upcast(EcmascriptModuleReexportsFacadeModule::new(
+                                            module, true,
+                                        ))
+                                    } else {
+                                        Vc::upcast(module)
+                                    }
+                                }
+                                ModulePart::Export(_) => {
+                                    if *module.get_exports().needs_reexports_facade().await? {
+                                        apply_reexport_tree_shaking(
+                                            Vc::upcast(EcmascriptModuleReexportsFacadeModule::new(
+                                                module, false,
+                                            )),
+                                            part,
+                                        )
+                                    } else {
+                                        apply_reexport_tree_shaking(Vc::upcast(module), part)
+                                    }
+                                }
+                                _ => bail!(
+                                    "Invalid module part for reexports only tree shaking mode"
+                                ),
+                            }
+                        } else if *module.get_exports().needs_reexports_facade().await? {
+                            Vc::upcast(EcmascriptModuleReexportsFacadeModule::new(module, false))
                         } else {
-                            return Ok(apply_reexport_tree_shaking(Vc::upcast(module), part));
+                            Vc::upcast(module)
                         }
                     }
                     None => Vc::upcast(builder.build()),
@@ -225,40 +255,29 @@ async fn apply_module_type(
 #[turbo_tasks::function]
 async fn apply_reexport_tree_shaking(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
-    part: Option<Vc<ModulePart>>,
-) -> Result<Vc<ProcessResult>> {
-    if let Some(part) = part {
-        match *part.await? {
-            ModulePart::ModuleEvaluation => {
-                if *module.is_marked_as_side_effect_free().await? {
-                    return Ok(ProcessResult::Ignore.cell());
+    part: Vc<ModulePart>,
+) -> Result<Vc<Box<dyn Module>>> {
+    match *part.await? {
+        ModulePart::Export(export) => {
+            let export = export.await?;
+            let FollowExportsResult {
+                module: final_module,
+                export_name: new_export,
+                ..
+            } = &*follow_reexports(module, export.clone_value()).await?;
+            if let Some(new_export) = new_export {
+                if *new_export == *export {
+                    return Ok(Vc::upcast(*final_module));
+                } else {
+                    // TODO: create a remapping module
                 }
+            } else {
+                // TODO: create a remapping module
             }
-            ModulePart::Export(export) => {
-                if let Some(placeable) =
-                    Vc::try_resolve_sidecast::<Box<dyn EcmascriptChunkPlaceable>>(module).await?
-                {
-                    let export = export.await?;
-                    let FollowExportsResult {
-                        module: final_module,
-                        export_name: new_export,
-                        ..
-                    } = &*follow_reexports(placeable, export.clone_value()).await?;
-                    if let Some(new_export) = new_export {
-                        if *new_export == *export {
-                            return Ok(ProcessResult::Module(Vc::upcast(*final_module)).cell());
-                        } else {
-                            // TODO: create a remapping module
-                        }
-                    } else {
-                        // TODO: create a remapping module
-                    }
-                }
-            }
-            _ => {}
         }
+        _ => {}
     }
-    Ok(ProcessResult::Module(Vc::upcast(module)).cell())
+    Ok(Vc::upcast(module))
 }
 
 #[turbo_tasks::value]

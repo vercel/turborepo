@@ -46,7 +46,7 @@ impl Module for EcmascriptModuleLocalsModule {
     #[turbo_tasks::function]
     async fn references(&self) -> Result<Vc<ModuleReferences>> {
         let result = self.module.failsafe_analyze().await?;
-        Ok(result.references)
+        Ok(result.local_references)
     }
 }
 

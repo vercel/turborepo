@@ -58,26 +58,26 @@ pub struct FollowExportsResult {
 }
 
 #[turbo_tasks::function]
-pub async fn follow_reexports(
+pub fn follow_reexports(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: String,
-) -> Result<Vc<FollowExportsResult>> {
-    if *module.is_marked_as_side_effect_free().await? {
-        Ok(follow_reexports_internal(module, export_name))
-    } else {
-        Ok(FollowExportsResult::cell(FollowExportsResult {
-            module,
-            export_name: Some(export_name),
-            ty: FoundExportType::SideEffects,
-        }))
-    }
+) -> Vc<FollowExportsResult> {
+    follow_reexports_internal(module, export_name, true)
 }
 
 #[turbo_tasks::function]
 pub async fn follow_reexports_internal(
     mut module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     mut export_name: String,
+    stop_on_side_effects: bool,
 ) -> Result<Vc<FollowExportsResult>> {
+    if stop_on_side_effects && !*module.is_marked_as_side_effect_free().await? {
+        return Ok(FollowExportsResult::cell(FollowExportsResult {
+            module,
+            export_name: Some(export_name),
+            ty: FoundExportType::SideEffects,
+        }));
+    }
     loop {
         let exports = module.get_exports().await?;
         let EcmascriptExports::EsmExports(exports) = &*exports else {
@@ -92,7 +92,7 @@ pub async fn follow_reexports_internal(
 
         // Try to find the export in the local exports
         if let Some(export) = exports.exports.get(&export_name) {
-            match handle_declared_export(module, export_name, export).await? {
+            match handle_declared_export(module, export_name, export, stop_on_side_effects).await? {
                 ControlFlow::Continue((m, n)) => {
                     module = m;
                     export_name = n;
@@ -113,21 +113,21 @@ async fn handle_declared_export(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: String,
     export: &EsmExport,
+    stop_on_side_effects: bool,
 ) -> Result<ControlFlow<FollowExportsResult, (Vc<Box<dyn EcmascriptChunkPlaceable>>, String)>> {
     match export {
         EsmExport::ImportedBinding(reference, name) => {
             if let ReferencedAsset::Some(module) =
                 *ReferencedAsset::from_resolve_result(reference.resolve_reference()).await?
             {
-                if *module.is_marked_as_side_effect_free().await? {
-                    return Ok(ControlFlow::Continue((module, name.to_string())));
-                } else {
+                if stop_on_side_effects && !*module.is_marked_as_side_effect_free().await? {
                     return Ok(ControlFlow::Break(FollowExportsResult {
                         module,
                         export_name: Some(name.to_string()),
                         ty: FoundExportType::SideEffects,
                     }));
                 }
+                return Ok(ControlFlow::Continue((module, name.to_string())));
             }
         }
         EsmExport::ImportedNamespace(reference) => {
@@ -169,14 +169,14 @@ async fn handle_star_reexports(
     let mut potential_modules = Vec::new();
     for star_export in star_exports {
         if let ReferencedAsset::Some(m) = *star_export.get_referenced_asset().await? {
-            let result = follow_reexports(m, export_name.clone());
+            let result = follow_reexports_internal(m, export_name.clone(), false);
             let result_ref = result.await?;
             match result_ref.ty {
                 FoundExportType::Found => {
-                    return Ok(result);
+                    return Ok(follow_reexports(m, export_name.clone()));
                 }
                 FoundExportType::SideEffects => {
-                    return Ok(result);
+                    unreachable!();
                 }
                 FoundExportType::Dynamic => {
                     potential_modules.push(result);

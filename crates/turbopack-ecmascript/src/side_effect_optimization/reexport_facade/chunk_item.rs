@@ -1,25 +1,21 @@
 use std::sync::Arc;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use swc_core::{
-    common::{util::take::Take, Globals, DUMMY_SP, GLOBALS},
+    common::{util::take::Take, Globals, GLOBALS},
     ecma::{
-        ast::{Expr, Ident, ModuleItem, Program},
+        ast::Program,
         codegen::{text_writer::JsWriter, Emitter},
         visit::{VisitMutWith, VisitMutWithPath},
     },
-    quote,
 };
 use turbo_tasks::{TryJoinIterExt, Vc};
 use turbo_tasks_fs::rope::RopeBuilder;
 use turbopack_core::{
-    chunk::{
-        AsyncModuleInfo, ChunkItem, ChunkItemExt, ChunkType, ChunkableModule, ChunkingContext,
-        ModuleId,
-    },
+    chunk::{AsyncModuleInfo, ChunkItem, ChunkType, ChunkingContext},
     ident::AssetIdent,
     module::Module,
-    reference::{ModuleReference, ModuleReferences},
+    reference::ModuleReferences,
 };
 
 use super::module::EcmascriptModuleReexportsFacadeModule;
@@ -31,8 +27,6 @@ use crate::{
     },
     code_gen::{CodeGenerateable, CodeGenerateableWithAsyncModuleInfo},
     path_visitor::ApplyVisitors,
-    references::esm::base::ReferencedAsset,
-    side_effect_optimization::locals::reference::EcmascriptModuleLocalsReference,
 };
 
 /// The chunk item for [EcmascriptModuleReexportsFacadeModule].
@@ -54,20 +48,16 @@ impl EcmascriptChunkItem for EcmascriptModuleReexportsFacadeChunkItem {
         &self,
         async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
-        let module = self.module.await?;
         let chunking_context = self.chunking_context;
         let exports = self.module.get_exports();
-        let original_module = module.module;
         let EcmascriptExports::EsmExports(exports) = *exports.await? else {
             bail!("Expected EsmExports");
         };
 
         let mut code = RopeBuilder::default();
 
-        let analyze_result = original_module.analyze().await?;
-
         let mut code_gens = Vec::new();
-        for r in analyze_result.reexport_references.await?.iter() {
+        for r in self.module.references().await?.iter() {
             let r = r.resolve().await?;
             if let Some(code_gen) =
                 Vc::try_resolve_sidecast::<Box<dyn CodeGenerateableWithAsyncModuleInfo>>(r).await?
@@ -84,8 +74,6 @@ impl EcmascriptChunkItem for EcmascriptModuleReexportsFacadeChunkItem {
         let code_gens = code_gens.into_iter().try_join().await?;
         let code_gens = code_gens.iter().map(|cg| &**cg).collect::<Vec<_>>();
 
-        let mut program = Program::Module(swc_core::ecma::ast::Module::dummy());
-
         let mut visitors = Vec::new();
         let mut root_visitors = Vec::new();
         for code_gen in code_gens {
@@ -97,23 +85,8 @@ impl EcmascriptChunkItem for EcmascriptModuleReexportsFacadeChunkItem {
                 }
             }
         }
-        let referenced_asset = ReferencedAsset::from_resolve_result(
-            EcmascriptModuleLocalsReference::new(module.module).resolve_reference(),
-        );
-        let referenced_asset = referenced_asset.await?;
-        let ident = referenced_asset
-            .get_ident()
-            .await?
-            .context("locals module reference should have an ident")?;
 
-        let ReferencedAsset::Some(module) = *referenced_asset else {
-            bail!("locals module reference should have an module reference");
-        };
-        let id = module
-            .as_chunk_item(Vc::upcast(chunking_context))
-            .id()
-            .await?;
-
+        let mut program = Program::Module(swc_core::ecma::ast::Module::dummy());
         GLOBALS.set(&Globals::new(), || {
             if !visitors.is_empty() {
                 program.visit_mut_with_path(
@@ -125,19 +98,6 @@ impl EcmascriptChunkItem for EcmascriptModuleReexportsFacadeChunkItem {
                 program.visit_mut_with(&mut visitor.create());
             }
 
-            let stmt = quote!(
-                "var $name = __turbopack_import__($id);" as Stmt,
-                name = Ident::new(ident.into(), DUMMY_SP),
-                id: Expr = Expr::Lit(match &*id {
-                    ModuleId::String(s) => s.clone().into(),
-                    ModuleId::Number(n) => (*n as f64).into(),
-                })
-            );
-            program
-                .as_mut_module()
-                .unwrap()
-                .body
-                .push(ModuleItem::Stmt(stmt));
             program.visit_mut_with(&mut swc_core::ecma::transforms::base::hygiene::hygiene());
             program.visit_mut_with(&mut swc_core::ecma::transforms::base::fixer::fixer(None));
         });

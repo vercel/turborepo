@@ -92,7 +92,6 @@ impl Module for EcmascriptModulePartAsset {
         let analyze = analyze(self.full_module, self.part).await?;
 
         assets.extend(analyze.references.await?.iter().cloned());
-        assets.extend(analyze.reexport_references.await?.iter().cloned());
 
         Ok(Vc::cell(assets))
     }

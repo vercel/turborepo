@@ -158,7 +158,9 @@ fn modifier() -> Vc<String> {
 struct MemoizedSuccessfulAnalysis {
     operation: Vc<AnalyzeEcmascriptModuleResult>,
     references: ReadRef<ModuleReferences>,
+    local_references: ReadRef<ModuleReferences>,
     reexport_references: ReadRef<ModuleReferences>,
+    evaluation_references: ReadRef<ModuleReferences>,
     exports: ReadRef<EcmascriptExports>,
     async_module: ReadRef<OptionAsyncModule>,
 }
@@ -322,14 +324,18 @@ impl EcmascriptModuleAsset {
                     operation: result,
                     // We need to store the ReadRefs since we want to keep a snapshot.
                     references: result_value.references.await?,
+                    local_references: result_value.local_references.await?,
                     reexport_references: result_value.reexport_references.await?,
+                    evaluation_references: result_value.evaluation_references.await?,
                     exports: result_value.exports.await?,
                     async_module: result_value.async_module.await?,
                 }));
         } else if let Some(MemoizedSuccessfulAnalysis {
             operation,
             references,
+            local_references,
             reexport_references,
+            evaluation_references,
             exports,
             async_module,
         }) = &*this.last_successful_analysis.get()
@@ -339,7 +345,9 @@ impl EcmascriptModuleAsset {
             Vc::connect(*operation);
             return Ok(AnalyzeEcmascriptModuleResult {
                 references: ReadRef::cell(references.clone()),
+                local_references: ReadRef::cell(local_references.clone()),
                 reexport_references: ReadRef::cell(reexport_references.clone()),
+                evaluation_references: ReadRef::cell(evaluation_references.clone()),
                 exports: ReadRef::cell(exports.clone()),
                 code_generation: result_value.code_generation,
                 async_module: ReadRef::cell(async_module.clone()),
@@ -417,13 +425,7 @@ impl Module for EcmascriptModuleAsset {
     #[turbo_tasks::function]
     async fn references(self: Vc<Self>) -> Result<Vc<ModuleReferences>> {
         let analyze = self.failsafe_analyze().await?;
-        let references = analyze
-            .references
-            .await?
-            .iter()
-            .chain(analyze.reexport_references.await?.iter())
-            .copied()
-            .collect();
+        let references = analyze.references.await?.iter().copied().collect();
         Ok(Vc::cell(references))
     }
 }
@@ -606,18 +608,13 @@ impl EcmascriptModuleContent {
     ) -> Result<Vc<Self>> {
         let AnalyzeEcmascriptModuleResult {
             references,
-            reexport_references,
             code_generation,
             exports,
             ..
         } = &*analyzed.await?;
 
         let mut code_gens = Vec::new();
-        for r in references
-            .await?
-            .iter()
-            .chain(reexport_references.await?.iter())
-        {
+        for r in references.await?.iter() {
             let r = r.resolve().await?;
             if let Some(code_gen) =
                 Vc::try_resolve_sidecast::<Box<dyn CodeGenerateableWithAsyncModuleInfo>>(r).await?

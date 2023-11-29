@@ -1,5 +1,4 @@
 import { a as a1, b as b1, /*c as c1,*/ local as local1 } from "package-named";
-
 it("should optimize named reexports from side effect free module", () => {
   expect(a1).toBe("a");
   expect(b1).toBe("b");
@@ -44,4 +43,11 @@ it("should allow to import the whole module and pick without duplicating the mod
 
   // Check for identity
   expect(fullModule.c).toBe(c5);
+});
+
+import { a } from "package-reexport-side-effect";
+import { effects } from "package-reexport-side-effect/check-side-effect";
+it("should run side effects of a reexporting module with side effects", () => {
+  expect(a).toBe("a");
+  expect(effects).toEqual(["side-effect.js", "index.js"]);
 });

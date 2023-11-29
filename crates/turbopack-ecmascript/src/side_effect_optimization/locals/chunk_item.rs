@@ -46,7 +46,7 @@ impl EcmascriptChunkItem for EcmascriptModuleLocalsChunkItem {
 
         let mut analyze_result = original_module.analyze().await?.clone_value();
         analyze_result.exports = exports;
-        analyze_result.reexport_references = Vc::cell(vec![]);
+        analyze_result.references = analyze_result.local_references;
         let analyze_result = analyze_result.cell();
 
         let content = EcmascriptModuleContent::new(

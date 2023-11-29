@@ -26,7 +26,9 @@ impl ProcessResult {
     pub async fn module(&self) -> Result<Vc<Box<dyn Module>>> {
         match *self {
             ProcessResult::Module(m) => Ok(m),
-            ProcessResult::Ignore => bail!("Expected a module"),
+            ProcessResult::Ignore => {
+                bail!("Expected process result to be a module, but it was ignored")
+            }
         }
     }
 }
