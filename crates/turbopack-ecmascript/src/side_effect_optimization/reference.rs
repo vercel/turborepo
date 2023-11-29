@@ -1,6 +1,8 @@
 use anyhow::Result;
 use turbo_tasks::{ValueToString, Vc};
-use turbopack_core::{reference::ModuleReference, resolve::ModuleResolveResult};
+use turbopack_core::{
+    chunk::ChunkableModuleReference, reference::ModuleReference, resolve::ModuleResolveResult,
+};
 
 use super::module::{EcmascriptModuleReexportsPartModule, EcmascriptModuleReexportsPartModuleType};
 use crate::EcmascriptModuleAsset;
@@ -37,3 +39,6 @@ impl ModuleReference for EcmascriptModuleReexportsPartModuleLocalsReference {
         Ok(ModuleResolveResult::module(Vc::upcast(locals_module)).cell())
     }
 }
+
+#[turbo_tasks::value_impl]
+impl ChunkableModuleReference for EcmascriptModuleReexportsPartModuleLocalsReference {}

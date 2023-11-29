@@ -646,7 +646,6 @@ impl EcmascriptModuleContent {
         // need to keep that around to allow references into that
         let code_gens = code_gens.into_iter().try_join().await?;
         let code_gens = code_gens.iter().map(|cg| &**cg).collect::<Vec<_>>();
-        // TOOD use interval tree with references into "code_gens"
         let mut visitors = Vec::new();
         let mut root_visitors = Vec::new();
         for code_gen in code_gens {
