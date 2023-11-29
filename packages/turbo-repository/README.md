@@ -13,4 +13,4 @@ This package contains scripts to build dev and release versions. `pnpm build && 
 
 # Publishing
 
-There is now a version bump script in [bump-version.sh](./scripts/bump-version.sh). Passing it the new version will bump the metapackage version, as well as the optional dependencies list and native packages.
+There is now a version bump script in [bump-version.sh](./scripts/bump-version.sh). Passing it the new version will bump the meta package version, as well as the optional dependencies list and native packages.
