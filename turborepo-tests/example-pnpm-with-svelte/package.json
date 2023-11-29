@@ -1,0 +1,13 @@
+{
+  "name": "@turborepo-examples-tests/pnpm-with-svelte",
+  "private": true,
+  "scripts": {
+    "test": "./node_modules/.bin/prysk test.t"
+  },
+  "dependencies": {
+    "turborepo-tests-helpers": "workspace:*",
+    "turborepo-examples": "workspace:*",
+    "prysk": "workspace:*",
+    "cli": "workspace:*"
+  }
+}
