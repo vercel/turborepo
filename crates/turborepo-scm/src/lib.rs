@@ -5,7 +5,7 @@
 
 //! Turborepo's library for interacting with source control management (SCM).
 //! Currently we only support git. We use SCM for finding changed files,
-//! for getting the previous version of a lockfile, and to hash files.
+//! for getting the previous version of a lockfile, and for hashing files.
 
 use std::{
     backtrace::{self, Backtrace},

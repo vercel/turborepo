@@ -1,7 +1,7 @@
 #![deny(clippy::all)]
 
 //! Turborepo's analytics library. Handles sending analytics events to the
-//! Vercel API in the background. Currently we only record cache usage events,
+//! Vercel API in the background. We only record cache usage events,
 //! so when the cache is hit or missed for the file system or the HTTP cache.
 //! Requires the user to be logged in to Vercel.
 

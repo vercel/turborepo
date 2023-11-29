@@ -295,7 +295,6 @@ impl<'a> Run<'a> {
 
         let is_monorepo = !opts.run_opts.single_package;
 
-        println!("{:#?}", root_workspace.transitive_dependencies);
         let root_external_dependencies_hash =
             is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
