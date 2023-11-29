@@ -259,7 +259,7 @@ mod fallback_tests {
                     "mock error",
                 ))))
             } else {
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 self.calls += 1;
                 // Simulate successful package discovery
                 Ok(DiscoveryResponse {
@@ -300,7 +300,7 @@ mod fallback_tests {
             let fallback = MockDiscovery::new(false);
 
             let mut discovery =
-                FallbackPackageDiscovery::new(primary, fallback, Duration::from_secs(0));
+                FallbackPackageDiscovery::new(primary, fallback, Duration::from_millis(1));
 
             // Invoke the method under test
             let result = discovery.discover_packages().await;
