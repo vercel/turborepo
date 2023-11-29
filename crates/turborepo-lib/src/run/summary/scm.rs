@@ -18,6 +18,8 @@ pub(crate) struct SCMState {
     pub(crate) branch: Option<String>,
 }
 
+// Testing something
+
 impl SCMState {
     pub fn get(env_vars: &EnvironmentVariableMap, dir: &AbsoluteSystemPath) -> Self {
         let mut state = SCMState {
