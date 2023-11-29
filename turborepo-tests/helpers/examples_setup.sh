@@ -49,7 +49,7 @@ elif [ "$pkgManager" == "yarn" ]; then
   # Pass a --cache-folder here because yarn seems to have trouble
   # running multiple yarn installs at the same time and we are running
   # examples tests in parallel. https://github.com/yarnpkg/yarn/issues/1275
-  yarn install --cache-folder="$PWD/.yarn-cache" > /dev/null 2>&1
+  yarn install --cache-folder="$PWD/.yarn-cache"
 
   # And ignore this new cache folder from the new git repo we're about to create.
   echo ".yarn-cache" >> .gitignore
