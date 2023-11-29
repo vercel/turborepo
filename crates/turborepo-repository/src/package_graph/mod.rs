@@ -9,7 +9,10 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
-use crate::{package_json::PackageJson, package_manager::PackageManager};
+use crate::{
+    discovery::LocalPackageDiscoveryBuilder, package_json::PackageJson,
+    package_manager::PackageManager,
+};
 
 pub mod builder;
 
@@ -17,6 +20,7 @@ pub use builder::{Error, PackageGraphBuilder};
 
 pub const ROOT_PKG_NAME: &str = "//";
 
+#[derive(Debug)]
 pub struct PackageGraph {
     workspace_graph: petgraph::Graph<WorkspaceNode, ()>,
     #[allow(dead_code)]
@@ -88,7 +92,7 @@ impl PackageGraph {
     pub fn builder(
         repo_root: &AbsoluteSystemPath,
         root_package_json: PackageJson,
-    ) -> PackageGraphBuilder {
+    ) -> PackageGraphBuilder<LocalPackageDiscoveryBuilder> {
         PackageGraphBuilder::new(repo_root, root_package_json)
     }
 
@@ -411,15 +415,29 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
+    use crate::discovery::PackageDiscovery;
 
-    #[test]
-    fn test_single_package_is_depends_on_root() {
+    struct MockDiscovery;
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(
+            &mut self,
+        ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
+            Ok(crate::discovery::DiscoveryResponse {
+                package_manager: PackageManager::Npm,
+                workspaces: vec![],
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn test_single_package_is_depends_on_root() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let pkg_graph = PackageGraph::builder(&root, PackageJson::default())
-            .with_package_manger(Some(PackageManager::Npm))
+            .with_package_discovery(MockDiscovery)
             .with_single_package_mode(true)
             .build()
+            .await
             .unwrap();
 
         let closure =
@@ -428,15 +446,15 @@ mod test {
         assert!(pkg_graph.validate().is_ok());
     }
 
-    #[test]
-    fn test_internal_dependencies_get_split_out() {
+    #[tokio::test]
+    async fn test_internal_dependencies_get_split_out() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let pkg_graph = PackageGraph::builder(
             &root,
             PackageJson::from_value(json!({ "name": "root" })).unwrap(),
         )
-        .with_package_manger(Some(PackageManager::Npm))
+        .with_package_discovery(MockDiscovery)
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
@@ -462,6 +480,7 @@ mod test {
             map
         }))
         .build()
+        .await
         .unwrap();
 
         assert!(pkg_graph.validate().is_ok());
@@ -488,6 +507,7 @@ mod test {
         assert_eq!(pkg_version, "1.2.3");
     }
 
+    #[derive(Debug)]
     struct MockLockfile {}
     impl turborepo_lockfiles::Lockfile for MockLockfile {
         fn resolve_package(
@@ -545,15 +565,15 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_lockfile_traversal() {
+    #[tokio::test]
+    async fn test_lockfile_traversal() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let pkg_graph = PackageGraph::builder(
             &root,
             PackageJson::from_value(json!({ "name": "root" })).unwrap(),
         )
-        .with_package_manger(Some(PackageManager::Npm))
+        .with_package_discovery(MockDiscovery)
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
@@ -580,6 +600,7 @@ mod test {
         }))
         .with_lockfile(Some(Box::new(MockLockfile {})))
         .build()
+        .await
         .unwrap();
 
         assert!(pkg_graph.validate().is_ok());
@@ -611,15 +632,15 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_circular_dependency() {
+    #[tokio::test]
+    async fn test_circular_dependency() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let pkg_graph = PackageGraph::builder(
             &root,
             PackageJson::from_value(json!({ "name": "root" })).unwrap(),
         )
-        .with_package_manger(Some(PackageManager::Npm))
+        .with_package_discovery(MockDiscovery)
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
@@ -656,6 +677,7 @@ mod test {
         }))
         .with_lockfile(Some(Box::new(MockLockfile {})))
         .build()
+        .await
         .unwrap();
 
         assert_matches!(
@@ -666,15 +688,15 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_self_dependency() {
+    #[tokio::test]
+    async fn test_self_dependency() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let pkg_graph = PackageGraph::builder(
             &root,
             PackageJson::from_value(json!({ "name": "root" })).unwrap(),
         )
-        .with_package_manger(Some(PackageManager::Npm))
+        .with_package_discovery(MockDiscovery)
         .with_package_jsons(Some({
             let mut map = HashMap::new();
             map.insert(
@@ -691,6 +713,7 @@ mod test {
         }))
         .with_lockfile(Some(Box::new(MockLockfile {})))
         .build()
+        .await
         .unwrap();
 
         assert_matches!(

@@ -570,6 +570,7 @@ mod test {
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
     use turborepo_repository::{
+        discovery::PackageDiscovery,
         package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
         package_json::PackageJson,
         package_manager::PackageManager,
@@ -594,6 +595,21 @@ mod test {
     fn reverse<T, U>(tuple: (T, U)) -> (U, T) {
         let (a, b) = tuple;
         (b, a)
+    }
+
+    struct MockDiscovery;
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(
+            &mut self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            Ok(turborepo_repository::discovery::DiscoveryResponse {
+                package_manager: PackageManager::Pnpm6,
+                workspaces: vec![], // we don't care about this
+            })
+        }
     }
 
     /// Make a project resolver with the provided dependencies. Extras is for
@@ -646,13 +662,21 @@ mod test {
             })
             .collect();
 
-        let pkg_graph = Box::leak(Box::new(
-            PackageGraph::builder(turbo_root, Default::default())
-                .with_package_jsons(Some(package_jsons))
-                .with_package_manger(Some(PackageManager::Pnpm6))
+        let graph = {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
                 .build()
-                .unwrap(),
-        ));
+                .unwrap();
+            rt.block_on(
+                PackageGraph::builder(turbo_root, Default::default())
+                    .with_package_discovery(MockDiscovery)
+                    .with_package_jsons(Some(package_jsons))
+                    .build(),
+            )
+            .unwrap()
+        };
+
+        let pkg_graph = Box::leak(Box::new(graph));
 
         let scm = Box::leak(Box::new(turborepo_scm::SCM::new(turbo_root)));
 
