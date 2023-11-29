@@ -18,6 +18,12 @@ export function forceWorkspaceCommits({ workspace }: { workspace: string }) {
   return [`[vercel deploy ${workspace}]`, `[vercel build ${workspace}]`];
 }
 
+export const onlyWorkspaceRegex = /\[vercel only .+\]/;
+
+export function onlyWorkspaceCommits({ workspace }: { workspace: string }) {
+  return [`[vercel only ${workspace}]`];
+}
+
 export function getCommitDetails() {
   // if we're on Vercel, use the provided commit message
   if (process.env.VERCEL === "1") {
@@ -36,7 +42,28 @@ export function checkCommit({ workspace }: { workspace: string }): {
   const commitMessage = getCommitDetails();
   const findInCommit = (commit: string) => commitMessage.includes(commit);
 
-  // check workspace specific messages first
+  // only mode first
+  const onlyWorkspaceDeployMatch = onlyWorkspaceRegex.exec(commitMessage)?.[0];
+  if (onlyWorkspaceDeployMatch) {
+    if (
+      onlyWorkspaceCommits({ workspace }).find(
+        (commit) => commit === onlyWorkspaceDeployMatch
+      )
+    ) {
+      return {
+        result: "deploy",
+        scope: "workspace",
+        reason: `Found commit message: ${onlyWorkspaceDeployMatch}`,
+      };
+    }
+    return {
+      result: "skip",
+      scope: "workspace",
+      reason: `Found commit message: ${onlyWorkspaceDeployMatch}`,
+    };
+  }
+
+  // check other workspace specific messages
   const forceWorkspaceDeploy = forceWorkspaceCommits({ workspace }).find(
     findInCommit
   );
