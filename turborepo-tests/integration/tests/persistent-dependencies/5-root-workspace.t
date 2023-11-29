@@ -1,5 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh persistent_dependencies/5-root-workspace
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) persistent_dependencies/5-root-workspace
 
 # WorkspaceGraph: no package dependencies
 #

@@ -1,5 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh persistent_dependencies/10-too-many
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) persistent_dependencies/10-too-many
 
   $ ${TURBO} run build --concurrency=1
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:

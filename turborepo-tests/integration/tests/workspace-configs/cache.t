@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) composable_config
 
 This test covers:
 # - `cache:false` in root, override `cache:true` in workspace

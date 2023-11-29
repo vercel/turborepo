@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh inference/has_workspaces
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) inference/has_workspaces
 
   $ cd $TARGET_DIR && ${TURBO} run build --filter=nothing -vv 1> ROOT 2>&1
   $ grep --quiet 'pkg_inference_root set' ROOT

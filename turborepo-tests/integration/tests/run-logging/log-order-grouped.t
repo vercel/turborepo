@@ -1,5 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh ordered
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) ordered
 
 # Build in grouped order.
   $ ${TURBO} run build --log-order grouped --force

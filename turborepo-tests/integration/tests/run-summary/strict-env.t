@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh strict_env_vars
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) strict_env_vars
 
 Set the env vars
   $ export GLOBAL_VAR_PT=higlobalpt

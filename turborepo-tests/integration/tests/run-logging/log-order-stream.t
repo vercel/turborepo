@@ -1,5 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh ordered
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) ordered
 
 # Build in stream order. All the .*'s are unpredictable lines, however the amount of lines is predictable.
   $ ${TURBO} run build --log-order stream --force
