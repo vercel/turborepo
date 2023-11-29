@@ -20,4 +20,7 @@ elif [ "$PACKAGE_MANAGER" == "yarn" ]; then
 fi
 
 git add .
-git commit -am "Install dependencies" --quiet
+
+# even with --quiet, we'lls end output to /dev/null, because if
+# there was nothing to commit stderr is still printed.
+git commit -am "Install dependencies" --quiet > /dev/null 2>&1
