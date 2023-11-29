@@ -115,7 +115,7 @@ fn preprocess_paths_and_globs(
 
 fn double_doublestar() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"\*\*(/\*\*)+").unwrap())
+    RE.get_or_init(|| Regex::new(r"\*\*(?:/\*\*)+").unwrap())
 }
 
 fn leading_doublestar() -> &'static Regex {
