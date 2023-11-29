@@ -13,10 +13,14 @@ FIXTURE="_fixtures/${FIXTURE_NAME}"
 TURBOREPO_TESTS_DIR="$SCRIPT_DIR/.."
 TURBOREPO_INTEGRATION_TESTS_DIR="${TURBOREPO_TESTS_DIR}/integration/tests"
 
-
 cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
 
-${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh ${TARGET_DIR}
+"${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" ${TARGET_DIR}
+
+# Install dependencies
+pushd ${TARGET_DIR} > /dev/null || exit 1
+${SCRIPT_DIR}/install_deps.sh
+popd > /dev/null || exit 1
 
 # Update package manager if one was provided
 if [ "$PACKAGE_MANAGER" != "" ]; then
