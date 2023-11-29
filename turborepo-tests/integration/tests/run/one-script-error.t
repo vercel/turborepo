@@ -24,7 +24,7 @@ Note that npm reports any failed script as exit code 1, even though we "exit 2"
   my-app:error: npm ERR!   in workspace: my-app 
   my-app:error: npm ERR!   at location: .*apps(\/|\\)my-app  (re)
   my-app:error: ERROR: command finished with error: command \(.*apps(\/|\\)my-app\) (.*)npm(?:\.cmd)? run error exited \(1\) (re)
-  my-app#error: command \(.*apps(\/|\\)my-app\) (.*)npm run error exited \(1\) (re)
+  my-app#error: command \(.*apps(\/|\\)my-app\) (.*)npm(?:\.cmd)? run error exited \(1\) (re)
   
    Tasks:    1 successful, 2 total
   Cached:    0 cached, 2 total
