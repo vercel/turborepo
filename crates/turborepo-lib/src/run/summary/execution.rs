@@ -1,11 +1,12 @@
-use std::{fmt, fmt::Formatter};
+use std::fmt;
 
-use chrono::{DateTime, Duration, Local, SubsecRound};
+use chrono::{DateTime, Local};
 use serde::Serialize;
 use tokio::sync::mpsc;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_ui::{color, cprintln, BOLD, BOLD_GREEN, BOLD_RED, MAGENTA, UI, YELLOW};
 
+use super::TurboDuration;
 use crate::run::{summary::task::TaskSummary, task_id::TaskId};
 
 // Just used to make changing the type that gets passed to the state management
@@ -42,53 +43,6 @@ pub struct ExecutionSummary<'a> {
     #[serde(skip)]
     duration: TurboDuration,
     pub(crate) exit_code: i32,
-}
-
-#[derive(Debug)]
-struct TurboDuration(Duration);
-
-impl TurboDuration {
-    pub fn new(start_time: &DateTime<Local>, end_time: &DateTime<Local>) -> Self {
-        TurboDuration(
-            end_time
-                .trunc_subsecs(3)
-                .signed_duration_since(start_time.trunc_subsecs(3)),
-        )
-    }
-}
-
-impl From<Duration> for TurboDuration {
-    fn from(duration: Duration) -> Self {
-        Self(duration)
-    }
-}
-
-impl fmt::Display for TurboDuration {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let duration = &self.0;
-
-        // If duration is less than a second, we print milliseconds
-        if duration.num_seconds() <= 0 {
-            let milliseconds = duration.num_milliseconds() - duration.num_seconds() * 1000;
-            return write!(f, "{}ms", milliseconds);
-        }
-
-        if duration.num_hours() > 0 {
-            write!(f, "{}h", duration.num_hours(),)?;
-        }
-
-        if duration.num_minutes() > 0 {
-            let minutes = duration.num_minutes() - duration.num_hours() * 60;
-            write!(f, "{}m", minutes)?;
-        }
-
-        if duration.num_seconds() > 0 {
-            let seconds = duration.num_seconds() - duration.num_minutes() * 60;
-            write!(f, "{}s", seconds)?;
-        }
-
-        Ok(())
-    }
 }
 
 impl<'a> ExecutionSummary<'a> {
@@ -470,6 +424,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
 
 #[cfg(test)]
 mod test {
+    use chrono::Duration;
     use serde_json::json;
     use test_case::test_case;
 

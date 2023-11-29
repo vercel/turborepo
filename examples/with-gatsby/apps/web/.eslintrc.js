@@ -1,3 +1,3 @@
 module.exports = {
-  extends: ["custom/gatsby"],
+  extends: ["@repo/eslint-config/gatsby.js"],
 };

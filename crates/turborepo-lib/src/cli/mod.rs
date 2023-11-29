@@ -563,6 +563,10 @@ pub struct RunArgs {
     /// allow reading and caching artifacts using the remote cache.
     #[clap(long, env = "TURBO_REMOTE_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
     pub remote_only: bool,
+    /// Treat remote cache as read only
+    #[clap(long, env = "TURBO_REMOTE_CACHE_READ_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
+    #[serde(skip)]
+    pub remote_cache_read_only: bool,
     /// Specify package(s) to act as entry points for task execution.
     /// Supports globs.
     #[clap(long)]
