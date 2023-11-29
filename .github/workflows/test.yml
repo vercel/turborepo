@@ -368,9 +368,8 @@ jobs:
         os:
           - name: ubuntu
             runner: ubuntu-latest
-          # TODO: enable macos when --experimental-rust-codepath is passing all tests on ubuntu
-          # - name: macos
-          #   runner: macos-latest
+          - name: macos
+            runner: macos-latest
           - name: windows
             runner: windows-latest
     steps:
@@ -1029,6 +1028,7 @@ jobs:
       - turborepo_examples
       - turborepo_e2e
       - turborepo_integration
+      - turborepo_integration_rust
       - js_packages
       - rust_lint
       - turborepo_rust_check
@@ -1068,6 +1068,7 @@ jobs:
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.turborepo_e2e.result}} "Go e2e tests"
           subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
+          subjob ${{needs.turborepo_integration_rust.result}} "Turborepo integration tests (Rust codepath)"
           subjob ${{needs.js_packages.result}} "JS Package tests"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
@@ -1183,6 +1184,7 @@ jobs:
       - turborepo_examples
       - turborepo_e2e
       - turborepo_integration
+      - turborepo_integration_rust
       - rust_lint
       - turborepo_rust_check
       - turborepo_rust_clippy
@@ -1224,6 +1226,7 @@ jobs:
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.turborepo_e2e.result}} "Turborepo e2e tests"
           subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
+          subjob ${{needs.turborepo_integration_rust.result}} "Turborepo integration tests (Rust codepath)"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
           subjob ${{needs.turborepo_rust_clippy.result}} "Turborepo Rust clippy"
