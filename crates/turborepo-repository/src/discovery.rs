@@ -121,7 +121,7 @@ impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
 
 impl PackageDiscovery for LocalPackageDiscovery {
     async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
-        let packages = match self.package_manager.get_package_jsons(&self.repo_root) {
+        let package_paths = match self.package_manager.get_package_jsons(&self.repo_root) {
             Ok(packages) => packages,
             // if there is not a list of workspaces, it is not necessarily an error. just report no
             // workspaces
@@ -134,16 +134,19 @@ impl PackageDiscovery for LocalPackageDiscovery {
             Err(e) => return Err(Error::Failed(Box::new(e))),
         };
 
-        iter(packages)
-            .then(|a| async move {
-                let potential_turbo = a.parent().expect("non-root").join_component("turbo.json");
+        iter(package_paths)
+            .then(|path| async move {
+                let potential_turbo = path
+                    .parent()
+                    .expect("non-root")
+                    .join_component("turbo.json");
                 let potential_turbo_exists = tokio::fs::try_exists(potential_turbo.as_path()).await;
 
                 Ok(WorkspaceData {
-                    package_json: a,
+                    package_json: path,
                     turbo_json: potential_turbo_exists
-                        .ok()
-                        .and_then(|pe| pe.then_some(potential_turbo)),
+                        .unwrap_or_default()
+                        .then_some(potential_turbo),
                 })
             })
             .collect::<Result<Vec<_>, _>>()

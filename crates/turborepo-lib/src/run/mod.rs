@@ -193,7 +193,6 @@ impl<'a> Run<'a> {
 
         let is_single_package = opts.run_opts.single_package;
 
-        // There's some warning handling code in Go that I'm ignoring
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
 
         let mut daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
@@ -227,6 +226,8 @@ impl<'a> Run<'a> {
                 .with_single_package_mode(opts.run_opts.single_package)
                 .with_package_discovery(FallbackPackageDiscovery::new(
                     daemon.as_mut().map(DaemonPackageDiscovery::new),
+                    // TODO: we may never need this fallback, so we could make this a builder
+                    // instead and instantiate it lazily
                     LocalPackageDiscoveryBuilder::new(
                         self.base.repo_root.clone(),
                         None,

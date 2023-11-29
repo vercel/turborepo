@@ -128,6 +128,7 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
         // respond to changes
         loop {
             tokio::select! {
+                biased;
                 _ = &mut self.exit_rx => {
                     tracing::info!("exiting package watcher");
                     return
