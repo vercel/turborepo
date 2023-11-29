@@ -32,6 +32,9 @@
     "semver": "^7.3.8",
     "typescript": "^4.9.4"
   },
+  "optionalDependencies": {
+    "rust": "nightly"
+  },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
       "prettier --write"
@@ -57,8 +60,5 @@
   "packageManager": "pnpm@8.9.0",
   "engines": {
     "node": "20.x"
-  },
-  "dependencies": {
-    "rust": "nightly"
   }
 }
