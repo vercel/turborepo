@@ -455,7 +455,7 @@ jobs:
         # Note: using CLI flags instead of env vars because
         # envs var would apply to the actual tests that exercise turbo also,
         # making test output non-deterministic.
-        run: turbo run test -F "@turborepo-examples-tests/*" --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
+        run: turbo run test -F "@turborepo-examples-tests/*" --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
