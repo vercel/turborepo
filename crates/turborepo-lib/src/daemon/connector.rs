@@ -637,6 +637,13 @@ mod test {
         ) -> tonic::Result<tonic::Response<proto::GetChangedOutputsResponse>> {
             unimplemented!()
         }
+
+        async fn discover_packages(
+            &self,
+            _req: tonic::Request<proto::DiscoverPackagesRequest>,
+        ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
+            unimplemented!()
+        }
     }
 
     #[tokio::test]

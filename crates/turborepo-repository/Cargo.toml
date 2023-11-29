@@ -19,6 +19,8 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 thiserror = "1.0.38"
+tokio-stream = "0.1.14"
+tokio.workspace = true
 tracing.workspace = true
 turbopath = { workspace = true }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }
