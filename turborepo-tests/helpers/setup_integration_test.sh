@@ -1,34 +1,29 @@
 #!/usr/bin/env bash
 
 THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
-ROOT_DIR="${THIS_DIR}/../.."
 
-if [[ "${OSTYPE}" == "msys" ]]; then
-  EXT=".exe"
-else
-  EXT=""
-fi
+. ${THIS_DIR}/setup.sh
 
-TURBO=${ROOT_DIR}/target/debug/turbo${EXT}
-VERSION=${ROOT_DIR}/version.txt
-TMPDIR=$(mktemp -d)
+TARGET_DIR=$1
+FIXTURE_NAME="${2-basic_monorepo}"
+PACKAGE_MANAGER="$3"
 
 SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
-FIXTURE="_fixtures/${2-basic_monorepo}"
+FIXTURE="_fixtures/${FIXTURE_NAME}"
 TURBOREPO_TESTS_DIR="$SCRIPT_DIR/.."
 TURBOREPO_INTEGRATION_TESTS_DIR="${TURBOREPO_TESTS_DIR}/integration/tests"
 
-TARGET_DIR=$1
+
 cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
 
 ${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh ${TARGET_DIR}
 
-# Update package manager
-if [ "$3" != "" ]; then
+# Update package manager if one was provided
+if [ "$PACKAGE_MANAGER" != "" ]; then
   # Use jq to write a new file with a .packageManager field set and then
   # Overwrite original package.json. For some reason the command above won't send its output
   # directly to the original file.
-  jq --arg pm "$3" '.packageManager = $pm' "$TARGET_DIR/package.json" > "$TARGET_DIR/package.json.new"
+  jq --arg pm "$PACKAGE_MANAGER" '.packageManager = $pm' "$TARGET_DIR/package.json" > "$TARGET_DIR/package.json.new"
   mv "$TARGET_DIR/package.json.new" "$TARGET_DIR/package.json"
 
   # We just created a new file. On Windows, we need to convert it to Unix line endings

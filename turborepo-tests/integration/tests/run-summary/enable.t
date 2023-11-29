@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd)
 
 # Delete all run summaries to start
   $ rm -rf .turbo/runs
