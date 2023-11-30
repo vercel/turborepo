@@ -43,21 +43,18 @@ You can add custom fixture monorepos as an escape hatch or if you truly need a c
 
 #### Custom turbo.json
 
-If an existing fixture meets your needs, but you need a custom `turbo.json`, create
-a directory for your test (instead of just `my-new-test.t`), add your "local" fixture `turbo.json`
-there, and then use `cp` as part the setup before writing your test. For example:
+If an existing fixture meets your needs, but you need a custom `turbo.json`, add your customized
+turbo.json config in `turborepo-tests/integration/tests/_fixtures/turbo-configs` and use the helper
+script to replace before your test runs:
 
 ```bash
 Setup
-  $ . ${TESTDIR}/../setup.sh
-  $ . ${TESTDIR}/../setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/setup.sh
+  $ . ${TESTDIR}/setup_monorepo.sh $(pwd)
 
 Custom config
-  $ cp ${TESTDIR}/myturboconfig.json $(pwd)/turbo.json
-  $ git commit -am "Update turbo.json"
+  $ . ${TESTDIR}/../../helpers/replace_turbo_config.sh $(pwd) "my-custom-config.json"
 
 Write your tests
 ...
 ```
-
-(Note that in the example above the paths to `setup.sh` and `setup_monorepo.sh` changed)
