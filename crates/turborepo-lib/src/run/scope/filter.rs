@@ -75,7 +75,14 @@ impl PackageInference {
         }
 
         if selector.parent_dir != turbopath::AnchoredSystemPathBuf::default() {
-            selector.parent_dir = self.directory_root.join(&selector.parent_dir);
+            let repo_relative_parent_dir = self.directory_root.join(&selector.parent_dir);
+            let clean_parent_dir =
+                path_clean::clean(std::path::Path::new(repo_relative_parent_dir.as_path()))
+                    .into_os_string()
+                    .into_string()
+                    .expect("path was valid utf8 before cleaning");
+            selector.parent_dir = AnchoredSystemPathBuf::try_from(clean_parent_dir.as_str())
+                .expect("path wasn't absolute before cleaning");
         } else if self.package_name.is_none() {
             // fallback: the user didn't set a parent directory and we didn't find a single
             // package, so use the directory we inferred and select all subdirectories
@@ -810,6 +817,18 @@ mod test {
         None,
         &["project-0", "project-1"] ;
         "select by parentDir using glob"
+    )]
+    #[test_case(
+        vec![TargetSelector {
+            parent_dir: AnchoredSystemPathBuf::try_from(if cfg!(windows) { "..\\packages\\*" } else { "../packages/*" }).unwrap(),
+            ..Default::default()
+        }],
+        Some(PackageInference{
+            package_name: None,
+            directory_root: AnchoredSystemPathBuf::try_from("project-5").unwrap(),
+        }),
+        &["project-0", "project-1"] ;
+        "select sibling directory"
     )]
     #[test_case(
         vec![

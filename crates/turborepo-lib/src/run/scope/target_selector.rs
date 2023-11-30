@@ -120,7 +120,11 @@ impl FromStr for TargetSelector {
             if directory.is_empty() {
                 return Err(InvalidSelectorError::EmptyPathSpecification);
             } else {
-                parent_dir = AnchoredSystemPathBuf::try_from(directory.as_str())
+                let clean_directory = path_clean::clean(std::path::Path::new(directory.as_str()))
+                    .into_os_string()
+                    .into_string()
+                    .expect("directory was valid utf8 before cleaning");
+                parent_dir = AnchoredSystemPathBuf::try_from(clean_directory.as_str())
                     .map_err(|_| InvalidSelectorError::InvalidAnchoredPath(directory))?;
             }
         }
