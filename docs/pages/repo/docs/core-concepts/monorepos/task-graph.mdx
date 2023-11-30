@@ -1,0 +1,73 @@
+---
+title: The Task Graph
+description: Turborepo builds a Task Graph based on your turbo config
+---
+
+One of the reasons Turborepo is so fast is that it builds a task graph based on
+a combination of your `turbo.json` and package dependencies. Depending on the
+configuration, Turborepo can figure out the order in which tasks need to run,
+and which tasks can run at the same time. This data structure is called a graph,
+or more specifically a [directed acyclic graph][1], or a DAG.
+
+For example, if your `turbo.json` configures a `build` task:
+
+```json
+{
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"]
+    }
+  }
+}
+```
+
+and you have an app that depends on 2 packages, `turbo run build` will build a
+task graph that looks like this:
+
+\<insert graphic\>
+
+This mental model is useful for understands how `dependsOn` works.
+
+## Phantom Nodes
+
+A challenge when building a task graph is how to handle nested dependencies. For
+example, let's say your monrepo has a `docs/` app that depends on the `ui/`
+package, which depends on the `core/` package:
+
+```
+apps/
+  docs/
+packages/
+  ui/
+  core/
+```
+
+Let's assume the `docs` app and the `core`/ package each have a `build` task,
+but the `ui` package does not. And your `turbo.json` configures the `build` task
+the same way as above with `"dependsOn": ["^build"]`. When you run
+`turbo run build`, what would you expect to happen?
+
+Turborepo will build a task graph that looks like this:
+
+\<insert graphic\>
+
+As you can see, the `core/` package is included in the graph, even though it is a
+"transitive" of the `docs/` app. In other words, even though the `docs` app only depends on `ui/`,
+and the `ui/` package doesn't have a build script, the `ui/` package's _dependencies_ have a build
+script, so the task graph incldues those. Turborepo calls the `ui/` package a "phantom node". Since
+it doesn't have a `build/` script, Turborepo won't execute anything for it, but it's still part of the
+graph for the purpose of including its dependencies.
+
+Another interesting situation is if a an entry point in the graph is a phantom node. For example,
+let's say you have another `web/` app in your monorepo and this also doesn't have a `build` script,
+but similarly depends on the `ui/` package.
+
+To make things clear, let's run `turbo run build --filter=web`, to leave out the `docs` app.
+What would you expect to happen in this case? Turborepo will generate a graph that looks like this:
+
+\<insert graphic\>
+
+In this case, _both_ `web/` and `ui/` nodes are phantom nodes. Neither implement the `build` task,
+but because `core/` does, Turborepo will end up executing the `core/` package's `build` script.
+
+[1]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
