@@ -24,16 +24,16 @@ use swc_core::{
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{ChunkableModuleReference, ChunkingContext},
-    issue::IssueSource,
+    issue::{IssueSeverity, IssueSource},
     reference::ModuleReference,
-    reference_type::CssReferenceSubType,
+    reference_type::UrlReferenceSubType,
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
+use turbopack_ecmascript::resolve::url_resolve;
 
 use crate::{
     chunk::CssImport,
     code_gen::{CodeGenerateable, CodeGeneration},
-    references::css_resolve,
 };
 
 #[turbo_tasks::value(into = "new", eq = "manual", serialization = "none")]
@@ -345,11 +345,12 @@ impl ImportAssetReference {
 impl ModuleReference for ImportAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        css_resolve(
+        url_resolve(
             self.origin,
             self.request,
-            Value::new(CssReferenceSubType::AtImport),
+            Value::new(UrlReferenceSubType::CssUrl),
             Some(self.issue_source),
+            IssueSeverity::Error.cell(),
         )
     }
 }

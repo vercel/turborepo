@@ -94,7 +94,7 @@ pub async fn url_resolve(
     origin: Vc<Box<dyn ResolveOrigin>>,
     request: Vc<Request>,
     ty: Value<UrlReferenceSubType>,
-    issue_source: Vc<IssueSource>,
+    issue_source: Option<Vc<IssueSource>>,
     issue_severity: Vc<IssueSeverity>,
 ) -> Result<Vc<ModuleResolveResult>> {
     let ty = Value::new(ReferenceType::Url(ty.into_value()));
@@ -129,7 +129,7 @@ pub async fn url_resolve(
         request,
         resolve_options,
         issue_severity,
-        Some(issue_source),
+        issue_source,
     )
     .await
 }

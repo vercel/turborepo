@@ -2,12 +2,12 @@ use anyhow::Result;
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::ChunkableModuleReference,
+    issue::IssueSeverity,
     reference::ModuleReference,
-    reference_type::CssReferenceSubType,
+    reference_type::UrlReferenceSubType,
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
-
-use crate::references::css_resolve;
+use turbopack_ecmascript::resolve::url_resolve;
 
 /// A `composes: ... from ...` CSS module reference.
 #[turbo_tasks::value]
@@ -30,14 +30,15 @@ impl CssModuleComposeReference {
 impl ModuleReference for CssModuleComposeReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        css_resolve(
+        url_resolve(
             self.origin,
             self.request,
-            Value::new(CssReferenceSubType::Compose),
+            Value::new(UrlReferenceSubType::CssUrl),
             // TODO: add real issue source, currently impossible because `CssClassName` doesn't
             // contain the source span
             // https://docs.rs/swc_css_modules/0.21.16/swc_css_modules/enum.CssClassName.html
             None,
+            IssueSeverity::Error.cell(),
         )
     }
 }

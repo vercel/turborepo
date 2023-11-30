@@ -97,7 +97,7 @@ impl ModuleReference for UrlAssetReference {
             self.origin,
             self.request,
             Value::new(UrlReferenceSubType::EcmaScriptNewUrl),
-            self.issue_source,
+            Some(self.issue_source),
             try_to_severity(self.in_try),
         )
     }

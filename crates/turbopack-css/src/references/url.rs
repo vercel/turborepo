@@ -90,7 +90,7 @@ impl ModuleReference for UrlAssetReference {
             self.origin,
             self.request,
             Value::new(UrlReferenceSubType::CssUrl),
-            self.issue_source,
+            Some(self.issue_source),
             IssueSeverity::Error.cell(),
         )
     }
