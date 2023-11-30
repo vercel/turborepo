@@ -689,7 +689,7 @@ pub async fn run(
                         run_args.pkg_inference_root = Some(relative_path.to_string());
                     }
                 } else {
-                    debug!("Failed to strip {?:} from {?:}", repo_root, invocation_path)
+                    debug!("Failed to strip {:?} from {:?}", repo_root, invocation_path)
                 }
             } else {
                 debug!("{} not set", INVOCATION_DIR_ENV_VAR);
