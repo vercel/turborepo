@@ -674,16 +674,22 @@ pub async fn run(
                 // TODO: this calculation can probably be wrapped into the path library
                 // and made a little more robust or clear
                 let invocation_path = Utf8Path::new(&invocation_dir);
-                debug!("invocation_dir: {:?}", invocation_dir);
-                debug!("invocation_path: {:?}", invocation_path);
-
                 // If repo state doesn't exist, we're either local turbo running at the root
                 // (cwd), or inference failed.
                 // If repo state does exist, we're global turbo, and want to calculate
                 // package inference based on the repo root
                 let this_dir = AbsoluteSystemPathBuf::cwd()?;
                 let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
+
+                debug!("invocation_dir: {:?}", invocation_dir);
+                debug!("invocation_path: {:?}", invocation_path);
+                debug!("repo_root: {:?}", repo_root);
+
                 if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
+                    debug!(
+                        "Successfully stripped {:?} from {:?}",
+                        repo_root, invocation_path
+                    );
                     debug!("relative_path: {:?}", relative_path);
                     if !relative_path.as_str().is_empty() {
                         debug!("pkg_inference_root set to \"{}\"", relative_path);
