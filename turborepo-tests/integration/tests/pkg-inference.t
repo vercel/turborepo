@@ -2,7 +2,7 @@ Setup
   $ . ${TESTDIR}/../../helpers/setup_integration_test.sh $(pwd)
 
 # Run as if called by global turbo
-  $ TURBO_INVOCATION_DIR=$(pwd)/packages/util ${TURBO} build --skip-infer
+  $ TURBO_INVOCATION_DIR=$(pwd)/packages/util ${TURBO} build --skip-infer -vv
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -16,4 +16,3 @@ Setup
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
-  
