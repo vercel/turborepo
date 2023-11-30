@@ -6,7 +6,6 @@ set -eo pipefail
 
 exampleName=$1
 pkgManager=$2
-pkgManagerReplacement=$3
 
 # Copy the example dir over to the test dir that prysk puts you in
 SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
@@ -32,7 +31,7 @@ if [ "$TURBO_TAG" == "canary" ]; then
 fi
 
 # Update package manager
-if [ pkgManagerReplacement != "" ]; then
+if [ "$3" != "" ]; then
   # Use jq to write a new file with a .packageManager field set and then
   # overwrite original package.json.
   jq --arg pm "$3" '.packageManager = $pm' "$TARGET_DIR/package.json" > "$TARGET_DIR/package.json.new"
