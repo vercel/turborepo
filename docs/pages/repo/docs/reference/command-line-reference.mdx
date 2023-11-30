@@ -97,3 +97,12 @@ Alternatively, you can also disable the update notification by using either the 
 declare -x TURBO_NO_UPDATE_NOTIFIER=1
 turbo run build
 ```
+
+#### `--log-prefix=none`
+
+This will remove the `<package>:<task>:` prefix when running tasks (both on execute and replay from cache). This removal will also apply to "single package" repos where the prefix is just `<task>:`.
+The log output when running multiple parallel tasks will be interleaved, so another method must be used to determine which task logged that line (ie enriched JSON logs).
+
+```sh
+turbo run dev --log-prefix=none
+```
