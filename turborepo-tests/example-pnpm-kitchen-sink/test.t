@@ -13,9 +13,8 @@
    Tasks:    12 successful, 12 total
   Cached:    0 cached, 12 total
     Time:\s*[\.0-9ms]+  (re)
-
-  Done in [\.0-9]+m?s\. (re)
   
+
   $ pnpm run build lint --output-logs=errors-only
   
   \> @ build (.*)/test.t (re)
@@ -28,7 +27,6 @@
    Tasks:    12 successful, 12 total
   Cached:    12 cached, 12 total
     Time:\s*[\.0-9ms]+ >>> FULL TURBO (re)
-
-  Done in [\.0-9]+m?s\. (re)
   
+
   $ git diff
