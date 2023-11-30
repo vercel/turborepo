@@ -1,7 +1,7 @@
   $ . ${TESTDIR}/../helpers/examples_setup.sh basic pnpm
 
 # run twice and make sure it works
-  $ pnpm run build lint -- --output-logs=errors-only
+  $ pnpm run build lint --output-logs=errors-only
   
   \> my-turborepo@ build (.*)/test.t (re)
   \> turbo build "lint" "--output-logs=errors-only" (re)
@@ -14,7 +14,7 @@
   Cached:    0 cached, 5 total
     Time:\s*[\.0-9ms]+  (re)
   
-  $ pnpm run build lint -- --output-logs=errors-only
+  $ pnpm run build lint --output-logs=errors-only
   
   \> my-turborepo@ build (.*)/test.t (re)
   \> turbo build "lint" "--output-logs=errors-only" (re)
