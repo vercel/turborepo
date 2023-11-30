@@ -4,7 +4,7 @@ use anyhow::{bail, Context, Result};
 use turbo_tasks::Vc;
 use turbopack_core::{
     asset::{Asset, AssetContent},
-    chunk::{ChunkableModule, ChunkingContext, EvaluatableAsset},
+    chunk::{AsyncModuleInfo, ChunkableModule, ChunkingContext, EvaluatableAsset},
     ident::AssetIdent,
     module::Module,
     reference::ModuleReferences,
@@ -14,9 +14,12 @@ use turbopack_core::{
 use super::chunk_item::EcmascriptModuleReexportsFacadeChunkItem;
 use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports},
-    references::esm::{EsmExport, EsmExports},
+    references::{
+        async_module::OptionAsyncModule,
+        esm::{EsmExport, EsmExports},
+    },
     side_effect_optimization::locals::reference::EcmascriptModuleLocalsReference,
-    EcmascriptModuleAsset,
+    EcmascriptModuleAsset, EcmascriptModuleContent,
 };
 
 #[turbo_tasks::value]
@@ -33,6 +36,27 @@ impl EcmascriptModuleReexportsFacadeModule {
     #[turbo_tasks::function]
     pub fn new(module: Vc<EcmascriptModuleAsset>, evaluation: bool) -> Vc<Self> {
         EcmascriptModuleReexportsFacadeModule { module, evaluation }.cell()
+    }
+
+    #[turbo_tasks::function]
+    pub async fn module_content(
+        self: Vc<Self>,
+        chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+        async_module_info: Option<Vc<AsyncModuleInfo>>,
+    ) -> Result<Vc<EcmascriptModuleContent>> {
+        let this = self.await?;
+
+        let parsed = this.module.parse().resolve().await?;
+
+        Ok(EcmascriptModuleContent::new(
+            parsed,
+            self.ident(),
+            chunking_context,
+            self.references(),
+            Vc::cell(vec![]),
+            self.get_exports(),
+            async_module_info,
+        ))
     }
 }
 
@@ -132,6 +156,11 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleReexportsFacadeModule {
     #[turbo_tasks::function]
     fn is_marked_as_side_effect_free(&self) -> Vc<bool> {
         Vc::cell(!self.evaluation)
+    }
+
+    #[turbo_tasks::function]
+    fn get_async_module(&self) -> Vc<OptionAsyncModule> {
+        self.module.get_async_module()
     }
 }
 

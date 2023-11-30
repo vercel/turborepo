@@ -44,16 +44,15 @@ impl EcmascriptChunkItem for EcmascriptModuleLocalsChunkItem {
             .module_options(async_module_info);
         let parsed = original_module.parse().resolve().await?;
 
-        let mut analyze_result = original_module.analyze().await?.clone_value();
-        analyze_result.exports = exports;
-        analyze_result.references = analyze_result.local_references;
-        let analyze_result = analyze_result.cell();
+        let analyze_result = original_module.analyze().await?.clone_value();
 
         let content = EcmascriptModuleContent::new(
             parsed,
             self.module.ident(),
             chunking_context,
-            analyze_result,
+            analyze_result.local_references,
+            analyze_result.code_generation,
+            exports,
             async_module_info,
         );
         Ok(EcmascriptChunkItemContent::new(

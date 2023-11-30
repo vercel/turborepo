@@ -54,6 +54,18 @@ impl EcmascriptChunkItem for EcmascriptModuleReexportsFacadeChunkItem {
             bail!("Expected EsmExports");
         };
 
+        let externals = *chunking_context
+            .environment()
+            .supports_commonjs_externals()
+            .await?;
+
+        let async_module_options = self
+            .module
+            .get_async_module()
+            .module_options(async_module_info);
+
+        let async_module = async_module_options.await?.clone_value();
+
         let mut code = RopeBuilder::default();
 
         let mut code_gens = Vec::new();
@@ -122,6 +134,8 @@ impl EcmascriptChunkItem for EcmascriptModuleReexportsFacadeChunkItem {
             source_map: None,
             options: EcmascriptChunkItemOptions {
                 strict: true,
+                externals,
+                async_module,
                 ..Default::default()
             },
             ..Default::default()
