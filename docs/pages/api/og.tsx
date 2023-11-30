@@ -1,5 +1,5 @@
 import React, { createElement } from "react";
-import { ImageResponse } from "@vercel/og";
+import { ImageResponse } from "next/og";
 import type { NextApiRequest } from "next/index";
 import PackLogo from "../../components/logos/og/PackLogo";
 import RepoLogo from "../../components/logos/og/RepoLogo";

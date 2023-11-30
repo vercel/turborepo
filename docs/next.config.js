@@ -59,9 +59,6 @@ const nextConfig = withNextra({
     hideSourceMaps: true,
   },
   reactStrictMode: true,
-  experimental: {
-    legacyBrowsers: false,
-  },
   eslint: {
     // TODO: remove after eslint has been fixed from new config introduced in vercel/turbo/pull/5752
     ignoreDuringBuilds: true,
