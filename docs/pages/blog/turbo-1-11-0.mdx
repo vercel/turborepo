@@ -41,6 +41,8 @@ As we wrote about in [our blog post about the migration](https://vercel.com/blog
 - We've been able to catch possible bugs much sooner, as Rust forces us to think about the differences between platforms and environments much more closely than Go.
 - The Rust ecosystem has many powerful crates that served our needs well, showcasing the ecosystem alignment we were lacking in Go.
 
+If you find any problems that you believe are related to the new Rust codepath, you can opt back to the Go codepath using the `--go-fallback` flag and [report an issue on GitHub](https://github.com/vercel/turbo/issues/new?assignees=&labels=kind%3A+bug%2Cowned-by%3A+turborepo%2Cneeds%3A+triage&projects=&template=0-turborepo-bug-report.yml&title=%5Bturborepo%5D+).
+
 ## Group logs for improved readability
 
 To make it easier to review your task logs, we've introduced the `--log-order` flag to output all logs from a task **after it finishes** rather than _as it writes_. This results in logs that are separated per-task, improving legibility on a specific task's logs.
