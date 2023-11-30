@@ -27,12 +27,24 @@ const config: DocsThemeConfig = {
       section = "Turborepo";
     }
 
+    // only show section if we're not on a landing page (these show as "Index")
+    let titleTemplate = `%s – ${section}`;
+    if (router?.pathname === "/repo") {
+      titleTemplate = `Turborepo`;
+    }
+    if (router?.pathname === "/pack") {
+      titleTemplate = `Turbopack`;
+    }
+    if (router?.pathname === "/") {
+      titleTemplate = `Turbo`;
+    }
+
     const defaultTitle = frontMatter.overrideTitle || section;
 
     return {
       description: frontMatter.description,
       defaultTitle,
-      titleTemplate: `%s – ${section}`,
+      titleTemplate,
     };
   },
   gitTimestamp({ timestamp }) {
