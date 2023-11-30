@@ -272,6 +272,10 @@ impl<'a> Run<'a> {
                 &scm,
             )?;
 
+            println!("scope opts: {:?}", &opts.scope_opts);
+            println!("pkg dep graph: {:?}", &pkg_dep_graph);
+            println!("is_all_packages: {}", is_all_packages);
+
             if is_all_packages {
                 for target in self.targets() {
                     let mut task_name = TaskName::from(target.as_str());
