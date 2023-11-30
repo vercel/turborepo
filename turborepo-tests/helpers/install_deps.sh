@@ -7,8 +7,17 @@ PACKAGE_MANAGER=${1-npm}
 
 if [ "$PACKAGE_MANAGER" == "npm" ]; then
   npm install > /dev/null 2>&1
+
+  if [[ "$OSTYPE" == "msys" ]]; then
+    dos2unix --quiet "package-lock.json"
+  fi
+
 elif [ "$PACKAGE_MANAGER" == "pnpm" ]; then
   pnpm install > /dev/null 2>&1
+
+  if [[ "$OSTYPE" == "msys" ]]; then
+    dos2unix --quiet "pnpm-lock.yaml"
+  fi
 elif [ "$PACKAGE_MANAGER" == "yarn" ]; then
   # Pass a --cache-folder here because yarn seems to have trouble
   # running multiple yarn installs at the same time and we are running
@@ -17,6 +26,10 @@ elif [ "$PACKAGE_MANAGER" == "yarn" ]; then
 
   # And ignore this new cache folder from the new git repo we're about to create.
   echo ".yarn-cache" >> .gitignore
+
+  if [[ "$OSTYPE" == "msys" ]]; then
+    dos2unix --quiet "yarn.lock"
+  fi
 fi
 
 git add .
