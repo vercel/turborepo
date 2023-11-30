@@ -45,9 +45,16 @@ it("should allow to import the whole module and pick without duplicating the mod
   expect(fullModule.c).toBe(c5);
 });
 
-import { a } from "package-reexport-side-effect";
-import { effects } from "package-reexport-side-effect/check-side-effect";
+import { a as a6 } from "package-reexport-side-effect";
+import { effects as effects6 } from "package-reexport-side-effect/check-side-effect";
 it("should run side effects of a reexporting module with side effects", () => {
-  expect(a).toBe("a");
-  expect(effects).toEqual(["side-effect.js", "index.js"]);
+  expect(a6).toBe("a");
+  expect(effects6).toEqual(["side-effect.js", "index.js"]);
+});
+
+import { a as a7 } from "package-reexport-tla-side-effect";
+import { effects as effects7 } from "package-reexport-tla-side-effect/check-side-effect";
+it("should run side effects of a reexporting module with side effects (async modules)", () => {
+  expect(a7).toBe("a");
+  expect(effects7).toEqual(["side-effect.js", "index.js"]);
 });
