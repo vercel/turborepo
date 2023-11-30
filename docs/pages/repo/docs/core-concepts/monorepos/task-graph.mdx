@@ -26,7 +26,7 @@ task graph that looks like this:
 
 \<insert graphic\>
 
-This mental model is useful for understands how `dependsOn` works.
+This mental model is useful to understand how `dependsOn` works.
 
 ## Phantom Nodes
 
@@ -42,8 +42,8 @@ packages/
   core/
 ```
 
-Let's assume the `docs` app and the `core`/ package each have a `build` task,
-but the `ui` package does not. And your `turbo.json` configures the `build` task
+Let's assume the `docs/` app and the `core/` package each have a `build` task,
+but the `ui/` package does not. And your `turbo.json` configures the `build` task
 the same way as above with `"dependsOn": ["^build"]`. When you run
 `turbo run build`, what would you expect to happen?
 
@@ -54,7 +54,7 @@ Turborepo will build a task graph that looks like this:
 As you can see, the `core/` package is included in the graph, even though it is a
 "transitive" of the `docs/` app. In other words, even though the `docs` app only depends on `ui/`,
 and the `ui/` package doesn't have a build script, the `ui/` package's _dependencies_ have a build
-script, so the task graph incldues those. Turborepo calls the `ui/` package a "phantom node". Since
+script, so the task graph includes those. Turborepo calls the `ui/` package a "phantom node". Since
 it doesn't have a `build/` script, Turborepo won't execute anything for it, but it's still part of the
 graph for the purpose of including its dependencies.
 
@@ -67,7 +67,7 @@ What would you expect to happen in this case? Turborepo will generate a graph th
 
 \<insert graphic\>
 
-In this case, _both_ `web/` and `ui/` nodes are phantom nodes. Neither implement the `build` task,
+In this case, _both_ the `web/` and `ui/` nodes are phantom nodes. Neither implement the `build` task,
 but because `core/` does, Turborepo will end up executing the `core/` package's `build` script.
 
 [1]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
