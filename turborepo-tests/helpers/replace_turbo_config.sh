@@ -15,4 +15,9 @@ if [[ "$OSTYPE" == "msys" ]]; then
   dos2unix --quiet "$PROJECT_DIR/turbo.json"
 fi
 
-git commit --quiet -am "Use $CONFIG_NAME as turbo.json"
+# Check if there are changes before trying to run git commit
+# Since we're replacing an existing turbo.json, git commit -a should work and we
+# don't need to git add anything.
+if [[ $(git status --porcelain) ]]; then
+  git commit --quiet -am "Use $CONFIG_NAME as turbo.json"
+fi
