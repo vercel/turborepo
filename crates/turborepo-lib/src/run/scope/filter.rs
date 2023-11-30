@@ -38,7 +38,7 @@ impl PackageInference {
         );
         let full_inference_path = turbo_root.resolve(pkg_inference_path);
         for (workspace_name, workspace_entry) in pkg_graph.workspaces() {
-            let pkg_path = turbo_root.resolve(workspace_entry.package_json_path());
+            let pkg_path = turbo_root.resolve(workspace_entry.package_path());
             let inferred_path_is_below = pkg_path.contains(&full_inference_path);
             // We skip over the root package as the inferred path will always be below it
             if inferred_path_is_below && (&pkg_path as &AbsoluteSystemPath) != turbo_root {
@@ -47,7 +47,7 @@ impl PackageInference {
                 // do so in a consistent manner
                 return Self {
                     package_name: Some(workspace_name.to_string()),
-                    directory_root: workspace_entry.package_json_path().to_owned(),
+                    directory_root: workspace_entry.package_path().to_owned(),
                 };
             }
             let inferred_path_is_between_root_and_pkg = full_inference_path.contains(&pkg_path);
@@ -343,7 +343,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             } else {
                 let path = selector.parent_dir.to_unix();
                 let parent_dir_matcher = wax::Glob::new(path.as_str())?;
-                let matches = parent_dir_matcher.is_match(info.package_json_path.as_path());
+                let matches = parent_dir_matcher.is_match(info.package_path().as_path());
 
                 if matches {
                     entry_packages.insert(name.to_owned());
@@ -413,7 +413,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             let package_path_lookup = self
                 .pkg_graph
                 .workspaces()
-                .map(|(name, entry)| (name, entry.package_json_path()))
+                .map(|(name, entry)| (name, entry.package_path()))
                 .collect::<HashMap<_, _>>();
 
             for package in changed_packages {
@@ -446,7 +446,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             } else {
                 let packages = self.pkg_graph.workspaces();
                 for (name, _) in packages.filter(|(_name, info)| {
-                    let path = info.package_json_path.as_path();
+                    let path = info.package_path().as_path();
                     parent_dir_globber.is_match(path)
                 }) {
                     entry_packages.insert(name.to_owned());
@@ -625,7 +625,7 @@ mod test {
             AbsoluteSystemPathBuf::new(temp_folder.path().as_os_str().to_str().unwrap()).unwrap(),
         ));
 
-        let packages = dependencies
+        let package_dirs = dependencies
             .iter()
             .flat_map(|(a, b)| vec![a, b])
             .chain(extras.iter())
@@ -641,13 +641,16 @@ mod test {
                     acc
                 });
 
-        let package_jsons = packages
+        let package_jsons = package_dirs
             .iter()
             .map(|package_path| {
                 let (_, name) = get_name(package_path);
                 (
                     turbo_root
-                        .join_unix_path(RelativeUnixPathBuf::new(**package_path).unwrap())
+                        .join_unix_path(
+                            RelativeUnixPathBuf::new(format!("{package_path}/package.json"))
+                                .unwrap(),
+                        )
                         .unwrap(),
                     PackageJson {
                         name: Some(name.to_string()),
