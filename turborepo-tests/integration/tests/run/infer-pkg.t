@@ -10,8 +10,15 @@ Run a dry run
     "util"
   ]
 
+Run a dry run in packages with a filter
+  $ cd packages
+  $ ${TURBO} build --dry=json -F "{./util}" | jq .packages
+  [
+    "util"
+  ]
+
 Run a dry run in a directory
-  $ cd packages/util
+  $ cd util
   $ ${TURBO} build --dry=json | jq .packages
   [
     "util"
