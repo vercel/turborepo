@@ -3,6 +3,8 @@ Setup
   $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd)
 
 # Run as if called by global turbo
+  $ echo what
+
   $ TURBO_INVOCATION_DIR=$(pwd)/packages/util ${TURBO} build --skip-infer
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
