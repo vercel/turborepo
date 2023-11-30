@@ -1,7 +1,7 @@
   $ . ${TESTDIR}/../helpers/examples_setup.sh with-gatsby pnpm
 
 # run twice and make sure it works
-  $ pnpm run build lint -- --output-logs=errors-only
+  $ pnpm run build lint --output-logs=errors-only
   
   \> with-gatsby@0.0.0 build (.*)/test.t (re)
   \> turbo build "lint" "--output-logs=errors-only" (re)
@@ -15,7 +15,7 @@
     Time:\s*[\.0-9ms]+  (re)
   
 
-  $ pnpm run build lint -- --output-logs=errors-only
+  $ pnpm run build lint --output-logs=errors-only
   
   \> with-gatsby@0.0.0 build (.*)/test.t (re)
   \> turbo build "lint" "--output-logs=errors-only" (re)
