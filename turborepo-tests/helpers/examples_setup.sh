@@ -6,6 +6,7 @@ set -eo pipefail
 
 exampleName=$1
 pkgManager=$2
+pkgManagerRep=$2
 
 # Copy the example dir over to the test dir that prysk puts you in
 SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
@@ -30,6 +31,20 @@ if [ "$TURBO_TAG" == "canary" ]; then
   mv package.json.new package.json
 fi
 
+# Update package manager
+if [ "$3" != "" ]; then
+  # Use jq to write a new file with a .packageManager field set and then
+  # overwrite original package.json.
+  jq --arg pm "$3" '.packageManager = $pm' "$TARGET_DIR/package.json" > "$TARGET_DIR/package.json.new"
+  mv "$TARGET_DIR/package.json.new" "$TARGET_DIR/package.json"
+
+  # We just created a new file. On Windows, we need to convert it to Unix line endings
+  # so the hashes will be stable with what's expected in our test cases.
+  if [[ "$OSTYPE" == "msys" ]]; then
+    dos2unix --quiet "$TARGET_DIR/package.json"
+  fi
+fi
+
 # Enable corepack so that when we set the packageManager in package.json it actually makes a diference.
 if [ "$PRYSK_TEMP" == "" ]; then
   COREPACK_INSTALL_DIR_CMD=
@@ -49,7 +64,7 @@ elif [ "$pkgManager" == "yarn" ]; then
   # Pass a --cache-folder here because yarn seems to have trouble
   # running multiple yarn installs at the same time and we are running
   # examples tests in parallel. https://github.com/yarnpkg/yarn/issues/1275
-  yarn install --cache-folder="$PWD/.yarn-cache" > /dev/null 2>&1
+  yarn install --cache-folder="$PWD/.yarn-cache"
 
   # And ignore this new cache folder from the new git repo we're about to create.
   echo ".yarn-cache" >> .gitignore
