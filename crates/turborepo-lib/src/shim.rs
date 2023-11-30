@@ -479,6 +479,10 @@ fn run_correct_turbo(
         try_check_for_updates(&shim_args, &turbo_state.version);
 
         if turbo_state.local_is_self() {
+            debug!(
+                "1. Setting invocation dir env var to: {:?}",
+                shim_args.invocation_dir,
+            );
             env::set_var(
                 cli::INVOCATION_DIR_ENV_VAR,
                 shim_args.invocation_dir.as_path(),
@@ -496,6 +500,10 @@ fn run_correct_turbo(
         try_check_for_updates(&shim_args, get_version());
         // cli::run checks for this env var, rather than an arg, so that we can support
         // calling old versions without passing unknown flags.
+        debug!(
+            "2. Setting invocation dir env var to: {:?}",
+            shim_args.invocation_dir,
+        );
         env::set_var(
             cli::INVOCATION_DIR_ENV_VAR,
             shim_args.invocation_dir.as_path(),
@@ -554,6 +562,7 @@ fn spawn_local_turbo(
     // We spawn a process that executes the local turbo
     // that we've found in node_modules/.bin/turbo.
     let mut command = process::Command::new(local_turbo_path);
+    debug!("Passing invocation dir as: {:?}", shim_args.invocation_dir);
     command
         .args(&raw_args)
         // rather than passing an argument that local turbo might not understand, set
