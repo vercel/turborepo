@@ -674,6 +674,8 @@ pub async fn run(
                 // TODO: this calculation can probably be wrapped into the path library
                 // and made a little more robust or clear
                 let invocation_path = Utf8Path::new(&invocation_dir);
+                print!("invocation_dir: {:?}", invocation_dir);
+                print!("invocation_path: {:?}", invocation_path);
 
                 // If repo state doesn't exist, we're either local turbo running at the root
                 // (cwd), or inference failed.
@@ -686,6 +688,8 @@ pub async fn run(
                         debug!("pkg_inference_root set to \"{}\"", relative_path);
                         run_args.pkg_inference_root = Some(relative_path.to_string());
                     }
+                } else {
+                    debug!("Failed to strip {?:} from {?:}", repo_root, invocation_path)
                 }
             } else {
                 debug!("{} not set", INVOCATION_DIR_ENV_VAR);
