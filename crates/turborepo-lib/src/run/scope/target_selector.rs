@@ -230,7 +230,7 @@ mod test {
     #[test_case("../foo", TargetSelector { raw: "../foo".to_string(), parent_dir: AnchoredSystemPathBuf::try_from(if cfg!(windows) { "..\\foo" } else { "../foo" }).unwrap(), ..Default::default() }; "dot dot slash foo")]
     #[test_case("./foo", TargetSelector { raw: "./foo".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("foo").unwrap(), ..Default::default() }; "dot slash foo")]
     #[test_case("./foo/*", TargetSelector { raw: "./foo/*".to_string(), parent_dir: AnchoredSystemPathBuf::try_from(if cfg!(windows) { "foo\\*" } else { "foo/*" }).unwrap(), ..Default::default() }; "dot slash foo star")]
-    #[test_case("...{./foo}", TargetSelector { raw: "...{./foo}".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("./foo").unwrap(), include_dependents: true, ..Default::default() }; "dot dot dot curly bracket foo")]
+    #[test_case("...{./foo}", TargetSelector { raw: "...{./foo}".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("foo").unwrap(), include_dependents: true, ..Default::default() }; "dot dot dot curly bracket foo")]
     #[test_case(".", TargetSelector { raw: ".".to_string(), parent_dir: AnchoredSystemPathBuf::try_from(".").unwrap(), ..Default::default() }; "parent dir dot")]
     #[test_case("..", TargetSelector { raw: "..".to_string(), parent_dir: AnchoredSystemPathBuf::try_from("..").unwrap(), ..Default::default() }; "parent dir dot dot")]
     #[test_case("[master]", TargetSelector { raw: "[master]".to_string(), from_ref: "master".to_string(), ..Default::default() }; "square brackets master")]
