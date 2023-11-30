@@ -6,11 +6,7 @@ Choose our custom config based on OS, since the input/output configs will be dif
   $ [[ "$OSTYPE" == "msys" ]] && CONFIG="abs-path-globs-win.json" || CONFIG="abs-path-globs.json"
 
 Copy config into the root of our monrepo
-  $ cp "${TESTDIR}/../_fixtures/turbo-configs/$CONFIG" "$PWD/turbo.json"
-
-dos2unix the new file if we're on Windows
-  $ if [[ "$OSTYPE" == "msys" ]]; then dos2unix --quiet "$PWD/turbo.json"; fi
-  $ git commit --quiet -am "Add turbo.json with absolute path in outputs"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $PWD $CONFIG
 
 Only check contents that comes after the warning prefix
 We omit duplicates as Go with debug assertions enabled parses turbo.json twice
