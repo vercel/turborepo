@@ -27,19 +27,19 @@ Inferred mode as loose because no pass through configs, all vars are available
   globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: 'hiother', sysroot set: 'yes', path set: 'yes'
 
 Inferred mode as strict, because global pass through config, no vars available
-  $ . ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/global_pt-empty.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/global_pt-empty.json"
   $ ${TURBO} build -vv --env-mode=infer > /dev/null 2>&1
   $ cat "$OUTPUT"
   globalpt: '', localpt: '', globaldep: '', localdep: '', other: '', sysroot set: 'yes', path set: 'yes'
 
 Inferred mode as strict, because task pass through config, no vars available
-  $ . ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/task_pt-empty.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/task_pt-empty.json"
   $ ${TURBO} build -vv --env-mode=infer > /dev/null 2>&1
   $ cat "$OUTPUT"
   globalpt: '', localpt: '', globaldep: '', localdep: '', other: '', sysroot set: 'yes', path set: 'yes'
 
 Inferred mode as strict, with declared deps and pass through. all declared available, other is not available
-  $ . ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/all.json"
+  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/all.json"
   $ ${TURBO} build -vv --env-mode=infer > /dev/null 2>&1
   $ cat "$OUTPUT"
   globalpt: 'higlobalpt', localpt: 'hilocalpt', globaldep: 'higlobaldep', localdep: 'hilocaldep', other: '', sysroot set: 'yes', path set: 'yes'

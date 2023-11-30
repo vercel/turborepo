@@ -51,7 +51,7 @@ Run as `loose`
 
 All specified + infer
   $ rm -rf .turbo/runs
-  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/all.json" 
+  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/all.json"
   $ ${TURBO} run build --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   strict
@@ -67,7 +67,7 @@ All specified + infer
 
 All specified + loose
   $ rm -rf .turbo/runs
-strict_env_vars/all.json is still the turbo.json
+  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/all.json"
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
