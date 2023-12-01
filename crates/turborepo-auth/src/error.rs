@@ -6,6 +6,8 @@ use turborepo_api_client::Error as APIError;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
+    UrlParseError(#[from] url::ParseError),
+    #[error(transparent)]
     APIError(#[from] APIError),
 
     #[error("failed to get token")]
@@ -40,6 +42,8 @@ pub enum Error {
     },
 
     // File read errors.
+    #[error(transparent)]
+    PathError(#[from] turbopath::PathError),
     #[error("failed to read auth file at path: {path}")]
     FailedToReadAuthFile {
         #[source]
@@ -82,9 +86,4 @@ pub enum Error {
         #[source]
         source: serde_json::Error,
     },
-
-    #[error(transparent)]
-    PathError(#[from] turbopath::PathError),
-    #[error(transparent)]
-    UrlParseError(#[from] url::ParseError),
 }

@@ -46,7 +46,7 @@ pub async fn read_or_create_auth_file(
     config_file_path: &AbsoluteSystemPath,
     client: &impl Client,
 ) -> Result<AuthFile, Error> {
-    if auth_file_path.exists() {
+    if auth_file_path.try_exists()? {
         let content = auth_file_path
             .read_existing_to_string_or(Ok("{}"))
             .map_err(|e| Error::FailedToReadAuthFile {
@@ -56,7 +56,7 @@ pub async fn read_or_create_auth_file(
         let auth_file: AuthFile = serde_json::from_str(&content)
             .map_err(|e| Error::FailedToDeserializeAuthFile { source: e })?;
         return Ok(auth_file);
-    } else if config_file_path.exists() {
+    } else if config_file_path.try_exists()? {
         let content = config_file_path
             .read_existing_to_string_or(Ok("{}"))
             .map_err(|e| Error::FailedToReadConfigFile {
