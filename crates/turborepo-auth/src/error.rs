@@ -12,7 +12,7 @@ pub enum Error {
     FailedToGetToken,
 
     #[error("failed to fetch user: {0}")]
-    FailedToFetchUser(turborepo_api_client::Error),
+    FailedToFetchUser(#[source] turborepo_api_client::Error),
     #[error("failed to fetch token metadata: {source}")]
     FailedToFetchTokenMetadata { source: turborepo_api_client::Error },
     #[error(

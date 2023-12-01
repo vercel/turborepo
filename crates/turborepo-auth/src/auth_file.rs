@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::Client;
 
 use crate::Error;
@@ -32,7 +32,7 @@ impl AuthFile {
 
         path.create_with_contents(pretty_content)
             .map_err(|e| crate::Error::FailedToWriteAuth {
-                auth_path: path.clone(),
+                auth_path: path.to_owned(),
                 error: e,
             })?;
 
@@ -130,7 +130,7 @@ mod tests {
             .join(TURBOREPO_AUTH_FILE_NAME);
 
         // unwrapping is fine because we know the path exists
-        let absolute_auth_path = AbsoluteSystemPathBuf::try_from(auth_file_path).unwrap();
+        let absolute_auth_path = AbsoluteSystemPath::new(auth_file_path.to_str().unwrap()).unwrap();
 
         // Make sure the temp dir exists before writing to it.
         fs::create_dir_all(temp_dir.path().join(TURBOREPO_CONFIG_DIR)).unwrap();
