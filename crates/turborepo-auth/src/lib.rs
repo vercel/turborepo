@@ -82,9 +82,6 @@ pub async fn read_or_create_auth_file(
     Ok(auth_file)
 }
 
-/// Promote a token with new scopes.
-pub async fn promote(_token: &str, _client: &impl Client) {}
-
 #[cfg(test)]
 mod tests {
     use std::{fs::File, io::Write};
