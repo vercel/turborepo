@@ -48,5 +48,5 @@ if [ "$PACKAGE_MANAGER" != "" ]; then
     dos2unix --quiet "$TARGET_DIR/package.json"
   fi
 
-  git commit -am "Updateed package manager to $PACKAGE_MANAGER_NAME" --quiet
+  git commit -am "Updated package manager to $PACKAGE_MANAGER_NAME" --quiet
 fi
