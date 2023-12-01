@@ -140,10 +140,10 @@ mod tests {
         auth_file.add_or_update_token("test-api".to_string(), "test-token".to_string());
 
         // Test: Write the auth file to disk and then read it back.
-        auth_file.write_to_disk(&absolute_auth_path).unwrap();
+        auth_file.write_to_disk(absolute_auth_path).unwrap();
 
         let read_back: AuthFile =
-            serde_json::from_str(&fs::read_to_string(absolute_auth_path.clone()).unwrap()).unwrap();
+            serde_json::from_str(&fs::read_to_string(absolute_auth_path).unwrap()).unwrap();
         assert_eq!(read_back.tokens.len(), 1);
         assert!(read_back.tokens.contains_key("test-api"));
         assert_eq!(
