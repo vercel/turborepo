@@ -24,6 +24,7 @@ module.exports = {
     browser: true,
     node: true,
   },
+  plugins: ["only-warn"],
   globals: {
     JSX: true,
   },
