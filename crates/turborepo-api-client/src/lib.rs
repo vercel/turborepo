@@ -122,7 +122,6 @@ impl Client for APIClient {
             .await?
             .error_for_status()?;
         let json: TokenMetadataResponse = response.json().await?;
-        println!("{:#?}", json);
 
         Ok(json.token)
     }
