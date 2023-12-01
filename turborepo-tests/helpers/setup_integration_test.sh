@@ -26,7 +26,7 @@ TURBOREPO_INTEGRATION_TESTS_DIR="${TURBOREPO_TESTS_DIR}/integration/tests"
 
 cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
 
-"${TURBOREPO_TESTS_DIR}/helpers/setup_git_old.sh" ${TARGET_DIR}
+"${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" ${TARGET_DIR}
 
 # default package manager is npm
 PACKAGE_MANAGER_NAME="npm"
