@@ -301,16 +301,27 @@ pub(crate) fn insert_hoisted_stmt(program: &mut Program, stmt: Stmt) {
                 }
             });
             if let Some(pos) = pos {
-                body.insert(pos, ModuleItem::Stmt(stmt));
+                let has_stmt = body[0..pos].iter().any(|item| {
+                    if let ModuleItem::Stmt(item_stmt) = item {
+                        stmt == *item_stmt
+                    } else {
+                        false
+                    }
+                });
+                if !has_stmt {
+                    body.insert(pos, ModuleItem::Stmt(stmt));
+                }
             } else {
-                body.insert(
-                    0,
-                    ModuleItem::Stmt(Stmt::Expr(ExprStmt {
-                        expr: Box::new(Expr::Lit(Lit::Str((*ESM_HOISTING_LOCATION).into()))),
-                        span: DUMMY_SP,
-                    })),
+                body.splice(
+                    0..0,
+                    [
+                        ModuleItem::Stmt(stmt),
+                        ModuleItem::Stmt(Stmt::Expr(ExprStmt {
+                            expr: Box::new(Expr::Lit(Lit::Str((*ESM_HOISTING_LOCATION).into()))),
+                            span: DUMMY_SP,
+                        })),
+                    ],
                 );
-                body.insert(0, ModuleItem::Stmt(stmt));
             }
         }
         Program::Script(Script { body, .. }) => {
