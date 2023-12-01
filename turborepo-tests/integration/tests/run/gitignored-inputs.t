@@ -6,7 +6,7 @@ Use our custom turbo config which has foo.txt as an input to the build command
   $ . ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "gitignored-inputs.json"
 
 Create a internal.txt for the util package and add it to gitignore
-This fiel is already part of our turbo config.
+This field is already part of our turbo config.
   $ echo "hello world" >> packages/util/internal.txt
   $ echo "packages/util/internal.txt" >> ${PWD}/.gitignore
   $ if [[ "$OSTYPE" == "msys" ]]; then dos2unix --quiet packages/util/internal.txt; fi
