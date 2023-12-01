@@ -264,6 +264,19 @@ Default `false`. `turbo` can run a standalone process in some cases to precalcul
 This standalone process (daemon) is an optimization, and not required for proper functioning of `turbo`.
 Passing `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
 
+### `--log-prefix`
+Only allowed value is `none`.
+
+This will remove the `<package>:<task>:` prefix when running tasks (both on execute and replay from cache). This removal will also apply to "single package" repos where the prefix is just `<task>:`.
+The log output when running multiple parallel tasks will be interleaved, so another method must be used to determine which task logged that line (ie enriched JSON logs).
+
+```shell
+--log-prefix=none
+```
+```shell
+turbo run dev --log-prefix=none
+```
+
 ### `--output-logs`
 
 `type: string`
