@@ -1,45 +1,57 @@
 #![allow(dead_code)]
 
 mod cache;
+mod error;
 pub(crate) mod global_hash;
+mod graph_visualizer;
+pub(crate) mod package_discovery;
 mod scope;
 pub(crate) mod summary;
 pub mod task_id;
+
 use std::{
     collections::HashSet,
-    io::{BufWriter, IsTerminal, Write},
+    io::{IsTerminal, Write},
     sync::Arc,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
-use anyhow::{anyhow, Context as ErrorContext, Result};
 pub use cache::{RunCache, TaskCache};
-use chrono::Local;
+use chrono::{DateTime, Local};
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
-use tracing::{debug, info};
-use turbopath::AbsoluteSystemPathBuf;
+use tracing::debug;
+use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
+use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
-use turborepo_repository::package_json::PackageJson;
+use turborepo_repository::{
+    discovery::{FallbackPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscoveryBuilder},
+    package_graph::{PackageGraph, WorkspaceName},
+    package_json::PackageJson,
+};
 use turborepo_scm::SCM;
 use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY};
 
 use self::task_id::TaskName;
+pub use crate::run::error::Error;
 use crate::{
-    cli::EnvMode,
+    cli::{DryRunMode, EnvMode},
     commands::CommandBase,
     config::TurboJson,
     daemon::DaemonConnector,
-    engine::EngineBuilder,
-    opts::{GraphOpts, Opts},
-    package_graph::{PackageGraph, WorkspaceName},
+    engine::{Engine, EngineBuilder},
+    opts::Opts,
     process::ProcessManager,
-    run::{global_hash::get_global_hash_inputs, summary::RunTracker},
+    run::{
+        global_hash::get_global_hash_inputs, package_discovery::DaemonPackageDiscovery,
+        summary::RunTracker,
+    },
     shim::TurboState,
+    signal::{SignalHandler, SignalSubscriber},
     task_graph::Visitor,
-    task_hash::{PackageInputsHashes, TaskHashTrackerState},
+    task_hash::{get_external_deps_hash, PackageInputsHashes, TaskHashTrackerState},
 };
 
 #[derive(Debug)]
@@ -54,12 +66,31 @@ impl<'a> Run<'a> {
         Self { base, processes }
     }
 
+    fn connect_process_manager(&self, signal_subscriber: SignalSubscriber) {
+        let manager = self.processes.clone();
+        tokio::spawn(async move {
+            let _guard = signal_subscriber.listen().await;
+            manager.stop().await;
+        });
+    }
+
     fn targets(&self) -> &[String] {
         self.base.args().get_tasks()
     }
 
-    fn opts(&self) -> Result<Opts> {
-        self.base.args().try_into()
+    fn opts(&self) -> Result<Opts, Error> {
+        Ok(self.base.args().try_into()?)
+    }
+
+    fn initialize_analytics(
+        api_auth: Option<APIAuth>,
+        api_client: APIClient,
+    ) -> Option<(AnalyticsSender, AnalyticsHandle)> {
+        // If there's no API auth, we don't want to record analytics
+        let api_auth = api_auth?;
+        api_auth
+            .is_linked()
+            .then(|| start_analytics(api_auth, api_client))
     }
 
     fn print_run_prelude(&self, opts: &Opts<'_>, filtered_pkgs: &HashSet<WorkspaceName>) {
@@ -92,27 +123,63 @@ impl<'a> Run<'a> {
         }
     }
 
-    #[tracing::instrument(skip(self))]
-    pub async fn run(&mut self) -> Result<i32> {
+    #[tracing::instrument(skip(self, signal_handler))]
+    pub async fn run(&mut self, signal_handler: &SignalHandler) -> Result<i32, Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
             turbo_version = %TurboState::version(),
+            numcpus = num_cpus::get(),
             "performing run on {:?}",
             TurboState::platform_name(),
         );
         let start_at = Local::now();
-        let package_json_path = self.base.repo_root.join_component("package.json");
-        let root_package_json =
-            PackageJson::load(&package_json_path).context("failed to read package.json")?;
-        let mut opts = self.opts()?;
+        if let Some(subscriber) = signal_handler.subscribe() {
+            self.connect_process_manager(subscriber);
+        }
 
         let api_auth = self.base.api_auth()?;
         let api_client = self.base.api_client()?;
+        let (analytics_sender, analytics_handle) =
+            Self::initialize_analytics(api_auth.clone(), api_client.clone()).unzip();
+
+        let result = self
+            .run_with_analytics(
+                start_at,
+                api_auth,
+                api_client,
+                analytics_sender,
+                signal_handler,
+            )
+            .await;
+
+        if let Some(analytics_handle) = analytics_handle {
+            analytics_handle.close_with_timeout().await;
+        }
+
+        result
+    }
+
+    // We split this into a separate function because we need
+    // to close the AnalyticsHandle regardless of whether the run succeeds or not
+    async fn run_with_analytics(
+        &mut self,
+        start_at: DateTime<Local>,
+        api_auth: Option<APIAuth>,
+        api_client: APIClient,
+        analytics_sender: Option<AnalyticsSender>,
+        signal_handler: &SignalHandler,
+    ) -> Result<i32, Error> {
+        let package_json_path = self.base.repo_root.join_component("package.json");
+        let root_package_json = PackageJson::load(&package_json_path)?;
+        let mut opts = self.opts()?;
+
         let config = self.base.config()?;
 
         // Pulled from initAnalyticsClient in run.go
-        let is_linked = api_auth.is_some();
+        let is_linked = api_auth
+            .as_ref()
+            .map_or(false, |api_auth| api_auth.is_linked());
         if !is_linked {
             opts.cache_opts.skip_remote = true;
         } else if let Some(enabled) = config.enabled {
@@ -121,13 +188,56 @@ impl<'a> Run<'a> {
             opts.cache_opts.skip_remote = !enabled;
         }
 
-        let _is_structured_output = opts.run_opts.graph.is_some() || opts.run_opts.dry_run_json;
+        let _is_structured_output = opts.run_opts.graph.is_some()
+            || matches!(opts.run_opts.dry_run, Some(DryRunMode::Json));
 
         let is_single_package = opts.run_opts.single_package;
 
-        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-            .with_single_package_mode(opts.run_opts.single_package)
-            .build()?;
+        let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
+
+        let mut daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
+            debug!("skipping turbod since we appear to be in a non-interactive context");
+            None
+        } else if !opts.run_opts.no_daemon {
+            let connector = DaemonConnector {
+                can_start_server: true,
+                can_kill_server: true,
+                pid_file: self.base.daemon_file_root().join_component("turbod.pid"),
+                sock_file: self.base.daemon_file_root().join_component("turbod.sock"),
+            };
+
+            match connector.connect().await {
+                Ok(client) => {
+                    debug!("running in daemon mode");
+                    Some(client)
+                }
+                Err(e) => {
+                    debug!("failed to connect to daemon {e}");
+                    None
+                }
+            }
+        } else {
+            // We are opted out of using the daemon
+            None
+        };
+
+        let mut pkg_dep_graph =
+            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+                .with_single_package_mode(opts.run_opts.single_package)
+                .with_package_discovery(FallbackPackageDiscovery::new(
+                    daemon.as_mut().map(DaemonPackageDiscovery::new),
+                    // TODO: we may never need this fallback, so we could make this a builder
+                    // instead and instantiate it lazily
+                    LocalPackageDiscoveryBuilder::new(
+                        self.base.repo_root.clone(),
+                        None,
+                        Some(root_package_json.clone()),
+                    )
+                    .build()?,
+                    Duration::from_millis(10),
+                ))
+                .build()
+                .await?;
 
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
@@ -150,40 +260,19 @@ impl<'a> Run<'a> {
             opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
         }
 
-        // There's some warning handling code in Go that I'm ignoring
-        let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
-
-        let mut daemon = None;
-        if is_ci_or_not_tty && !opts.run_opts.no_daemon {
-            info!("skipping turbod since we appear to be in a non-interactive context");
-        } else if !opts.run_opts.no_daemon {
-            let connector = DaemonConnector {
-                can_start_server: true,
-                can_kill_server: true,
-                pid_file: self.base.daemon_file_root().join_component("turbod.pid"),
-                sock_file: self.base.daemon_file_root().join_component("turbod.sock"),
-            };
-
-            let client = connector.connect().await?;
-            debug!("running in daemon mode");
-            daemon = Some(client);
-        }
-
-        pkg_dep_graph
-            .validate()
-            .context("Invalid package dependency graph")?;
+        pkg_dep_graph.validate()?;
 
         let scm = SCM::new(&self.base.repo_root);
 
         let filtered_pkgs = {
-            let mut filtered_pkgs = scope::resolve_packages(
+            let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
                 &opts.scope_opts,
                 &self.base.repo_root,
                 &pkg_dep_graph,
                 &scm,
             )?;
 
-            if filtered_pkgs.len() != pkg_dep_graph.len() {
+            if is_all_packages {
                 for target in self.targets() {
                     let mut task_name = TaskName::from(target.as_str());
                     // If it's not a package task, we convert to a root task
@@ -208,61 +297,13 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
             api_client.clone(),
             api_auth.clone(),
+            analytics_sender,
         )?;
 
-        info!("created cache");
+        let mut engine =
+            self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
 
-        let engine = EngineBuilder::new(
-            &self.base.repo_root,
-            &pkg_dep_graph,
-            opts.run_opts.single_package,
-        )
-        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
-        .with_turbo_jsons(Some(
-            Some((WorkspaceName::Root, root_turbo_json.clone()))
-                .into_iter()
-                .collect(),
-        ))
-        .with_tasks_only(opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.iter().cloned().collect())
-        .with_tasks(
-            opts.run_opts
-                .tasks
-                .iter()
-                .map(|task| TaskName::from(task.as_str()).into_owned()),
-        )
-        .build()?;
-
-        engine
-            .validate(&pkg_dep_graph, opts.run_opts.concurrency)
-            .map_err(|errors| {
-                anyhow!(
-                    "error preparing engine: Invalid persistent task configuration:\n{}",
-                    errors
-                        .into_iter()
-                        .map(|e| e.to_string())
-                        .sorted()
-                        .join("\n")
-                )
-            })?;
-
-        if let Some(graph_opts) = opts.run_opts.graph {
-            match graph_opts {
-                GraphOpts::File(graph_file) => {
-                    let graph_file =
-                        AbsoluteSystemPathBuf::from_unknown(self.base.cwd(), graph_file);
-                    let file = graph_file.open()?;
-                    let _writer = BufWriter::new(file);
-                    todo!("Need to implement different format support");
-                }
-                GraphOpts::Stdout => {
-                    engine.dot_graph(std::io::stdout(), opts.run_opts.single_package)?
-                }
-            }
-            return Ok(0);
-        }
-
-        if !opts.run_opts.dry_run {
+        if opts.run_opts.dry_run.is_none() && opts.run_opts.graph.is_none() {
             self.print_run_prelude(&opts, &filtered_pkgs);
         }
 
@@ -273,7 +314,7 @@ impl<'a> Run<'a> {
         let is_monorepo = !opts.run_opts.single_package;
 
         let root_external_dependencies_hash =
-            is_monorepo.then(|| root_workspace.get_external_deps_hash());
+            is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
         let mut global_hash_inputs = get_global_hash_inputs(
             root_external_dependencies_hash.as_deref(),
@@ -302,9 +343,17 @@ impl<'a> Run<'a> {
             color_selector,
             daemon,
             self.base.ui,
+            opts.run_opts.dry_run.is_some(),
         ));
-
-        info!("created cache");
+        if let Some(subscriber) = signal_handler.subscribe() {
+            let runcache = runcache.clone();
+            tokio::spawn(async move {
+                let _guard = subscriber.listen().await;
+                let spinner = turborepo_ui::start_spinner("...Finishing writing to cache...");
+                runcache.wait_for_cache().await;
+                spinner.finish_and_clear();
+            });
+        }
 
         let mut global_env_mode = opts.run_opts.env_mode;
         if matches!(global_env_mode, EnvMode::Infer)
@@ -322,15 +371,29 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
         )?;
 
-        // remove dead code warnings
-        let _proc_manager = ProcessManager::new();
+        if opts.run_opts.parallel {
+            pkg_dep_graph.remove_workspace_dependencies();
+            engine = self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
+        }
+
+        if let Some(graph_opts) = opts.run_opts.graph {
+            graph_visualizer::write_graph(
+                self.base.ui,
+                graph_opts,
+                &engine,
+                opts.run_opts.single_package,
+                self.base.cwd(),
+            )?;
+            return Ok(0);
+        }
 
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
 
         let global_env = {
             let mut env = env_at_execution_start
-                .from_wildcards(global_hash_inputs.pass_through_env.unwrap_or_default())?;
+                .from_wildcards(global_hash_inputs.pass_through_env.unwrap_or_default())
+                .map_err(Error::Env)?;
             if let Some(resolved_global) = &global_hash_inputs.resolved_env_vars {
                 env.union(&resolved_global.all);
             }
@@ -339,7 +402,7 @@ impl<'a> Run<'a> {
 
         let run_tracker = RunTracker::new(
             start_at,
-            "todo",
+            opts.synthesize_command(),
             opts.scope_opts.pkg_inference_root.as_deref(),
             &env_at_execution_start,
             &self.base.repo_root,
@@ -366,7 +429,7 @@ impl<'a> Run<'a> {
             global_env,
         );
 
-        if opts.run_opts.dry_run {
+        if opts.run_opts.dry_run.is_some() {
             visitor.dry_run();
         }
 
@@ -383,8 +446,13 @@ impl<'a> Run<'a> {
             // We hit some error, it shouldn't be exit code 0
             .unwrap_or(if errors.is_empty() { 0 } else { 1 });
 
+        let error_prefix = if opts.run_opts.is_github_actions {
+            "::error::"
+        } else {
+            ""
+        };
         for err in &errors {
-            writeln!(std::io::stderr(), "{err}").ok();
+            writeln!(std::io::stderr(), "{error_prefix}{err}").ok();
         }
 
         visitor
@@ -402,21 +470,22 @@ impl<'a> Run<'a> {
 
     #[tokio::main]
     #[tracing::instrument(skip(self))]
-    pub async fn get_hashes(&self) -> Result<(String, TaskHashTrackerState)> {
+    pub async fn get_hashes(&self) -> Result<(String, TaskHashTrackerState), Error> {
         let started_at = Local::now();
         let env_at_execution_start = EnvironmentVariableMap::infer();
 
         let package_json_path = self.base.repo_root.join_component("package.json");
-        let root_package_json =
-            PackageJson::load(&package_json_path).context("failed to read package.json")?;
+        let root_package_json = PackageJson::load(&package_json_path)?;
 
         let opts = self.opts()?;
 
         let is_single_package = opts.run_opts.single_package;
 
-        let pkg_dep_graph = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-            .with_single_package_mode(opts.run_opts.single_package)
-            .build()?;
+        let mut pkg_dep_graph =
+            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+                .with_single_package_mode(opts.run_opts.single_package)
+                .build()
+                .await?;
 
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
@@ -427,7 +496,7 @@ impl<'a> Run<'a> {
 
         let is_monorepo = !opts.run_opts.single_package;
         let root_external_dependencies_hash =
-            is_monorepo.then(|| root_workspace.get_external_deps_hash());
+            is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
         let mut global_hash_inputs = get_global_hash_inputs(
             root_external_dependencies_hash.as_deref(),
@@ -446,14 +515,14 @@ impl<'a> Run<'a> {
         let scm = SCM::new(&self.base.repo_root);
 
         let filtered_pkgs = {
-            let mut filtered_pkgs = scope::resolve_packages(
+            let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
                 &opts.scope_opts,
                 &self.base.repo_root,
                 &pkg_dep_graph,
                 &scm,
             )?;
 
-            if filtered_pkgs.len() != pkg_dep_graph.len() {
+            if is_all_packages {
                 for target in self.targets() {
                     let task_name = TaskName::from(target.as_str()).into_root_task();
 
@@ -470,7 +539,7 @@ impl<'a> Run<'a> {
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
         let api_auth = self.base.api_auth()?;
 
-        let engine = EngineBuilder::new(
+        let mut engine = EngineBuilder::new(
             &self.base.repo_root,
             &pkg_dep_graph,
             opts.run_opts.single_package,
@@ -506,6 +575,11 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
         )?;
 
+        if opts.run_opts.parallel {
+            pkg_dep_graph.remove_workspace_dependencies();
+            engine = self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
+        }
+
         let pkg_dep_graph = Arc::new(pkg_dep_graph);
         let engine = Arc::new(engine);
         let api_client = self.base.api_client()?;
@@ -515,6 +589,7 @@ impl<'a> Run<'a> {
             &self.base.repo_root,
             api_client.clone(),
             api_auth.clone(),
+            None,
         )?;
 
         let color_selector = ColorSelector::default();
@@ -526,11 +601,13 @@ impl<'a> Run<'a> {
             color_selector,
             None,
             self.base.ui,
+            // Always dry run when getting hashes
+            true,
         ));
 
         let run_tracker = RunTracker::new(
             started_at,
-            "todo",
+            opts.synthesize_command(),
             opts.scope_opts.pkg_inference_root.as_deref(),
             &env_at_execution_start,
             &self.base.repo_root,
@@ -565,5 +642,50 @@ impl<'a> Run<'a> {
         let task_hash_tracker = visitor.into_task_hash_tracker();
 
         Ok((global_hash, task_hash_tracker))
+    }
+
+    fn build_engine(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        opts: &Opts,
+        root_turbo_json: &TurboJson,
+        filtered_pkgs: &HashSet<WorkspaceName>,
+    ) -> Result<Engine, Error> {
+        let engine = EngineBuilder::new(
+            &self.base.repo_root,
+            pkg_dep_graph,
+            opts.run_opts.single_package,
+        )
+        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
+        .with_turbo_jsons(Some(
+            Some((WorkspaceName::Root, root_turbo_json.clone()))
+                .into_iter()
+                .collect(),
+        ))
+        .with_tasks_only(opts.run_opts.only)
+        .with_workspaces(filtered_pkgs.clone().into_iter().collect())
+        .with_tasks(
+            opts.run_opts
+                .tasks
+                .iter()
+                .map(|task| TaskName::from(task.as_str()).into_owned()),
+        )
+        .build()?;
+
+        if !opts.run_opts.parallel {
+            engine
+                .validate(pkg_dep_graph, opts.run_opts.concurrency)
+                .map_err(|errors| {
+                    Error::EngineValidation(
+                        errors
+                            .into_iter()
+                            .map(|e| e.to_string())
+                            .sorted()
+                            .join("\n"),
+                    )
+                })?;
+        }
+
+        Ok(engine)
     }
 }

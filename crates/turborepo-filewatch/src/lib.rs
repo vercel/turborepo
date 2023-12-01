@@ -39,6 +39,7 @@ pub mod cookie_jar;
 #[cfg(target_os = "macos")]
 mod fsevent;
 pub mod globwatcher;
+pub mod package_watcher;
 
 #[cfg(not(target_os = "macos"))]
 type Backend = RecommendedWatcher;

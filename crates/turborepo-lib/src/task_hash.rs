@@ -8,16 +8,16 @@ use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
-use turborepo_cache::CacheResponse;
+use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
+use turborepo_repository::package_graph::{WorkspaceInfo, WorkspaceName};
 use turborepo_scm::SCM;
 
 use crate::{
     engine::TaskNode,
     framework::infer_framework,
-    hash::{FileHashes, TaskHashable, TurboHash},
+    hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
     opts::Opts,
-    package_graph::{WorkspaceInfo, WorkspaceName},
     run::task_id::TaskId,
     task_graph::TaskDefinition,
 };
@@ -115,21 +115,20 @@ impl PackageInputsHashes {
                     Err(err) => return Some(Err(err.into())),
                 };
 
-                if !task_definition.dot_env.is_empty() {
-                    let absolute_package_path = repo_root.resolve(package_path);
-                    let dot_env_object = match scm.hash_existing_of(
-                        &absolute_package_path,
-                        task_definition
-                            .dot_env
-                            .iter()
-                            .map(|p| p.to_anchored_system_path_buf()),
-                    ) {
-                        Ok(dot_env_object) => dot_env_object,
-                        Err(err) => return Some(Err(err.into())),
-                    };
+                if let Some(dot_env) = &task_definition.dot_env {
+                    if !dot_env.is_empty() {
+                        let absolute_package_path = repo_root.resolve(package_path);
+                        let dot_env_object = match scm.hash_existing_of(
+                            &absolute_package_path,
+                            dot_env.iter().map(|p| p.to_anchored_system_path_buf()),
+                        ) {
+                            Ok(dot_env_object) => dot_env_object,
+                            Err(err) => return Some(Err(err.into())),
+                        };
 
-                    for (key, value) in dot_env_object {
-                        hash_object.insert(key, value);
+                        for (key, value) in dot_env_object {
+                            hash_object.insert(key, value);
+                        }
                     }
                 }
 
@@ -165,7 +164,7 @@ pub struct TaskHashTrackerState {
     #[serde(skip)]
     package_task_outputs: HashMap<TaskId<'static>, Vec<AnchoredSystemPathBuf>>,
     #[serde(skip)]
-    package_task_cache: HashMap<TaskId<'static>, CacheResponse>,
+    package_task_cache: HashMap<TaskId<'static>, CacheHitMetadata>,
     #[serde(skip)]
     package_task_inputs_expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
 }
@@ -219,7 +218,7 @@ impl<'a> TaskHasher<'a> {
         let mut all_env_var_map = EnvironmentVariableMap::default();
         let mut matching_env_var_map = EnvironmentVariableMap::default();
 
-        if do_framework_inference {
+        let framework_slug = if do_framework_inference {
             // See if we infer a framework
             if let Some(framework) = infer_framework(workspace, is_monorepo) {
                 debug!("auto detected framework for {}", task_id.package());
@@ -264,12 +263,14 @@ impl<'a> TaskHasher<'a> {
 
                 matching_env_var_map.union(&inference_env_var_map);
                 matching_env_var_map.difference(&user_env_var_set.exclusions);
+                Some(framework.slug().to_string())
             } else {
                 all_env_var_map = self
                     .env_at_execution_start
                     .from_wildcards(&task_definition.env)?;
 
                 explicit_env_var_map.union(&all_env_var_map);
+                None
             }
         } else {
             all_env_var_map = self
@@ -277,7 +278,8 @@ impl<'a> TaskHasher<'a> {
                 .from_wildcards(&task_definition.env)?;
 
             explicit_env_var_map.union(&all_env_var_map);
-        }
+            None
+        };
 
         let env_vars = DetailedMap {
             all: all_env_var_map,
@@ -290,7 +292,8 @@ impl<'a> TaskHasher<'a> {
         let hashable_env_pairs = env_vars.all.to_hashable();
         let outputs = task_definition.hashable_outputs(task_id);
         let task_dependency_hashes = self.calculate_dependency_hashes(dependency_set)?;
-        let external_deps_hash = is_monorepo.then(|| workspace.get_external_deps_hash());
+        let external_deps_hash =
+            is_monorepo.then(|| get_external_deps_hash(&workspace.transitive_dependencies));
 
         debug!(
             "task hash env vars for {}:{}\n vars: {:?}",
@@ -321,13 +324,17 @@ impl<'a> TaskHasher<'a> {
                 .as_deref()
                 .unwrap_or_default(),
             env_mode: task_env_mode,
-            dot_env: &task_definition.dot_env,
+            dot_env: task_definition.dot_env.as_deref().unwrap_or_default(),
         };
 
         let task_hash = task_hashable.calculate_task_hash();
 
-        self.task_hash_tracker
-            .insert_hash(task_id.clone(), env_vars, task_hash.clone());
+        self.task_hash_tracker.insert_hash(
+            task_id.clone(),
+            env_vars,
+            task_hash.clone(),
+            framework_slug,
+        );
 
         Ok(task_hash)
     }
@@ -385,9 +392,16 @@ impl<'a> TaskHasher<'a> {
         match task_env_mode {
             ResolvedEnvMode::Strict => {
                 let mut pass_through_env = EnvironmentVariableMap::default();
-                let default_env_var_pass_through_map = self
-                    .env_at_execution_start
-                    .from_wildcards(&["PATH", "SHELL", "SYSTEMROOT"])?;
+                let default_env_var_pass_through_map =
+                    self.env_at_execution_start.from_wildcards(&[
+                        "SHELL",
+                        // Command Prompt casing of env variables
+                        "PATH",
+                        "SYSTEMROOT",
+                        // Powershell casing of env variables
+                        "Path",
+                        "SystemRoot",
+                    ])?;
                 let tracker_env = self
                     .task_hash_tracker
                     .env_vars(task_id)
@@ -411,6 +425,27 @@ impl<'a> TaskHasher<'a> {
     }
 }
 
+pub fn get_external_deps_hash(
+    transitive_dependencies: &Option<HashSet<turborepo_lockfiles::Package>>,
+) -> String {
+    let Some(transitive_dependencies) = transitive_dependencies else {
+        return "".into();
+    };
+
+    let mut transitive_deps = Vec::with_capacity(transitive_dependencies.len());
+
+    for dependency in transitive_dependencies.iter() {
+        transitive_deps.push(dependency.clone());
+    }
+
+    transitive_deps.sort_by(|a, b| match a.key.cmp(&b.key) {
+        std::cmp::Ordering::Equal => a.version.cmp(&b.version),
+        other => other,
+    });
+
+    LockFilePackages(transitive_deps).hash()
+}
+
 impl TaskHashTracker {
     pub fn new(input_expanded_hashes: HashMap<TaskId<'static>, FileHashes>) -> Self {
         Self {
@@ -426,11 +461,22 @@ impl TaskHashTracker {
         state.package_task_hashes.get(task_id).cloned()
     }
 
-    fn insert_hash(&self, task_id: TaskId<'static>, env_vars: DetailedMap, hash: String) {
+    fn insert_hash(
+        &self,
+        task_id: TaskId<'static>,
+        env_vars: DetailedMap,
+        hash: String,
+        framework_slug: Option<String>,
+    ) {
         let mut state = self.state.lock().expect("hash tracker mutex poisoned");
         state
             .package_task_env_vars
             .insert(task_id.clone(), env_vars);
+        if let Some(framework) = framework_slug {
+            state
+                .package_task_framework
+                .insert(task_id.clone(), framework);
+        }
         state.package_task_hashes.insert(task_id, hash);
     }
 
@@ -458,12 +504,12 @@ impl TaskHashTracker {
         state.package_task_outputs.insert(task_id, outputs);
     }
 
-    pub fn cache_status(&self, task_id: &TaskId) -> Option<CacheResponse> {
+    pub fn cache_status(&self, task_id: &TaskId) -> Option<CacheHitMetadata> {
         let state = self.state.lock().expect("hash tracker mutex poisoned");
         state.package_task_cache.get(task_id).copied()
     }
 
-    pub fn insert_cache_status(&self, task_id: TaskId<'static>, cache_status: CacheResponse) {
+    pub fn insert_cache_status(&self, task_id: TaskId<'static>, cache_status: CacheHitMetadata) {
         let mut state = self.state.lock().expect("hash tracker mutex poisoned");
         state.package_task_cache.insert(task_id, cache_status);
     }

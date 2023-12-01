@@ -80,6 +80,7 @@ pub enum EnvMode {
 #[clap(disable_help_subcommand = true)]
 #[clap(disable_version_flag = true)]
 #[clap(arg_required_else_help = true)]
+#[command(name = "turbo")]
 pub struct Args {
     #[clap(long, global = true)]
     #[serde(skip)]
@@ -105,6 +106,10 @@ pub struct Args {
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
     pub cwd: Option<Utf8PathBuf>,
+    /// Fallback to use Go for task execution
+    #[serde(skip)]
+    #[clap(long, global = true)]
+    pub go_fallback: bool,
     /// Specify a file to save a pprof heap profile
     #[clap(long, global = true, value_parser)]
     pub heap: Option<String>,
@@ -335,7 +340,7 @@ pub enum Command {
         #[clap(short = 'r', long)]
         root: Option<String>,
         /// Answers passed directly to generator
-        #[clap(short = 'a', long, value_delimiter = ' ', num_args = 1..)]
+        #[clap(short = 'a', long, num_args = 1..)]
         args: Vec<String>,
 
         #[clap(subcommand)]
@@ -343,7 +348,12 @@ pub enum Command {
         command: Option<Box<GenerateCommand>>,
     },
     #[clap(hide = true)]
-    Info { workspace: Option<String> },
+    Info {
+        workspace: Option<String>,
+        // We output turbo info as json. Currently just for internal testing
+        #[clap(long)]
+        json: bool,
+    },
     /// Link your local directory to a Vercel organization and enable remote
     /// caching.
     Link {
@@ -542,7 +552,7 @@ pub struct RunArgs {
     /// Execute all tasks in parallel.
     #[clap(long)]
     pub parallel: bool,
-    #[clap(long, hide = true, default_missing_value = "")]
+    #[clap(long, hide = true)]
     pub pkg_inference_root: Option<String>,
     /// File to write turbo's performance profile output into.
     /// You can load the file up in chrome://tracing to see
@@ -553,6 +563,10 @@ pub struct RunArgs {
     /// allow reading and caching artifacts using the remote cache.
     #[clap(long, env = "TURBO_REMOTE_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
     pub remote_only: bool,
+    /// Treat remote cache as read only
+    #[clap(long, env = "TURBO_REMOTE_CACHE_READ_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
+    #[serde(skip)]
+    pub remote_cache_read_only: bool,
     /// Specify package(s) to act as entry points for task execution.
     /// Supports globs.
     #[clap(long)]
@@ -586,11 +600,6 @@ pub struct RunArgs {
     // Pass a string to enable posting Run Summaries to Vercel
     #[clap(long, hide = true)]
     pub experimental_space_id: Option<String>,
-
-    /// Opt-in to the rust codepath for running turbo
-    /// rather than using the go shim
-    #[clap(long, env, hide = true, default_value_t = false)]
-    pub experimental_rust_codepath: bool,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
@@ -662,6 +671,8 @@ pub async fn run(
         // inference root, as long as the user hasn't overridden the cwd
         if cli_args.cwd.is_none() {
             if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
+                // TODO: this calculation can probably be wrapped into the path library
+                // and made a little more robust or clear
                 let invocation_path = Utf8Path::new(&invocation_dir);
 
                 // If repo state doesn't exist, we're either local turbo running at the root
@@ -671,8 +682,10 @@ pub async fn run(
                 let this_dir = AbsoluteSystemPathBuf::cwd()?;
                 let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
                 if let Ok(relative_path) = invocation_path.strip_prefix(repo_root) {
-                    debug!("pkg_inference_root set to \"{}\"", relative_path);
-                    run_args.pkg_inference_root = Some(relative_path.to_string());
+                    if !relative_path.as_str().is_empty() {
+                        debug!("pkg_inference_root set to \"{}\"", relative_path);
+                        run_args.pkg_inference_root = Some(relative_path.to_string());
+                    }
                 }
             } else {
                 debug!("{} not set", INVOCATION_DIR_ENV_VAR);
@@ -740,10 +753,11 @@ pub async fn run(
             generate::run(tag, command, &args)?;
             Ok(Payload::Rust(Ok(0)))
         }
-        Command::Info { workspace } => {
+        Command::Info { workspace, json } => {
+            let json = *json;
             let workspace = workspace.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
-            info::run(&mut base, workspace.as_deref())?;
+            info::run(&mut base, workspace.as_deref(), json).await?;
 
             Ok(Payload::Rust(Ok(0)))
         }
@@ -815,12 +829,14 @@ pub async fn run(
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
-            if args.experimental_rust_codepath {
+            let should_use_go = cli_args.go_fallback
+                || env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false");
+            if should_use_go {
+                Ok(Payload::Go(Box::new(base)))
+            } else {
                 use crate::commands::run;
                 let exit_code = run::run(base).await?;
                 Ok(Payload::Rust(Ok(exit_code)))
-            } else {
-                Ok(Payload::Go(Box::new(base)))
             }
         }
         Command::Prune {
@@ -837,7 +853,7 @@ pub async fn run(
             let docker = *docker;
             let output_dir = output_dir.clone();
             let base = CommandBase::new(cli_args, repo_root, version, ui);
-            prune::prune(&base, &scope, docker, &output_dir)?;
+            prune::prune(&base, &scope, docker, &output_dir).await?;
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Completion { shell } => {
@@ -1889,5 +1905,73 @@ mod test {
             "3"
         );
         Ok(())
+    }
+    #[test]
+    fn test_parse_gen() {
+        let default_gen = Command::Generate {
+            tag: "latest".to_string(),
+            generator_name: None,
+            config: None,
+            root: None,
+            args: vec![],
+            command: None,
+        };
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "gen"]).unwrap(),
+            Args {
+                command: Some(default_gen.clone()),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo",
+                "gen",
+                "--args",
+                "my long arg string",
+                "my-second-arg"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Generate {
+                    tag: "latest".to_string(),
+                    generator_name: None,
+                    config: None,
+                    root: None,
+                    args: vec![
+                        "my long arg string".to_string(),
+                        "my-second-arg".to_string()
+                    ],
+                    command: None,
+                }),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo",
+                "gen",
+                "--tag",
+                "canary",
+                "--config",
+                "~/custom-gen-config/gen",
+                "my-generator"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Generate {
+                    tag: "canary".to_string(),
+                    generator_name: Some("my-generator".to_string()),
+                    config: Some("~/custom-gen-config/gen".to_string()),
+                    root: None,
+                    args: vec![],
+                    command: None,
+                }),
+                ..Args::default()
+            }
+        );
     }
 }

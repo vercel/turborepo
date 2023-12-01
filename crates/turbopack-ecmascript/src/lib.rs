@@ -3,7 +3,6 @@
 #![feature(iter_intersperse)]
 #![feature(int_roundings)]
 #![feature(slice_group_by)]
-#![feature(async_fn_in_trait)]
 #![feature(arbitrary_self_types)]
 #![recursion_limit = "256"]
 
@@ -34,6 +33,7 @@ use code_gen::CodeGenerateable;
 pub use parse::ParseResultSourceMap;
 use parse::{parse, ParseResult};
 use path_visitor::ApplyVisitors;
+use references::esm::UrlRewriteBehavior;
 pub use references::{AnalyzeEcmascriptModuleResult, TURBOPACK_HELPER};
 pub use static_code::StaticEcmascriptCode;
 use swc_core::{
@@ -94,6 +94,13 @@ pub struct EcmascriptOptions {
     pub import_parts: bool,
     /// module is forced to a specific type (happens e. g. for .cjs and .mjs)
     pub specified_module_type: SpecifiedModuleType,
+    /// Determines how to treat `new URL(...)` rewrites.
+    /// This allows to construct url depends on the different building context,
+    /// e.g. SSR, CSR, or Node.js.
+    pub url_rewrite_behavior: Option<UrlRewriteBehavior>,
+    /// External imports should used `__turbopack_import__` instead of
+    /// `__turbopack_require__` and become async module references.
+    pub import_externals: bool,
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
@@ -171,7 +178,11 @@ impl EcmascriptModuleAssetBuilder {
             )
         };
         if let Some(part) = self.part {
-            Vc::upcast(EcmascriptModulePartAsset::new(base, part))
+            Vc::upcast(EcmascriptModulePartAsset::new(
+                base,
+                part,
+                self.options.import_externals,
+            ))
         } else {
             Vc::upcast(base)
         }
@@ -264,6 +275,11 @@ impl EcmascriptModuleAsset {
             inner_assets: Some(inner_assets),
             last_successful_analysis: Default::default(),
         })
+    }
+
+    #[turbo_tasks::function]
+    pub async fn source(self: Vc<Self>) -> Result<Vc<Box<dyn Source>>> {
+        Ok(self.await?.source)
     }
 
     #[turbo_tasks::function]

@@ -5,50 +5,21 @@ use tonic::{Code, Status};
 use tracing::info;
 use turbopath::AbsoluteSystemPathBuf;
 
-use self::proto::turbod_client::TurbodClient;
 use super::{
     connector::{DaemonConnector, DaemonConnectorError},
     endpoint::SocketOpenError,
+    proto::DiscoverPackagesResponse,
 };
-use crate::{get_version, globwatcher::HashGlobSetupError};
-
-pub mod proto {
-    tonic::include_proto!("turbodprotocol");
-}
+use crate::{daemon::proto, globwatcher::HashGlobSetupError};
 
 #[derive(Debug, Clone)]
-pub struct DaemonClient<T: Clone> {
-    client: TurbodClient<tonic::transport::Channel>,
+pub struct DaemonClient<T> {
+    client: proto::turbod_client::TurbodClient<tonic::transport::Channel>,
     connect_settings: T,
 }
 
-impl<T: Clone> DaemonClient<T> {
-    /// Interrogate the server for its version.
-    #[tracing::instrument(skip(self))]
-    pub(super) async fn handshake(&mut self) -> Result<(), DaemonError> {
-        let _ret = self
-            .client
-            .hello(proto::HelloRequest {
-                version: get_version().to_string(),
-                // todo(arlyon): add session id
-                ..Default::default()
-            })
-            .await?;
-
-        Ok(())
-    }
-
-    /// Stops the daemon and closes the connection, returning
-    /// the connection settings that were used to connect.
-    pub async fn stop(mut self) -> Result<T, DaemonError> {
-        info!("Stopping daemon");
-        self.client.shutdown(proto::ShutdownRequest {}).await?;
-        Ok(self.connect_settings)
-    }
-}
-
 impl DaemonClient<()> {
-    pub fn new(client: TurbodClient<tonic::transport::Channel>) -> Self {
+    pub fn new(client: proto::turbod_client::TurbodClient<tonic::transport::Channel>) -> Self {
         Self {
             client,
             connect_settings: (),
@@ -68,10 +39,33 @@ impl DaemonClient<()> {
     }
 }
 
-impl DaemonClient<DaemonConnector> {
-    /// Stops the daemon, closes the connection, and opens a new connection.
-    pub async fn restart(self) -> Result<DaemonClient<DaemonConnector>, DaemonError> {
-        self.stop().await?.connect().await.map_err(Into::into)
+impl<T> DaemonClient<T> {
+    /// Interrogate the server for its version.
+    #[tracing::instrument(skip(self))]
+    pub(super) async fn handshake(&mut self) -> Result<(), DaemonError> {
+        let _ret = self
+            .client
+            .hello(proto::HelloRequest {
+                version: proto::VERSION.to_string(),
+                // minor version means that we need the daemon server to have at least the
+                // same features as us, but it can have more. it is unlikely that we will
+                // ever want to change the version range but we can tune it if, for example,
+                // we need to lock to a specific minor version.
+                supported_version_range: proto::VersionRange::Minor.into(),
+                // todo(arlyon): add session id
+                ..Default::default()
+            })
+            .await?;
+
+        Ok(())
+    }
+
+    /// Stops the daemon and closes the connection, returning
+    /// the connection settings that were used to connect.
+    pub async fn stop(mut self) -> Result<T, DaemonError> {
+        info!("Stopping daemon");
+        self.client.shutdown(proto::ShutdownRequest {}).await?;
+        Ok(self.connect_settings)
     }
 
     pub async fn get_changed_outputs(
@@ -126,6 +120,23 @@ impl DaemonClient<DaemonConnector> {
             .into_inner()
             .daemon_status
             .ok_or(DaemonError::MalformedResponse)
+    }
+
+    pub async fn discover_packages(&mut self) -> Result<DiscoverPackagesResponse, DaemonError> {
+        let response = self
+            .client
+            .discover_packages(proto::DiscoverPackagesRequest {})
+            .await?
+            .into_inner();
+
+        Ok(response)
+    }
+}
+
+impl DaemonClient<DaemonConnector> {
+    /// Stops the daemon, closes the connection, and opens a new connection.
+    pub async fn restart(self) -> Result<DaemonClient<DaemonConnector>, DaemonError> {
+        self.stop().await?.connect().await.map_err(Into::into)
     }
 
     pub fn pid_file(&self) -> &turbopath::AbsoluteSystemPathBuf {
@@ -191,6 +202,9 @@ pub enum DaemonError {
 
     #[error("failed to setup cookie dir {1}: {0}")]
     CookieDir(io::Error, AbsoluteSystemPathBuf),
+
+    #[error("failed to determine package manager: {0}")]
+    PackageManager(#[from] turborepo_repository::package_manager::Error),
 }
 
 impl From<Status> for DaemonError {

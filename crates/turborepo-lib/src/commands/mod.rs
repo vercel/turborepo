@@ -1,6 +1,5 @@
 use std::cell::OnceCell;
 
-use anyhow::anyhow;
 use dirs_next::config_dir;
 use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -99,10 +98,12 @@ impl CommandBase {
         let team_id = config.team_id();
         let team_slug = config.team_slug();
 
-        let token = config.token();
+        let Some(token) = config.token() else {
+            return Ok(None);
+        };
 
-        Ok(team_id.zip(token).map(|(team_id, token)| APIAuth {
-            team_id: team_id.to_string(),
+        Ok(Some(APIAuth {
+            team_id: team_id.map(|s| s.to_string()),
             token: token.to_string(),
             team_slug: team_slug.map(|s| s.to_string()),
         }))
@@ -119,15 +120,8 @@ impl CommandBase {
         let api_url = config.api_url();
         let timeout = config.timeout();
 
-        APIClient::new(api_url, timeout, self.version, args.preflight).map_err(|e| {
-            // This error can only be turborepo_api_client::Error::TlsError()
-            match e {
-                turborepo_api_client::Error::TlsError(e) => {
-                    ConfigError::Anyhow(anyhow!("Unable to configure TLS for your machine: {}", e))
-                }
-                _ => panic!("Got a non-builder error at build time."),
-            }
-        })
+        APIClient::new(api_url, timeout, self.version, args.preflight)
+            .map_err(ConfigError::ApiClient)
     }
 
     pub fn daemon_file_root(&self) -> AbsoluteSystemPathBuf {

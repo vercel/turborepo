@@ -1,3 +1,7 @@
+//! Turborepo's terminal UI library. Handles elements like spinners, colors,
+//! and logging. Includes a `PrefixedUI` struct that can be used to prefix
+//! output, and a `ColorSelector` that lets multiple concurrent resources get
+//! an assigned color.
 mod color_selector;
 mod logs;
 mod output;
@@ -20,9 +24,9 @@ pub use crate::{
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("cannot read logs: {0}")]
-    CannotReadLogs(std::io::Error),
+    CannotReadLogs(#[source] std::io::Error),
     #[error("cannot write logs: {0}")]
-    CannotWriteLogs(std::io::Error),
+    CannotWriteLogs(#[source] std::io::Error),
 }
 
 pub fn start_spinner(message: &str) -> ProgressBar {
@@ -182,6 +186,7 @@ lazy_static! {
     pub static ref BOLD: Style = Style::new().bold();
     pub static ref MAGENTA: Style = Style::new().magenta();
     pub static ref YELLOW: Style = Style::new().yellow();
+    pub static ref BOLD_YELLOW_REVERSE: Style = Style::new().yellow().bold().reverse();
     pub static ref UNDERLINE: Style = Style::new().underlined();
     pub static ref BOLD_CYAN: Style = Style::new().cyan().bold();
     pub static ref BOLD_GREY: Style = Style::new().dim().bold();

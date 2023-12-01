@@ -7,14 +7,14 @@ use tracing::trace;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
 };
-use turborepo_repository::package_json::PackageJson;
+use turborepo_repository::{
+    package_graph::{self, PackageGraph, WorkspaceName, WorkspaceNode},
+    package_json::PackageJson,
+};
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
-use crate::{
-    config::RawTurboJSON,
-    package_graph::{PackageGraph, WorkspaceName, WorkspaceNode},
-};
+use crate::config::RawTurboJSON;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -29,7 +29,7 @@ pub enum Error {
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(transparent)]
-    PackageGraph(#[from] crate::package_graph::Error),
+    PackageGraph(#[from] package_graph::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error("turbo doesn't support workspaces at file system root")]
@@ -79,13 +79,13 @@ fn turbo_json() -> &'static AnchoredSystemPath {
     PATH.get_or_init(|| AnchoredSystemPath::new("turbo.json").unwrap())
 }
 
-pub fn prune(
+pub async fn prune(
     base: &CommandBase,
     scope: &[String],
     docker: bool,
     output_dir: &str,
 ) -> Result<(), Error> {
-    let prune = Prune::new(base, scope, docker, output_dir)?;
+    let prune = Prune::new(base, scope, docker, output_dir).await?;
 
     if matches!(
         prune.package_graph.package_manager(),
@@ -243,7 +243,7 @@ enum CopyDestination {
 }
 
 impl<'a> Prune<'a> {
-    fn new(
+    async fn new(
         base: &CommandBase,
         scope: &'a [String],
         docker: bool,
@@ -256,7 +256,9 @@ impl<'a> Prune<'a> {
         let root_package_json_path = base.repo_root.join_component("package.json");
         let root_package_json = PackageJson::load(&root_package_json_path)?;
 
-        let package_graph = PackageGraph::builder(&base.repo_root, root_package_json).build()?;
+        let package_graph = PackageGraph::builder(&base.repo_root, root_package_json)
+            .build()
+            .await?;
 
         let out_directory = AbsoluteSystemPathBuf::from_unknown(&base.repo_root, output_dir);
 

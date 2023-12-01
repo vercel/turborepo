@@ -5,14 +5,15 @@ use swc_core::{
 };
 use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
-    chunk::{ChunkableModuleReference, ChunkingType, ChunkingTypeOption},
+    chunk::{ChunkableModuleReference, ChunkingContext, ChunkingType, ChunkingTypeOption},
+    environment::ChunkLoading,
     issue::IssueSource,
     reference::ModuleReference,
     reference_type::EcmaScriptModulesReferenceSubType,
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
 
-use super::super::pattern_mapping::{PatternMapping, ResolveType::EsmAsync};
+use super::super::pattern_mapping::{PatternMapping, ResolveType};
 use crate::{
     chunk::EcmascriptChunkingContext,
     code_gen::{CodeGenerateable, CodeGeneration},
@@ -29,6 +30,7 @@ pub struct EsmAsyncAssetReference {
     pub path: Vc<AstPath>,
     pub issue_source: Vc<IssueSource>,
     pub in_try: bool,
+    pub import_externals: bool,
 }
 
 #[turbo_tasks::value_impl]
@@ -40,6 +42,7 @@ impl EsmAsyncAssetReference {
         path: Vc<AstPath>,
         issue_source: Vc<IssueSource>,
         in_try: bool,
+        import_externals: bool,
     ) -> Vc<Self> {
         Self::cell(EsmAsyncAssetReference {
             origin,
@@ -47,6 +50,7 @@ impl EsmAsyncAssetReference {
             path,
             issue_source,
             in_try,
+            import_externals,
         })
     }
 }
@@ -59,8 +63,8 @@ impl ModuleReference for EsmAsyncAssetReference {
             self.origin,
             self.request,
             Default::default(),
-            Some(self.issue_source),
             try_to_severity(self.in_try),
+            Some(self.issue_source),
         )
     }
 }
@@ -99,14 +103,22 @@ impl CodeGenerateable for EsmAsyncAssetReference {
                 self.origin,
                 self.request,
                 Value::new(EcmaScriptModulesReferenceSubType::Undefined),
-                Some(self.issue_source),
                 try_to_severity(self.in_try),
+                Some(self.issue_source),
             ),
-            Value::new(EsmAsync),
+            if matches!(
+                *chunking_context.environment().chunk_loading().await?,
+                ChunkLoading::None
+            ) {
+                Value::new(ResolveType::ChunkItem)
+            } else {
+                Value::new(ResolveType::AsyncChunkLoader)
+            },
         )
         .await?;
 
         let path = &self.path.await?;
+        let import_externals = self.import_externals;
 
         let visitor = match &*pm {
             PatternMapping::Invalid => {
@@ -151,6 +163,30 @@ impl CodeGenerateable for EsmAsyncAssetReference {
                     call_expr.args = vec![
                         ExprOrSpread { spread: None, expr: quote_expr!("__turbopack_import__") },
                     ];
+                })
+            }
+            PatternMapping::OriginalReferenceTypeExternal(_)
+            | PatternMapping::OriginalReferenceExternal => {
+                create_visitor!(exact path, visit_mut_call_expr(call_expr: &mut CallExpr) {
+                    let old_args = std::mem::take(&mut call_expr.args);
+                    let expr = match old_args.into_iter().next() {
+                        Some(ExprOrSpread { expr, spread: None }) => pm.apply(*expr),
+                        _ => pm.create(),
+                    };
+                    if import_externals {
+                        call_expr.callee = Callee::Expr(quote_expr!("__turbopack_external_import__"));
+                        call_expr.args = vec![
+                            ExprOrSpread { spread: None, expr: Box::new(expr) },
+                        ];
+                    } else {
+                        call_expr.callee = Callee::Expr(quote_expr!("Promise.resolve().then"));
+                        call_expr.args = vec![
+                            ExprOrSpread { spread: None, expr: quote_expr!(
+                                "() => __turbopack_external_require__($arg, true)",
+                                arg: Expr = expr
+                            ) },
+                        ];
+                    }
                 })
             }
             _ => {

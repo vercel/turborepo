@@ -56,19 +56,23 @@ impl EnvironmentVariableMap {
     // This is the value used to print out the task hash input,
     // so the values are cryptographically hashed
     pub fn to_secret_hashable(&self) -> EnvironmentVariablePairs {
-        self.iter()
+        let mut pairs: Vec<String> = self
+            .iter()
             .map(|(k, v)| {
                 if !v.is_empty() {
                     let mut hasher = Sha256::new();
                     hasher.update(v.as_bytes());
                     let hash = hasher.finalize();
                     let hexed_hash = hex::encode(hash);
-                    format!("{}=", hexed_hash)
+                    format!("{k}={hexed_hash}")
                 } else {
-                    format!("{}=", k)
+                    format!("{k}=")
                 }
             })
-            .collect()
+            .collect();
+        // Make it deterministic to facilitate comparisons
+        pairs.sort();
+        pairs
     }
 }
 
@@ -156,7 +160,7 @@ impl EnvironmentVariableMap {
     fn wildcard_map_from_wildcards(
         &self,
         wildcard_patterns: &[impl AsRef<str>],
-    ) -> Result<WildcardMaps, regex::Error> {
+    ) -> Result<WildcardMaps, Error> {
         let mut output = WildcardMaps {
             inclusions: EnvironmentVariableMap::default(),
             exclusions: EnvironmentVariableMap::default(),
@@ -201,7 +205,7 @@ impl EnvironmentVariableMap {
     pub fn from_wildcards(
         &self,
         wildcard_patterns: &[impl AsRef<str>],
-    ) -> Result<EnvironmentVariableMap, regex::Error> {
+    ) -> Result<EnvironmentVariableMap, Error> {
         if wildcard_patterns.is_empty() {
             return Ok(EnvironmentVariableMap::default());
         }
@@ -216,7 +220,7 @@ impl EnvironmentVariableMap {
     pub fn wildcard_map_from_wildcards_unresolved(
         &self,
         wildcard_patterns: &[String],
-    ) -> Result<WildcardMaps, regex::Error> {
+    ) -> Result<WildcardMaps, Error> {
         if wildcard_patterns.is_empty() {
             return Ok(WildcardMaps {
                 inclusions: EnvironmentVariableMap::default(),

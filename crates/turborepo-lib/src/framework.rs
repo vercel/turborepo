@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use crate::package_graph::WorkspaceInfo;
+use turborepo_repository::package_graph::WorkspaceInfo;
 
 #[derive(Debug, PartialEq)]
 enum Strategy {
@@ -160,7 +160,6 @@ impl Matcher {
     }
 }
 
-#[allow(dead_code)]
 pub fn infer_framework(workspace: &WorkspaceInfo, is_monorepo: bool) -> Option<&'static Framework> {
     let frameworks = get_frameworks();
 
@@ -172,12 +171,9 @@ pub fn infer_framework(workspace: &WorkspaceInfo, is_monorepo: bool) -> Option<&
 #[cfg(test)]
 mod tests {
     use test_case::test_case;
-    use turborepo_repository::package_json::PackageJson;
+    use turborepo_repository::{package_graph::WorkspaceInfo, package_json::PackageJson};
 
-    use crate::{
-        framework::{get_frameworks, infer_framework, Framework},
-        package_graph::WorkspaceInfo,
-    };
+    use crate::framework::{get_frameworks, infer_framework, Framework};
 
     fn get_framework_by_slug(slug: &str) -> &'static Framework {
         get_frameworks()

@@ -84,7 +84,6 @@ func RunWithExecutionState(executionState *turbostate.ExecutionState, turboVersi
 		if errors.As(execErr, &exitErr) {
 			return exitErr.ExitCode
 		} else if execErr != nil {
-			fmt.Printf("Turbo error: %v\n", execErr)
 			return 1
 		}
 		return 0

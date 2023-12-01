@@ -33,10 +33,10 @@ Validate that we got a full task summary for the failed task with an error in .e
     "taskId": "my-app#maybefails",
     "task": "maybefails",
     "package": "my-app",
-    "hash": "b55c6f27415ae745",
+    "hash": "9626dfcd1fbbdc68",
     "inputs": {
       ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
-      "package.json": "6bcf57fd6ff30d1a6f40ad8d8d08e8b940fc7e3b"
+      "package.json": "1746e0db2361085b5953a6a3beab08c24af5bc08"
     },
     "hashOfExternalDependencies": "459c029558afe716",
     "cache": {
@@ -49,8 +49,8 @@ Validate that we got a full task summary for the failed task with an error in .e
     "cliArguments": [],
     "outputs": null,
     "excludedOutputs": null,
-    "logFile": "apps/my-app/.turbo/turbo-maybefails.log",
-    "directory": "apps/my-app",
+    "logFile": "apps(\/|\\\\)my-app(\/|\\\\).turbo(\/|\\\\)turbo-maybefails\.log", (re)
+    "directory": "apps(\/|\\\\)my-app", (re)
     "dependencies": [],
     "dependents": [],
     "resolvedTaskDefinition": {
@@ -80,7 +80,7 @@ Validate that we got a full task summary for the failed task with an error in .e
     "execution": {
       "startTime": [0-9]+, (re)
       "endTime": [0-9]+, (re)
-      "error": "command .* npm run maybefails exited \(1\)", (re)
+      "error": "command .*npm(?:\.cmd)? run maybefails exited \(1\)", (re)
       "exitCode": 1
     }
   }
@@ -117,6 +117,6 @@ success should be 1, and attempted should be 2
   {
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
-    "error": "command .* npm run maybefails exited \(1\)", (re)
+    "error": "command .*npm(?:\.cmd)? run maybefails exited \(1\)", (re)
     "exitCode": 1
   }

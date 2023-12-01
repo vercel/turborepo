@@ -21,7 +21,6 @@ Thanks for your interest in contributing to Turbo!
   - [Contributing to Turbopack](#contributing-to-turbopack)
     - [Turbopack Architecture](#turbopack-architecture)
     - [Testing Turbopack](#testing-turbopack)
-    - [Benchmarking Turbopack](#benchmarking-turbopack)
     - [Profiling Turbopack](#profiling-turbopack)
   - [Troubleshooting](#troubleshooting)
 
@@ -89,17 +88,16 @@ Then from the root directory, you can run:
   pnpm test -- --filter=turborepo-tests-integration
   ```
 - A single Integration test
-  e.g to run everything in `tests/run_summary`:
+  e.g to run everything in `tests/run-summary`:
+
   ```
   # build first because the next command doesn't run through turbo
   pnpm -- turbo run build --filter=cli
-  pnpm test -F turborepo-tests-integration -- "run_summary"
+  pnpm test -F turborepo-tests-integration -- "run-summary"
   ```
+
   Note: this is not through turbo, so you'll have to build turbo yourself first.
-- E2E test
-  ```bash
-  pnpm -- turbo e2e --filter=cli
-  ```
+
 - Example tests
   ```bash
   pnpm test -- --filter=turborepo-tests-examples -- <example-name> <packagemanager>

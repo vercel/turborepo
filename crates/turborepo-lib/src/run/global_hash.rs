@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use anyhow::Result;
 use globwalk::WalkType;
 use thiserror::Error;
 use tracing::debug;
@@ -20,7 +19,16 @@ static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 const GLOBAL_CACHE_KEY: &str = "HEY STELLLLLLLAAAAAAAAAAAAA";
 
 #[derive(Debug, Error)]
-enum GlobalHashError {}
+pub enum Error {
+    #[error(transparent)]
+    Env(#[from] turborepo_env::Error),
+    #[error(transparent)]
+    Globwalk(#[from] globwalk::WalkError),
+    #[error(transparent)]
+    Scm(#[from] turborepo_scm::Error),
+    #[error(transparent)]
+    PackageManager(#[from] turborepo_repository::package_manager::Error),
+}
 
 #[derive(Debug)]
 pub struct GlobalHashableInputs<'a> {
@@ -51,7 +59,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     env_mode: EnvMode,
     framework_inference: bool,
     dot_env: Option<&'a [RelativeUnixPathBuf]>,
-) -> Result<GlobalHashableInputs<'a>> {
+) -> Result<GlobalHashableInputs<'a>, Error> {
     let global_hashable_env_vars =
         get_global_hashable_env_vars(env_at_execution_start, global_env)?;
 
@@ -76,9 +84,25 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
             }
         };
 
+        // This is a bit of a hack to ensure that we don't crash
+        // when given an absolute path on Windows. We don't support
+        // absolute paths, but the ':' from the drive letter will also
+        // fail to compile to a glob. We already know we aren't going to
+        // get anything good, and we've already logged a warning, but we
+        // can modify the glob so it compiles. This is similar to the old
+        // behavior, which tacked it on to the end of the base path unmodified,
+        // and then would produce no files.
+        #[cfg(windows)]
+        let windows_global_file_dependencies: Vec<String> = global_file_dependencies
+            .iter()
+            .map(|s| s.replace(":", ""))
+            .collect();
         let files = globwalk::globwalk(
             root_path,
+            #[cfg(not(windows))]
             global_file_dependencies,
+            #[cfg(windows)]
+            windows_global_file_dependencies.as_slice(),
             &exclusions,
             WalkType::All,
         )?;
@@ -171,5 +195,53 @@ impl<'a> GlobalHashableInputs<'a> {
         };
 
         global_hashable.hash()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_env::EnvironmentVariableMap;
+    use turborepo_lockfiles::Lockfile;
+    use turborepo_repository::package_manager::PackageManager;
+
+    use super::get_global_hash_inputs;
+    use crate::cli::EnvMode;
+
+    #[test]
+    fn test_absolute_path() {
+        // We don't technically support absolute paths in global deps,
+        // but we shouldn't crash. We already print out a warning.
+        // Send an absolute path through and verify that we don't crash.
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        // Always default included, so it has to exist
+        root.join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+
+        let env_var_map = EnvironmentVariableMap::default();
+        let lockfile: Option<&dyn Lockfile> = None;
+        #[cfg(windows)]
+        let file_deps = ["C:\\some\\path".to_string()];
+        #[cfg(not(windows))]
+        let file_deps = ["/some/path".to_string()];
+        let result = get_global_hash_inputs(
+            None,
+            &root,
+            &PackageManager::Pnpm,
+            lockfile,
+            &file_deps,
+            &env_var_map,
+            &[],
+            None,
+            EnvMode::Infer,
+            false,
+            None,
+        );
+        assert!(result.is_ok());
     }
 }

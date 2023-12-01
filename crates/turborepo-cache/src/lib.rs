@@ -3,11 +3,19 @@
 #![feature(box_patterns)]
 #![deny(clippy::all)]
 
+/// A wrapper for the cache that uses a worker pool to perform cache operations
 mod async_cache;
+/// The core cache creation and restoration logic.
 pub mod cache_archive;
+/// File system cache
 pub mod fs;
+/// Remote cache
 pub mod http;
+/// A wrapper that allows reads and writes from the file system and remote
+/// cache.
 mod multiplexer;
+/// Cache signature authentication lets users provide a private key to sign
+/// their cache payloads.
 pub mod signature_authentication;
 #[cfg(test)]
 mod test_cases;
@@ -64,8 +72,6 @@ pub enum CacheError {
     InvalidMetadata(serde_json::Error, #[backtrace] Backtrace),
     #[error("Failed to write cache metadata file")]
     MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
-    #[error("Cache miss")]
-    CacheMiss,
     #[error("Unable to perform write as cache is shutting down")]
     CacheShuttingDown,
 }
@@ -83,7 +89,7 @@ pub enum CacheSource {
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub struct CacheResponse {
+pub struct CacheHitMetadata {
     pub source: CacheSource,
     pub time_saved: u64,
 }
@@ -91,6 +97,7 @@ pub struct CacheResponse {
 #[derive(Debug, Default)]
 pub struct CacheOpts<'a> {
     pub override_dir: Option<&'a Utf8Path>,
+    pub remote_cache_read_only: bool,
     pub skip_remote: bool,
     pub skip_filesystem: bool,
     pub workers: u32,

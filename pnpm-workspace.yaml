@@ -3,12 +3,12 @@ packages:
   - "docs"
   - "cli"
   - "packages/*"
-  - "benchmark"
   - "turborepo-tests/*"
-  - "examples-tests/*"
   # Intentionally exclude the `npm` `turbo` package from the workspaces.
   - "!packages/turbo"
   - "packages/turbo-tracing-next-plugin/test/with-mongodb-mongoose"
   - "crates/turbopack-tests/tests/execution"
   - "crates/*/js"
   - examples
+  # Exclude the non-monorepo example as it should be treated as independent of this repo
+  - "!examples/non-monorepo"

@@ -1,5 +1,8 @@
 #![deny(clippy::all)]
 
+//! Turborepo's update notifier. Indicates to the user that there is a new
+//! version of `turbo` available.
+
 use std::{fmt, time::Duration};
 
 use console::style;
@@ -7,7 +10,7 @@ use semver::Version as SemVerVersion;
 use serde::Deserialize;
 use thiserror::Error as ThisError;
 use update_informer::{
-    http_client::{GenericHttpClient, HeaderMap, HttpClient},
+    http_client::{GenericHttpClient, HttpClient},
     Check, Package, Registry, Result as UpdateResult,
 };
 
@@ -74,31 +77,6 @@ impl Registry for NPMRegistry {
     }
 }
 
-// Source https://github.com/mgrachev/update-informer/blob/main/src/http_client/reqwest.rs
-// Vendored here until update-informer allows us to control tls implementation
-pub struct ReqwestHttpClient;
-
-impl HttpClient for ReqwestHttpClient {
-    fn get<T: serde::de::DeserializeOwned>(
-        url: &str,
-        timeout: Duration,
-        headers: HeaderMap,
-    ) -> Result<T, Box<dyn std::error::Error>> {
-        let mut req = reqwest::blocking::Client::builder()
-            .timeout(timeout)
-            .build()?
-            .get(url);
-
-        for (key, value) in headers {
-            req = req.header(key, value);
-        }
-
-        let json = req.send()?.json()?;
-
-        Ok(json)
-    }
-}
-
 fn get_tag_from_version(pre: &semver::Prerelease) -> VersionTag {
     match pre {
         t if t.contains("canary") => VersionTag::Canary,
@@ -140,13 +118,12 @@ pub fn check_for_updates(
     let timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
     let interval = interval.unwrap_or(DEFAULT_INTERVAL);
     let informer = update_informer::new(NPMRegistry, package_name, current_version)
-        .http_client(ReqwestHttpClient)
         .timeout(timeout)
         .interval(interval);
     if let Ok(Some(version)) = informer.check_version() {
         let latest_version = version.to_string();
         // TODO: make this package manager aware
-        let update_cmd = style("npx @turbo/codemod update").cyan().bold();
+        let update_cmd = style("npx @turbo/codemod@latest update").cyan().bold();
 
         let msg = format!(
             "

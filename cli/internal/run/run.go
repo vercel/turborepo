@@ -177,7 +177,7 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 	}
 
 	if ui.IsCI && !r.opts.runOpts.NoDaemon {
-		r.base.Logger.Info("skipping turbod since we appear to be in a non-interactive context")
+		r.base.Logger.Debug("skipping turbod since we appear to be in a non-interactive context")
 	} else if !r.opts.runOpts.NoDaemon {
 		turbodClient, err := daemon.GetClient(ctx, r.base.RepoRoot, r.base.Logger, r.base.TurboVersion, daemon.ClientOpts{})
 		if err != nil {
@@ -445,7 +445,7 @@ func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
 	}
 
 	// After we know if its _possible_ to enable remote cache, check the config
-	// and dsiable it if wanted.
+	// and disable it if wanted.
 	if r.base.Config.Enabled != nil {
 		r.opts.cacheOpts.SkipRemote = !*r.base.Config.Enabled
 	}

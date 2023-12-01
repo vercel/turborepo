@@ -1,17 +1,18 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    io::Write,
     path::Path,
 };
 
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
-use turborepo_repository::package_json::PackageJson;
+use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
 
 use crate::{
     cli::OutputLogsMode,
     config::{ConfigurationOptions, Error},
-    run::task_id::{TaskId, TaskName, ROOT_PKG_NAME},
+    run::task_id::{TaskId, TaskName},
     task_graph::{BookkeepingTaskDefinition, Pipeline, TaskDefinitionStable, TaskOutputs},
 };
 
@@ -105,21 +106,25 @@ impl From<Vec<String>> for TaskOutputs {
         for glob in outputs {
             if let Some(glob) = glob.strip_prefix('!') {
                 if Utf8Path::new(glob).is_absolute() {
-                    println!(
+                    writeln!(
+                        std::io::stderr(),
                         "[WARNING] Using an absolute path in \"outputs\" ({}) will not work and \
                          will be an error in a future version",
                         glob
                     )
+                    .expect("unable to write to stderr");
                 }
 
                 exclusions.push(glob.to_string());
             } else {
                 if Utf8Path::new(&glob).is_absolute() {
-                    println!(
+                    writeln!(
+                        std::io::stderr(),
                         "[WARNING] Using an absolute path in \"outputs\" ({}) will not work and \
                          will be an error in a future version",
                         glob
                     )
+                    .expect("unable to write to stderr");
                 }
 
                 inclusions.push(glob);
@@ -211,11 +216,13 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
                 defined_fields.insert("Inputs".to_string());
                 for input in &inputs {
                     if Path::new(&input).is_absolute() {
-                        println!(
+                        writeln!(
+                            std::io::stderr(),
                             "[WARNING] Using an absolute path in \"inputs\" ({}) will not work \
                              and will be an error in a future version",
                             input
                         )
+                        .expect("unable to write to stderr");
                     }
                 }
 
@@ -249,8 +256,7 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
 
                 Ok(dot_env)
             })
-            .transpose()?
-            .unwrap_or_default();
+            .transpose()?;
 
         if raw_task.output_mode.is_some() {
             defined_fields.insert("OutputMode".to_string());
@@ -330,11 +336,13 @@ impl TryFrom<RawTurboJSON> for TurboJson {
                 global_env.insert(env_var.to_string());
             } else {
                 if Path::new(&value).is_absolute() {
-                    println!(
+                    writeln!(
+                        std::io::stderr(),
                         "[WARNING] Using an absolute path in \"globalDependencies\" ({}) will not \
                          work and will be an error in a future version",
                         value
                     )
+                    .expect("unable to write to stderr");
                 }
 
                 global_file_dependencies.insert(value);
@@ -710,6 +718,20 @@ mod tests {
         }
     )]
     #[test_case(
+        r#"{ "dotEnv": [] }"#,
+        RawTaskDefinition {
+            dot_env: Some(Vec::new()),
+            ..RawTaskDefinition::default()
+        },
+        BookkeepingTaskDefinition {
+            defined_fields: ["DotEnv".to_string()].into_iter().collect(),
+            experimental_fields: HashSet::new(),
+            experimental: TaskDefinitionExperiments::default(),
+            task_definition: TaskDefinitionStable { dot_env: Some(Vec::new()), ..Default::default() }
+        }
+        ; "empty dotenv"
+    )]
+    #[test_case(
         r#"{
           "dependsOn": ["cli#build"],
           "dotEnv": ["package/a/.env"],
@@ -747,7 +769,7 @@ mod tests {
             experimental_fields: HashSet::new(),
             experimental: TaskDefinitionExperiments {},
             task_definition: TaskDefinitionStable {
-                dot_env: vec![RelativeUnixPathBuf::new("package/a/.env").unwrap()],
+                dot_env: Some(vec![RelativeUnixPathBuf::new("package/a/.env").unwrap()]),
                 env: vec!["OS".to_string()],
                 outputs: TaskOutputs {
                     inclusions: vec!["package/a/dist".to_string()],

@@ -11,7 +11,7 @@ use turbopack_core::{
         ChunkItemExt, ChunkableModule, ChunkableModuleReference, ChunkingContext, ChunkingType,
         ChunkingTypeOption, ModuleId,
     },
-    issue::IssueSeverity,
+    issue::{IssueSeverity, IssueSource},
     module::Module,
     reference::ModuleReference,
     reference_type::EcmaScriptModulesReferenceSubType,
@@ -103,8 +103,9 @@ pub struct EsmAssetReference {
     pub origin: Vc<Box<dyn ResolveOrigin>>,
     pub request: Vc<Request>,
     pub annotations: ImportAnnotations,
-
+    pub issue_source: Option<Vc<IssueSource>>,
     pub export_name: Option<Vc<ModulePart>>,
+    pub import_externals: bool,
 }
 
 /// A list of [EsmAssetReference]s
@@ -127,14 +128,18 @@ impl EsmAssetReference {
     pub fn new(
         origin: Vc<Box<dyn ResolveOrigin>>,
         request: Vc<Request>,
+        issue_source: Option<Vc<IssueSource>>,
         annotations: Value<ImportAnnotations>,
         export_name: Option<Vc<ModulePart>>,
+        import_externals: bool,
     ) -> Vc<Self> {
         Self::cell(EsmAssetReference {
             origin,
             request,
+            issue_source,
             annotations: annotations.into_value(),
             export_name,
+            import_externals,
         })
     }
 
@@ -162,8 +167,8 @@ impl ModuleReference for EsmAssetReference {
             self.get_origin().resolve().await?,
             self.request,
             ty,
-            None,
             IssueSeverity::Error.cell(),
+            self.issue_source,
         ))
     }
 }
@@ -207,13 +212,13 @@ impl CodeGenerateable for EsmAssetReference {
     ) -> Result<Vc<CodeGeneration>> {
         let mut visitors = Vec::new();
 
+        let this = &*self.await?;
         let chunking_type = self.chunking_type().await?;
         let resolved = self.resolve_reference().await?;
 
         // Insert code that throws immediately at time of import if a request is
         // unresolvable
         if resolved.is_unresolveable_ref() {
-            let this = &*self.await?;
             let request = request_to_string(this.request).await?.to_string();
             visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
                 insert_hoisted_stmt(program, Stmt::Expr(ExprStmt {
@@ -230,6 +235,7 @@ impl CodeGenerateable for EsmAssetReference {
         // only chunked references can be imported
         if chunking_type.is_some() {
             let referenced_asset = self.get_referenced_asset().await?;
+            let import_externals = this.import_externals;
             if let Some(ident) = referenced_asset.get_ident().await? {
                 match &*referenced_asset {
                     ReferencedAsset::Some(asset) => {
@@ -250,21 +256,33 @@ impl CodeGenerateable for EsmAssetReference {
                         }));
                     }
                     ReferencedAsset::OriginalReferenceTypeExternal(request) => {
-                        if !*chunking_context.environment().node_externals().await? {
+                        if !*chunking_context
+                            .environment()
+                            .supports_commonjs_externals()
+                            .await?
+                        {
                             bail!(
-                                "the chunking context does not support Node.js external modules \
-                                 (request: {})",
+                                "the chunking context does not support external modules (request: \
+                                 {})",
                                 request
                             );
                         }
                         let request = request.clone();
                         visitors.push(create_visitor!(visit_mut_program(program: &mut Program) {
                             // TODO Technically this should insert a ESM external, but we don't support that yet
-                            let stmt = quote!(
-                                "var $name = __turbopack_external_require__($id, true);" as Stmt,
-                                name = Ident::new(ident.clone().into(), DUMMY_SP),
-                                id: Expr = Expr::Lit(request.clone().into())
-                            );
+                            let stmt = if import_externals {
+                                quote!(
+                                    "var $name = __turbopack_external_import__($id);" as Stmt,
+                                    name = Ident::new(ident.clone().into(), DUMMY_SP),
+                                    id: Expr = Expr::Lit(request.clone().into())
+                                )
+                            } else {
+                                quote!(
+                                    "var $name = __turbopack_external_require__($id, true);" as Stmt,
+                                    name = Ident::new(ident.clone().into(), DUMMY_SP),
+                                    id: Expr = Expr::Lit(request.clone().into())
+                                )
+                            };
                             insert_hoisted_stmt(program, stmt);
                         }));
                     }

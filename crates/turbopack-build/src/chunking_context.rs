@@ -4,6 +4,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{trace::TraceRawVcs, TaskInput, Value, Vc};
 use turbo_tasks_fs::FileSystemPath;
+use turbo_tasks_hash::DeterministicHash;
 use turbopack_core::{
     chunk::{
         availability_info::AvailabilityInfo,
@@ -39,6 +40,7 @@ use crate::ecmascript::node::{
     Serialize,
     Deserialize,
     TraceRawVcs,
+    DeterministicHash,
 )]
 pub enum MinifyType {
     #[default]
@@ -143,6 +145,11 @@ impl BuildChunkingContext {
     #[turbo_tasks::function]
     fn new(this: Value<BuildChunkingContext>) -> Vc<Self> {
         this.into_value().cell()
+    }
+
+    #[turbo_tasks::function]
+    pub fn asset_prefix(&self) -> Vc<Option<String>> {
+        self.asset_prefix
     }
 
     /// Generates an output chunk that:

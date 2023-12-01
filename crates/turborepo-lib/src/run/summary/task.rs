@@ -3,19 +3,23 @@ use std::collections::BTreeMap;
 use itertools::Itertools;
 use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
-use turborepo_cache::CacheResponse;
+use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{DetailedMap, EnvironmentVariableMap};
 
 use super::{execution::TaskExecutionSummary, EnvMode};
-use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
+use crate::{
+    cli::OutputLogsMode,
+    run::task_id::TaskId,
+    task_graph::{TaskDefinition, TaskOutputs},
+};
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskCacheSummary {
     // Deprecated, but keeping around for --dry=json
-    local: bool,
+    pub local: bool,
     // Deprecated, but keeping around for --dry=json
-    remote: bool,
+    pub remote: bool,
     status: CacheStatus,
     // Present unless a cache miss
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -42,7 +46,7 @@ enum CacheSource {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TaskSummary {
     pub task_id: TaskId<'static>,
-    pub dir: String,
+    pub task: String,
     pub package: String,
     #[serde(flatten)]
     pub shared: SharedTaskSummary<TaskId<'static>>,
@@ -66,37 +70,52 @@ pub(crate) struct SharedTaskSummary<T> {
     pub cache: TaskCacheSummary,
     pub command: String,
     pub cli_arguments: Vec<String>,
-    pub outputs: Vec<String>,
-    pub excluded_outputs: Vec<String>,
+    pub outputs: Option<Vec<String>>,
+    pub excluded_outputs: Option<Vec<String>>,
     pub log_file: String,
-    pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub directory: Option<String>,
     pub dependencies: Vec<T>,
     pub dependents: Vec<T>,
-    pub resolved_task_definition: TaskDefinition,
+    pub resolved_task_definition: TaskSummaryTaskDefinition,
+    pub expanded_outputs: Vec<AnchoredSystemPathBuf>,
     pub framework: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub execution: Option<TaskExecutionSummary>,
     pub env_mode: EnvMode,
     pub environment_variables: TaskEnvVarSummary,
-    pub dot_env: Vec<RelativeUnixPathBuf>,
+    pub dot_env: Option<Vec<RelativeUnixPathBuf>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution: Option<TaskExecutionSummary>,
 }
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskEnvConfiguration {
     pub env: Vec<String>,
-    // TODO: we most likely want this to be optional
-    pub pass_through_env: Vec<String>,
+    pub pass_through_env: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskSummaryTaskDefinition {
+    outputs: Vec<String>,
+    cache: bool,
+    depends_on: Vec<String>,
+    inputs: Vec<String>,
+    output_mode: OutputLogsMode,
+    persistent: bool,
+    env: Vec<String>,
+    pass_through_env: Option<Vec<String>>,
+    dot_env: Option<Vec<RelativeUnixPathBuf>>,
 }
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskEnvVarSummary {
     pub specified: TaskEnvConfiguration,
-
     pub configured: Vec<String>,
     pub inferred: Vec<String>,
-    pub pass_through: Vec<String>,
+    #[serde(rename = "passthrough")]
+    pub pass_through: Option<Vec<String>>,
 }
 
 impl TaskCacheSummary {
@@ -111,30 +130,33 @@ impl TaskCacheSummary {
     }
 }
 
-impl From<Option<CacheResponse>> for TaskCacheSummary {
-    fn from(value: Option<CacheResponse>) -> Self {
-        value.map_or_else(Self::cache_miss, |CacheResponse { source, time_saved }| {
-            let source = CacheSource::from(source);
-            // Assign these deprecated fields Local and Remote based on the information
-            // available in the itemStatus. Note that these fields are
-            // problematic, because an ItemStatus isn't always the composite
-            // of both local and remote caches. That means that an ItemStatus might say it
-            // was a local cache hit, and we return remote: false here. That's misleading
-            // because it does not mean that there is no remote cache hit,
-            // it _could_ mean that we never checked the remote cache. These
-            // fields are being deprecated for this reason.
-            let (local, remote) = match source {
-                CacheSource::Local => (true, false),
-                CacheSource::Remote => (false, true),
-            };
-            Self {
-                local,
-                remote,
-                status: CacheStatus::Hit,
-                source: Some(source),
-                time_saved,
+impl From<Option<CacheHitMetadata>> for TaskCacheSummary {
+    fn from(response: Option<CacheHitMetadata>) -> Self {
+        match response {
+            Some(CacheHitMetadata { source, time_saved }) => {
+                let source = CacheSource::from(source);
+                // Assign these deprecated fields Local and Remote based on the information
+                // available in the itemStatus. Note that these fields are
+                // problematic, because an ItemStatus isn't always the composite
+                // of both local and remote caches. That means that an ItemStatus might say it
+                // was a local cache hit, and we return remote: false here. That's misleading
+                // because it does not mean that there is no remote cache hit,
+                // it _could_ mean that we never checked the remote cache. These
+                // fields are being deprecated for this reason.
+                let (local, remote) = match source {
+                    CacheSource::Local => (true, false),
+                    CacheSource::Remote => (false, true),
+                };
+                Self {
+                    local,
+                    remote,
+                    status: CacheStatus::Hit,
+                    source: Some(source),
+                    time_saved,
+                }
             }
-        })
+            None => Self::cache_miss(),
+        }
     }
 }
 
@@ -152,25 +174,28 @@ impl TaskEnvVarSummary {
         task_definition: &TaskDefinition,
         env_vars: DetailedMap,
         env_at_execution_start: &EnvironmentVariableMap,
-    ) -> Result<Self, regex::Error> {
+    ) -> Result<Self, turborepo_env::Error> {
+        // TODO: this operation differs from the actual env that gets passed in during
+        // task execution it should be unified, but first we should copy Go's
+        // behavior as we try to match the implementations
+        let pass_through = task_definition
+            .pass_through_env
+            .as_deref()
+            .map(|pass_through_env| -> Result<_, turborepo_env::Error> {
+                Ok(env_at_execution_start
+                    .from_wildcards(pass_through_env)?
+                    .to_secret_hashable())
+            })
+            .transpose()?;
+
         Ok(Self {
             specified: TaskEnvConfiguration {
                 env: task_definition.env.clone(),
-                pass_through_env: task_definition.pass_through_env.clone().unwrap_or_default(),
+                pass_through_env: task_definition.pass_through_env.clone(),
             },
             configured: env_vars.by_source.explicit.to_secret_hashable(),
             inferred: env_vars.by_source.matching.to_secret_hashable(),
-            // TODO: this operation differs from the actual env that gets passed in during task
-            // execution it should be unified, but first we should copy Go's behavior as
-            // we try to match the implementations
-            pass_through: env_at_execution_start
-                .from_wildcards(
-                    task_definition
-                        .pass_through_env
-                        .as_deref()
-                        .unwrap_or_default(),
-                )?
-                .to_secret_hashable(),
+            pass_through,
         })
     }
 }
@@ -209,6 +234,7 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
             env_mode,
             environment_variables,
             dot_env,
+            ..
         } = value;
         Self {
             hash,
@@ -220,6 +246,7 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
             outputs,
             excluded_outputs,
             log_file,
+            directory: None,
             expanded_outputs,
             dependencies: dependencies
                 .into_iter()
@@ -236,6 +263,62 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
             execution,
             env_mode,
             environment_variables,
+            dot_env,
+        }
+    }
+}
+
+impl From<TaskDefinition> for TaskSummaryTaskDefinition {
+    fn from(value: TaskDefinition) -> Self {
+        let TaskDefinition {
+            outputs:
+                TaskOutputs {
+                    inclusions,
+                    exclusions,
+                },
+            cache,
+            mut env,
+            pass_through_env,
+            dot_env,
+            topological_dependencies,
+            task_dependencies,
+            mut inputs,
+            output_mode,
+            persistent,
+        } = value;
+
+        let mut outputs = inclusions;
+        for exclusion in exclusions {
+            outputs.push(format!("!{exclusion}"));
+        }
+
+        let mut depends_on =
+            Vec::with_capacity(task_dependencies.len() + topological_dependencies.len());
+        for task_dependency in task_dependencies {
+            depends_on.push(task_dependency.to_string());
+        }
+        for topological_dependency in topological_dependencies {
+            depends_on.push(format!("^{topological_dependency}"));
+        }
+
+        // These _should_ already be sorted when the TaskDefinition struct was
+        // unmarshaled, but we want to ensure they're sorted on the way out
+        // also, just in case something in the middle mutates the items.
+        depends_on.sort();
+        outputs.sort();
+        env.sort();
+        inputs.sort();
+
+        Self {
+            outputs,
+            cache,
+            depends_on,
+            inputs,
+            output_mode,
+            persistent,
+            env,
+            pass_through_env,
+            // This should _not_ be sorted.
             dot_env,
         }
     }
@@ -278,6 +361,25 @@ mod test {
                 "timeSaved": 6,
             })
         ; "local cache hit"
+    )]
+    #[test_case(
+        TaskSummaryTaskDefinition {
+            outputs: vec!["foo".into()],
+            cache: true,
+            ..Default::default()
+        },
+        json!({
+            "outputs": ["foo"],
+            "cache": true,
+            "dependsOn": [],
+            "inputs": [],
+            "outputMode": "full",
+            "persistent": false,
+            "env": [],
+            "passThroughEnv": null,
+            "dotEnv": null,
+        })
+        ; "resolved task definition"
     )]
     fn test_serialization(value: impl serde::Serialize, expected: serde_json::Value) {
         assert_eq!(serde_json::to_value(value).unwrap(), expected);

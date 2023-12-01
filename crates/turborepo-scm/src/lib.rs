@@ -3,6 +3,10 @@
 #![feature(assert_matches)]
 #![deny(clippy::all)]
 
+//! Turborepo's library for interacting with source control management (SCM).
+//! Currently we only support git. We use SCM for finding changed files,
+//! for getting the previous version of a lockfile, and for hashing files.
+
 use std::{
     backtrace::{self, Backtrace},
     io::Read,
@@ -24,7 +28,11 @@ mod status;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("git error on {1}: {0}")]
-    Git2(git2::Error, String, #[backtrace] backtrace::Backtrace),
+    Git2(
+        #[source] git2::Error,
+        String,
+        #[backtrace] backtrace::Backtrace,
+    ),
     #[error("git error: {0}")]
     Git(String, #[backtrace] backtrace::Backtrace),
     #[error(
@@ -50,7 +58,7 @@ pub enum Error {
     #[error("package traversal error: {0}")]
     Ignore(#[from] ignore::Error, #[backtrace] backtrace::Backtrace),
     #[error("invalid glob: {0}")]
-    Glob(Box<wax::BuildError>, backtrace::Backtrace),
+    Glob(#[source] Box<wax::BuildError>, backtrace::Backtrace),
     #[error(transparent)]
     Walk(#[from] globwalk::WalkError),
 }

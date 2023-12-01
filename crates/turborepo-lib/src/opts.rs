@@ -1,11 +1,34 @@
-use anyhow::{anyhow, Result};
+use std::backtrace;
+
+use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
 use turborepo_cache::CacheOpts;
 
 use crate::{
     cli::{Command, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, RunArgs},
+    run::task_id::TaskId,
     Args,
 };
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Expected run command")]
+    ExpectedRun,
+    #[error(transparent)]
+    ParseFloat(#[from] std::num::ParseFloatError),
+    #[error(
+        "invalid percentage value for --concurrency CLI flag. This should be a percentage of CPU \
+         cores, between 1% and 100% : {1}"
+    )]
+    InvalidConcurrencyPercentage(#[backtrace] backtrace::Backtrace, f64),
+    #[error(
+        "invalid value for --concurrency CLI flag. This should be a positive integer greater than \
+         or equal to 1: {1}"
+    )]
+    ConcurrencyOutOfBounds(#[backtrace] backtrace::Backtrace, String),
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
+}
 
 #[derive(Debug)]
 pub struct Opts<'a> {
@@ -15,12 +38,53 @@ pub struct Opts<'a> {
     pub scope_opts: ScopeOpts,
 }
 
-impl<'a> TryFrom<&'a Args> for Opts<'a> {
-    type Error = anyhow::Error;
+impl<'a> Opts<'a> {
+    pub fn synthesize_command(&self) -> String {
+        let mut cmd = format!("turbo run {}", self.run_opts.tasks.join(" "));
+        for pattern in &self.scope_opts.filter_patterns {
+            cmd.push_str(" --filter=");
+            cmd.push_str(pattern);
+        }
 
-    fn try_from(args: &'a Args) -> std::result::Result<Self, Self::Error> {
+        for pattern in &self.scope_opts.legacy_filter.as_filter_pattern() {
+            cmd.push_str(" --filter=");
+            cmd.push_str(pattern);
+        }
+
+        if self.run_opts.parallel {
+            cmd.push_str(" --parallel");
+        }
+
+        if self.run_opts.continue_on_error {
+            cmd.push_str(" --continue");
+        }
+
+        if let Some(dry) = self.run_opts.dry_run {
+            match dry {
+                DryRunMode::Json => cmd.push_str(" --dry=json"),
+                DryRunMode::Text => cmd.push_str(" --dry"),
+            }
+        }
+
+        if self.run_opts.only {
+            cmd.push_str(" --only");
+        }
+
+        if !self.run_opts.pass_through_args.is_empty() {
+            cmd.push_str(" -- ");
+            cmd.push_str(&self.run_opts.pass_through_args.join(" "));
+        }
+
+        cmd
+    }
+}
+
+impl<'a> TryFrom<&'a Args> for Opts<'a> {
+    type Error = self::Error;
+
+    fn try_from(args: &'a Args) -> Result<Self, Self::Error> {
         let Some(Command::Run(run_args)) = &args.command else {
-            return Err(anyhow!("Expected run command"));
+            return Err(Error::ExpectedRun);
         };
         let run_opts = RunOpts::try_from(run_args.as_ref())?;
         let cache_opts = CacheOpts::from(run_args.as_ref());
@@ -57,7 +121,7 @@ impl<'a> From<&'a RunArgs> for RunCacheOpts {
 pub struct RunOpts<'a> {
     pub(crate) tasks: &'a [String],
     pub(crate) concurrency: u32,
-    parallel: bool,
+    pub(crate) parallel: bool,
     pub(crate) env_mode: EnvMode,
     // Whether or not to infer the framework for each workspace.
     pub(crate) framework_inference: bool,
@@ -65,8 +129,7 @@ pub struct RunOpts<'a> {
     pub(crate) continue_on_error: bool,
     pub(crate) pass_through_args: &'a [String],
     pub(crate) only: bool,
-    pub(crate) dry_run: bool,
-    pub(crate) dry_run_json: bool,
+    pub(crate) dry_run: Option<DryRunMode>,
     pub graph: Option<GraphOpts<'a>>,
     pub(crate) no_daemon: bool,
     pub(crate) single_package: bool,
@@ -75,6 +138,21 @@ pub struct RunOpts<'a> {
     pub summarize: Option<Option<bool>>,
     pub(crate) experimental_space_id: Option<String>,
     pub is_github_actions: bool,
+}
+
+impl<'a> RunOpts<'a> {
+    pub fn args_for_task(&self, task_id: &TaskId) -> Option<Vec<String>> {
+        if !self.pass_through_args.is_empty()
+            && self
+                .tasks
+                .iter()
+                .any(|task| task.as_str() == task_id.task())
+        {
+            Some(Vec::from(self.pass_through_args))
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -98,9 +176,9 @@ pub enum ResolvedLogPrefix {
 const DEFAULT_CONCURRENCY: u32 = 10;
 
 impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
-    type Error = anyhow::Error;
+    type Error = self::Error;
 
-    fn try_from(args: &'a RunArgs) -> Result<Self> {
+    fn try_from(args: &'a RunArgs) -> Result<Self, Self::Error> {
         let concurrency = args
             .concurrency
             .as_deref()
@@ -147,32 +225,29 @@ impl<'a> TryFrom<&'a RunArgs> for RunOpts<'a> {
             no_daemon: args.no_daemon,
             single_package: args.single_package,
             graph,
-            dry_run_json: matches!(args.dry_run, Some(DryRunMode::Json)),
-            dry_run: args.dry_run.is_some(),
+            dry_run: args.dry_run,
             is_github_actions,
         })
     }
 }
 
-fn parse_concurrency(concurrency_raw: &str) -> Result<u32> {
+fn parse_concurrency(concurrency_raw: &str) -> Result<u32, self::Error> {
     if let Some(percent) = concurrency_raw.strip_suffix('%') {
         let percent = percent.parse::<f64>()?;
         return if percent > 0.0 && percent.is_finite() {
             Ok((num_cpus::get() as f64 * percent / 100.0).max(1.0) as u32)
         } else {
-            Err(anyhow!(
-                "invalid percentage value for --concurrency CLI flag. This should be a percentage \
-                 of CPU cores, between 1% and 100% : {}",
-                percent
+            Err(Error::InvalidConcurrencyPercentage(
+                backtrace::Backtrace::capture(),
+                percent,
             ))
         };
     }
     match concurrency_raw.parse::<u32>() {
         Ok(concurrency) if concurrency >= 1 => Ok(concurrency),
-        Ok(_) | Err(_) => Err(anyhow!(
-            "invalid value for --concurrency CLI flag. This should be a positive integer greater \
-             than or equal to 1: {}",
-            concurrency_raw
+        Ok(_) | Err(_) => Err(Error::ConcurrencyOutOfBounds(
+            backtrace::Backtrace::capture(),
+            concurrency_raw.to_string(),
         )),
     }
 }
@@ -216,7 +291,7 @@ impl LegacyFilter {
             let since = self
                 .since
                 .as_ref()
-                .map_or_else(String::new, |s| format!("...{}", s));
+                .map_or_else(String::new, |s| format!("...[{}]", s));
             self.entrypoints
                 .iter()
                 .map(|pattern| {
@@ -241,14 +316,15 @@ pub struct ScopeOpts {
 }
 
 impl<'a> TryFrom<&'a RunArgs> for ScopeOpts {
-    type Error = anyhow::Error;
+    type Error = self::Error;
 
-    fn try_from(args: &'a RunArgs) -> std::result::Result<Self, Self::Error> {
+    fn try_from(args: &'a RunArgs) -> Result<Self, Self::Error> {
         let pkg_inference_root = args
             .pkg_inference_root
             .as_ref()
             .map(AnchoredSystemPathBuf::from_raw)
             .transpose()?;
+
         let legacy_filter = LegacyFilter {
             include_dependencies: args.include_dependencies,
             skip_dependents: args.no_deps,
@@ -270,6 +346,7 @@ impl<'a> From<&'a RunArgs> for CacheOpts<'a> {
         CacheOpts {
             override_dir: run_args.cache_dir.as_deref(),
             skip_filesystem: run_args.remote_only,
+            remote_cache_read_only: run_args.remote_cache_read_only,
             workers: run_args.cache_workers,
             ..CacheOpts::default()
         }
@@ -297,8 +374,13 @@ impl ScopeOpts {
 #[cfg(test)]
 mod test {
     use test_case::test_case;
+    use turborepo_cache::CacheOpts;
 
-    use super::LegacyFilter;
+    use super::{LegacyFilter, RunOpts};
+    use crate::{
+        cli::DryRunMode,
+        opts::{Opts, RunCacheOpts, ScopeOpts},
+    };
 
     #[test_case(LegacyFilter {
             include_dependencies: true,
@@ -317,11 +399,157 @@ mod test {
             skip_dependents: true,
             entrypoints: vec!["entry".to_string()],
             since: Some("since".to_string()),
-        }, &["entry...since"])]
+        }, &["entry...[since]"])]
     fn basic_legacy_filter_pattern(filter: LegacyFilter, expected: &[&str]) {
         assert_eq!(
             filter.as_filter_pattern(),
             expected.iter().map(|s| s.to_string()).collect::<Vec<_>>()
         )
+    }
+    #[derive(Default)]
+    struct TestCaseOpts {
+        filter_patterns: Vec<String>,
+        tasks: Vec<String>,
+        only: bool,
+        pass_through_args: Vec<String>,
+        parallel: bool,
+        continue_on_error: bool,
+        dry_run: Option<DryRunMode>,
+        legacy_filter: Option<LegacyFilter>,
+    }
+
+    #[test_case(TestCaseOpts {
+        filter_patterns: vec!["my-app".to_string()],
+        tasks: vec!["build".to_string()],
+        ..Default::default()
+    },
+    "turbo run build --filter=my-app")]
+    #[test_case(
+        TestCaseOpts {
+            tasks: vec!["build".to_string()],
+            only: true,
+            ..Default::default()
+        },
+        "turbo run build --only"
+    )]
+    #[test_case(
+        TestCaseOpts {
+            filter_patterns: vec!["my-app".to_string()],
+            tasks: vec!["build".to_string()],
+            pass_through_args: vec!["-v".to_string(), "--foo=bar".to_string()],
+            ..Default::default()
+        },
+        "turbo run build --filter=my-app -- -v --foo=bar"
+    )]
+    #[test_case(
+        TestCaseOpts {
+            legacy_filter: Some(LegacyFilter {
+                include_dependencies: false,
+                skip_dependents: true,
+                entrypoints: vec!["my-app".to_string()],
+                since: None,
+            }),
+            tasks: vec!["build".to_string()],
+            pass_through_args: vec!["-v".to_string(), "--foo=bar".to_string()],
+            ..Default::default()
+        },
+        "turbo run build --filter=my-app -- -v --foo=bar"
+    )]
+    #[test_case(
+        TestCaseOpts {
+            legacy_filter: Some(LegacyFilter {
+                include_dependencies: false,
+                skip_dependents: true,
+                entrypoints: vec!["my-app".to_string()],
+                since: None,
+            }),
+            filter_patterns: vec!["other-app".to_string()],
+            tasks: vec!["build".to_string()],
+            pass_through_args: vec!["-v".to_string(), "--foo=bar".to_string()],
+            ..Default::default()
+        },
+        "turbo run build --filter=other-app --filter=my-app -- -v --foo=bar"
+    )]
+    #[test_case    (
+        TestCaseOpts {
+            legacy_filter: Some(LegacyFilter {
+                include_dependencies: true,
+                skip_dependents: false,
+                entrypoints: vec!["my-app".to_string()],
+                since: Some("some-ref".to_string()),
+            }),
+            filter_patterns: vec!["other-app".to_string()],
+            tasks: vec!["build".to_string()],
+            ..Default::default()
+        },
+        "turbo run build --filter=other-app --filter=...my-app...[some-ref]..."
+    )]
+    #[test_case    (
+        TestCaseOpts {
+            filter_patterns: vec!["my-app".to_string()],
+            tasks: vec!["build".to_string()],
+            parallel: true,
+            continue_on_error: true,
+            ..Default::default()
+        },
+        "turbo run build --filter=my-app --parallel --continue"
+    )]
+    #[test_case    (
+        TestCaseOpts {
+            filter_patterns: vec!["my-app".to_string()],
+            tasks: vec!["build".to_string()],
+            dry_run: Some(DryRunMode::Text),
+            ..Default::default()
+        },
+        "turbo run build --filter=my-app --dry"
+    )]
+    #[test_case    (
+        TestCaseOpts {
+            filter_patterns: vec!["my-app".to_string()],
+            tasks: vec!["build".to_string()],
+            dry_run: Some(DryRunMode::Json),
+            ..Default::default()
+        },
+        "turbo run build --filter=my-app --dry=json"
+    )]
+    fn test_synthesize_command(opts_input: TestCaseOpts, expected: &str) {
+        let run_opts = RunOpts {
+            tasks: &opts_input.tasks,
+            concurrency: 10,
+            parallel: opts_input.parallel,
+            env_mode: crate::cli::EnvMode::Loose,
+            framework_inference: true,
+            profile: None,
+            continue_on_error: opts_input.continue_on_error,
+            pass_through_args: &opts_input.pass_through_args,
+            only: opts_input.only,
+            dry_run: opts_input.dry_run,
+            graph: None,
+            no_daemon: false,
+            single_package: false,
+            log_prefix: crate::opts::ResolvedLogPrefix::Task,
+            log_order: crate::opts::ResolvedLogOrder::Stream,
+            summarize: None,
+            experimental_space_id: None,
+            is_github_actions: false,
+        };
+        let cache_opts = CacheOpts::default();
+        let runcache_opts = RunCacheOpts::default();
+        let legacy_filter = opts_input.legacy_filter.unwrap_or_default();
+        let scope_opts = ScopeOpts {
+            pkg_inference_root: None,
+            legacy_filter,
+            global_deps: vec![],
+            filter_patterns: opts_input.filter_patterns,
+            ignore_patterns: vec![],
+        };
+        let opts = Opts {
+            run_opts,
+            cache_opts,
+            scope_opts,
+            runcache_opts,
+        };
+        let synthesized = opts.synthesize_command();
+        assert_eq!(synthesized, expected);
     }
 }

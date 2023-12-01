@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use turbopack_cli_utils::issue::{format_issue, LogOptions};
 use turbopack_core::{
-    issue::{IssueSeverity, PlainIssue},
+    issue::{IssueSeverity, PlainIssue, StyledString},
     source_pos::SourcePos,
 };
 
@@ -124,6 +124,11 @@ pub struct Asset<'a> {
 #[derive(Serialize)]
 pub struct IssueSource<'a> {
     pub asset: Asset<'a>,
+    pub range: Option<IssueSourceRange>,
+}
+
+#[derive(Serialize)]
+pub struct IssueSourceRange {
     pub start: SourcePos,
     pub end: SourcePos,
 }
@@ -134,9 +139,9 @@ pub struct Issue<'a> {
     pub file_path: &'a str,
     pub category: &'a str,
 
-    pub title: &'a str,
-    pub description: &'a str,
-    pub detail: &'a str,
+    pub title: &'a StyledString,
+    pub description: Option<&'a StyledString>,
+    pub detail: Option<&'a StyledString>,
     pub documentation_link: &'a str,
 
     pub source: Option<IssueSource<'a>>,
@@ -151,8 +156,9 @@ impl<'a> From<&'a PlainIssue> for Issue<'a> {
             asset: Asset {
                 path: &source.asset.ident,
             },
-            start: source.start,
-            end: source.end,
+            range: source
+                .range
+                .map(|(start, end)| IssueSourceRange { start, end }),
         });
 
         Issue {
@@ -160,9 +166,9 @@ impl<'a> From<&'a PlainIssue> for Issue<'a> {
             file_path: &plain.file_path,
             category: &plain.category,
             title: &plain.title,
-            description: &plain.description,
+            description: plain.description.as_ref(),
             documentation_link: &plain.documentation_link,
-            detail: &plain.detail,
+            detail: plain.detail.as_ref(),
             source,
             sub_issues: plain.sub_issues.iter().map(|p| p.deref().into()).collect(),
             // TODO(WEB-691) formatting the issue should be handled by the error overlay.

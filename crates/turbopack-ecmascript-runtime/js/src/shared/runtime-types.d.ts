@@ -39,6 +39,9 @@ type LoadWebAssemblyModule = (wasmChunkPath: ChunkPath) => WebAssembly.Module;
 type ModuleCache = Record<ModuleId, Module>;
 type ModuleFactories = Record<ModuleId, ModuleFactory>;
 
+type RelativeURL = (inputUrl: string) => void;
+type ResolvePathFromModule = (moduleId: string) => string;
+
 type AsyncModule = (
   body: (
     handleAsyncDependencies: (
@@ -66,5 +69,6 @@ interface TurbopackBaseContext {
   w: LoadWebAssembly;
   u: LoadWebAssemblyModule;
   g: typeof globalThis;
+  U: RelativeURL;
   __dirname: string;
 }

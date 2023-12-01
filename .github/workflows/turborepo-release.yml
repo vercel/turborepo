@@ -379,7 +379,7 @@ jobs:
           ref: ${{ needs.stage.outputs.stage-branch }}
       - name: Get version
         id: getVersion
-        run: echo ::set-output name=version::$(head -n 1 version.txt)
+        run: echo "version=$(head -n 1 version.txt)" >> $GITHUB_OUTPUT
       - name: Create pull request
         uses: thomaseizinger/create-pull-request@master
         if: ${{ !inputs.dry_run }}

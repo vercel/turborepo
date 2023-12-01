@@ -17,7 +17,7 @@ impl Engine<Built> {
     }
 }
 
-const GRAPH_PRELUDE: &str = "digraph {\n\tcompound = \"true\"
+const GRAPH_PRELUDE: &str = "\ndigraph {\n\tcompound = \"true\"
 \tnewrank = \"true\"
 \tsubgraph \"root\" {
 ";
@@ -70,7 +70,7 @@ mod test {
         render_graph(&graph, |n| n.to_string(), &mut bytes).unwrap();
         assert_eq!(
             String::from_utf8(bytes).unwrap(),
-            "digraph {
+            "\ndigraph {
 \tcompound = \"true\"
 \tnewrank = \"true\"
 \tsubgraph \"root\" {

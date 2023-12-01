@@ -9,18 +9,17 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "^13.4.1",
+    "@repo/ui": "workspace:*",
+    "next": "^14.0.3",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "ui": "workspace:*"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@types/node": "^17.0.12",
-    "@types/react": "^18.2.5",
-    "@types/react-dom": "^18.2.4",
-    "eslint-config-custom": "workspace:*",
-    "next-transpile-modules": "^9.0.0",
-    "tsconfig": "workspace:*",
-    "typescript": "^4.5.3"
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.38",
+    "@types/react-dom": "^18.2.17",
+    "typescript": "^5.3.2"
   }
 }

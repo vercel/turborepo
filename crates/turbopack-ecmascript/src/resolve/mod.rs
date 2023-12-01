@@ -64,14 +64,14 @@ pub async fn esm_resolve(
     origin: Vc<Box<dyn ResolveOrigin>>,
     request: Vc<Request>,
     ty: Value<EcmaScriptModulesReferenceSubType>,
-    issue_source: Option<Vc<IssueSource>>,
     issue_severity: Vc<IssueSeverity>,
+    issue_source: Option<Vc<IssueSource>>,
 ) -> Result<Vc<ModuleResolveResult>> {
     let ty = Value::new(ReferenceType::EcmaScriptModules(ty.into_value()));
     let options = apply_esm_specific_options(origin.resolve_options(ty.clone()))
         .resolve()
         .await?;
-    specific_resolve(origin, request, options, ty, issue_source, issue_severity).await
+    specific_resolve(origin, request, options, ty, issue_severity, issue_source).await
 }
 
 #[turbo_tasks::function]
@@ -86,7 +86,7 @@ pub async fn cjs_resolve(
     let options = apply_cjs_specific_options(origin.resolve_options(ty.clone()))
         .resolve()
         .await?;
-    specific_resolve(origin, request, options, ty, issue_source, issue_severity).await
+    specific_resolve(origin, request, options, ty, issue_severity, issue_source).await
 }
 
 #[turbo_tasks::function]
@@ -100,11 +100,22 @@ pub async fn url_resolve(
     let ty = Value::new(ReferenceType::Url(ty.into_value()));
     let resolve_options = origin.resolve_options(ty.clone());
     let rel_request = request.as_relative();
-    let rel_result = resolve(origin.origin_path().parent(), rel_request, resolve_options);
+    let reference_type = Value::new(ReferenceType::Url(UrlReferenceSubType::EcmaScriptNewUrl));
+    let rel_result = resolve(
+        origin.origin_path().parent(),
+        reference_type.clone(),
+        rel_request,
+        resolve_options,
+    );
     let result = if *rel_result.is_unresolveable().await? && rel_request.resolve().await? != request
     {
-        resolve(origin.origin_path().parent(), request, resolve_options)
-            .with_affecting_sources(rel_result.await?.get_affecting_sources().clone())
+        resolve(
+            origin.origin_path().parent(),
+            reference_type,
+            request,
+            resolve_options,
+        )
+        .with_affecting_sources(rel_result.await?.get_affecting_sources().clone())
     } else {
         rel_result
     };
@@ -117,8 +128,8 @@ pub async fn url_resolve(
         origin.origin_path(),
         request,
         resolve_options,
-        Some(issue_source),
         issue_severity,
+        Some(issue_source),
     )
     .await
 }
@@ -128,8 +139,8 @@ async fn specific_resolve(
     request: Vc<Request>,
     options: Vc<ResolveOptions>,
     reference_type: Value<ReferenceType>,
-    issue_source: Option<Vc<IssueSource>>,
     issue_severity: Vc<IssueSeverity>,
+    issue_source: Option<Vc<IssueSource>>,
 ) -> Result<Vc<ModuleResolveResult>> {
     let result = origin.resolve_asset(request, options, reference_type.clone());
 
@@ -139,8 +150,8 @@ async fn specific_resolve(
         origin.origin_path(),
         request,
         options,
-        issue_source,
         issue_severity,
+        issue_source,
     )
     .await
 }

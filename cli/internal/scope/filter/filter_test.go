@@ -209,6 +209,14 @@ func Test_filter(t *testing.T) {
 			[]string{"project-0", "project-1"},
 		},
 		{
+			"select sibling directory",
+			[]*TargetSelector{{parentDir: turbopath.MakeRelativeSystemPath("..", "packages", "*")}},
+			&PackageInference{
+				DirectoryRoot: turbopath.MakeRelativeSystemPath("project-5"),
+			},
+			[]string{"project-0", "project-1"},
+		},
+		{
 			"select by parentDir using globstar",
 			[]*TargetSelector{
 				{

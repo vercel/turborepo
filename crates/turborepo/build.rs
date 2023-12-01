@@ -6,15 +6,16 @@ fn main() {
     let is_ci_release =
         &profile == "release" && matches!(env::var("RELEASE_TURBO_CLI"), Ok(v) if v == "true");
 
-    if !is_ci_release {
+    let invocation = std::env::var("RUSTC_WRAPPER").unwrap_or_default();
+    if !is_ci_release && !invocation.ends_with("rust-analyzer") {
         build_local_go_binary(profile);
     }
 }
 
-#[cfg(not(feature = "go-binary"))]
+#[cfg(any(not(feature = "go-binary"), doc))]
 fn build_local_go_binary(_: String) {}
 
-#[cfg(feature = "go-binary")]
+#[cfg(all(feature = "go-binary", not(doc)))]
 fn build_local_go_binary(profile: String) {
     let cli_path = cli_path();
     let target = build_target::target().unwrap();
