@@ -44,17 +44,6 @@ pub async fn read_or_create_auth_file(
     config_file_path: &AbsoluteSystemPath,
     client: &impl Client,
 ) -> Result<AuthFile, Error> {
-    // match auth_file_path.try_exists() {
-    //     Err(e) => {
-    //         return Err(Error::FailedToReadAuthFile {
-    //             source: e,
-    //             path: auth_file_path.clone(),
-    //         })
-    //     }
-    //     Ok(true) => (),
-    //     Ok(false) => {}
-    // }
-
     if auth_file_path.exists() {
         let content = auth_file_path
             .read_existing_to_string_or(Ok("{}"))
