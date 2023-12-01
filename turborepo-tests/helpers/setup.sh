@@ -13,3 +13,4 @@ fi
 
 # All integration tests use this variable to call the turbo binary
 TURBO=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
+TMPDIR=$(mktemp -d)
