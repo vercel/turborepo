@@ -229,8 +229,8 @@ impl<'a> Visitor<'a> {
                     // the following block should never get hit. In the meantime, keep it after
                     // hashing so that downstream tasks can count on the hash existing
                     //
-                    // bail if the script doesn't exist
-                    if command.is_none() {
+                    // bail if the script doesn't exist or is empty
+                    if command.map_or(true, |s| s.is_empty()) {
                         continue;
                     }
 

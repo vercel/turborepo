@@ -563,6 +563,10 @@ pub struct RunArgs {
     /// allow reading and caching artifacts using the remote cache.
     #[clap(long, env = "TURBO_REMOTE_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
     pub remote_only: bool,
+    /// Treat remote cache as read only
+    #[clap(long, env = "TURBO_REMOTE_CACHE_READ_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
+    #[serde(skip)]
+    pub remote_cache_read_only: bool,
     /// Specify package(s) to act as entry points for task execution.
     /// Supports globs.
     #[clap(long)]
@@ -753,7 +757,7 @@ pub async fn run(
             let json = *json;
             let workspace = workspace.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
-            info::run(&mut base, workspace.as_deref(), json)?;
+            info::run(&mut base, workspace.as_deref(), json).await?;
 
             Ok(Payload::Rust(Ok(0)))
         }
@@ -849,7 +853,7 @@ pub async fn run(
             let docker = *docker;
             let output_dir = output_dir.clone();
             let base = CommandBase::new(cli_args, repo_root, version, ui);
-            prune::prune(&base, &scope, docker, &output_dir)?;
+            prune::prune(&base, &scope, docker, &output_dir).await?;
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Completion { shell } => {
@@ -1901,5 +1905,73 @@ mod test {
             "3"
         );
         Ok(())
+    }
+    #[test]
+    fn test_parse_gen() {
+        let default_gen = Command::Generate {
+            tag: "latest".to_string(),
+            generator_name: None,
+            config: None,
+            root: None,
+            args: vec![],
+            command: None,
+        };
+
+        assert_eq!(
+            Args::try_parse_from(["turbo", "gen"]).unwrap(),
+            Args {
+                command: Some(default_gen.clone()),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo",
+                "gen",
+                "--args",
+                "my long arg string",
+                "my-second-arg"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Generate {
+                    tag: "latest".to_string(),
+                    generator_name: None,
+                    config: None,
+                    root: None,
+                    args: vec![
+                        "my long arg string".to_string(),
+                        "my-second-arg".to_string()
+                    ],
+                    command: None,
+                }),
+                ..Args::default()
+            }
+        );
+
+        assert_eq!(
+            Args::try_parse_from([
+                "turbo",
+                "gen",
+                "--tag",
+                "canary",
+                "--config",
+                "~/custom-gen-config/gen",
+                "my-generator"
+            ])
+            .unwrap(),
+            Args {
+                command: Some(Command::Generate {
+                    tag: "canary".to_string(),
+                    generator_name: Some("my-generator".to_string()),
+                    config: Some("~/custom-gen-config/gen".to_string()),
+                    root: None,
+                    args: vec![],
+                    command: None,
+                }),
+                ..Args::default()
+            }
+        );
     }
 }

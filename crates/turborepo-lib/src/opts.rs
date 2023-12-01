@@ -346,6 +346,7 @@ impl<'a> From<&'a RunArgs> for CacheOpts<'a> {
         CacheOpts {
             override_dir: run_args.cache_dir.as_deref(),
             skip_filesystem: run_args.remote_only,
+            remote_cache_read_only: run_args.remote_cache_read_only,
             workers: run_args.cache_workers,
             ..CacheOpts::default()
         }

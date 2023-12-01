@@ -8,7 +8,7 @@ use turborepo_repository::{
     package_manager,
 };
 
-use crate::{PackageManagerRoot, Workspace};
+use crate::{Package, PackageManagerRoot};
 
 /// This module is used to isolate code with defined errors
 /// from code in lib.rs that needs to have errors coerced to strings /
@@ -27,12 +27,12 @@ pub(crate) enum Error {
         error: String,
         path: AbsoluteSystemPathBuf,
     },
-    #[error("Failed to discover workspaces from root {repo_root}: {error}")]
+    #[error("Failed to discover packages from root {repo_root}: {error}")]
     PackageJsons {
         error: package_manager::Error,
         repo_root: AbsoluteSystemPathBuf,
     },
-    #[error("Workspace directory {0} has no parent")]
+    #[error("Package directory {0} has no parent")]
     MissingParent(AbsoluteSystemPathBuf),
 }
 
@@ -66,7 +66,7 @@ impl PackageManagerRoot {
         })
     }
 
-    pub(crate) async fn packages_internal(&self) -> Result<Vec<Workspace>, Error> {
+    pub(crate) async fn packages_internal(&self) -> Result<Vec<Package>, Error> {
         // Note: awkward error handling because we memoize the error from package
         // manager discovery. That probably isn't the best design. We should
         // address it when we decide how we want to handle possibly finding a
@@ -89,13 +89,13 @@ impl PackageManagerRoot {
                     error,
                     repo_root: self.repo_state.root.clone(),
                 })?;
-        let workspaces = package_json_paths
+        let packages = package_json_paths
             .map(|path| {
                 path.parent()
-                    .map(|workspace_path| Workspace::new(&self.repo_state.root, workspace_path))
+                    .map(|package_path| Package::new(&self.repo_state.root, package_path))
                     .ok_or_else(|| Error::MissingParent(path.to_owned()))
             })
-            .collect::<Result<Vec<Workspace>, Error>>()?;
-        Ok(workspaces)
+            .collect::<Result<Vec<Package>, Error>>()?;
+        Ok(packages)
     }
 }

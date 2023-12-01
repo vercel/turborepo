@@ -422,13 +422,16 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_lockfiles::Lockfile;
-    use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
+    use turborepo_repository::{
+        discovery::PackageDiscovery, package_json::PackageJson, package_manager::PackageManager,
+    };
 
     use super::*;
     use crate::{config::RawTurboJSON, engine::TaskNode};
 
     // Only used to prevent package graph construction from attempting to read
     // lockfile from disk
+    #[derive(Debug)]
     struct MockLockfile;
     impl Lockfile for MockLockfile {
         fn resolve_package(
@@ -464,6 +467,21 @@ mod test {
         }
     }
 
+    struct MockDiscovery;
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(
+            &mut self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            Ok(turborepo_repository::discovery::DiscoveryResponse {
+                package_manager: PackageManager::Npm,
+                workspaces: vec![], // we don't care about this
+            })
+        }
+    }
+
     macro_rules! package_jsons {
         {$root:expr, $($name:expr => $deps:expr),+} => {
             {
@@ -483,12 +501,19 @@ mod test {
         repo_root: &AbsoluteSystemPath,
         jsons: HashMap<AbsoluteSystemPathBuf, PackageJson>,
     ) -> PackageGraph {
-        PackageGraph::builder(repo_root, PackageJson::default())
-            .with_package_manger(Some(PackageManager::Npm))
-            .with_lockfile(Some(Box::new(MockLockfile)))
-            .with_package_jsons(Some(jsons))
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
             .build()
-            .unwrap()
+            .unwrap();
+
+        rt.block_on(
+            PackageGraph::builder(repo_root, PackageJson::default())
+                .with_package_discovery(MockDiscovery)
+                .with_lockfile(Some(Box::new(MockLockfile)))
+                .with_package_jsons(Some(jsons))
+                .build(),
+        )
+        .unwrap()
     }
 
     #[test]

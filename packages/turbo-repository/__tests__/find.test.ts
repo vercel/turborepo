@@ -1,5 +1,9 @@
 import * as path from "node:path";
-import { PackageManagerRoot } from "../js/dist/index.js";
+import {
+  PackageManagerRoot,
+  Package,
+  PackageManager,
+} from "../js/dist/index.js";
 
 describe("find", () => {
   it("finds a package manager root", async () => {
@@ -9,11 +13,16 @@ describe("find", () => {
     expect(packageManagerRoot.root).toBe(expectedRoot);
   });
 
-  it("enumerates workspaces", async () => {
+  it("enumerates packages", async () => {
     const packageManagerRoot = await PackageManagerRoot.find();
-    const workspaces = await packageManagerRoot.packages();
-    expect(workspaces.length).not.toBe(0);
+    const packages: Package[] = await packageManagerRoot.packages();
+    expect(packages.length).not.toBe(0);
   });
 
+  it("finds a package manager", async () => {
+    const packageManagerRoot = await PackageManagerRoot.find();
+    const packageManager: PackageManager = packageManagerRoot.packageManager();
+    expect(packageManager.name).toBe("pnpm");
+  });
   // TODO: proper tests on real fixtures
 });
