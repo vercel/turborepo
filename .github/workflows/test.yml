@@ -149,21 +149,13 @@ jobs:
             turborepo-tests/integration/**
             turborepo-tests/helpers/**
 
-      - name: Turborepo e2e tests changes
-        id: turborepo_e2e
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            turborepo-tests/e2e/**
-            turborepo-tests/helpers/**
-
       - name: Examples related changes
         id: examples
         uses: technote-space/get-diff-action@v6
         with:
           PATTERNS: |
             examples/**
-            examples-tests/**
+            turborepo-tests/example-*/**
             !**.md
             !**.mdx
 
@@ -192,8 +184,7 @@ jobs:
       turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
       turborepo_go_unit: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
       turborepo_go_lint: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != ''}}
-      turborepo_build: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' || steps.turborepo_integration.outputs.diff != '' || steps.turborepo_e2e.outputs.diff != ''}}
-      turborepo_e2e: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_e2e.outputs.diff != '' }}
+      turborepo_build: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' || steps.turborepo_integration.outputs.diff != ''}}
       turborepo_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' || steps.turborepo_version.outputs.diff != '' }}
       turborepo_js: ${{ steps.ci.outputs.diff != '' || steps.turborepo_js.outputs.diff != '' }}
@@ -319,46 +310,6 @@ jobs:
             runner: ubuntu-latest
           - name: macos
             runner: macos-latest
-          # Enable this once all tests on windows are passing (rememeber to copy over crlf fix from turborepo_integration_windows)
-          # - name: winodws
-          #   runner: windows-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Setup Graphviz
-        uses: ts-graphviz/setup-graphviz@v1
-        with:
-          macos-skip-brew-update: "true"
-        env:
-          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
-
-      - name: Cache Prysk
-        id: cache-prysk
-        uses: actions/cache@v3
-        with:
-          path: cli/.cram_env
-          key: prysk-venv-${{ matrix.os.name }}
-
-      - name: Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
-
-  # This is the same as turborepo_integration, but it runs on windows.
-  # Separate entry so it's not required for merge.
-  turborepo_integration_windows:
-    name: Turborepo Integration Tests (Windows)
-    needs: [determine_jobs, build_turborepo]
-    if: needs.determine_jobs.outputs.turborepo_integration == 'true'
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
           - name: windows
             runner: windows-latest
     steps:
@@ -408,9 +359,8 @@ jobs:
         os:
           - name: ubuntu
             runner: ubuntu-latest
-          # TODO: enable macos when --experimental-rust-codepath is passing all tests on ubuntu
-          # - name: macos
-          #   runner: macos-latest
+          - name: macos
+            runner: macos-latest
           - name: windows
             runner: windows-latest
     steps:
@@ -447,34 +397,6 @@ jobs:
 
       - name: Integration Tests
         run: turbo run test:rust-codepath --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
-
-  turborepo_e2e:
-    name: Turborepo E2E Tests
-    needs: [determine_jobs, build_turborepo]
-    if: needs.determine_jobs.outputs.turborepo_e2e == 'true'
-    timeout-minutes: 60
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-          - name: windows
-            runner: windows-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: E2E Tests
-        run: turbo run test --filter=turborepo-tests-e2e --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --color --env-mode=strict
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
@@ -533,7 +455,7 @@ jobs:
         # Note: using CLI flags instead of env vars because
         # envs var would apply to the actual tests that exercise turbo also,
         # making test output non-deterministic.
-        run: turbo run example-test --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
+        run: turbo run test -F "@turborepo-examples-tests/*" --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
@@ -1067,8 +989,8 @@ jobs:
       - go_lint
       - go_unit
       - turborepo_examples
-      - turborepo_e2e
       - turborepo_integration
+      - turborepo_integration_rust
       - js_packages
       - rust_lint
       - turborepo_rust_check
@@ -1106,8 +1028,8 @@ jobs:
           subjob ${{needs.go_lint.result}} "Go lints"
           subjob ${{needs.go_unit.result}} "Go unit tests"
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
-          subjob ${{needs.turborepo_e2e.result}} "Go e2e tests"
           subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
+          subjob ${{needs.turborepo_integration_rust.result}} "Turborepo integration tests (Rust codepath)"
           subjob ${{needs.js_packages.result}} "JS Package tests"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
@@ -1221,8 +1143,8 @@ jobs:
       - go_lint
       - go_unit
       - turborepo_examples
-      - turborepo_e2e
       - turborepo_integration
+      - turborepo_integration_rust
       - rust_lint
       - turborepo_rust_check
       - turborepo_rust_clippy
@@ -1262,8 +1184,8 @@ jobs:
           subjob ${{needs.go_lint.result}} "Go lints"
           subjob ${{needs.go_unit.result}} "Go unit tests"
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
-          subjob ${{needs.turborepo_e2e.result}} "Turborepo e2e tests"
           subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
+          subjob ${{needs.turborepo_integration_rust.result}} "Turborepo integration tests (Rust codepath)"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
           subjob ${{needs.turborepo_rust_clippy.result}} "Turborepo Rust clippy"

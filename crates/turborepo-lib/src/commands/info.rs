@@ -34,15 +34,16 @@ struct WorkspaceDetails<'a> {
     dependencies: Vec<&'a str>,
 }
 
-pub fn run(base: &mut CommandBase, workspace: Option<&str>, json: bool) -> Result<(), cli::Error> {
+pub async fn run(
+    base: &mut CommandBase,
+    workspace: Option<&str>,
+    json: bool,
+) -> Result<(), cli::Error> {
     let root_package_json = PackageJson::load(&base.repo_root.join_component("package.json"))?;
 
-    let package_manager =
-        PackageManager::get_package_manager(&base.repo_root, Some(&root_package_json))?;
-
     let package_graph = PackageGraph::builder(&base.repo_root, root_package_json)
-        .with_package_manger(Some(package_manager))
-        .build()?;
+        .build()
+        .await?;
 
     let config = base.config()?;
 

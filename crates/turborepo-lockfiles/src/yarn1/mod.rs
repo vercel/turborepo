@@ -19,6 +19,7 @@ pub enum Error {
     NonUTF8(#[from] std::str::Utf8Error),
 }
 
+#[derive(Debug)]
 pub struct Yarn1Lockfile {
     inner: Map<String, Entry>,
 }

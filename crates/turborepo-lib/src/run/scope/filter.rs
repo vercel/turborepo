@@ -38,7 +38,7 @@ impl PackageInference {
         );
         let full_inference_path = turbo_root.resolve(pkg_inference_path);
         for (workspace_name, workspace_entry) in pkg_graph.workspaces() {
-            let pkg_path = turbo_root.resolve(workspace_entry.package_json_path());
+            let pkg_path = turbo_root.resolve(workspace_entry.package_path());
             let inferred_path_is_below = pkg_path.contains(&full_inference_path);
             // We skip over the root package as the inferred path will always be below it
             if inferred_path_is_below && (&pkg_path as &AbsoluteSystemPath) != turbo_root {
@@ -47,7 +47,7 @@ impl PackageInference {
                 // do so in a consistent manner
                 return Self {
                     package_name: Some(workspace_name.to_string()),
-                    directory_root: workspace_entry.package_json_path().to_owned(),
+                    directory_root: workspace_entry.package_path().to_owned(),
                 };
             }
             let inferred_path_is_between_root_and_pkg = full_inference_path.contains(&pkg_path);
@@ -75,7 +75,14 @@ impl PackageInference {
         }
 
         if selector.parent_dir != turbopath::AnchoredSystemPathBuf::default() {
-            selector.parent_dir = self.directory_root.join(&selector.parent_dir);
+            let repo_relative_parent_dir = self.directory_root.join(&selector.parent_dir);
+            let clean_parent_dir =
+                path_clean::clean(std::path::Path::new(repo_relative_parent_dir.as_path()))
+                    .into_os_string()
+                    .into_string()
+                    .expect("path was valid utf8 before cleaning");
+            selector.parent_dir = AnchoredSystemPathBuf::try_from(clean_parent_dir.as_str())
+                .expect("path wasn't absolute before cleaning");
         } else if self.package_name.is_none() {
             // fallback: the user didn't set a parent directory and we didn't find a single
             // package, so use the directory we inferred and select all subdirectories
@@ -343,7 +350,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             } else {
                 let path = selector.parent_dir.to_unix();
                 let parent_dir_matcher = wax::Glob::new(path.as_str())?;
-                let matches = parent_dir_matcher.is_match(info.package_json_path.as_path());
+                let matches = parent_dir_matcher.is_match(info.package_path().as_path());
 
                 if matches {
                     entry_packages.insert(name.to_owned());
@@ -413,7 +420,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             let package_path_lookup = self
                 .pkg_graph
                 .workspaces()
-                .map(|(name, entry)| (name, entry.package_json_path()))
+                .map(|(name, entry)| (name, entry.package_path()))
                 .collect::<HashMap<_, _>>();
 
             for package in changed_packages {
@@ -446,7 +453,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
             } else {
                 let packages = self.pkg_graph.workspaces();
                 for (name, _) in packages.filter(|(_name, info)| {
-                    let path = info.package_json_path.as_path();
+                    let path = info.package_path().as_path();
                     parent_dir_globber.is_match(path)
                 }) {
                     entry_packages.insert(name.to_owned());
@@ -570,6 +577,7 @@ mod test {
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
     use turborepo_repository::{
+        discovery::PackageDiscovery,
         package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
         package_json::PackageJson,
         package_manager::PackageManager,
@@ -596,6 +604,21 @@ mod test {
         (b, a)
     }
 
+    struct MockDiscovery;
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(
+            &mut self,
+        ) -> Result<
+            turborepo_repository::discovery::DiscoveryResponse,
+            turborepo_repository::discovery::Error,
+        > {
+            Ok(turborepo_repository::discovery::DiscoveryResponse {
+                package_manager: PackageManager::Pnpm6,
+                workspaces: vec![], // we don't care about this
+            })
+        }
+    }
+
     /// Make a project resolver with the provided dependencies. Extras is for
     /// packages that are not dependencies of any other package.
     fn make_project<T: PackageChangeDetector>(
@@ -609,7 +632,7 @@ mod test {
             AbsoluteSystemPathBuf::new(temp_folder.path().as_os_str().to_str().unwrap()).unwrap(),
         ));
 
-        let packages = dependencies
+        let package_dirs = dependencies
             .iter()
             .flat_map(|(a, b)| vec![a, b])
             .chain(extras.iter())
@@ -625,13 +648,16 @@ mod test {
                     acc
                 });
 
-        let package_jsons = packages
+        let package_jsons = package_dirs
             .iter()
             .map(|package_path| {
                 let (_, name) = get_name(package_path);
                 (
                     turbo_root
-                        .join_unix_path(RelativeUnixPathBuf::new(**package_path).unwrap())
+                        .join_unix_path(
+                            RelativeUnixPathBuf::new(format!("{package_path}/package.json"))
+                                .unwrap(),
+                        )
                         .unwrap(),
                     PackageJson {
                         name: Some(name.to_string()),
@@ -646,13 +672,21 @@ mod test {
             })
             .collect();
 
-        let pkg_graph = Box::leak(Box::new(
-            PackageGraph::builder(turbo_root, Default::default())
-                .with_package_jsons(Some(package_jsons))
-                .with_package_manger(Some(PackageManager::Pnpm6))
+        let graph = {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
                 .build()
-                .unwrap(),
-        ));
+                .unwrap();
+            rt.block_on(
+                PackageGraph::builder(turbo_root, Default::default())
+                    .with_package_discovery(MockDiscovery)
+                    .with_package_jsons(Some(package_jsons))
+                    .build(),
+            )
+            .unwrap()
+        };
+
+        let pkg_graph = Box::leak(Box::new(graph));
 
         let scm = Box::leak(Box::new(turborepo_scm::SCM::new(turbo_root)));
 
@@ -783,6 +817,18 @@ mod test {
         None,
         &["project-0", "project-1"] ;
         "select by parentDir using glob"
+    )]
+    #[test_case(
+        vec![TargetSelector {
+            parent_dir: AnchoredSystemPathBuf::try_from(if cfg!(windows) { "..\\packages\\*" } else { "../packages/*" }).unwrap(),
+            ..Default::default()
+        }],
+        Some(PackageInference{
+            package_name: None,
+            directory_root: AnchoredSystemPathBuf::try_from("project-5").unwrap(),
+        }),
+        &["project-0", "project-1"] ;
+        "select sibling directory"
     )]
     #[test_case(
         vec![
