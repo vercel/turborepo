@@ -10,7 +10,6 @@ use super::{
 };
 use crate::{
     cli,
-    cli::DryRunMode,
     engine::{Engine, TaskNode},
     opts::RunOpts,
     run::task_id::TaskId,

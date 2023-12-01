@@ -174,14 +174,15 @@ pub async fn daemon_server(
         }
         CloseReason::Interrupt
     });
-    let reason = crate::daemon::serve(
-        &base.repo_root,
-        &daemon_root,
+    let server = crate::daemon::TurboGrpcService::new(
+        base.repo_root.clone(),
+        daemon_root,
         log_file,
         timeout,
         exit_signal,
-    )
-    .await;
+    );
+
+    let reason = server.serve().await;
 
     match reason {
         CloseReason::SocketOpenError(SocketOpenError::LockError(AlreadyOwned)) => {
