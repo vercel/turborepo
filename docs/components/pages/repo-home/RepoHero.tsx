@@ -9,7 +9,7 @@ import RepoLogo from "../../logos/RepoLogo";
 export function RepoHero() {
   return (
     <FadeIn
-      className="font-sans w-auto pb-16 pt-[48px] md:pb-24 lg:pb-32 md:pt-16 lg:pt-20 flex justify-between gap-8 items-center flex-col relative z-0"
+      className="font-sans w-auto min-h-[calc(100svh-var(--nextra-navbar-height))] pb-16 pt-[48px] md:pb-24 lg:pb-32 md:pt-16 lg:pt-20 flex justify-between gap-8 items-center flex-col relative z-0"
       noVertical
     >
       <FadeIn className="z-50 flex items-center justify-center w-full ">
