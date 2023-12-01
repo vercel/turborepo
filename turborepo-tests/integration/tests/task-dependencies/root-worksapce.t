@@ -2,9 +2,9 @@ This tests asserts that root tasks can depend on workspace#task
   $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) task_dependencies/root-to-workspace
 
-  $ ${TURBO} run mytask -F "//"
-  \xe2\x80\xa2 Packages in scope: // (esc)
-  \xe2\x80\xa2 Running mytask in 1 packages (esc)
+  $ ${TURBO} run mytask
+  \xe2\x80\xa2 Packages in scope: //, lib-a (esc)
+  \xe2\x80\xa2 Running mytask in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   lib-a:build: cache miss, executing 5f3e63ff10e1a66a
   lib-a:build: 
