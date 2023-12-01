@@ -176,6 +176,7 @@ impl AnalyzeEcmascriptModuleResultBuilder {
         R: Upcast<Box<dyn ModuleReference>>,
     {
         self.references.insert(Vc::upcast(reference));
+        self.local_references.insert(Vc::upcast(reference));
     }
 
     /// Adds an asset reference to the analysis result.
@@ -1907,7 +1908,6 @@ async fn handle_free_var_reference(
             .resolve()
             .await?;
             analysis.add_reference(esm_reference);
-            analysis.add_local_reference(esm_reference);
             analysis.add_code_gen(EsmBinding::new(
                 esm_reference,
                 export.clone(),
