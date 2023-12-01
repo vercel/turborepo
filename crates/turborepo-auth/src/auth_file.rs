@@ -22,7 +22,7 @@ impl AuthFile {
     }
     /// Writes the contents of the auth file to disk. Will override whatever is
     /// there with what's in the struct.
-    pub fn write_to_disk(&self, path: &AbsoluteSystemPathBuf) -> Result<(), Error> {
+    pub fn write_to_disk(&self, path: &AbsoluteSystemPath) -> Result<(), Error> {
         path.ensure_dir().map_err(|e| Error::PathError(e.into()))?;
 
         let mut pretty_content = serde_json::to_string_pretty(self)
