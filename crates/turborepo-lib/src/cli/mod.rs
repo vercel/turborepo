@@ -563,6 +563,10 @@ pub struct RunArgs {
     /// allow reading and caching artifacts using the remote cache.
     #[clap(long, env = "TURBO_REMOTE_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
     pub remote_only: bool,
+    /// Treat remote cache as read only
+    #[clap(long, env = "TURBO_REMOTE_CACHE_READ_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
+    #[serde(skip)]
+    pub remote_cache_read_only: bool,
     /// Specify package(s) to act as entry points for task execution.
     /// Supports globs.
     #[clap(long)]
@@ -753,7 +757,7 @@ pub async fn run(
             let json = *json;
             let workspace = workspace.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
-            info::run(&mut base, workspace.as_deref(), json)?;
+            info::run(&mut base, workspace.as_deref(), json).await?;
 
             Ok(Payload::Rust(Ok(0)))
         }
@@ -849,7 +853,7 @@ pub async fn run(
             let docker = *docker;
             let output_dir = output_dir.clone();
             let base = CommandBase::new(cli_args, repo_root, version, ui);
-            prune::prune(&base, &scope, docker, &output_dir)?;
+            prune::prune(&base, &scope, docker, &output_dir).await?;
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Completion { shell } => {

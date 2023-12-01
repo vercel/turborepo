@@ -10,10 +10,10 @@ overrides:
 importers:
 
   .:
-    dependencies:
-      rustc:
-        specifier: ^0.0.8
-        version: 0.0.8
+    optionalDependencies:
+      rust:
+        specifier: nightly
+        version: 1.0.2-nightly
     devDependencies:
       '@taplo/cli':
         specifier: ^0.5.2
@@ -32,7 +32,7 @@ importers:
         version: 13.1.0
       next:
         specifier: ^13.4.12
-        version: 13.4.12(@babel/core@7.20.12)(react-dom@18.2.0)(react@18.2.0)
+        version: 13.4.12(react-dom@18.2.0)(react@18.2.0)
       npm-run-all:
         specifier: ^4.1.5
         version: 4.1.5
@@ -298,128 +298,6 @@ importers:
 
   examples: {}
 
-  examples-tests/helpers: {}
-
-  examples-tests/npm-non-monorepo:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/npm-with-npm:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/npm-with-yarn:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/pnpm-basic:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/pnpm-gatsby:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/pnpm-kitchen-sink:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/pnpm-with-svelte:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/yarn-non-monorepo:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/yarn-with-npm:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
-  examples-tests/yarn-with-yarn:
-    dependencies:
-      '@turborepo-examples-tests/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../../turborepo-tests/helpers
-
   packages/create-turbo:
     dependencies:
       chalk:
@@ -482,7 +360,7 @@ importers:
         version: 7.3.12
       jest:
         specifier: ^27.4.3
-        version: 27.5.1(ts-node@10.9.1)
+        version: 27.5.1
       ts-jest:
         specifier: ^27.1.1
         version: 27.1.5(@babel/core@7.20.12)(@types/jest@27.5.2)(esbuild@0.17.18)(jest@27.5.1)(typescript@5.2.2)
@@ -540,7 +418,7 @@ importers:
     devDependencies:
       '@vercel/style-guide':
         specifier: ^5.0.0
-        version: 5.0.0(eslint@8.54.0)(prettier@2.8.7)(typescript@4.9.5)
+        version: 5.0.0(eslint@8.54.0)(typescript@4.9.5)
 
   packages/eslint-config-turbo:
     dependencies:
@@ -596,7 +474,7 @@ importers:
         version: 18.17.4
       jest:
         specifier: ^27.4.3
-        version: 27.5.1(ts-node@10.9.1)
+        version: 27.5.1
       json5:
         specifier: ^2.2.1
         version: 2.2.3
@@ -605,12 +483,14 @@ importers:
         version: 27.1.5(@babel/core@7.20.12)(@types/jest@27.5.2)(esbuild@0.17.18)(jest@27.5.1)(typescript@4.9.4)
       tsup:
         specifier: ^6.2.0
-        version: 6.7.0(ts-node@10.9.1)(typescript@4.9.4)
+        version: 6.7.0(typescript@4.9.4)
       typescript:
         specifier: ^4.7.4
         version: 4.9.4
 
   packages/node-module-trace: {}
+
+  packages/prysk: {}
 
   packages/tsconfig: {}
 
@@ -749,7 +629,7 @@ importers:
         version: 4.2.2
       jest:
         specifier: ^27.4.3
-        version: 27.5.1(ts-node@10.9.1)
+        version: 27.5.1
       plop:
         specifier: ^3.1.1
         version: 3.1.1
@@ -758,7 +638,7 @@ importers:
         version: 27.1.5(@babel/core@7.20.12)(@types/jest@27.5.2)(esbuild@0.17.18)(jest@27.5.1)(typescript@4.9.4)
       tsup:
         specifier: ^6.7.0
-        version: 6.7.0(ts-node@10.9.1)(typescript@4.9.4)
+        version: 6.7.0(typescript@4.9.4)
       typescript:
         specifier: ^4.5.5
         version: 4.9.4
@@ -869,7 +749,7 @@ importers:
         version: 11.0.0
       jest:
         specifier: ^27.4.3
-        version: 27.5.1(ts-node@10.9.1)
+        version: 27.5.1
       ts-jest:
         specifier: ^27.1.1
         version: 27.1.5(@babel/core@7.20.12)(@types/jest@27.5.2)(esbuild@0.14.49)(jest@27.5.1)(typescript@4.9.4)
@@ -893,7 +773,7 @@ importers:
         version: 11.1.1
       jest:
         specifier: ^27.4.3
-        version: 27.5.1(ts-node@10.9.1)
+        version: 27.5.1
       ts-jest:
         specifier: ^27.1.1
         version: 27.1.5(@babel/core@7.20.12)(jest@27.5.1)(typescript@4.9.5)
@@ -939,10 +819,10 @@ importers:
         version: 9.0.0
       jest:
         specifier: ^27.4.3
-        version: 27.5.1(ts-node@10.9.1)
+        version: 27.5.1
       ts-jest:
         specifier: ^27.1.1
-        version: 27.1.5(@babel/core@7.20.12)(@types/jest@27.5.2)(esbuild@0.14.49)(jest@27.5.1)(typescript@4.9.4)
+        version: 27.1.5(@babel/core@7.20.12)(@types/jest@27.5.2)(jest@27.5.1)(typescript@4.9.4)
       typescript:
         specifier: ^4.7.4
         version: 4.9.4
@@ -958,7 +838,7 @@ importers:
         version: link:../eslint-config
       next:
         specifier: ^13.4.12
-        version: 13.4.12(@babel/core@7.20.12)(react-dom@18.2.0)(react@18.2.0)
+        version: 13.4.12(react-dom@18.2.0)(react@18.2.0)
 
   packages/turbo-tracing-next-plugin/test/with-mongodb-mongoose:
     dependencies:
@@ -967,7 +847,7 @@ importers:
         version: 6.6.5
       next:
         specifier: ^13.4.12
-        version: 13.4.12(@babel/core@7.20.12)(react-dom@18.2.0)(react@18.2.0)
+        version: 13.4.12(react-dom@18.2.0)(react@18.2.0)
       react:
         specifier: ^18.2.0
         version: 18.2.0
@@ -1059,7 +939,7 @@ importers:
         version: 2.0.1
       jest:
         specifier: ^27.4.3
-        version: 27.5.1(ts-node@10.9.1)
+        version: 27.5.1
       js-yaml:
         specifier: ^4.1.0
         version: 4.1.0
@@ -1074,7 +954,7 @@ importers:
         version: 6.1.13
       ts-jest:
         specifier: ^27.1.1
-        version: 27.1.5(@babel/core@7.20.12)(@types/jest@27.5.2)(esbuild@0.14.49)(jest@27.5.1)(typescript@4.9.4)
+        version: 27.1.5(@babel/core@7.20.12)(@types/jest@27.5.2)(jest@27.5.1)(typescript@4.9.4)
       typescript:
         specifier: ^4.7.4
         version: 4.9.4
@@ -1159,7 +1039,7 @@ importers:
         version: 7.3.12
       jest:
         specifier: ^27.4.3
-        version: 27.5.1(ts-node@10.9.1)
+        version: 27.5.1
       strip-ansi:
         specifier: ^6.0.1
         version: 6.0.1
@@ -1189,45 +1069,125 @@ importers:
         specifier: ^5.75.0
         version: 5.75.0
 
-  turborepo-tests/e2e:
+  turborepo-tests/example-npm-non-monorepo:
     dependencies:
-      esbuild:
-        specifier: ^0.15.0
-        version: 0.15.6
-      esbuild-register:
-        specifier: ^3.3.2
-        version: 3.3.3(esbuild@0.15.6)
-      execa:
-        specifier: ^5.1.1
-        version: 5.1.1
-      fs-extra:
-        specifier: ^11.1.1
-        version: 11.1.1
-      globby:
-        specifier: 11.1.0
-        version: 11.1.0
-      tar:
-        specifier: 6.1.13
-        version: 6.1.13
-      uvu:
-        specifier: ^0.5.3
-        version: 0.5.6
-      zstd-codec:
-        specifier: 0.1.4
-        version: 0.1.4
-    devDependencies:
-      '@turbo/tsconfig':
+      cli:
         specifier: workspace:*
-        version: link:../../packages/tsconfig
-      '@types/node':
-        specifier: ^20.8.5
-        version: 20.8.5
-      cross-env:
-        specifier: ^7.0.3
-        version: 7.0.3
-      typescript:
-        specifier: ^5.2.2
-        version: 5.2.2
+        version: link:../../cli
+      prysk:
+        specifier: workspace:*
+        version: link:../../packages/prysk
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-npm-with-npm:
+    dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../cli
+      prysk:
+        specifier: workspace:*
+        version: link:../../packages/prysk
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-pnpm-basic:
+    dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../cli
+      prysk:
+        specifier: workspace:*
+        version: link:../../packages/prysk
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-pnpm-gatsby:
+    dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../cli
+      prysk:
+        specifier: workspace:*
+        version: link:../../packages/prysk
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-pnpm-kitchen-sink:
+    dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../cli
+      prysk:
+        specifier: workspace:*
+        version: link:../../packages/prysk
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-pnpm-with-svelte:
+    dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../cli
+      prysk:
+        specifier: workspace:*
+        version: link:../../packages/prysk
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-yarn-non-monorepo:
+    dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../cli
+      prysk:
+        specifier: workspace:*
+        version: link:../../packages/prysk
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-yarn-with-yarn:
+    dependencies:
+      cli:
+        specifier: workspace:*
+        version: link:../../cli
+      prysk:
+        specifier: workspace:*
+        version: link:../../packages/prysk
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
 
   turborepo-tests/helpers: {}
 
@@ -1236,6 +1196,9 @@ importers:
       '@turbo/exe-stub':
         specifier: workspace:*
         version: link:../../packages/turbo-exe-stub
+      prysk:
+        specifier: workspace:*
+        version: link:../../packages/prysk
       turborepo-tests-helpers:
         specifier: workspace:*
         version: link:../helpers
@@ -2198,6 +2161,51 @@ packages:
       slash: 3.0.0
     dev: false
 
+  /@jest/core@27.5.1:
+    resolution: {integrity: sha512-AK6/UTrvQD0Cd24NSqmIA6rKsu0tKIxfiCducZvqxYdmMisOYAsdItspT+fQDQYARPf8XgjAFZi0ogW2agH5nQ==}
+    engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
+    peerDependencies:
+      node-notifier: ^8.0.1 || ^9.0.0 || ^10.0.0
+    peerDependenciesMeta:
+      node-notifier:
+        optional: true
+    dependencies:
+      '@jest/console': 27.5.1
+      '@jest/reporters': 27.5.1
+      '@jest/test-result': 27.5.1
+      '@jest/transform': 27.5.1
+      '@jest/types': 27.5.1
+      '@types/node': 18.17.4
+      ansi-escapes: 4.3.2
+      chalk: 4.1.2
+      emittery: 0.8.1
+      exit: 0.1.2
+      graceful-fs: 4.2.11
+      jest-changed-files: 27.5.1
+      jest-config: 27.5.1
+      jest-haste-map: 27.5.1
+      jest-message-util: 27.5.1
+      jest-regex-util: 27.5.1
+      jest-resolve: 27.5.1
+      jest-resolve-dependencies: 27.5.1
+      jest-runner: 27.5.1
+      jest-runtime: 27.5.1
+      jest-snapshot: 27.5.1
+      jest-util: 27.5.1
+      jest-validate: 27.5.1
+      jest-watcher: 27.5.1
+      micromatch: 4.0.5
+      rimraf: 3.0.2
+      slash: 3.0.0
+      strip-ansi: 6.0.1
+    transitivePeerDependencies:
+      - bufferutil
+      - canvas
+      - supports-color
+      - ts-node
+      - utf-8-validate
+    dev: true
+
   /@jest/core@27.5.1(ts-node@10.9.1):
     resolution: {integrity: sha512-AK6/UTrvQD0Cd24NSqmIA6rKsu0tKIxfiCducZvqxYdmMisOYAsdItspT+fQDQYARPf8XgjAFZi0ogW2agH5nQ==}
     engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
@@ -3154,7 +3162,7 @@ packages:
     resolution: {integrity: sha512-hKlIQpFugdRlWj0wcEG9I8JyVm/osdsE72zwMBGnmCw/jf7U63vjOjfxMe/gRuvllCf/AvoGHEkR5jPufcO+bw==}
     engines: {node: '>=8'}
     peerDependencies:
-      next: ^13.4.12
+      next: ^10.0.8 || ^11.0 || ^12.0 || ^13.0
       react: 16.x || 17.x || 18.x
       webpack: '>= 4.0.0'
     peerDependenciesMeta:
@@ -3646,12 +3654,6 @@ packages:
     resolution: {integrity: sha512-dP7f3LdZIysZnmvP3ANJYTSwg+wLLl8p7RqniVlV7j+oXSXAbt9h0WIBFmJy5inWZoX9wZN6eXx+YXd9Rh3RBA==}
     dev: true
 
-  /@types/node@20.8.5:
-    resolution: {integrity: sha512-SPlobFgbidfIeOYlzXiEjSYeIJiOCthv+9tSQVpvk4PAdIIc+2SmjNVzWXk9t0Y7dl73Zdf+OgXKHX9XtkqUpw==}
-    dependencies:
-      undici-types: 5.25.3
-    dev: true
-
   /@types/normalize-package-data@2.4.1:
     resolution: {integrity: sha512-Gj7cI7z+98M282Tqmp2K5EIsoouUEzbBJhQQzDE3jSIRk6r9gsz0oUokqIUR4u1R3dMHo0pDHM7sNOHyhulypw==}
     dev: true
@@ -4007,7 +4009,7 @@ packages:
       yoga-wasm-web: 0.1.2
     dev: false
 
-  /@vercel/style-guide@5.0.0(eslint@8.54.0)(prettier@2.8.7)(typescript@4.9.5):
+  /@vercel/style-guide@5.0.0(eslint@8.54.0)(typescript@4.9.5):
     resolution: {integrity: sha512-z8EbEyZm5Zn6AOa+XJ7dOja94m5Hm6cgCuTRK74qxKFWi7qQYUJoEkU27wYgOplZSAYVLB8mHfe51RGZMyqiUw==}
     engines: {node: '>=16'}
     peerDependencies:
@@ -4035,7 +4037,7 @@ packages:
       eslint-import-resolver-alias: 1.1.2(eslint-plugin-import@2.28.1)
       eslint-import-resolver-typescript: 3.6.0(@typescript-eslint/parser@6.5.0)(eslint-plugin-import@2.28.1)(eslint@8.54.0)
       eslint-plugin-eslint-comments: 3.2.0(eslint@8.54.0)
-      eslint-plugin-import: 2.28.1(@typescript-eslint/parser@6.5.0)(eslint-import-resolver-typescript@3.6.0)(eslint@8.54.0)
+      eslint-plugin-import: 2.28.1(@typescript-eslint/parser@6.5.0)(eslint@8.54.0)
       eslint-plugin-jest: 27.2.3(@typescript-eslint/eslint-plugin@6.5.0)(eslint@8.54.0)(typescript@4.9.5)
       eslint-plugin-jsx-a11y: 6.7.1(eslint@8.54.0)
       eslint-plugin-playwright: 0.16.0(eslint-plugin-jest@27.2.3)(eslint@8.54.0)
@@ -4044,8 +4046,7 @@ packages:
       eslint-plugin-testing-library: 6.0.1(eslint@8.54.0)(typescript@4.9.5)
       eslint-plugin-tsdoc: 0.2.17
       eslint-plugin-unicorn: 48.0.1(eslint@8.54.0)
-      prettier: 2.8.7
-      prettier-plugin-packagejson: 2.4.5(prettier@2.8.7)
+      prettier-plugin-packagejson: 2.4.5
       typescript: 4.9.5
     transitivePeerDependencies:
       - eslint-import-resolver-node
@@ -4550,6 +4551,7 @@ packages:
     dependencies:
       tunnel: 0.0.6
     dev: false
+    optional: true
 
   /axios@0.26.1:
     resolution: {integrity: sha512-fPwcX4EvnSHuInCMItEhAGnaSEXRBjtzh9fOtsE6E1G6p7vl7edEeZe11QHf18+6+9gR5PbKV/sGKNaD8YaMeA==}
@@ -4558,6 +4560,7 @@ packages:
     transitivePeerDependencies:
       - debug
     dev: false
+    optional: true
 
   /axios@0.27.2:
     resolution: {integrity: sha512-t+yRIyySRTp/wua5xEr+z1q60QmLq8ABsS5O9Me1AsE5dfKqgnCFzwiCZZ/cGNd1lq4/7akDWMxdhVlucjmnOQ==}
@@ -4697,6 +4700,7 @@ packages:
     transitivePeerDependencies:
       - debug
     dev: false
+    optional: true
 
   /bl@4.1.0:
     resolution: {integrity: sha512-1W07cM9gS6DcLperZfFSj+bWLtaPGSOHWhPiGzXmvVJbRLdG82sH/Kn8EtW1VqWVA54AKf2h5k5BbnIbwF3h6w==}
@@ -5308,6 +5312,7 @@ packages:
     dependencies:
       easy-table: 1.1.0
     dev: false
+    optional: true
 
   /constant-case@2.0.0:
     resolution: {integrity: sha512-eS0N9WwmjTqrOmR3o83F5vW8Z+9R1HnVz3xmzT2PMFug9ly+Au/fxRWlEBSb6LcZwspSsEn9Xs1uw9YgzAg1EQ==}
@@ -6139,6 +6144,7 @@ packages:
     optionalDependencies:
       wcwidth: 1.0.1
     dev: false
+    optional: true
 
   /electron-to-chromium@1.4.328:
     resolution: {integrity: sha512-DE9tTy2PNmy1v55AZAO542ui+MLC2cvINMK4P2LXGsJdput/ThVG9t+QGecPuAZZSgC8XoI+Jh9M1OG9IoNSCw==}
@@ -6834,7 +6840,7 @@ packages:
     peerDependencies:
       eslint-plugin-import: '>=1.4.0'
     dependencies:
-      eslint-plugin-import: 2.28.1(@typescript-eslint/parser@6.5.0)(eslint-import-resolver-typescript@3.6.0)(eslint@8.54.0)
+      eslint-plugin-import: 2.28.1(@typescript-eslint/parser@6.5.0)(eslint@8.54.0)
     dev: true
 
   /eslint-import-resolver-node@0.3.9:
@@ -6858,7 +6864,7 @@ packages:
       enhanced-resolve: 5.12.0
       eslint: 8.54.0
       eslint-module-utils: 2.7.4(@typescript-eslint/parser@6.5.0)(eslint-import-resolver-typescript@3.6.0)(eslint@8.54.0)
-      eslint-plugin-import: 2.28.1(@typescript-eslint/parser@6.5.0)(eslint-import-resolver-typescript@3.6.0)(eslint@8.54.0)
+      eslint-plugin-import: 2.28.1(@typescript-eslint/parser@6.5.0)(eslint@8.54.0)
       fast-glob: 3.3.1
       get-tsconfig: 4.7.0
       is-core-module: 2.11.0
@@ -6899,7 +6905,7 @@ packages:
       - supports-color
     dev: true
 
-  /eslint-module-utils@2.8.0(@typescript-eslint/parser@6.5.0)(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.6.0)(eslint@8.54.0):
+  /eslint-module-utils@2.8.0(@typescript-eslint/parser@6.5.0)(eslint-import-resolver-node@0.3.9)(eslint@8.54.0):
     resolution: {integrity: sha512-aWajIYfsqCKRDgUfjEXNN/JlrzauMuSEy5sbd7WXbtW3EH6A6MpwEh42c7qD+MqQo9QMJ6fWLAeIJynx0g6OAw==}
     engines: {node: '>=4'}
     peerDependencies:
@@ -6924,7 +6930,6 @@ packages:
       debug: 3.2.7
       eslint: 8.54.0
       eslint-import-resolver-node: 0.3.9
-      eslint-import-resolver-typescript: 3.6.0(@typescript-eslint/parser@6.5.0)(eslint-plugin-import@2.28.1)(eslint@8.54.0)
     transitivePeerDependencies:
       - supports-color
     dev: true
@@ -6940,7 +6945,7 @@ packages:
       ignore: 5.2.4
     dev: true
 
-  /eslint-plugin-import@2.28.1(@typescript-eslint/parser@6.5.0)(eslint-import-resolver-typescript@3.6.0)(eslint@8.54.0):
+  /eslint-plugin-import@2.28.1(@typescript-eslint/parser@6.5.0)(eslint@8.54.0):
     resolution: {integrity: sha512-9I9hFlITvOV55alzoKBI+K9q74kv0iKMeY6av5+umsNwayt59fz692daGyjR+oStBQgx6nwR9rXldDev3Clw+A==}
     engines: {node: '>=4'}
     peerDependencies:
@@ -6959,7 +6964,7 @@ packages:
       doctrine: 2.1.0
       eslint: 8.54.0
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.8.0(@typescript-eslint/parser@6.5.0)(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.6.0)(eslint@8.54.0)
+      eslint-module-utils: 2.8.0(@typescript-eslint/parser@6.5.0)(eslint-import-resolver-node@0.3.9)(eslint@8.54.0)
       has: 1.0.3
       is-core-module: 2.13.0
       is-glob: 4.0.3
@@ -8084,6 +8089,7 @@ packages:
       ignore: 5.2.1
       merge2: 1.4.1
       slash: 3.0.0
+    dev: true
 
   /globby@13.1.2:
     resolution: {integrity: sha512-LKSDZXToac40u8Q1PQtZihbNdTYSNMuWe+K5l+oa6KgDzSvVrHXlJy40hUP522RjAIoNLJYBJi7ow+rbFpIhHQ==}
@@ -9322,6 +9328,36 @@ packages:
       - supports-color
     dev: false
 
+  /jest-cli@27.5.1:
+    resolution: {integrity: sha512-Hc6HOOwYq4/74/c62dEE3r5elx8wjYqxY0r0G/nFrLDPMFRu6RA/u8qINOIkvhxG7mMQ5EJsOGfRpI8L6eFUVw==}
+    engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
+    hasBin: true
+    peerDependencies:
+      node-notifier: ^8.0.1 || ^9.0.0 || ^10.0.0
+    peerDependenciesMeta:
+      node-notifier:
+        optional: true
+    dependencies:
+      '@jest/core': 27.5.1
+      '@jest/test-result': 27.5.1
+      '@jest/types': 27.5.1
+      chalk: 4.1.2
+      exit: 0.1.2
+      graceful-fs: 4.2.11
+      import-local: 3.1.0
+      jest-config: 27.5.1
+      jest-util: 27.5.1
+      jest-validate: 27.5.1
+      prompts: 2.4.2
+      yargs: 16.2.0
+    transitivePeerDependencies:
+      - bufferutil
+      - canvas
+      - supports-color
+      - ts-node
+      - utf-8-validate
+    dev: true
+
   /jest-cli@27.5.1(ts-node@10.9.1):
     resolution: {integrity: sha512-Hc6HOOwYq4/74/c62dEE3r5elx8wjYqxY0r0G/nFrLDPMFRu6RA/u8qINOIkvhxG7mMQ5EJsOGfRpI8L6eFUVw==}
     engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
@@ -9349,6 +9385,46 @@ packages:
       - canvas
       - supports-color
       - ts-node
+      - utf-8-validate
+    dev: true
+
+  /jest-config@27.5.1:
+    resolution: {integrity: sha512-5sAsjm6tGdsVbW9ahcChPAFCk4IlkQUknH5AvKjuLTSlcO/wCZKyFdn7Rg0EkC+OGgWODEy2hDpWB1PgzH0JNA==}
+    engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
+    peerDependencies:
+      ts-node: '>=9.0.0'
+    peerDependenciesMeta:
+      ts-node:
+        optional: true
+    dependencies:
+      '@babel/core': 7.20.12
+      '@jest/test-sequencer': 27.5.1
+      '@jest/types': 27.5.1
+      babel-jest: 27.5.1(@babel/core@7.20.12)
+      chalk: 4.1.2
+      ci-info: 3.8.0
+      deepmerge: 4.2.2
+      glob: 7.2.3
+      graceful-fs: 4.2.11
+      jest-circus: 27.5.1
+      jest-environment-jsdom: 27.5.1
+      jest-environment-node: 27.5.1
+      jest-get-type: 27.5.1
+      jest-jasmine2: 27.5.1
+      jest-regex-util: 27.5.1
+      jest-resolve: 27.5.1
+      jest-runner: 27.5.1
+      jest-util: 27.5.1
+      jest-validate: 27.5.1
+      micromatch: 4.0.5
+      parse-json: 5.2.0
+      pretty-format: 27.5.1
+      slash: 3.0.0
+      strip-json-comments: 3.1.1
+    transitivePeerDependencies:
+      - bufferutil
+      - canvas
+      - supports-color
       - utf-8-validate
     dev: true
 
@@ -9937,6 +10013,27 @@ packages:
       merge-stream: 2.0.0
       supports-color: 8.1.1
     dev: false
+
+  /jest@27.5.1:
+    resolution: {integrity: sha512-Yn0mADZB89zTtjkPJEXwrac3LHudkQMR+Paqa8uxJHCBr9agxztUifWCyiYrjhMPBoUVBjyny0I7XH6ozDr7QQ==}
+    engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
+    hasBin: true
+    peerDependencies:
+      node-notifier: ^8.0.1 || ^9.0.0 || ^10.0.0
+    peerDependenciesMeta:
+      node-notifier:
+        optional: true
+    dependencies:
+      '@jest/core': 27.5.1
+      import-local: 3.1.0
+      jest-cli: 27.5.1
+    transitivePeerDependencies:
+      - bufferutil
+      - canvas
+      - supports-color
+      - ts-node
+      - utf-8-validate
+    dev: true
 
   /jest@27.5.1(ts-node@10.9.1):
     resolution: {integrity: sha512-Yn0mADZB89zTtjkPJEXwrac3LHudkQMR+Paqa8uxJHCBr9agxztUifWCyiYrjhMPBoUVBjyny0I7XH6ozDr7QQ==}
@@ -11423,7 +11520,7 @@ packages:
   /next-seo@6.1.0(next@13.4.12)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-iMBpFoJsR5zWhguHJvsoBDxDSmdYTHtnVPB1ij+CD0NReQCP78ZxxbdL9qkKIf4oEuZEqZkrjAQLB0bkII7RYA==}
     peerDependencies:
-      next: ^13.4.12
+      next: ^8.1.1-canary.54 || >=9.0.0
       react: '>=16.0.0'
       react-dom: '>=16.0.0'
     dependencies:
@@ -11435,7 +11532,7 @@ packages:
   /next-themes@0.2.1(next@13.4.12)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-B+AKNfYNIzh0vqQQKqQItTS8evEouKD7H5Hj3kmuPERwddR2TxvDSFZuTj6T7Jfn1oyeUyJMydPl1Bkxkh0W7A==}
     peerDependencies:
-      next: ^13.4.12
+      next: '*'
       react: '*'
       react-dom: '*'
     dependencies:
@@ -11485,11 +11582,54 @@ packages:
     transitivePeerDependencies:
       - '@babel/core'
       - babel-plugin-macros
+    dev: false
+
+  /next@13.4.12(react-dom@18.2.0)(react@18.2.0):
+    resolution: {integrity: sha512-eHfnru9x6NRmTMcjQp6Nz0J4XH9OubmzOa7CkWL+AUrUxpibub3vWwttjduu9No16dug1kq04hiUUpo7J3m3Xw==}
+    engines: {node: '>=16.8.0'}
+    hasBin: true
+    peerDependencies:
+      '@opentelemetry/api': ^1.1.0
+      fibers: '>= 3.1.0'
+      react: ^18.2.0
+      react-dom: ^18.2.0
+      sass: ^1.3.0
+    peerDependenciesMeta:
+      '@opentelemetry/api':
+        optional: true
+      fibers:
+        optional: true
+      sass:
+        optional: true
+    dependencies:
+      '@next/env': 13.4.12
+      '@swc/helpers': 0.5.1
+      busboy: 1.6.0
+      caniuse-lite: 1.0.30001466
+      postcss: 8.4.14
+      react: 18.2.0
+      react-dom: 18.2.0(react@18.2.0)
+      styled-jsx: 5.1.1(react@18.2.0)
+      watchpack: 2.4.0
+      zod: 3.21.4
+    optionalDependencies:
+      '@next/swc-darwin-arm64': 13.4.12
+      '@next/swc-darwin-x64': 13.4.12
+      '@next/swc-linux-arm64-gnu': 13.4.12
+      '@next/swc-linux-arm64-musl': 13.4.12
+      '@next/swc-linux-x64-gnu': 13.4.12
+      '@next/swc-linux-x64-musl': 13.4.12
+      '@next/swc-win32-arm64-msvc': 13.4.12
+      '@next/swc-win32-ia32-msvc': 13.4.12
+      '@next/swc-win32-x64-msvc': 13.4.12
+    transitivePeerDependencies:
+      - '@babel/core'
+      - babel-plugin-macros
 
   /nextra-theme-docs@2.12.3(next@13.4.12)(nextra@2.12.3)(react-dom@18.2.0)(react@18.2.0):
     resolution: {integrity: sha512-aZywZwokk/h5HrUTh/bsU981Sd2prZks7ci+HNG9wuMnm+drp3PBmRKIuQxBCiJurePVBJ2Qk2/wTV3VECGKnA==}
     peerDependencies:
-      next: ^13.4.12
+      next: '>=9.5.3'
       nextra: 2.12.3
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
@@ -11517,7 +11657,7 @@ packages:
     resolution: {integrity: sha512-0d8wXpGAccFpMFZuxnlnN56MIZj+AWGYXW3Xk6ByXyr0Mb+B/C/0aGZV5YrBex0V1wEqMGQl4LLAJI+AfCbSXg==}
     engines: {node: '>=16'}
     peerDependencies:
-      next: ^13.4.12
+      next: '>=9.5.3'
       react: '>=16.13.1'
       react-dom: '>=16.13.1'
     dependencies:
@@ -12349,6 +12489,22 @@ packages:
       postcss: 8.4.21
     dev: true
 
+  /postcss-load-config@3.1.4:
+    resolution: {integrity: sha512-6DiM4E7v4coTE4uzA8U//WhtPwyhiim3eyjEMFCnUpzbrkK9wJHgKDT2mR+HbtSrd/NubVaYTOpSpjUl8NQeRg==}
+    engines: {node: '>= 10'}
+    peerDependencies:
+      postcss: '>=8.0.9'
+      ts-node: '>=9.0.0'
+    peerDependenciesMeta:
+      postcss:
+        optional: true
+      ts-node:
+        optional: true
+    dependencies:
+      lilconfig: 2.0.6
+      yaml: 1.10.2
+    dev: true
+
   /postcss-load-config@3.1.4(postcss@8.4.21):
     resolution: {integrity: sha512-6DiM4E7v4coTE4uzA8U//WhtPwyhiim3eyjEMFCnUpzbrkK9wJHgKDT2mR+HbtSrd/NubVaYTOpSpjUl8NQeRg==}
     engines: {node: '>= 10'}
@@ -12448,7 +12604,7 @@ packages:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
     engines: {node: '>= 0.8.0'}
 
-  /prettier-plugin-packagejson@2.4.5(prettier@2.8.7):
+  /prettier-plugin-packagejson@2.4.5:
     resolution: {integrity: sha512-glG71jE1gO3y5+JNAhC8X+4yrlN28rub6Aj461SKbaPie9RgMiHKcInH2Moi2VGOfkTXaEHBhg4uVMBqa+kBUA==}
     peerDependencies:
       prettier: '>= 1.16.0'
@@ -12456,7 +12612,6 @@ packages:
       prettier:
         optional: true
     dependencies:
-      prettier: 2.8.7
       sort-package-json: 2.5.1
       synckit: 0.8.5
     dev: true
@@ -13095,8 +13250,8 @@ packages:
     dependencies:
       queue-microtask: 1.2.3
 
-  /rustc@0.0.8:
-    resolution: {integrity: sha512-Ko42rGqkCNXxePmJAiR/PCxaIfYil+rqhLukrLWgme7UqRNX/er9gcIv+cKslwxeBuY6yJcSRAXjsxppkwARXw==}
+  /rust@1.0.2-nightly:
+    resolution: {integrity: sha512-s/SSyYpcsvmpnDty/i/7kAfV67+x4dwVzlsmFIdIduY9uFFB8aYSijJ6GIkOdDqsN5RyIqaa3vycQ1pMbKxpIQ==}
     engines: {node: '>=14', npm: '>=6'}
     hasBin: true
     requiresBuild: true
@@ -13108,6 +13263,7 @@ packages:
     transitivePeerDependencies:
       - debug
     dev: false
+    optional: true
 
   /rw@1.3.3:
     resolution: {integrity: sha512-PdhdWy89SiZogBLaw42zdeqtRJ//zFd2PgQavcICDUgJT5oW10QCRKbJ6bg4r0/UY2M6BWd5tkxuGFRvCkgfHQ==}
@@ -13822,6 +13978,23 @@ packages:
       '@babel/core': 7.20.12
       client-only: 0.0.1
       react: 18.2.0
+    dev: false
+
+  /styled-jsx@5.1.1(react@18.2.0):
+    resolution: {integrity: sha512-pW7uC1l4mBZ8ugbiZrcIsiIvVx1UmTfw7UkC3Um2tmfUq9Bhk8IiyEIPl6F8agHgjzku6j0xQEZbfA5uSgSaCw==}
+    engines: {node: '>= 12.0.0'}
+    peerDependencies:
+      '@babel/core': '*'
+      babel-plugin-macros: '*'
+      react: '>= 16.8.0 || 17.x.x || ^18.0.0-0'
+    peerDependenciesMeta:
+      '@babel/core':
+        optional: true
+      babel-plugin-macros:
+        optional: true
+    dependencies:
+      client-only: 0.0.1
+      react: 18.2.0
 
   /styled-jsx@5.1.2(@babel/core@7.20.12)(react@18.2.0):
     resolution: {integrity: sha512-FI5r0a5ED2/+DSdG2ZRz3a4FtNQnKPLadauU5v76a9QsscwZrWggQKOmyxGGP5EWKbyY3bsuWAJYzyKaDAVAcw==}
@@ -14258,7 +14431,7 @@ packages:
       bs-logger: 0.2.6
       esbuild: 0.14.49
       fast-json-stable-stringify: 2.1.0
-      jest: 27.5.1(ts-node@10.9.1)
+      jest: 27.5.1
       jest-util: 27.5.1
       json5: 2.2.3
       lodash.memoize: 4.1.2
@@ -14294,7 +14467,7 @@ packages:
       bs-logger: 0.2.6
       esbuild: 0.17.18
       fast-json-stable-stringify: 2.1.0
-      jest: 27.5.1(ts-node@10.9.1)
+      jest: 27.5.1
       jest-util: 27.5.1
       json5: 2.2.3
       lodash.memoize: 4.1.2
@@ -14330,13 +14503,48 @@ packages:
       bs-logger: 0.2.6
       esbuild: 0.17.18
       fast-json-stable-stringify: 2.1.0
-      jest: 27.5.1(ts-node@10.9.1)
+      jest: 27.5.1
       jest-util: 27.5.1
       json5: 2.2.3
       lodash.memoize: 4.1.2
       make-error: 1.3.6
       semver: 7.5.4
       typescript: 5.2.2
+      yargs-parser: 20.2.9
+    dev: true
+
+  /ts-jest@27.1.5(@babel/core@7.20.12)(@types/jest@27.5.2)(jest@27.5.1)(typescript@4.9.4):
+    resolution: {integrity: sha512-Xv6jBQPoBEvBq/5i2TeSG9tt/nqkbpcurrEG1b+2yfBrcJelOZF9Ml6dmyMh7bcW9JyFbRYpR5rxROSlBLTZHA==}
+    engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
+    hasBin: true
+    peerDependencies:
+      '@babel/core': '>=7.0.0-beta.0 <8'
+      '@types/jest': ^27.0.0
+      babel-jest: '>=27.0.0 <28'
+      esbuild: '*'
+      jest: ^27.0.0
+      typescript: '>=3.8 <5.0'
+    peerDependenciesMeta:
+      '@babel/core':
+        optional: true
+      '@types/jest':
+        optional: true
+      babel-jest:
+        optional: true
+      esbuild:
+        optional: true
+    dependencies:
+      '@babel/core': 7.20.12
+      '@types/jest': 27.5.2
+      bs-logger: 0.2.6
+      fast-json-stable-stringify: 2.1.0
+      jest: 27.5.1
+      jest-util: 27.5.1
+      json5: 2.2.3
+      lodash.memoize: 4.1.2
+      make-error: 1.3.6
+      semver: 7.5.4
+      typescript: 4.9.4
       yargs-parser: 20.2.9
     dev: true
 
@@ -14364,7 +14572,7 @@ packages:
       '@babel/core': 7.20.12
       bs-logger: 0.2.6
       fast-json-stable-stringify: 2.1.0
-      jest: 27.5.1(ts-node@10.9.1)
+      jest: 27.5.1
       jest-util: 27.5.1
       json5: 2.2.3
       lodash.memoize: 4.1.2
@@ -14463,7 +14671,7 @@ packages:
       execa: 5.1.1
       globby: 11.1.0
       joycon: 3.1.1
-      postcss-load-config: 3.1.4(ts-node@10.9.1)
+      postcss-load-config: 3.1.4
       resolve-from: 5.0.0
       rollup: 2.78.0
       source-map: 0.8.0-beta.0
@@ -14511,6 +14719,42 @@ packages:
       - ts-node
     dev: true
 
+  /tsup@6.7.0(typescript@4.9.4):
+    resolution: {integrity: sha512-L3o8hGkaHnu5TdJns+mCqFsDBo83bJ44rlK7e6VdanIvpea4ArPcU3swWGsLVbXak1PqQx/V+SSmFPujBK+zEQ==}
+    engines: {node: '>=14.18'}
+    hasBin: true
+    peerDependencies:
+      '@swc/core': ^1
+      postcss: ^8.4.12
+      typescript: '>=4.1.0'
+    peerDependenciesMeta:
+      '@swc/core':
+        optional: true
+      postcss:
+        optional: true
+      typescript:
+        optional: true
+    dependencies:
+      bundle-require: 4.0.1(esbuild@0.17.18)
+      cac: 6.7.12
+      chokidar: 3.5.3
+      debug: 4.3.4
+      esbuild: 0.17.18
+      execa: 5.1.1
+      globby: 11.1.0
+      joycon: 3.1.1
+      postcss-load-config: 3.1.4
+      resolve-from: 5.0.0
+      rollup: 3.21.5
+      source-map: 0.8.0-beta.0
+      sucrase: 3.24.0
+      tree-kill: 1.2.2
+      typescript: 4.9.4
+    transitivePeerDependencies:
+      - supports-color
+      - ts-node
+    dev: true
+
   /tsup@6.7.0(typescript@5.2.2):
     resolution: {integrity: sha512-L3o8hGkaHnu5TdJns+mCqFsDBo83bJ44rlK7e6VdanIvpea4ArPcU3swWGsLVbXak1PqQx/V+SSmFPujBK+zEQ==}
     engines: {node: '>=14.18'}
@@ -14535,7 +14779,7 @@ packages:
       execa: 5.1.1
       globby: 11.1.0
       joycon: 3.1.1
-      postcss-load-config: 3.1.4(ts-node@10.9.1)
+      postcss-load-config: 3.1.4
       resolve-from: 5.0.0
       rollup: 3.21.5
       source-map: 0.8.0-beta.0
@@ -14697,10 +14941,6 @@ packages:
   /unc-path-regex@0.1.2:
     resolution: {integrity: sha512-eXL4nmJT7oCpkZsHZUOJo8hcX3GbsiDOa0Qu9F646fi8dT3XuSVopVqAcEiVzSKKH7UoDti23wNX3qGFxcW5Qg==}
     engines: {node: '>=0.10.0'}
-    dev: true
-
-  /undici-types@5.25.3:
-    resolution: {integrity: sha512-Ga1jfYwRn7+cP9v8auvEXN1rX3sWqlayd4HP7OKk4mZWylEmu3KzXDUGrQUN6Ol7qo1gPvB2e5gX6udnyEPgdA==}
     dev: true
 
   /unified@10.1.2:
@@ -15427,10 +15667,6 @@ packages:
 
   /zod@3.22.2:
     resolution: {integrity: sha512-wvWkphh5WQsJbVk1tbx1l1Ly4yg+XecD+Mq280uBGt9wa5BKSWf4Mhp6GmrkPixhMxmabYY7RbzlwVP32pbGCg==}
-    dev: false
-
-  /zstd-codec@0.1.4:
-    resolution: {integrity: sha512-KYnWoFWgGtWyQEKNnUcb3u8ZtKO8dn5d8u+oGpxPlopqsPyv60U8suDyfk7Z7UtAO6Sk5i1aVcAs9RbaB1n36A==}
     dev: false
 
   /zwitch@2.0.2:

@@ -12,9 +12,13 @@ pub fn restore_regular(
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
     let header = entry.header();
     // Assuming this was a `turbo`-created input, we currently have an
-    // AnchoredUnixPath. Assuming this is malicious input we don't really care
+    // RelativeUnixPath. Assuming this is malicious input we don't really care
     // if we do the wrong thing.
-    let processed_name = AnchoredSystemPathBuf::from_system_path(&header.path()?)?;
+    //
+    // Note that we don't use `header.path()` as some archive formats have support
+    // for longer path names described in separate entries instead of solely in the
+    // header
+    let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
 
     // We need to traverse `processedName` from base to root split at
     // `os.Separator` to make sure we don't end up following a symlink

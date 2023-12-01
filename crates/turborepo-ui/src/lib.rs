@@ -1,3 +1,7 @@
+//! Turborepo's terminal UI library. Handles elements like spinners, colors,
+//! and logging. Includes a `PrefixedUI` struct that can be used to prefix
+//! output, and a `ColorSelector` that lets multiple concurrent resources get
+//! an assigned color.
 mod color_selector;
 mod logs;
 mod output;
