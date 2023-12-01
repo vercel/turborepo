@@ -110,6 +110,19 @@ func TestParseTargetSelector(t *testing.T) {
 			false,
 		},
 		{
+			"./foo/*",
+			&TargetSelector{
+				fromRef:             "",
+				exclude:             false,
+				excludeSelf:         false,
+				includeDependencies: false,
+				includeDependents:   false,
+				namePattern:         "",
+				parentDir:           turbopath.MakeRelativeSystemPath("foo/*"),
+			},
+			false,
+		},
+		{
 			"../foo",
 			&TargetSelector{
 				fromRef:             "",

@@ -8,12 +8,12 @@ export class PackageManagerRoot {
   readonly isSinglePackage: boolean;
   static find(path?: string | undefined | null): Promise<PackageManagerRoot>;
   packageManager(): PackageManager;
-  packages(): Promise<Array<Workspace>>;
+  packages(): Promise<Array<Package>>;
 }
 export class PackageManager {
   readonly name: string;
 }
-export class Workspace {
+export class Package {
   readonly absolutePath: string;
   readonly repoPath: string;
 }

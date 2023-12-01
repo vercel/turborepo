@@ -39,6 +39,7 @@ pub enum Error {
 // We depend on BTree iteration being sorted for correct serialization
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
+#[derive(Debug)]
 pub struct BerryLockfile {
     data: LockfileData,
     resolutions: Map<Descriptor<'static>, Locator<'static>>,

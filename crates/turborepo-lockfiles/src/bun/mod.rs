@@ -20,6 +20,7 @@ pub enum Error {
     NotImplemented(),
 }
 
+#[derive(Debug)]
 pub struct BunLockfile {
     inner: Map<String, Entry>,
 }

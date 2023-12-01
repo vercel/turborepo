@@ -17,7 +17,6 @@ use std::{
     time::Duration,
 };
 
-pub use child::Command;
 use futures::Future;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
