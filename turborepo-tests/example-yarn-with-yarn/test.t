@@ -12,7 +12,8 @@
   Cached:    0 cached, 5 total
     Time:\s*[\.0-9ms]+  (re)
   
-  Done in [\.0-9]+m?s\. (re)
+  Done in [\.0-9]+m?s. (re)
+
  
   $ yarn turbo build lint --output-logs=errors-only
   yarn run v\d+\.\d+\.\d+ (re)
@@ -26,5 +27,6 @@
     Time:\s*[\.0-9ms]+ >>> FULL TURBO (re)
   
   Done in [\.0-9]+m?s\. (re)
+
 
   $ git diff
