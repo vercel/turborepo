@@ -53,8 +53,9 @@ pub async fn read_or_create_auth_file(
                 source: e,
                 path: auth_file_path.to_owned(),
             })?;
-        let auth_file: AuthFile = serde_json::from_str(&content)
+        let tokens: HashMap<String, String> = serde_json::from_str(&content)
             .map_err(|e| Error::FailedToDeserializeAuthFile { source: e })?;
+        let auth_file = AuthFile { tokens };
         return Ok(auth_file);
     } else if config_file_path.try_exists()? {
         let content = config_file_path
