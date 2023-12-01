@@ -7,17 +7,17 @@
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache bypass, force executing a47fc4626be5a730
+  my-app:build: cache bypass, force executing [0-9a-f]+ (re)
   my-app:build: 
   my-app:build: > build
-  my-app:build: > echo building && sleep 0.5 && echo done
+  my-app:build: > echo building && sleep 1 && echo done
   my-app:build: 
   my-app:build: building
   my-app:build: done
-  util:build: cache bypass, force executing 3f2fdfad6dfa4b39
+  util:build: cache bypass, force executing [0-9a-f]+ (re)
   util:build: 
   util:build: > build
-  util:build: > sleep 0.1 && echo building && sleep 0.5 && echo completed
+  util:build: > sleep 0.5 && echo building && sleep 1 && echo completed
   util:build: 
   util:build: building
   util:build: completed
@@ -32,17 +32,17 @@
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache bypass, force executing a47fc4626be5a730
+  my-app:build: cache bypass, force executing [0-9a-f]+ (re)
   my-app:build: 
   my-app:build: > build
-  my-app:build: > echo building && sleep 0.5 && echo done
+  my-app:build: > echo building && sleep 1 && echo done
   my-app:build: 
   my-app:build: building
   my-app:build: done
-  util:build: cache bypass, force executing 3f2fdfad6dfa4b39
+  util:build: cache bypass, force executing [0-9a-f]+ (re)
   util:build: 
   util:build: > build
-  util:build: > sleep 0.1 && echo building && sleep 0.5 && echo completed
+  util:build: > sleep 0.5 && echo building && sleep 1 && echo completed
   util:build: 
   util:build: building
   util:build: completed
@@ -56,17 +56,17 @@
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  my-app:build: cache bypass, force executing a47fc4626be5a730
+  my-app:build: cache bypass, force executing [0-9a-f]+ (re)
   my-app:build: 
   my-app:build: > build
-  my-app:build: > echo building && sleep 0.5 && echo done
+  my-app:build: > echo building && sleep 1 && echo done
   my-app:build: 
   my-app:build: building
   my-app:build: done
-  util:build: cache bypass, force executing 3f2fdfad6dfa4b39
+  util:build: cache bypass, force executing [0-9a-f]+ (re)
   util:build: 
   util:build: > build
-  util:build: > sleep 0.1 && echo building && sleep 0.5 && echo completed
+  util:build: > sleep 0.5 && echo building && sleep 1 && echo completed
   util:build: 
   util:build: building
   util:build: completed
