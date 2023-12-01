@@ -77,13 +77,9 @@ pub async fn read_or_create_auth_file(
 
     // If neither file exists, return an empty auth file and write a blank one to
     // disk.
-    let auth_file = AuthFile {
-        tokens: HashMap::new(),
-    };
+    let auth_file = AuthFile::default();
     auth_file.write_to_disk(auth_file_path)?;
-    Ok(AuthFile {
-        tokens: HashMap::new(),
-    })
+    Ok(auth_file)
 }
 
 /// Promote a token with new scopes.
