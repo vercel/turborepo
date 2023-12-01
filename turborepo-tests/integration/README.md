@@ -49,8 +49,7 @@ script to replace before your test runs:
 
 ```bash
 Setup
-  $ . ${TESTDIR}/setup.sh
-  $ . ${TESTDIR}/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh $(pwd) single_package
 
 Custom config
   $ . ${TESTDIR}/../../helpers/replace_turbo_config.sh $(pwd) "my-custom-config.json"
