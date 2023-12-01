@@ -105,7 +105,13 @@ pub async fn follow_reexports_internal(
         }
 
         // Try to find the export in the star exports
-        return handle_star_reexports(module, export_name, &exports.star_exports).await;
+        return handle_star_reexports(
+            module,
+            export_name,
+            &exports.star_exports,
+            stop_on_side_effects,
+        )
+        .await;
     }
 }
 
@@ -165,6 +171,7 @@ async fn handle_star_reexports(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: String,
     star_exports: &[Vc<EsmAssetReference>],
+    stop_on_side_effects: bool,
 ) -> Result<Vc<FollowExportsResult>> {
     let mut potential_modules = Vec::new();
     for star_export in star_exports {
@@ -173,7 +180,11 @@ async fn handle_star_reexports(
             let result_ref = result.await?;
             match result_ref.ty {
                 FoundExportType::Found => {
-                    return Ok(follow_reexports(m, export_name.clone()));
+                    if stop_on_side_effects {
+                        return Ok(follow_reexports(m, export_name.clone()));
+                    } else {
+                        return Ok(result);
+                    }
                 }
                 FoundExportType::SideEffects => {
                     unreachable!();
