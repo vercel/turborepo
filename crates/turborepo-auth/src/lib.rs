@@ -1,6 +1,8 @@
 #![feature(cow_is_borrowed)]
 #![feature(fs_try_exists)] // Used in tests
 #![deny(clippy::all)]
+//! Turborepo's library for authenticating with the Vercel API.
+//! Handles logging into Vercel, verifying SSO, and storing the token.
 
 mod auth_file;
 mod config_token;
