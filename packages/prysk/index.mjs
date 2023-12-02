@@ -21,7 +21,7 @@ execSync(`${getVenvBin("python3")} -m pip install --quiet --upgrade pip`);
 execSync(`${getVenvBin("pip")} install "prysk==0.15.2"`);
 
 // Which tests do we want to run?
-const testArg = process.argv[2] ? process.argv[2] : "";
+const testArg = process.argv[3] ? process.argv[3] : process.argv[2];
 const tests = isWindows ? testArg.replaceAll("/", path.sep) : testArg;
 
 if (!tests) {

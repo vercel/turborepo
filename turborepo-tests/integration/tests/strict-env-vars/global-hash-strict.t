@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) strict_env_vars
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) strict_env_vars
 
 With strict mode
 
@@ -13,12 +12,12 @@ Hash changes, because we're using a new mode
 
 Add empty config for global pass through env var
 Hash does not change, because the mode is the same and we haven't added any new pass through vars
-  $ cp "$TESTDIR/../_fixtures/turbo-configs/strict_env_vars/global_pt-empty.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
+  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/global_pt-empty.json"
   $ WITH_EMPTY_GLOBAL=$(${TURBO} build -vv --env-mode=strict 2>&1 | "$TESTDIR/../_helpers/get-global-hash.sh")
   $ test $WITH_FLAG = $WITH_EMPTY_GLOBAL
 
 Add global pass through env var
 Hash changes, because we have a new pass through value
-  $ cp "$TESTDIR/../_fixtures/turbo-configs/strict_env_vars/global_pt.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
+  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/global_pt.json"
   $ WITH_GLOBAL=$(${TURBO} build -vv --env-mode=strict 2>&1 | "$TESTDIR/../_helpers/get-global-hash.sh")
   $ test $WITH_EMPTY_GLOBAL != $WITH_GLOBAL
