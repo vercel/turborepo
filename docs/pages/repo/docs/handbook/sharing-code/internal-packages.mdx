@@ -89,7 +89,7 @@ Great! We've now got all the files we need for our internal package.
 
 We're now going to import the package and see what happens. Go into one of your apps, and add `math-helpers` into the dependencies of its package.json:
 
-<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+<Tabs items={['npm', 'yarn', 'pnpm', 'bun']} storageKey="selected-pkg-manager">
   <Tab>
 ```jsonc filename="apps/web/package.json"
 {
@@ -104,6 +104,15 @@ We're now going to import the package and see what happens. Go into one of your 
 {
   "dependencies": {
     "math-helpers": "*"
+  }
+}
+```
+  </Tab>
+  <Tab>
+```jsonc filename="apps/web/package.json"
+{
+  "dependencies": {
+    "math-helpers": "workspace:*"
   }
 }
 ```
