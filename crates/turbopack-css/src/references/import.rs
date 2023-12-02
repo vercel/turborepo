@@ -348,7 +348,7 @@ impl ModuleReference for ImportAssetReference {
         url_resolve(
             self.origin,
             self.request,
-            Value::new(UrlReferenceSubType::CssUrl),
+            Value::new(UrlReferenceSubType::CssAtImport),
             Some(self.issue_source),
             IssueSeverity::Error.cell(),
         )
