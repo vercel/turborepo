@@ -1,5 +1,5 @@
-import { log } from "logger";
-import { CounterButton, Link } from "ui";
+import { log } from "@repo/logger";
+import { CounterButton, Link } from "@repo/ui";
 
 export const metadata = {
   title: "Store | Kitchen Sink",
