@@ -5,9 +5,15 @@ set -eo pipefail
 # TODO: Should we default to pnpm here?
 PACKAGE_MANAGER=${1-npm}
 
+# If a lock file already exists, we will exit. Some fixtures already have the lock
+# file. The caller is responsible for deleting this before calling this script.
+# TODO: we should make the fixtures consistent in either having or not having lockfiles.
+if [[ -f "package-lock.json" || -f "pnpm-lock.yaml" || -f "yarn.lock" ]]; then
+  exit 0
+fi
+
 if [ "$PACKAGE_MANAGER" == "npm" ]; then
   npm install > /dev/null 2>&1
-
   if [[ "$OSTYPE" == "msys" ]]; then
     dos2unix --quiet "package-lock.json"
   fi
@@ -34,6 +40,7 @@ fi
 
 git add .
 
-# even with --quiet, we'lls end output to /dev/null, because if
-# there was nothing to commit stderr is still printed.
-git commit -am "Install dependencies" --quiet > /dev/null 2>&1
+# Check if there are changes before trying to run git commit, so it doesn't exit with 0
+if [[ $(git status --porcelain) ]]; then
+  git commit -am "Install dependencies" --quiet > /dev/null 2>&1 || true
+fi
