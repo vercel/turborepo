@@ -27,23 +27,7 @@ TURBOREPO_INTEGRATION_TESTS_DIR="${TURBOREPO_TESTS_DIR}/integration/tests"
 cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
 
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" ${TARGET_DIR}
-
-# Update package manager if one was provided
-if [ "$PACKAGE_MANAGER" != "" ]; then
-  # Use jq to write a new file with a .packageManager field set and then
-  # Overwrite original package.json. For some reason the command above won't send its output
-  # directly to the original file.
-  jq --arg pm "$PACKAGE_MANAGER" '.packageManager = $pm' "$TARGET_DIR/package.json" > "$TARGET_DIR/package.json.new"
-  mv "$TARGET_DIR/package.json.new" "$TARGET_DIR/package.json"
-
-  # We just created a new file. On Windows, we need to convert it to Unix line endings
-  # so the hashes will be stable with what's expected in our test cases.
-  if [[ "$OSTYPE" == "msys" ]]; then
-    dos2unix --quiet "$TARGET_DIR/package.json"
-  fi
-
-  git commit -am "Updated package manager to $PACKAGE_MANAGER" --quiet
-fi
+"${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" ${TARGET_DIR} "$PACKAGE_MANAGER"
 
 # Install dependencies with the given package manager
 PACKAGE_MANAGER_NAME="npm"

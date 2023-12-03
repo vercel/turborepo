@@ -6,10 +6,12 @@ set -eo pipefail
 
 exampleName=$1
 pkgManager=$2
+pkgManagerWithVersion=$3
 
 # Copy the example dir over to the test dir that prysk puts you in
 SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 MONOREPO_ROOT_DIR="$SCRIPT_DIR/../.."
+TURBOREPO_TESTS_DIR="$SCRIPT_DIR/.."
 EXAMPLE_DIR="$MONOREPO_ROOT_DIR/examples/$exampleName"
 
 TARGET_DIR="$(pwd)"
@@ -30,19 +32,10 @@ if [ "$TURBO_TAG" == "canary" ]; then
   mv package.json.new package.json
 fi
 
-# Update package manager
-if [ "$3" != "" ]; then
-  # Use jq to write a new file with a .packageManager field set and then
-  # overwrite original package.json.
-  jq --arg pm "$3" '.packageManager = $pm' "$TARGET_DIR/package.json" > "$TARGET_DIR/package.json.new"
-  mv "$TARGET_DIR/package.json.new" "$TARGET_DIR/package.json"
-
-  # We just created a new file. On Windows, we need to convert it to Unix line endings
-  # so the hashes will be stable with what's expected in our test cases.
-  if [[ "$OSTYPE" == "msys" ]]; then
-    dos2unix --quiet "$TARGET_DIR/package.json"
-  fi
-fi
+# Delete .git directory if it's there, we'll set up a new git repo
+[ ! -d .git ] || rm -rf .git
+"${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
+"${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$pkgManagerWithVersion"
 
 # Enable corepack so that when we set the packageManager in package.json it actually makes a diference.
 if [ "$PRYSK_TEMP" == "" ]; then
@@ -54,9 +47,7 @@ else
   COREPACK_INSTALL_DIR_CMD="--install-directory=${COREPACK_INSTALL_DIR}"
 fi
 corepack enable "${COREPACK_INSTALL_DIR_CMD}"
-
-# Delete .git directory if it's there, we'll set up a new git repo
-[ ! -d .git ] || rm -rf .git
+"${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$pkgManager"
 
 if [ "${OSTYPE}" == "msys" ]; then
   EXT=".exe"
@@ -64,8 +55,3 @@ else
   EXT=""
 fi
 export TURBO_BINARY_PATH=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
-
-"$MONOREPO_ROOT_DIR/turborepo-tests/helpers/setup_git.sh" "${TARGET_DIR}"
-
-# Install dependencies after git is setup
-"${SCRIPT_DIR}/install_deps.sh" "$pkgManager"
