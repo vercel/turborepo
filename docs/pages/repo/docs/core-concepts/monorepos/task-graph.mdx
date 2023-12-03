@@ -5,21 +5,30 @@ description: Turborepo builds a Task Graph based on your configuration and repos
 
 # The Task Graph
 
-Turborepo uses a data structure called a directed acyclic graph (DAG) to
-understand your repository and its tasks. We call it a "graph", for short. Using
-the graph, Turborepo can schedule and perform the work you need done in your
-repo incredibly fast.
+In [the previous section][3], we talked about how Turborepo uses `turbo.json` to express
+how tasks relate to each other. You can think of these relationships as dependencies between
+tasks, but we have a more formal name for them: the task graph.
 
-To build a graph, Turborepo uses a combination of your `turbo.json` and the
-packages in your repository. Depending on how you've configured your pipelines,
-Turborepo can figure out:
+Turborepo uses a data structure called a [directed acyclic graph (DAG)][1] to
+understand your repository and its tasks. A graph is made up of nodes and edges.
+In the case of a task graph, the nodes are tasks and the edges are the dependencies.
+A _directed_ graph means that the edges have a direction, so we can say that
+TaskA has a dependency on TaskB, or the other way around. The direction of the edge
+depends on which way the dependency goes.
 
-- the order in which tasks need to run
-- which tasks can be run at the same time
-- tasks that have already ran
+For example, let's say you have a monorepo with an application `apps/web` that depends on two
+packages: `@repo/ui` and `@repo/utils`:
 
-For example, you may have an application that depends on two packages and a
-`turbo.json` that configures a `build` task:
+```
+my-monorepo
+└─ apps
+ └─ web
+└─ packages
+ └─ ui
+ └─ utils
+```
+
+And a `build` task depends on `^build`:
 
 ```json
 {
@@ -31,29 +40,13 @@ For example, you may have an application that depends on two packages and a
 }
 ```
 
-With this `turbo.json`, you're telling Turborepo: "When I run a build, make sure
-that the dependencies my application needs are built first." If you run your
-`build` task with `turbo run build`, Turborepo will use a graph like this:
+Turborepo will build a task graph like this:
 
-![Simple task graph visualization. The diagram has one node at the top named "apps/web" with two lines that connect to other nodes, "packages/ui" and "packages/utils" respectively.](/images/docs/simple-task-graph.png)
-
-The `@repo/ui` package and `@repo/utils` package can be built at the same time
-since they don't need each other's source code. Once both of those packages are
-ready, your final application's build can run (since both its dependencies are
-now available).
-
-This fundamental model is great for building powerful monorepos that can reach
-massive scale while still running CI pipelines as fast as possible. We can build
-monorepos where we know:
-
-- tasks are guaranteed to ran before others
-- we never have to do the same work twice
-- we'll only do the required work for the pipeline we care about
-- we have a clear description of the dependencies in our repo for all developers
+![Task graph visualization. The diagram has one node at the top named "apps/web" with two lines that connect to other nodes, "packages/ui" and "packages/utils" respectively.](/images/docs/simple-task-graph.png)
 
 ## Phantom Nodes
 
-A challenge when building a task graph is how to handle nested dependencies. For
+A challenge when building a task graph is handling nested dependencies. For
 example, let's say your monorepo has a `docs` app that depends on the `ui`
 package, which depends on the `core` package:
 
@@ -96,3 +89,7 @@ If the default was to **exclude** Phantom Nodes, you could make a source code
 change in the `core` package but still hit cache for the `docs` app the next
 time you try `turbo run build`, using stale code from previous iterations of
 your `core` package.
+
+[1]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
+[2]: https://vercel.com/blog/how-to-scale-a-large-codebase
+[3]: /repo/docs/core-concepts/task-dependencies
