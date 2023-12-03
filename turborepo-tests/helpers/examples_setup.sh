@@ -55,20 +55,6 @@ else
 fi
 corepack enable "${COREPACK_INSTALL_DIR_CMD}"
 
-if [ "$pkgManager" == "npm" ]; then
-  npm install > /dev/null 2>&1
-elif [ "$pkgManager" == "pnpm" ]; then
-  pnpm install > /dev/null 2>&1
-elif [ "$pkgManager" == "yarn" ]; then
-  # Pass a --cache-folder here because yarn seems to have trouble
-  # running multiple yarn installs at the same time and we are running
-  # examples tests in parallel. https://github.com/yarnpkg/yarn/issues/1275
-  yarn install --cache-folder="$PWD/.yarn-cache" > /dev/null 2>&1
-
-  # And ignore this new cache folder from the new git repo we're about to create.
-  echo ".yarn-cache" >> .gitignore
-fi
-
 # Delete .git directory if it's there, we'll set up a new git repo
 [ ! -d .git ] || rm -rf .git
 
@@ -79,4 +65,7 @@ else
 fi
 export TURBO_BINARY_PATH=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
 
-"$MONOREPO_ROOT_DIR/turborepo-tests/helpers/setup_git.sh" "${TARGET_DIR}" "false"
+"$MONOREPO_ROOT_DIR/turborepo-tests/helpers/setup_git.sh" "${TARGET_DIR}"
+
+# Install dependencies after git is setup
+"${SCRIPT_DIR}/install_deps.sh" "$pkgManager"
