@@ -31,6 +31,11 @@ if [ "$TURBO_TAG" == "canary" ]; then
   mv package.json.new package.json
 fi
 
+# Delete .git directory if it's there, we'll set up a new git repo
+[ ! -d .git ] || rm -rf .git
+
+"$MONOREPO_ROOT_DIR/turborepo-tests/helpers/setup_git.sh" "${TARGET_DIR}"
+
 "${SCRIPT_DIR}/set_package_manager.sh" "$TARGET_DIR" "$pkgManager"
 
 # Enable corepack so that when we set the packageManager in package.json it actually makes a diference.
@@ -44,17 +49,13 @@ else
 fi
 corepack enable "${COREPACK_INSTALL_DIR_CMD}"
 
-# Delete .git directory if it's there, we'll set up a new git repo
-[ ! -d .git ] || rm -rf .git
+# Install dependencies after git is setup
+"${SCRIPT_DIR}/install_deps.sh" "$pkgManager"
 
+# Set TURBO_BINARY_PATH env var.
 if [ "${OSTYPE}" == "msys" ]; then
   EXT=".exe"
 else
   EXT=""
 fi
 export TURBO_BINARY_PATH=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
-
-"$MONOREPO_ROOT_DIR/turborepo-tests/helpers/setup_git.sh" "${TARGET_DIR}"
-
-# Install dependencies after git is setup
-"${SCRIPT_DIR}/install_deps.sh" "$pkgManager"
