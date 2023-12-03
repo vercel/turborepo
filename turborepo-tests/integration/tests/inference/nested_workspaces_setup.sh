@@ -13,7 +13,7 @@ function install_deps() {
   git --git-dir="${dir}/.git" --work-tree="${dir}" commit -m "Install dependencies" --quiet
 }
 
-SETUP_GIT_SCRIPT="${TURBOREPO_TESTS_DIR}/helpers/setup_git_old.sh"
+SETUP_GIT_SCRIPT="${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh"
 
 cp -a ${SCRIPT_DIR}/../_fixtures/inference/nested_workspaces/. ${TARGET_DIR}/
 
