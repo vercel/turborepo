@@ -28,27 +28,15 @@ cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
 
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" ${TARGET_DIR}
 
+# Update package manager. If $PACKAGE_MANAGER is not setup, the script won't do anything.
+"${SCRIPT_DIR}/set_package_manager.sh" "${TARGET_DIR}" "${PACKAGE_MANAGER}"
+
 # default package manager is npm
 PACKAGE_MANAGER_NAME="npm"
 
-# Update package manager if one was provided
+# If a package manager was provided, set the PACKAGE_MANAGER_NAME by removing the
+# specific version from the argument.
 if [ "$PACKAGE_MANAGER" != "" ]; then
-  # If a package manager was provided, set the PACKAGE_MANAGER_NAME by removing the
-  # specific version from the argument.
   PACKAGE_MANAGER_NAME=$(echo "$PACKAGE_MANAGER" | sed 's/@.*//')
-  # Use jq to write a new file with a .packageManager field set and then
-  # Overwrite original package.json. For some reason the command above won't send its output
-  # directly to the original file.
-  jq --arg pm "$PACKAGE_MANAGER" '.packageManager = $pm' "$TARGET_DIR/package.json" > "$TARGET_DIR/package.json.new"
-  mv "$TARGET_DIR/package.json.new" "$TARGET_DIR/package.json"
-
-  # We just created a new file. On Windows, we need to convert it to Unix line endings
-  # so the hashes will be stable with what's expected in our test cases.
-  if [[ "$OSTYPE" == "msys" ]]; then
-    dos2unix --quiet "$TARGET_DIR/package.json"
-  fi
-
-  git commit -am "Updated package manager to $PACKAGE_MANAGER_NAME" --quiet
 fi
-
-"${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" ${TARGET_DIR} ${PACKAGE_MANAGER_NAME}
+"${SCRIPT_DIR}/install_deps.sh" "${TARGET_DIR}" "${PACKAGE_MANAGER_NAME}"
