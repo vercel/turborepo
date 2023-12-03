@@ -5,8 +5,8 @@
 set -eo pipefail
 
 exampleName=$1
-pkgManager=$2
-pkgManagerName=$3
+pkgManagerName=$2
+pkgManager=$3 # Optional
 
 # Copy the example dir over to the test dir that prysk puts you in
 SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
@@ -32,6 +32,7 @@ if [ "$TURBO_TAG" == "canary" ]; then
 fi
 
 # Delete .git directory if it's there, we'll set up a new git repo
+# TODO: this may not be necessary anymore...
 [ ! -d .git ] || rm -rf .git
 
 "$MONOREPO_ROOT_DIR/turborepo-tests/helpers/setup_git.sh" "${TARGET_DIR}"
@@ -50,7 +51,7 @@ fi
 corepack enable "${COREPACK_INSTALL_DIR_CMD}"
 
 # Install dependencies after git is setup
-"${SCRIPT_DIR}/install_deps.sh" "$pkgManager"
+"${SCRIPT_DIR}/install_deps.sh" "$pkgManagerName"
 
 # Set TURBO_BINARY_PATH env var.
 if [ "${OSTYPE}" == "msys" ]; then
