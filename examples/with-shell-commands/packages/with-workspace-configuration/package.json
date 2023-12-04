@@ -1,0 +1,12 @@
+{
+  "name": "with-workspace-configuration",
+  "description": "Uses different a different output file and ignores changes in README.md.",
+  "scripts": {
+    "build": "pnpm write-file && pnpm read-file",
+    "write-file": "echo \"I used a different output file!\" > a-different-file.txt",
+    "read-file": "cat a-different-file.txt"
+  },
+  "dependencies": {
+    "tooling-config": "workspace:*"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "pipeline": {
+    "build": {
+      "inputs": ["!README.md"],
+      "outputs": ["a-different-file.txt"]
+    }
+  }
+}

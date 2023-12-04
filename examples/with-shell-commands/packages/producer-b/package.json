@@ -1,0 +1,9 @@
+{
+  "name": "pkg-b",
+  "scripts": {
+    "build": "echo \"Turborepo is\" > output-file.txt && cat output-file.txt"
+  },
+  "dependencies": {
+    "tooling-config": "workspace:*"
+  }
+}
