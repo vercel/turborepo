@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# This script is called from within a prysk test, so pwd is already in the prysk tmp directory.
-
 set -eo pipefail
 
 FIXTURE_NAME=$1
@@ -20,14 +18,6 @@ TARGET_DIR="$(pwd)"
 [ ! -f yarn.lock ] || mv yarn.lock yarn.lock.bak
 [ ! -f pnpm-lock.yaml ] || mv pnpm-lock.yaml pnpm-lock.yaml.bak
 [ ! -f package-lock.json ] || mv package-lock.json package-lock.json.bak
-
-TURBO_VERSION_FILE="${MONOREPO_ROOT_DIR}/version.txt"
-# Change package.json in the example directory to point to @canary if our branch is currently at that version
-TURBO_TAG=$(cat "$TURBO_VERSION_FILE" | sed -n '2 p')
-if [ "$TURBO_TAG" == "canary" ]; then
-  jq --arg version "canary" '.devDependencies.turbo = $version' package.json > package.json.new
-  mv package.json.new package.json
-fi
 
 # Delete .git directory if it's there, we'll set up a new git repo
 [ ! -d .git ] || rm -rf .git
