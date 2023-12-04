@@ -27,7 +27,9 @@ use css::{CssModuleAsset, GlobalCssAsset, ModuleCssAsset};
 use ecmascript::{
     chunk::EcmascriptChunkPlaceable,
     references::{follow_reexports, FollowExportsResult},
-    side_effect_optimization::reexport_facade::module::EcmascriptModuleReexportsFacadeModule,
+    side_effect_optimization::reexport_facade::module::{
+        EcmascriptModuleReexportsFacadeModule, FacadeType,
+    },
     typescript::resolve::TypescriptTypesAssetReference,
     EcmascriptModuleAsset, EcmascriptModuleAssetType, TreeShakingMode,
 };
@@ -179,7 +181,8 @@ async fn apply_module_type(
                                     }
                                     if *module.get_exports().needs_reexports_facade().await? {
                                         Vc::upcast(EcmascriptModuleReexportsFacadeModule::new(
-                                            module, true,
+                                            module,
+                                            FacadeType::Evaluation,
                                         ))
                                     } else {
                                         Vc::upcast(module)
@@ -189,7 +192,8 @@ async fn apply_module_type(
                                     if *module.get_exports().needs_reexports_facade().await? {
                                         apply_reexport_tree_shaking(
                                             Vc::upcast(EcmascriptModuleReexportsFacadeModule::new(
-                                                module, false,
+                                                module,
+                                                FacadeType::Reexports,
                                             )),
                                             part,
                                         )
@@ -202,7 +206,11 @@ async fn apply_module_type(
                                 ),
                             }
                         } else if *module.get_exports().needs_reexports_facade().await? {
-                            Vc::upcast(EcmascriptModuleReexportsFacadeModule::new(module, false))
+                            // TODO this should be reexports and evaluation
+                            Vc::upcast(EcmascriptModuleReexportsFacadeModule::new(
+                                module,
+                                FacadeType::Reexports,
+                            ))
                         } else {
                             Vc::upcast(module)
                         }

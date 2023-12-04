@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use anyhow::{bail, Context, Result};
-use turbo_tasks::Vc;
+use serde::{Deserialize, Serialize};
+use turbo_tasks::{trace::TraceRawVcs, TaskInput, Vc};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{AsyncModuleInfo, ChunkableModule, ChunkingContext, EvaluatableAsset},
@@ -22,10 +23,29 @@ use crate::{
     EcmascriptModuleAsset, EcmascriptModuleContent,
 };
 
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    Hash,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    TaskInput,
+    TraceRawVcs,
+)]
+pub enum FacadeType {
+    Evaluation,
+    Reexports,
+}
+
 #[turbo_tasks::value]
 pub struct EcmascriptModuleReexportsFacadeModule {
     pub module: Vc<EcmascriptModuleAsset>,
-    pub evaluation: bool,
+    pub ty: FacadeType,
 }
 
 /// A module derived from an original ecmascript module that only contains all
@@ -34,8 +54,8 @@ pub struct EcmascriptModuleReexportsFacadeModule {
 #[turbo_tasks::value_impl]
 impl EcmascriptModuleReexportsFacadeModule {
     #[turbo_tasks::function]
-    pub fn new(module: Vc<EcmascriptModuleAsset>, evaluation: bool) -> Vc<Self> {
-        EcmascriptModuleReexportsFacadeModule { module, evaluation }.cell()
+    pub fn new(module: Vc<EcmascriptModuleAsset>, ty: FacadeType) -> Vc<Self> {
+        EcmascriptModuleReexportsFacadeModule { module, ty }.cell()
     }
 
     #[turbo_tasks::function]
@@ -66,20 +86,18 @@ impl Module for EcmascriptModuleReexportsFacadeModule {
     async fn ident(&self) -> Result<Vc<AssetIdent>> {
         let inner = self.module.ident();
 
-        Ok(inner.with_part(if self.evaluation {
-            ModulePart::module_evaluation()
-        } else {
-            ModulePart::reexports_facade()
+        Ok(inner.with_part(match self.ty {
+            FacadeType::Evaluation => ModulePart::module_evaluation(),
+            FacadeType::Reexports => ModulePart::reexports_facade(),
         }))
     }
 
     #[turbo_tasks::function]
     async fn references(&self) -> Result<Vc<ModuleReferences>> {
         let result = self.module.failsafe_analyze().await?;
-        let references = if self.evaluation {
-            result.evaluation_references
-        } else {
-            result.reexport_references
+        let references = match self.ty {
+            FacadeType::Evaluation => result.evaluation_references,
+            FacadeType::Reexports => result.reexport_references,
         };
         let mut references = references.await?.clone_value();
         references.push(Vc::upcast(EcmascriptModuleLocalsReference::new(
@@ -115,34 +133,39 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleReexportsFacadeModule {
         let mut exports = BTreeMap::new();
         let mut star_exports = Vec::new();
 
-        if !self.evaluation {
-            for (name, export) in &esm_exports.exports {
-                let name = name.clone();
-                match export {
-                    EsmExport::LocalBinding(local_name) => {
-                        exports.insert(
-                            name,
-                            EsmExport::ImportedBinding(
-                                Vc::upcast(EcmascriptModuleLocalsReference::new(self.module)),
-                                local_name.clone(),
-                            ),
-                        );
-                    }
-                    EsmExport::ImportedNamespace(reference) => {
-                        exports.insert(name, EsmExport::ImportedNamespace(*reference));
-                    }
-                    EsmExport::ImportedBinding(reference, imported_name) => {
-                        exports.insert(
-                            name,
-                            EsmExport::ImportedBinding(*reference, imported_name.clone()),
-                        );
-                    }
-                    EsmExport::Error => {
-                        exports.insert(name, EsmExport::Error);
+        match self.ty {
+            FacadeType::Reexports => {
+                for (name, export) in &esm_exports.exports {
+                    let name = name.clone();
+                    match export {
+                        EsmExport::LocalBinding(local_name) => {
+                            exports.insert(
+                                name,
+                                EsmExport::ImportedBinding(
+                                    Vc::upcast(EcmascriptModuleLocalsReference::new(self.module)),
+                                    local_name.clone(),
+                                ),
+                            );
+                        }
+                        EsmExport::ImportedNamespace(reference) => {
+                            exports.insert(name, EsmExport::ImportedNamespace(*reference));
+                        }
+                        EsmExport::ImportedBinding(reference, imported_name) => {
+                            exports.insert(
+                                name,
+                                EsmExport::ImportedBinding(*reference, imported_name.clone()),
+                            );
+                        }
+                        EsmExport::Error => {
+                            exports.insert(name, EsmExport::Error);
+                        }
                     }
                 }
+                star_exports.extend(esm_exports.star_exports.iter().copied());
             }
-            star_exports.extend(esm_exports.star_exports.iter().copied());
+            FacadeType::Evaluation => {
+                // no exports
+            }
         }
 
         let exports = EsmExports {
@@ -155,7 +178,10 @@ impl EcmascriptChunkPlaceable for EcmascriptModuleReexportsFacadeModule {
 
     #[turbo_tasks::function]
     fn is_marked_as_side_effect_free(&self) -> Vc<bool> {
-        Vc::cell(!self.evaluation)
+        Vc::cell(match self.ty {
+            FacadeType::Evaluation => false,
+            FacadeType::Reexports => true,
+        })
     }
 
     #[turbo_tasks::function]
