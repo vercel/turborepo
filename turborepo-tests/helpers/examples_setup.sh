@@ -4,25 +4,22 @@
 
 set -eo pipefail
 
-exampleName=$1
+FIXTURE_NAME=$1
 pkgManager=$2
 pkgManagerWithVersion=$3
 
-# Copy the example dir over to the test dir that prysk puts you in
-SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
-MONOREPO_ROOT_DIR="$SCRIPT_DIR/../.."
-TURBOREPO_TESTS_DIR="$SCRIPT_DIR/.."
-EXAMPLE_DIR="$MONOREPO_ROOT_DIR/examples/$exampleName"
+THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
+MONOREPO_ROOT_DIR="$THIS_DIR/../.."
+TURBOREPO_TESTS_DIR="${MONOREPO_ROOT_DIR}/turborepo-tests"
 
 TARGET_DIR="$(pwd)"
 
-cp -a "$EXAMPLE_DIR/." "${TARGET_DIR}/"
+"${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${MONOREPO_ROOT_DIR}/examples"
 
 # cleanup lockfiles so we can install from scratch
 [ ! -f yarn.lock ] || mv yarn.lock yarn.lock.bak
 [ ! -f pnpm-lock.yaml ] || mv pnpm-lock.yaml pnpm-lock.yaml.bak
 [ ! -f package-lock.json ] || mv package-lock.json package-lock.json.bak
-
 
 TURBO_VERSION_FILE="${MONOREPO_ROOT_DIR}/version.txt"
 # Change package.json in the example directory to point to @canary if our branch is currently at that version
@@ -49,6 +46,10 @@ fi
 corepack enable "${COREPACK_INSTALL_DIR_CMD}"
 "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$pkgManager"
 
+# Set the TURBO_BINARY_PATH env var. The examples themselves invoke the locally installed turbo,
+# but turbo has an internal feature that will look for this environment variable and use it if it's set.
+# This is our way of running a locally built turbo version in our examples/ instead of the version
+# that is installed in the example's node_modules.
 if [ "${OSTYPE}" == "msys" ]; then
   EXT=".exe"
 else
