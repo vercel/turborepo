@@ -71,7 +71,8 @@ jobs:
       - name: Build native library
         run: |
           rustup target list
-
+          rustup update
+          printenv
           cd packages/turbo-repository
           pnpm build:release --target=${{ matrix.settings.target }}
 
