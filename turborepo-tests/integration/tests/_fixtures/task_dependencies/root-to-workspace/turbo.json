@@ -1,0 +1,10 @@
+{
+  "pipeline": {
+    "//#mytask": {
+      "dependsOn": [
+        "lib-a#build"
+      ]
+    },
+    "build": {}
+  }
+}
