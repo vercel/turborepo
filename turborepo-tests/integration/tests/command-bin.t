@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh $(pwd)
+  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
   $ ${TURBO} bin -vvv > out.log 2>&1
   $ grep --quiet "Global turbo version: .*" out.log

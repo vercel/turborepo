@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) monorepo_dependency_error
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh monorepo_dependency_error
 Run without --continue
   $ ${TURBO} build
   \xe2\x80\xa2 Packages in scope: my-app, other-app, some-lib (esc)

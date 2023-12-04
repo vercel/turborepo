@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 Remove comments from our fixture turbo.json so we can do more jq things to it
   $ grep -v '^\s*//' turbo.json > turbo.json.1

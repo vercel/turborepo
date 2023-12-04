@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../../helpers/setup_integration_test.sh $(pwd) single_package "yarn@1.22.17"
+  $ . ${TESTDIR}/../../../../helpers/setup_integration_test.sh single_package "yarn@1.22.17"
 
 Check
   $ ${TURBO} run build

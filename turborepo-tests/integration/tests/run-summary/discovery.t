@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
   $ rm -rf .turbo/runs
 
   $ ${TURBO} run build --summarize --filter=my-app
