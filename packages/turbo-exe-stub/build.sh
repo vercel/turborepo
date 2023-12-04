@@ -13,7 +13,7 @@ g++ turbo.cpp -o turbo.exe
 SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 UP_ONE="$SCRIPT_DIR/.."
 ROOT_DIR="$SCRIPT_DIR/../.."
-FIND_TURBO_FIXTURES_DIR="${ROOT_DIR}/turborepo-tests/integration/tests/_fixtures/find_turbo"
+FIND_TURBO_FIXTURES_DIR="${ROOT_DIR}/turborepo-tests/integration/fixtures/find_turbo"
 
 echo "PWD: $PWD"
 echo "ROOT_DIR: $ROOT_DIR"
