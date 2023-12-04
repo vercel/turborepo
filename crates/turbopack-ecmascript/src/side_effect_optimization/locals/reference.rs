@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use swc_core::{
     common::DUMMY_SP,
-    ecma::ast::{Expr, Ident, ModuleItem},
+    ecma::ast::{Expr, Ident},
     quote,
 };
 use turbo_tasks::{ValueToString, Vc};
@@ -16,7 +16,7 @@ use crate::{
     chunk::EcmascriptChunkingContext,
     code_gen::{CodeGenerateable, CodeGeneration},
     create_visitor,
-    references::esm::base::ReferencedAsset,
+    references::esm::base::{insert_hoisted_stmt, ReferencedAsset},
     EcmascriptModuleAsset,
 };
 
@@ -88,11 +88,7 @@ impl CodeGenerateable for EcmascriptModuleLocalsReference {
                     ModuleId::Number(n) => (*n as f64).into(),
                 })
             );
-            program
-                .as_mut_module()
-                .unwrap()
-                .body
-                .push(ModuleItem::Stmt(stmt));
+            insert_hoisted_stmt(program, stmt);
         }));
 
         Ok(CodeGeneration { visitors }.into())
