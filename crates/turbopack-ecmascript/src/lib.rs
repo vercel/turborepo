@@ -541,6 +541,11 @@ impl EcmascriptChunkItem for ModuleChunkItem {
         async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<EcmascriptChunkItemContent>> {
         let this = self.await?;
+        let _span = tracing::info_span!(
+            "code generation",
+            module = *self.asset_ident().to_string().await?
+        )
+        .entered();
         let async_module_options = this
             .module
             .get_async_module()

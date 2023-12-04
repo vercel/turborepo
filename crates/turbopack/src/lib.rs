@@ -31,7 +31,8 @@ use ecmascript::{
 use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
 use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
 pub use resolve::resolve_options;
-use turbo_tasks::{Completion, Value, Vc};
+use tracing::Instrument;
+use turbo_tasks::{Completion, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::Asset,
@@ -301,130 +302,143 @@ async fn process_default(
     reference_type: Value<ReferenceType>,
     processed_rules: Vec<usize>,
 ) -> Result<Vc<Box<dyn Module>>> {
-    let ident = source.ident().resolve().await?;
-    let options = ModuleOptions::new(
-        ident.path().parent(),
-        module_asset_context.module_options_context(),
+    let span = tracing::info_span!(
+        "process module",
+        name = *source.ident().to_string().await?,
+        reference_type = display(&*reference_type)
     );
+    async move {
+        let ident = source.ident().resolve().await?;
+        let options = ModuleOptions::new(
+            ident.path().parent(),
+            module_asset_context.module_options_context(),
+        );
 
-    let reference_type = reference_type.into_value();
-    let part: Option<Vc<ModulePart>> = match &reference_type {
-        ReferenceType::EcmaScriptModules(EcmaScriptModulesReferenceSubType::ImportPart(part)) => {
-            Some(*part)
-        }
-        _ => None,
-    };
-    let inner_assets = match &reference_type {
-        ReferenceType::Internal(inner_assets) => Some(*inner_assets),
-        _ => None,
-    };
-    let mut current_source = source;
-    let mut current_module_type = None;
-    for (i, rule) in options.await?.rules.iter().enumerate() {
-        if processed_rules.contains(&i) {
-            continue;
-        }
-        if rule
-            .matches(source, &*ident.path().await?, &reference_type)
-            .await?
-        {
-            for effect in rule.effects() {
-                match effect {
-                    ModuleRuleEffect::SourceTransforms(transforms) => {
-                        current_source = transforms.transform(current_source);
-                        if current_source.ident().resolve().await? != ident {
-                            // The ident has been changed, so we need to apply new rules.
-                            let mut processed_rules = processed_rules.clone();
-                            processed_rules.push(i);
-                            return Ok(process_default(
-                                module_asset_context,
-                                current_source,
-                                Value::new(reference_type),
-                                processed_rules,
-                            ));
+        let reference_type = reference_type.into_value();
+        let part: Option<Vc<ModulePart>> = match &reference_type {
+            ReferenceType::EcmaScriptModules(EcmaScriptModulesReferenceSubType::ImportPart(
+                part,
+            )) => Some(*part),
+            _ => None,
+        };
+        let inner_assets = match &reference_type {
+            ReferenceType::Internal(inner_assets) => Some(*inner_assets),
+            _ => None,
+        };
+        let mut current_source = source;
+        let mut current_module_type = None;
+        for (i, rule) in options.await?.rules.iter().enumerate() {
+            if processed_rules.contains(&i) {
+                continue;
+            }
+            if rule
+                .matches(source, &*ident.path().await?, &reference_type)
+                .await?
+            {
+                for effect in rule.effects() {
+                    match effect {
+                        ModuleRuleEffect::SourceTransforms(transforms) => {
+                            current_source = transforms.transform(current_source);
+                            if current_source.ident().resolve().await? != ident {
+                                // The ident has been changed, so we need to apply new rules.
+                                let mut processed_rules = processed_rules.clone();
+                                processed_rules.push(i);
+                                return Ok(process_default(
+                                    module_asset_context,
+                                    current_source,
+                                    Value::new(reference_type),
+                                    processed_rules,
+                                ));
+                            }
                         }
-                    }
-                    ModuleRuleEffect::ModuleType(module) => {
-                        current_module_type = Some(*module);
-                    }
-                    ModuleRuleEffect::AddEcmascriptTransforms(additional_transforms) => {
-                        current_module_type = match current_module_type {
-                            Some(ModuleType::Ecmascript {
-                                transforms,
-                                options,
-                            }) => Some(ModuleType::Ecmascript {
-                                transforms: transforms.extend(*additional_transforms),
-                                options,
-                            }),
-                            Some(ModuleType::Typescript {
-                                transforms,
-                                options,
-                            }) => Some(ModuleType::Typescript {
-                                transforms: transforms.extend(*additional_transforms),
-                                options,
-                            }),
-                            Some(ModuleType::TypescriptWithTypes {
-                                transforms,
-                                options,
-                            }) => Some(ModuleType::TypescriptWithTypes {
-                                transforms: transforms.extend(*additional_transforms),
-                                options,
-                            }),
-                            Some(ModuleType::Mdx {
-                                transforms,
-                                options,
-                            }) => Some(ModuleType::Mdx {
-                                transforms: transforms.extend(*additional_transforms),
-                                options,
-                            }),
-                            Some(module_type) => {
-                                ModuleIssue {
-                                    ident,
-                                    title: StyledString::Text("Invalid module type".to_string())
+                        ModuleRuleEffect::ModuleType(module) => {
+                            current_module_type = Some(*module);
+                        }
+                        ModuleRuleEffect::AddEcmascriptTransforms(additional_transforms) => {
+                            current_module_type = match current_module_type {
+                                Some(ModuleType::Ecmascript {
+                                    transforms,
+                                    options,
+                                }) => Some(ModuleType::Ecmascript {
+                                    transforms: transforms.extend(*additional_transforms),
+                                    options,
+                                }),
+                                Some(ModuleType::Typescript {
+                                    transforms,
+                                    options,
+                                }) => Some(ModuleType::Typescript {
+                                    transforms: transforms.extend(*additional_transforms),
+                                    options,
+                                }),
+                                Some(ModuleType::TypescriptWithTypes {
+                                    transforms,
+                                    options,
+                                }) => Some(ModuleType::TypescriptWithTypes {
+                                    transforms: transforms.extend(*additional_transforms),
+                                    options,
+                                }),
+                                Some(ModuleType::Mdx {
+                                    transforms,
+                                    options,
+                                }) => Some(ModuleType::Mdx {
+                                    transforms: transforms.extend(*additional_transforms),
+                                    options,
+                                }),
+                                Some(module_type) => {
+                                    ModuleIssue {
+                                        ident,
+                                        title: StyledString::Text(
+                                            "Invalid module type".to_string(),
+                                        )
                                         .cell(),
-                                    description: StyledString::Text(
-                                        "The module type must be Ecmascript or Typescript to add \
-                                         Ecmascript transforms"
-                                            .to_string(),
-                                    )
-                                    .cell(),
-                                }
-                                .cell()
-                                .emit();
-                                Some(module_type)
-                            }
-                            None => {
-                                ModuleIssue {
-                                    ident,
-                                    title: StyledString::Text("Missing module type".to_string())
+                                        description: StyledString::Text(
+                                            "The module type must be Ecmascript or Typescript to \
+                                             add Ecmascript transforms"
+                                                .to_string(),
+                                        )
                                         .cell(),
-                                    description: StyledString::Text(
-                                        "The module type effect must be applied before adding \
-                                         Ecmascript transforms"
-                                            .to_string(),
-                                    )
-                                    .cell(),
+                                    }
+                                    .cell()
+                                    .emit();
+                                    Some(module_type)
                                 }
-                                .cell()
-                                .emit();
-                                None
-                            }
-                        };
+                                None => {
+                                    ModuleIssue {
+                                        ident,
+                                        title: StyledString::Text(
+                                            "Missing module type".to_string(),
+                                        )
+                                        .cell(),
+                                        description: StyledString::Text(
+                                            "The module type effect must be applied before adding \
+                                             Ecmascript transforms"
+                                                .to_string(),
+                                        )
+                                        .cell(),
+                                    }
+                                    .cell()
+                                    .emit();
+                                    None
+                                }
+                            };
+                        }
                     }
                 }
             }
         }
+
+        let module_type = current_module_type.unwrap_or(ModuleType::Raw).cell();
+
+        Ok(apply_module_type(
+            current_source,
+            module_asset_context,
+            module_type,
+            part,
+            inner_assets,
+        ))
     }
-
-    let module_type = current_module_type.unwrap_or(ModuleType::Raw).cell();
-
-    Ok(apply_module_type(
-        current_source,
-        module_asset_context,
-        module_type,
-        part,
-        inner_assets,
-    ))
+    .instrument(span)
+    .await
 }
 
 #[turbo_tasks::value_impl]
