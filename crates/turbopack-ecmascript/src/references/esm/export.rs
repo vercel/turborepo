@@ -105,13 +105,21 @@ pub async fn follow_reexports_internal(
         }
 
         // Try to find the export in the star exports
-        return handle_star_reexports(
+        if export_name != "default" {
+            return handle_star_reexports(
+                module,
+                export_name,
+                &exports.star_exports,
+                stop_on_side_effects,
+            )
+            .await;
+        }
+
+        return Ok(FollowExportsResult::cell(FollowExportsResult {
             module,
-            export_name,
-            &exports.star_exports,
-            stop_on_side_effects,
-        )
-        .await;
+            export_name: Some(export_name),
+            ty: FoundExportType::NotFound,
+        }));
     }
 }
 
