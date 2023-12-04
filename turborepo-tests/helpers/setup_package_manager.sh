@@ -20,8 +20,8 @@ if [ "$pkgManager" != "" ]; then
   git commit -am "Updated package manager to $pkgManager" --quiet
 fi
 
-# Enable corepack so that when we set the packageManager
-# in package.json it actually makes a diference.
+# If we're in a prysk test, set the corepack install directory to the prysk temp directory.
+# This will help isolate from the rest of the system, especially when running tests on a dev machine.
 if [ "$PRYSK_TEMP" == "" ]; then
   COREPACK_INSTALL_DIR_CMD=
 else
@@ -30,4 +30,6 @@ else
   export PATH=${COREPACK_INSTALL_DIR}:$PATH
   COREPACK_INSTALL_DIR_CMD="--install-directory=${COREPACK_INSTALL_DIR}"
 fi
+
+# Enable corepack so that the packageManager setting in package.json is respected.
 corepack enable "${COREPACK_INSTALL_DIR_CMD}"
