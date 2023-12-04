@@ -1,0 +1,16 @@
+{
+  "name": "app-a",
+  "description": "A workspace to use as a model for a final application that the rest of your dependencies are building towards.",
+  "scripts": {
+    "build": "sleep 4 && mkdir -p dist && echo \"Your application output!\" > dist/app-output.txt && echo \"Application A is built!\"",
+    "lint": "sleep 4 && echo \"Linted!\"",
+    "type-check": "sleep 4 && echo \"Types checked!\""
+  },
+  "dependencies": {
+    "pkg-a": "workspace:*",
+    "with-workspace-configuration": "workspace:*"
+  },
+  "devDependencies": {
+    "tooling-config": "workspace:*"
+  }
+}

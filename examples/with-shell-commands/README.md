@@ -19,6 +19,7 @@ Giving the Turborepo core team a minimal reproduction is the best way to create 
 Because most monorepos will rely on more tooling than Turborepo (frameworks, linters, formatters, etc.), it's often useful for us to have a reproduction that strips away all of this other tooling so we can focus _only_ on Turborepo's role in your repo. This example does exactly that, giving you a good starting point for creating a reproduction.
 
 - Feel free to rename/delete packages for your reproduction so that you can be confident it most closely matches your use case.
+- If you need to use a different package manager to produce your bug, run `npx @turbo/workspaces convert` to switch package managers.
 - It's possible that your bug really **does** have to do with the interaction of Turborepo and other tooling within your repository. If you find that your bug does not reproduce in this minimal example and you're confident Turborepo is still at fault, feel free to bring that other tooling into your reproduction.
 
 ## What's inside?
@@ -27,18 +28,19 @@ This Turborepo includes the following packages:
 
 ### Apps and Packages
 
-- `consumer-a`: A final package that depends on all other packages in the graph and has no dependents. This could resemble an application in your monorepo that consumes everything in your monorepo through its topological tree.
-- `consumer-b`: Another final package with many dependencies. No dependents, lost of dependencies.
-- `producer-a`: A package that has all scripts in the root `package.json`.
-- `producer-b`: A package with _almost_ all scripts in the root `package.json`.
+- `app-a`: A final package that depends on all other packages in the graph and has no dependents. This could resemble an application in your monorepo that consumes everything in your monorepo through its topological tree.
+- `app-b`: Another final package with many dependencies. No dependents, lost of dependencies.
+- `pkg-a`: A package that has all scripts in the root `package.json`.
+- `pkg-b`: A package with _almost_ all scripts in the root `package.json`.
 - `with-workspace-configuration`: A package with a [Workspace Configuration](https://turbo.build/repo/docs/core-concepts/monorepos/configuring-workspaces) (a nested `turbo.json` file). This allows us to set special configuration specifically in this package.
-- `minimum-reqs`: A package with no scripts to demonstrate that it will still be part of the Task Graph. It's also a Phantom Node (a transitive dependency to `producer-b`). To learn more, visit [Phantom Nodes](https://turbo.build/core-concepts/monorepos/the-task-graph#phantom-nodes)
+- `minimum-reqs`: A package with no scripts to demonstrate that it will still affect the Task Graph. It's also a Transit Node (a transitive dependency to `pkg-b`). To learn more, visit [the docs for Transit Nodes](https://turbo.build/core-concepts/monorepos/the-task-graph#transit-nodes)
 - `tooling-config`: A package to simulate a common configuration used for all of your repository. This could resemble a configuration for tools like TypeScript or ESLint that are installed into all of your packages.
 
 ### Pre-built scripts
 
 In the root `package.json`, we've built some scripts to demonstrate many of Turborepo's features. We've named these scripts after common monorepo tasks to make the example more tangible.
 
-- todo
-- todo
-- todo
+- `pnpm all-tasks`: Runs all tasks in your graph.
+- `pnpm build`: A basic command to build `app-a` and `app-b` in parallel.
+- `pnpm build:*`: Variations of `turbo run build` to demonstrate filtering and flag usage.
+- `pnpm lint`: A basic linting command that

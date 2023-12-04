@@ -12,31 +12,31 @@ importers:
         specifier: ^1.10.16
         version: 1.10.16
 
-  packages/consumer-a:
+  apps/apps-a:
     dependencies:
       pkg-a:
         specifier: workspace:*
-        version: link:../pkg-a
+        version: link:../../packages/pkg-a
       with-workspace-configuration:
         specifier: workspace:*
-        version: link:../with-workspace-configuration
+        version: link:../../packages/with-workspace-configuration
     devDependencies:
       tooling-config:
         specifier: workspace:*
-        version: link:../tooling-config
+        version: link:../../packages/tooling-config
 
-  packages/consumer-b:
+  apps/apps-b:
     dependencies:
       minimum-reqs:
         specifier: workspace:*
-        version: link:../minimum-reqs
+        version: link:../../packages/minimum-reqs
       with-workspace-configuration:
         specifier: workspace:*
-        version: link:../with-workspace-configuration
+        version: link:../../packages/with-workspace-configuration
     devDependencies:
       tooling-config:
         specifier: workspace:*
-        version: link:../tooling-config
+        version: link:../../packages/tooling-config
 
   packages/minimum-reqs:
     dependencies:

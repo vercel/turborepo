@@ -1,7 +1,8 @@
 {
   "name": "pkg-a",
   "scripts": {
-    "build": "echo \"Building at the speed of Turbo.\" > output-file.txt && cat output-file.txt",
+    "build": "sleep 2 && echo \"Building at the speed of Turbo.\" > output-file.txt && cat output-file.txt",
+    "lint": "sleep 2 && echo \"Linted!\"",
     "type-check": "sleep 2 && echo \"Types checked!\""
   },
   "devDependencies": {
