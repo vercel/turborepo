@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd)
 
 TURBO_LOG_VERBOSITY should be respected
   $ TURBO_LOG_VERBOSITY=debug ${TURBO} daemon status > tmp.log 2>&1
