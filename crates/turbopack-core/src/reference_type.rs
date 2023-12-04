@@ -44,6 +44,8 @@ pub enum EcmaScriptModulesReferenceSubType {
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub enum CssReferenceSubType {
+    AtImport,
+    Compose,
     /// Reference from any asset to a CSS-parseable asset.
     ///
     /// This marks the boundary between non-CSS and CSS assets. The Next.js App
@@ -58,8 +60,6 @@ pub enum CssReferenceSubType {
 #[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub enum UrlReferenceSubType {
     EcmaScriptNewUrl,
-    CssAtImport,
-    // Other url references from css, e.g. url(myurl); composes: foo from 'myurl'
     CssUrl,
     Custom(u8),
     Undefined,
