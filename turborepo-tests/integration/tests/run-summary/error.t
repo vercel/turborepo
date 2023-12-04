@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd)
 
   $ rm -rf .turbo/runs
 
@@ -80,7 +79,7 @@ Validate that we got a full task summary for the failed task with an error in .e
     "execution": {
       "startTime": [0-9]+, (re)
       "endTime": [0-9]+, (re)
-      "error": "command .*npm run maybefails exited \(1\)", (re)
+      "error": "command .*npm(?:\.cmd)? run maybefails exited \(1\)", (re)
       "exitCode": 1
     }
   }
@@ -117,6 +116,6 @@ success should be 1, and attempted should be 2
   {
     "startTime": [0-9]+, (re)
     "endTime": [0-9]+, (re)
-    "error": "command .*npm run maybefails exited \(1\)", (re)
+    "error": "command .*npm(?:\.cmd)? run maybefails exited \(1\)", (re)
     "exitCode": 1
   }

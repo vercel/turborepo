@@ -409,17 +409,29 @@ mod tests {
 
     #[test]
     fn create_tar_with_really_long_name() -> Result<()> {
-        let dir = tempdir()?;
+        let archive_dir = tempdir()?;
+        let archive_dir_path = AbsoluteSystemPath::new(archive_dir.path().to_str().unwrap())?;
 
-        let anchor = AbsoluteSystemPath::new(dir.path().to_str().unwrap())?;
-        let out_path = anchor.join_component("test.tar");
-        let mut archive = CacheWriter::create(&out_path)?;
+        let tar_dir = tempdir()?;
+        let tar_dir_path = AbsoluteSystemPath::new(tar_dir.path().to_str().unwrap())?;
+
+        let tar_path = tar_dir_path.join_component("test.tar");
+        let mut archive = CacheWriter::create(&tar_path)?;
         let really_long_file = AnchoredSystemPath::new("this-is-a-really-really-really-long-path-like-so-very-long-that-i-can-list-all-of-my-favorite-directors-like-edward-yang-claire-denis-lucrecia-martel-wong-kar-wai-even-kurosawa").unwrap();
 
-        let really_long_path = anchor.resolve(really_long_file);
+        let really_long_path = archive_dir_path.resolve(really_long_file);
         really_long_path.create_with_contents("The End!")?;
-        archive.add_file(anchor, really_long_file)?;
+        archive.add_file(archive_dir_path, really_long_file)?;
 
+        archive.finish()?;
+
+        let restore_dir = tempdir()?;
+        let restore_dir_path = AbsoluteSystemPath::new(restore_dir.path().to_str().unwrap())?;
+
+        let mut restore = CacheReader::open(&tar_path)?;
+        let files = restore.restore(restore_dir_path)?;
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].as_str(), really_long_file.as_str());
         Ok(())
     }
 

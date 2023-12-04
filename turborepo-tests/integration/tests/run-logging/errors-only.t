@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) run_logging
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) run_logging
 
 # [ ] error exit
 # [ ] outputMode: errors-only
@@ -48,8 +47,8 @@ Setup
   app-a:builderror: npm ERR! Error: command failed 
   app-a:builderror: npm ERR!   in workspace: app-a 
   app-a:builderror: npm ERR!   at location: .* (re)
-  app-a:builderror: ERROR: command finished with error: command .*npm run builderror exited \(1\) (re)
-  app-a#builderror: command .*npm run builderror exited \(1\) (re)
+  app-a:builderror: ERROR: command finished with error: command .*npm(?:\.cmd)? run builderror exited \(1\) (re)
+  app-a#builderror: command .*npm(?:\.cmd)? run builderror exited \(1\) (re)
   
    Tasks:    0 successful, 1 total
   Cached:    0 cached, 1 total
@@ -78,8 +77,8 @@ Setup
   app-a:builderror2: npm ERR! Error: command failed 
   app-a:builderror2: npm ERR!   in workspace: app-a 
   app-a:builderror2: npm ERR!   at location: .* (re)
-  app-a:builderror2: ERROR: command finished with error: command .*npm run builderror2 exited \(1\) (re)
-  app-a#builderror2: command .*npm run builderror2 exited \(1\) (re)
+  app-a:builderror2: ERROR: command finished with error: command .*npm(?:\.cmd)? run builderror2 exited \(1\) (re)
+  app-a#builderror2: command .*npm(?:\.cmd)? run builderror2 exited \(1\) (re)
   
    Tasks:    0 successful, 1 total
   Cached:    0 cached, 1 total

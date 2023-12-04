@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) task_dependencies/topological
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) task_dependencies/topological
 
 Graph to stdout
   $ ${TURBO} build -F my-app --graph
