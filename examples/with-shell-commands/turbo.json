@@ -2,15 +2,15 @@
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "build": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["prebuild", "^build"],
       "outputs": ["output-file.txt", "dist/**"]
     },
-    "lint": {
-      "dependsOn": ["^lint"]
+    "lint": {},
+    "topo": {
+      "dependsOn": ["^topo"]
     },
-    "dev": {
-      "cache": false,
-      "persistent": true
+    "type-check": {
+      "dependsOn": ["^topo"]
     }
   }
 }

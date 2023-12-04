@@ -3,6 +3,7 @@
   "extends": ["//"],
   "pipeline": {
     "build": {
+      "dependsOn": ["^build"],
       "inputs": ["!README.md"],
       "outputs": ["a-different-file.txt"]
     }

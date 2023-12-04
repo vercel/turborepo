@@ -4,9 +4,10 @@
   "scripts": {
     "build": "pnpm write-file && pnpm read-file",
     "write-file": "echo \"I used a different output file!\" > a-different-file.txt",
-    "read-file": "cat a-different-file.txt"
+    "read-file": "cat a-different-file.txt",
+    "type-check": "sleep 1 && echo \"Types checked!\""
   },
-  "dependencies": {
+  "devDependencies": {
     "tooling-config": "workspace:*"
   }
 }

@@ -27,14 +27,12 @@ This Turborepo includes the following packages:
 
 ### Apps and Packages
 
-- `final-consumer-a`: A final package that depends on all other packages in the graph and has no dependents. This could resemble an application in your monorepo that consumes everything in your monorepo through its topological tree.
-- `final-consumer-b`: Another final package with many dependencies. No dependents, lost of dependencies.
-- `minimum-reqs`: A package with the minimum requirements to work with Turborepo (a `package.json` file).
-- `with-workspace-configuration`: A package with a [Workspace Configuration](https://turbo.build/repo/docs/core-concepts/monorepos/configuring-workspaces) (a nested `turbo.json` file). This allows us to set special configuration specifically in this package.
-- `phantom`: A package with no scripts to demonstrate that it will still be part of the Task Graph. You will still see it in your task logs and source code changes will affect cache hit ratios. To learn more, visit [Phantom Nodes](https://turbo.build/core-concepts/monorepos/the-task-graph#phantom-nodes)
+- `consumer-a`: A final package that depends on all other packages in the graph and has no dependents. This could resemble an application in your monorepo that consumes everything in your monorepo through its topological tree.
+- `consumer-b`: Another final package with many dependencies. No dependents, lost of dependencies.
 - `producer-a`: A package that has all scripts in the root `package.json`.
 - `producer-b`: A package with _almost_ all scripts in the root `package.json`.
-- `with-sleep-timers`: A package with sleep timers to delay execution within the Task Graph, simulating the time it takes to execute tasks in your repo.
+- `with-workspace-configuration`: A package with a [Workspace Configuration](https://turbo.build/repo/docs/core-concepts/monorepos/configuring-workspaces) (a nested `turbo.json` file). This allows us to set special configuration specifically in this package.
+- `minimum-reqs`: A package with no scripts to demonstrate that it will still be part of the Task Graph. It's also a Phantom Node (a transitive dependency to `producer-b`). To learn more, visit [Phantom Nodes](https://turbo.build/core-concepts/monorepos/the-task-graph#phantom-nodes)
 - `tooling-config`: A package to simulate a common configuration used for all of your repository. This could resemble a configuration for tools like TypeScript or ESLint that are installed into all of your packages.
 
 ### Pre-built scripts

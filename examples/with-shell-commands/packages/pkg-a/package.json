@@ -1,0 +1,10 @@
+{
+  "name": "pkg-a",
+  "scripts": {
+    "build": "echo \"Building at the speed of Turbo.\" > output-file.txt && cat output-file.txt",
+    "type-check": "sleep 2 && echo \"Types checked!\""
+  },
+  "devDependencies": {
+    "tooling-config": "workspace:*"
+  }
+}

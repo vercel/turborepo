@@ -12,17 +12,61 @@ importers:
         specifier: ^1.10.16
         version: 1.10.16
 
-  packages/final-consumer-a: {}
+  packages/consumer-a:
+    dependencies:
+      pkg-a:
+        specifier: workspace:*
+        version: link:../pkg-a
+      with-workspace-configuration:
+        specifier: workspace:*
+        version: link:../with-workspace-configuration
+    devDependencies:
+      tooling-config:
+        specifier: workspace:*
+        version: link:../tooling-config
 
-  packages/final-consumer-b: {}
+  packages/consumer-b:
+    dependencies:
+      minimum-reqs:
+        specifier: workspace:*
+        version: link:../minimum-reqs
+      with-workspace-configuration:
+        specifier: workspace:*
+        version: link:../with-workspace-configuration
+    devDependencies:
+      tooling-config:
+        specifier: workspace:*
+        version: link:../tooling-config
 
-  packages/minimum-reqs: {}
+  packages/minimum-reqs:
+    dependencies:
+      pkg-b:
+        specifier: workspace:*
+        version: link:../pkg-b
+    devDependencies:
+      tooling-config:
+        specifier: workspace:*
+        version: link:../tooling-config
 
-  packages/pkg-a: {}
+  packages/pkg-a:
+    devDependencies:
+      tooling-config:
+        specifier: workspace:*
+        version: link:../tooling-config
 
-  packages/pkg-b: {}
+  packages/pkg-b:
+    devDependencies:
+      tooling-config:
+        specifier: workspace:*
+        version: link:../tooling-config
 
-  packages/with-workspace-configuration: {}
+  packages/tooling-config: {}
+
+  packages/with-workspace-configuration:
+    devDependencies:
+      tooling-config:
+        specifier: workspace:*
+        version: link:../tooling-config
 
 packages:
 
