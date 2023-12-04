@@ -1,6 +1,6 @@
 
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) task_dependencies/complex
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh task_dependencies/complex
 
 # Workspace Graph:
 # app-a -> lib-a
