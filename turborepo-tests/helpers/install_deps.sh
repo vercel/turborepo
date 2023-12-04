@@ -2,18 +2,6 @@
 
 set -eo pipefail
 
-# Enable corepack so that when we set the packageManager
-# in package.json it actually makes a diference.
-if [ "$PRYSK_TEMP" == "" ]; then
-  COREPACK_INSTALL_DIR_CMD=
-else
-  COREPACK_INSTALL_DIR="${PRYSK_TEMP}/corepack"
-  mkdir -p "${COREPACK_INSTALL_DIR}"
-  export PATH=${COREPACK_INSTALL_DIR}:$PATH
-  COREPACK_INSTALL_DIR_CMD="--install-directory=${COREPACK_INSTALL_DIR}"
-fi
-corepack enable "${COREPACK_INSTALL_DIR_CMD}"
-
 # TODO: Should we default to pnpm here?
 PACKAGE_MANAGER=${1-npm}
 
