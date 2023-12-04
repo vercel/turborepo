@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Result};
 use serde_json::Value as JsonValue;
-use tracing::Level;
+use tracing::{Instrument, Level};
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{
     util::{normalize_path, normalize_request},
@@ -20,11 +20,13 @@ use self::{
         resolve_modules_options, ConditionValue, ImportMapResult, ResolveInPackage,
         ResolveIntoPackage, ResolveModules, ResolveModulesOptions, ResolveOptions,
     },
+    origin::{ResolveOrigin, ResolveOriginExt},
     parse::Request,
     pattern::Pattern,
     remap::{ExportsField, ImportsField},
 };
 use crate::{
+    context::AssetContext,
     file_source::FileSource,
     issue::{resolve::ResolvingIssue, IssueExt, IssueSource},
     module::{Module, Modules, OptionModule},
@@ -1021,6 +1023,49 @@ pub async fn resolve(
     Ok(result)
 }
 
+#[turbo_tasks::function]
+pub async fn url_resolve(
+    origin: Vc<Box<dyn ResolveOrigin>>,
+    request: Vc<Request>,
+    reference_type: Value<ReferenceType>,
+    issue_source: Option<Vc<IssueSource>>,
+    issue_severity: Vc<IssueSeverity>,
+) -> Result<Vc<ModuleResolveResult>> {
+    let resolve_options = origin.resolve_options(reference_type.clone());
+    let rel_request = request.as_relative();
+    let rel_result = resolve(
+        origin.origin_path().parent(),
+        reference_type.clone(),
+        rel_request,
+        resolve_options,
+    );
+    let result = if *rel_result.is_unresolveable().await? && rel_request.resolve().await? != request
+    {
+        resolve(
+            origin.origin_path().parent(),
+            reference_type.clone(),
+            request,
+            resolve_options,
+        )
+        .with_affecting_sources(rel_result.await?.get_affecting_sources().clone())
+    } else {
+        rel_result
+    };
+    let result = origin
+        .asset_context()
+        .process_resolve_result(result, reference_type.clone());
+    handle_resolve_error(
+        result,
+        reference_type,
+        origin.origin_path(),
+        request,
+        resolve_options,
+        issue_severity,
+        issue_source,
+    )
+    .await
+}
+
 async fn handle_resolve_plugins(
     lookup_path: Vc<FileSystemPath>,
     reference_type: Value<ReferenceType>,
@@ -1094,7 +1139,14 @@ async fn resolve_internal(
     request: Vc<Request>,
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
-    resolve_internal_inline(lookup_path, request, options).await
+    let span = {
+        let lookup_path = lookup_path.to_string().await?;
+        let request = request.to_string().await?;
+        tracing::info_span!("resolving", lookup_path = *lookup_path, request = *request)
+    };
+    resolve_internal_inline(lookup_path, request, options)
+        .instrument(span)
+        .await
 }
 
 fn resolve_internal_boxed(
