@@ -250,20 +250,22 @@ turbo run build --log-order=grouped
 </Callout>
 
 ### `--log-prefix`
+
 `type: string`
 
 This controls the `<package>:<task>:` prefix to log lines produced when running tasks (both on execute and replay from cache). This also applies to "single package" repos where the prefix will be just `<task>:`.
 The log output when running multiple parallel tasks will be interleaved, so another method must be used to determine which task logged that line (ie enriched JSON logs) if the prefix is omitted.
 
-| option  | description                               |
-| ------- | ----------------------------------------- |
-| auto    | Turbo decides based on its own heuristics |
-| none    | No prefixes                               |
-| prefix  | Force prepending the prefix to logs       |
+| option | description                               |
+| ------ | ----------------------------------------- |
+| auto   | Turbo decides based on its own heuristics |
+| none   | No prefixes                               |
+| prefix | Force prepending the prefix to logs       |
 
 ```shell
 --log-prefix=none
 ```
+
 ```shell
 turbo run dev --log-prefix=none
 ```
