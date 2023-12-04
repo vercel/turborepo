@@ -5,12 +5,13 @@
 set -eo pipefail
 
 exampleName=$1
-pkgManagerName=$2
-pkgManager=$3 # Optional
+pkgManager=$2
+pkgManagerWithVersion=$3
 
 # Copy the example dir over to the test dir that prysk puts you in
 SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 MONOREPO_ROOT_DIR="$SCRIPT_DIR/../.."
+TURBOREPO_TESTS_DIR="$SCRIPT_DIR/.."
 EXAMPLE_DIR="$MONOREPO_ROOT_DIR/examples/$exampleName"
 
 TARGET_DIR="$(pwd)"
@@ -32,12 +33,9 @@ if [ "$TURBO_TAG" == "canary" ]; then
 fi
 
 # Delete .git directory if it's there, we'll set up a new git repo
-# TODO: this may not be necessary anymore...
 [ ! -d .git ] || rm -rf .git
-
-"$MONOREPO_ROOT_DIR/turborepo-tests/helpers/setup_git.sh" "${TARGET_DIR}"
-
-"${SCRIPT_DIR}/set_package_manager.sh" "$TARGET_DIR" "$pkgManager"
+"${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
+"${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$pkgManagerWithVersion"
 
 # Enable corepack so that when we set the packageManager in package.json it actually makes a diference.
 if [ "$PRYSK_TEMP" == "" ]; then
@@ -49,9 +47,7 @@ else
   COREPACK_INSTALL_DIR_CMD="--install-directory=${COREPACK_INSTALL_DIR}"
 fi
 corepack enable "${COREPACK_INSTALL_DIR_CMD}"
-
-# Install dependencies after git is setup
-"${SCRIPT_DIR}/install_deps.sh" "$pkgManagerName"
+"${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$pkgManager"
 
 # Set TURBO_BINARY_PATH env var.
 if [ "${OSTYPE}" == "msys" ]; then
