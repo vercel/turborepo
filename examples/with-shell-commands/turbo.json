@@ -5,6 +5,7 @@
       "dependsOn": ["prebuild", "^build"],
       "outputs": ["output-file.txt", "dist/**"]
     },
+    "prebuild": {},
     "lint": {},
     "topo": {
       "dependsOn": ["^topo"]
