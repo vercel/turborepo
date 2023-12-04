@@ -9,7 +9,7 @@ PACKAGE_MANAGER="$3"
 SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 MONOREPO_ROOT_DIR="${SCRIPT_DIR}/../.."
 TURBOREPO_TESTS_DIR="${MONOREPO_ROOT_DIR}/turborepo-tests"
-FIXTURES_DIR="${TURBOREPO_TESTS_DIR}/integration/tests/_fixtures"
+FIXTURES_DIR="${TURBOREPO_TESTS_DIR}/integration/fixtures"
 
 # TODO: what is this for?
 TMPDIR=$(mktemp -d)

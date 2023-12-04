@@ -28,7 +28,7 @@ argument:
   $ . ${TESTDIR}/../../helpers/setup_integration_test.sh $(pwd) single_package
 ```
 
-where `single_package` is a directory located at `turborepo-tests/integration/tests/_fixtures/single_package`.
+where `single_package` is a directory located at `turborepo-tests/integration/fixtures/single_package`.
 
 You can also pass a second argument to change the packageManager of a fixture:
 
@@ -44,7 +44,7 @@ You can add custom fixture monorepos as an escape hatch or if you truly need a c
 #### Custom turbo.json
 
 If an existing fixture meets your needs, but you need a custom `turbo.json`, add your customized
-turbo.json config in `turborepo-tests/integration/tests/_fixtures/turbo-configs` and use the helper
+turbo.json config in `turborepo-tests/integration/fixtures/turbo-configs` and use the helper
 script to replace before your test runs:
 
 ```bash

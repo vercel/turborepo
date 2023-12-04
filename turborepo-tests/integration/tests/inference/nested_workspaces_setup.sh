@@ -14,7 +14,7 @@ function install_deps() {
   git --git-dir="${dir}/.git" --work-tree="${dir}" commit -m "Install dependencies" --quiet
 }
 
-cp -a ${SCRIPT_DIR}/../_fixtures/inference/nested_workspaces/. ${TARGET_DIR}/
+cp -a ${SCRIPT_DIR}/../../fixtures/inference/nested_workspaces/. ${TARGET_DIR}/
 ${SETUP_GIT_SCRIPT} ${TARGET_DIR}/outer
 install_deps "${TARGET_DIR}/outer"
 
