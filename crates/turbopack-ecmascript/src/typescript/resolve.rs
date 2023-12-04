@@ -268,7 +268,7 @@ pub async fn tsconfig_resolve_options(
                     if let JsonValue::Array(vec) = value {
                         let entries = vec
                             .iter()
-                            .filter_map(|entry| entry.as_str().map(|s| s.to_string()))
+                            .filter_map(|entry| entry.as_str().map(|s| format!("./{s}")))
                             .collect();
                         all_paths.insert(
                             key.to_string(),
