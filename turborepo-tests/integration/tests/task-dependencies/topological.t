@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) task_dependencies/topological
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh task_dependencies/topological
 
 Check my-app#build output
   $ ${TURBO} run build

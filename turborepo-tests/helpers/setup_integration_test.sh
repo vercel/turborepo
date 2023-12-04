@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
-TARGET_DIR=$1
-FIXTURE_NAME="${2-basic_monorepo}"
-PACKAGE_MANAGER="$3"
+FIXTURE_NAME="${1-basic_monorepo}"
+PACKAGE_MANAGER="$2"
 
 # TOOD: what is this for?
 TMPDIR=$(mktemp -d)
@@ -10,6 +9,8 @@ TMPDIR=$(mktemp -d)
 THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
 MONOREPO_ROOT_DIR="$THIS_DIR/../.."
 TURBOREPO_TESTS_DIR="${MONOREPO_ROOT_DIR}/turborepo-tests"
+
+TARGET_DIR="$(pwd)"
 
 "${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/tests/_fixtures"
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" ${TARGET_DIR}

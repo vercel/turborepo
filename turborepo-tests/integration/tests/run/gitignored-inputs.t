@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 Use our custom turbo config which has foo.txt as an input to the build command
   $ . ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "gitignored-inputs.json"
