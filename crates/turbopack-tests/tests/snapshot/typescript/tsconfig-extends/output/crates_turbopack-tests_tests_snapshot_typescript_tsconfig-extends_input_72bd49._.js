@@ -14,8 +14,6 @@ const prop = 1;
 
 __turbopack_esm__({});
 var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$tsconfig$2d$extends$2f$input$2f$prop$2e$ts__$5b$test$5d$__$28$ecmascript$29$__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/typescript/tsconfig-extends/input/prop.ts [test] (ecmascript)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$tsconfig$2d$extends$2f$input$2f$prop$2e$ts__$5b$test$5d$__$28$ecmascript$29$__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/typescript/tsconfig-extends/input/prop.ts [test] (ecmascript)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$crates$2f$turbopack$2d$tests$2f$tests$2f$snapshot$2f$typescript$2f$tsconfig$2d$extends$2f$input$2f$prop$2e$ts__$5b$test$5d$__$28$ecmascript$29$__ = __turbopack_import__("[project]/crates/turbopack-tests/tests/snapshot/typescript/tsconfig-extends/input/prop.ts [test] (ecmascript)");
 "__TURBOPACK__ecmascript__hoisting__location__";
 ;
 ;
