@@ -20,7 +20,7 @@ use crate::{
 
 /// A module derived from an original ecmascript module that only contains the
 /// local declarations, but excludes all reexports. These reexports are exposed
-/// from [EcmascriptModuleReexportsFacadeModule] instead.
+/// from [EcmascriptModuleFacadeModule] instead.
 #[turbo_tasks::value]
 pub struct EcmascriptModuleLocalsModule {
     pub module: Vc<EcmascriptModuleAsset>,

@@ -18,7 +18,7 @@ use turbopack_core::{
     reference::ModuleReferences,
 };
 
-use super::module::EcmascriptModuleReexportsFacadeModule;
+use super::module::EcmascriptModuleFacadeModule;
 use crate::{
     chunk::{
         EcmascriptChunkItem, EcmascriptChunkItemContent, EcmascriptChunkItemOptions,
@@ -29,15 +29,15 @@ use crate::{
     path_visitor::ApplyVisitors,
 };
 
-/// The chunk item for [EcmascriptModuleReexportsFacadeModule].
+/// The chunk item for [EcmascriptModuleFacadeModule].
 #[turbo_tasks::value(shared)]
-pub struct EcmascriptModuleReexportsFacadeChunkItem {
-    pub(super) module: Vc<EcmascriptModuleReexportsFacadeModule>,
-    pub(super) chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
+pub struct EcmascriptModuleReexportsChunkItem {
+    pub(crate) module: Vc<EcmascriptModuleFacadeModule>,
+    pub(crate) chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
 }
 
 #[turbo_tasks::value_impl]
-impl EcmascriptChunkItem for EcmascriptModuleReexportsFacadeChunkItem {
+impl EcmascriptChunkItem for EcmascriptModuleReexportsChunkItem {
     #[turbo_tasks::function]
     fn content(self: Vc<Self>) -> Vc<EcmascriptChunkItemContent> {
         panic!("content() should never be called");
@@ -150,7 +150,7 @@ impl EcmascriptChunkItem for EcmascriptModuleReexportsFacadeChunkItem {
 }
 
 #[turbo_tasks::value_impl]
-impl ChunkItem for EcmascriptModuleReexportsFacadeChunkItem {
+impl ChunkItem for EcmascriptModuleReexportsChunkItem {
     #[turbo_tasks::function]
     fn references(&self) -> Vc<ModuleReferences> {
         self.module.references()

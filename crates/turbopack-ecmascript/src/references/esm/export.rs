@@ -178,12 +178,14 @@ async fn handle_declared_export(
 async fn handle_star_reexports(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     export_name: String,
-    star_exports: &[Vc<EsmAssetReference>],
+    star_exports: &[Vc<Box<dyn ModuleReference>>],
     stop_on_side_effects: bool,
 ) -> Result<Vc<FollowExportsResult>> {
     let mut potential_modules = Vec::new();
     for star_export in star_exports {
-        if let ReferencedAsset::Some(m) = *star_export.get_referenced_asset().await? {
+        if let ReferencedAsset::Some(m) =
+            *ReferencedAsset::from_resolve_result(star_export.resolve_reference()).await?
+        {
             let result = follow_reexports_internal(m, export_name.clone(), false);
             let result_ref = result.await?;
             match result_ref.ty {
@@ -253,7 +255,9 @@ async fn expand_star_exports(
                 let exports = exports.await?;
                 set.extend(exports.exports.keys().filter(|n| *n != "default").cloned());
                 for esm_ref in exports.star_exports.iter() {
-                    if let ReferencedAsset::Some(asset) = &*esm_ref.get_referenced_asset().await? {
+                    if let ReferencedAsset::Some(asset) =
+                        &*ReferencedAsset::from_resolve_result(esm_ref.resolve_reference()).await?
+                    {
                         if checked_modules.insert(*asset) {
                             queue.push((*asset, asset.get_exports()));
                         }
@@ -331,7 +335,7 @@ async fn expand_star_exports(
 #[derive(Hash, Debug)]
 pub struct EsmExports {
     pub exports: BTreeMap<String, EsmExport>,
-    pub star_exports: Vec<Vc<EsmAssetReference>>,
+    pub star_exports: Vec<Vc<Box<dyn ModuleReference>>>,
 }
 
 #[turbo_tasks::value_impl]
@@ -353,7 +357,9 @@ impl CodeGenerateable for EsmExports {
         let mut dynamic_exports = Vec::<Box<Expr>>::new();
 
         for esm_ref in this.star_exports.iter() {
-            if let ReferencedAsset::Some(asset) = &*esm_ref.get_referenced_asset().await? {
+            if let ReferencedAsset::Some(asset) =
+                &*ReferencedAsset::from_resolve_result(esm_ref.resolve_reference()).await?
+            {
                 let export_info = expand_star_exports(*asset).await?;
                 let export_names = &export_info.star_exports;
                 for export in export_names.iter() {

@@ -2049,6 +2049,7 @@ pub async fn handle_resolve_error(
     })
 }
 
+// TODO this should become a TaskInput instead of a Vc
 /// ModulePart represents a part of a module.
 ///
 /// Currently this is used only for ESMs.
@@ -2064,7 +2065,10 @@ pub enum ModulePart {
     /// The local declarations of a module.
     Locals,
     /// The reexports of a module and a reexport of the Locals part.
-    ReexportsFacade,
+    Reexports,
+    /// A facade of the module behaving like the original, but referencing
+    /// internal parts.
+    Facade,
 }
 
 #[turbo_tasks::value_impl]
@@ -2086,7 +2090,11 @@ impl ModulePart {
         ModulePart::Locals.cell()
     }
     #[turbo_tasks::function]
-    pub fn reexports_facade() -> Vc<Self> {
-        ModulePart::ReexportsFacade.cell()
+    pub fn reexports() -> Vc<Self> {
+        ModulePart::Reexports.cell()
+    }
+    #[turbo_tasks::function]
+    pub fn facade() -> Vc<Self> {
+        ModulePart::Facade.cell()
     }
 }

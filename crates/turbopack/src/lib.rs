@@ -27,9 +27,7 @@ use css::{CssModuleAsset, GlobalCssAsset, ModuleCssAsset};
 use ecmascript::{
     chunk::EcmascriptChunkPlaceable,
     references::{follow_reexports, FollowExportsResult},
-    side_effect_optimization::reexport_facade::module::{
-        EcmascriptModuleReexportsFacadeModule, FacadeType,
-    },
+    side_effect_optimization::facade::module::{EcmascriptModuleFacadeModule, FacadeType},
     typescript::resolve::TypescriptTypesAssetReference,
     EcmascriptModuleAsset, EcmascriptModuleAssetType, TreeShakingMode,
 };
@@ -168,7 +166,7 @@ async fn apply_module_type(
                         if let Some(part) = part {
                             Vc::upcast(builder.build_part(part))
                         } else {
-                            Vc::upcast(builder.build_part(ModulePart::reexports_facade()))
+                            Vc::upcast(builder.build_part(ModulePart::reexports()))
                         }
                     }
                     Some(TreeShakingMode::ReexportsOnly) => {
@@ -179,8 +177,8 @@ async fn apply_module_type(
                                     if *module.is_marked_as_side_effect_free().await? {
                                         return Ok(ProcessResult::Ignore.cell());
                                     }
-                                    if *module.get_exports().needs_reexports_facade().await? {
-                                        Vc::upcast(EcmascriptModuleReexportsFacadeModule::new(
+                                    if *module.get_exports().needs_facade().await? {
+                                        Vc::upcast(EcmascriptModuleFacadeModule::new(
                                             module,
                                             FacadeType::Evaluation,
                                         ))
@@ -189,9 +187,9 @@ async fn apply_module_type(
                                     }
                                 }
                                 ModulePart::Export(_) => {
-                                    if *module.get_exports().needs_reexports_facade().await? {
+                                    if *module.get_exports().needs_facade().await? {
                                         apply_reexport_tree_shaking(
-                                            Vc::upcast(EcmascriptModuleReexportsFacadeModule::new(
+                                            Vc::upcast(EcmascriptModuleFacadeModule::new(
                                                 module,
                                                 FacadeType::Reexports,
                                             )),
@@ -205,11 +203,10 @@ async fn apply_module_type(
                                     "Invalid module part for reexports only tree shaking mode"
                                 ),
                             }
-                        } else if *module.get_exports().needs_reexports_facade().await? {
-                            // TODO this should be reexports and evaluation
-                            Vc::upcast(EcmascriptModuleReexportsFacadeModule::new(
+                        } else if *module.get_exports().needs_facade().await? {
+                            Vc::upcast(EcmascriptModuleFacadeModule::new(
                                 module,
-                                FacadeType::Reexports,
+                                FacadeType::Complete,
                             ))
                         } else {
                             Vc::upcast(module)

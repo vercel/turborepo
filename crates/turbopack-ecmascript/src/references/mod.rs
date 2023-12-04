@@ -569,7 +569,7 @@ pub(crate) async fn analyse_ecmascript_module_internal(
                 let import_ref = import_references[i];
                 match reexport {
                     Reexport::Star => {
-                        visitor.esm_star_exports.push(import_ref);
+                        visitor.esm_star_exports.push(Vc::upcast(import_ref));
                     }
                     Reexport::Namespace { exported: n } => {
                         visitor
@@ -2385,7 +2385,7 @@ struct ModuleReferencesVisitor<'a> {
     import_references: &'a [Vc<EsmAssetReference>],
     analysis: &'a mut AnalyzeEcmascriptModuleResultBuilder,
     esm_exports: BTreeMap<String, EsmExport>,
-    esm_star_exports: Vec<Vc<EsmAssetReference>>,
+    esm_star_exports: Vec<Vc<Box<dyn ModuleReference>>>,
     webpack_runtime: Option<(String, Span)>,
     webpack_entry: bool,
     webpack_chunks: Vec<Lit>,

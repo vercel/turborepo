@@ -97,8 +97,11 @@ impl ValueToString for AssetIdent {
                 ModulePart::Locals => {
                     write!(s, " {{locals}}")?;
                 }
-                ModulePart::ReexportsFacade => {
-                    write!(s, " {{reexports-facade}}")?;
+                ModulePart::Reexports => {
+                    write!(s, " {{reexports}}")?;
+                }
+                ModulePart::Facade => {
+                    write!(s, " {{facade}}")?;
                 }
             }
         }
@@ -268,8 +271,11 @@ impl AssetIdent {
                 ModulePart::Locals => {
                     4_u8.deterministic_hash(&mut hasher);
                 }
-                ModulePart::ReexportsFacade => {
+                ModulePart::Reexports => {
                     5_u8.deterministic_hash(&mut hasher);
+                }
+                ModulePart::Facade => {
+                    6_u8.deterministic_hash(&mut hasher);
                 }
             }
 
