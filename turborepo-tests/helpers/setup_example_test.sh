@@ -21,7 +21,6 @@ cp -a "$"${FIXTURES_DIR}/${FIXTURE_NAME}"/." "${TARGET_DIR}/"
 [ ! -f pnpm-lock.yaml ] || mv pnpm-lock.yaml pnpm-lock.yaml.bak
 [ ! -f package-lock.json ] || mv package-lock.json package-lock.json.bak
 
-
 TURBO_VERSION_FILE="${MONOREPO_ROOT_DIR}/version.txt"
 # Change package.json in the example directory to point to @canary if our branch is currently at that version
 TURBO_TAG=$(cat "$TURBO_VERSION_FILE" | sed -n '2 p')
@@ -32,17 +31,6 @@ fi
 
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
 "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$PACKAGE_MANAGER"
-
-# Enable corepack so that when we set the packageManager in package.json it actually makes a diference.
-if [ "$PRYSK_TEMP" == "" ]; then
-  COREPACK_INSTALL_DIR_CMD=
-else
-  COREPACK_INSTALL_DIR="${PRYSK_TEMP}/corepack"
-  mkdir -p "${COREPACK_INSTALL_DIR}"
-  export PATH=${COREPACK_INSTALL_DIR}:$PATH
-  COREPACK_INSTALL_DIR_CMD="--install-directory=${COREPACK_INSTALL_DIR}"
-fi
-corepack enable "${COREPACK_INSTALL_DIR_CMD}"
 "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER_NAME"
 
 # Set TURBO_BINARY_PATH env var.
