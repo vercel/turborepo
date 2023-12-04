@@ -24,9 +24,9 @@ import Date from "../../components/blog/Date";
   "alexanderlyon",
 ]} />
 
-Turborepo 1.11 completes the migration to Rust and ships several developer experience improvements:
+Turborepo 1.11 completes our migration to Rust and ships several developer experience improvements:
 
-- [**Rust port completed**](#unlocking-the-future-of-turbo-with-rust): We've finished the port from Go to lay the groundwork for better performance, improved stability, and new features.
+- [**Our new Rust foundation**](#unlocking-the-future-of-turbo-with-rust): We've finished the port from Go to lay the groundwork for better performance, improved stability, and new features.
 - [**Group logs for improved readability**](#group-logs-for-improved-readability): You can now specify `--log-order=grouped` to organize your logs into distinct sections separated by tasks.
 - [**Updated examples**](#updated-examples): Start with an example for Next.js, Svelte, Remix, Nuxt, and more.
 - [**Tighter feedback loops in your editor** <ExperimentalBadge isLink={false} />](#tighter-feedback-loops-in-your-editor-experimental): Find errors in your Turborepo configuration without leaving your IDE.
@@ -45,7 +45,7 @@ If you find any problems that you believe are related to the new Rust codepath, 
 
 ## Group logs for improved readability
 
-To make it easier to review your task logs, we've introduced the `--log-order` flag to output all logs from a task **after it finishes** rather than _as it writes_. This results in logs that are separated per-task, improving legibility on a specific task's logs.
+To make it easier to review your task logs, we've introduced the `--log-order` flag to output all logs from a task **after it finishes** rather than _as it writes_. This results in logs that are separated per-task, improving readability on a specific task's logs.
 
 <ThemeAwareImage
   className="my-4 flex justify-center"
@@ -69,11 +69,11 @@ To make it easier to review your task logs, we've introduced the `--log-order` f
   }}
 />
 
-Enable this behavior using `--log-order=grouped`.
+Enable this behavior using `--log-order=grouped`. [Check out the documentation](https://turbo.build/repo/docs/reference/command-line-reference/run#--log-order) to learn more
 
 ## Updated examples
 
-Our repository contains [`an examples folder`](https://github.com/vercel/turbo/tree/main/examples) with starter single-workspace monorepos for your projects.
+Our repository contains [`an examples directory`](https://github.com/vercel/turbo/tree/main/examples) with starter monorepos for your projects.
 
 To get started with an example, run:
 
@@ -92,22 +92,22 @@ npx create-turbo@latest -e kitchen-sink
 npx create-turbo@latest -e with-vue-nuxt
 ```
 
-We're putting a renewed effort towards ensuring our examples are kept up-to-date. Additionally, we've re-architected our examples to advocate for best practices in monorepos:
+We're putting a renewed effort towards ensuring our examples are kept up-to-date. Additionally, we've re-architected our examples to advocate for best practices in monorepos. For example:
 
 - In-editor go-to-definition across packages
 - Dependencies updated to latest versions
 - Tooling like ESLint, Prettier, jest, and vitest pre-configured
 - Hot-reloading across packages
 
-Check out [the examples folder](https://github.com/vercel/turbo/tree/main/examples) for more.
+Check out [the examples directory](https://github.com/vercel/turbo/tree/main/examples) for more.
 
 ## Tighter feedback loops in your editor <ExperimentalBadge>Experimental</ExperimentalBadge>
 
-A language server protocol (LSP) gives you the earliest feedback possible by showing you possible issues in your code while you write it.
+A language server protocol (LSP) gives you the earliest feedback possible by showing you issues in your code while you write it.
 
 TODO: demo photo
 
-This experimental version of Turbo LSP helps you get the most out of Turborepo with in-editor tips like:
+The experimental version of Turbo LSP in thie release helps you get the most out of Turborepo with in-editor tips like:
 
 - Intellisense for packages and tasks
 - Warning diagnostics on missing tasks and packages
