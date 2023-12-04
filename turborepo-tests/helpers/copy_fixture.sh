@@ -1,10 +1,14 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
-SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
 TARGET_DIR=$1
-FIXTURE="_fixtures/${2-basic_monorepo}"
-TURBOREPO_TESTS_DIR="$SCRIPT_DIR/.."
-TURBOREPO_INTEGRATION_TESTS_DIR="${TURBOREPO_TESTS_DIR}/integration/tests"
+FIXTURE="${2-basic_monorepo}"
+FIXTURES_DIR="$3"
 
-cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
+# If a fixtures directory isn't provided, we use the default one we use for integration tests
+if [ "$FIXTURES_DIR" == "" ]; then
+  echo "Pass a fixtures directory"
+  exit 1
+fi
+
+cp -a "${FIXTURES_DIR}/$FIXTURE/." "${TARGET_DIR}/"
