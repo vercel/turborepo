@@ -86,6 +86,7 @@ pub enum EntryReferenceSubType {
     AppRoute,
     AppClientComponent,
     Middleware,
+    Instrumentation,
     Runtime,
     Custom(u8),
     Undefined,
