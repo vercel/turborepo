@@ -31,5 +31,3 @@ export TURBO=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
 # Some of our tests actually assert non-zero exit codes, and we don't want to
 # abort the test in those cases. So we undo the set -eo pipefail here.
 set +eo pipefail
-
-echo "MONOREPO_ROOT_DIR: $MONOREPO_ROOT_DIR"
