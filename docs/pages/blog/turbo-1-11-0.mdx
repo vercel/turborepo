@@ -29,7 +29,6 @@ Turborepo 1.11 completes our migration to Rust and ships several developer exper
 - [**Our new Rust foundation**](#unlocking-the-future-of-turbo-with-rust): We've finished the port from Go to lay the groundwork for better performance, improved stability, and new features.
 - [**Group logs for improved readability**](#group-logs-for-improved-readability): You can now specify `--log-order=grouped` to organize your logs into distinct sections separated by tasks.
 - [**Updated examples**](#updated-examples): Start with an example for Next.js, Svelte, Remix, Nuxt, and more.
-- [**Tighter feedback loops in your editor** <ExperimentalBadge isLink={false} />](#tighter-feedback-loops-in-your-editor-experimental): Find errors in your Turborepo configuration without leaving your IDE.
 
 Update today by running `npx @turbo/codemod migrate`.
 
@@ -100,20 +99,6 @@ We're putting a renewed effort towards ensuring our examples are kept up-to-date
 - Hot-reloading across packages
 
 Check out [the examples directory](https://github.com/vercel/turbo/tree/main/examples) for more.
-
-## Tighter feedback loops in your editor <ExperimentalBadge>Experimental</ExperimentalBadge>
-
-A language server protocol (LSP) gives you the earliest feedback possible by showing you issues in your code while you write it.
-
-TODO: demo photo
-
-The experimental version of Turbo LSP in thie release helps you get the most out of Turborepo with in-editor tips like:
-
-- Intellisense for packages and tasks
-- Warning diagnostics on missing tasks and packages
-- A codemod to quickly fix deprecated syntax in `turbo.json`
-
-Try it out today by...TODO.
 
 ## Community
 
