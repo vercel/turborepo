@@ -32,15 +32,11 @@ This Turborepo includes the following packages:
 - `app-b`: Another final package with many dependencies. No dependents, lost of dependencies.
 - `pkg-a`: A package that has all scripts in the root `package.json`.
 - `pkg-b`: A package with _almost_ all scripts in the root `package.json`.
-- `with-workspace-configuration`: A package with a [Workspace Configuration](https://turbo.build/repo/docs/core-concepts/monorepos/configuring-workspaces) (a nested `turbo.json` file). This allows us to set special configuration specifically in this package.
-- `minimum-reqs`: A package with no scripts to demonstrate that it will still affect the Task Graph. It's also a Transit Node (a transitive dependency to `pkg-b`). To learn more, visit [the docs for Transit Nodes](https://turbo.build/core-concepts/monorepos/the-task-graph#transit-nodes)
 - `tooling-config`: A package to simulate a common configuration used for all of your repository. This could resemble a configuration for tools like TypeScript or ESLint that are installed into all of your packages.
 
-### Pre-built scripts
+### Some scripts to try
 
-In the root `package.json`, we've built some scripts to demonstrate many of Turborepo's features. We've named these scripts after common monorepo tasks to make the example more tangible.
-
-- `pnpm all-tasks`: Runs all tasks in your graph.
-- `pnpm build`: A basic command to build `app-a` and `app-b` in parallel.
-- `pnpm build:*`: Variations of `turbo run build` to demonstrate filtering and flag usage.
-- `pnpm lint`: A basic linting command that
+- `turbo build lint typecheck`: Runs all tasks in the default graph.
+- `turbo build`: A basic command to build `app-a` and `app-b` in parallel.
+- `turbo build --filter=app-a`: Building only `app-a` and its dependencies.
+- `turbo lint`: A basic command for running lints in all packages in parallel.
