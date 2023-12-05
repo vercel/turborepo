@@ -13,12 +13,6 @@ TURBOREPO_TESTS_DIR="${MONOREPO_ROOT_DIR}/turborepo-tests"
 TARGET_DIR="$(pwd)"
 
 "${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${MONOREPO_ROOT_DIR}/examples"
-
-# cleanup lockfiles so we can install from scratch
-[ ! -f yarn.lock ] || mv yarn.lock yarn.lock.bak
-[ ! -f pnpm-lock.yaml ] || mv pnpm-lock.yaml pnpm-lock.yaml.bak
-[ ! -f package-lock.json ] || mv package-lock.json package-lock.json.bak
-
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
 "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$PACKAGE_MANAGER"
 "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER_NAME"
