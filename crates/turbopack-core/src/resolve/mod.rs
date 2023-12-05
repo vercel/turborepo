@@ -837,9 +837,12 @@ pub async fn find_context_file(
     }
     if refs.is_empty() {
         // Tailcall
-        Ok(find_context_file(lookup_path.parent(), names))
+        Ok(find_context_file(
+            lookup_path.parent().resolve().await?,
+            names,
+        ))
     } else {
-        let parent_result = find_context_file(lookup_path.parent(), names).await?;
+        let parent_result = find_context_file(lookup_path.parent().resolve().await?, names).await?;
         Ok(match &*parent_result {
             FindContextFileResult::Found(p, r) => {
                 refs.extend(r.iter().copied());
