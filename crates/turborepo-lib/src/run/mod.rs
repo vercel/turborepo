@@ -13,7 +13,7 @@ use std::{
     collections::HashSet,
     io::{IsTerminal, Write},
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
 pub use cache::{RunCache, TaskCache};
@@ -27,7 +27,7 @@ use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::{
-    discovery::{FallbackPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscoveryBuilder},
+    discovery::{LocalPackageDiscoveryBuilder, PackageDiscoveryBuilder},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
 };
@@ -44,10 +44,7 @@ use crate::{
     engine::{Engine, EngineBuilder},
     opts::Opts,
     process::ProcessManager,
-    run::{
-        global_hash::get_global_hash_inputs, package_discovery::DaemonPackageDiscovery,
-        summary::RunTracker,
-    },
+    run::{global_hash::get_global_hash_inputs, summary::RunTracker},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
     task_graph::Visitor,
@@ -195,7 +192,7 @@ impl<'a> Run<'a> {
 
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
 
-        let mut daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
+        let daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
             debug!("skipping turbod since we appear to be in a non-interactive context");
             None
         } else if !opts.run_opts.no_daemon {
@@ -224,18 +221,14 @@ impl<'a> Run<'a> {
         let mut pkg_dep_graph =
             PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
                 .with_single_package_mode(opts.run_opts.single_package)
-                .with_package_discovery(FallbackPackageDiscovery::new(
-                    daemon.as_mut().map(DaemonPackageDiscovery::new),
-                    // TODO: we may never need this fallback, so we could make this a builder
-                    // instead and instantiate it lazily
+                .with_package_discovery(
                     LocalPackageDiscoveryBuilder::new(
                         self.base.repo_root.clone(),
                         None,
                         Some(root_package_json.clone()),
                     )
                     .build()?,
-                    Duration::from_millis(10),
-                ))
+                )
                 .build()
                 .await?;
 

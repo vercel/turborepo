@@ -1,31 +1,18 @@
 #!/usr/bin/env bash
 
-THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
+FIXTURE_NAME="${1-basic_monorepo}"
+PACKAGE_MANAGER="$2"
 
-ROOT_DIR="${THIS_DIR}/../.."
-
-if [[ "${OSTYPE}" == "msys" ]]; then
-  EXT=".exe"
-else
-  EXT=""
-fi
-
-TURBO=${ROOT_DIR}/target/debug/turbo${EXT}
-VERSION=${ROOT_DIR}/version.txt
+# TOOD: what is this for?
 TMPDIR=$(mktemp -d)
 
+THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
+MONOREPO_ROOT_DIR="$THIS_DIR/../.."
+TURBOREPO_TESTS_DIR="${MONOREPO_ROOT_DIR}/turborepo-tests"
 
-TARGET_DIR=$1
-FIXTURE_NAME="${2-basic_monorepo}"
-PACKAGE_MANAGER="$3"
+TARGET_DIR="$(pwd)"
 
-SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
-FIXTURE="_fixtures/${FIXTURE_NAME}"
-TURBOREPO_TESTS_DIR="$SCRIPT_DIR/.."
-TURBOREPO_INTEGRATION_TESTS_DIR="${TURBOREPO_TESTS_DIR}/integration/tests"
-
-cp -a "${TURBOREPO_INTEGRATION_TESTS_DIR}/$FIXTURE/." "${TARGET_DIR}/"
-
+"${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" ${TARGET_DIR}
 "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" ${TARGET_DIR} "$PACKAGE_MANAGER"
 
@@ -36,3 +23,13 @@ if [ "$PACKAGE_MANAGER" != "" ]; then
 fi
 
 "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER_NAME"
+
+# Set TURBO env var, it is used by tests to run the binary
+if [[ "${OSTYPE}" == "msys" ]]; then
+  EXT=".exe"
+else
+  EXT=""
+fi
+
+TURBO=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
+VERSION=${MONOREPO_ROOT_DIR}/version.txt

@@ -10,6 +10,7 @@
 //! we can track areas of run that are performing sub-optimally.
 
 use tokio_stream::{iter, StreamExt};
+use tracing::debug;
 use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
@@ -190,14 +191,23 @@ impl<A: PackageDiscovery + Send, B: PackageDiscovery + Send> PackageDiscovery
 {
     async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
         match tokio::time::timeout(self.timeout, self.primary.discover_packages()).await {
-            Ok(Ok(packages)) => Ok(packages),
-            Ok(Err(err1)) => match self.fallback.discover_packages().await {
-                Ok(packages) => Ok(packages),
-                // if the backup is unavailable, return the original error
-                Err(Error::Unavailable) => Err(err1),
-                Err(err2) => Err(err2),
-            },
-            Err(_) => self.fallback.discover_packages().await,
+            Ok(Ok(packages)) => {
+                debug!("used primary strategy");
+                Ok(packages)
+            }
+            Ok(Err(err1)) => {
+                debug!("primary strategy failed. using fallback strategy");
+                match self.fallback.discover_packages().await {
+                    Ok(packages) => Ok(packages),
+                    // if the backup is unavailable, return the original error
+                    Err(Error::Unavailable) => Err(err1),
+                    Err(err2) => Err(err2),
+                }
+            }
+            Err(_) => {
+                debug!("primary strategy timed out. using fallback strategy");
+                self.fallback.discover_packages().await
+            }
         }
     }
 }
