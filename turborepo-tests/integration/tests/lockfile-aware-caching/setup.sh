@@ -3,7 +3,7 @@
 SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
 TARGET_DIR=$1
 FIXTURE_DIR=$2
-cp -a ${SCRIPT_DIR}/../_fixtures/lockfile_aware_caching/. ${TARGET_DIR}/
+cp -a ${SCRIPT_DIR}/../../fixtures/lockfile_aware_caching/. ${TARGET_DIR}/
 cp -a ${SCRIPT_DIR}/${FIXTURE_DIR}/. ${TARGET_DIR}/
 #  Setup git
 git init ${TARGET_DIR} --quiet

@@ -7,11 +7,11 @@
       "dependsOn": ["^topo"]
     },
     "test": {
-      "dependsOn": ["cli#build", "topo"],
+      "dependsOn": ["cli#build", "topo", "^build"],
       "passThroughEnv": ["CI"]
     },
     "test:rust-codepath": {
-      "dependsOn": ["cli#build", "topo"],
+      "dependsOn": ["cli#build", "topo", "^build"],
       "passThroughEnv": ["CI"]
     }
   }

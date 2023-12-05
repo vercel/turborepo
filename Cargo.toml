@@ -46,6 +46,8 @@ default-members = [
   "crates/turbopack-swc-utils",
   "crates/turbopack-test-utils",
   "crates/turbopack-tests",
+  "crates/turbopack-trace-server",
+  "crates/turbopack-trace-utils",
   "crates/turbopack-wasm",
   "xtask",
 ]
@@ -60,6 +62,9 @@ turbopack = [
   "path:crates/turbo-tasks*",
   "path:crates/node-file-trace",
 ]
+
+[workspace.lints.clippy]
+too_many_arguments = "allow"
 
 [profile.dev.package.turbo-tasks-macros]
 opt-level = 3
@@ -76,19 +81,19 @@ lto = "off"
 [workspace.dependencies]
 async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
-browserslist-rs = { version = "0.12.2" }
+browserslist-rs = { version = "0.13.0" }
 
-mdxjs = "0.1.19"
-modularize_imports = { version = "0.55.0" }
-styled_components = { version = "0.82.0" }
-styled_jsx = { version = "0.59.0" }
-swc_core = { version = "0.86.40", features = [
+mdxjs = "0.1.20"
+modularize_imports = { version = "0.61.0" }
+styled_components = { version = "0.89.0" }
+styled_jsx = { version = "0.66.0" }
+swc_core = { version = "0.86.81", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
-swc_emotion = { version = "0.58.0" }
-swc_relay = { version = "0.30.0" }
-testing = { version = "0.35.7" }
+swc_emotion = { version = "0.65.0" }
+swc_relay = { version = "0.37.0" }
+testing = { version = "0.35.11" }
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
@@ -133,6 +138,7 @@ turbopack-static = { path = "crates/turbopack-static" }
 turbopack-swc-utils = { path = "crates/turbopack-swc-utils" }
 turbopack-test-utils = { path = "crates/turbopack-test-utils" }
 turbopack-tests = { path = "crates/turbopack-tests" }
+turbopack-trace-utils = { path = "crates/turbopack-trace-utils" }
 turbopack-wasm = { path = "crates/turbopack-wasm" }
 turbopath = { path = "crates/turborepo-paths" }
 turborepo = { path = "crates/turborepo" }
@@ -246,3 +252,4 @@ url = "2.2.2"
 urlencoding = "2.1.2"
 webbrowser = "0.8.7"
 which = "4.4.0"
+unicode-segmentation = "1.10.1"

@@ -13,6 +13,10 @@ pub struct CacheMultiplexer {
     // This does create a mild race condition where we might use the cache
     // even though another thread might be removing it, but that's fine.
     should_use_http_cache: AtomicBool,
+    // Just for keeping track of whether we've already printed a warning about the remote cache
+    // being read-only
+    should_print_skipping_remote_put: AtomicBool,
+    remote_cache_read_only: bool,
     fs: Option<FSCache>,
     http: Option<HTTPCache>,
 }
@@ -53,7 +57,9 @@ impl CacheMultiplexer {
             });
 
         Ok(CacheMultiplexer {
+            should_print_skipping_remote_put: AtomicBool::new(true),
             should_use_http_cache: AtomicBool::new(http_cache.is_some()),
+            remote_cache_read_only: opts.remote_cache_read_only,
             fs: fs_cache,
             http: http_cache,
         })
@@ -83,23 +89,40 @@ impl CacheMultiplexer {
 
         let http_result = match self.get_http_cache() {
             Some(http) => {
-                let http_result = http.put(anchor, key, files, duration).await;
+                if self.remote_cache_read_only {
+                    if self
+                        .should_print_skipping_remote_put
+                        .load(Ordering::Relaxed)
+                    {
+                        // Warn once per build, not per task
+                        warn!("Remote cache is read-only, skipping upload");
+                        self.should_print_skipping_remote_put
+                            .store(false, Ordering::Relaxed);
+                    }
+                    // Cache is functional but running in read-only mode, so we don't want to try to
+                    // write to it
+                    None
+                } else {
+                    let http_result = http.put(anchor, key, files, duration).await;
 
-                Some(http_result)
+                    Some(http_result)
+                }
             }
             _ => None,
         };
 
-        if let Some(Err(CacheError::ApiClientError(
-            box turborepo_api_client::Error::CacheDisabled { .. },
-            ..,
-        ))) = http_result
-        {
-            warn!("failed to put to http cache: cache disabled");
-            self.should_use_http_cache.store(false, Ordering::Relaxed);
+        match http_result {
+            Some(Err(CacheError::ApiClientError(
+                box turborepo_api_client::Error::CacheDisabled { .. },
+                ..,
+            ))) => {
+                warn!("failed to put to http cache: cache disabled");
+                self.should_use_http_cache.store(false, Ordering::Relaxed);
+                Ok(())
+            }
+            Some(Err(e)) => Err(e),
+            None | Some(Ok(())) => Ok(()),
         }
-
-        Ok(())
     }
 
     pub async fn fetch(

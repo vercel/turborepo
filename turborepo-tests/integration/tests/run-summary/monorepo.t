@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 # Delete all run summaries
   $ rm -rf .turbo/runs
@@ -92,7 +91,7 @@ Setup
   "459c029558afe716"
   $ echo $FIRST_APP_BUILD | jq '.expandedOutputs'
   [
-    "apps/my-app/.turbo/turbo-build.log"
+    "apps(\/|\\\\)my-app(\/|\\\\).turbo(\/|\\\\)turbo-build.log" (re)
   ]
 # validate that cache state updates in second run
   $ echo $FIRST_APP_BUILD | jq '.cache'

@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../../helpers/setup.sh
-  $ . ${TESTDIR}/../../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ . ${TESTDIR}/../../../../helpers/setup_integration_test.sh single_package
   $ rm turbo.json
   $ git commit -am "Delete turbo config" --quiet
 
@@ -26,7 +25,7 @@ Check
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)
     Outputs                        =\s* (re)
-    Log File                       = .turbo/turbo-build.log\s* (re)
+    Log File                       = .turbo(\/|\\)turbo-build.log\s* (re)
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
     Inputs Files Considered        = 4\s* (re)
@@ -37,7 +36,7 @@ Check
     Passed Through Env Vars        =\s* (re)
     Passed Through Env Vars Values =\s* (re)
     Resolved Task Definition       = {"outputs":\[],"cache":false,"dependsOn":\[],"inputs":\[],"outputMode":"full","persistent":false,"env":\[],"passThroughEnv":null,"dotEnv":null}\s* (re)
-    Framework                      = <NO FRAMEWORK DETECTED>\s* (re)
+    Framework                      =\s* (re)
 
   $ ${TURBO} run build --graph
   

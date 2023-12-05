@@ -1,8 +1,13 @@
 #![deny(clippy::all)]
 
+//! Turborepo's analytics library. Handles sending analytics events to the
+//! Vercel API in the background. We only record cache usage events,
+//! so when the cache is hit or missed for the file system or the HTTP cache.
+//! Requires the user to be logged in to Vercel.
+
 use std::time::Duration;
 
-use futures::stream::FuturesUnordered;
+use futures::{stream::FuturesUnordered, StreamExt};
 use thiserror::Error;
 use tokio::{
     select,
@@ -28,16 +33,21 @@ pub enum Error {
     Join(#[from] JoinError),
 }
 
-// We have two different types because the AnalyticsSender should be shared
-// across threads (i.e. Clone + Send), while the AnalyticsHandle cannot be
-// shared since it contains the structs necessary to shut down the worker.
 pub type AnalyticsSender = mpsc::UnboundedSender<AnalyticsEvent>;
 
+/// The handle on the `Worker` tokio thread, along with a channel
+/// to indicate to the thread that it should shut down.
 pub struct AnalyticsHandle {
     exit_ch: oneshot::Receiver<()>,
     handle: JoinHandle<()>,
 }
 
+/// Starts the `Worker` on a separate tokio thread. Returns an `AnalyticsSender`
+/// and an `AnalyticsHandle`.
+///
+/// We have two different types because the AnalyticsSender should be shared
+/// across threads (i.e. Clone + Send), while the AnalyticsHandle cannot be
+/// shared since it contains the structs necessary to shut down the worker.
 pub fn start_analytics(
     api_auth: APIAuth,
     client: impl AnalyticsClient + Clone + Send + Sync + 'static,
@@ -72,6 +82,8 @@ impl AnalyticsHandle {
         Ok(())
     }
 
+    /// Closes the handle with an explicit timeout. If the handle fails to close
+    /// within that timeout, it will log an error and drop the handle.
     pub async fn close_with_timeout(self) {
         if let Err(err) = tokio::time::timeout(EVENT_TIMEOUT, self.close()).await {
             debug!("failed to close analytics handle. error: {}", err)
@@ -101,12 +113,15 @@ impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
                     event = self.rx.recv() => {
                         if let Some(event) = event {
                             self.buffer.push(event);
+                        } else {
+                            // There are no senders left so we can shut down
+                            break;
                         }
                         if self.buffer.len() == BUFFER_THRESHOLD {
                             self.flush_events();
                             timeout = tokio::time::sleep(NO_TIMEOUT);
                         } else {
-                            timeout = tokio::time::sleep(REQUEST_TIMEOUT);
+                            timeout = tokio::time::sleep(EVENT_TIMEOUT);
                         }
                     }
                     _ = timeout => {
@@ -114,14 +129,14 @@ impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
                         timeout = tokio::time::sleep(NO_TIMEOUT);
                     }
                     _ = self.exit_ch.closed() => {
-                                                self.flush_events();
-                        for handle in self.senders {
-                            if let Err(err) = handle.await {
-                                debug!("failed to send analytics event. error: {}", err)
-                            }
-                        }
-                        return;
+                        break;
                     }
+                }
+            }
+            self.flush_events();
+            while let Some(result) = self.senders.next().await {
+                if let Err(err) = result {
+                    debug!("failed to send analytics event. error: {}", err)
                 }
             }
         })
@@ -165,6 +180,7 @@ mod tests {
     use std::{
         cell::RefCell,
         sync::{Arc, Mutex},
+        time::Duration,
     };
 
     use async_trait::async_trait;
@@ -324,7 +340,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_closing() {
-        let (tx, _) = mpsc::unbounded_channel();
+        let (tx, _rx) = mpsc::unbounded_channel();
 
         let client = DummyClient {
             events: Default::default(),
@@ -351,11 +367,15 @@ mod tests {
                 })
                 .unwrap();
         }
+        drop(analytics_sender);
 
         let found = client.events();
         assert!(found.is_empty());
 
-        analytics_handle.close().await.unwrap();
+        tokio::time::timeout(Duration::from_millis(5), analytics_handle.close())
+            .await
+            .expect("timeout before close")
+            .expect("analytics worker panicked");
         let found = client.events();
         assert_eq!(found.len(), 1);
         let payloads = &found[0];

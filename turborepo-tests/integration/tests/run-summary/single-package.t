@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh single_package
 
 Check
   $ ${TURBO} run build --summarize > /dev/null
@@ -100,7 +99,7 @@ Check
   []
   $ echo $TASK_SUMMARY | jq '.expandedOutputs'
   [
-    ".turbo/turbo-build.log",
+    ".turbo(\/|\\\\)turbo-build.log", (re)
     "foo.txt"
   ]
   $ echo $TASK_SUMMARY | jq '.cache'

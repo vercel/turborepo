@@ -1,10 +1,10 @@
 {
+  "extends": "@repo/typescript-config/base.json",
   "compilerOptions": {
     "lib": ["ES2015"],
     "module": "CommonJS",
     "outDir": "./dist",
   },
   "exclude": ["node_modules"],
-  "extends": "tsconfig/base.json",
   "include": ["."]
 }

@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 # Save JSON to tmp file so we don't need to keep re-running the build
   $ ${TURBO} run build --dry=json > tmpjson.log
@@ -70,8 +69,8 @@ Setup
       "banana.txt"
     ],
     "excludedOutputs": null,
-    "logFile": "apps/my-app/.turbo/turbo-build.log",
-    "directory": "apps/my-app",
+    "logFile": "apps(\/|\\\\)my-app(\/|\\\\)\.turbo(\/|\\\\)turbo-build\.log", (re)
+    "directory": "apps(\/|\\\\)my-app", (re)
     "dependencies": [],
     "dependents": [],
     "resolvedTaskDefinition": {
@@ -91,7 +90,7 @@ Setup
       ]
     },
     "expandedOutputs": [],
-    "framework": "<NO FRAMEWORK DETECTED>",
+    "framework": "",
     "envMode": "loose",
     "environmentVariables": {
       "specified": {
@@ -128,8 +127,8 @@ Setup
     "cliArguments": [],
     "outputs": null,
     "excludedOutputs": null,
-    "logFile": "packages/util/.turbo/turbo-build.log",
-    "directory": "packages/util",
+    "logFile": "packages(\/|\\\\)util(\/|\\\\)\.turbo(\/|\\\\)turbo-build\.log", (re)
+    "directory": "packages(\/|\\\\)util", (re)
     "dependencies": [],
     "dependents": [],
     "resolvedTaskDefinition": {
@@ -146,7 +145,7 @@ Setup
       "dotEnv": null
     },
     "expandedOutputs": [],
-    "framework": "<NO FRAMEWORK DETECTED>",
+    "framework": "",
     "envMode": "loose",
     "environmentVariables": {
       "specified": {

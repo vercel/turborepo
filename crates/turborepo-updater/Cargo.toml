@@ -12,6 +12,9 @@ publish = false
 native-tls = ["reqwest/native-tls", "update-informer/native-tls"]
 rustls-tls = ["reqwest/rustls-tls", "update-informer/rustls-tls"]
 
+[lints]
+workspace = true
+
 [dependencies]
 atty = { workspace = true }
 console = { workspace = true }

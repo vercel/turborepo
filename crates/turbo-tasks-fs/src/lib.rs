@@ -4,7 +4,6 @@
 #![feature(iter_advance_by)]
 #![feature(io_error_more)]
 #![feature(round_char_boundary)]
-#![feature(async_fn_in_trait)]
 #![feature(arbitrary_self_types)]
 
 pub mod attach;
@@ -59,7 +58,7 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, BufReader},
     sync::{RwLock, RwLockReadGuard},
 };
-use tracing::{instrument, Level};
+use tracing::{instrument, Instrument, Level};
 use turbo_tasks::{
     mark_stateful, spawn_thread, trace::TraceRawVcs, Completion, InvalidationReason, Invalidator,
     ReadRef, ValueToString, Vc,
@@ -592,7 +591,13 @@ impl FileSystem for DiskFileSystem {
         self.register_invalidator(&full_path)?;
 
         let _lock = self.lock_path(&full_path).await;
-        let content = match retry_future(|| File::from_path(full_path.clone())).await {
+        let content = match retry_future(|| File::from_path(full_path.clone()))
+            .instrument(tracing::info_span!(
+                "read file",
+                path = display(full_path.display())
+            ))
+            .await
+        {
             Ok(file) => FileContent::new(file),
             Err(e) if e.kind() == ErrorKind::NotFound => FileContent::NotFound,
             Err(e) => {
@@ -610,7 +615,13 @@ impl FileSystem for DiskFileSystem {
 
         // we use the sync std function here as it's a lot faster (600%) in
         // node-file-trace
-        let read_dir = match retry_blocking(&full_path, |path| std::fs::read_dir(path)).await {
+        let read_dir = match retry_blocking(
+            &full_path,
+            tracing::info_span!("read directory", path = display(full_path.display())),
+            |path| std::fs::read_dir(path),
+        )
+        .await
+        {
             Ok(dir) => dir,
             Err(e)
                 if e.kind() == ErrorKind::NotFound
@@ -661,7 +672,13 @@ impl FileSystem for DiskFileSystem {
         self.register_invalidator(&full_path)?;
 
         let _lock = self.lock_path(&full_path).await;
-        let link_path = match retry_future(|| fs::read_link(&full_path)).await {
+        let link_path = match retry_future(|| fs::read_link(&full_path))
+            .instrument(tracing::info_span!(
+                "read symlink",
+                path = display(full_path.display())
+            ))
+            .await
+        {
             Ok(res) => res,
             Err(_) => return Ok(LinkContent::NotFound.cell()),
         };
@@ -763,7 +780,13 @@ impl FileSystem for DiskFileSystem {
         // be freed immediately. Given this is an output file, it's unlikely any Turbo
         // code will need to read the file from disk into a Vc<FileContent>, so we're
         // not wasting cycles.
-        let compare = content.streaming_compare(full_path.clone()).await?;
+        let compare = content
+            .streaming_compare(full_path.clone())
+            .instrument(tracing::info_span!(
+                "read file before write",
+                path = display(full_path.display())
+            ))
+            .await?;
         if compare == FileComparison::Equal {
             if !old_invalidators.is_empty() {
                 let key = path_to_key(&full_path);
@@ -781,6 +804,10 @@ impl FileSystem for DiskFileSystem {
                 if create_directory {
                     if let Some(parent) = full_path.parent() {
                         retry_future(move || fs::create_dir_all(parent))
+                            .instrument(tracing::info_span!(
+                                "create directory",
+                                path = display(parent.display())
+                            ))
                             .await
                             .with_context(|| {
                                 format!(
@@ -799,14 +826,38 @@ impl FileSystem for DiskFileSystem {
                         tokio::io::copy(&mut file.read(), &mut f).await?;
                         #[cfg(target_family = "unix")]
                         f.set_permissions(file.meta.permissions.into()).await?;
+                        #[cfg(feature = "write_version")]
+                        {
+                            let mut full_path = full_path;
+                            let hash = hash_xxh3_hash64(file);
+                            let ext = full_path.extension();
+                            let ext = if let Some(ext) = ext {
+                                format!("{:016x}.{}", hash, ext.to_string_lossy())
+                            } else {
+                                format!("{:016x}", hash)
+                            };
+                            full_path.set_extension(ext);
+                            let mut f = fs::File::create(&full_path).await?;
+                            tokio::io::copy(&mut file.read(), &mut f).await?;
+                            #[cfg(target_family = "unix")]
+                            f.set_permissions(file.meta.permissions.into()).await?;
+                        }
                         Ok::<(), io::Error>(())
                     }
                 })
+                .instrument(tracing::info_span!(
+                    "write file",
+                    path = display(full_path.display())
+                ))
                 .await
                 .with_context(|| format!("failed to write to {}", full_path.display()))?;
             }
             FileContent::NotFound => {
                 retry_future(|| fs::remove_file(full_path.clone()))
+                    .instrument(tracing::info_span!(
+                        "remove file",
+                        path = display(full_path.display())
+                    ))
                     .await
                     .or_else(|err| {
                         if err.kind() == ErrorKind::NotFound {
@@ -846,6 +897,10 @@ impl FileSystem for DiskFileSystem {
         if create_directory {
             if let Some(parent) = full_path.parent() {
                 retry_future(move || fs::create_dir_all(parent))
+                    .instrument(tracing::info_span!(
+                        "create directory",
+                        path = display(parent.display())
+                    ))
                     .await
                     .with_context(|| {
                         format!(
@@ -865,22 +920,26 @@ impl FileSystem for DiskFileSystem {
                 } else {
                     PathBuf::from(unix_to_sys(target).as_ref())
                 };
-                retry_blocking(&target_path, move |target_path| {
-                    // we use the sync std method here because `symlink` is fast
-                    // if we put it into a task, it will be slower
-                    #[cfg(not(target_family = "windows"))]
-                    {
-                        std::os::unix::fs::symlink(target_path, &full_path)
-                    }
-                    #[cfg(target_family = "windows")]
-                    {
-                        if link_type.contains(LinkType::DIRECTORY) {
-                            std::os::windows::fs::symlink_dir(target_path, &full_path)
-                        } else {
-                            std::os::windows::fs::symlink_file(target_path, &full_path)
+                retry_blocking(
+                    &target_path,
+                    tracing::info_span!("write symlink", path = display(full_path.display())),
+                    move |target_path| {
+                        // we use the sync std method here because `symlink` is fast
+                        // if we put it into a task, it will be slower
+                        #[cfg(not(target_family = "windows"))]
+                        {
+                            std::os::unix::fs::symlink(target_path, &full_path)
                         }
-                    }
-                })
+                        #[cfg(target_family = "windows")]
+                        {
+                            if link_type.contains(LinkType::DIRECTORY) {
+                                std::os::windows::fs::symlink_dir(target_path, &full_path)
+                            } else {
+                                std::os::windows::fs::symlink_file(target_path, &full_path)
+                            }
+                        }
+                    },
+                )
                 .await
                 .with_context(|| format!("create symlink to {}", target))?;
             }
@@ -910,6 +969,10 @@ impl FileSystem for DiskFileSystem {
 
         let _lock = self.lock_path(&full_path).await;
         let meta = retry_future(|| fs::metadata(full_path.clone()))
+            .instrument(tracing::info_span!(
+                "read metadata",
+                path = display(full_path.display())
+            ))
             .await
             .with_context(|| format!("reading metadata for {}", full_path.display()))?;
 

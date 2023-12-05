@@ -120,9 +120,6 @@ $(GENERATED_FILES): internal/turbodprotocol/turbod.proto
 
 compile-protos: $(GENERATED_FILES)
 
-ewatch: scripts/...
-	nodemon --exec "make e2e" -e .ts,.go
-
 check-go-version:
 	@go version | grep ' go1\.18\.0 ' || (echo 'Please install Go version 1.18.0' && false)
 
@@ -156,14 +153,6 @@ install: | ./package.json
 corepack:
 	which corepack || npm install -g corepack@latest
 	corepack enable
-
-e2e: corepack install turbo
-	node -r esbuild-register scripts/e2e/e2e.ts
-
-# Expects turbo to be built and up to date
-# Only should be used by CI
-e2e-prebuilt: corepack install
-	node -r esbuild-register scripts/e2e/e2e.ts
 
 cmd/turbo/version.go: ../version.txt
 	# Update this atomically to avoid issues with this being overwritten during use
@@ -332,12 +321,12 @@ clean-demo:
 	rm -rf node_modules
 	rm -rf demo
 
-# use target fixture-<some directory under integration_tests/_fixtures> to set up the testbed directory
+# use target fixture-<some directory under turborepo-tests/integration/fixtures> to set up the testbed directory
 .PHONY=fixture-%
 fixture-%:
 	$(eval $@_FIXTURE := $(@:fixture-%=%))
 	@echo "fixture setup $($@_FIXTURE)"
 	rm -rf testbed
 	mkdir -p testbed
-	../turborepo-tests/integration/tests/_helpers/setup_monorepo.sh ./testbed $($@_FIXTURE)
+	../turborepo-tests/helpers/setup_integration_test.sh ./testbed $($@_FIXTURE)
 

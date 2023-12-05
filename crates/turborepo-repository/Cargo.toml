@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 license = "MPL-2.0"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
@@ -16,6 +19,8 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 thiserror = "1.0.38"
+tokio-stream = "0.1.14"
+tokio.workspace = true
 tracing.workspace = true
 turbopath = { workspace = true }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }

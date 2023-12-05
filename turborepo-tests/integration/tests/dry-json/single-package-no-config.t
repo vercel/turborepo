@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh single_package
   $ rm turbo.json
   $ git commit -am "Delete turbo config" --quiet
 
@@ -52,7 +51,7 @@ Setup
         "cliArguments": [],
         "outputs": null,
         "excludedOutputs": null,
-        "logFile": ".turbo/turbo-build.log",
+        "logFile": "\.turbo(\/|\\\\)turbo-build\.log", (re)
         "dependencies": [],
         "dependents": [],
         "resolvedTaskDefinition": {
@@ -67,7 +66,7 @@ Setup
           "dotEnv": null
         },
         "expandedOutputs": [],
-        "framework": "<NO FRAMEWORK DETECTED>",
+        "framework": "",
         "envMode": "loose",
         "environmentVariables": {
           "specified": {

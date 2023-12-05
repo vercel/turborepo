@@ -16,7 +16,9 @@
     "turbo-prebuilt": "node turbow.js",
     "docs": "pnpm -- turbo run dev --filter=docs --no-cache",
     "prepare": "husky install",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going || true",
+    "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open"
   },
   "devDependencies": {
     "@taplo/cli": "^0.5.2",
@@ -29,6 +31,9 @@
     "prettier": "^2.8.7",
     "semver": "^7.3.8",
     "typescript": "^4.9.4"
+  },
+  "optionalDependencies": {
+    "rust": "nightly"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
@@ -54,6 +59,6 @@
   },
   "packageManager": "pnpm@8.9.0",
   "engines": {
-    "node": "18.x"
+    "node": "20.x"
   }
 }

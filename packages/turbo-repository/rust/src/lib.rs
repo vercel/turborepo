@@ -7,12 +7,12 @@ use turborepo_repository::{
 mod internal;
 
 #[napi]
-pub struct Repository {
+pub struct PackageManagerRoot {
     repo_state: RepoState,
     #[napi(readonly)]
     pub root: String,
     #[napi(readonly)]
-    pub is_monorepo: bool,
+    pub is_single_package: bool,
 }
 
 #[napi]
@@ -24,14 +24,14 @@ pub struct PackageManager {
 }
 
 #[napi]
-pub struct Workspace {
+pub struct Package {
     #[napi(readonly)]
     pub absolute_path: String,
     #[napi(readonly)]
     pub repo_path: String,
 }
 
-impl Workspace {
+impl Package {
     fn new(repo_root: &AbsoluteSystemPath, workspace_path: &AbsoluteSystemPath) -> Self {
         let repo_path = repo_root
             .anchor(workspace_path)
@@ -53,10 +53,10 @@ impl From<RustPackageManager> for PackageManager {
 }
 
 #[napi]
-impl Repository {
-    #[napi(factory, js_name = "detectJS")]
-    pub async fn detect_js_repository(path: Option<String>) -> Result<Repository, napi::Error> {
-        Self::detect_js_internal(path).await.map_err(|e| e.into())
+impl PackageManagerRoot {
+    #[napi(factory)]
+    pub async fn find(path: Option<String>) -> Result<PackageManagerRoot, napi::Error> {
+        Self::find_internal(path).await.map_err(|e| e.into())
     }
 
     #[napi]
@@ -71,7 +71,7 @@ impl Repository {
     }
 
     #[napi]
-    pub async fn workspaces(&self) -> std::result::Result<Vec<Workspace>, napi::Error> {
-        self.workspaces_internal().await.map_err(|e| e.into())
+    pub async fn packages(&self) -> std::result::Result<Vec<Package>, napi::Error> {
+        self.packages_internal().await.map_err(|e| e.into())
     }
 }

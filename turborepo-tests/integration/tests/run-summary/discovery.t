@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
   $ rm -rf .turbo/runs
 
   $ ${TURBO} run build --summarize --filter=my-app
@@ -17,5 +16,5 @@ Setup
     Tasks:    1 successful, 1 total
    Cached:    0 cached, 1 total
      Time:\s*[\.0-9]+m?s  (re)
-  Summary:    .+\.turbo\/runs\/[a-zA-Z0-9]+.json (re)
+  Summary:    .+\.turbo(\/|\\)runs(\/|\\)[a-zA-Z0-9]+.json (re)
   

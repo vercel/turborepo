@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Result};
 use serde_json::Value as JsonValue;
-use tracing::Level;
+use tracing::{Instrument, Level};
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{
     util::{normalize_path, normalize_request},
@@ -20,11 +20,13 @@ use self::{
         resolve_modules_options, ConditionValue, ImportMapResult, ResolveInPackage,
         ResolveIntoPackage, ResolveModules, ResolveModulesOptions, ResolveOptions,
     },
+    origin::{ResolveOrigin, ResolveOriginExt},
     parse::Request,
     pattern::Pattern,
     remap::{ExportsField, ImportsField},
 };
 use crate::{
+    context::AssetContext,
     file_source::FileSource,
     issue::{resolve::ResolvingIssue, IssueExt, IssueSource},
     module::{Module, Modules, OptionModule},
@@ -1008,19 +1010,80 @@ pub async fn resolve_raw(
 #[turbo_tasks::function]
 pub async fn resolve(
     lookup_path: Vc<FileSystemPath>,
+    reference_type: Value<ReferenceType>,
     request: Vc<Request>,
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
-    let raw_result = resolve_internal_inline(lookup_path, request, options)
-        .await?
-        .resolve()
-        .await?;
-    let result = handle_resolve_plugins(lookup_path, request, options, raw_result).await?;
-    Ok(result)
+    let span = {
+        let lookup_path = lookup_path.to_string().await?;
+        let request = request.to_string().await?;
+        tracing::info_span!(
+            "resolving",
+            lookup_path = *lookup_path,
+            request = *request,
+            reference_type = display(&*reference_type)
+        )
+    };
+    async {
+        let raw_result = resolve_internal_inline(lookup_path, request, options)
+            .await?
+            .resolve()
+            .await?;
+        let result =
+            handle_resolve_plugins(lookup_path, reference_type, request, options, raw_result)
+                .await?;
+        Ok(result)
+    }
+    .instrument(span)
+    .await
+}
+
+#[turbo_tasks::function]
+pub async fn url_resolve(
+    origin: Vc<Box<dyn ResolveOrigin>>,
+    request: Vc<Request>,
+    reference_type: Value<ReferenceType>,
+    issue_source: Option<Vc<IssueSource>>,
+    issue_severity: Vc<IssueSeverity>,
+) -> Result<Vc<ModuleResolveResult>> {
+    let resolve_options = origin.resolve_options(reference_type.clone());
+    let rel_request = request.as_relative();
+    let rel_result = resolve(
+        origin.origin_path().parent(),
+        reference_type.clone(),
+        rel_request,
+        resolve_options,
+    );
+    let result = if *rel_result.is_unresolveable().await? && rel_request.resolve().await? != request
+    {
+        resolve(
+            origin.origin_path().parent(),
+            reference_type.clone(),
+            request,
+            resolve_options,
+        )
+        .with_affecting_sources(rel_result.await?.get_affecting_sources().clone())
+    } else {
+        rel_result
+    };
+    let result = origin
+        .asset_context()
+        .process_resolve_result(result, reference_type.clone());
+    handle_resolve_error(
+        result,
+        reference_type,
+        origin.origin_path(),
+        request,
+        resolve_options,
+        issue_severity,
+        issue_source,
+    )
+    .await
 }
 
 async fn handle_resolve_plugins(
     lookup_path: Vc<FileSystemPath>,
+    reference_type: Value<ReferenceType>,
     request: Vc<Request>,
     options: Vc<ResolveOptions>,
     result: Vc<ResolveResult>,
@@ -1028,13 +1091,17 @@ async fn handle_resolve_plugins(
     async fn apply_plugins_to_path(
         path: Vc<FileSystemPath>,
         lookup_path: Vc<FileSystemPath>,
+        reference_type: Value<ReferenceType>,
         request: Vc<Request>,
         options: Vc<ResolveOptions>,
     ) -> Result<Option<Vc<ResolveResult>>> {
         for plugin in &options.await?.plugins {
             let after_resolve_condition = plugin.after_resolve_condition().resolve().await?;
             if *after_resolve_condition.matches(path).await? {
-                if let Some(result) = *plugin.after_resolve(path, lookup_path, request).await? {
+                if let Some(result) = *plugin
+                    .after_resolve(path, lookup_path, reference_type.clone(), request)
+                    .await?
+                {
                     return Ok(Some(result));
                 }
             }
@@ -1052,7 +1119,8 @@ async fn handle_resolve_plugins(
         if let &ResolveResultItem::Source(source) = primary {
             let path = source.ident().path().resolve().await?;
             if let Some(new_result) =
-                apply_plugins_to_path(path, lookup_path, request, options).await?
+                apply_plugins_to_path(path, lookup_path, reference_type.clone(), request, options)
+                    .await?
             {
                 let new_result = new_result.await?;
                 changed = true;
@@ -1086,7 +1154,14 @@ async fn resolve_internal(
     request: Vc<Request>,
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
-    resolve_internal_inline(lookup_path, request, options).await
+    let span = {
+        let lookup_path = lookup_path.to_string().await?;
+        let request = request.to_string().await?;
+        tracing::info_span!("resolving", lookup_path = *lookup_path, request = *request)
+    };
+    resolve_internal_inline(lookup_path, request, options)
+        .instrument(span)
+        .await
 }
 
 fn resolve_internal_boxed(
@@ -1333,11 +1408,20 @@ async fn resolve_into_folder(
                 return resolve_internal_inline(package_path, request.resolve().await?, options)
                     .await;
             }
-            ResolveIntoPackage::MainField(name) => {
+            ResolveIntoPackage::MainField {
+                field: name,
+                extensions,
+            } => {
                 if let Some(package_json) = &*read_package_json(package_json_path).await? {
                     if let Some(field_value) = package_json[name].as_str() {
                         let request =
                             Request::parse(Value::new(normalize_request(field_value).into()));
+
+                        let options = if let Some(extensions) = extensions {
+                            options.with_extensions(extensions.clone())
+                        } else {
+                            options
+                        };
 
                         let result = &*resolve_internal_inline(package_path, request, options)
                             .await?
@@ -1542,7 +1626,7 @@ async fn resolve_into_package(
     if could_match_others {
         for resolve_into_package in options_value.into_package.iter() {
             match resolve_into_package {
-                ResolveIntoPackage::Default(_) | ResolveIntoPackage::MainField(_) => {
+                ResolveIntoPackage::Default(_) | ResolveIntoPackage::MainField { .. } => {
                     // doesn't affect packages with subpath
                     if path.is_match("/") {
                         results.push(resolve_into_folder(package_path, options, query));

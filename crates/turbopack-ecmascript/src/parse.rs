@@ -19,13 +19,14 @@ use swc_core::{
         visit::VisitMutWith,
     },
 };
+use tracing::Instrument;
 use turbo_tasks::{util::WrapFuture, Value, ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbo_tasks_hash::hash_xxh3_hash64;
 use turbopack_core::{
     asset::{Asset, AssetContent},
     error::PrettyPrintError,
-    issue::{Issue, IssueExt, IssueSeverity, StyledString},
+    issue::{Issue, IssueExt, IssueSeverity, OptionStyledString, StyledString},
     source::Source,
     source_map::{GenerateSourceMap, OptionSourceMap, SourceMap},
     SOURCE_MAP_ROOT_NAME,
@@ -153,7 +154,12 @@ pub async fn parse(
     ty: Value<EcmascriptModuleAssetType>,
     transforms: Vc<EcmascriptInputTransforms>,
 ) -> Result<Vc<ParseResult>> {
-    match parse_internal(source, ty, transforms).await {
+    let name = source.ident().to_string().await?;
+    let span = tracing::info_span!("parse ecmascript", name = *name, ty = display(&*ty));
+    match parse_internal(source, ty, transforms)
+        .instrument(span)
+        .await
+    {
         Ok(result) => Ok(result),
         Err(error) => Err(error.context(format!(
             "failed to parse {}",
@@ -402,17 +408,19 @@ impl Issue for ReadSourceIssue {
     }
 
     #[turbo_tasks::function]
-    fn title(&self) -> Vc<String> {
-        Vc::cell("Reading source code for parsing failed".to_string())
+    fn title(&self) -> Vc<StyledString> {
+        StyledString::Text("Reading source code for parsing failed".to_string()).cell()
     }
 
     #[turbo_tasks::function]
-    fn description(&self) -> Vc<StyledString> {
-        StyledString::Text(format!(
-            "An unexpected error happened while trying to read the source code to parse: {}",
-            self.error
+    fn description(&self) -> Vc<OptionStyledString> {
+        Vc::cell(Some(
+            StyledString::Text(format!(
+                "An unexpected error happened while trying to read the source code to parse: {}",
+                self.error
+            ))
+            .cell(),
         ))
-        .cell()
     }
 
     #[turbo_tasks::function]

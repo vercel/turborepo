@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../../helpers/setup.sh
-  $ . ${TESTDIR}/../../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ . ${TESTDIR}/../../../../helpers/setup_integration_test.sh single_package
 
 Graph
   $ ${TURBO} run build --graph
@@ -13,4 +12,9 @@ Graph
   \t} (esc)
   }
   
-
+Graph file
+  $ ${TURBO} build --graph=graph.dot
+  
+  .*Generated task graph in .*graph\.dot.* (re)
+  $ cat graph.dot | grep -o "\"[^\"]*\" -> \"[^\"]*\""
+  "[root] build" -> "[root] ___ROOT___"

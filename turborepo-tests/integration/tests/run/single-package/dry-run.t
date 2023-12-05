@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../../helpers/setup.sh
-  $ . ${TESTDIR}/../../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ . ${TESTDIR}/../../../../helpers/setup_integration_test.sh single_package
 
 Check
   $ ${TURBO} run build --dry
@@ -24,7 +23,7 @@ Check
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)
     Outputs                        = foo.txt\s* (re)
-    Log File                       = .turbo/turbo-build.log\s* (re)
+    Log File                       = .turbo(\/|\\)turbo-build.log\s* (re)
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
     Inputs Files Considered        = 5\s* (re)
@@ -35,4 +34,4 @@ Check
     Passed Through Env Vars        =\s* (re)
     Passed Through Env Vars Values =\s* (re)
     Resolved Task Definition       = {"outputs":\["foo.txt"],"cache":true,"dependsOn":\[],"inputs":\[],"outputMode":"full","persistent":false,"env":\[],"passThroughEnv":null,"dotEnv":null}\s* (re)
-    Framework                      = <NO FRAMEWORK DETECTED>\s* (re)
+    Framework                      =\s* (re)

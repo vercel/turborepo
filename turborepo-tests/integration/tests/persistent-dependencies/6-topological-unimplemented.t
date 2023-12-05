@@ -1,6 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) persistent_dependencies/6-topological-unimplemented
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh persistent_dependencies/6-topological-unimplemented
 
 # WorkspaceGraph
 # - app-a depends on pkg-a
@@ -27,5 +26,5 @@
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
-    Time:\s+[0-9]+m?s  (re)
+    Time:\s+[.0-9]+m?s  (re)
   

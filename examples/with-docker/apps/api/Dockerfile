@@ -36,7 +36,7 @@ COPY turbo.json turbo.json
 # ARG TURBO_TOKEN
 # ENV TURBO_TOKEN=$TURBO_TOKEN
 
-RUN yarn turbo run build --filter=api...
+RUN yarn turbo build --filter=api...
 
 FROM base AS runner
 WORKDIR /app
