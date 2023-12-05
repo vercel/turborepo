@@ -30,6 +30,10 @@ runs:
         cache-key: ${{ inputs.target }}
         save-cache: true
 
+    - name: "Show Rust Version"
+      shell: bash
+      run: pnpm rustc --version
+
     - name: "Setup capnproto"
       uses: ./.github/actions/setup-capnproto
 
