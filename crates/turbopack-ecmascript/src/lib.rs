@@ -73,7 +73,7 @@ use self::{
 };
 use crate::{
     chunk::EcmascriptChunkPlaceable,
-    references::{analyze_ecmascript_module, async_module::OptionAsyncModule},
+    references::{analyse_ecmascript_module, async_module::OptionAsyncModule},
     transform::remove_shebang,
 };
 
@@ -297,7 +297,7 @@ impl EcmascriptModuleAsset {
 
     #[turbo_tasks::function]
     pub fn analyze(self: Vc<Self>) -> Vc<AnalyzeEcmascriptModuleResult> {
-        analyze_ecmascript_module(self, None)
+        analyse_ecmascript_module(self, None)
     }
 
     #[turbo_tasks::function]
