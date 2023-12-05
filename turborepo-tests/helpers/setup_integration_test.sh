@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -eo pipefail
+
 FIXTURE_NAME="${1-basic_monorepo}"
 PACKAGE_MANAGER="$2"
 
@@ -33,3 +35,10 @@ fi
 
 TURBO=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
 VERSION=${MONOREPO_ROOT_DIR}/version.txt
+
+# Undo the set -eo pipefail at the top of this script
+# This script is called with a leading ".", which means that it does not fork
+# the process, so the set -eo pipefail would affect the calling script.
+# Some of our tests actually assert non-zero exit codes, and we don't want to
+# abort the test in those cases. So we undo the set -eo pipefail here.
+set +eo pipefail

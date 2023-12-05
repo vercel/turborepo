@@ -27,3 +27,10 @@ else
   EXT=""
 fi
 export TURBO_BINARY_PATH=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
+
+# Undo the set -eo pipefail at the top of this script
+# This script is called with a leading ".", which means that it does not fork
+# the process, so the set -eo pipefail would affect the calling script.
+# Some of our tests actually assert non-zero exit codes, and we don't want to
+# abort the test in those cases. So we undo the set -eo pipefail here.
+set +eo pipefail
