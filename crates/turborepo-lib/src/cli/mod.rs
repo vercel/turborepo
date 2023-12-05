@@ -108,7 +108,7 @@ pub struct Args {
     pub cwd: Option<Utf8PathBuf>,
     /// Fallback to use Go for task execution
     #[serde(skip)]
-    #[clap(long, global = true)]
+    #[clap(long, global = true, conflicts_with = "remote_cache_read_only")]
     pub go_fallback: bool,
     /// Specify a file to save a pprof heap profile
     #[clap(long, global = true, value_parser)]
@@ -1973,5 +1973,34 @@ mod test {
                 ..Args::default()
             }
         );
+    }
+
+    #[test]
+    fn test_go_fallback_conflicts_with_remote_read_only() {
+        assert!(Args::try_parse_from([
+            "turbo",
+            "build",
+            "--remote-cache-read-only",
+            "--go-fallback"
+        ])
+        .unwrap_err()
+        .to_string()
+        .contains(
+            "the argument '--remote-cache-read-only [<BOOL>]' cannot be used with '--go-fallback"
+        ));
+        assert!(Args::try_parse_from([
+            "turbo",
+            "run",
+            "build",
+            "--remote-cache-read-only",
+            "--go-fallback"
+        ])
+        .unwrap_err()
+        .to_string()
+        .contains(
+            "the argument '--remote-cache-read-only [<BOOL>]' cannot be used with '--go-fallback"
+        ));
+        assert!(Args::try_parse_from(["turbo", "build", "--go-fallback"]).is_ok(),);
+        assert!(Args::try_parse_from(["turbo", "build", "--remote-cache-read-only",]).is_ok(),);
     }
 }
