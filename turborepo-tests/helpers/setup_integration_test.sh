@@ -5,9 +5,6 @@ set -eo pipefail
 FIXTURE_NAME="${1-basic_monorepo}"
 PACKAGE_MANAGER="$2"
 
-# TOOD: what is this for?
-TMPDIR=$(mktemp -d)
-
 THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
 MONOREPO_ROOT_DIR="$THIS_DIR/../.."
 TURBOREPO_TESTS_DIR="${MONOREPO_ROOT_DIR}/turborepo-tests"
