@@ -19,8 +19,6 @@ TARGET_DIR="$(pwd)"
 [ ! -f pnpm-lock.yaml ] || mv pnpm-lock.yaml pnpm-lock.yaml.bak
 [ ! -f package-lock.json ] || mv package-lock.json package-lock.json.bak
 
-# Delete .git directory if it's there, we'll set up a new git repo
-[ ! -d .git ] || rm -rf .git
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
 "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$PACKAGE_MANAGER"
 "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER_NAME"
