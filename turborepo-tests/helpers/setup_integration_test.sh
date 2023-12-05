@@ -14,14 +14,7 @@ TARGET_DIR="$(pwd)"
 "${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
 "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$PACKAGE_MANAGER"
-
-# Install dependencies with the given package manager
-PACKAGE_MANAGER_NAME="npm"
-if [ "$PACKAGE_MANAGER" != "" ]; then
-  PACKAGE_MANAGER_NAME=$(echo "$PACKAGE_MANAGER" | sed 's/@.*//')
-fi
-
-"${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER_NAME"
+"${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER"
 
 # Set TURBO env var, it is used by tests to run the binary
 if [[ "${OSTYPE}" == "msys" ]]; then
@@ -38,3 +31,5 @@ export TURBO=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
 # Some of our tests actually assert non-zero exit codes, and we don't want to
 # abort the test in those cases. So we undo the set -eo pipefail here.
 set +eo pipefail
+
+echo "MONOREPO_ROOT_DIR: $MONOREPO_ROOT_DIR"
