@@ -33,8 +33,9 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "e46d6df5143cae99",
+        "hash": "6b3b1f6928b77978",
         "inputs": {
+          ".gitattributes": "fcadb2cf97913f58a2523f535336e725c6b59d1f",
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
           "package.json": "5519edda652c463054307421a3c05ff49f080328",

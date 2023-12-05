@@ -20,7 +20,7 @@ Check
   Tasks to Run
   build
     Task                           = build\s* (re)
-    Hash                           = e46d6df5143cae99\s* (re)
+    Hash                           = 6b3b1f6928b77978\s* (re)
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)
@@ -28,7 +28,7 @@ Check
     Log File                       = .turbo(\/|\\)turbo-build.log\s* (re)
     Dependencies                   =\s* (re)
     Dependents                     =\s* (re)
-    Inputs Files Considered        = 4\s* (re)
+    Inputs Files Considered        = 5\s* (re)
     .env Files Considered          = 0\s* (re)
     Env Vars                       =\s* (re)
     Env Vars Values                =\s* (re)
@@ -52,7 +52,7 @@ Run real once
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing e46d6df5143cae99
+  build: cache bypass, force executing 6b3b1f6928b77978
   build: 
   build: > build
   build: > echo building > foo.txt
@@ -66,7 +66,7 @@ Run a second time, verify no caching because there is no config
   $ ${TURBO} run build
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  build: cache bypass, force executing e46d6df5143cae99
+  build: cache bypass, force executing 6b3b1f6928b77978
   build: 
   build: > build
   build: > echo building > foo.txt

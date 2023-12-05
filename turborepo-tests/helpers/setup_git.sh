@@ -13,5 +13,8 @@ git ${GIT_ARGS} config user.name "Turbo Test"
 # shell rather than the full path and npm will find it on its own on each platform.
 echo "script-shell=bash" > ${TARGET_DIR}/.npmrc
 
+# Set repository to only use LF even on windows
+echo "* text eol=lf" > ${TARGET_DIR}/.gitattributes
+
 git ${GIT_ARGS} add .
 git ${GIT_ARGS} commit -m "Initial" --quiet
