@@ -2,16 +2,6 @@
   "name": "my-turborepo",
   "description": "A barebones Turborepo example for working with Task Graphs.",
   "packageManager": "pnpm@8.11.0",
-  "scripts": {
-    "all-tasks": "turbo lint type-check build",
-    "build": "turbo run build",
-    "build:a": "turbo run build --filter=app-a",
-    "build:b": "turbo run build --filter=app-b",
-    "build:quiet": "turbo run build --output-logs=hash-only",
-    "build:grouped": "turbo run build --log-order=grouped",
-    "lint": "turbo lint",
-    "check-types": "turbo run type-check --continue"
-  },
   "devDependencies": {
     "turbo": "^1.10.16"
   }
