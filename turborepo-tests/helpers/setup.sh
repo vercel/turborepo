@@ -10,6 +10,4 @@ else
 fi
 
 TURBO=${ROOT_DIR}/target/debug/turbo${EXT}
-
-VERSION=${ROOT_DIR}/version.txt
 TMPDIR=$(mktemp -d)
