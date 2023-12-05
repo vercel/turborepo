@@ -27,6 +27,8 @@ pub mod typescript;
 pub mod utils;
 pub mod webpack;
 
+use std::fmt::{Display, Formatter};
+
 use anyhow::{Context, Result};
 use chunk::{EcmascriptChunkItem, EcmascriptChunkingContext};
 use code_gen::CodeGenerateable;
@@ -114,6 +116,17 @@ pub enum EcmascriptModuleAssetType {
     TypescriptWithTypes,
     /// Module with TypeScript declaration code
     TypescriptDeclaration,
+}
+
+impl Display for EcmascriptModuleAssetType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EcmascriptModuleAssetType::Ecmascript => write!(f, "ecmascript"),
+            EcmascriptModuleAssetType::Typescript => write!(f, "typescript"),
+            EcmascriptModuleAssetType::TypescriptWithTypes => write!(f, "typescript with types"),
+            EcmascriptModuleAssetType::TypescriptDeclaration => write!(f, "typescript declaration"),
+        }
+    }
 }
 
 #[turbo_tasks::function]
