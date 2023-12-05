@@ -33,7 +33,7 @@ else
   EXT=""
 fi
 
-TURBO=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
+export TURBO=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
 
 # Undo the set -eo pipefail at the top of this script
 # This script is called with a leading ".", which means that it does not fork
