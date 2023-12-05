@@ -1,4 +1,4 @@
-  $ . ${TESTDIR}/../helpers/setup_example_test.sh with-gatsby pnpm
+  $ . ${TESTDIR}/../helpers/setup_example_test.sh with-gatsby pnpm@8.9.0
 
 # run twice and make sure it works
   $ pnpm run build lint --output-logs=errors-only

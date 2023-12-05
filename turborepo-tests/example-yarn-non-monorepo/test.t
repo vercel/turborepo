@@ -1,4 +1,4 @@
-  $ . ${TESTDIR}/../helpers/setup_example_test.sh non-monorepo yarn yarn@1.22.19
+  $ . ${TESTDIR}/../helpers/setup_example_test.sh non-monorepo yarn@1.22.19
 
 # run twice and make sure it works
   $ yarn turbo build lint --output-logs=errors-only
