@@ -12,7 +12,6 @@ npx create-turbo@latest -e with-shell-commands
 
 ### For bug reproductions
 
-**Looking for input from teammates here.**
 
 Giving the Turborepo core team a minimal reproduction is the best way to create a tight feedback loop for a bug you'd like to report.
 
