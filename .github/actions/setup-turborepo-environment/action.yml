@@ -14,6 +14,8 @@ runs:
   steps:
     - name: "Setup Node"
       uses: ./.github/actions/setup-node
+      with:
+        extra-flags: --no-optional
 
     - name: "Setup Go"
       uses: ./.github/actions/setup-go

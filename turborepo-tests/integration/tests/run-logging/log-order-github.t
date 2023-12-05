@@ -1,6 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) ordered
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh ordered
 
 # Build as if we are in Github Actions
 Note that we need to use (re) for lines that start with '> '

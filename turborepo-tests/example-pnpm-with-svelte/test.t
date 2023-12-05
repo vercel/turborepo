@@ -1,12 +1,12 @@
   $ . ${TESTDIR}/../helpers/examples_setup.sh with-svelte pnpm
 
 # run twice and make sure it works
-  $ pnpm run build lint -- --output-logs=errors-only
+  $ pnpm run build lint --output-logs=errors-only
   
   \> @ build (.*)/test.t (re)
   \> turbo run build "lint" "--output-logs=errors-only" (re)
   
-  \xe2\x80\xa2 Packages in scope: docs, eslint-config-custom, ui, web (esc)
+  \xe2\x80\xa2 Packages in scope: @repo/eslint-config, @repo/ui, docs, web (esc)
   \xe2\x80\xa2 Running build, lint in 4 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
@@ -14,12 +14,12 @@
   Cached:    0 cached, 5 total
     Time:\s*[\.0-9ms]+  (re)
   
-  $ pnpm run build lint -- --output-logs=errors-only
+  $ pnpm run build lint --output-logs=errors-only
   
   \> @ build (.*)/test.t (re)
   \> turbo run build "lint" "--output-logs=errors-only" (re)
   
-  \xe2\x80\xa2 Packages in scope: docs, eslint-config-custom, ui, web (esc)
+  \xe2\x80\xa2 Packages in scope: @repo/eslint-config, @repo/ui, docs, web (esc)
   \xe2\x80\xa2 Running build, lint in 4 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   

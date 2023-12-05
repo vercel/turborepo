@@ -1,6 +1,5 @@
 # Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) persistent_dependencies/3-workspace-specific
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh persistent_dependencies/3-workspace-specific
 
 # Workspace Graph:
 # - app-a depends on pkg-a

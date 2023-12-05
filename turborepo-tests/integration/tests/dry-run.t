@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
 # Run the build task with --dry flag and cut up the logs into separate files by empty lines
 # https://stackoverflow.com/a/33297878/986415

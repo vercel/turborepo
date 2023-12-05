@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) single_package
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh single_package
 
 Check
   $ ${TURBO} run build --summarize > /dev/null
