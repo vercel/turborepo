@@ -614,8 +614,8 @@ mod tests {
         let with_yarn_expected: HashSet<AbsoluteSystemPathBuf> = HashSet::from_iter([
             with_yarn.join_components(&["apps", "docs", "package.json"]),
             with_yarn.join_components(&["apps", "web", "package.json"]),
-            with_yarn.join_components(&["packages", "eslint-config-custom", "package.json"]),
-            with_yarn.join_components(&["packages", "tsconfig", "package.json"]),
+            with_yarn.join_components(&["packages", "eslint-config", "package.json"]),
+            with_yarn.join_components(&["packages", "typescript-config", "package.json"]),
             with_yarn.join_components(&["packages", "ui", "package.json"]),
         ]);
         for mgr in &[

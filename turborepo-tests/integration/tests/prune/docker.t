@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) monorepo_with_root_dep
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh monorepo_with_root_dep
 
   $ ${TURBO} prune web --docker
   Generating pruned monorepo for web in .*out (re)

@@ -21,14 +21,8 @@ cp -a "$"${FIXTURES_DIR}/${FIXTURE_NAME}"/." "${TARGET_DIR}/"
 [ ! -f pnpm-lock.yaml ] || mv pnpm-lock.yaml pnpm-lock.yaml.bak
 [ ! -f package-lock.json ] || mv package-lock.json package-lock.json.bak
 
-TURBO_VERSION_FILE="${MONOREPO_ROOT_DIR}/version.txt"
-# Change package.json in the example directory to point to @canary if our branch is currently at that version
-TURBO_TAG=$(cat "$TURBO_VERSION_FILE" | sed -n '2 p')
-if [ "$TURBO_TAG" == "canary" ]; then
-  jq --arg version "canary" '.devDependencies.turbo = $version' package.json > package.json.new
-  mv package.json.new package.json
-fi
-
+# Delete .git directory if it's there, we'll set up a new git repo
+[ ! -d .git ] || rm -rf .git
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
 "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$PACKAGE_MANAGER"
 "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER_NAME"

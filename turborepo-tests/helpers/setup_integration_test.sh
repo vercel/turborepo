@@ -2,9 +2,8 @@
 
 set -eo pipefail
 
-TARGET_DIR=$1
-FIXTURE_NAME="${2-basic_monorepo}"
-PACKAGE_MANAGER="$3"
+FIXTURE_NAME="${1-basic_monorepo}"
+PACKAGE_MANAGER="$2"
 
 SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
 MONOREPO_ROOT_DIR="${SCRIPT_DIR}/../.."
@@ -16,7 +15,9 @@ TMPDIR=$(mktemp -d)
 
 cp -a "${FIXTURES_DIR}/$FIXTURE_NAME/." "${TARGET_DIR}/"
 
-"${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/tests/_fixtures"
+TARGET_DIR="$(pwd)"
+
+"${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" ${TARGET_DIR}
 "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" ${TARGET_DIR} "$PACKAGE_MANAGER"
 
