@@ -106,10 +106,6 @@ pub struct Args {
     /// The directory in which to run turbo
     #[clap(long, global = true, value_parser)]
     pub cwd: Option<Utf8PathBuf>,
-    /// Fallback to use Go for task execution
-    #[serde(skip)]
-    #[clap(long, global = true, conflicts_with = "remote_cache_read_only")]
-    pub go_fallback: bool,
     /// Specify a file to save a pprof heap profile
     #[clap(long, global = true, value_parser)]
     pub heap: Option<String>,
@@ -484,6 +480,10 @@ pub struct RunArgs {
     pub continue_execution: bool,
     #[clap(alias = "dry", long = "dry-run", num_args = 0..=1, default_missing_value = "text")]
     pub dry_run: Option<DryRunMode>,
+    /// Fallback to use Go for task execution
+    #[serde(skip)]
+    #[clap(long, conflicts_with = "remote_cache_read_only")]
+    pub go_fallback: bool,
     /// Run turbo in single-package mode
     #[clap(long)]
     pub single_package: bool,
@@ -829,7 +829,7 @@ pub async fn run(
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
-            let should_use_go = cli_args.go_fallback
+            let should_use_go = args.go_fallback
                 || env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false");
             if should_use_go {
                 Ok(Payload::Go(Box::new(base)))
@@ -1981,7 +1981,7 @@ mod test {
             "turbo",
             "build",
             "--remote-cache-read-only",
-            "--go-fallback"
+            "--go-fallback",
         ])
         .unwrap_err()
         .to_string()
@@ -1990,10 +1990,22 @@ mod test {
         ));
         assert!(Args::try_parse_from([
             "turbo",
+            "--go-fallback",
+            "--remote-cache-read-only",
+            "true",
+            "build",
+        ])
+        .unwrap_err()
+        .to_string()
+        .contains(
+            "the argument '--go-fallback' cannot be used with '--remote-cache-read-only [<BOOL>]'"
+        ));
+        assert!(Args::try_parse_from([
+            "turbo",
             "run",
             "build",
             "--remote-cache-read-only",
-            "--go-fallback"
+            "--go-fallback",
         ])
         .unwrap_err()
         .to_string()
