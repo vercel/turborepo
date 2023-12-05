@@ -4,7 +4,7 @@ SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
 TARGET_DIR=$1
 FIXTURE_DIR=$2
 
-cp -a ${SCRIPT_DIR}/../_fixtures/find_turbo/$FIXTURE_DIR/. ${TARGET_DIR}/
+cp -a ${SCRIPT_DIR}/../../fixtures/find_turbo/$FIXTURE_DIR/. ${TARGET_DIR}/
 
 # We need to symlink: turbo -> .pnpm/turbo@1.0.0/node_modules/turbo
 # where `turbo` is the symlink
