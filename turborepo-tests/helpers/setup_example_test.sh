@@ -3,8 +3,8 @@
 set -eo pipefail
 
 FIXTURE_NAME=$1
-pkgManager=$2
-pkgManagerWithVersion=$3
+PACKAGE_MANAGER_NAME=$2 # e.g. "npm"
+PACKAGE_MANAGER=$3      # e.g. yarn@1.22.17
 
 THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
 MONOREPO_ROOT_DIR="$THIS_DIR/../.."
@@ -22,8 +22,8 @@ TARGET_DIR="$(pwd)"
 # Delete .git directory if it's there, we'll set up a new git repo
 [ ! -d .git ] || rm -rf .git
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
-"${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$pkgManagerWithVersion"
-"${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$pkgManager"
+"${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$PACKAGE_MANAGER"
+"${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER_NAME"
 
 # Set the TURBO_BINARY_PATH env var. The examples themselves invoke the locally installed turbo,
 # but turbo has an internal feature that will look for this environment variable and use it if it's set.
