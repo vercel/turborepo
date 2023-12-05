@@ -1,9 +1,9 @@
 {
   "name": "pkg-a",
   "scripts": {
-    "build": "sleep 2 && echo \"Building at the speed of Turbo.\" > output-file.txt && cat output-file.txt",
-    "lint": "sleep 2 && echo \"Linted!\"",
-    "type-check": "sleep 2 && echo \"Types checked!\""
+    "build": "echo \"Building at the speed of Turbo.\" > output-file.txt && cat output-file.txt",
+    "lint": "echo \"Linted!\"",
+    "type-check": "echo \"Types checked!\""
   },
   "devDependencies": {
     "tooling-config": "workspace:*"

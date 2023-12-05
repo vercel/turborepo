@@ -2,8 +2,8 @@
   "name": "pkg-b",
   "scripts": {
     "prebuild": "echo \"Executing pre-build step...\"",
-    "build": "sleep 5 && echo \"Welcome to the Turboverse.\" > output-file.txt && cat output-file.txt",
-    "type-check": "sleep 5 && echo \"Types checked!\""
+    "build": "echo \"Welcome to the Turboverse.\" > output-file.txt && cat output-file.txt",
+    "type-check": "echo \"Types checked!\""
   },
   "devDependencies": {
     "tooling-config": "workspace:*"
