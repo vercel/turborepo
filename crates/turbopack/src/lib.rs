@@ -262,25 +262,22 @@ async fn apply_reexport_tree_shaking(
     module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
     part: Vc<ModulePart>,
 ) -> Result<Vc<Box<dyn Module>>> {
-    match *part.await? {
-        ModulePart::Export(export) => {
-            let export = export.await?;
-            let FollowExportsResult {
-                module: final_module,
-                export_name: new_export,
-                ..
-            } = &*follow_reexports(module, export.clone_value()).await?;
-            if let Some(new_export) = new_export {
-                if *new_export == *export {
-                    return Ok(Vc::upcast(*final_module));
-                } else {
-                    // TODO: create a remapping module
-                }
+    if let ModulePart::Export(export) = *part.await? {
+        let export = export.await?;
+        let FollowExportsResult {
+            module: final_module,
+            export_name: new_export,
+            ..
+        } = &*follow_reexports(module, export.clone_value()).await?;
+        if let Some(new_export) = new_export {
+            if *new_export == *export {
+                return Ok(Vc::upcast(*final_module));
             } else {
                 // TODO: create a remapping module
             }
+        } else {
+            // TODO: create a remapping module
         }
-        _ => {}
     }
     Ok(Vc::upcast(module))
 }
