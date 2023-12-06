@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, future::Future, pin::Pin};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use turbo_tasks::{
     debug::ValueDebugFormat, trace::TraceRawVcs, TryJoinIterExt, Value, ValueToString, Vc,
@@ -272,11 +272,14 @@ async fn import_mapping_to_result(
     Ok(match &*mapping.await? {
         ImportMapping::Direct(result) => ImportMapResult::Result(*result),
         ImportMapping::External(name) => ImportMapResult::Result(
-            ResolveResult::primary(name.as_ref().map_or_else(
-                || ResolveResultItem::OriginalReferenceExternal,
-                |req| ResolveResultItem::OriginalReferenceTypeExternal(req.to_string()),
-            ))
-            .into(),
+            ResolveResult::primary(if let Some(name) = name {
+                ResolveResultItem::OriginalReferenceTypeExternal(name.to_string())
+            } else if let Some(request) = request.await?.request() {
+                ResolveResultItem::OriginalReferenceTypeExternal(request)
+            } else {
+                bail!("Cannot resolve external reference without request")
+            })
+            .cell(),
         ),
         ImportMapping::Ignore => {
             ImportMapResult::Result(ResolveResult::primary(ResolveResultItem::Ignore).into())
@@ -357,8 +360,22 @@ impl ImportMap {
         request: Vc<Request>,
     ) -> Result<ImportMapResult> {
         // TODO lookup pattern
+        // relative requests must not match global wildcard aliases.
         if let Some(request_string) = request.await?.request() {
-            if let Some(result) = self.map.lookup(&request_string).next() {
+            let mut lookup = if request_string.starts_with("./") {
+                self.map
+                    .lookup_with_prefix_predicate(&request_string, |prefix| {
+                        prefix.starts_with("./")
+                    })
+            } else if request_string.starts_with("../") {
+                self.map
+                    .lookup_with_prefix_predicate(&request_string, |prefix| {
+                        prefix.starts_with("../")
+                    })
+            } else {
+                self.map.lookup(&request_string)
+            };
+            if let Some(result) = lookup.next() {
                 return import_mapping_to_result(
                     result.try_join_into_self().await?.into_owned(),
                     lookup_path,

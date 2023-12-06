@@ -56,9 +56,6 @@ jobs:
           PATTERNS: |
             .github/actions/**
             .github/workflows/test.yml
-            .github/workflows/setup-nextjs-build.yml
-            .github/workflows/nextjs-integration-test-results.yml
-            .github/workflows/upload-nextjs-integration-test-results.yml
 
       - name: Root cargo related changes
         id: cargo
@@ -156,6 +153,7 @@ jobs:
           PATTERNS: |
             examples/**
             turborepo-tests/example-*/**
+            turborepo-tests/helpers/**
             !**.md
             !**.mdx
 

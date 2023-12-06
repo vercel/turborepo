@@ -1,0 +1,12 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipeline": {
+    "build": {
+      "dependsOn": ["prebuild", "^build"],
+      "outputs": ["output-file.txt", "dist/**"]
+    },
+    "prebuild": {},
+    "lint": {},
+    "type-check": {}
+  }
+}

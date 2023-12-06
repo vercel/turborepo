@@ -1,6 +1,6 @@
 
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd) task_dependencies/overwriting
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh task_dependencies/overwriting
 
 Test
   $ ${TURBO} run build > tmp.log
