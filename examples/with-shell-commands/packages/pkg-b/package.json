@@ -1,0 +1,11 @@
+{
+  "name": "pkg-b",
+  "scripts": {
+    "prebuild": "echo \"Executing pre-build step...\"",
+    "build": "echo \"Welcome to the Turboverse.\" > output-file.txt && cat output-file.txt",
+    "type-check": "echo \"Types checked!\""
+  },
+  "dependencies": {
+    "tooling-config": "workspace:*"
+  }
+}

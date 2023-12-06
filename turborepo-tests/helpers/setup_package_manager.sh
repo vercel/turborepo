@@ -17,7 +17,9 @@ if [ "$pkgManager" != "" ]; then
     dos2unix --quiet "$dir/package.json"
   fi
 
-  git commit -am "Updated package manager to $pkgManager" --quiet
+  if [[ $(git status --porcelain) ]]; then
+    git commit -am "Updated package manager to $pkgManager" --quiet
+  fi
 fi
 
 # If we're in a prysk test, set the corepack install directory to the prysk temp directory.
