@@ -4,7 +4,9 @@ use crate::{commands::CommandBase, run, run::Run, signal::SignalHandler};
 
 pub async fn run(base: CommandBase) -> Result<i32, run::Error> {
     #[cfg(windows)]
-    let signal = tokio::signal::windows::ctrl_c().map_err(run::Error::SignalHandler)?;
+    let signal = tokio::signal::windows::ctrl_c()
+        .map_err(run::Error::SignalHandler)?
+        .recv();
     #[cfg(not(windows))]
     let signal = {
         use tokio::signal::unix;
