@@ -676,7 +676,7 @@ impl Backend {
                 let (package, task) = property
                     .name
                     .as_str()
-                    .rsplit_once('#')
+                    .split_once('#') // turbo packages may not have # in them
                     .map(|(p, t)| (Some(p), t))
                     .unwrap_or((None, property.name.as_str()));
 
