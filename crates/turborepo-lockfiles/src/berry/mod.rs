@@ -998,4 +998,24 @@ mod test {
              resolve@patch:resolve@^1.22.2#~builtin<compat/resolve>"
         );
     }
+
+    #[test]
+    fn test_yarn4_mixed_protocols() {
+        let data =
+            LockfileData::from_bytes(include_bytes!("../../fixtures/yarn4-mixed-protocol.lock"))
+                .unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+        // make sure that npm:* protocol still resolves to workspace dependency
+        let a_deps = lockfile
+            .all_dependencies("a@workspace:pkgs/a")
+            .unwrap()
+            .unwrap();
+        assert_eq!(a_deps.len(), 1);
+        let (c_desc, version) = a_deps.into_iter().next().unwrap();
+        let c_pkg = lockfile
+            .resolve_package("pkgs/a", &c_desc, &version)
+            .unwrap()
+            .unwrap();
+        assert_eq!(c_pkg.key, "c@workspace:pkgs/c");
+    }
 }
