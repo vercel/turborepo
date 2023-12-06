@@ -408,6 +408,7 @@ impl EcmascriptModuleAsset {
             chunking_context,
             analyze.references,
             analyze.code_generation,
+            analyze.source_map,
             analyze.exports,
             async_module_info,
         ))
@@ -617,6 +618,7 @@ impl EcmascriptModuleContent {
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         references: Vc<ModuleReferences>,
         code_generation: Vc<CodeGenerateables>,
+        source_map: Option<Vc<SourceMap>>,
         exports: Vc<EcmascriptExports>,
         async_module_info: Option<Vc<AsyncModuleInfo>>,
     ) -> Result<Vc<Self>> {
@@ -662,7 +664,7 @@ impl EcmascriptModuleContent {
             }
         }
 
-        gen_content_with_visitors(parsed, ident, visitors, root_visitors, *source_map).await
+        gen_content_with_visitors(parsed, ident, visitors, root_visitors, source_map).await
     }
 
     /// Creates a new [`Vc<EcmascriptModuleContent>`] without an analysis pass.
