@@ -7,13 +7,13 @@ description: Turborepo builds a Task Graph based on your configuration and repos
 
 In [the previous section][3], we talked about how Turborepo uses `turbo.json` to express
 how tasks relate to each other. You can think of these relationships as dependencies between
-tasks, but we have a more formal name for them: the task graph.
+tasks, but we have a more formal name for them: the Task Graph.
 
 Turborepo uses a data structure called a [directed acyclic graph (DAG)][1] to
 understand your repository and its tasks. A graph is made up of nodes and edges.
 In the case of a task graph, the nodes are tasks and the edges are the dependencies.
 A _directed_ graph means that the edges have a direction, so we can say that
-TaskA has a dependency on TaskB, or the other way around. The direction of the edge
+Task A has a dependency on Task B, or the other way around. The direction of the edge
 depends on which way the dependency goes.
 
 For example, let's say you have a monorepo with an application `apps/web` that depends on two
