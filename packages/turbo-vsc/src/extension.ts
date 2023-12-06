@@ -1,7 +1,6 @@
 import {
   ExtensionContext,
   window,
-  languages,
   commands,
   workspace,
   StatusBarAlignment,
@@ -11,7 +10,6 @@ import {
   Uri,
   env,
 } from "vscode";
-import * as net from "net";
 import * as cp from "child_process";
 import * as path from "path";
 import * as fs from "fs";
@@ -20,9 +18,7 @@ import {
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
-  TransportKind,
 } from "vscode-languageclient/node";
-import { subscribe } from "diagnostics_channel";
 
 import { visit } from "jsonc-parser";
 
@@ -70,14 +66,34 @@ export function activate(context: ExtensionContext) {
     cwd: workspace.workspaceFolders?.[0].uri.path,
   };
 
+  let turboPath = workspace.getConfiguration("turbo").get("path");
+  try {
+    if (turboPath == null) {
+      turboPath = cp.execSync(
+        "bash -c 'source ~/.nvm/nvm.sh; which turbo'",
+        options
+      );
+    }
+  } catch (e: any) {
+    if (
+      e.message.includes("command not found") ||
+      e.message.includes("Command failed")
+    ) {
+      promptGlobalTurbo();
+    } else {
+      window.showErrorMessage(e.message);
+    }
+  }
+
   context.subscriptions.push(
     commands.registerCommand("turbo.daemon.start", () => {
-      cp.exec("source ~/.nvm/nvm.sh; turbo daemon start", options, (err) => {
+      const turboPath = workspace.getConfiguration("turbo").get("path");
+      cp.exec(`${turboPath} daemon start`, options, (err) => {
         if (err) {
           if (err.message.includes("command not found")) {
             promptGlobalTurbo();
           } else {
-            window.showErrorMessage(err.message);
+            window.showErrorMessage(JSON.stringify(err));
           }
         } else {
           updateStatusBarItem(true);
@@ -89,7 +105,7 @@ export function activate(context: ExtensionContext) {
 
   context.subscriptions.push(
     commands.registerCommand("turbo.daemon.stop", () => {
-      cp.exec("source ~/.nvm/nvm.sh; turbo daemon stop", options, (err) => {
+      cp.exec(`${turboPath} daemon stop`, options, (err) => {
         if (err) {
           if (err.message.includes("command not found")) {
             promptGlobalTurbo();
@@ -106,7 +122,7 @@ export function activate(context: ExtensionContext) {
 
   context.subscriptions.push(
     commands.registerCommand("turbo.daemon.status", () => {
-      cp.exec("source ~/.nvm/nvm.sh; turbo daemon status", options, (err) => {
+      cp.exec(`${turboPath} daemon status`, options, (err) => {
         if (err) {
           if (err.message.includes("command not found")) {
             promptGlobalTurbo();
@@ -311,9 +327,10 @@ function updateJSONDecorations(editor?: TextEditor) {
 
 async function promptGlobalTurbo() {
   let answer = await window.showErrorMessage(
-    "turbo not found. See https://turbo.build/repo/docs/installing.",
+    "turbo not found. Please see the docs to install, or set the path manually in the settings.",
     "Install Now",
-    "Open Docs"
+    "Open Docs",
+    "Open Settings"
   );
 
   if (answer === "Install Now") {
@@ -333,5 +350,7 @@ async function promptGlobalTurbo() {
     }
   } else if (answer === "Open Docs") {
     env.openExternal(Uri.parse("https://turbo.build/repo/docs/installing"));
+  } else if (answer === "Open Settings") {
+    commands.executeCommand("workbench.action.openSettings", "turbo.path");
   }
 }

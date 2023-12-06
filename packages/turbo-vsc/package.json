@@ -65,7 +65,18 @@
         "title": "Get the status of the Turborepo Daemon",
         "category": "turbo"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Turborepo",
+      "properties": {
+        "turbo.path": {
+          "type": "string",
+          "required": false,
+          "default": null,
+          "description": "The path to your global `turbo` executable, if you'd rather not rely on auto-detection."
+        }
+      }
+    }
   },
   "capabilities": {
     "virtualWorkspaces": {
