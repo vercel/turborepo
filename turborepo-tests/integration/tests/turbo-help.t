@@ -27,7 +27,6 @@ Test help flag
         --color                           Force color usage in the terminal
         --cpuprofile <CPU_PROFILE>        Specify a file to save a cpu profile
         --cwd <CWD>                       The directory in which to run turbo
-        --go-fallback                     Fallback to use Go for task execution
         --heap <HEAP>                     Specify a file to save a pprof heap profile
         --login <LOGIN>                   Override the login endpoint
         --no-color                        Suppress color usage in the terminal
@@ -50,6 +49,8 @@ Test help flag
             Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]
             [possible values: text, json]
+        --go-fallback
+            Fallback to use Go for task execution
         --single-package
             Run turbo in single-package mode
     -F, --filter <FILTER>
@@ -127,7 +128,6 @@ Test help flag
         --color                           Force color usage in the terminal
         --cpuprofile <CPU_PROFILE>        Specify a file to save a cpu profile
         --cwd <CWD>                       The directory in which to run turbo
-        --go-fallback                     Fallback to use Go for task execution
         --heap <HEAP>                     Specify a file to save a pprof heap profile
         --login <LOGIN>                   Override the login endpoint
         --no-color                        Suppress color usage in the terminal
@@ -150,6 +150,8 @@ Test help flag
             Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]
             [possible values: text, json]
+        --go-fallback
+            Fallback to use Go for task execution
         --single-package
             Run turbo in single-package mode
     -F, --filter <FILTER>
@@ -213,7 +215,6 @@ Test help flag for link command
         --color                           Force color usage in the terminal
         --cpuprofile <CPU_PROFILE>        Specify a file to save a cpu profile
         --cwd <CWD>                       The directory in which to run turbo
-        --go-fallback                     Fallback to use Go for task execution
         --heap <HEAP>                     Specify a file to save a pprof heap profile
         --login <LOGIN>                   Override the login endpoint
         --no-color                        Suppress color usage in the terminal
@@ -240,7 +241,6 @@ Test help flag for unlink command
         --color                           Force color usage in the terminal
         --cpuprofile <CPU_PROFILE>        Specify a file to save a cpu profile
         --cwd <CWD>                       The directory in which to run turbo
-        --go-fallback                     Fallback to use Go for task execution
         --heap <HEAP>                     Specify a file to save a pprof heap profile
         --login <LOGIN>                   Override the login endpoint
         --no-color                        Suppress color usage in the terminal
@@ -267,7 +267,6 @@ Test help flag for login command
         --color                           Force color usage in the terminal
         --cpuprofile <CPU_PROFILE>        Specify a file to save a cpu profile
         --cwd <CWD>                       The directory in which to run turbo
-        --go-fallback                     Fallback to use Go for task execution
         --heap <HEAP>                     Specify a file to save a pprof heap profile
         --login <LOGIN>                   Override the login endpoint
         --no-color                        Suppress color usage in the terminal
@@ -293,7 +292,6 @@ Test help flag for logout command
         --color                           Force color usage in the terminal
         --cpuprofile <CPU_PROFILE>        Specify a file to save a cpu profile
         --cwd <CWD>                       The directory in which to run turbo
-        --go-fallback                     Fallback to use Go for task execution
         --heap <HEAP>                     Specify a file to save a pprof heap profile
         --login <LOGIN>                   Override the login endpoint
         --no-color                        Suppress color usage in the terminal
