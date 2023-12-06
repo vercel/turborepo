@@ -8,6 +8,7 @@ use turbopack_core::{
     ident::AssetIdent,
     module::Module,
     reference::{ModuleReference, ModuleReferences},
+    reference_type::ImportContext,
     resolve::origin::ResolveOrigin,
     source::Source,
 };
@@ -33,6 +34,7 @@ fn modifier() -> Vc<String> {
 pub struct CssModuleAsset {
     source: Vc<Box<dyn Source>>,
     asset_context: Vc<Box<dyn AssetContext>>,
+    pub import_context: Option<Vc<ImportContext>>,
     ty: CssModuleAssetType,
     use_lightningcss: bool,
 }
@@ -46,10 +48,12 @@ impl CssModuleAsset {
         asset_context: Vc<Box<dyn AssetContext>>,
         ty: CssModuleAssetType,
         use_lightningcss: bool,
+        import_context: Option<Vc<ImportContext>>,
     ) -> Vc<Self> {
         Self::cell(CssModuleAsset {
             source,
             asset_context,
+            import_context,
             ty,
             use_lightningcss,
         })
@@ -273,6 +277,7 @@ impl CssChunkItem for CssModuleChunkItem {
             Ok(CssChunkItemContent {
                 inner_code: output_code.to_owned().into(),
                 imports,
+                import_context: self.module.await?.import_context,
                 source_map: Some(*source_map),
             }
             .into())
@@ -284,6 +289,7 @@ impl CssChunkItem for CssModuleChunkItem {
                 )
                 .into(),
                 imports: vec![],
+                import_context: None,
                 source_map: None,
             }
             .into())

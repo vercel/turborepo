@@ -43,10 +43,29 @@ pub enum EcmaScriptModulesReferenceSubType {
     Undefined,
 }
 
+/// The individual set of conditions present on this module through `@import`
+#[derive(Debug)]
+#[turbo_tasks::value(shared)]
+pub struct ImportAttributes {
+    pub layer: Option<String>,
+    pub supports: Option<String>,
+    pub media: Option<String>,
+}
+
+/// The accumulated list of conditions that should be applied to this module
+/// through its import path
+#[derive(Clone, Debug, Default, Hash)]
+#[turbo_tasks::value(shared)]
+pub struct ImportContext {
+    pub layers: Vec<String>,
+    pub supports: Vec<String>,
+    pub media: Vec<String>,
+}
+
 #[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(Debug, Clone, PartialOrd, Ord, Hash)]
 pub enum CssReferenceSubType {
-    AtImport,
+    AtImport(Option<Vc<ImportContext>>),
     Compose,
     /// Reference from any asset to a CSS-parseable asset.
     ///
@@ -144,7 +163,11 @@ impl ReferenceType {
                     && matches!(sub_type, EcmaScriptModulesReferenceSubType::Undefined)
             }
             ReferenceType::Css(sub_type) => {
-                matches!(other, ReferenceType::Css(_))
+                (
+                    // For condition matching, treat any AtImport pair as identical.
+                    matches!(other, ReferenceType::Css(CssReferenceSubType::AtImport(_)))
+                        && matches!(sub_type, CssReferenceSubType::AtImport(_))
+                ) || matches!(other, ReferenceType::Css(_))
                     && matches!(sub_type, CssReferenceSubType::Undefined)
             }
             ReferenceType::Url(sub_type) => {

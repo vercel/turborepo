@@ -4,7 +4,7 @@ use lightningcss::{
     printer::Printer,
     properties::custom::TokenList,
     rules::{
-        import::ImportRule,
+        import::{self, ImportRule},
         layer::{LayerBlockRule, LayerName},
         media::MediaRule,
         supports::{SupportsCondition, SupportsRule},
@@ -15,18 +15,18 @@ use lightningcss::{
     traits::ToCss,
 };
 use swc_core::{
-    common::DUMMY_SP,
+    common::{Spanned, DUMMY_SP},
     css::codegen::{
         writer::basic::{BasicCssWriter, BasicCssWriterConfig},
-        CodeGenerator, Emit,
+        CodeGenerator, CodegenConfig, Emit,
     },
 };
-use turbo_tasks::{Value, ValueToString, Vc};
+use turbo_tasks::{debug::ValueDebug, Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{ChunkableModuleReference, ChunkingContext},
     issue::IssueSource,
     reference::ModuleReference,
-    reference_type::CssReferenceSubType,
+    reference_type::{CssReferenceSubType, ImportContext},
     resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
 
@@ -34,8 +34,10 @@ use crate::{
     chunk::CssImport,
     code_gen::{CodeGenerateable, CodeGeneration},
     references::css_resolve,
+    CssModuleAsset,
 };
 
+// #[derive(Clone)]
 #[turbo_tasks::value(into = "new", eq = "manual", serialization = "none")]
 pub enum ImportAttributes {
     LightningCss {
@@ -151,167 +153,49 @@ impl ImportAttributes {
         }
     }
 
-    pub fn print_block(&self) -> Result<(String, String)> {
+    fn as_reference_import_attributes(&self) -> turbopack_core::reference_type::ImportAttributes {
         match self {
             ImportAttributes::LightningCss {
                 layer_name,
                 supports,
                 media,
-            } => {
-                // something random that's never gonna be in real css
-                // Box::new(ListOfComponentValues {
-                //     span: DUMMY_SP,
-                //     children: vec![ComponentValue::PreservedToken(Box::new(token(
-                //         Token::String {
-                //             value: Default::default(),
-                //             raw: r#""""__turbopack_placeholder__""""#.into(),
-                //         },
-                //     )))],
-                // })
-
-                let default_loc = Location {
-                    source_index: 0,
-                    line: 0,
-                    column: 0,
-                };
-
-                let mut rule: CssRule = CssRule::Unknown(UnknownAtRule {
-                    name: r#""""__turbopack_placeholder__""""#.into(),
-                    prelude: TokenList(vec![]),
-                    block: None,
-                    loc: default_loc,
-                });
-
-                if !media.media_queries.is_empty() {
-                    rule = CssRule::Media(MediaRule {
-                        query: media.clone(),
-                        rules: CssRuleList(vec![rule]),
-                        loc: default_loc,
-                    })
-                }
-
-                if let Some(supports) = &supports {
-                    rule = CssRule::Supports(SupportsRule {
-                        condition: supports.clone(),
-                        rules: CssRuleList(vec![rule]),
-                        loc: default_loc,
-                    })
-                }
-                if let Some(layer_name) = &layer_name {
-                    rule = CssRule::LayerBlock(LayerBlockRule {
-                        loc: default_loc,
-                        name: Some(layer_name.clone()),
-                        rules: CssRuleList(vec![rule]),
-                    });
-                }
-
-                let mut output = String::new();
-                let mut printer = Printer::new(&mut output, PrinterOptions::default());
-                rule.to_css(&mut printer)?;
-
-                let (open, close) = output
-                    .split_once(r#"@"""__turbopack_placeholder__""""#)
-                    .unwrap();
-
-                Ok((open.trim().into(), close.trim().into()))
-            }
+            } => turbopack_core::reference_type::ImportAttributes {
+                layer: layer_name
+                    .as_ref()
+                    .map(|l| l.to_css_string(Default::default()).unwrap()),
+                supports: supports
+                    .as_ref()
+                    .map(|s| s.to_css_string(Default::default()).unwrap()),
+                media: Some(media.to_css_string(Default::default()).unwrap()),
+            },
             ImportAttributes::Swc {
                 layer_name,
                 supports,
                 media,
-            } => {
-                fn token(token: swc_core::css::ast::Token) -> swc_core::css::ast::TokenAndSpan {
-                    swc_core::css::ast::TokenAndSpan {
-                        span: DUMMY_SP,
-                        token,
-                    }
-                }
-
-                // something random that's never gonna be in real css
-                let mut rule = swc_core::css::ast::Rule::ListOfComponentValues(Box::new(
-                    swc_core::css::ast::ListOfComponentValues {
-                        span: DUMMY_SP,
-                        children: vec![swc_core::css::ast::ComponentValue::PreservedToken(
-                            Box::new(token(swc_core::css::ast::Token::String {
-                                value: Default::default(),
-                                raw: r#""""__turbopack_placeholder__""""#.into(),
-                            })),
-                        )],
-                    },
-                ));
-
-                fn at_rule(
-                    name: &str,
-                    prelude: swc_core::css::ast::AtRulePrelude,
-                    inner_rule: swc_core::css::ast::Rule,
-                ) -> swc_core::css::ast::Rule {
-                    swc_core::css::ast::Rule::AtRule(Box::new(swc_core::css::ast::AtRule {
-                        span: DUMMY_SP,
-                        name: swc_core::css::ast::AtRuleName::Ident(swc_core::css::ast::Ident {
-                            span: DUMMY_SP,
-                            value: name.into(),
-                            raw: None,
-                        }),
-                        prelude: Some(Box::new(prelude)),
-                        block: Some(swc_core::css::ast::SimpleBlock {
-                            span: DUMMY_SP,
-                            name: token(swc_core::css::ast::Token::LBrace),
-                            value: vec![swc_core::css::ast::ComponentValue::from(inner_rule)],
-                        }),
-                    }))
-                }
-
-                if let Some(media) = &media {
-                    rule = at_rule(
-                        "media",
-                        swc_core::css::ast::AtRulePrelude::MediaPrelude(
-                            swc_core::css::ast::MediaQueryList {
-                                span: DUMMY_SP,
-                                queries: media.clone(),
-                            },
-                        ),
-                        rule,
-                    );
-                }
-                if let Some(supports) = &supports {
-                    rule = at_rule(
-                        "supports",
-                        swc_core::css::ast::AtRulePrelude::SupportsPrelude(supports.clone()),
-                        rule,
-                    );
-                }
-                if let Some(layer_name) = &layer_name {
-                    rule = at_rule(
-                        "layer",
-                        swc_core::css::ast::AtRulePrelude::LayerPrelude(
-                            swc_core::css::ast::LayerPrelude::Name(layer_name.clone()),
-                        ),
-                        rule,
-                    );
-                }
-
-                let mut output = String::new();
-                let mut code_gen = CodeGenerator::new(
-                    BasicCssWriter::new(
-                        &mut output,
-                        None,
-                        BasicCssWriterConfig {
-                            indent_width: 0,
-                            ..Default::default()
-                        },
-                    ),
-                    Default::default(),
-                );
-                code_gen.emit(&rule)?;
-
-                let (open, close) = output
-                    .split_once(r#""""__turbopack_placeholder__""""#)
-                    .unwrap();
-
-                Ok((open.trim().into(), close.trim().into()))
-            }
+            } => turbopack_core::reference_type::ImportAttributes {
+                layer: layer_name.as_ref().map(|l| gen_swc_node(l)),
+                supports: supports.as_ref().map(|s| gen_swc_node(s)),
+                media: media
+                    .as_ref()
+                    .map(|queries| queries.iter().map(|q| gen_swc_node(q)).collect()),
+            },
         }
     }
+}
+
+fn gen_swc_node<N>(node: N) -> String
+where
+    N: Spanned,
+    for<'a> CodeGenerator<BasicCssWriter<'a, &'a mut String>>: Emit<N>,
+{
+    let mut code = String::new();
+    {
+        let wr = BasicCssWriter::new(&mut code, None, BasicCssWriterConfig::default());
+        let mut gen = CodeGenerator::new(wr, CodegenConfig { minify: true });
+
+        gen.emit(&node).unwrap();
+    }
+    code
 }
 
 #[turbo_tasks::value]
@@ -344,13 +228,40 @@ impl ImportAssetReference {
 #[turbo_tasks::value_impl]
 impl ModuleReference for ImportAssetReference {
     #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        css_resolve(
+    async fn resolve_reference(&self) -> Result<Vc<ModuleResolveResult>> {
+        let css_asset = Vc::try_resolve_downcast_type::<CssModuleAsset>(self.origin).await?;
+
+        let import_context = {
+            let own_attrs = (&*self.attributes.await?).as_reference_import_attributes();
+            let mut import_context: ImportContext = if let Some(my_css_asset) = css_asset {
+                if let Some(import_context) = (&*my_css_asset.await?).import_context {
+                    (*import_context.await?).to_owned()
+                } else {
+                    Default::default()
+                }
+            } else {
+                Default::default()
+            };
+
+            if let Some(layer) = own_attrs.layer {
+                import_context.layers.push(layer);
+            };
+            if let Some(supports) = own_attrs.supports {
+                import_context.supports.push(supports);
+            };
+            if let Some(media) = own_attrs.media {
+                import_context.media.push(media);
+            };
+
+            import_context
+        };
+
+        Ok(css_resolve(
             self.origin,
             self.request,
-            Value::new(CssReferenceSubType::AtImport),
+            Value::new(CssReferenceSubType::AtImport(Some(import_context.cell()))),
             Some(self.issue_source),
-        )
+        ))
     }
 }
 

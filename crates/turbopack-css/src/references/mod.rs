@@ -16,7 +16,10 @@ use turbopack_core::{
     issue::{IssueSeverity, IssueSource},
     reference::ModuleReference,
     reference_type::{CssReferenceSubType, ReferenceType},
-    resolve::{origin::ResolveOrigin, parse::Request, url_resolve, ModuleResolveResult},
+    resolve::{
+        origin::ResolveOrigin, parse::Request, url_resolve, ModuleResolveResult,
+        ModuleResolveResultItem,
+    },
     source::Source,
     source_pos::SourcePos,
 };
@@ -26,7 +29,7 @@ use crate::{
         import::{ImportAssetReference, ImportAttributes},
         url::UrlAssetReference,
     },
-    StyleSheetLike,
+    CssModuleAsset, StyleSheetLike,
 };
 
 pub(crate) mod compose;

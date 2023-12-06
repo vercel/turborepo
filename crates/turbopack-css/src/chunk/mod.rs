@@ -1,12 +1,13 @@
 pub(crate) mod single_item_chunk;
 pub mod source_map;
-pub(crate) mod writer;
 
-use std::fmt::Write;
+use std::{collections::HashSet, fmt::Write};
 
 use anyhow::{bail, Result};
 use indexmap::IndexSet;
-use turbo_tasks::{TryJoinIterExt, Value, ValueDefault, ValueToString, Vc};
+use turbo_tasks::{
+    debug::ValueDebug, trace::TraceRawVcs, TryJoinIterExt, Value, ValueDefault, ValueToString, Vc,
+};
 use turbo_tasks_fs::{rope::Rope, File, FileSystem};
 use turbopack_core::{
     asset::{Asset, AssetContent},
@@ -23,10 +24,10 @@ use turbopack_core::{
     },
     module::Module,
     output::{OutputAsset, OutputAssets},
+    reference_type::ImportContext,
     server_fs::ServerFileSystem,
     source_map::{GenerateSourceMap, OptionSourceMap},
 };
-use writer::expand_imports;
 
 use self::{single_item_chunk::chunk::SingleItemCssChunk, source_map::CssChunkSourceMapAsset};
 use crate::{process::ParseCssResultSourceMap, util::stringify_js, ImportAssetReference};
@@ -65,21 +66,65 @@ impl CssChunk {
 
         let this = self.await?;
 
-        let mut body = CodeBuilder::default();
-        let mut external_imports = IndexSet::new();
-        for css_item in this.content.await?.chunk_items.iter() {
-            // TODO(WEB-1261)
-            for external_import in expand_imports(&mut body, *css_item).await? {
-                external_imports.insert(external_import.await?.to_owned());
-            }
-        }
-
         let mut code = CodeBuilder::default();
-        for external_import in external_imports {
-            writeln!(code, "@import {};", stringify_js(&external_import))?;
+        let mut body = CodeBuilder::default();
+        let mut seen = HashSet::new();
+        for css_item in &this.content.strongly_consistent().await?.chunk_items {
+            // TODO(WEB-1261)
+            let id = &*css_item.id().await?;
+            let content = &*css_item.content().await?;
+
+            let attr = match content.import_context {
+                Some(i) => Some((*i.await?).clone()),
+                None => None,
+            };
+
+            let key = (id.clone(), attr.clone());
+            if seen.contains(&key) {
+                continue;
+            }
+            seen.insert(key);
+
+            let content = &css_item.content().await?;
+            for import in &content.imports {
+                if let CssImport::External(external_import) = import {
+                    writeln!(code, "@import {};", stringify_js(&external_import.await?))?;
+                }
+            }
+
+            writeln!(body, "/* {} */", id)?;
+            let mut close: Vec<String> = vec![];
+            if let Some(import_context) = content.import_context {
+                let import_context = &*import_context.await?;
+                if !&import_context.layers.is_empty() {
+                    writeln!(body, "@layer {} {{", import_context.layers.join("."))?;
+                    close.push("}\n".to_owned());
+                }
+                if !&import_context.media.is_empty() {
+                    writeln!(body, "@media {} {{", import_context.media.join(" and "))?;
+                    close.push("}\n".to_owned());
+                }
+                if !&import_context.supports.is_empty() {
+                    writeln!(
+                        body,
+                        "@supports {} {{",
+                        import_context.supports.join(" and ")
+                    )?;
+                    close.push("}\n".to_owned());
+                }
+            }
+
+            body.push_source(&content.inner_code, content.source_map.map(Vc::upcast));
+            write!(body, "\n")?;
+
+            for line in &close {
+                body.push_source(&Rope::from(line.to_string()), None);
+            }
+            write!(body, "\n")?;
         }
 
-        code.push_code(&body.build());
+        let built = &body.build();
+        code.push_code(built);
 
         if *this
             .chunking_context
@@ -90,7 +135,7 @@ impl CssChunk {
             let chunk_path = self.path().await?;
             write!(
                 code,
-                "\n/*# sourceMappingURL={}.map*/",
+                "/*# sourceMappingURL={}.map*/\n",
                 chunk_path.file_name()
             )?;
         }
@@ -316,7 +361,7 @@ pub trait CssChunkPlaceable: ChunkableModule + Module + Asset {}
 #[turbo_tasks::value(transparent)]
 pub struct CssChunkPlaceables(Vec<Vc<Box<dyn CssChunkPlaceable>>>);
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[turbo_tasks::value(shared)]
 pub enum CssImport {
     External(Vc<String>),
@@ -324,10 +369,12 @@ pub enum CssImport {
     Composes(Vc<Box<dyn CssChunkItem>>),
 }
 
+#[derive(Debug)]
 #[turbo_tasks::value(shared)]
 pub struct CssChunkItemContent {
-    pub inner_code: Rope,
+    pub import_context: Option<Vc<ImportContext>>,
     pub imports: Vec<CssImport>,
+    pub inner_code: Rope,
     pub source_map: Option<Vc<ParseCssResultSourceMap>>,
 }
 
@@ -422,6 +469,10 @@ impl ChunkType for CssChunkType {
                     else {
                         bail!("Chunk item is not an css chunk item but reporting chunk type css");
                     };
+                    // println!(
+                    //     "css chunk item {}",
+                    //     chunk_item.asset_ident().await?.path.await?.path,
+                    // );
                     // CSS doesn't need to care about async_info, so we can discard it
                     Ok(chunk_item)
                 })
