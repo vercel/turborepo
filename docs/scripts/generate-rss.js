@@ -28,7 +28,9 @@ async function generate() {
     const file = await fs.readFile(
       path.join(__dirname, "..", "pages", "blog", post)
     );
-    sortedData.push({ ...matter(file), slug: post.replace(".mdx", "") });
+    const frontmatter = matter(file);
+    if (frontmatter.data.href) continue;
+    sortedData.push({ ...frontmatter, slug: post.replace(".mdx", "") });
   }
 
   // sort by date
