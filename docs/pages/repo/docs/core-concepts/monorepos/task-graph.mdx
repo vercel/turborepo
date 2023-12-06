@@ -80,15 +80,6 @@ doesn't have its own `build` script. Since it doesn't have a `build` script,
 Turborepo won't execute anything for it, but it's still part of the graph for
 the purpose of including its dependencies.
 
-### Transit Nodes as entry points
-
-But what if the `docs/` package didn't implement the `build` task? What would you expect to happen
-in this case? Should the `ui` and `core` packages still execute their build tasks? Should _anything_
-happen here?
-
-Turborepo's mental model is that all nodes in the Task Graph are the same. In other words,
-Transit Nodes are included in the graph regardless of where they appear in the graph.
-
 What if we didn't include Transit Nodes in the graph?
 
 In the monorepo described above, we're including the Transit Node (and its
@@ -99,6 +90,15 @@ If the default was to **exclude** Transit Nodes, a source code change in the
 `core` package would not invalidate the cache for the `docs` app for
 `turbo run build`, using stale code from previous iterations of your `core`
 package.
+
+### Transit Nodes as entry points
+
+But what if the `docs/` package didn't implement the `build` task? What would
+you expect to happen in this case? Should the `ui` and `core` packages still
+execute their build tasks? Should _anything_ happen here?
+
+Turborepo's mental model is that all nodes in the Task Graph are the same. In other words,
+Transit Nodes are included in the graph regardless of where they appear in the graph.
 
 [1]: https://en.wikipedia.org/wiki/Directed_acyclic_graph
 [2]: /repo/docs/core-concepts/task-dependencies
