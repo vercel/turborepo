@@ -24,6 +24,7 @@ use swc_core::{
         visit::{VisitMut, VisitMutWith},
     },
 };
+use tracing::Instrument;
 use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::{FileContent, FileSystemPath};
 use turbopack_core::{
