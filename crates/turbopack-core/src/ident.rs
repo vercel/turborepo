@@ -83,6 +83,10 @@ impl ValueToString for AssetIdent {
             s.push(')');
         }
 
+        if let Some(part) = self.part {
+            write!(s, " {{{}}}", part.to_string().await?)?;
+        }
+
         Ok(Vc::cell(s))
     }
 }
@@ -234,16 +238,37 @@ impl AssetIdent {
         if let Some(part) = part {
             4_u8.deterministic_hash(&mut hasher);
             match &*part.await? {
-                ModulePart::ModuleEvaluation => {
+                ModulePart::Evaluation => {
                     1_u8.deterministic_hash(&mut hasher);
                 }
                 ModulePart::Export(export) => {
                     2_u8.deterministic_hash(&mut hasher);
                     export.await?.deterministic_hash(&mut hasher);
                 }
-                ModulePart::Internal(id) => {
+                ModulePart::RenamedExport {
+                    original_export,
+                    export,
+                } => {
                     3_u8.deterministic_hash(&mut hasher);
+                    original_export.await?.deterministic_hash(&mut hasher);
+                    export.await?.deterministic_hash(&mut hasher);
+                }
+                ModulePart::RenamedNamespace { export } => {
+                    4_u8.deterministic_hash(&mut hasher);
+                    export.await?.deterministic_hash(&mut hasher);
+                }
+                ModulePart::Internal(id) => {
+                    5_u8.deterministic_hash(&mut hasher);
                     id.deterministic_hash(&mut hasher);
+                }
+                ModulePart::Locals => {
+                    6_u8.deterministic_hash(&mut hasher);
+                }
+                ModulePart::Exports => {
+                    7_u8.deterministic_hash(&mut hasher);
+                }
+                ModulePart::Facade => {
+                    8_u8.deterministic_hash(&mut hasher);
                 }
             }
 
