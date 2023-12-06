@@ -54,6 +54,14 @@ body:
     validations:
       required: true
 
+  - type: input
+    attributes:
+      label: Which canary version will you have in your reproduction?
+      description: |
+        To find the exact version installed in your reproduction, you can use `npm list turbo`, `yarn why turbo`, or `pnpm why turbo`.
+    validations:
+      required: true
+
   - type: textarea
     attributes:
       label: Describe the Bug
