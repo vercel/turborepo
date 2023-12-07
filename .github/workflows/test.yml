@@ -985,6 +985,7 @@ jobs:
     uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
     timeout-minutes: 180
     with:
+      # custom runner label specific to workflow
       runner: ubuntu-latest-metal
       os: linux
       all: ${{ needs.determine_jobs.outputs.turbopack_bench == 'true' }}

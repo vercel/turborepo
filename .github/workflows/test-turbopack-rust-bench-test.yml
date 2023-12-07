@@ -16,6 +16,7 @@ env:
 jobs:
   test:
     name: Test
+    # alias custom runner name to our labels array
     runs-on: ${{ inputs.runner == 'ubuntu-latest-metal' && fromJSON('[ "self-hosted", "linux", "x64", "metal" ]') || inputs.runner }}
     steps:
       - name: Set git to use LF
