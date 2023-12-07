@@ -161,7 +161,7 @@ fn collect_global_deps(
         #[cfg(windows)]
         windows_global_file_dependencies.as_slice(),
         &exclusions,
-        WalkType::All,
+        WalkType::Files,
     )?)
 }
 
@@ -213,7 +213,7 @@ mod tests {
     use turborepo_repository::package_manager::PackageManager;
 
     use super::get_global_hash_inputs;
-    use crate::cli::EnvMode;
+    use crate::{cli::EnvMode, run::global_hash::collect_global_deps};
 
     #[test]
     fn test_absolute_path() {
@@ -250,5 +250,44 @@ mod tests {
             None,
         );
         assert!(result.is_ok());
+    }
+
+    /// get_global_hash_inputs should not yield any folders when walking since
+    /// turbo does not consider changes to folders when evaluating hashes,
+    /// only to files
+    #[test]
+    fn test_collect_only_yields_files() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        // add some files
+        //   - package.json
+        //   - src/index.js
+        //   - src/index.test.js
+        //   - empty-folder/
+
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let src = root.join_component("src");
+
+        root.join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+        root.join_component("empty-folder")
+            .create_dir_all()
+            .unwrap();
+
+        src.create_dir_all().unwrap();
+        src.join_component("index.js")
+            .create_with_contents("console.log('hello world');")
+            .unwrap();
+        src.join_component("index.test.js")
+            .create_with_contents("")
+            .unwrap();
+
+        let global_file_dependencies = vec!["**".to_string()];
+        let results =
+            collect_global_deps(&PackageManager::Berry, &root, &global_file_dependencies).unwrap();
+
+        // should not yield the root folder itself, src, or empty-folder
+        assert_eq!(results.len(), 3, "{:?}", results);
     }
 }
