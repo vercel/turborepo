@@ -162,7 +162,7 @@ impl ValueToString for EsmAssetReference {
     #[turbo_tasks::function]
     async fn to_string(&self) -> Result<Vc<String>> {
         Ok(Vc::cell(format!(
-            "import {} {}",
+            "import {} with {}",
             self.request.to_string().await?,
             self.annotations
         )))
