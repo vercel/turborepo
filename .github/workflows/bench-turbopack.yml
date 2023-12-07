@@ -403,7 +403,7 @@ jobs:
       - name: Add failure prose text
         if: steps.info.outputs.failure == 'true'
         run: |
-          echo "## ⚠ Turbopack Benchmark CI failed ⚠" > comment.md
+          echo "## ⚠️ Turbopack Benchmark CI failed ⚠️" > comment.md
           echo >> comment.md
           echo "The following steps have failed in CI:" >> comment.md
           echo >> comment.md

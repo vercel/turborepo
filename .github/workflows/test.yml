@@ -728,7 +728,7 @@ jobs:
 
           # strip ansi colors with `sed`
           echo "\
-          ⚠ This change may fail to build \`next-swc\`.
+          ⚠️ This change may fail to build \`next-swc\`.
 
           <details><summary>Logs</summary>
           <p>
@@ -1207,7 +1207,7 @@ jobs:
       - name: Add failure prose text
         if: steps.info.outputs.failure == 'true'
         run: |
-          echo "## ⚠ CI failed ⚠" > comment.md
+          echo "## ⚠️ CI failed ⚠️" > comment.md
           echo >> comment.md
           echo "The following steps have failed in CI:" >> comment.md
           echo >> comment.md
