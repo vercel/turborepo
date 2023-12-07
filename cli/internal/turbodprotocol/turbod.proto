@@ -91,8 +91,36 @@ message DiscoverPackagesResponse {
 message PackageFiles {
   string package_json = 1;
   optional string turbo_json = 2;
-
 }
+
+// Request to daemon to receive the latest event so
+// the subscriber can start watching from that point
+message StartWatchRequest {}
+
+message GetWatchEventsRequest {
+  string last_event_id = 1;
+}
+
+message GetWatchEventsResponse {
+  repeated WatchEvent events = 1;
+}
+
+message WatchEvent {
+  string id = 1;
+  oneof response {
+    PackageUpdateEvent package_update = 2;
+    RediscoveryEvent rediscovery = 3;
+  }
+}
+
+// Indicates that a package has been updated
+message PackageUpdateEvent {
+  string package = 1;
+  repeated string files = 2;
+}
+
+// Indicates that all packages are changed
+message RediscoveryEvent {}
 
 enum PackageManager {
   Berry = 0;
