@@ -131,6 +131,9 @@ async fn base_resolve_options(
         ]
         .into_iter()
         .collect();
+        for condition in opt.custom_conditions.iter() {
+            conditions.insert(condition.to_string(), ConditionValue::Set);
+        }
         if opt.browser {
             conditions.insert("browser".to_string(), ConditionValue::Set);
         }
@@ -141,9 +144,6 @@ async fn base_resolve_options(
             for condition in environment.resolve_conditions().await?.iter() {
                 conditions.insert(condition.to_string(), ConditionValue::Set);
             }
-        }
-        for condition in opt.custom_conditions.iter() {
-            conditions.insert(condition.to_string(), ConditionValue::Set);
         }
         // Infer some well-known conditions
         let dev = conditions.get("development").cloned();
