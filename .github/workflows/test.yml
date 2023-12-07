@@ -983,6 +983,7 @@ jobs:
     needs: [determine_jobs, turbopack_rust_check]
     name: Turbopack Rust testing benchmarks on linux
     uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
+    timeout-minutes: 180
     with:
       runner: ubuntu-latest-metal
       os: linux
@@ -990,6 +991,7 @@ jobs:
 
   turbopack_rust_test_bench2:
     needs: [determine_jobs, turbopack_rust_check]
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
