@@ -21,7 +21,7 @@ impl RelativeUnixPath {
     pub fn new<'a, P: AsRef<str> + 'a>(value: P) -> Result<&'a Self, PathError> {
         let path = value.as_ref();
         if path.starts_with('/') {
-            return Err(PathError::NotRelative(path.to_string(), None));
+            return Err(PathError::NotRelative(path.to_string()));
         }
         // copied from stdlib path.rs: relies on the representation of
         // RelativeUnixPath being just a str, the same way Path relies on
@@ -60,9 +60,10 @@ impl RelativeUnixPath {
         &self,
         prefix: impl AsRef<RelativeUnixPath>,
     ) -> Result<&RelativeUnixPath, PathError> {
-        let stripped_path = self.0.strip_prefix(&prefix.as_ref().0).ok_or_else(|| {
-            PathError::NotParent(prefix.as_ref().to_string(), self.to_string(), None)
-        })?;
+        let stripped_path = self
+            .0
+            .strip_prefix(&prefix.as_ref().0)
+            .ok_or_else(|| PathError::NotParent(prefix.as_ref().to_string(), self.to_string()))?;
 
         // Remove leading '/' if present
         let stripped_path = stripped_path.strip_prefix('/').unwrap_or(stripped_path);

@@ -1,7 +1,6 @@
-use std::{backtrace, sync::Arc};
+use std::backtrace;
 
 use thiserror::Error;
-use turborepo_errors::{Provenance, Sourced};
 use turborepo_repository::package_graph;
 
 use crate::{
@@ -45,22 +44,4 @@ pub enum Error {
     Run(#[from] run::Error),
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
-}
-
-impl Sourced for Error {
-    fn with_provenance(self, provenance: Option<Arc<Provenance>>) -> Self {
-        match self {
-            Self::Path(e) => Self::Path(e.with_provenance(provenance)),
-            Self::Run(e) => Self::Run(e.with_provenance(provenance)),
-            _ => todo!(),
-        }
-    }
-
-    fn provenance(&self) -> Option<Arc<Provenance>> {
-        match self {
-            Self::Path(e) => e.provenance(),
-            Self::Run(e) => e.provenance(),
-            _ => todo!(),
-        }
-    }
 }

@@ -6,7 +6,6 @@ use std::{
 
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_errors::{Provenance, Sourced};
 use turborepo_ui::{cprintln, cwrite, cwriteln, BOLD, BOLD_YELLOW_REVERSE, UI, YELLOW};
 use which::which;
 
@@ -142,8 +141,7 @@ fn filename_and_extension(
     cwd: &AbsoluteSystemPath,
     raw_filename: &str,
 ) -> Result<(AbsoluteSystemPathBuf, String), Error> {
-    let graph_file = AbsoluteSystemPathBuf::from_unknown(cwd, raw_filename)
-        .with_provenance(Provenance::from_flag("graph"));
+    let graph_file = AbsoluteSystemPathBuf::from_unknown(cwd, raw_filename);
     if let Some(extension) = graph_file.extension() {
         let extension = extension.to_string();
         Ok((graph_file, extension))

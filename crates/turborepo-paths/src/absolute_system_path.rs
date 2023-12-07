@@ -38,7 +38,7 @@ impl ToOwned for AbsoluteSystemPath {
     type Owned = AbsoluteSystemPathBuf;
 
     fn to_owned(&self) -> Self::Owned {
-        AbsoluteSystemPathBuf(None, self.0.to_owned())
+        AbsoluteSystemPathBuf(self.0.to_owned())
     }
 }
 
@@ -105,7 +105,7 @@ impl AbsoluteSystemPath {
     /// Errors if `Utf8Path` is relative.
     fn from_utf8_path(path: &Utf8Path) -> Result<&Self, PathError> {
         if path.is_relative() {
-            return Err(PathError::NotAbsolute(path.to_string(), None));
+            return Err(PathError::NotAbsolute(path.to_string()));
         }
         Ok(Self::new_unchecked(path))
     }
@@ -199,7 +199,6 @@ impl AbsoluteSystemPath {
     pub fn join_component(&self, segment: &str) -> AbsoluteSystemPathBuf {
         debug_assert!(!segment.contains(std::path::MAIN_SEPARATOR));
         AbsoluteSystemPathBuf(
-            None,
             self.0
                 .join(segment)
                 .as_std_path()
@@ -215,7 +214,6 @@ impl AbsoluteSystemPath {
             .iter()
             .any(|segment| segment.contains(std::path::MAIN_SEPARATOR)));
         AbsoluteSystemPathBuf(
-            None,
             self.0
                 .join(segments.join(std::path::MAIN_SEPARATOR_STR))
                 .as_std_path()
@@ -235,7 +233,6 @@ impl AbsoluteSystemPath {
     ) -> Result<AbsoluteSystemPathBuf, PathError> {
         let tail = unix_path.as_ref().to_system_path_buf();
         Ok(AbsoluteSystemPathBuf(
-            None,
             self.0.join(tail).as_std_path().clean().try_into()?,
         ))
     }
@@ -267,7 +264,7 @@ impl AbsoluteSystemPath {
 
     pub fn resolve(&self, path: &AnchoredSystemPath) -> AbsoluteSystemPathBuf {
         let path = self.0.join(path);
-        AbsoluteSystemPathBuf(None, path)
+        AbsoluteSystemPathBuf(path)
     }
 
     /// Lexically cleans a path by doing the following:
@@ -284,18 +281,15 @@ impl AbsoluteSystemPath {
             .as_std_path()
             .clean()
             .try_into()
-            .map_err(|_| PathError::InvalidUnicode(self.0.as_str().to_owned(), None))?;
+            .map_err(|_| PathError::InvalidUnicode(self.0.as_str().to_owned()))?;
 
-        Ok(AbsoluteSystemPathBuf(None, cleaned_path))
+        Ok(AbsoluteSystemPathBuf(cleaned_path))
     }
 
     /// Canonicalizes a path. Uses `dunce` to avoid UNC paths when possible.
     pub fn to_realpath(&self) -> Result<AbsoluteSystemPathBuf, PathError> {
         let realpath = dunce::canonicalize(&self.0)?;
-        Ok(AbsoluteSystemPathBuf(
-            None,
-            Utf8PathBuf::try_from(realpath)?,
-        ))
+        Ok(AbsoluteSystemPathBuf(Utf8PathBuf::try_from(realpath)?))
     }
 
     /// Gets metadata on path.

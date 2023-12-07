@@ -1,8 +1,5 @@
-use std::sync::Arc;
-
 use miette::Diagnostic;
 use thiserror::Error;
-use turborepo_errors::{Provenance, Sourced};
 use turborepo_repository::package_graph;
 
 use super::graph_visualizer;
@@ -51,20 +48,4 @@ pub enum Error {
     Visitor(#[from] task_graph::VisitorError),
     #[error("error registering signal handler: {0}")]
     SignalHandler(std::io::Error),
-}
-
-impl Sourced for Error {
-    fn with_provenance(self, provenance: Option<Arc<Provenance>>) -> Self {
-        match self {
-            Self::Path(e) => Self::Path(e.with_provenance(provenance)),
-            _ => todo!(),
-        }
-    }
-
-    fn provenance(&self) -> Option<Arc<Provenance>> {
-        match self {
-            Self::Path(e) => e.provenance().clone(),
-            _ => None,
-        }
-    }
 }

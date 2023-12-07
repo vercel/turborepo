@@ -3,47 +3,18 @@ use std::{
     fmt, io,
     ops::Deref,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use camino::{Utf8Components, Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use path_clean::PathClean;
 use serde::Serialize;
-use turborepo_errors::{Provenance, Sourced, WithSource};
 
 use crate::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathError};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize)]
-pub struct AbsoluteSystemPathBuf(
-    #[serde(skip)] pub(crate) Option<Arc<Provenance>>,
-    pub(crate) Utf8PathBuf,
-);
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize)]
+pub struct AbsoluteSystemPathBuf(pub(crate) Utf8PathBuf);
 
-impl TryFrom<PathBuf> for AbsoluteSystemPathBuf {
-    type Error = PathError;
-
-    fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
-        Self::new(Utf8PathBuf::try_from(path)?)
-    }
-}
-
-impl TryFrom<&Path> for AbsoluteSystemPathBuf {
-    type Error = PathError;
-
-    fn try_from(path: &Path) -> Result<Self, Self::Error> {
-        let utf8_path: &Utf8Path = path.try_into()?;
-        Self::new(utf8_path.to_owned())
-    }
-}
-
-impl TryFrom<&str> for AbsoluteSystemPathBuf {
-    type Error = PathError;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        Self::new(Utf8PathBuf::from(value))
-    }
-}
 impl Borrow<AbsoluteSystemPath> for AbsoluteSystemPathBuf {
     fn borrow(&self) -> &AbsoluteSystemPath {
         let path = self.as_path();
@@ -62,17 +33,6 @@ impl Deref for AbsoluteSystemPathBuf {
 
     fn deref(&self) -> &Self::Target {
         self.borrow()
-    }
-}
-
-impl Sourced for AbsoluteSystemPathBuf {
-    fn with_provenance(mut self, provenance: Option<Arc<Provenance>>) -> Self {
-        self.0 = provenance;
-        self
-    }
-
-    fn provenance(&self) -> Option<Arc<Provenance>> {
-        self.0.clone()
     }
 }
 
@@ -110,9 +70,9 @@ impl AbsoluteSystemPathBuf {
     pub fn new(unchecked_path: impl Into<String>) -> Result<Self, PathError> {
         let unchecked_path = unchecked_path.into();
         if !Path::new(&unchecked_path).is_absolute() {
-            return Err(PathError::NotAbsolute(unchecked_path, None));
+            return Err(PathError::NotAbsolute(unchecked_path));
         }
-        Ok(AbsoluteSystemPathBuf(None, unchecked_path.into()))
+        Ok(AbsoluteSystemPathBuf(unchecked_path.into()))
     }
 
     /// Takes in a system path of unknown type. If it's absolute, returns the
@@ -121,10 +81,9 @@ impl AbsoluteSystemPathBuf {
         // we have an absolute system path and an unknown kind of system path.
         let unknown: Utf8PathBuf = unknown.into();
         if unknown.is_absolute() {
-            Self(None, unknown)
+            Self(unknown)
         } else {
             Self(
-                None,
                 base.as_path()
                     .join(unknown)
                     .as_std_path()
@@ -142,7 +101,7 @@ impl AbsoluteSystemPathBuf {
 
     pub fn cwd() -> Result<Self, PathError> {
         // TODO(errors): Unwrap current_dir()
-        Ok(Self(None, Utf8PathBuf::try_from(std::env::current_dir()?)?))
+        Ok(Self(Utf8PathBuf::try_from(std::env::current_dir()?)?))
     }
 
     /// Anchors `path` at `self`.
@@ -182,32 +141,27 @@ impl AbsoluteSystemPathBuf {
     }
 
     pub fn as_path(&self) -> &Utf8Path {
-        self.1.as_path()
-    }
-
-    pub fn as_sourced_path(&self) -> WithSource<&AbsoluteSystemPath> {
-        let provenance = self.provenance();
-        WithSource::new(&self, provenance)
+        self.0.as_path()
     }
 
     pub fn components(&self) -> Utf8Components<'_> {
-        self.1.components()
+        self.0.components()
     }
 
     pub fn parent(&self) -> Option<&AbsoluteSystemPath> {
-        self.1.parent().map(AbsoluteSystemPath::new_unchecked)
+        self.0.parent().map(AbsoluteSystemPath::new_unchecked)
     }
 
     pub fn starts_with<P: AsRef<Path>>(&self, base: P) -> bool {
-        self.1.starts_with(base.as_ref())
+        self.0.starts_with(base.as_ref())
     }
 
     pub fn ends_with<P: AsRef<Path>>(&self, child: P) -> bool {
-        self.1.ends_with(child.as_ref())
+        self.0.ends_with(child.as_ref())
     }
 
     pub fn ensure_dir(&self) -> Result<(), io::Error> {
-        if let Some(parent) = self.1.parent() {
+        if let Some(parent) = self.0.parent() {
             fs::create_dir_all(parent)
         } else {
             Ok(())
@@ -215,58 +169,83 @@ impl AbsoluteSystemPathBuf {
     }
 
     pub fn create_dir_all(&self) -> Result<(), io::Error> {
-        fs::create_dir_all(self.1.as_path())
+        fs::create_dir_all(self.0.as_path())
     }
 
     pub fn remove(&self) -> Result<(), io::Error> {
-        fs::remove_file(self.1.as_path())
+        fs::remove_file(self.0.as_path())
     }
 
     pub fn set_readonly(&self) -> Result<(), PathError> {
         let metadata = fs::symlink_metadata(self)?;
         let mut perms = metadata.permissions();
         perms.set_readonly(true);
-        fs::set_permissions(self.1.as_path(), perms)?;
+        fs::set_permissions(self.0.as_path(), perms)?;
         Ok(())
     }
 
     pub fn is_readonly(&self) -> Result<bool, PathError> {
-        Ok(self.1.symlink_metadata()?.permissions().readonly())
+        Ok(self.0.symlink_metadata()?.permissions().readonly())
     }
 
     pub fn as_str(&self) -> &str {
-        self.1.as_str()
+        self.0.as_str()
     }
 
     pub fn file_name(&self) -> Option<&str> {
-        self.1.file_name()
+        self.0.file_name()
     }
 
     pub fn try_exists(&self) -> Result<bool, PathError> {
         // try_exists is an experimental API and not yet in fs_err
-        Ok(std::fs::try_exists(&self.1)?)
+        Ok(std::fs::try_exists(&self.0)?)
     }
 
     pub fn extension(&self) -> Option<&str> {
-        self.1.extension()
+        self.0.extension()
+    }
+}
+
+impl TryFrom<PathBuf> for AbsoluteSystemPathBuf {
+    type Error = PathError;
+
+    fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
+        Self::new(Utf8PathBuf::try_from(path)?)
+    }
+}
+
+impl TryFrom<&Path> for AbsoluteSystemPathBuf {
+    type Error = PathError;
+
+    fn try_from(path: &Path) -> Result<Self, Self::Error> {
+        let utf8_path: &Utf8Path = path.try_into()?;
+        Self::new(utf8_path.to_owned())
+    }
+}
+
+impl TryFrom<&str> for AbsoluteSystemPathBuf {
+    type Error = PathError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new(Utf8PathBuf::from(value))
     }
 }
 
 impl From<AbsoluteSystemPathBuf> for PathBuf {
     fn from(path: AbsoluteSystemPathBuf) -> Self {
-        path.1.into_std_path_buf()
+        path.0.into_std_path_buf()
     }
 }
 
 impl fmt::Display for AbsoluteSystemPathBuf {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.1.as_str())
+        write!(f, "{}", self.0.as_str())
     }
 }
 
 impl AsRef<Path> for AbsoluteSystemPathBuf {
     fn as_ref(&self) -> &Path {
-        self.1.as_std_path()
+        self.0.as_std_path()
     }
 }
 

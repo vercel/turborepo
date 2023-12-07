@@ -20,7 +20,7 @@ impl TryFrom<&str> for AnchoredSystemPathBuf {
     fn try_from(path: &str) -> Result<Self, Self::Error> {
         let path = Utf8Path::new(path);
         if path.is_absolute() {
-            return Err(PathError::NotRelative(path.to_string(), None));
+            return Err(PathError::NotRelative(path.to_string()));
         }
 
         Ok(AnchoredSystemPathBuf(path.into()))
@@ -53,7 +53,7 @@ impl TryFrom<&Path> for AnchoredSystemPathBuf {
     fn try_from(path: &Path) -> Result<Self, Self::Error> {
         let path = path
             .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string(), None))?;
+            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
 
         Self::try_from(path)
     }
@@ -82,7 +82,7 @@ impl AnchoredSystemPathBuf {
         let stripped_path = path
             .as_path()
             .strip_prefix(root.as_path())
-            .map_err(|_| PathError::NotParent(root.to_string(), path.to_string(), None))?
+            .map_err(|_| PathError::NotParent(root.to_string(), path.to_string()))?
             .into();
 
         Ok(AnchoredSystemPathBuf(stripped_path))
@@ -151,7 +151,7 @@ impl AnchoredSystemPathBuf {
     pub fn from_system_path(path: &Path) -> Result<Self, PathError> {
         let path = path
             .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string(), None))?;
+            .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
 
         #[allow(unused_variables)]
         let PathValidation {
@@ -160,7 +160,7 @@ impl AnchoredSystemPathBuf {
         } = check_path(path);
 
         if !well_formed {
-            return Err(PathError::MalformedPath(path.to_string(), None));
+            return Err(PathError::MalformedPath(path.to_string()));
         }
 
         #[cfg(windows)]
