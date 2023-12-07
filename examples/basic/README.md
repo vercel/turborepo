@@ -36,19 +36,27 @@ This Turborepo has some additional tools already setup for you:
 
 To build all apps and packages, run the following command:
 
+<!-- Build Command -->
+
 ```
 cd my-turborepo
 pnpm build
 ```
 
+<!-- Build Command End -->
+
 ### Develop
 
 To develop all apps and packages, run the following command:
+
+<!-- Dev Command -->
 
 ```
 cd my-turborepo
 pnpm dev
 ```
+
+<!-- Dev Command End -->
 
 ### Remote Caching
 

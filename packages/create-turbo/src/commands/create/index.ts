@@ -20,6 +20,7 @@ import { TransformError } from "../../transforms/errors";
 import { isDefaultExample } from "../../utils/isDefaultExample";
 import * as prompts from "./prompts";
 import type { CreateCommandArgument, CreateCommandOptions } from "./types";
+import { updateCommandsInREADME } from "./updateCommandsInREADME";
 
 const { turboGradient, turboLoader, info, error, warn } = logger;
 
@@ -92,6 +93,8 @@ export async function create(
     skipTransforms,
   });
 
+  const selectedPackageManager = selectedPackageManagerDetails.name;
+  updateCommandsInREADME(selectedPackageManager);
   if (packageManager && opts.skipTransforms) {
     warn(
       "--skip-transforms conflicts with <package-manager>. The package manager argument will be ignored."
