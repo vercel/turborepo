@@ -17,9 +17,7 @@ const RETRY_MAX: u32 = 2;
 ///   body already set. NOTE: This must be cloneable, so no streams are allowed.
 ///
 /// returns: Result<Response, Error>
-pub(crate) async fn make_retryable_request(
-    request_builder: RequestBuilder,
-) -> Result<Response, Error> {
+pub async fn make_retryable_request(request_builder: RequestBuilder) -> Result<Response, Error> {
     let mut last_error = None;
     for retry_count in 0..RETRY_MAX {
         let builder = request_builder.try_clone().expect("cannot clone request");

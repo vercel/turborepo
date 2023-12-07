@@ -11,10 +11,17 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::inference::{RepoMode, RepoState};
+use turborepo_telemetry::{
+    client::AnonAPIClient,
+    events::{Fallback, TelemetryEvent},
+    init_telemetry, telem, TelemetryHandle,
+};
 use turborepo_ui::UI;
 
 use crate::{
-    commands::{bin, daemon, generate, info, link, login, logout, prune, unlink, CommandBase},
+    commands::{
+        bin, daemon, generate, info, link, login, logout, prune, telemetry, unlink, CommandBase,
+    },
     get_version,
     tracing::TurboSubscriber,
     Payload,
@@ -200,6 +207,17 @@ pub enum DaemonCommand {
     Clean,
 }
 
+#[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
+#[serde(tag = "command")]
+pub enum TelemetryCommand {
+    /// Enables anonymous telemetry
+    Enable,
+    /// Disables anonymous telemetry
+    Disable,
+    /// Reports the status of telemetry
+    Status,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum LinkTarget {
     RemoteCache,
@@ -345,6 +363,11 @@ pub enum Command {
         #[clap(subcommand)]
         #[serde(skip)]
         command: Option<Box<GenerateCommand>>,
+    },
+    Telemetry {
+        #[clap(subcommand)]
+        #[serde(flatten)]
+        command: Option<Box<TelemetryCommand>>,
     },
     #[clap(hide = true)]
     Info {
@@ -686,6 +709,21 @@ pub async fn run(
     ui: UI,
 ) -> Result<Payload, Error> {
     let mut cli_args = Args::new();
+    let version = get_version();
+
+    // initialize telemetry and track handle to close at the end of the run
+    let mut telemetry_handle: Option<TelemetryHandle> = None;
+    match AnonAPIClient::new("https://telemetry.vercel.com", 250, version) {
+        Ok(anonymous_api_client) => {
+            let handle = init_telemetry(anonymous_api_client, ui);
+            match handle {
+                Ok(h) => telemetry_handle = Some(h),
+                Err(error) => debug!("failed to start telemetry: {:?}", error),
+            }
+        }
+        Err(error) => debug!("Failed to create AnonAPIClient: {:?}", error),
+    }
+
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
     let mut command = if let Some(command) = mem::take(&mut cli_args.command) {
@@ -750,12 +788,10 @@ pub async fn run(
         AbsoluteSystemPathBuf::cwd()?
     };
 
-    let version = get_version();
-
     cli_args.command = Some(command);
     cli_args.cwd = Some(repo_root.as_path().to_owned());
 
-    match cli_args.command.as_ref().unwrap() {
+    let cli_result = match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
             bin::run()?;
 
@@ -794,6 +830,11 @@ pub async fn run(
             };
 
             generate::run(tag, command, &args)?;
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Telemetry { command } => {
+            let mut base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
+            telemetry::configure(command, &mut base);
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Info { workspace, json } => {
@@ -875,6 +916,12 @@ pub async fn run(
 
             let should_use_go = args.go_fallback
                 || env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false");
+
+            telem(TelemetryEvent::Fallback(Fallback {
+                go_arg: args.go_fallback,
+                rust_env_var: env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false"),
+            }));
+
             if should_use_go {
                 Ok(Payload::Go(Box::new(base)))
             } else {
@@ -902,10 +949,16 @@ pub async fn run(
         }
         Command::Completion { shell } => {
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
-
             Ok(Payload::Rust(Ok(0)))
         }
+    };
+
+    match telemetry_handle {
+        Some(handle) => handle.close_with_timeout().await,
+        None => debug!("Skipping telemetry close - not initialized"),
     }
+
+    cli_result
 }
 
 #[cfg(test)]

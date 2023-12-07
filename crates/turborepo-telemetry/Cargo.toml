@@ -1,0 +1,29 @@
+[package]
+name = "turborepo-telemetry"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lints]
+workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+config = "0.13.4"
+dirs-next = "2.0.0"
+futures = { workspace = true }
+once_cell = "1.18.0"
+reqwest = { workspace = true, features = ["json"] }
+rustc_version_runtime = "0.3.0"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full", "time"] }
+tracing = { workspace = true }
+turborepo-api-client = { workspace = true }
+turborepo-ui = { workspace = true }
+url = { workspace = true }
+uuid = { version = "1.5.0", features = ["v4"] }
