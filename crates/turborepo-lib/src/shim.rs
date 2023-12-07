@@ -11,6 +11,8 @@ use std::{
 use camino::Utf8PathBuf;
 use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
+use itertools::Itertools;
+use miette::{Diagnostic, SourceSpan};
 use semver::Version;
 use serde::Deserialize;
 use thiserror::Error;
@@ -18,7 +20,7 @@ use tiny_gradient::{GradientStr, RGB};
 use tracing::debug;
 use turbo_updater::check_for_updates;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_errors::Sourced;
+use turborepo_errors::{Sourced, WithSource};
 use turborepo_repository::{
     inference::{RepoMode, RepoState},
     package_json::PackageJson,
@@ -27,12 +29,35 @@ use turborepo_ui::UI;
 
 use crate::{cli, get_version, spawn_child, tracing::TurboSubscriber, Payload};
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("cannot have multiple `--cwd` flags in command")]
-    MultipleCwd(#[backtrace] Backtrace),
-    #[error("No value assigned to `--cwd` argument")]
-    EmptyCwd(#[backtrace] Backtrace),
+    #[diagnostic(code(turbo::shim::empty_cwd))]
+    MultipleCwd {
+        #[backtrace]
+        backtrace: Backtrace,
+        #[source_code]
+        args_string: String,
+        #[label("first flag declared here")]
+        flag1: Option<SourceSpan>,
+        #[label("but second flag declared here")]
+        flag2: Option<SourceSpan>,
+        #[label("and here")]
+        flag3: Option<SourceSpan>,
+        // The user should get the idea after the first 4 examples
+        #[label("and here")]
+        flag4: Option<SourceSpan>,
+    },
+    #[error("No value assigned to `--cwd` flag")]
+    #[diagnostic(code(turbo::shim::empty_cwd))]
+    EmptyCwd {
+        #[backtrace]
+        backtrace: Backtrace,
+        #[source_code]
+        args_string: String,
+        #[label = "Requires a path to be passed after it"]
+        flag_range: SourceSpan,
+    },
     #[error(transparent)]
     Cli(#[from] cli::Error),
     #[error(transparent)]
@@ -87,8 +112,8 @@ struct ShimArgs {
 
 impl ShimArgs {
     pub fn parse() -> Result<Self, Error> {
-        let mut found_cwd_flag = false;
-        let mut cwd: Option<AbsoluteSystemPathBuf> = None;
+        let mut cwd_flag_idx = None;
+        let mut cwds = Vec::new();
         let mut skip_infer = false;
         let mut found_verbosity_flag = false;
         let mut verbosity = 0;
@@ -98,8 +123,9 @@ impl ShimArgs {
         let mut is_forwarded_args = false;
         let mut color = false;
         let mut no_color = false;
+
         let args = env::args().skip(1);
-        for arg in args {
+        for (idx, arg) in args.enumerate() {
             // We've seen a `--` and therefore we do no parsing
             if is_forwarded_args {
                 forwarded_args.push(arg);
@@ -127,24 +153,18 @@ impl ShimArgs {
             } else if arg == "-v" || arg.starts_with("-vv") {
                 verbosity = arg[1..].len();
                 remaining_turbo_args.push(arg);
-            } else if found_cwd_flag {
-                // We've seen a `--cwd` and therefore set the cwd to this arg.
-                //cwd = Some(arg.into());
-                cwd = Some(AbsoluteSystemPathBuf::from_cwd(arg)?);
-                found_cwd_flag = false;
+            } else if cwd_flag_idx.is_some() {
+                // We've seen a `--cwd` and therefore add this to the cwds list along with
+                // the index of the `--cwd` (*not* the value)
+                cwds.push((AbsoluteSystemPathBuf::from_cwd(arg)?, idx - 1));
+                cwd_flag_idx = None;
             } else if arg == "--cwd" {
-                if cwd.is_some() {
-                    return Err(Error::MultipleCwd(Backtrace::capture()));
-                }
                 // If we see a `--cwd` we expect the next arg to be a path.
-                found_cwd_flag = true
+                cwd_flag_idx = Some(idx)
             } else if let Some(cwd_arg) = arg.strip_prefix("--cwd=") {
                 // In the case where `--cwd` is passed as `--cwd=./path/to/foo`, that
                 // entire chunk is a single arg, so we need to split it up.
-                if cwd.is_some() {
-                    return Err(Error::MultipleCwd(Backtrace::capture()));
-                }
-                cwd = Some(AbsoluteSystemPathBuf::from_cwd(cwd_arg)?);
+                cwds.push((AbsoluteSystemPathBuf::from_cwd(cwd_arg)?, idx));
             } else if arg == "--color" {
                 color = true;
             } else if arg == "--no-color" {
@@ -154,24 +174,82 @@ impl ShimArgs {
             }
         }
 
-        if found_cwd_flag {
-            Err(Error::EmptyCwd(Backtrace::capture()))
-        } else {
-            let invocation_dir = AbsoluteSystemPathBuf::cwd()?;
-            let cwd = cwd.unwrap_or_else(|| invocation_dir.clone());
+        if let Some(idx) = cwd_flag_idx {
+            let start_idx = Self::get_indices_in_args_string(vec![idx], env::args().skip(1));
+            let args_string = env::args().skip(1).take(idx).join(" ");
 
-            Ok(ShimArgs {
-                cwd,
-                invocation_dir,
-                skip_infer,
-                verbosity,
-                force_update_check,
-                remaining_turbo_args,
-                forwarded_args,
-                color,
-                no_color,
-            })
+            return Err(Error::EmptyCwd {
+                backtrace: Backtrace::capture(),
+                args_string,
+                flag_range: (start_idx[0], "--cwd".len()).into(),
+            });
         }
+
+        if cwds.len() > 1 {
+            let indices = Self::get_indices_in_args_string(
+                cwds.iter().map(|(_, idx)| *idx).collect(),
+                env::args().skip(1),
+            );
+            let args_string = env::args().skip(1).join(" ");
+
+            return Err(Error::MultipleCwd {
+                backtrace: Backtrace::capture(),
+                args_string,
+                flag1: indices.get(0).map(|i| (*i, "--cwd".len()).into()),
+                flag2: indices.get(1).map(|i| (*i, "--cwd".len()).into()),
+                flag3: indices.get(2).map(|i| (*i, "--cwd".len()).into()),
+                flag4: indices.get(3).map(|i| (*i, "--cwd".len()).into()),
+            });
+        }
+
+        let invocation_dir = AbsoluteSystemPathBuf::cwd()?;
+        let cwd = cwds
+            .pop()
+            .map(|(cwd, _)| cwd)
+            .unwrap_or_else(|| invocation_dir.clone());
+
+        Ok(ShimArgs {
+            cwd,
+            invocation_dir,
+            skip_infer,
+            verbosity,
+            force_update_check,
+            remaining_turbo_args,
+            forwarded_args,
+            color,
+            no_color,
+        })
+    }
+
+    /// Takes a list of indices into a Vec of arguments, i.e. ["--graph", "foo",
+    /// "--cwd"] and converts them into indices into the string of those
+    /// arguments, i.e. "-- graph foo --cwd"
+    pub(crate) fn get_indices_in_args_string(
+        mut args_indices: Vec<usize>,
+        args: impl Iterator<Item = impl Into<String>>,
+    ) -> Vec<usize> {
+        // Sort the indices to keep the invariant
+        // that if i > j then output[i] > output[j]
+        args_indices.sort();
+        let mut indices_in_args_string = Vec::new();
+        let mut i = 0;
+        let mut current_args_string_idx = 0;
+
+        for (idx, arg) in args.enumerate() {
+            let Some(arg_idx) = args_indices.get(i) else {
+                break;
+            };
+
+            let arg = arg.into();
+
+            if idx == *arg_idx {
+                indices_in_args_string.push(current_args_string_idx);
+                i += 1;
+            }
+            current_args_string_idx += arg.len() + 1;
+        }
+
+        indices_in_args_string
     }
 
     // returns true if any flags result in pure json output to stdout
@@ -322,7 +400,9 @@ impl LocalTurboState {
     // - berry (nodeLinker: "node-modules")
     //
     // This also supports people directly depending upon the platform version.
-    fn generate_hoisted_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+    fn generate_hoisted_path(
+        root_path: WithSource<&AbsoluteSystemPath>,
+    ) -> Option<AbsoluteSystemPathBuf> {
         Some(root_path.join_component("node_modules"))
     }
 
@@ -330,14 +410,18 @@ impl LocalTurboState {
     // - `npm install --install-strategy=shallow` (`npm install --global-style`)
     // - `npm install --install-strategy=nested` (`npm install --legacy-bundling`)
     // - berry (nodeLinker: "pnpm")
-    fn generate_nested_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+    fn generate_nested_path(
+        root_path: WithSource<&AbsoluteSystemPath>,
+    ) -> Option<AbsoluteSystemPathBuf> {
         Some(root_path.join_components(&["node_modules", "turbo", "node_modules"]))
     }
 
     // Linked strategy:
     // - `pnpm install`
     // - `npm install --install-strategy=linked`
-    fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+    fn generate_linked_path(
+        root_path: WithSource<&AbsoluteSystemPath>,
+    ) -> Option<AbsoluteSystemPathBuf> {
         // root_path/node_modules/turbo is a symlink. Canonicalize the symlink to what
         // it points to. We do this _before_ traversing up to the parent,
         // because on Windows, if you canonicalize a path that ends with `/..`
@@ -352,7 +436,7 @@ impl LocalTurboState {
     }
 
     // The unplugged directory doesn't have a fixed path.
-    fn get_unplugged_base_path(root_path: &AbsoluteSystemPath) -> Utf8PathBuf {
+    fn get_unplugged_base_path(root_path: WithSource<&AbsoluteSystemPath>) -> Utf8PathBuf {
         let yarn_rc_filename =
             env::var("YARN_RC_FILENAME").unwrap_or_else(|_| String::from(".yarnrc.yml"));
         let yarn_rc_filepath = root_path.as_path().join(yarn_rc_filename);
@@ -365,9 +449,11 @@ impl LocalTurboState {
 
     // Unplugged strategy:
     // - berry 2.1+
-    fn generate_unplugged_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
+    fn generate_unplugged_path(
+        root_path: WithSource<&AbsoluteSystemPath>,
+    ) -> Option<AbsoluteSystemPathBuf> {
         let platform_package_name = TurboState::platform_package_name();
-        let unplugged_base_path = Self::get_unplugged_base_path(root_path);
+        let unplugged_base_path = Self::get_unplugged_base_path(root_path.clone());
 
         unplugged_base_path
             .read_dir_utf8()
@@ -383,7 +469,7 @@ impl LocalTurboState {
                                 unplugged_base_path.join(file_name).join("node_modules"),
                             )
                             .ok()
-                            .map(|path| path.with_provenance(root_path.provenance()))
+                            .map(|path| path.with_provenance(root_path.clone().provenance()))
                         } else {
                             None
                         }
@@ -400,7 +486,7 @@ impl LocalTurboState {
     //
     // In spite of that, the only known unsupported local invocation is Yarn/Berry <
     // 2.1 PnP
-    pub fn infer(root_path: &AbsoluteSystemPath) -> Option<Self> {
+    pub fn infer(root_path: WithSource<&AbsoluteSystemPath>) -> Option<Self> {
         let platform_package_name = TurboState::platform_package_name();
         let binary_name = TurboState::binary_name();
 
@@ -420,7 +506,7 @@ impl LocalTurboState {
         // search.
         for root in search_functions
             .iter()
-            .filter_map(|search_function| search_function(root_path))
+            .filter_map(|search_function| search_function(root_path.clone()))
         {
             // Needs borrow because of the loop.
             #[allow(clippy::needless_borrow)]
@@ -477,7 +563,7 @@ fn run_correct_turbo(
     subscriber: &TurboSubscriber,
     ui: UI,
 ) -> Result<Payload, Error> {
-    if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
+    if let Some(turbo_state) = LocalTurboState::infer(repo_state.root.as_sourced_path()) {
         try_check_for_updates(&shim_args, &turbo_state.version);
 
         if turbo_state.local_is_self() {
@@ -668,7 +754,10 @@ pub fn run() -> Result<Payload, Error> {
 
 #[cfg(test)]
 mod test {
+    use test_case::test_case;
+
     use super::turbo_version_has_shim;
+    use crate::shim::ShimArgs;
 
     #[test]
     fn test_skip_infer_version_constraint() {
@@ -689,5 +778,19 @@ mod test {
         assert!(turbo_version_has_shim(new_major));
         assert!(!turbo_version_has_shim(old));
         assert!(!turbo_version_has_shim(old_canary));
+    }
+
+    #[test_case(vec![3], vec!["--graph", "foo", "--cwd", "apple"], vec![18])]
+    #[test_case(vec![0], vec!["--graph", "foo", "--cwd"], vec![0])]
+    #[test_case(vec![0, 2], vec!["--graph", "foo", "--cwd"], vec![0, 12])]
+    #[test_case(vec![], vec!["--cwd"], vec![])]
+    fn test_get_indices_in_arg_string(
+        arg_indices: Vec<usize>,
+        args: Vec<&'static str>,
+        expected_indices_in_arg_string: Vec<usize>,
+    ) {
+        let indices_in_args_string =
+            ShimArgs::get_indices_in_args_string(arg_indices, args.into_iter());
+        assert_eq!(indices_in_args_string, expected_indices_in_arg_string);
     }
 }

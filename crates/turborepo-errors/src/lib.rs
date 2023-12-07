@@ -1,6 +1,6 @@
 //! Turborepo's library for high quality errors
 
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::Display, ops::Deref, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
@@ -8,6 +8,36 @@ pub trait Sourced {
     fn with_provenance(self, provenance: Option<Arc<Provenance>>) -> Self;
 
     fn provenance(&self) -> Option<Arc<Provenance>>;
+}
+
+#[derive(Clone, Debug)]
+pub struct WithSource<T> {
+    value: T,
+    provenance: Option<Arc<Provenance>>,
+}
+
+impl<T> WithSource<T> {
+    pub fn new(value: T, provenance: Option<Arc<Provenance>>) -> Self {
+        Self { value, provenance }
+    }
+}
+
+impl<T> Deref for WithSource<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl<T> Sourced for WithSource<T> {
+    fn with_provenance(self, provenance: Option<Arc<Provenance>>) -> Self {
+        Self::new(self.value, provenance)
+    }
+
+    fn provenance(&self) -> Option<Arc<Provenance>> {
+        self.provenance.clone()
+    }
 }
 
 impl<T: Sourced, E: Sourced> Sourced for Result<T, E> {
@@ -38,7 +68,9 @@ impl Display for Provenance {
         match self {
             Provenance::TurboJson => write!(f, "from turbo.json"),
             Provenance::EnvironmentVariable { name } => write!(f, "environment variable {}", name),
-            Provenance::Flag { name } => write!(f, "flag --{}", name),
+            Provenance::Flag { name } => {
+                write!(f, "flag --{}", name)
+            }
         }
     }
 }

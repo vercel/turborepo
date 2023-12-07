@@ -54,17 +54,17 @@ pub enum Error {
 }
 
 impl Sourced for Error {
-    fn provenance(&self) -> Option<Arc<Provenance>> {
-        match self {
-            Self::Path(e) => e.provenance().clone(),
-            _ => None,
-        }
-    }
-
     fn with_provenance(self, provenance: Option<Arc<Provenance>>) -> Self {
         match self {
             Self::Path(e) => Self::Path(e.with_provenance(provenance)),
             _ => todo!(),
+        }
+    }
+
+    fn provenance(&self) -> Option<Arc<Provenance>> {
+        match self {
+            Self::Path(e) => e.provenance().clone(),
+            _ => None,
         }
     }
 }

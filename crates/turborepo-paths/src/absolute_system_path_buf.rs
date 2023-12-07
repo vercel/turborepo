@@ -10,7 +10,7 @@ use camino::{Utf8Components, Utf8Path, Utf8PathBuf};
 use fs_err as fs;
 use path_clean::PathClean;
 use serde::Serialize;
-use turborepo_errors::{Provenance, Sourced};
+use turborepo_errors::{Provenance, Sourced, WithSource};
 
 use crate::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathError};
 
@@ -183,6 +183,11 @@ impl AbsoluteSystemPathBuf {
 
     pub fn as_path(&self) -> &Utf8Path {
         self.1.as_path()
+    }
+
+    pub fn as_sourced_path(&self) -> WithSource<&AbsoluteSystemPath> {
+        let provenance = self.provenance();
+        WithSource::new(&self, provenance)
     }
 
     pub fn components(&self) -> Utf8Components<'_> {
