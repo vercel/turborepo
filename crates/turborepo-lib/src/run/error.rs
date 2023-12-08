@@ -11,11 +11,8 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("error preparing engine: Invalid persistent task configuration:")]
-    EngineValidation {
-        #[related]
-        validation_errors: Vec<engine::ValidateError>,
-    },
+    #[error("error preparing engine: Invalid persistent task configuration:\n{0}")]
+    EngineValidation(String),
     #[error(transparent)]
     Graph(#[from] graph_visualizer::Error),
     #[error(transparent)]
