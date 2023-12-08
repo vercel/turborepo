@@ -103,8 +103,6 @@ type ExecutionState struct {
 	SpacesAPIClientConfig APIClientConfig    `json:"spaces_api_client_config"`
 	PackageManager        string             `json:"package_manager"`
 	CLIArgs               ParsedArgsFromRust `json:"cli_args"`
-	GlobalHash            *string            `json:"global_hash"`
-	TaskHashTracker       *TaskHashTracker   `json:"task_hash_tracker"`
 }
 
 // Config holds the resolved configuration from the combination of all sources.
