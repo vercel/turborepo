@@ -94,7 +94,15 @@ export async function create(
   });
 
   const selectedPackageManager = selectedPackageManagerDetails.name;
-  updateCommandsInREADME(selectedPackageManager);
+  if (selectedPackageManager !== "pnpm") {
+    updateCommandsInREADME(selectedPackageManager)
+      .then(() => {
+        info(`README updated for ${selectedPackageManager} commands.`);
+      })
+      .catch((error) => {
+        console.error("Unable to update README. Error: ", error);
+      });
+  }
   if (packageManager && opts.skipTransforms) {
     warn(
       "--skip-transforms conflicts with <package-manager>. The package manager argument will be ignored."
