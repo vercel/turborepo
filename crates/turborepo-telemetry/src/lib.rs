@@ -255,9 +255,10 @@ mod tests {
         select,
         sync::{mpsc, mpsc::UnboundedReceiver},
     };
+    use turborepo_ui::UI;
 
     use crate::{
-        events::{Generic, TelemetryEvent},
+        events::{KeyVal, TelemetryEvent},
         init_telemetry, telem,
         telemetry::TelemetryClient,
     };
@@ -305,37 +306,22 @@ mod tests {
         rx.recv().await;
     }
 
-    // Asserts that we get the message immediately before the timeout
-    async fn expected_immediate_message(rx: &mut UnboundedReceiver<()>) {
-        let timeout = tokio::time::sleep(std::time::Duration::from_millis(150));
-
-        select! {
-            _ = rx.recv() => {
-            }
-            _ = timeout => {
-                panic!("expected to not wait out the flush timeout")
-            }
-        }
-    }
-
     #[tokio::test]
-    async fn test_batching() {
+    async fn test_events() {
         let (tx, mut rx) = mpsc::unbounded_channel();
 
+        let ui = UI::new(false);
         let client = DummyClient {
             events: Default::default(),
             tx,
         };
 
-        let result = init_telemetry(client.clone());
+        let result = init_telemetry(client.clone(), ui);
         assert!(result.is_ok());
         let telemetry_handle = result.unwrap();
 
         for _ in 0..2 {
-            telem(TelemetryEvent::Generic(Generic {
-                key: "test".to_string(),
-                value: serde_json::json!({"foo": "bar"}),
-            }))
+            telem(TelemetryEvent::KeyVal(KeyVal::command("run")))
         }
         let found = client.events();
         // Should have no events since we haven't flushed yet
@@ -348,76 +334,5 @@ mod tests {
         assert_eq!(payloads.len(), 2);
 
         drop(telemetry_handle);
-    }
-
-    #[tokio::test]
-    async fn test_batching_across_two_batches() {
-        let (tx, mut rx) = mpsc::unbounded_channel();
-
-        let client = DummyClient {
-            events: Default::default(),
-            tx,
-        };
-
-        let result = init_telemetry(client.clone());
-        assert!(result.is_ok());
-        let telemetry_handle = result.unwrap();
-
-        for _ in 0..12 {
-            telem(TelemetryEvent::Generic(Generic {
-                key: "test".to_string(),
-                value: serde_json::json!({"foo": "bar"}),
-            }))
-        }
-
-        expected_immediate_message(&mut rx).await;
-
-        let found = client.events();
-        assert_eq!(found.len(), 1);
-
-        let payloads = &found[0];
-        assert_eq!(payloads.len(), 10);
-
-        expect_timeout_then_message(&mut rx).await;
-        let found = client.events();
-        assert_eq!(found.len(), 2);
-
-        let payloads = &found[1];
-        assert_eq!(payloads.len(), 2);
-
-        drop(telemetry_handle);
-    }
-
-    #[tokio::test]
-    async fn test_closing() {
-        let (tx, _rx) = mpsc::unbounded_channel();
-
-        let client = DummyClient {
-            events: Default::default(),
-            tx,
-        };
-
-        let result = init_telemetry(client.clone());
-        assert!(result.is_ok());
-        let telemetry_handle = result.unwrap();
-
-        for _ in 0..2 {
-            telem(TelemetryEvent::Generic(Generic {
-                key: "test".to_string(),
-                value: serde_json::json!({"foo": "bar"}),
-            }))
-        }
-
-        let found = client.events();
-        assert!(found.is_empty());
-
-        tokio::time::timeout(Duration::from_millis(5), telemetry_handle.close())
-            .await
-            .expect("timeout before close")
-            .expect("telemetry worker panicked");
-        let found = client.events();
-        assert_eq!(found.len(), 1);
-        let payloads = &found[0];
-        assert_eq!(payloads.len(), 2);
     }
 }

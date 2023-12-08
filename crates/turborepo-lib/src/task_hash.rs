@@ -13,7 +13,7 @@ use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMo
 use turborepo_repository::package_graph::{WorkspaceInfo, WorkspaceName};
 use turborepo_scm::SCM;
 use turborepo_telemetry::{
-    events::{Framework, TelemetryEvent},
+    events::{KeyVal, TelemetryEvent},
     telem,
 };
 
@@ -230,9 +230,7 @@ impl<'a> TaskHasher<'a> {
                     framework.slug(),
                     framework.env_wildcards()
                 );
-                telem(TelemetryEvent::Framework(Framework {
-                    framework: framework.slug().to_string(),
-                }));
+                telem(TelemetryEvent::KeyVal(KeyVal::framework(framework.slug())));
                 let mut computed_wildcards = framework
                     .env_wildcards()
                     .iter()

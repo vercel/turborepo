@@ -5,14 +5,31 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub enum TelemetryEvent {
     Fallback(Fallback),
-    Framework(Framework),
+    KeyVal(KeyVal),
 }
 
 /// Individual events are defined here
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Framework {
-    pub framework: String,
+pub struct KeyVal {
+    key: String,
+    value: String,
+}
+
+impl KeyVal {
+    pub fn framework(value: &str) -> Self {
+        Self {
+            key: "framework".to_string(),
+            value: value.to_string(),
+        }
+    }
+
+    pub fn command(value: &str) -> Self {
+        Self {
+            key: "command".to_string(),
+            value: value.to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
