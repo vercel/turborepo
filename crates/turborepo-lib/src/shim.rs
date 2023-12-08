@@ -180,7 +180,7 @@ impl ShimArgs {
 
         if let Some(idx) = cwd_flag_idx {
             let start_idx = Self::get_indices_in_args_string(vec![idx], env::args().skip(1));
-            let args_string = env::args().skip(1).take(idx).join(" ");
+            let args_string = env::args().skip(1).join(" ");
 
             return Err(Error::EmptyCwd {
                 backtrace: Backtrace::capture(),
