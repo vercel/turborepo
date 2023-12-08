@@ -63,6 +63,7 @@ pub enum Error {
         flag_range: SourceSpan,
     },
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Cli(#[from] cli::Error),
     #[error(transparent)]
     Inference(#[from] turborepo_repository::inference::Error),
@@ -712,6 +713,17 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
 pub fn run() -> Result<Payload, Error> {
     let args = ShimArgs::parse()?;
     let ui = args.ui();
+    if ui.should_strip_ansi {
+        // Let's not crash just because we failed to set up the hook
+        let _ = miette::set_hook(Box::new(|_| {
+            Box::new(
+                miette::MietteHandlerOpts::new()
+                    .color(false)
+                    .unicode(false)
+                    .build(),
+            )
+        }));
+    }
     let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &ui);
 
     debug!("Global turbo version: {}", get_version());
