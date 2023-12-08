@@ -1,4 +1,4 @@
-  $ . ${TESTDIR}/../helpers/examples_setup.sh with-npm npm
+  $ . ${TESTDIR}/../helpers/setup_example_test.sh with-npm npm@8.19.4
 
 # run twice and make sure it works
   $ npm run build lint -- --output-logs=errors-only

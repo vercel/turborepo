@@ -17,5 +17,21 @@ if [ "$pkgManager" != "" ]; then
     dos2unix --quiet "$dir/package.json"
   fi
 
-  git commit -am "Updated package manager to $pkgManager" --quiet
+  if [[ $(git status --porcelain) ]]; then
+    git commit -am "Updated package manager to $pkgManager" --quiet
+  fi
 fi
+
+# If we're in a prysk test, set the corepack install directory to the prysk temp directory.
+# This will help isolate from the rest of the system, especially when running tests on a dev machine.
+if [ "$PRYSK_TEMP" == "" ]; then
+  COREPACK_INSTALL_DIR_CMD=
+else
+  COREPACK_INSTALL_DIR="${PRYSK_TEMP}/corepack"
+  mkdir -p "${COREPACK_INSTALL_DIR}"
+  export PATH=${COREPACK_INSTALL_DIR}:$PATH
+  COREPACK_INSTALL_DIR_CMD="--install-directory=${COREPACK_INSTALL_DIR}"
+fi
+
+# Enable corepack so that the packageManager setting in package.json is respected.
+corepack enable "${COREPACK_INSTALL_DIR_CMD}"

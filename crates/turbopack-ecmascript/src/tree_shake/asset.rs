@@ -12,7 +12,7 @@ use turbopack_core::{
 use super::{chunk_item::EcmascriptModulePartChunkItem, get_part_id, split_module, SplitResult};
 use crate::{
     chunk::{EcmascriptChunkPlaceable, EcmascriptChunkingContext, EcmascriptExports},
-    references::analyze_ecmascript_module,
+    references::analyse_ecmascript_module,
     AnalyzeEcmascriptModuleResult, EcmascriptModuleAsset,
 };
 
@@ -89,12 +89,9 @@ impl Module for EcmascriptModulePartAsset {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let external = analyze(self.full_module, self.part)
-            .await?
-            .references
-            .await?;
+        let analyze = analyze(self.full_module, self.part).await?;
 
-        assets.extend(external.iter().cloned());
+        assets.extend(analyze.references.await?.iter().cloned());
 
         Ok(Vc::cell(assets))
     }
@@ -157,5 +154,5 @@ async fn analyze(
     module: Vc<EcmascriptModuleAsset>,
     part: Vc<ModulePart>,
 ) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
-    Ok(analyze_ecmascript_module(module, Some(part)))
+    Ok(analyse_ecmascript_module(module, Some(part)))
 }

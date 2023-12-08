@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 # Running non-existent tasks errors
   $ ${TURBO} run doesnotexist
