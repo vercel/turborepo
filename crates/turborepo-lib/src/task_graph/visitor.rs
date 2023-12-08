@@ -767,7 +767,6 @@ impl ExecContext {
 
         if self.expect_stdin {
             debug!("piping stdin to parent process, because expect_stdin is true");
-            let _unused = self.stdin_lock.lock().expect("lock poisoned");
             cmd.stdin(Stdio::piped());
         } else {
             debug!("piping stdin to Stdio::null, because expect_stdin is false");
@@ -790,6 +789,12 @@ impl ExecContext {
                 return ExecOutcome::Internal;
             }
         };
+
+        // Bind to a local variable so it will last the lifetime of the function
+        let mut _stdin_lock;
+        if self.expect_stdin {
+            _stdin_lock = self.stdin_lock.lock().expect("lock poisoned");
+        }
 
         let mut process = match self.manager.spawn(cmd, Duration::from_millis(500)) {
             Some(Ok(child)) => child,
