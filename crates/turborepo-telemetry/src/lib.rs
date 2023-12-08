@@ -57,7 +57,7 @@ pub struct TelemetryHandle {
 static SENDER_INSTANCE: OnceCell<TelemetrySender> = OnceCell::new();
 
 // A global instance of the TelemetrySender.
-pub fn telem(event: events::TelemetryEvent) -> () {
+pub fn telem(event: events::TelemetryEvent) {
     let sender = SENDER_INSTANCE.get();
     match sender {
         Some(s) => {
@@ -218,7 +218,6 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
             for event in &events {
                 let pretty_event = serde_json::to_string_pretty(&event)
                     .unwrap_or("Error serializing event".to_string());
-                println!("");
                 println!(
                     "\n{}\n{}\n",
                     self.ui.apply(BOLD.apply_to("[telemetry event]")),

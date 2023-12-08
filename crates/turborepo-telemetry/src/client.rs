@@ -60,7 +60,7 @@ impl AnonAPIClient {
 
         let request_builder = self
             .client
-            .request(method, &url)
+            .request(method, url)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
             .header("x-turbo-telemetry-id", telemetry_id)

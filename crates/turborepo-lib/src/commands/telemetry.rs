@@ -39,7 +39,7 @@ pub fn configure(command: &Option<Box<TelemetryCommand>>, base: &mut CommandBase
         Ok(config) => config,
         Err(e) => {
             log_error("Failed to load telemetry config", &e.to_string(), base);
-            return ();
+            return;
         }
     };
 
@@ -68,6 +68,4 @@ pub fn configure(command: &Option<Box<TelemetryCommand>>, base: &mut CommandBase
             log_status(config, base);
         }
     }
-
-    ()
 }

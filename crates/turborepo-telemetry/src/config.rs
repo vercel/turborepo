@@ -57,7 +57,7 @@ fn write_new_config() -> Result<(), ConfigError> {
 
 pub fn is_debug() -> bool {
     let debug = env::var(DEBUG_ENV_VAR).unwrap_or("0".to_string());
-    return debug == "1" || debug == "true";
+    debug == "1" || debug == "true"
 }
 
 impl TelemetryConfig {
@@ -74,15 +74,16 @@ impl TelemetryConfig {
 
         let settings = settings.build();
 
-        // Check if this is a FileParse error, remove the config file and write a new
-        // one, otherwise return the error
+        // If this is a FileParse error, we assume something corrupted the file or
+        // structure. In this case, try to remove the config file and write a
+        // new one, otherwise return the error
         if let Err(ConfigError::FileParse { .. }) = settings {
             fs::remove_file(file_path).map_err(|e| ConfigError::Message(e.to_string()))?;
             write_new_config()?;
             return Err(settings.unwrap_err());
-        } else if settings.is_err() {
+        } else if let Err(err) = settings {
             // Propagate other errors
-            return Err(settings.unwrap_err());
+            return Err(err);
         }
 
         // this is safe because we just checked the error case above
@@ -107,7 +108,7 @@ impl TelemetryConfig {
         Ok(())
     }
 
-    pub fn show_alert(&mut self) -> () {
+    pub fn show_alert(&mut self) {
         if !self.has_seen_alert() && self.is_enabled() {
             println!(
                 "\n{}\n{}\n{}\n{}\n{}\n",
@@ -137,7 +138,6 @@ impl TelemetryConfig {
                 ),
             }
         }
-        ()
     }
 
     // getters
@@ -168,13 +168,13 @@ impl TelemetryConfig {
     pub fn enable(&mut self) -> Result<&TelemetryConfigContents, ConfigError> {
         self.config.telemetry_enabled = true;
         self.write()?;
-        return Ok(&self.config);
+        Ok(&self.config)
     }
 
     pub fn disable(&mut self) -> Result<&TelemetryConfigContents, ConfigError> {
         self.config.telemetry_enabled = false;
         self.write()?;
-        return Ok(&self.config);
+        Ok(&self.config)
     }
 
     pub fn alert_shown(&mut self) -> Result<&TelemetryConfigContents, ConfigError> {
@@ -183,7 +183,7 @@ impl TelemetryConfig {
             false => {
                 self.config.telemetry_alerted = Some(Utc::now());
                 self.write()?;
-                return Ok(&self.config);
+                Ok(&self.config)
             }
         }
     }
