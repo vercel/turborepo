@@ -235,12 +235,15 @@ impl<'a> Visitor<'a> {
 
                     let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
 
+                    debug!("task_definition {:?}", task_definition);
+                    let expect_stdin = task_definition.expect_stdin;
                     let mut exec_context = factory.exec_context(
                         info.clone(),
                         task_hash,
                         task_cache,
                         workspace_directory,
                         execution_env,
+                        expect_stdin,
                     );
 
                     let output_client = self.output_client(&info);
@@ -548,6 +551,7 @@ impl<'a> ExecContextFactory<'a> {
         task_cache: TaskCache,
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
+        expect_stdin: bool,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.opts.run_opts.args_for_task(&task_id);
@@ -571,6 +575,8 @@ impl<'a> ExecContextFactory<'a> {
             continue_on_error: self.visitor.opts.run_opts.continue_on_error,
             pass_through_args,
             errors: self.errors.clone(),
+            expect_stdin: expect_stdin,
+            stdin_lock: Arc::new(Mutex::new(0)),
         }
     }
 
@@ -604,6 +610,8 @@ struct ExecContext {
     continue_on_error: bool,
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
+    expect_stdin: bool,
+    stdin_lock: Arc<Mutex<i32>>,
 }
 
 enum ExecOutcome {
@@ -756,6 +764,15 @@ impl ExecContext {
         cmd.current_dir(self.workspace_directory.as_path());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
+
+        if self.expect_stdin {
+            debug!("piping stdin to parent process, because expect_stdin is true");
+            let _unused = self.stdin_lock.lock().expect("lock poisoned");
+            cmd.stdin(Stdio::piped());
+        } else {
+            debug!("piping stdin to Stdio::null, because expect_stdin is false");
+            cmd.stdin(Stdio::null());
+        }
 
         // We clear the env before populating it with variables we expect
         cmd.env_clear();

@@ -50,6 +50,7 @@ pub struct TaskDefinitionStable {
     pub(crate) env: Vec<String>,
     pub(crate) pass_through_env: Option<Vec<String>>,
     pub(crate) dot_env: Option<Vec<RelativeUnixPathBuf>>,
+    pub(crate) expect_stdin: bool,
 }
 
 impl Default for TaskDefinitionStable {
@@ -65,6 +66,7 @@ impl Default for TaskDefinitionStable {
             env: Vec::new(),
             pass_through_env: None,
             dot_env: None,
+            expect_stdin: false,
         }
     }
 }
@@ -104,6 +106,9 @@ pub struct TaskDefinition {
     // Persistent indicates whether the Task is expected to exit or not
     // Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
     pub persistent: bool,
+
+    // expect_stdin indicates whether the Task expects to read from stdin
+    pub expect_stdin: bool,
 }
 
 impl BookkeepingTaskDefinition {
@@ -151,6 +156,7 @@ impl Default for TaskDefinition {
             output_mode: Default::default(),
             persistent: Default::default(),
             dot_env: Default::default(),
+            expect_stdin: false,
         }
     }
 }
@@ -249,6 +255,7 @@ impl TaskDefinition {
                 env,
                 pass_through_env,
                 dot_env,
+                expect_stdin,
             },
             _experimental,
         ) = other.split();
@@ -263,6 +270,7 @@ impl TaskDefinition {
         set_field!(self, meta, env, "Env");
         set_field!(self, meta, pass_through_env, "PassThroughEnv");
         set_field!(self, meta, dot_env, "DotEnv");
+        set_field!(self, meta, expect_stdin, "ExpectStdin");
     }
 }
 
