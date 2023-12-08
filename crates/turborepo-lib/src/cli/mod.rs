@@ -1,7 +1,7 @@
 use std::{backtrace, backtrace::Backtrace, env, io, mem, process};
 
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{ArgAction, CommandFactory, Parser, Subcommand, ValueEnum};
+use clap::{ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 pub use error::Error;
 use serde::{Deserialize, Serialize};
@@ -463,6 +463,7 @@ pub enum GenerateCommand {
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
+#[command(group = ArgGroup::new("daemon-group").multiple(false).required(false))]
 pub struct RunArgs {
     /// Override the filesystem cache directory.
     #[clap(long)]
@@ -526,9 +527,20 @@ pub struct RunArgs {
     /// tasks.
     #[clap(long)]
     pub no_cache: bool,
-    /// Run without using turbo's daemon process
-    #[clap(long)]
-    pub no_daemon: bool,
+
+    // clap does not have negation flags such as --daemon and --no-daemon
+    // so we need to use a group to enforce that only one of them is set.
+    // we set the long name as [no-]daemon with an alias of daemon such
+    // that we can merge the help text together for both flags
+    // -----------------------
+    /// Force turbo to either use or not use the local daemon. If unset
+    /// turbo will use the default detection logic.
+    #[clap(long = "[no-]daemon", alias = "daemon", group = "daemon-group")]
+    daemon: bool,
+
+    #[clap(long, group = "daemon-group", hide = true)]
+    no_daemon: bool,
+
     /// Exclude dependent task consumers from execution.
     #[clap(long)]
     pub no_deps: bool,
@@ -600,6 +612,20 @@ pub struct RunArgs {
     // Pass a string to enable posting Run Summaries to Vercel
     #[clap(long, hide = true)]
     pub experimental_space_id: Option<String>,
+}
+
+impl RunArgs {
+    /// Some(true) means force the daemon
+    /// Some(false) means force no daemon
+    /// None means use the default detection
+    pub fn daemon(&self) -> Option<bool> {
+        match (self.daemon, self.no_daemon) {
+            (true, false) => Some(true),
+            (false, true) => Some(false),
+            (false, false) => None,
+            (true, true) => unreachable!(), // guaranteed by mutually exclusive `ArgGroup`
+        }
+    }
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
@@ -866,6 +892,8 @@ pub async fn run(
 
 #[cfg(test)]
 mod test {
+    use std::assert_matches::assert_matches;
+
     use camino::Utf8PathBuf;
     use clap::Parser;
     use itertools::Itertools;
@@ -1281,6 +1309,17 @@ mod test {
         }
 	)]
     #[test_case::test_case(
+		&["turbo", "run", "build", "--daemon"],
+        Args {
+            command: Some(Command::Run(Box::new(RunArgs {
+                tasks: vec!["build".to_string()],
+                daemon: true,
+                ..get_default_run_args()
+            }))),
+            ..Args::default()
+        }
+	)]
+    #[test_case::test_case(
 		&["turbo", "run", "build", "--no-deps"],
         Args {
             command: Some(Command::Run(Box::new(RunArgs {
@@ -1514,6 +1553,13 @@ mod test {
                 .unwrap()
                 .contains("\"output_logs\":null"),
             true
+        );
+    }
+
+    fn test_multi_daemon() {
+        assert_matches!(
+            Args::try_parse_from(["turbo", "run", "build", "--daemon", "--no-daemon"]),
+            Err(err) if err.to_string().contains("Cannot specify both --daemon and --no-daemon")
         );
     }
 
