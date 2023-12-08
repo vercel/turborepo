@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/examples"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
