@@ -427,7 +427,7 @@ impl<'a, K, V> Iterator for Values<'a, K, V> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            Values::List(iter) => iter.next().map(|(_, v)| v),
+            Values::List(iter) => iter.next(),
             Values::Map(iter) => iter.next(),
         }
     }
@@ -450,7 +450,7 @@ impl<'a, K, V> Iterator for ValuesMut<'a, K, V> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            ValuesMut::List(iter) => iter.next().map(|(_, v)| v),
+            ValuesMut::List(iter) => iter.next(),
             ValuesMut::Map(iter) => iter.next(),
         }
     }
@@ -543,7 +543,7 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher + Default> OccupiedEntry<'a, K, V, H> {
     /// see [HashMap::OccupiedEntry::remove](https://doc.rust-lang.org/std/collections/hash_map/enum.OccupiedEntry.html#method.remove)
     pub fn remove(self) -> V {
         match self {
-            OccupiedEntry::List { entry } => list.swap_remove(index).1,
+            OccupiedEntry::List { entry } => entry.remove(),
             OccupiedEntry::Map { entry, this } => {
                 let v = entry.remove();
                 let this = unsafe { &mut *this };
