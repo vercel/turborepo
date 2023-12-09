@@ -572,13 +572,16 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher + Default + 'a> VacantEntry<'a, K, V, H
     /// see [HashMap::VacantEntry::insert](https://doc.rust-lang.org/std/collections/hash_map/enum.VacantEntry.html#method.insert)
     pub fn insert(self, value: V) -> &'a mut V {
         match self {
-            VacantEntry::List { this, list, key } => {
-                if list.len() >= MAX_LIST_SIZE {
+            VacantEntry::List { this, entry } => {
+                let len = (unsafe { &*this }).len();
+
+                if len >= MAX_LIST_SIZE {
                     let this = unsafe { &mut *this };
-                    this.convert_to_map().entry(key).or_insert(value)
+                    this.convert_to_map()
+                        .entry(entry.into_key())
+                        .or_insert(value)
                 } else {
-                    list.insert(key, value);
-                    &mut list.last_mut().unwrap().1
+                    entry.insert(value)
                 }
             }
             VacantEntry::Map(entry) => entry.insert(value),
