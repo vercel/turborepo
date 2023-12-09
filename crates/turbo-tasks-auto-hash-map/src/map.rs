@@ -418,7 +418,7 @@ impl<K, V> Iterator for IntoIter<K, V> {
 }
 
 pub enum Values<'a, K, V> {
-    List(std::slice::Iter<'a, (K, V)>),
+    List(vecmap::map::Values<'a, K, V>),
     Map(std::collections::hash_map::Values<'a, K, V>),
 }
 
@@ -441,7 +441,7 @@ impl<'a, K, V> Iterator for Values<'a, K, V> {
 }
 
 pub enum ValuesMut<'a, K, V> {
-    List(std::slice::IterMut<'a, (K, V)>),
+    List(vecmap::map::ValuesMut<'a, K, V>),
     Map(std::collections::hash_map::ValuesMut<'a, K, V>),
 }
 
