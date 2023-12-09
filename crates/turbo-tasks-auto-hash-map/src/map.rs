@@ -597,7 +597,7 @@ pub enum RawEntry<'a, K, V, H> {
 pub enum OccupiedRawEntry<'a, K, V, H> {
     List {
         list: &'a mut VecMap<K, V>,
-        entry: vecmap::map::OccupiedEntry<'a, K, V>,
+        index: usize,
     },
     Map {
         this: *mut AutoMap<K, V, H>,
@@ -609,7 +609,7 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher> OccupiedRawEntry<'a, K, V, H> {
     /// see [HashMap::RawOccupiedEntryMut::get_mut](https://doc.rust-lang.org/std/collections/hash_map/struct.RawOccupiedEntryMut.html#method.get_mut)
     pub fn get_mut(&mut self) -> &mut V {
         match self {
-            OccupiedRawEntry::List { list, entry } => entry.get_mut(),
+            OccupiedRawEntry::List { list, index } => &mut list[*index].1,
             OccupiedRawEntry::Map { entry, .. } => entry.get_mut(),
         }
     }
@@ -617,7 +617,7 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher> OccupiedRawEntry<'a, K, V, H> {
     /// see [HashMap::RawOccupiedEntryMut::into_mut](https://doc.rust-lang.org/std/collections/hash_map/struct.RawOccupiedEntryMut.html#method.into_mut)
     pub fn into_mut(self) -> &'a mut V {
         match self {
-            OccupiedRawEntry::List { list, entry } => entry.into_mut(),
+            OccupiedRawEntry::List { list, index } => &mut list[index].1,
             OccupiedRawEntry::Map { entry, .. } => entry.into_mut(),
         }
     }
@@ -627,7 +627,7 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher + Default> OccupiedRawEntry<'a, K, V, H
     /// see [HashMap::OccupiedEntry::remove](https://doc.rust-lang.org/std/collections/hash_map/enum.OccupiedEntry.html#method.remove)
     pub fn remove(self) -> V {
         match self {
-            OccupiedRawEntry::List { list, entry } => entry.remove(),
+            OccupiedRawEntry::List { list, index } => list.swap_remove(index).1,
             OccupiedRawEntry::Map { entry, this } => {
                 let v = entry.remove();
                 let this = unsafe { &mut *this };
