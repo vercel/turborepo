@@ -590,6 +590,9 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher + Default + 'a> VacantEntry<'a, K, V, H
     }
 }
 
+/// Type for transmute
+#[allow(unused)]
+
 struct Slot<K, V> {
     key: K,
     value: V,
@@ -671,7 +674,7 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher + Default + 'a> VacantRawEntry<'a, K, V
                     this.convert_to_map().entry(key).or_insert(value)
                 } else {
                     list.insert(key, value);
-                    &mut list.last_mut().unwrap().1
+                    &mut cast_as_mut_vec(list).last_mut().unwrap().value
                 }
             }
             VacantRawEntry::Map(entry) => entry.insert(key, value).1,

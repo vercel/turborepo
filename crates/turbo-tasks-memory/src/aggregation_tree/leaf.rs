@@ -79,15 +79,10 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
 
     /// Prepares the removal of a child. It returns a closure that should be
     /// executed outside of the leaf lock.
-    pub fn remove_children_job<
-        'a,
-        C: AggregationContext<Info = T, ItemRef = I>,
-        H,
-        const N: usize,
-    >(
+    pub fn remove_children_job<'a, C: AggregationContext<Info = T, ItemRef = I>, H>(
         &self,
         aggregation_context: &'a C,
-        children: AutoSet<I, H, N>,
+        children: AutoSet<I, H>,
     ) -> impl FnOnce() + 'a
     where
         T: 'a,

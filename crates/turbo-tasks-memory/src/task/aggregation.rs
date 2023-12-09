@@ -504,8 +504,8 @@ impl<'l> AggregationItemLock for TaskGuard<'l> {
 
 pub type TaskAggregationTreeLeaf = AggregationTreeLeaf<Aggregated, TaskId>;
 
-fn update_count_entry<K: Eq + Hash, H: BuildHasher + Default, const I: usize>(
-    entry: Entry<'_, K, i32, H, I>,
+fn update_count_entry<K: Eq + Hash, H: BuildHasher + Default>(
+    entry: Entry<'_, K, i32, H>,
     update: i32,
 ) -> i32 {
     match entry {

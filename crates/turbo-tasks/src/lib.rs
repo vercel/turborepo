@@ -110,7 +110,7 @@ pub use vc::{
     VcDefaultRead, VcRead, VcTransparentRead, VcValueTrait, VcValueType,
 };
 
-pub type TaskIdSet = AutoSet<TaskId, BuildNoHashHasher<TaskId>, 2>;
+pub type TaskIdSet = AutoSet<TaskId, BuildNoHashHasher<TaskId>>;
 
 pub mod test_helpers {
     pub use super::manager::{current_task_for_testing, with_turbo_tasks_for_testing};
