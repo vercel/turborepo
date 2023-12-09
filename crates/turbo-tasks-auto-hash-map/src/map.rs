@@ -472,7 +472,7 @@ impl<'a, K, V> Iterator for ValuesMut<'a, K, V> {
 }
 
 pub enum IntoValues<K, V> {
-    List(smallvec::IntoIter<[(K, V); I]>),
+    List(vecmap::map::IntoIter<K, V>),
     Map(std::collections::hash_map::IntoValues<K, V>),
 }
 

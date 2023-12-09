@@ -10,11 +10,11 @@ use serde::{Deserialize, Serialize};
 use crate::AutoMap;
 
 #[derive(Clone)]
-pub struct AutoSet<K, H = RandomState, const I: usize = 0> {
-    map: AutoMap<K, (), H, I>,
+pub struct AutoSet<K, H = RandomState> {
+    map: AutoMap<K, (), H>,
 }
 
-impl<K, H, const I: usize> Default for AutoSet<K, H, I> {
+impl<K, H, const I: usize> Default for AutoSet<K, H> {
     fn default() -> Self {
         Self {
             map: Default::default(),
@@ -22,13 +22,13 @@ impl<K, H, const I: usize> Default for AutoSet<K, H, I> {
     }
 }
 
-impl<K: Debug, H, const I: usize> Debug for AutoSet<K, H, I> {
+impl<K: Debug, H, const I: usize> Debug for AutoSet<K, H> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_set().entries(self.iter()).finish()
     }
 }
 
-impl<K> AutoSet<K, RandomState, 0> {
+impl<K> AutoSet<K, RandomState> {
     /// see [HashSet::new](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.new)
     pub const fn new() -> Self {
         Self {
@@ -44,7 +44,7 @@ impl<K> AutoSet<K, RandomState, 0> {
     }
 }
 
-impl<K, H: BuildHasher, const I: usize> AutoSet<K, H, I> {
+impl<K, H: BuildHasher, const I: usize> AutoSet<K, H> {
     /// see [HashSet::with_hasher](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.with_hasher)
     pub const fn with_hasher() -> Self {
         Self {
@@ -65,7 +65,7 @@ impl<K, H: BuildHasher, const I: usize> AutoSet<K, H, I> {
     }
 }
 
-impl<K: Hash + Eq, H: BuildHasher + Default, const I: usize> AutoSet<K, H, I> {
+impl<K: Hash + Eq, H: BuildHasher + Default, const I: usize> AutoSet<K, H> {
     /// see [HashSet::insert](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.insert)
     pub fn insert(&mut self, key: K) -> bool {
         self.map.insert(key, ()).is_none()
@@ -92,7 +92,7 @@ impl<K: Hash + Eq, H: BuildHasher + Default, const I: usize> AutoSet<K, H, I> {
     }
 }
 
-impl<K, H, const I: usize> AutoSet<K, H, I> {
+impl<K, H, const I: usize> AutoSet<K, H> {
     /// see [HashSet::len](https://doc.rust-lang.org/std/collections/hash_set/struct.HashSet.html#method.len)
     pub fn len(&self) -> usize {
         self.map.len()
@@ -109,16 +109,16 @@ impl<K, H, const I: usize> AutoSet<K, H, I> {
     }
 }
 
-impl<K, H, const I: usize> IntoIterator for AutoSet<K, H, I> {
+impl<K, H, const I: usize> IntoIterator for AutoSet<K, H> {
     type Item = K;
-    type IntoIter = IntoIter<K, I>;
+    type IntoIter = IntoIter<K>;
 
     fn into_iter(self) -> Self::IntoIter {
         IntoIter(self.map.into_iter())
     }
 }
 
-impl<'a, K, H, const I: usize> IntoIterator for &'a AutoSet<K, H, I> {
+impl<'a, K, H, const I: usize> IntoIterator for &'a AutoSet<K, H> {
     type Item = &'a K;
     type IntoIter = Iter<'a, K>;
 
@@ -147,9 +147,9 @@ impl<'a, K> Clone for Iter<'a, K> {
     }
 }
 
-pub struct IntoIter<K, const I: usize>(super::map::IntoIter<K, (), I>);
+pub struct IntoIter<K, const I: usize>(super::map::IntoIter<K, ()>);
 
-impl<K, const I: usize> Iterator for IntoIter<K, I> {
+impl<K, const I: usize> Iterator for IntoIter<K> {
     type Item = K;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -161,7 +161,7 @@ impl<K, const I: usize> Iterator for IntoIter<K, I> {
     }
 }
 
-impl<K, H, const I: usize> Serialize for AutoSet<K, H, I>
+impl<K, H, const I: usize> Serialize for AutoSet<K, H>
 where
     K: Serialize,
     H: BuildHasher,
@@ -171,20 +171,20 @@ where
     }
 }
 
-impl<'de, K, H, const I: usize> Deserialize<'de> for AutoSet<K, H, I>
+impl<'de, K, H, const I: usize> Deserialize<'de> for AutoSet<K, H>
 where
     K: Deserialize<'de> + Hash + Eq,
     H: BuildHasher + Default,
 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct AutoSetVisitor<K, H, const I: usize>(PhantomData<AutoSet<K, H, I>>);
+        struct AutoSetVisitor<K, H, const I: usize>(PhantomData<AutoSet<K, H>>);
 
-        impl<'de, K, H, const I: usize> serde::de::Visitor<'de> for AutoSetVisitor<K, H, I>
+        impl<'de, K, H, const I: usize> serde::de::Visitor<'de> for AutoSetVisitor<K, H>
         where
             K: Deserialize<'de> + Hash + Eq,
             H: BuildHasher + Default,
         {
-            type Value = AutoSet<K, H, I>;
+            type Value = AutoSet<K, H>;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("a set")
@@ -210,15 +210,15 @@ where
     }
 }
 
-impl<K: Eq + Hash, H: BuildHasher, const I: usize> PartialEq for AutoSet<K, H, I> {
+impl<K: Eq + Hash, H: BuildHasher, const I: usize> PartialEq for AutoSet<K, H> {
     fn eq(&self, other: &Self) -> bool {
         self.map == other.map
     }
 }
 
-impl<K: Eq + Hash, H: BuildHasher, const I: usize> Eq for AutoSet<K, H, I> {}
+impl<K: Eq + Hash, H: BuildHasher, const I: usize> Eq for AutoSet<K, H> {}
 
-impl<K, H, const I: usize> FromIterator<K> for AutoSet<K, H, I>
+impl<K, H, const I: usize> FromIterator<K> for AutoSet<K, H>
 where
     K: Hash + Eq,
     H: BuildHasher + Default,
@@ -230,7 +230,7 @@ where
     }
 }
 
-impl<K, H, const N: usize, const I: usize> From<[K; N]> for AutoSet<K, H, I>
+impl<K, H, const N: usize, const I: usize> From<[K; N]> for AutoSet<K, H>
 where
     K: Hash + Eq,
     H: BuildHasher + Default,
