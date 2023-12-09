@@ -169,9 +169,13 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V, H> {
         let this = self as *mut Self;
         match self {
-            AutoMap::List(list) => match list.iter().position(|(k, _)| *k == key) {
-                Some(index) => Entry::Occupied(OccupiedEntry::List { list, index }),
-                None => Entry::Vacant(VacantEntry::List { this, list, key }),
+            AutoMap::List(list) => match list.entry(key) {
+                vecmap::map::Entry::Occupied(entry) => {
+                    Entry::Occupied(OccupiedEntry::List { entry })
+                }
+                vecmap::map::Entry::Vacant(entry) => {
+                    Entry::Vacant(VacantEntry::List { this, list, key })
+                }
             },
             AutoMap::Map(map) => match map.entry(key) {
                 std::collections::hash_map::Entry::Occupied(entry) => {
@@ -294,7 +298,7 @@ impl<K, V, H> AutoMap<K, V, H> {
     /// see [HashMap::values_mut](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.values_mut)
     pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
         match self {
-            AutoMap::List(list) => ValuesMut::List(list.iter_mut()),
+            AutoMap::List(list) => ValuesMut::List(list.values_mut()),
             AutoMap::Map(map) => ValuesMut::Map(map.values_mut()),
         }
     }
@@ -302,7 +306,7 @@ impl<K, V, H> AutoMap<K, V, H> {
     /// see [HashMap::values](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.values)
     pub fn values(&self) -> Values<'_, K, V> {
         match self {
-            AutoMap::List(list) => Values::List(list.iter()),
+            AutoMap::List(list) => Values::List(list.values()),
             AutoMap::Map(map) => Values::Map(map.values()),
         }
     }
