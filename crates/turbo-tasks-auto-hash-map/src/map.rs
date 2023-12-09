@@ -37,13 +37,13 @@ impl<K: Debug, V: Debug, H> Debug for AutoMap<K, V, H> {
 impl<K, V> AutoMap<K, V, RandomState> {
     /// see [HashMap::new](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.new)
     pub const fn new() -> Self {
-        AutoMap::List(SmallVec::new_const())
+        AutoMap::List(VecMap::new())
     }
 
     /// see [HashMap::with_capacity](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.with_capacity)
     pub fn with_capacity(capacity: usize) -> Self {
         if capacity < MAX_LIST_SIZE {
-            AutoMap::List(SmallVec::with_capacity(capacity))
+            AutoMap::List(VecMap::with_capacity(capacity))
         } else {
             AutoMap::Map(Box::new(HashMap::with_capacity_and_hasher(
                 capacity,
@@ -56,13 +56,13 @@ impl<K, V> AutoMap<K, V, RandomState> {
 impl<K, V, H: BuildHasher> AutoMap<K, V, H> {
     /// see [HashMap::with_hasher](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html#method.with_hasher)
     pub const fn with_hasher() -> Self {
-        AutoMap::List(SmallVec::new_const())
+        AutoMap::List(VecMap::new())
     }
 
     /// see [HashMap::with_capacity_and_hasher](https://doc.rust-lang.org/std/collections/hash_map/struct.HashMap.html#method.with_capacity_and_hasher)
     pub fn with_capacity_and_hasher(capacity: usize, hasher: H) -> Self {
         if capacity <= MAX_LIST_SIZE {
-            AutoMap::List(SmallVec::with_capacity(capacity))
+            AutoMap::List(VecMap::with_capacity(capacity))
         } else {
             AutoMap::Map(Box::new(HashMap::with_capacity_and_hasher(
                 capacity, hasher,
