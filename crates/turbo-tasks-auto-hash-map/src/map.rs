@@ -4,6 +4,7 @@ use std::{
     fmt::{Debug, Formatter},
     hash::{BuildHasher, Hash},
     marker::PhantomData,
+    mem::transmute,
 };
 
 use serde::{
@@ -589,6 +590,16 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher + Default + 'a> VacantEntry<'a, K, V, H
     }
 }
 
+struct Slot<K, V> {
+    key: K,
+    value: V,
+}
+
+/// **This is extermely unsafe**
+fn cast_as_mut_vec<K, V>(v: &mut VecMap<K, V>) -> &mut Vec<Slot<K, V>> {
+    unsafe { transmute(v) }
+}
+
 pub enum RawEntry<'a, K, V, H> {
     Occupied(OccupiedRawEntry<'a, K, V, H>),
     Vacant(VacantRawEntry<'a, K, V, H>),
@@ -609,7 +620,7 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher> OccupiedRawEntry<'a, K, V, H> {
     /// see [HashMap::RawOccupiedEntryMut::get_mut](https://doc.rust-lang.org/std/collections/hash_map/struct.RawOccupiedEntryMut.html#method.get_mut)
     pub fn get_mut(&mut self) -> &mut V {
         match self {
-            OccupiedRawEntry::List { list, index } => &mut list[*index].1,
+            OccupiedRawEntry::List { list, index } => &mut cast_as_mut_vec(list)[*index].value,
             OccupiedRawEntry::Map { entry, .. } => entry.get_mut(),
         }
     }
@@ -617,7 +628,7 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher> OccupiedRawEntry<'a, K, V, H> {
     /// see [HashMap::RawOccupiedEntryMut::into_mut](https://doc.rust-lang.org/std/collections/hash_map/struct.RawOccupiedEntryMut.html#method.into_mut)
     pub fn into_mut(self) -> &'a mut V {
         match self {
-            OccupiedRawEntry::List { list, index } => &mut list[index].1,
+            OccupiedRawEntry::List { list, index } => &mut cast_as_mut_vec(list)[index].value,
             OccupiedRawEntry::Map { entry, .. } => entry.into_mut(),
         }
     }
@@ -627,7 +638,9 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher + Default> OccupiedRawEntry<'a, K, V, H
     /// see [HashMap::OccupiedEntry::remove](https://doc.rust-lang.org/std/collections/hash_map/enum.OccupiedEntry.html#method.remove)
     pub fn remove(self) -> V {
         match self {
-            OccupiedRawEntry::List { list, index } => list.swap_remove(index).1,
+            OccupiedRawEntry::List { list, index } => {
+                cast_as_mut_vec(list).swap_remove(index).value
+            }
             OccupiedRawEntry::Map { entry, this } => {
                 let v = entry.remove();
                 let this = unsafe { &mut *this };
