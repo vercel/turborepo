@@ -19,7 +19,7 @@ use crate::{MAX_LIST_SIZE, MIN_HASH_SIZE};
 #[derive(Clone)]
 pub enum AutoMap<K, V, H = RandomState> {
     List(VecMap<K, V>),
-    Map(Box<HashMap<K, V, H>>),
+    Map(HashMap<K, V, H>),
 }
 
 impl<K, V, H> Default for AutoMap<K, V, H> {
@@ -45,10 +45,10 @@ impl<K, V> AutoMap<K, V, RandomState> {
         if capacity < MAX_LIST_SIZE {
             AutoMap::List(VecMap::with_capacity(capacity))
         } else {
-            AutoMap::Map(Box::new(HashMap::with_capacity_and_hasher(
+            AutoMap::Map(HashMap::with_capacity_and_hasher(
                 capacity,
                 Default::default(),
-            )))
+            ))
         }
     }
 }
@@ -64,9 +64,7 @@ impl<K, V, H: BuildHasher> AutoMap<K, V, H> {
         if capacity <= MAX_LIST_SIZE {
             AutoMap::List(VecMap::with_capacity(capacity))
         } else {
-            AutoMap::Map(Box::new(HashMap::with_capacity_and_hasher(
-                capacity, hasher,
-            )))
+            AutoMap::Map(HashMap::with_capacity_and_hasher(capacity, hasher))
         }
     }
 
@@ -84,7 +82,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
         if let AutoMap::List(list) = self {
             let mut map = HashMap::with_capacity_and_hasher(MAX_LIST_SIZE * 2, Default::default());
             map.extend(list.drain(..));
-            *self = AutoMap::Map(Box::new(map));
+            *self = AutoMap::Map(map);
         }
         if let AutoMap::Map(map) = self {
             map
@@ -700,7 +698,7 @@ where
                 }
                 map.end()
             }
-            AutoMap::Map(map) => (**map).serialize(serializer),
+            AutoMap::Map(map) => (*map).serialize(serializer),
         }
     }
 }
@@ -743,8 +741,7 @@ where
                         }
                         return Ok(AutoMap::List(list));
                     } else {
-                        let mut map =
-                            Box::new(HashMap::with_capacity_and_hasher(size, H::default()));
+                        let mut map = HashMap::with_capacity_and_hasher(size, H::default());
                         while let Some((k, v)) = m.next_entry()? {
                             map.insert(k, v);
                         }
@@ -806,7 +803,7 @@ where
             if map.len() < MIN_HASH_SIZE {
                 return AutoMap::List(map.into_iter().collect());
             }
-            return AutoMap::Map(Box::new(map));
+            return AutoMap::Map(map);
         }
         let mut map = AutoMap::with_hasher();
         for (k, v) in iter {
