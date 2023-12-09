@@ -719,9 +719,9 @@ where
             {
                 if let Some(size) = m.size_hint() {
                     if size < MAX_LIST_SIZE {
-                        let mut list = SmallVec::with_capacity(size);
+                        let mut list = VecMap::with_capacity(size);
                         while let Some((k, v)) = m.next_entry()? {
-                            list.push((k, v));
+                            list.insert(k, v);
                         }
                         return Ok(AutoMap::List(list));
                     } else {
