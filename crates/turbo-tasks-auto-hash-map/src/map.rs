@@ -119,7 +119,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
                     let map = self.convert_to_map();
                     map.insert(key, value);
                 } else {
-                    list.push((key, value));
+                    list.insert(key, value);
                 }
                 None
             }
@@ -403,7 +403,7 @@ impl<'a, K, V> Iterator for IterMut<'a, K, V> {
 }
 
 pub enum IntoIter<K, V> {
-    List(smallvec::IntoIter<[(K, V); I]>),
+    List(vecmap::map::IntoIter<K, V>),
     Map(std::collections::hash_map::IntoIter<K, V>),
 }
 
@@ -583,7 +583,7 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher + Default + 'a> VacantEntry<'a, K, V, H
                     let this = unsafe { &mut *this };
                     this.convert_to_map().entry(key).or_insert(value)
                 } else {
-                    list.push((key, value));
+                    list.insert(key, value);
                     &mut list.last_mut().unwrap().1
                 }
             }
@@ -660,7 +660,7 @@ impl<'a, K: Eq + Hash, V, H: BuildHasher + Default + 'a> VacantRawEntry<'a, K, V
                     let this = unsafe { &mut *this };
                     this.convert_to_map().entry(key).or_insert(value)
                 } else {
-                    list.push((key, value));
+                    list.insert(key, value);
                     &mut list.last_mut().unwrap().1
                 }
             }
