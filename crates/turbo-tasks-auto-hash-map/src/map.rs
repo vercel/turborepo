@@ -11,7 +11,6 @@ use serde::{
     ser::SerializeMap,
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use smallvec::SmallVec;
 use vecmap::VecMap;
 
 use crate::{MAX_LIST_SIZE, MIN_HASH_SIZE};
@@ -95,7 +94,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
 
     fn convert_to_list(&mut self) -> &mut VecMap<K, V> {
         if let AutoMap::Map(map) = self {
-            let mut list = SmallVec::with_capacity(MAX_LIST_SIZE);
+            let mut list = VecMap::with_capacity(MAX_LIST_SIZE);
             list.extend(map.drain());
             *self = AutoMap::List(list);
         }
@@ -130,14 +129,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
     /// see [HashMap::remove](https://doc.rust-lang.org/std/collections/struct.HashMap.html#method.remove)
     pub fn remove(&mut self, key: &K) -> Option<V> {
         match self {
-            AutoMap::List(list) => {
-                for i in 0..list.len() {
-                    if list[i].0 == *key {
-                        return Some(list.swap_remove(i).1);
-                    }
-                }
-                None
-            }
+            AutoMap::List(list) => list.remove(key),
             AutoMap::Map(map) => {
                 let result = map.remove(key);
                 if result.is_some() && map.len() < MIN_HASH_SIZE {
@@ -220,7 +212,7 @@ impl<K: Eq + Hash, V, H: BuildHasher + Default> AutoMap<K, V, H> {
             AutoMap::List(list) => list.shrink_to_fit(),
             AutoMap::Map(map) => {
                 if map.len() <= MAX_LIST_SIZE {
-                    let mut list = SmallVec::with_capacity(map.len());
+                    let mut list = VecMap::with_capacity(map.len());
                     list.extend(map.drain());
                     *self = AutoMap::List(list);
                 } else {
@@ -346,7 +338,7 @@ impl<'a, K, V, H> IntoIterator for &'a AutoMap<K, V, H> {
 }
 
 pub enum Iter<'a, K, V> {
-    List(std::slice::Iter<'a, (K, V)>),
+    List(vecmap::map::Iter<'a, K, V>),
     Map(std::collections::hash_map::Iter<'a, K, V>),
 }
 
