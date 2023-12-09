@@ -372,7 +372,7 @@ impl<'a, K, V> Clone for Iter<'a, K, V> {
 }
 
 pub enum IterMut<'a, K, V> {
-    List(std::slice::IterMut<'a, (K, V)>),
+    List(vecmap::map::IterMut<'a, K, V>),
     Map(std::collections::hash_map::IterMut<'a, K, V>),
 }
 
