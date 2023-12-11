@@ -10,7 +10,7 @@ use url::Url;
 pub struct TokenMetadataResponse {
     pub token: TokenMetadata,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct TokenMetadata {
     pub id: String,
     pub name: String,
@@ -18,6 +18,7 @@ pub struct TokenMetadata {
     pub token_type: String,
     pub origin: String,
     pub scopes: Vec<TokenScope>,
+    #[serde(rename = "activeAt")]
     pub active_at: Option<i64>,
     #[serde(rename = "createdAt")]
     pub created_at: Option<i64>,
@@ -26,9 +27,10 @@ pub struct TokenMetadata {
     #[serde(rename = "teamId")]
     pub team_id: Option<String>,
 }
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct TokenScope {
-    pub r#type: String,
+    #[serde(rename = "type")]
+    pub kind: String,
     pub origin: String,
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
@@ -190,9 +192,10 @@ impl AnalyticsEvent {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
     use test_case::test_case;
 
-    use crate::{AnalyticsEvent, CacheEvent, CacheSource};
+    use crate::{AnalyticsEvent, CacheEvent, CacheSource, TokenMetadata, TokenScope};
 
     #[test_case(
       AnalyticsEvent {
@@ -202,7 +205,7 @@ mod tests {
         hash: "this-is-my-hash".to_string(),
         duration: 58,
       },
-      "with-id-local-hit"
+      "with-id-local-hit"; "id local hit"
     )]
     #[test_case(
       AnalyticsEvent {
@@ -212,7 +215,7 @@ mod tests {
         hash: "this-is-my-hash-2".to_string(),
         duration: 21,
       },
-      "with-id-remote-miss"
+      "with-id-remote-miss"; "id remote miss"
     )]
     #[test_case(
       AnalyticsEvent {
@@ -222,10 +225,54 @@ mod tests {
         hash: "this-is-my-hash-2".to_string(),
         duration: 21,
       },
-      "without-id-remote-miss"
+      "without-id-remote-miss"; "without id remote miss"
     )]
     fn test_serialize_analytics_event(event: AnalyticsEvent, name: &str) {
         let json = serde_json::to_string(&event).unwrap();
         insta::assert_json_snapshot!(name, json);
+    }
+
+    #[test_case(
+        TokenMetadata{
+            id: "id".to_owned(),
+            name: "name".to_owned(),
+            token_type: "token type".to_owned(),
+            origin: "origin".to_owned(),
+            scopes: vec![TokenScope{
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+        json!({
+            "id": "id",
+            "name": "name",
+            "type": "token type",
+            "origin": "origin",
+            "scopes": [{
+                "type": "",
+                "origin": "",
+            }],
+            "activeAt": null,
+            "createdAt": null,
+            "expiresAt": null,
+            "teamId": null,
+        }); "renaming fields"
+    )]
+    #[test_case(
+        TokenMetadata::default(),
+        json!({
+            "id": "",
+            "name": "",
+            "type": "",
+            "origin": "",
+            "scopes": [],
+            "activeAt": null,
+            "createdAt": null,
+            "expiresAt": null,
+            "teamId": null,
+        }); "pure defaults"
+    )]
+    fn test_serialize_token_metadata(raw_json: impl serde::Serialize, want: serde_json::Value) {
+        assert_eq!(serde_json::to_value(raw_json).unwrap(), want)
     }
 }
