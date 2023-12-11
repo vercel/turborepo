@@ -1,5 +1,8 @@
 mod visitor;
 
+use std::str::FromStr;
+
+use globwalk::{GlobError, ValidatedGlob};
 use serde::{Deserialize, Serialize};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 pub use visitor::{Error as VisitorError, Visitor};
@@ -16,6 +19,22 @@ use crate::{
 pub struct TaskOutputs {
     pub inclusions: Vec<String>,
     pub exclusions: Vec<String>,
+}
+
+impl TaskOutputs {
+    pub fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
+        self.inclusions
+            .iter()
+            .map(|i| ValidatedGlob::from_str(i))
+            .collect()
+    }
+
+    pub fn validated_exclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
+        self.exclusions
+            .iter()
+            .map(|e| ValidatedGlob::from_str(e))
+            .collect()
+    }
 }
 
 // Constructed from a RawTaskDefinition

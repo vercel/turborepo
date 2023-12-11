@@ -8,9 +8,10 @@ use std::{
     fmt::{self, Display},
     fs,
     process::Command,
+    str::FromStr,
 };
 
-use globwalk::fix_glob_pattern;
+use globwalk::{fix_glob_pattern, ValidatedGlob};
 use itertools::{Either, Itertools};
 use lazy_regex::{lazy_regex, Lazy};
 use regex::Regex;
@@ -93,15 +94,16 @@ impl Display for PackageManager {
 pub struct WorkspaceGlobs {
     directory_inclusions: Any<'static>,
     directory_exclusions: Any<'static>,
-    package_json_inclusions: Vec<String>,
+    package_json_inclusions: Vec<ValidatedGlob>,
+    pub raw_inclusions: Vec<String>,
     pub raw_exclusions: Vec<String>,
+    validated_exclusions: Vec<ValidatedGlob>,
 }
 
 impl PartialEq for WorkspaceGlobs {
     fn eq(&self, other: &Self) -> bool {
         // Use the literals for comparison, not the compiled globs
-        self.package_json_inclusions == other.package_json_inclusions
-            && self.raw_exclusions == other.raw_exclusions
+        self.raw_inclusions == other.raw_inclusions && self.raw_exclusions == other.raw_exclusions
     }
 }
 
@@ -141,9 +143,9 @@ impl WorkspaceGlobs {
                 } else {
                     s.push_str("/package.json");
                 }
-                s
+                ValidatedGlob::from_str(&s)
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<ValidatedGlob>, _>>()?;
         let raw_exclusions: Vec<String> = exclusions
             .into_iter()
             .map(|s| s.into())
@@ -156,14 +158,23 @@ impl WorkspaceGlobs {
             .iter()
             .map(glob_with_contextual_error)
             .collect::<Result<Vec<_>, _>>()?;
+        let validated_exclusions = raw_exclusions
+            .iter()
+            .map(|e| ValidatedGlob::from_str(e))
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            directory_inclusions: any_with_contextual_error(inclusion_globs, raw_inclusions)?,
+            directory_inclusions: any_with_contextual_error(
+                inclusion_globs,
+                raw_inclusions.clone(),
+            )?,
             directory_exclusions: any_with_contextual_error(
                 exclusion_globs,
                 raw_exclusions.clone(),
             )?,
             package_json_inclusions,
+            validated_exclusions,
             raw_exclusions,
+            raw_inclusions,
         })
     }
 
@@ -275,6 +286,8 @@ pub enum Error {
     WalkError(#[from] globwalk::WalkError),
     #[error("invalid workspace glob {0}: {1}")]
     Glob(String, #[source] Box<wax::BuildError>),
+    #[error("invalid globwalk pattern {0}")]
+    Globwalk(#[from] globwalk::GlobError),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
 
@@ -467,7 +480,7 @@ impl PackageManager {
         let files = globwalk::globwalk(
             repo_root,
             &globs.package_json_inclusions,
-            &globs.raw_exclusions,
+            &globs.validated_exclusions,
             globwalk::WalkType::Files,
         )?;
         Ok(files.into_iter())
@@ -880,7 +893,11 @@ mod tests {
         let globs =
             WorkspaceGlobs::new(vec!["scripts/", "packages/**"], vec!["package/template"]).unwrap();
         assert_eq!(
-            &globs.package_json_inclusions,
+            &globs
+                .package_json_inclusions
+                .iter()
+                .map(|i| i.as_str())
+                .collect::<Vec<_>>(),
             &["scripts/package.json", "packages/**/package.json"]
         );
     }

@@ -3125,7 +3125,9 @@ dependencies = [
 name = "globwalk"
 version = "0.1.0"
 dependencies = [
+ "camino",
  "itertools",
+ "path-clean 1.0.1",
  "path-slash",
  "regex",
  "tempdir",
@@ -11308,7 +11310,6 @@ dependencies = [
  "globwalk",
  "hex",
  "ignore",
- "itertools",
  "nom",
  "sha1 0.10.5",
  "tempfile",

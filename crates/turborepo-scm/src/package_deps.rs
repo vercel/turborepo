@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
-use itertools::{Either, Itertools};
+use globwalk::ValidatedGlob;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError, RelativeUnixPathBuf};
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
@@ -179,14 +179,17 @@ impl Git {
         // error further upstream, but since we haven't pulled the switch yet,
         // we need to mimic the Go behavior here and trim leading `/`
         // characters.
-        let (inclusions, exclusions): (Vec<String>, Vec<String>) =
-            inputs.into_iter().partition_map(|raw_glob| {
-                if let Some(exclusion) = raw_glob.strip_prefix('!') {
-                    Either::Right([package_unix_path, exclusion.trim_start_matches('/')].join("/"))
-                } else {
-                    Either::Left([package_unix_path, raw_glob.trim_start_matches('/')].join("/"))
-                }
-            });
+        let mut inclusions = vec![];
+        let mut exclusions = vec![];
+        for raw_glob in inputs {
+            if let Some(exclusion) = raw_glob.strip_prefix('!') {
+                let glob_str = [package_unix_path, exclusion.trim_start_matches('/')].join("/");
+                exclusions.push(ValidatedGlob::from_str(&glob_str)?);
+            } else {
+                let glob_str = [package_unix_path, raw_glob.trim_start_matches('/')].join("/");
+                inclusions.push(ValidatedGlob::from_str(&glob_str)?);
+            }
+        }
         let files = globwalk::globwalk(
             turbo_root,
             &inclusions,
