@@ -23,7 +23,12 @@ impl TelemetryClient for AnonAPIClient {
         session_id: &str,
     ) -> Result<(), Error> {
         let request_builder = self
-            .create_request_builder("/api/turborepo/v1", Method::POST, session_id, telemetry_id)
+            .create_request_builder(
+                "/api/turborepo/v1/events",
+                Method::POST,
+                session_id,
+                telemetry_id,
+            )
             .await?
             .json(&events);
 

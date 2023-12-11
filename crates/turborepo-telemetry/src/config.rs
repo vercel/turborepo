@@ -2,8 +2,10 @@ use std::{env, fs, path::Path};
 
 use chrono::{DateTime, Utc};
 pub use config::{Config, ConfigError, File, FileFormat};
+use hex;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use sha2::{Digest, Sha256};
 use tracing::{debug, error};
 use turborepo_ui::{BOLD, GREY, UI, UNDERLINE};
 use uuid::Uuid;
@@ -12,21 +14,40 @@ static DEBUG_ENV_VAR: &str = "TURBO_TELEMETRY_DEBUG";
 static DISABLED_ENV_VAR: &str = "TURBO_TELEMETRY_DISABLED";
 static DO_NOT_TRACK_ENV_VAR: &str = "DO_NOT_TRACK";
 
+fn salt_string(salt: &str, input: &str) -> String {
+    let salted = format!("{}{}", salt, input);
+    let mut hasher = Sha256::new();
+    hasher.update(salted.as_bytes());
+    let generic = hasher.finalize();
+    hex::encode(generic)
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TelemetryConfigContents {
-    telemetry_id: String,
+    // whether or not telemetry is enabled
     telemetry_enabled: bool,
+    // randomized and salted machine id - used for linking events together
+    telemetry_id: String,
+    // private salt used to anonymize event data (telemetry_id, task names, package names, etc.) -
+    // this is generated on first run and never leaves the machine
+    telemetry_salt: String,
 
+    // when the alert was shown
     #[serde(skip_serializing_if = "Option::is_none")]
     telemetry_alerted: Option<DateTime<Utc>>,
 }
 
 impl Default for TelemetryConfigContents {
     fn default() -> Self {
+        let telemetry_salt = Uuid::new_v4().to_string();
+        let raw_telemetry_id = Uuid::new_v4().to_string();
+        let telemetry_id = salt_string(&telemetry_salt, &raw_telemetry_id);
+
         TelemetryConfigContents {
-            telemetry_id: Uuid::new_v4().to_string(),
             telemetry_enabled: true,
             telemetry_alerted: None,
+            telemetry_salt,
+            telemetry_id,
         }
     }
 }
@@ -106,6 +127,10 @@ impl TelemetryConfig {
         fs::write(&self.config_path, serialized)
             .map_err(|e| ConfigError::Message(e.to_string()))?;
         Ok(())
+    }
+
+    pub fn salt(&self, input: &str) -> String {
+        salt_string(&self.config.telemetry_salt, input)
     }
 
     pub fn show_alert(&mut self) {
