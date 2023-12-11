@@ -203,10 +203,10 @@ jobs:
         os:
           - name: ubuntu
             runner:
-              - 'self-hosted'
-              - 'linux'
-              - 'x64'
-              - 'metal'
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
           - name: macos
             runner: macos-latest
           - name: windows
@@ -244,10 +244,10 @@ jobs:
   go_lint:
     name: Go linting
     runs-on:
-      - 'self-hosted'
-      - 'linux'
-      - 'x64'
-      - 'metal'
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     needs: determine_jobs
     if: needs.determine_jobs.outputs.turborepo_go_lint == 'true'
     steps:
@@ -287,10 +287,10 @@ jobs:
         os:
           - name: ubuntu
             runner:
-              - 'self-hosted'
-              - 'linux'
-              - 'x64'
-              - 'metal'
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
           - name: macos
             runner: macos-latest
           - name: windows
@@ -488,10 +488,10 @@ jobs:
         os:
           - name: ubuntu
             runner:
-              - 'self-hosted'
-              - 'linux'
-              - 'x64'
-              - 'metal'
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
           - name: macos
             runner: macos-latest
     env:
@@ -528,10 +528,10 @@ jobs:
   turbopack_typescript:
     name: Turbopack TypeScript files
     runs-on:
-      - 'self-hosted'
-      - 'linux'
-      - 'x64'
-      - 'metal'
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     needs: determine_jobs
     if: needs.determine_jobs.outputs.turbopack_typescript == 'true'
     steps:
@@ -561,10 +561,10 @@ jobs:
     if: needs.determine_jobs.outputs.rust == 'true'
     name: Rust lints
     runs-on:
-      - 'self-hosted'
-      - 'linux'
-      - 'x64'
-      - 'metal'
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -595,10 +595,10 @@ jobs:
       needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turborepo rust check
     runs-on:
-      - 'self-hosted'
-      - 'linux'
-      - 'x64'
-      - 'metal'
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -625,10 +625,10 @@ jobs:
     needs: [turborepo_rust_check]
     name: Turborepo rust clippy
     runs-on:
-      - 'self-hosted'
-      - 'linux'
-      - 'x64'
-      - 'metal'
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -664,10 +664,10 @@ jobs:
       needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turbopack rust check
     runs-on:
-      - 'self-hosted'
-      - 'linux'
-      - 'x64'
-      - 'metal'
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -691,10 +691,10 @@ jobs:
     needs: [turbopack_rust_check]
     name: Turbopack rust clippy
     runs-on:
-      - 'self-hosted'
-      - 'linux'
-      - 'x64'
-      - 'metal'
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -723,10 +723,10 @@ jobs:
     if: needs.determine_jobs.outputs.turbopack == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     name: Check next-swc
     runs-on:
-      - 'self-hosted'
-      - 'linux'
-      - 'x64'
-      - 'metal'
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     permissions:
       pull-requests: write
     steps:
@@ -800,10 +800,10 @@ jobs:
         os:
           - name: ubuntu
             runner:
-              - 'self-hosted'
-              - 'linux'
-              - 'x64'
-              - 'metal'
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
             nextest: linux
           - name: macos
             runner: macos-latest
@@ -844,10 +844,10 @@ jobs:
   turbopack_rust_test1:
     needs: [turbopack_rust_check]
     runs-on:
-      - 'self-hosted'
-      - 'linux'
-      - 'x64'
-      - 'metal'
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     name: Turbopack Rust testing on ubuntu
     steps:
       - name: Checkout
@@ -983,7 +983,6 @@ jobs:
     needs: [determine_jobs, turbopack_rust_check]
     name: Turbopack Rust testing benchmarks on linux
     uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
-    timeout-minutes: 180
     with:
       # custom runner label specific to workflow
       runner: ubuntu-latest-metal
@@ -992,7 +991,6 @@ jobs:
 
   turbopack_rust_test_bench2:
     needs: [determine_jobs, turbopack_rust_check]
-    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -1012,10 +1010,10 @@ jobs:
   format_lint:
     name: Formatting
     runs-on:
-      - 'self-hosted'
-      - 'linux'
-      - 'x64'
-      - 'metal'
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     needs: determine_jobs
     if: needs.determine_jobs.outputs.format == 'true'
     env:
