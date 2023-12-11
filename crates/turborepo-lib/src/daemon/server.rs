@@ -511,6 +511,12 @@ where
         }))
     }
 
+    async fn get_changed_packages(
+        &self,
+        _: tonic::Request<proto::GetChangedPackagesRequest>,
+    ) -> Result<tonic::Response<Self::GetChangedPackagesStream>, tonic::Status> {
+    }
+
     async fn discover_packages(
         &self,
         _request: tonic::Request<proto::DiscoverPackagesRequest>,

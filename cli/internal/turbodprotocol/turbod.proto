@@ -16,6 +16,9 @@ service Turbod {
   //
   // Since 1.11.0
   rpc DiscoverPackages (DiscoverPackagesRequest) returns (DiscoverPackagesResponse);
+
+
+  rpc GetChangedPackages (GetChangedPackagesRequest) returns (stream WatchEvent);
 }
 
 message HelloRequest {
@@ -93,17 +96,7 @@ message PackageFiles {
   optional string turbo_json = 2;
 }
 
-// Request to daemon to receive the latest event so
-// the subscriber can start watching from that point
-message StartWatchRequest {}
-
-message GetWatchEventsRequest {
-  string last_event_id = 1;
-}
-
-message GetWatchEventsResponse {
-  repeated WatchEvent events = 1;
-}
+message GetChangedPackagesRequest {}
 
 message WatchEvent {
   string id = 1;
