@@ -275,4 +275,51 @@ mod tests {
     fn test_serialize_token_metadata(raw_json: impl serde::Serialize, want: serde_json::Value) {
         assert_eq!(serde_json::to_value(raw_json).unwrap(), want)
     }
+
+    #[test_case(
+        json!({
+            "id": "id",
+            "name": "name",
+            "type": "token type",
+            "origin": "origin",
+            "scopes": [{
+                "type": "",
+                "origin": "",
+            }],
+            "activeAt": null,
+            "createdAt": null,
+            "expiresAt": null,
+            "teamId": null,
+        }),
+        TokenMetadata{
+            id: "id".to_owned(),
+            name: "name".to_owned(),
+            token_type: "token type".to_owned(),
+            origin: "origin".to_owned(),
+            scopes: vec![TokenScope{
+                ..Default::default()
+            }],
+            ..Default::default()
+        }; "renaming fields"
+    )]
+    #[test_case(
+        json!({
+            "id": "",
+            "name": "",
+            "type": "",
+            "origin": "",
+            "scopes": [],
+            "activeAt": null,
+            "createdAt": null,
+            "expiresAt": null,
+            "teamId": null,
+        }),
+        TokenMetadata::default(); "pure defaults"
+    )]
+    fn test_deserialize_token_metadata(raw_json: serde_json::Value, want: TokenMetadata) {
+        assert_eq!(
+            serde_json::from_value::<TokenMetadata>(raw_json).unwrap(),
+            want
+        )
+    }
 }
