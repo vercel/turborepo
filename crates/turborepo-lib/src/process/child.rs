@@ -108,7 +108,10 @@ impl ShutdownStyle {
 
                     let result = tokio::time::timeout(*timeout, fut).await;
                     match result {
-                        Ok(Ok(result)) => ChildState::Exited(ChildExit::Finished(result)),
+                        // We ignore the exit code and mark it as killed since we sent a SIGINT
+                        // This avoids reliance on an underlying process exiting with
+                        // no exit code or a non-zero in order for turbo to operate correctly.
+                        Ok(Ok(_exit_code)) => ChildState::Exited(ChildExit::Killed),
                         Ok(Err(_)) => ChildState::Exited(ChildExit::Failed),
                         Err(_) => {
                             debug!("graceful shutdown timed out, killing child");
@@ -612,11 +615,7 @@ mod test {
 
         let state = child.state.read().await;
 
-        // process exits with no code when interrupted
-        #[cfg(unix)]
-        assert_matches!(&*state, &ChildState::Exited(ChildExit::Finished(None)));
-
-        #[cfg(not(unix))]
+        // We should ignore the exit code of the process and always treat it as killed
         assert_matches!(&*state, &ChildState::Exited(ChildExit::Killed));
     }
 
@@ -767,7 +766,7 @@ mod test {
 
         let exit = child.stop().await;
 
-        assert_matches!(exit, Some(ChildExit::Finished(None)));
+        assert_matches!(exit, Some(ChildExit::Killed));
     }
 
     #[tokio::test]
