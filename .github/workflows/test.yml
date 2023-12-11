@@ -202,7 +202,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - 'self-hosted'
+              - 'linux'
+              - 'x64'
+              - 'metal'
           - name: macos
             runner: macos-latest
           - name: windows
@@ -239,7 +243,11 @@ jobs:
 
   go_lint:
     name: Go linting
-    runs-on: ubuntu-latest
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     needs: determine_jobs
     if: needs.determine_jobs.outputs.turborepo_go_lint == 'true'
     steps:
@@ -278,7 +286,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - 'self-hosted'
+              - 'linux'
+              - 'x64'
+              - 'metal'
           - name: macos
             runner: macos-latest
           - name: windows
@@ -475,7 +487,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - 'self-hosted'
+              - 'linux'
+              - 'x64'
+              - 'metal'
           - name: macos
             runner: macos-latest
     env:
@@ -511,7 +527,11 @@ jobs:
 
   turbopack_typescript:
     name: Turbopack TypeScript files
-    runs-on: ubuntu-latest
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     needs: determine_jobs
     if: needs.determine_jobs.outputs.turbopack_typescript == 'true'
     steps:
@@ -540,7 +560,11 @@ jobs:
     needs: [determine_jobs]
     if: needs.determine_jobs.outputs.rust == 'true'
     name: Rust lints
-    runs-on: ubuntu-latest
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -570,7 +594,11 @@ jobs:
       needs.determine_jobs.outputs.cargo_on_main == 'true' ||
       needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turborepo rust check
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -596,7 +624,11 @@ jobs:
   turborepo_rust_clippy:
     needs: [turborepo_rust_check]
     name: Turborepo rust clippy
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -631,7 +663,11 @@ jobs:
       needs.determine_jobs.outputs.cargo_on_main == 'true' ||
       needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turbopack rust check
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -654,7 +690,11 @@ jobs:
   turbopack_rust_clippy:
     needs: [turbopack_rust_check]
     name: Turbopack rust clippy
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -682,13 +722,14 @@ jobs:
     needs: [determine_jobs]
     if: needs.determine_jobs.outputs.turbopack == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     name: Check next-swc
-    runs-on: ubuntu-latest-8-core-oss
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     permissions:
       pull-requests: write
     steps:
-      - name: tune linux network
-        run: sudo ethtool -K eth0 tx off rx off
-
       - name: Checkout Next.js
         uses: actions/checkout@v3
         with:
@@ -758,7 +799,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest-16-core-oss
+            runner:
+              - 'self-hosted'
+              - 'linux'
+              - 'x64'
+              - 'metal'
             nextest: linux
           - name: macos
             runner: macos-latest
@@ -798,7 +843,11 @@ jobs:
 
   turbopack_rust_test1:
     needs: [turbopack_rust_check]
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     name: Turbopack Rust testing on ubuntu
     steps:
       - name: Checkout
@@ -934,13 +983,16 @@ jobs:
     needs: [determine_jobs, turbopack_rust_check]
     name: Turbopack Rust testing benchmarks on linux
     uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
+    timeout-minutes: 180
     with:
-      runner: ubuntu-latest-16-core-oss
+      # custom runner label specific to workflow
+      runner: ubuntu-latest-metal
       os: linux
       all: ${{ needs.determine_jobs.outputs.turbopack_bench == 'true' }}
 
   turbopack_rust_test_bench2:
     needs: [determine_jobs, turbopack_rust_check]
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -959,7 +1011,11 @@ jobs:
 
   format_lint:
     name: Formatting
-    runs-on: ubuntu-latest
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
     needs: determine_jobs
     if: needs.determine_jobs.outputs.format == 'true'
     env:
@@ -969,9 +1025,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
       - uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Lint
         # Filters some workspaces out:
         # - `cli` because it runs golangci-lint and this Job doesn't have all the dependencies for that.
