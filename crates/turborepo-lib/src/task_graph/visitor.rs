@@ -4,7 +4,7 @@ use std::{
     io::Write,
     process::Stdio,
     sync::{Arc, Mutex, OnceLock},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use console::{Style, StyledObject};
@@ -710,6 +710,7 @@ impl ExecContext {
         output_client: &OutputClient<impl std::io::Write>,
     ) -> ExecOutcome {
         let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
+        let task_start = Instant::now();
         span.follows_from(parent_span_id);
         let _enter = span.enter();
 
@@ -812,6 +813,7 @@ impl ExecContext {
                 return ExecOutcome::Internal;
             }
         };
+        let task_duration = task_start.elapsed();
 
         match exit_status {
             ChildExit::Finished(Some(0)) => {
@@ -819,7 +821,7 @@ impl ExecContext {
                     error!("{e}");
                 } else if let Err(e) = self
                     .task_cache
-                    .save_outputs(&mut prefixed_ui, Duration::from_secs(1))
+                    .save_outputs(&mut prefixed_ui, task_duration)
                     .await
                 {
                     error!("error caching output: {e}");

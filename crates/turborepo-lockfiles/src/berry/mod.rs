@@ -34,6 +34,11 @@ pub enum Error {
     MissingPackageForLocator(Locator<'static>),
     #[error("unable to find any locator for {0}")]
     MissingLocator(Descriptor<'static>),
+    #[error("Descriptor collision {descriptor} and {other}")]
+    DescriptorCollision {
+        descriptor: Descriptor<'static>,
+        other: String,
+    },
 }
 
 // We depend on BTree iteration being sorted for correct serialization
@@ -123,7 +128,10 @@ impl BerryLockfile {
             for descriptor in Descriptor::from_lockfile_key(key) {
                 let descriptor = descriptor?;
                 if let Some(other) = resolver.insert(&descriptor) {
-                    panic!("Descriptor collision {descriptor} and {other}");
+                    Err(Error::DescriptorCollision {
+                        descriptor: descriptor.clone().into_owned(),
+                        other,
+                    })?;
                 }
                 descriptor_locator.insert(descriptor.into_owned(), locator.as_owned());
             }
@@ -212,16 +220,19 @@ impl BerryLockfile {
         }
 
         // If there aren't any checksums in the lockfile, then cache key is omitted
-        if self
-            .resolutions
-            .values()
-            .map(|locator| {
-                self.locator_package
-                    .get(locator)
-                    .unwrap_or_else(|| panic!("No entry found for {locator}"))
-            })
-            .all(|pkg| pkg.checksum.is_none())
-        {
+        let mut no_checksum = true;
+        for pkg in self.resolutions.values().map(|locator| {
+            self.locator_package
+                .get(locator)
+                .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))
+        }) {
+            let pkg = pkg?;
+            no_checksum = pkg.checksum.is_none();
+            if !no_checksum {
+                break;
+            }
+        }
+        if no_checksum {
             metadata.cache_key = None;
         }
 
@@ -254,7 +265,7 @@ impl BerryLockfile {
                     let dep_locator = self
                         .resolutions
                         .get(&dependency)
-                        .unwrap_or_else(|| panic!("No locator found for {dependency}"));
+                        .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
                     resolutions.insert(dependency, dep_locator.clone());
                 }
 
@@ -382,7 +393,7 @@ impl Lockfile for BerryLockfile {
 
         let dependency = self
             .resolve_dependency(workspace_locator, name, version)
-            .unwrap_or_else(|_| panic!("{name} is an invalid lockfile identifier"));
+            .map_err(Error::from)?;
 
         let Some(locator) = self.resolutions.get(&dependency) else {
             return Ok(None);
@@ -403,8 +414,7 @@ impl Lockfile for BerryLockfile {
         &self,
         key: &str,
     ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
-        let locator =
-            Locator::try_from(key).unwrap_or_else(|_| panic!("Was passed invalid locator: {key}"));
+        let locator = Locator::try_from(key).map_err(Error::from)?;
 
         let Some(package) = self.locator_package.get(&locator) else {
             return Ok(None);
@@ -451,7 +461,7 @@ impl Lockfile for BerryLockfile {
                     let dep_locator = self
                         .resolutions
                         .get(&dependency)
-                        .unwrap_or_else(|| panic!("No locator found for {dependency}"));
+                        .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
                     resolutions.insert(dependency, dep_locator.clone());
                 }
 

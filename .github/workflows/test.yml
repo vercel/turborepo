@@ -38,7 +38,7 @@ jobs:
           comment-id: ${{ steps.comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
           body: |
-            ## :hourglass_flowing_sand: CI is running again... :hourglass_flowing_sand:
+            ## ⏳ CI is running again... ⏳
 
             [Wait for it...](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }})
 
@@ -769,7 +769,7 @@ jobs:
 
           # strip ansi colors with `sed`
           echo "\
-          :warning: This change may fail to build \`next-swc\`.
+          ⚠️ This change may fail to build \`next-swc\`.
 
           <details><summary>Logs</summary>
           <p>
@@ -1108,7 +1108,7 @@ jobs:
       - name: Add failure prose text
         if: steps.info.outputs.failure == 'true'
         run: |
-          echo "## :warning: CI failed :warning:" > comment.md
+          echo "## ⚠ CI failed ⚠" > comment.md
           echo >> comment.md
           echo "The following steps have failed in CI:" >> comment.md
           echo >> comment.md
@@ -1121,7 +1121,7 @@ jobs:
       - name: Add success prose text
         if: steps.info.outputs.success == 'true'
         run: |
-          echo "## :green_circle: CI likely successful :green_circle:" > comment.md
+          echo "## 🟢 CI likely successful 🟢" > comment.md
           echo >> comment.md
           echo "A few longer running steps are still running, but they should not be considered as blocking." >> comment.md
           echo >> comment.md
@@ -1265,7 +1265,7 @@ jobs:
       - name: Add failure prose text
         if: steps.info.outputs.failure == 'true'
         run: |
-          echo "## :warning: CI failed :warning:" > comment.md
+          echo "## ⚠️ CI failed ⚠️" > comment.md
           echo >> comment.md
           echo "The following steps have failed in CI:" >> comment.md
           echo >> comment.md
@@ -1278,7 +1278,7 @@ jobs:
       - name: Add success prose text
         if: steps.info.outputs.success == 'true'
         run: |
-          echo "## :green_circle: CI successful :green_circle:" > comment.md
+          echo "## 🟢 CI successful 🟢" > comment.md
           echo >> comment.md
           echo "Thanks" >> comment.md
           echo >> comment.md

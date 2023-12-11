@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use globwalk::WalkType;
 use thiserror::Error;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_env::{get_global_hashable_env_vars, DetailedMap, EnvironmentVariableMap};
 use turborepo_lockfiles::Lockfile;
 use turborepo_repository::package_manager::{self, PackageManager};
@@ -68,47 +68,8 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         global_hashable_env_vars.all.names()
     );
 
-    let mut global_deps = HashSet::new();
-
-    if !global_file_dependencies.is_empty() {
-        let exclusions = match package_manager.get_workspace_globs(root_path) {
-            Ok(globs) => globs.raw_exclusions,
-            // If we hit a missing workspaces error, we could be in single package mode
-            // so we should just use the default globs
-            Err(package_manager::Error::Workspace(_)) => {
-                package_manager.get_default_exclusions().collect()
-            }
-            Err(err) => {
-                debug!("no workspace globs found");
-                return Err(err.into());
-            }
-        };
-
-        // This is a bit of a hack to ensure that we don't crash
-        // when given an absolute path on Windows. We don't support
-        // absolute paths, but the ':' from the drive letter will also
-        // fail to compile to a glob. We already know we aren't going to
-        // get anything good, and we've already logged a warning, but we
-        // can modify the glob so it compiles. This is similar to the old
-        // behavior, which tacked it on to the end of the base path unmodified,
-        // and then would produce no files.
-        #[cfg(windows)]
-        let windows_global_file_dependencies: Vec<String> = global_file_dependencies
-            .iter()
-            .map(|s| s.replace(":", ""))
-            .collect();
-        let files = globwalk::globwalk(
-            root_path,
-            #[cfg(not(windows))]
-            global_file_dependencies,
-            #[cfg(windows)]
-            windows_global_file_dependencies.as_slice(),
-            &exclusions,
-            WalkType::All,
-        )?;
-
-        global_deps.extend(files);
-    }
+    let mut global_deps =
+        collect_global_deps(package_manager, root_path, global_file_dependencies)?;
 
     if lockfile.is_none() {
         global_deps.insert(root_path.join_component("package.json"));
@@ -156,6 +117,52 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         dot_env,
         env_at_execution_start,
     })
+}
+
+fn collect_global_deps(
+    package_manager: &PackageManager,
+    root_path: &AbsoluteSystemPath,
+    global_file_dependencies: &[String],
+) -> Result<HashSet<AbsoluteSystemPathBuf>, Error> {
+    if global_file_dependencies.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let exclusions = match package_manager.get_workspace_globs(root_path) {
+        Ok(globs) => globs.raw_exclusions,
+        // If we hit a missing workspaces error, we could be in single package mode
+        // so we should just use the default globs
+        Err(package_manager::Error::Workspace(_)) => {
+            package_manager.get_default_exclusions().collect()
+        }
+        Err(err) => {
+            debug!("no workspace globs found");
+            return Err(err.into());
+        }
+    };
+
+    // This is a bit of a hack to ensure that we don't crash
+    // when given an absolute path on Windows. We don't support
+    // absolute paths, but the ':' from the drive letter will also
+    // fail to compile to a glob. We already know we aren't going to
+    // get anything good, and we've already logged a warning, but we
+    // can modify the glob so it compiles. This is similar to the old
+    // behavior, which tacked it on to the end of the base path unmodified,
+    // and then would produce no files.
+    #[cfg(windows)]
+    let windows_global_file_dependencies: Vec<String> = global_file_dependencies
+        .iter()
+        .map(|s| s.replace(":", ""))
+        .collect();
+
+    Ok(globwalk::globwalk(
+        root_path,
+        #[cfg(not(windows))]
+        global_file_dependencies,
+        #[cfg(windows)]
+        windows_global_file_dependencies.as_slice(),
+        &exclusions,
+        WalkType::Files,
+    )?)
 }
 
 impl<'a> GlobalHashableInputs<'a> {
@@ -206,7 +213,7 @@ mod tests {
     use turborepo_repository::package_manager::PackageManager;
 
     use super::get_global_hash_inputs;
-    use crate::cli::EnvMode;
+    use crate::{cli::EnvMode, run::global_hash::collect_global_deps};
 
     #[test]
     fn test_absolute_path() {
@@ -243,5 +250,44 @@ mod tests {
             None,
         );
         assert!(result.is_ok());
+    }
+
+    /// get_global_hash_inputs should not yield any folders when walking since
+    /// turbo does not consider changes to folders when evaluating hashes,
+    /// only to files
+    #[test]
+    fn test_collect_only_yields_files() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        // add some files
+        //   - package.json
+        //   - src/index.js
+        //   - src/index.test.js
+        //   - empty-folder/
+
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let src = root.join_component("src");
+
+        root.join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+        root.join_component("empty-folder")
+            .create_dir_all()
+            .unwrap();
+
+        src.create_dir_all().unwrap();
+        src.join_component("index.js")
+            .create_with_contents("console.log('hello world');")
+            .unwrap();
+        src.join_component("index.test.js")
+            .create_with_contents("")
+            .unwrap();
+
+        let global_file_dependencies = vec!["**".to_string()];
+        let results =
+            collect_global_deps(&PackageManager::Berry, &root, &global_file_dependencies).unwrap();
+
+        // should not yield the root folder itself, src, or empty-folder
+        assert_eq!(results.len(), 3, "{:?}", results);
     }
 }
