@@ -660,13 +660,14 @@ mod test {
 
         let state = child.state.read().await;
 
-        let _expected = if cfg!(unix) {
-            ChildExit::KilledExternal
-        } else {
-            ChildExit::Finished(Some(1))
+        let ChildState::Exited(state) = &*state else {
+            panic!("expected child to have exited after wait call");
         };
 
-        assert_matches!(&*state, ChildState::Exited(_expected));
+        #[cfg(unix)]
+        assert_matches!(state, ChildExit::KilledExternal);
+        #[cfg(not(unix))]
+        assert_matches!(state, ChildExit::Finished(Some(1)));
     }
 
     #[tokio::test]
