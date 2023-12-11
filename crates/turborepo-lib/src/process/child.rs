@@ -666,7 +666,7 @@ mod test {
         #[cfg(unix)]
         assert_matches!(state, ChildExit::KilledExternal);
         #[cfg(not(unix))]
-        assert_matches!(state, ChildExit::Finished(Some(1)));
+        assert_matches!(state, ChildExit::Finished(Some(3)));
     }
 
     #[tokio::test]
