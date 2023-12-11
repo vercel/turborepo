@@ -1,19 +1,31 @@
 {
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "prisma": {
+    "schema": "packages/database/prisma/schema.prisma",
+    "seed": "tsx packages/database/src/seed.ts"
+  },
   "scripts": {
     "build": "turbo run build",
+    "db:migrate:deploy": "turbo run db:migrate:deploy",
+    "db:push": "turbo run db:push",
+    "db:seed": "turbo run db:seed",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "turbo run build --filter=docs^... && changeset publish"
+    "generate": "turbo run generate",
+    "lint": "turbo run lint"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.25.2",
-    "prettier": "^3.0.3",
-    "turbo": "^1.11.1"
+    "@repo/eslint-config": "*",
+    "prettier": "^3.1.0",
+    "tsx": "^4.4.0",
+    "turbo": "^1.10.16"
   },
-  "packageManager": "pnpm@8.9.0"
+  "engines": {
+    "node": ">=18"
+  },
+  "packageManager": "yarn@1.22.19"
 }

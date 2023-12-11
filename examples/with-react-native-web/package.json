@@ -1,19 +1,21 @@
 {
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
+    "build": "turbo run build",
     "clean": "turbo run clean && rm -rf node_modules",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "turbo run build --filter=docs^... && changeset publish"
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\" --ignore-path .gitignore"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.25.2",
-    "prettier": "^3.0.3",
-    "turbo": "^1.11.1"
+    "prettier": "^3.1.0",
+    "turbo": "^1.10.16"
   },
-  "packageManager": "pnpm@8.9.0"
+  "packageManager": "yarn@1.22.19",
+  "engines": {
+    "node": ">=18"
+  }
 }
