@@ -261,6 +261,9 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
       - name: Setup Protos
         run: cd cli && make compile-protos
 
