@@ -1,17 +1,19 @@
 {
-  "name": "with-vue-nuxt",
   "private": true,
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "turbo run build --filter=docs^... && changeset publish"
   },
   "devDependencies": {
-    "eslint": "^8.48.0",
+    "@changesets/cli": "^2.25.2",
     "prettier": "^3.0.3",
-    "tsconfig": "workspace:*",
-    "turbo": "^1.10.16"
+    "turbo": "^1.11.1"
   },
-  "packageManager": "pnpm@8.6.10"
+  "packageManager": "pnpm@8.9.0"
 }
