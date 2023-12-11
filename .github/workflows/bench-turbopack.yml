@@ -123,7 +123,12 @@ jobs:
       needs.determine_jobs.outputs.cargo_on_main == 'true' ||
       needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turbopack rust check
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
+      
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -182,7 +187,12 @@ jobs:
             args: -p turbopack-cli
             TURBOPACK_BENCH_COUNTS: 1000,10000
 
-    runs-on: ubuntu-latest-8-core-oss
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
+
     name: Benchmark on ${{ matrix.bench.name }}
 
     steps:
@@ -317,7 +327,11 @@ jobs:
           - name: linux
             title: Linux
             quiet: false
-            runner: ubuntu-latest-16-core-oss
+            runs-on:
+              - 'self-hosted'
+              - 'linux'
+              - 'x64'
+              - 'metal'
           # - name: macos
           #   title: MacOS
           #   quiet: true
