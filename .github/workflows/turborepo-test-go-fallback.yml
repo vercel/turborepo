@@ -16,13 +16,7 @@ on:
       - turborepo-tests/integration/**
       - version.txt
       - xtask/**
-    paths-ignore:
-      - "**.md"
-      - "**.mdx"
   pull_request:
-    paths-ignore:
-      - "**.md"
-      - "**.mdx"
     paths:
       - .cargo/**
       - Cargo.*
