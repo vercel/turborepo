@@ -9,18 +9,18 @@ pub async fn logout(base: &mut CommandBase) -> Result<(), Error> {
     let config_path = base.global_config_path()?;
     let mut auth_file = read_or_create_auth_file(&auth_path, &config_path, &client).await?;
 
-    if auth_file.tokens.is_empty() {
+    if auth_file.tokens().is_empty() {
         println!("No tokens to remove");
         return Ok(());
     }
 
     // Don't prompt when there's only one token to logout for.
-    if auth_file.tokens.len() <= 1 {
-        auth_file.tokens.clear();
+    if auth_file.tokens().len() <= 1 {
+        auth_file.tokens_mut().clear();
     } else {
         // Make a friendly display for the user to select from.
         let items = &auth_file
-            .tokens
+            .tokens()
             .iter()
             .map(|t| {
                 let token = AuthToken {
@@ -49,7 +49,7 @@ pub async fn logout(base: &mut CommandBase) -> Result<(), Error> {
                 token.friendly_token_display(),
                 token.friendly_api_display()
             );
-            auth_file.tokens.remove(api);
+            auth_file.remove(api);
         } else {
             // This should never happen, but just in case.
             return Err(Error::Auth(turborepo_auth::Error::FailedToGetToken));

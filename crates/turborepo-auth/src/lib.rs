@@ -55,7 +55,10 @@ pub async fn read_or_create_auth_file(
             })?;
         let tokens: HashMap<String, String> = serde_json::from_str(&content)
             .map_err(|e| Error::FailedToDeserializeAuthFile { source: e })?;
-        let auth_file = AuthFile { tokens };
+        let mut auth_file = AuthFile::new();
+        for (api, token) in tokens {
+            auth_file.insert(api, token);
+        }
         return Ok(auth_file);
     } else if config_file_path.try_exists()? {
         let content = config_file_path
@@ -68,9 +71,9 @@ pub async fn read_or_create_auth_file(
             .map_err(|e| Error::FailedToDeserializeConfigToken { source: e })?;
 
         let auth_token = convert_to_auth_token(&config_token.token, client).await?;
-        let auth_file = AuthFile {
-            tokens: HashMap::from([(client.base_url().to_owned(), auth_token.token)]),
-        };
+
+        let mut auth_file = AuthFile::new();
+        auth_file.insert(client.base_url().to_owned(), auth_token.token);
         auth_file.write_to_disk(auth_file_path)?;
         return Ok(auth_file);
     }
@@ -99,9 +102,8 @@ mod tests {
             .expect("Failed to create config file path");
 
         // Create auth file
-        let mock_auth_file = AuthFile {
-            tokens: HashMap::from([("mock-token".to_owned(), "mock-api".to_owned())]),
-        };
+        let mut mock_auth_file = AuthFile::new();
+        mock_auth_file.insert("mock-api".to_owned(), "mock-token".to_owned());
         mock_auth_file.write_to_disk(auth_file_path).unwrap();
 
         let client = MockApiClient::new();
@@ -110,7 +112,7 @@ mod tests {
 
         assert!(result.is_ok());
         let auth_file = result.unwrap();
-        assert_eq!(auth_file.tokens.len(), 1);
+        assert_eq!(auth_file.tokens().len(), 1);
     }
 
     #[tokio::test]
@@ -127,7 +129,7 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(std::fs::try_exists(auth_file_path).is_ok_and(|b| b));
-        assert!(result.unwrap().tokens.is_empty());
+        assert!(result.unwrap().tokens().is_empty());
     }
 
     #[tokio::test]
@@ -158,6 +160,6 @@ mod tests {
         assert!(std::fs::try_exists(auth_file_path).is_ok_and(|b| b));
 
         let auth_file = result.unwrap();
-        assert_eq!(auth_file.tokens.len(), 1);
+        assert_eq!(auth_file.tokens().len(), 1);
     }
 }

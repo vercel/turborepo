@@ -9,7 +9,7 @@ use crate::Error;
 #[derive(Serialize, Deserialize, Debug, Default)]
 /// AuthFile contains a list of domains, each with a token.
 pub struct AuthFile {
-    pub tokens: HashMap<String, String>,
+    tokens: HashMap<String, String>,
 }
 
 impl AuthFile {
@@ -47,8 +47,23 @@ impl AuthFile {
     /// Adds a token to the auth file. Attempts to match exclusively on `api`.
     /// If the api matches a token already in the file, it will be updated with
     /// the new token.
-    pub fn add_or_update_token(&mut self, api: String, token: String) {
-        self.tokens.insert(api, token.to_string());
+    pub fn insert(&mut self, api: String, token: String) -> Option<String> {
+        self.tokens.insert(api, token)
+    }
+
+    /// Removes a token from the auth file via the api as a key.
+    pub fn remove(&mut self, api: &str) {
+        self.tokens.remove(api);
+    }
+
+    /// Returns a reference to the tokens in the auth file.
+    pub fn tokens(&self) -> &HashMap<String, String> {
+        &self.tokens
+    }
+
+    /// Returns a mutable reference to the tokens in the auth file.
+    pub fn tokens_mut(&mut self) -> &mut HashMap<String, String> {
+        &mut self.tokens
     }
 }
 
@@ -133,7 +148,7 @@ mod tests {
 
         // Add a token to auth file
         let mut auth_file = AuthFile::default();
-        auth_file.add_or_update_token("test-api".to_string(), "test-token".to_string());
+        auth_file.insert("test-api".to_string(), "test-token".to_string());
 
         // Test: Write the auth file to disk and then read it back.
         auth_file.write_to_disk(absolute_auth_path).unwrap();
@@ -151,7 +166,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_token() {
         let mut auth_file = AuthFile::default();
-        auth_file.add_or_update_token("test-api".to_string(), "test-token".to_string());
+        auth_file.insert("test-api".to_string(), "test-token".to_string());
 
         let token = auth_file.get_token("test-api");
         assert!(token.is_some());
@@ -166,8 +181,8 @@ mod tests {
 
         // Test: Add a token to the auth file, then add same key with a different value
         // to ensure update happens.
-        auth_file.add_or_update_token("test-api".to_string(), "test-token".to_string());
-        auth_file.add_or_update_token("test-api".to_string(), "some new token".to_string());
+        auth_file.insert("test-api".to_string(), "test-token".to_string());
+        auth_file.insert("test-api".to_string(), "some new token".to_string());
 
         assert_eq!(auth_file.tokens.len(), 1);
         let mut token = auth_file.get_token("test-api");
@@ -176,7 +191,7 @@ mod tests {
         let mut t = token.unwrap();
         assert!(t.token == *"some new token");
 
-        auth_file.add_or_update_token("some vercel api".to_string(), "a second token".to_string());
+        auth_file.insert("some vercel api".to_string(), "a second token".to_string());
         assert_eq!(auth_file.tokens.len(), 2);
 
         token = auth_file.get_token("some vercel api");

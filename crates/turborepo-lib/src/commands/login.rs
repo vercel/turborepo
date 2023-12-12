@@ -50,7 +50,7 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Err
     let auth_token =
         auth_sso_login(&api_client, &ui, &login_url_config, sso_team, &login_server).await?;
 
-    auth_file.add_or_update_token(api_client.base_url().to_owned(), auth_token.token);
+    auth_file.insert(api_client.base_url().to_owned(), auth_token.token);
     auth_file.write_to_disk(&global_auth_path)?;
 
     Ok(())
@@ -98,7 +98,7 @@ pub async fn login(base: &mut CommandBase) -> Result<(), Error> {
 
     let auth_token = auth_login(&api_client, &ui, &login_url_config, &login_server).await?;
 
-    auth_file.add_or_update_token(api_client.base_url().to_owned(), auth_token.token);
+    auth_file.insert(api_client.base_url().to_owned(), auth_token.token);
     auth_file.write_to_disk(&global_auth_path)?;
 
     Ok(())
@@ -169,7 +169,7 @@ mod tests {
                 .unwrap();
         // Mock out the existing file.
         let mut mock_auth_file = AuthFile::default();
-        mock_auth_file.add_or_update_token("mock-api".to_string(), "mock-token".to_string());
+        mock_auth_file.insert("mock-api".to_string(), "mock-token".to_string());
         mock_auth_file.write_to_disk(&auth_file_path).unwrap();
 
         let mock_api_client = MockApiClient::new();
@@ -223,6 +223,6 @@ mod tests {
 
         api_server.abort();
 
-        assert_eq!(found_auth_file.tokens.len(), 1);
+        assert_eq!(found_auth_file.tokens().len(), 1);
     }
 }
