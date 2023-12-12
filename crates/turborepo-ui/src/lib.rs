@@ -186,13 +186,12 @@ impl UI {
         &self,
         prompt: &str,
         items: &[T],
-    ) -> Result<usize, Error> {
+    ) -> Result<usize, std::io::Error> {
         let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
             .with_prompt(prompt)
             .default(0)
             .items(items)
-            .interact()
-            .unwrap();
+            .interact()?;
         Ok(selection)
     }
 }
