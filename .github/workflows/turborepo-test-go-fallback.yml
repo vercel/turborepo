@@ -1,0 +1,216 @@
+name: Turborepo Test (Go Fallback)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .cargo/**
+      - Cargo.*
+      - Cargo.**
+      - cli/**
+      - crates/turborepo*/**
+      - package.json
+      - pnpm-lock.yaml
+      - rust-toolchain
+      - shim/**
+      - turborepo-tests/helpers/**
+      - turborepo-tests/integration/**
+      - version.txt
+      - xtask/**
+    paths-ignore:
+      - "**.md"
+      - "**.mdx"
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "**.mdx"
+    paths:
+      - .cargo/**
+      - Cargo.*
+      - Cargo.**
+      - cli/**
+      - crates/turborepo*/**
+      - package.json
+      - pnpm-lock.yaml
+      - rust-toolchain
+      - shim/**
+      - turborepo-tests/helpers/**
+      - turborepo-tests/integration/**
+      - version.txt
+      - xtask/**
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  build_turborepo:
+    name: Build Turborepo
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.3
+
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - run: turbo run build --filter=cli --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        env:
+          SCCACHE_BUCKET: turborepo-sccache
+          SCCACHE_REGION: us-east-2
+          # Only use sccache if we're in the Vercel repo.
+          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+          CARGO_INCREMENTAL: 0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          EXPERIMENTAL_RUST_CODEPATH: true
+
+      - name: Run sccache stat for check
+        shell: bash
+        run: ${SCCACHE_PATH} --show-stats
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+
+  go_lint:
+    name: Go linting
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.turborepo_go_lint == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Setup Protos
+        run: cd cli && make compile-protos
+
+      - name: Build turborepo-ffi
+        run: cd cli && make turborepo-ffi-install
+
+      - name: golangci Linting
+        uses: golangci/golangci-lint-action@v3
+        with:
+          # More config options documented here: https://github.com/golangci/golangci-lint-action
+          version: latest
+          working-directory: cli
+          args: --new-from-rev=${{ github.event.pull_request.base.sha || 'HEAD~1' }}
+
+  go_unit:
+    name: Go Unit Tests
+    needs: determine_jobs
+    if: needs.determine_jobs.outputs.turborepo_go_unit == 'true'
+    timeout-minutes: 45
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - run: turbo run test --filter=cli --color
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
+
+  integration_tests:
+    name: Turborepo Integration Tests (Go Fallback)
+    needs: [build_turborepo]
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
+    steps:
+      # On Windows, set autocrlf to input so that when the repo is cloned down
+      # the fixtures retain their line endings and don't get updated to CRLF.
+      # We want this because this repo also contains the fixtures for our test cases
+      # and these fixtures have files that need stable file hashes. If we let git update
+      # the line endings on checkout, the file hashes will change.
+      # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
+      - name: set crlf
+        if: matrix.os.name == 'windows'
+        shell: bash
+        run: git config --global core.autocrlf input
+
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-turborepo-environment
+        with:
+          windows: ${{ matrix.os.name == 'windows' }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v1
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
+
+      - name: Cache Prysk
+        id: cache-prysk
+        uses: actions/cache@v3
+        with:
+          path: cli/.cram_env
+          key: prysk-venv-${{ matrix.os.name }}
+
+      - name: Integration Tests
+        run: turbo run test:go-fallback --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
