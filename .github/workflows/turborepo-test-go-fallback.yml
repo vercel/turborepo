@@ -96,8 +96,6 @@ jobs:
       - "linux"
       - "x64"
       - "metal"
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.turborepo_go_lint == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -128,9 +126,6 @@ jobs:
 
   go_unit:
     name: Go Unit Tests
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.turborepo_go_unit == 'true'
-    timeout-minutes: 45
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
