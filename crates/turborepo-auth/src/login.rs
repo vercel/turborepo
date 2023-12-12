@@ -71,6 +71,8 @@ fn build_login_url(config: &str) -> Result<Url, Error> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::Ordering;
+
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
@@ -100,6 +102,8 @@ mod tests {
             got_token.as_deref(),
             Some(turborepo_vercel_api_mock::EXPECTED_TOKEN)
         );
+        // Make sure we hit the login server only once
+        assert_eq!(login_server.hits.load(Ordering::Relaxed), 1);
 
         api_server.abort();
     }
