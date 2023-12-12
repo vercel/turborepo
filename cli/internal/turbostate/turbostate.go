@@ -43,6 +43,7 @@ type RunPayload struct {
 	Ignore                   []string `json:"ignore"`
 	IncludeDependencies      bool     `json:"include_dependencies"`
 	NoCache                  bool     `json:"no_cache"`
+	Daemon                   bool     `json:"daemon"`
 	NoDaemon                 bool     `json:"no_daemon"`
 	NoDeps                   bool     `json:"no_deps"`
 	Only                     bool     `json:"only"`
