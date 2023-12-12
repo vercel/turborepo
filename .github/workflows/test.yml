@@ -361,8 +361,8 @@ jobs:
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
-  turborepo_integration_rust:
-    name: Turborepo Integration Tests (Rust Codepath)
+  turborepo_integration_go_fallback:
+    name: Turborepo Integration Tests (Go Fallback)
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
     runs-on: ${{ matrix.os.runner }}
@@ -409,7 +409,7 @@ jobs:
           key: prysk-venv-${{ matrix.os.name }}
 
       - name: Integration Tests
-        run: turbo run test:rust-codepath --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        run: turbo run test:go-fallback --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
@@ -1047,7 +1047,7 @@ jobs:
       - go_unit
       - turborepo_examples
       - turborepo_integration
-      - turborepo_integration_rust
+      - turborepo_integration_go_fallback
       - js_packages
       - rust_lint
       - turborepo_rust_check
@@ -1086,7 +1086,7 @@ jobs:
           subjob ${{needs.go_unit.result}} "Go unit tests"
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
-          subjob ${{needs.turborepo_integration_rust.result}} "Turborepo integration tests (Rust codepath)"
+          subjob ${{needs.turborepo_integration_go_fallback.result}} "Turborepo integration tests (Go Fallback)"
           subjob ${{needs.js_packages.result}} "JS Package tests"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
@@ -1201,7 +1201,7 @@ jobs:
       - go_unit
       - turborepo_examples
       - turborepo_integration
-      - turborepo_integration_rust
+      - turborepo_integration_go_fallback
       - rust_lint
       - turborepo_rust_check
       - turborepo_rust_clippy
@@ -1242,7 +1242,7 @@ jobs:
           subjob ${{needs.go_unit.result}} "Go unit tests"
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
-          subjob ${{needs.turborepo_integration_rust.result}} "Turborepo integration tests (Rust codepath)"
+          subjob ${{needs.turborepo_integration_go_fallback.result}} "Turborepo integration tests (Go Fallback)"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
           subjob ${{needs.turborepo_rust_clippy.result}} "Turborepo Rust clippy"
