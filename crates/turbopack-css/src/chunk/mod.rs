@@ -466,10 +466,6 @@ impl ChunkType for CssChunkType {
                     else {
                         bail!("Chunk item is not an css chunk item but reporting chunk type css");
                     };
-                    // println!(
-                    //     "css chunk item {}",
-                    //     chunk_item.asset_ident().await?.path.await?.path,
-                    // );
                     // CSS doesn't need to care about async_info, so we can discard it
                     Ok(chunk_item)
                 })
