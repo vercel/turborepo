@@ -48,7 +48,7 @@ pub async fn read_or_create_auth_file(
 ) -> Result<AuthFile, Error> {
     if auth_file_path.try_exists()? {
         let content = auth_file_path
-            .read_existing_to_string_or(Ok("{}"))
+            .read_to_string()
             .map_err(|e| Error::FailedToReadAuthFile {
                 source: e,
                 path: auth_file_path.to_owned(),
@@ -61,12 +61,13 @@ pub async fn read_or_create_auth_file(
         }
         return Ok(auth_file);
     } else if config_file_path.try_exists()? {
-        let content = config_file_path
-            .read_existing_to_string_or(Ok("{}"))
-            .map_err(|e| Error::FailedToReadConfigFile {
-                source: e,
-                path: config_file_path.to_owned(),
-            })?;
+        let content =
+            config_file_path
+                .read_to_string()
+                .map_err(|e| Error::FailedToReadConfigFile {
+                    source: e,
+                    path: config_file_path.to_owned(),
+                })?;
         let config_token: ConfigToken = serde_json::from_str(&content)
             .map_err(|e| Error::FailedToDeserializeConfigToken { source: e })?;
 
