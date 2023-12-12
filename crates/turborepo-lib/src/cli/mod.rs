@@ -497,7 +497,10 @@ pub enum GenerateCommand {
 }
 
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
-#[command(group = ArgGroup::new("daemon-group").multiple(false).required(false))]
+#[command(groups = [
+    ArgGroup::new("daemon-group").multiple(false).required(false),
+    ArgGroup::new("scope-filter-group").multiple(true).required(false),
+])]
 pub struct RunArgs {
     /// Override the filesystem cache directory.
     #[clap(long)]
@@ -549,31 +552,39 @@ pub struct RunArgs {
     /// entry points. The syntax mirrors pnpm's syntax, and
     /// additional documentation and examples can be found in
     /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
-    #[clap(short = 'F', long)]
+    #[clap(short = 'F', long, group = "scope-filter-group")]
     pub filter: Vec<String>,
 
-    /// Specify package(s) to act as entry
+    /// DEPRECATED: Specify package(s) to act as entry
     /// points for task execution. Supports globs.
-    #[clap(long)]
+    #[clap(long, group = "scope-filter-group")]
     pub scope: Vec<String>,
 
+    //  ignore filters out files from scope and filter, so we require it here
+    // -----------------------
     /// Files to ignore when calculating changed files from '--filter'.
     /// Supports globs.
-    #[clap(long)]
+    #[clap(long, requires = "scope-filter-group")]
     pub ignore: Vec<String>,
 
-    /// Limit/Set scope to changed packages
+    //  since only works with scope, so we require it here
+    // -----------------------
+    /// DEPRECATED: Limit/Set scope to changed packages
     /// since a mergebase. This uses the git diff ${target_branch}...
     /// mechanism to identify which packages have changed.
-    #[clap(long)]
+    #[clap(long, requires = "scope")]
     pub since: Option<String>,
 
-    /// Include the dependencies of tasks in execution.
-    #[clap(long)]
+    //  include_dependencies only works with scope, so we require it here
+    // -----------------------
+    /// DEPRECATED: Include the dependencies of tasks in execution.
+    #[clap(long, requires = "scope")]
     pub include_dependencies: bool,
 
-    /// Exclude dependent task consumers from execution.
-    #[clap(long)]
+    //  no_deps only works with scope, so we require it here
+    // -----------------------
+    /// DEPRECATED: Exclude dependent task consumers from execution.
+    #[clap(long, requires = "scope")]
     pub no_deps: bool,
 
     /// Avoid saving task results to the cache. Useful for development/watch
@@ -1400,37 +1411,43 @@ mod test {
         }
 	)]
     #[test_case::test_case(
-		&["turbo", "run", "build", "--ignore", "foo.js"],
+		&["turbo", "run", "build", "--filter", "[main]", "--ignore", "foo.js"],
         Args {
             command: Some(Command::Run(Box::new(RunArgs {
                 tasks: vec!["build".to_string()],
                 ignore: vec!["foo.js".to_string()],
+                filter: vec![String::from("[main]")],
                 ..get_default_run_args()
             }))),
             ..Args::default()
-        }
+        } ;
+        "single ignore"
 	)]
     #[test_case::test_case(
-		&["turbo", "run", "build", "--ignore", "foo.js", "--ignore", "bar.js"],
+		&["turbo", "run", "build", "--filter", "[main]", "--ignore", "foo.js", "--ignore", "bar.js"],
         Args {
             command: Some(Command::Run(Box::new(RunArgs {
                 tasks: vec!["build".to_string()],
                 ignore: vec!["foo.js".to_string(), "bar.js".to_string()],
+                filter: vec![String::from("[main]")],
                 ..get_default_run_args()
             }))),
             ..Args::default()
-        }
+        } ;
+        "multiple ignores"
 	)]
     #[test_case::test_case(
-		&["turbo", "run", "build", "--include-dependencies"],
+		&["turbo", "run", "build", "--scope", "test", "--include-dependencies"],
         Args {
             command: Some(Command::Run(Box::new(RunArgs {
                 tasks: vec!["build".to_string()],
                 include_dependencies: true,
+                scope: vec!["test".to_string()],
                 ..get_default_run_args()
             }))),
             ..Args::default()
-        }
+        } ;
+        "include dependencies"
 	)]
     #[test_case::test_case(
 		&["turbo", "run", "build", "--no-cache"],
@@ -1466,15 +1483,17 @@ mod test {
         }
 	)]
     #[test_case::test_case(
-		&["turbo", "run", "build", "--no-deps"],
+		&["turbo", "run", "build", "--scope", "test", "--no-deps"],
         Args {
             command: Some(Command::Run(Box::new(RunArgs {
                 tasks: vec!["build".to_string()],
+                scope: vec!["test".to_string()],
                 no_deps: true,
                 ..get_default_run_args()
             }))),
             ..Args::default()
-        }
+        } ;
+        "no deps"
 	)]
     #[test_case::test_case(
 		&["turbo", "run", "build", "--output-logs", "full"],
@@ -1658,15 +1677,17 @@ mod test {
         }
 	)]
     #[test_case::test_case(
-		&["turbo", "run", "build", "--since", "foo"],
+		&["turbo", "run", "build", "--scope", "test", "--since", "foo"],
         Args {
             command: Some(Command::Run(Box::new(RunArgs {
                 tasks: vec!["build".to_string()],
+                scope: vec!["test".to_string()],
                 since: Some("foo".to_string()),
                 ..get_default_run_args()
             }))),
             ..Args::default()
-        }
+        } ;
+        "scope and since"
 	)]
     #[test_case::test_case(
 		&["turbo", "build"],
@@ -1705,6 +1726,26 @@ mod test {
         &["turbo", "run", "build", "--daemon", "--no-daemon"],
         "cannot be used with '--no-daemon'" ;
         "daemon and no-daemon at the same time"
+    )]
+    #[test_case::test_case(
+        &["turbo", "run", "build", "--ignore", "foo/**"],
+        "the following required arguments were not provided" ;
+        "ignore without filter or scope"
+    )]
+    #[test_case::test_case(
+        &["turbo", "run", "build", "--since", "foo"],
+        "the following required arguments were not provided" ;
+        "since without filter or scope"
+    )]
+    #[test_case::test_case(
+        &["turbo", "run", "build", "--include-dependencies"],
+        "the following required arguments were not provided" ;
+        "include-dependencies without filter or scope"
+    )]
+    #[test_case::test_case(
+        &["turbo", "run", "build", "--no-deps"],
+        "the following required arguments were not provided" ;
+        "no-deps without filter or scope"
     )]
     fn test_parse_run_failures(args: &[&str], expected: &str) {
         assert_matches!(
