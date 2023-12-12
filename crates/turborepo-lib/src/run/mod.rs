@@ -192,30 +192,34 @@ impl<'a> Run<'a> {
 
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
 
-        let daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
-            debug!("skipping turbod since we appear to be in a non-interactive context");
-            None
-        } else if !opts.run_opts.no_daemon {
-            let connector = DaemonConnector {
-                can_start_server: true,
-                can_kill_server: true,
-                pid_file: self.base.daemon_file_root().join_component("turbod.pid"),
-                sock_file: self.base.daemon_file_root().join_component("turbod.sock"),
-            };
+        let daemon = match (is_ci_or_not_tty, opts.run_opts.daemon) {
+            (true, None) => {
+                debug!("skipping turbod since we appear to be in a non-interactive context");
+                None
+            }
+            (_, Some(true)) | (false, None) => {
+                let connector = DaemonConnector {
+                    can_start_server: true,
+                    can_kill_server: true,
+                    pid_file: self.base.daemon_file_root().join_component("turbod.pid"),
+                    sock_file: self.base.daemon_file_root().join_component("turbod.sock"),
+                };
 
-            match connector.connect().await {
-                Ok(client) => {
-                    debug!("running in daemon mode");
-                    Some(client)
-                }
-                Err(e) => {
-                    debug!("failed to connect to daemon {e}");
-                    None
+                match connector.connect().await {
+                    Ok(client) => {
+                        debug!("running in daemon mode");
+                        Some(client)
+                    }
+                    Err(e) => {
+                        debug!("failed to connect to daemon {e}");
+                        None
+                    }
                 }
             }
-        } else {
-            // We are opted out of using the daemon
-            None
+            (_, Some(false)) => {
+                debug!("skipping turbod since --no-daemon was passed");
+                None
+            }
         };
 
         let mut pkg_dep_graph =

@@ -71,8 +71,8 @@ Make sure exit code is 2 when no args are passed
             Include the dependencies of tasks in execution
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
-        --no-daemon
-            Run without using turbo's daemon process
+        --[no-]daemon
+            Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
         --no-deps
             Exclude dependent task consumers from execution
         --output-logs <OUTPUT_LOGS>
