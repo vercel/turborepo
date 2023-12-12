@@ -47,7 +47,7 @@ use turbopack_core::{
     output::OutputAsset,
     raw_module::RawModule,
     reference_type::{
-        self, CssReferenceSubType, EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType,
+        CssReferenceSubType, EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType,
     },
     resolve::{
         options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve,

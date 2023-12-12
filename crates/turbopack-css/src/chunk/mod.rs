@@ -4,10 +4,7 @@ pub mod source_map;
 use std::{collections::HashSet, fmt::Write};
 
 use anyhow::{bail, Result};
-use indexmap::IndexSet;
-use turbo_tasks::{
-    debug::ValueDebug, trace::TraceRawVcs, TryJoinIterExt, Value, ValueDefault, ValueToString, Vc,
-};
+use turbo_tasks::{TryJoinIterExt, Value, ValueDefault, ValueToString, Vc};
 use turbo_tasks_fs::{rope::Rope, File, FileSystem};
 use turbopack_core::{
     asset::{Asset, AssetContent},

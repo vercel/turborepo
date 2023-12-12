@@ -1,17 +1,7 @@
 use anyhow::Result;
 use lightningcss::{
     media_query::MediaList,
-    printer::Printer,
-    properties::custom::TokenList,
-    rules::{
-        import::{self, ImportRule},
-        layer::{LayerBlockRule, LayerName},
-        media::MediaRule,
-        supports::{SupportsCondition, SupportsRule},
-        unknown::UnknownAtRule,
-        CssRule, CssRuleList, Location,
-    },
-    stylesheet::PrinterOptions,
+    rules::{import::ImportRule, layer::LayerName, supports::SupportsCondition},
     traits::ToCss,
 };
 use swc_core::{
@@ -21,7 +11,7 @@ use swc_core::{
         CodeGenerator, CodegenConfig, Emit,
     },
 };
-use turbo_tasks::{debug::ValueDebug, Value, ValueToString, Vc};
+use turbo_tasks::{Value, ValueToString, Vc};
 use turbopack_core::{
     chunk::{ChunkableModuleReference, ChunkingContext},
     issue::IssueSource,
