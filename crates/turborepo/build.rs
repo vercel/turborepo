@@ -8,7 +8,7 @@ fn main() {
 
     let invocation = std::env::var("RUSTC_WRAPPER").unwrap_or_default();
     if !is_ci_release && !invocation.ends_with("rust-analyzer") {
-        build_local_go_binary(profile);
+        // build_local_go_binary(profile);
     }
 }
 

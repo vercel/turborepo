@@ -214,6 +214,10 @@ impl<'a> DaemonRootHasher<'a> {
         self.daemon_file_root().join_component("turbod.pid")
     }
 
+    pub fn lsp_path(&self) -> AbsoluteSystemPathBuf {
+        self.daemon_file_root().join_component("lsp.pid")
+    }
+
     fn repo_hash(&self) -> String {
         let mut hasher = Sha256::new();
         hasher.update(self.0.as_bytes());

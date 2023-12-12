@@ -23,13 +23,15 @@ use turborepo_repository::{
     package_json::PackageJson,
 };
 
-#[derive(Debug)]
 pub struct Backend {
     client: Client,
     repo_root: Arc<Mutex<Option<AbsoluteSystemPathBuf>>>,
     files: Mutex<HashMap<Url, crop::Rope>>,
     initializer: Sender<Option<DaemonClient<DaemonConnector>>>,
     daemon: Receiver<Option<DaemonClient<DaemonConnector>>>,
+
+    // this is only used for turbo optimize
+    pidlock: Mutex<Option<pidlock::Pidlock>>,
 }
 
 #[tower_lsp::async_trait]
@@ -94,6 +96,23 @@ impl LanguageServer for Backend {
             self.initializer
                 .send(Some(daemon))
                 .expect("there is a receiver");
+
+            let mut lock = pidlock::Pidlock::new(hasher.lsp_path().as_std_path().to_owned());
+
+            if let Err(e) = lock.acquire() {
+                self.client
+                    .log_message(
+                        MessageType::ERROR,
+                        format!(
+                            "failed to acquire pidlock, is another lsp instance running? - {}",
+                            e
+                        ),
+                    )
+                    .await;
+                return Err(Error::internal_error());
+            }
+
+            *self.pidlock.lock().expect("only fails if poisoned") = Some(lock);
         }
 
         Ok(InitializeResult {
@@ -558,6 +577,8 @@ impl Backend {
             files: Mutex::new(HashMap::new()),
             initializer: rx,
             daemon: tx,
+
+            pidlock: Mutex::new(None),
         }
     }
 
