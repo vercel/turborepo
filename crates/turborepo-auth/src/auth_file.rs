@@ -84,22 +84,22 @@ impl AuthToken {
             &self.token[self.token.len() - 3..]
         )
     }
-    pub fn friendly_api_display(&self) -> String {
+    pub fn friendly_api_display(&self) -> &str {
         if self.api.contains("vercel.com") {
             // We're Vercel, let's make it look nice ;)
-            return "▲ Vercel Remote Cache".to_owned();
+            "▲ Vercel Remote Cache"
+        } else {
+            &self.api
         }
-        self.api.clone()
     }
 }
 
 /// Converts our old style of token held in `config.json` into the new schema.
-pub async fn convert_to_auth_token(token: &str, client: &impl Client) -> Result<AuthToken, Error> {
-    let auth_token = AuthToken {
+pub fn convert_to_auth_token(token: &str, client: &impl Client) -> AuthToken {
+    AuthToken {
         token: token.to_string(),
         api: client.base_url().to_owned(),
-    };
-    Ok(auth_token)
+    }
 }
 
 #[cfg(test)]
@@ -122,9 +122,7 @@ mod tests {
         fs::create_dir_all(temp_dir.path().join(TURBOREPO_CONFIG_DIR)).unwrap();
 
         // Test: Call the convert_to_auth_file function and check the result
-        let result = convert_to_auth_token(token, &mock_client).await;
-        assert!(result.is_ok());
-        let auth_token = result.unwrap();
+        let auth_token = convert_to_auth_token(token, &mock_client);
 
         // Check that the AuthFile contains the correct data
         assert_eq!(auth_token.token, "test-token".to_string());

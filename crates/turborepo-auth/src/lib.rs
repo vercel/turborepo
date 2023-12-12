@@ -70,7 +70,7 @@ pub async fn read_or_create_auth_file(
         let config_token: ConfigToken = serde_json::from_str(&content)
             .map_err(|e| Error::FailedToDeserializeConfigToken { source: e })?;
 
-        let auth_token = convert_to_auth_token(&config_token.token, client).await?;
+        let auth_token = convert_to_auth_token(&config_token.token, client);
 
         let mut auth_file = AuthFile::new();
         auth_file.insert(client.base_url().to_owned(), auth_token.token);
