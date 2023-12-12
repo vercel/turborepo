@@ -266,13 +266,6 @@ func (r *run) run(ctx gocontext.Context, targets []string, executionState *turbo
 
 	if globalHash, err := calculateGlobalHashFromHashableInputs(globalHashInputs); err == nil {
 		r.base.Logger.Debug("global hash", "value", globalHash)
-		if executionState.GlobalHash != nil {
-			if *executionState.GlobalHash != globalHash {
-				return fmt.Errorf("global hash differs between Rust and Go: rust %v go %v", executionState.GlobalHash, globalHash)
-			}
-			r.base.Logger.Debug("global hash matches between Rust and Go")
-		}
-
 		g.GlobalHash = globalHash
 	} else {
 		return fmt.Errorf("failed to calculate global hash: %v", err)
