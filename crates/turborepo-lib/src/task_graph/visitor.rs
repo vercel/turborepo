@@ -11,6 +11,7 @@ use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::{
+    io::AsyncWriteExt,
     process::Command,
     sync::{mpsc, oneshot},
 };
@@ -135,6 +136,33 @@ impl<'a> Visitor<'a> {
             tokio::spawn(engine.execute(ExecutionOptions::new(false, concurrency), node_sender))
         };
         let mut tasks = FuturesUnordered::new();
+
+        tasks.push(tokio::spawn(async {
+            let mut stdin_manager = Command::new("while true; do done");
+
+            stdin_manager.stdin(Stdio::piped());
+
+            let process = match self
+                .manager
+                .spawn(stdin_manager, Duration::from_millis(500))
+            {
+                Some(Ok(child)) => Some(child),
+                Some(Err(e)) => None,
+                None => None,
+            };
+
+            loop {
+                if let Some(mut stdin) = process.unwrap().stdin.take() {
+                    stdin
+                        .write_all(b"Input to child process\n")
+                        .await
+                        .expect("Failed to write to stdin");
+                }
+
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        }));
+
         let errors = Arc::new(Mutex::new(Vec::new()));
 
         let span = Span::current();
@@ -790,11 +818,9 @@ impl ExecContext {
             }
         };
 
-        // Bind to a local variable so it will last the lifetime of the function
-        let mut _stdin_lock;
-        if self.expect_stdin {
-            _stdin_lock = self.stdin_lock.lock().expect("lock poisoned");
-        }
+        let stdin_mutex_clone = self.stdin_lock.clone();
+        debug!("acquiring stdin lock for {}", self.task_id);
+        let _guard = stdin_mutex_clone.lock();
 
         let mut process = match self.manager.spawn(cmd, Duration::from_millis(500)) {
             Some(Ok(child)) => child,
