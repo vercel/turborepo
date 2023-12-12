@@ -90,16 +90,14 @@ jobs:
               - "linux"
               - "x64"
               - "metal"
-          - name: macos
-            runner: macos-latest
-          - name: windows
-            runner: windows-latest
+          - runner: macos-latest
+          - runner: windows-latest
 
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
+          windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: turbo run test --filter=cli --color
