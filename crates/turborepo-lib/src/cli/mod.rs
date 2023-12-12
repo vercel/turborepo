@@ -522,12 +522,6 @@ pub struct RunArgs {
     /// Run turbo in single-package mode
     #[clap(long)]
     pub single_package: bool,
-    /// Use the given selector to specify package(s) to act as
-    /// entry points. The syntax mirrors pnpm's syntax, and
-    /// additional documentation and examples can be found in
-    /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
-    #[clap(short = 'F', long, action = ArgAction::Append)]
-    pub filter: Vec<String>,
     /// Ignore the existing cache (to force execution)
     #[clap(long, env = "TURBO_FORCE", default_missing_value = "true")]
     pub force: Option<Option<bool>>,
@@ -550,13 +544,38 @@ pub struct RunArgs {
     /// "globalPassThroughEnv" in turbo.json. (default infer)
     #[clap(long = "env-mode", default_value = "infer", num_args = 0..=1, default_missing_value = "infer")]
     pub env_mode: EnvMode,
-    /// Files to ignore when calculating changed files (i.e. --since).
+
+    /// Use the given selector to specify package(s) to act as
+    /// entry points. The syntax mirrors pnpm's syntax, and
+    /// additional documentation and examples can be found in
+    /// turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
+    #[clap(short = 'F', long)]
+    pub filter: Vec<String>,
+
+    /// Specify package(s) to act as entry
+    /// points for task execution. Supports globs.
+    #[clap(long)]
+    pub scope: Vec<String>,
+
+    /// Files to ignore when calculating changed files from '--filter'.
     /// Supports globs.
     #[clap(long)]
     pub ignore: Vec<String>,
+
+    /// Limit/Set scope to changed packages
+    /// since a mergebase. This uses the git diff ${target_branch}...
+    /// mechanism to identify which packages have changed.
+    #[clap(long)]
+    pub since: Option<String>,
+
     /// Include the dependencies of tasks in execution.
     #[clap(long)]
     pub include_dependencies: bool,
+
+    /// Exclude dependent task consumers from execution.
+    #[clap(long)]
+    pub no_deps: bool,
+
     /// Avoid saving task results to the cache. Useful for development/watch
     /// tasks.
     #[clap(long)]
@@ -575,9 +594,6 @@ pub struct RunArgs {
     #[clap(long, group = "daemon-group", hide = true)]
     no_daemon: bool,
 
-    /// Exclude dependent task consumers from execution.
-    #[clap(long)]
-    pub no_deps: bool,
     /// Set type of process output logging. Use "full" to show
     /// all output. Use "hash-only" to show only turbo-computed
     /// task hashes. Use "new-only" to show only new output with
@@ -618,15 +634,6 @@ pub struct RunArgs {
     #[clap(long, env = "TURBO_REMOTE_CACHE_READ_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
     #[serde(skip)]
     pub remote_cache_read_only: bool,
-    /// Specify package(s) to act as entry points for task execution.
-    /// Supports globs.
-    #[clap(long)]
-    pub scope: Vec<String>,
-    /// Limit/Set scope to changed packages since a mergebase.
-    /// This uses the git diff ${target_branch}... mechanism
-    /// to identify which packages have changed.
-    #[clap(long)]
-    pub since: Option<String>,
     /// Generate a summary of the turbo run
     #[clap(long, env = "TURBO_RUN_SUMMARY", default_missing_value = "true")]
     pub summarize: Option<Option<bool>>,
@@ -1694,11 +1701,15 @@ mod test {
             true
         );
     }
-
-    fn test_multi_daemon() {
+    #[test_case::test_case(
+        &["turbo", "run", "build", "--daemon", "--no-daemon"],
+        "cannot be used with '--no-daemon'" ;
+        "daemon and no-daemon at the same time"
+    )]
+    fn test_parse_run_failures(args: &[&str], expected: &str) {
         assert_matches!(
-            Args::try_parse_from(["turbo", "run", "build", "--daemon", "--no-daemon"]),
-            Err(err) if err.to_string().contains("Cannot specify both --daemon and --no-daemon")
+            Args::try_parse_from(args),
+            Err(err) if err.to_string().contains(expected)
         );
     }
 
