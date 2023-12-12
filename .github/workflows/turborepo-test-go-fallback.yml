@@ -42,8 +42,8 @@ permissions:
   pull-requests: read
 
 jobs:
-  go_lint:
-    name: Go linting
+  lint:
+    name: Lint
     runs-on:
       - "self-hosted"
       - "linux"
@@ -69,7 +69,7 @@ jobs:
       - name: Build turborepo-ffi
         run: cd cli && make turborepo-ffi-install
 
-      - name: golangci Linting
+      - name: golangci
         uses: golangci/golangci-lint-action@v3
         with:
           # More config options documented here: https://github.com/golangci/golangci-lint-action
@@ -77,8 +77,8 @@ jobs:
           working-directory: cli
           args: --new-from-rev=${{ github.event.pull_request.base.sha || 'HEAD~1' }}
 
-  go_unit:
-    name: Go Unit Tests
+  unit:
+    name: Unit Tests
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -104,7 +104,7 @@ jobs:
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
-  integration_tests:
+  integration:
     name: Integration
     runs-on: ${{ matrix.os.runner }}
     strategy:
