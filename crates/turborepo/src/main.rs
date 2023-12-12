@@ -70,6 +70,7 @@ fn run_go_binary(execution_state: ExecutionState) -> Result<i32> {
 
 // This function should not expanded. Please add any logic to
 // `turborepo_lib::main` instead
+// Important change
 fn main() -> Result<()> {
     std::panic::set_hook(Box::new(panic_handler));
 
