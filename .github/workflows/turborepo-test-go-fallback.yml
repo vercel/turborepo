@@ -107,7 +107,7 @@ jobs:
           EXPERIMENTAL_RUST_CODEPATH: true
 
   integration_tests:
-    name: Turborepo Integration Tests (Go Fallback)
+    name: Integration Tests (Go Fallback)
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
