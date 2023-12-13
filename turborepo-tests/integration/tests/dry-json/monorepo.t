@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd)
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 # Save JSON to tmp file so we don't need to keep re-running the build
   $ ${TURBO} run build --dry=json > tmpjson.log
@@ -180,5 +179,5 @@ Run again with NODE_ENV set and see the value in the summary. --filter=util work
 
 Tasks that don't exist throw an error
   $ ${TURBO} run doesnotexist --dry=json
-  (Error:| ERROR  run failed:) Could not find the following tasks in project: doesnotexist (re)
+   ERROR  run failed:( error preparing engine:)? Could not find the following tasks in project: doesnotexist (re)
   [1]

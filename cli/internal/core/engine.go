@@ -604,7 +604,7 @@ func (e *Engine) getTaskDefinitionChain(taskID string, taskName string) ([]fs.Bo
 	}
 
 	if len(taskDefinitions) == 0 {
-		return nil, fmt.Errorf("Could not find \"%s\" in root turbo.json or \"%s\" workspace", taskID, taskIDPackage)
+		return nil, fmt.Errorf("Could not find \"%s\" in root turbo.json or \"%s\" in workspace", taskID, taskName)
 	}
 
 	return taskDefinitions, nil

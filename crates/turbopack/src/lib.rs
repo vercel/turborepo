@@ -22,21 +22,25 @@ use std::{
     mem::swap,
 };
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use css::{CssModuleAsset, GlobalCssAsset, ModuleCssAsset};
 use ecmascript::{
-    typescript::resolve::TypescriptTypesAssetReference, EcmascriptModuleAsset,
-    EcmascriptModuleAssetType,
+    chunk::EcmascriptChunkPlaceable,
+    references::{follow_reexports, FollowExportsResult},
+    side_effect_optimization::facade::module::EcmascriptModuleFacadeModule,
+    typescript::resolve::TypescriptTypesAssetReference,
+    EcmascriptModuleAsset, EcmascriptModuleAssetType, TreeShakingMode,
 };
 use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
 use module_options::{ModuleOptions, ModuleOptionsContext, ModuleRuleEffect, ModuleType};
 pub use resolve::resolve_options;
-use turbo_tasks::{Completion, Value, Vc};
+use tracing::Instrument;
+use turbo_tasks::{Completion, Value, ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
     asset::Asset,
     compile_time_info::CompileTimeInfo,
-    context::AssetContext,
+    context::{AssetContext, ProcessResult},
     ident::AssetIdent,
     issue::{Issue, IssueExt, OptionStyledString, StyledString},
     module::Module,
@@ -45,7 +49,8 @@ use turbopack_core::{
     reference_type::{EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType},
     resolve::{
         options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve,
-        AffectingResolvingAssetReference, ModulePart, ModuleResolveResult, ResolveResult,
+        AffectingResolvingAssetReference, ModulePart, ModuleResolveResult, ModuleResolveResultItem,
+        ResolveResult,
     },
     source::Source,
 };
@@ -99,9 +104,10 @@ async fn apply_module_type(
     module_type: Vc<ModuleType>,
     part: Option<Vc<ModulePart>>,
     inner_assets: Option<Vc<InnerAssets>>,
-) -> Result<Vc<Box<dyn Module>>> {
+    runtime_code: bool,
+) -> Result<Vc<ProcessResult>> {
     let module_type = &*module_type.await?;
-    Ok(match module_type {
+    Ok(ProcessResult::Module(match module_type {
         ModuleType::Ecmascript {
             transforms,
             options,
@@ -152,13 +158,63 @@ async fn apply_module_type(
                 builder = builder.with_inner_assets(inner_assets);
             }
 
-            if options.split_into_parts {
-                if let Some(part) = part {
-                    builder = builder.with_part(part);
+            if runtime_code {
+                Vc::upcast(builder.build())
+            } else {
+                match options.tree_shaking_mode {
+                    Some(TreeShakingMode::ModuleFragments) => {
+                        if let Some(part) = part {
+                            Vc::upcast(builder.build_part(part))
+                        } else {
+                            Vc::upcast(builder.build_part(ModulePart::exports()))
+                        }
+                    }
+                    Some(TreeShakingMode::ReexportsOnly) => {
+                        let module = builder.build();
+                        if let Some(part) = part {
+                            match *part.await? {
+                                ModulePart::Evaluation => {
+                                    if *module.is_marked_as_side_effect_free().await? {
+                                        return Ok(ProcessResult::Ignore.cell());
+                                    }
+                                    if *module.get_exports().needs_facade().await? {
+                                        Vc::upcast(EcmascriptModuleFacadeModule::new(
+                                            Vc::upcast(module),
+                                            part,
+                                        ))
+                                    } else {
+                                        Vc::upcast(module)
+                                    }
+                                }
+                                ModulePart::Export(_) => {
+                                    if *module.get_exports().needs_facade().await? {
+                                        apply_reexport_tree_shaking(
+                                            Vc::upcast(EcmascriptModuleFacadeModule::new(
+                                                Vc::upcast(module),
+                                                ModulePart::exports(),
+                                            )),
+                                            part,
+                                        )
+                                    } else {
+                                        apply_reexport_tree_shaking(Vc::upcast(module), part)
+                                    }
+                                }
+                                _ => bail!(
+                                    "Invalid module part for reexports only tree shaking mode"
+                                ),
+                            }
+                        } else if *module.get_exports().needs_facade().await? {
+                            Vc::upcast(EcmascriptModuleFacadeModule::new(
+                                Vc::upcast(module),
+                                ModulePart::facade(),
+                            ))
+                        } else {
+                            Vc::upcast(module)
+                        }
+                    }
+                    None => Vc::upcast(builder.build()),
                 }
             }
-
-            builder.build()
         }
         ModuleType::Json => Vc::upcast(JsonModuleAsset::new(source)),
         ModuleType::Raw => Vc::upcast(RawModule::new(source)),
@@ -198,6 +254,39 @@ async fn apply_module_type(
         )),
         ModuleType::Custom(custom) => custom.create_module(source, module_asset_context, part),
     })
+    .cell())
+}
+
+#[turbo_tasks::function]
+async fn apply_reexport_tree_shaking(
+    module: Vc<Box<dyn EcmascriptChunkPlaceable>>,
+    part: Vc<ModulePart>,
+) -> Result<Vc<Box<dyn Module>>> {
+    if let ModulePart::Export(export) = *part.await? {
+        let export = export.await?;
+        let FollowExportsResult {
+            module: final_module,
+            export_name: new_export,
+            ..
+        } = &*follow_reexports(module, export.clone_value()).await?;
+        let module = if let Some(new_export) = new_export {
+            if *new_export == *export {
+                Vc::upcast(*final_module)
+            } else {
+                Vc::upcast(EcmascriptModuleFacadeModule::new(
+                    *final_module,
+                    ModulePart::renamed_export(new_export.clone(), export.clone_value()),
+                ))
+            }
+        } else {
+            Vc::upcast(EcmascriptModuleFacadeModule::new(
+                *final_module,
+                ModulePart::renamed_namespace(export.clone_value()),
+            ))
+        };
+        return Ok(module);
+    }
+    Ok(Vc::upcast(module))
 }
 
 #[turbo_tasks::value]
@@ -289,7 +378,7 @@ impl ModuleAssetContext {
         self: Vc<Self>,
         source: Vc<Box<dyn Source>>,
         reference_type: Value<ReferenceType>,
-    ) -> Vc<Box<dyn Module>> {
+    ) -> Vc<ProcessResult> {
         process_default(self, source, reference_type, Vec::new())
     }
 }
@@ -300,7 +389,28 @@ async fn process_default(
     source: Vc<Box<dyn Source>>,
     reference_type: Value<ReferenceType>,
     processed_rules: Vec<usize>,
-) -> Result<Vc<Box<dyn Module>>> {
+) -> Result<Vc<ProcessResult>> {
+    let span = tracing::info_span!(
+        "process module",
+        name = *source.ident().to_string().await?,
+        reference_type = display(&*reference_type)
+    );
+    process_default_internal(
+        module_asset_context,
+        source,
+        reference_type,
+        processed_rules,
+    )
+    .instrument(span)
+    .await
+}
+
+async fn process_default_internal(
+    module_asset_context: Vc<ModuleAssetContext>,
+    source: Vc<Box<dyn Source>>,
+    reference_type: Value<ReferenceType>,
+    processed_rules: Vec<usize>,
+) -> Result<Vc<ProcessResult>> {
     let ident = source.ident().resolve().await?;
     let options = ModuleOptions::new(
         ident.path().parent(),
@@ -424,6 +534,7 @@ async fn process_default(
         module_type,
         part,
         inner_assets,
+        matches!(reference_type, ReferenceType::Runtime),
     ))
 }
 
@@ -502,20 +613,17 @@ impl AssetContext for ModuleAssetContext {
                 |source| {
                     let reference_type = reference_type.clone();
                     async move {
-                        if let Some(transition) = transition {
-                            Ok(Vc::upcast(
-                                transition
-                                    .process(source, self, reference_type)
-                                    .resolve()
-                                    .await?,
-                            ))
+                        let process_result = if let Some(transition) = transition {
+                            transition.process(source, self, reference_type)
                         } else {
-                            Ok(Vc::upcast(
-                                self.process_default(source, reference_type)
-                                    .resolve()
-                                    .await?,
-                            ))
-                        }
+                            self.process_default(source, reference_type)
+                        };
+                        Ok(match *process_result.await? {
+                            ProcessResult::Module(m) => {
+                                ModuleResolveResultItem::Module(Vc::upcast(m))
+                            }
+                            ProcessResult::Ignore => ModuleResolveResultItem::Ignore,
+                        })
                     }
                 },
                 |i| async move { Ok(Vc::upcast(AffectingResolvingAssetReference::new(i))) },
@@ -529,7 +637,7 @@ impl AssetContext for ModuleAssetContext {
         self: Vc<Self>,
         asset: Vc<Box<dyn Source>>,
         reference_type: Value<ReferenceType>,
-    ) -> Result<Vc<Box<dyn Module>>> {
+    ) -> Result<Vc<ProcessResult>> {
         let this = self.await?;
         if let Some(transition) = this.transition {
             Ok(transition.process(asset, self, reference_type))

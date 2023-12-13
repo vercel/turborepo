@@ -43,6 +43,7 @@ type RunPayload struct {
 	Ignore                   []string `json:"ignore"`
 	IncludeDependencies      bool     `json:"include_dependencies"`
 	NoCache                  bool     `json:"no_cache"`
+	Daemon                   bool     `json:"daemon"`
 	NoDaemon                 bool     `json:"no_daemon"`
 	NoDeps                   bool     `json:"no_deps"`
 	Only                     bool     `json:"only"`
@@ -103,8 +104,6 @@ type ExecutionState struct {
 	SpacesAPIClientConfig APIClientConfig    `json:"spaces_api_client_config"`
 	PackageManager        string             `json:"package_manager"`
 	CLIArgs               ParsedArgsFromRust `json:"cli_args"`
-	GlobalHash            *string            `json:"global_hash"`
-	TaskHashTracker       *TaskHashTracker   `json:"task_hash_tracker"`
 }
 
 // Config holds the resolved configuration from the combination of all sources.

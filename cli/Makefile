@@ -321,12 +321,12 @@ clean-demo:
 	rm -rf node_modules
 	rm -rf demo
 
-# use target fixture-<some directory under integration_tests/_fixtures> to set up the testbed directory
+# use target fixture-<some directory under turborepo-tests/integration/fixtures> to set up the testbed directory
 .PHONY=fixture-%
 fixture-%:
 	$(eval $@_FIXTURE := $(@:fixture-%=%))
 	@echo "fixture setup $($@_FIXTURE)"
 	rm -rf testbed
 	mkdir -p testbed
-	../turborepo-tests/integration/tests/_helpers/setup_monorepo.sh ./testbed $($@_FIXTURE)
+	../turborepo-tests/helpers/setup_integration_test.sh ./testbed $($@_FIXTURE)
 

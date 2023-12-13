@@ -1,6 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup.sh
-  $ . ${TESTDIR}/../_helpers/setup_monorepo.sh $(pwd) strict_env_vars
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh strict_env_vars
 
 With strict mode
 

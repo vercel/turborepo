@@ -40,6 +40,7 @@ pub enum ServerToClientMessage {
         id: SpanId,
         is_graph: bool,
         start: u64,
+        end: u64,
         args: Vec<(String, String)>,
         path: Vec<String>,
     },
@@ -88,6 +89,7 @@ pub struct ViewRect {
     pub height: u64,
     pub horizontal_pixels: u64,
     pub query: String,
+    pub view_mode: String,
 }
 
 struct ConnectionState {
@@ -130,6 +132,7 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                         height: 1,
                         horizontal_pixels: 1,
                         query: String::new(),
+                        view_mode: "aggregated".to_string(),
                     },
                     last_update_generation: 0,
                 }));
@@ -196,46 +199,77 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                             match message {
                                 ClientToServerMessage::ViewRect { view_rect } => {
                                     state.view_rect = view_rect;
+                                    send_update(
+                                        &mut state,
+                                        true,
+                                        &ready_for_update,
+                                        &update_skipped,
+                                    )?;
                                 }
-                                ClientToServerMessage::ViewMode { id, mode, inherit } => match mode
-                                    .as_str()
-                                {
-                                    "raw-spans" => {
-                                        state.viewer.set_view_mode(
-                                            id,
-                                            Some((ViewMode::RawSpans { sorted: false }, inherit)),
-                                        );
+                                ClientToServerMessage::ViewMode { id, mode, inherit } => {
+                                    match mode.as_str() {
+                                        "raw-spans" => {
+                                            state.viewer.set_view_mode(
+                                                id,
+                                                Some((
+                                                    ViewMode::RawSpans { sorted: false },
+                                                    inherit,
+                                                )),
+                                            );
+                                        }
+                                        "raw-spans-sorted" => {
+                                            state.viewer.set_view_mode(
+                                                id,
+                                                Some((
+                                                    ViewMode::RawSpans { sorted: true },
+                                                    inherit,
+                                                )),
+                                            );
+                                        }
+                                        "aggregated" => {
+                                            state.viewer.set_view_mode(
+                                                id,
+                                                Some((
+                                                    ViewMode::Aggregated { sorted: false },
+                                                    inherit,
+                                                )),
+                                            );
+                                        }
+                                        "aggregated-sorted" => {
+                                            state.viewer.set_view_mode(
+                                                id,
+                                                Some((
+                                                    ViewMode::Aggregated { sorted: true },
+                                                    inherit,
+                                                )),
+                                            );
+                                        }
+                                        _ => {
+                                            bail!("unknown view mode: {}", mode)
+                                        }
                                     }
-                                    "raw-spans-sorted" => {
-                                        state.viewer.set_view_mode(
-                                            id,
-                                            Some((ViewMode::RawSpans { sorted: true }, inherit)),
-                                        );
-                                    }
-                                    "aggregated" => {
-                                        state.viewer.set_view_mode(
-                                            id,
-                                            Some((ViewMode::Aggregated { sorted: false }, inherit)),
-                                        );
-                                    }
-                                    "aggregated-sorted" => {
-                                        state.viewer.set_view_mode(
-                                            id,
-                                            Some((ViewMode::Aggregated { sorted: true }, inherit)),
-                                        );
-                                    }
-                                    _ => {
-                                        bail!("unknown view mode: {}", mode)
-                                    }
-                                },
+                                    send_update(
+                                        &mut state,
+                                        true,
+                                        &ready_for_update,
+                                        &update_skipped,
+                                    )?;
+                                }
                                 ClientToServerMessage::ResetViewMode { id } => {
                                     state.viewer.set_view_mode(id, None);
+                                    send_update(
+                                        &mut state,
+                                        true,
+                                        &ready_for_update,
+                                        &update_skipped,
+                                    )?;
                                 }
                                 ClientToServerMessage::Query { id } => {
                                     let message = if let Some((span, is_graph)) =
                                         state.store.read().span(id)
                                     {
                                         let span_start = span.start();
+                                        let span_end = span.end();
                                         let args = span
                                             .args()
                                             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -251,6 +285,7 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                                             id,
                                             is_graph,
                                             start: span_start,
+                                            end: span_end,
                                             args,
                                             path,
                                         }
@@ -259,12 +294,20 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                                             id,
                                             is_graph: false,
                                             start: 0,
+                                            end: 0,
                                             args: Vec::new(),
                                             path: Vec::new(),
                                         }
                                     };
                                     let message = serde_json::to_string(&message).unwrap();
                                     state.writer.send_message(&OwnedMessage::Text(message))?;
+                                    send_update(
+                                        &mut state,
+                                        true,
+                                        &ready_for_update,
+                                        &update_skipped,
+                                    )?;
+
                                     continue;
                                 }
                                 ClientToServerMessage::Ack => {
@@ -280,7 +323,6 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                                     }
                                 }
                             }
-                            send_update(&mut state, true, &ready_for_update, &update_skipped)?;
                         }
                         OwnedMessage::Binary(_) => {
                             // This doesn't happen

@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Result};
 use serde_json::Value as JsonValue;
-use tracing::Level;
+use tracing::{Instrument, Level};
 use turbo_tasks::{TryJoinIterExt, Value, ValueToString, Vc};
 use turbo_tasks_fs::{
     util::{normalize_path, normalize_request},
@@ -20,11 +20,13 @@ use self::{
         resolve_modules_options, ConditionValue, ImportMapResult, ResolveInPackage,
         ResolveIntoPackage, ResolveModules, ResolveModulesOptions, ResolveOptions,
     },
+    origin::{ResolveOrigin, ResolveOriginExt},
     parse::Request,
     pattern::Pattern,
     remap::{ExportsField, ImportsField},
 };
 use crate::{
+    context::AssetContext,
     file_source::FileSource,
     issue::{resolve::ResolvingIssue, IssueExt, IssueSource},
     module::{Module, Modules, OptionModule},
@@ -341,7 +343,6 @@ impl ModuleResolveResultOption {
 #[derive(Clone, Debug)]
 pub enum ResolveResultItem {
     Source(Vc<Box<dyn Source>>),
-    OriginalReferenceExternal,
     OriginalReferenceTypeExternal(String),
     Ignore,
     Empty,
@@ -499,7 +500,7 @@ impl ResolveResult {
     ) -> Result<ModuleResolveResult>
     where
         A: Fn(Vc<Box<dyn Source>>) -> AF,
-        AF: Future<Output = Result<Vc<Box<dyn Module>>>>,
+        AF: Future<Output = Result<ModuleResolveResultItem>>,
         R: Fn(Vc<Box<dyn Source>>) -> RF,
         RF: Future<Output = Result<Vc<Box<dyn ModuleReference>>>>,
     {
@@ -512,12 +513,7 @@ impl ResolveResult {
                     let asset_fn = &source_fn;
                     async move {
                         Ok(match item {
-                            ResolveResultItem::Source(source) => {
-                                ModuleResolveResultItem::Module(Vc::upcast(asset_fn(source).await?))
-                            }
-                            ResolveResultItem::OriginalReferenceExternal => {
-                                ModuleResolveResultItem::OriginalReferenceExternal
-                            }
+                            ResolveResultItem::Source(source) => asset_fn(source).await?,
                             ResolveResultItem::OriginalReferenceTypeExternal(s) => {
                                 ModuleResolveResultItem::OriginalReferenceTypeExternal(s)
                             }
@@ -550,7 +546,11 @@ impl ResolveResult {
         Ok(
             self.await?
                 .map_module(
-                    |asset| async move { Ok(Vc::upcast(RawModule::new(asset))) },
+                    |asset| async move {
+                        Ok(ModuleResolveResultItem::Module(Vc::upcast(RawModule::new(
+                            asset,
+                        ))))
+                    },
                     |source| async move {
                         Ok(Vc::upcast(AffectingResolvingAssetReference::new(source)))
                     },
@@ -837,9 +837,12 @@ pub async fn find_context_file(
     }
     if refs.is_empty() {
         // Tailcall
-        Ok(find_context_file(lookup_path.parent(), names))
+        Ok(find_context_file(
+            lookup_path.parent().resolve().await?,
+            names,
+        ))
     } else {
-        let parent_result = find_context_file(lookup_path.parent(), names).await?;
+        let parent_result = find_context_file(lookup_path.parent().resolve().await?, names).await?;
         Ok(match &*parent_result {
             FindContextFileResult::Found(p, r) => {
                 refs.extend(r.iter().copied());
@@ -1012,13 +1015,71 @@ pub async fn resolve(
     request: Vc<Request>,
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
-    let raw_result = resolve_internal_inline(lookup_path, request, options)
-        .await?
-        .resolve()
-        .await?;
-    let result =
-        handle_resolve_plugins(lookup_path, reference_type, request, options, raw_result).await?;
-    Ok(result)
+    let span = {
+        let lookup_path = lookup_path.to_string().await?;
+        let request = request.to_string().await?;
+        tracing::info_span!(
+            "resolving",
+            lookup_path = *lookup_path,
+            request = *request,
+            reference_type = display(&*reference_type)
+        )
+    };
+    async {
+        let raw_result = resolve_internal_inline(lookup_path, request, options)
+            .await?
+            .resolve()
+            .await?;
+        let result =
+            handle_resolve_plugins(lookup_path, reference_type, request, options, raw_result)
+                .await?;
+        Ok(result)
+    }
+    .instrument(span)
+    .await
+}
+
+#[turbo_tasks::function]
+pub async fn url_resolve(
+    origin: Vc<Box<dyn ResolveOrigin>>,
+    request: Vc<Request>,
+    reference_type: Value<ReferenceType>,
+    issue_source: Option<Vc<IssueSource>>,
+    issue_severity: Vc<IssueSeverity>,
+) -> Result<Vc<ModuleResolveResult>> {
+    let resolve_options = origin.resolve_options(reference_type.clone());
+    let rel_request = request.as_relative();
+    let rel_result = resolve(
+        origin.origin_path().parent(),
+        reference_type.clone(),
+        rel_request,
+        resolve_options,
+    );
+    let result = if *rel_result.is_unresolveable().await? && rel_request.resolve().await? != request
+    {
+        resolve(
+            origin.origin_path().parent(),
+            reference_type.clone(),
+            request,
+            resolve_options,
+        )
+        .with_affecting_sources(rel_result.await?.get_affecting_sources().clone())
+    } else {
+        rel_result
+    };
+    let result = origin
+        .asset_context()
+        .process_resolve_result(result, reference_type.clone());
+    handle_resolve_error(
+        result,
+        reference_type,
+        origin.origin_path(),
+        request,
+        resolve_options,
+        issue_severity,
+        issue_source,
+    )
+    .await
 }
 
 async fn handle_resolve_plugins(
@@ -1094,7 +1155,14 @@ async fn resolve_internal(
     request: Vc<Request>,
     options: Vc<ResolveOptions>,
 ) -> Result<Vc<ResolveResult>> {
-    resolve_internal_inline(lookup_path, request, options).await
+    let span = {
+        let lookup_path = lookup_path.to_string().await?;
+        let request = request.to_string().await?;
+        tracing::info_span!("resolving", lookup_path = *lookup_path, request = *request)
+    };
+    resolve_internal_inline(lookup_path, request, options)
+        .instrument(span)
+        .await
 }
 
 fn resolve_internal_boxed(
@@ -1984,6 +2052,7 @@ pub async fn handle_resolve_error(
     })
 }
 
+// TODO this should become a TaskInput instead of a Vc
 /// ModulePart represents a part of a module.
 ///
 /// Currently this is used only for ESMs.
@@ -1991,25 +2060,88 @@ pub async fn handle_resolve_error(
 pub enum ModulePart {
     /// Represents the side effects of a module. This part is evaluated even if
     /// all exports are unused.
-    ModuleEvaluation,
+    Evaluation,
     /// Represents an export of a module.
     Export(Vc<String>),
+    /// Represents a renamed export of a module.
+    RenamedExport {
+        original_export: Vc<String>,
+        export: Vc<String>,
+    },
+    /// Represents a namespace object of a module exported as named export.
+    RenamedNamespace { export: Vc<String> },
     /// A pointer to a specific part.
     Internal(u32),
+    /// The local declarations of a module.
+    Locals,
+    /// The whole exports of a module.
+    Exports,
+    /// A facade of the module behaving like the original, but referencing
+    /// internal parts.
+    Facade,
 }
 
 #[turbo_tasks::value_impl]
 impl ModulePart {
     #[turbo_tasks::function]
-    pub fn module_evaluation() -> Vc<Self> {
-        ModulePart::ModuleEvaluation.cell()
+    pub fn evaluation() -> Vc<Self> {
+        ModulePart::Evaluation.cell()
     }
     #[turbo_tasks::function]
     pub fn export(export: String) -> Vc<Self> {
         ModulePart::Export(Vc::cell(export)).cell()
     }
     #[turbo_tasks::function]
+    pub fn renamed_export(original_export: String, export: String) -> Vc<Self> {
+        ModulePart::RenamedExport {
+            original_export: Vc::cell(original_export),
+            export: Vc::cell(export),
+        }
+        .cell()
+    }
+    #[turbo_tasks::function]
+    pub fn renamed_namespace(export: String) -> Vc<Self> {
+        ModulePart::RenamedNamespace {
+            export: Vc::cell(export),
+        }
+        .cell()
+    }
+    #[turbo_tasks::function]
     pub fn internal(id: u32) -> Vc<Self> {
         ModulePart::Internal(id).cell()
+    }
+    #[turbo_tasks::function]
+    pub fn locals() -> Vc<Self> {
+        ModulePart::Locals.cell()
+    }
+    #[turbo_tasks::function]
+    pub fn exports() -> Vc<Self> {
+        ModulePart::Exports.cell()
+    }
+    #[turbo_tasks::function]
+    pub fn facade() -> Vc<Self> {
+        ModulePart::Facade.cell()
+    }
+}
+
+#[turbo_tasks::value_impl]
+impl ValueToString for ModulePart {
+    #[turbo_tasks::function]
+    async fn to_string(&self) -> Result<Vc<String>> {
+        Ok(Vc::cell(match self {
+            ModulePart::Evaluation => "module evaluation".to_string(),
+            ModulePart::Export(export) => format!("export {}", export.await?),
+            ModulePart::RenamedExport {
+                original_export,
+                export,
+            } => format!("export {} as {}", original_export.await?, export.await?),
+            ModulePart::RenamedNamespace { export } => {
+                format!("export * as {}", export.await?)
+            }
+            ModulePart::Internal(id) => format!("internal part {}", id),
+            ModulePart::Locals => "locals".to_string(),
+            ModulePart::Exports => "exports".to_string(),
+            ModulePart::Facade => "facade".to_string(),
+        }))
     }
 }

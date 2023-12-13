@@ -42,4 +42,6 @@ pub enum Error {
     TaskHash(#[from] task_hash::Error),
     #[error(transparent)]
     Visitor(#[from] task_graph::VisitorError),
+    #[error("error registering signal handler: {0}")]
+    SignalHandler(std::io::Error),
 }

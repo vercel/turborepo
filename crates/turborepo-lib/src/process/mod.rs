@@ -146,12 +146,7 @@ mod test {
         cmd
     }
 
-    // windows doesn't support graceful stop
-    const STOPPED_EXIT: Option<ChildExit> = Some(if cfg!(windows) {
-        ChildExit::Killed
-    } else {
-        ChildExit::Finished(None)
-    });
+    const STOPPED_EXIT: Option<ChildExit> = Some(ChildExit::Killed);
 
     #[tokio::test]
     async fn test_basic() {

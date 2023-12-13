@@ -83,6 +83,10 @@ impl ValueToString for AssetIdent {
             s.push(')');
         }
 
+        if let Some(part) = self.part {
+            write!(s, " {{{}}}", part.to_string().await?)?;
+        }
+
         Ok(Vc::cell(s))
     }
 }
@@ -170,6 +174,9 @@ impl AssetIdent {
         context_path: Vc<FileSystemPath>,
         expected_extension: String,
     ) -> Result<Vc<String>> {
+        // TODO(PACK-2140): restrict character set to A–Za–z0–9-_.~'()
+        // to be compatible with all operating systems + URLs.
+
         // For clippy -- This explicit deref is necessary
         let path = &*self.path.await?;
         let mut name = if let Some(inner) = context_path.await?.get_path_to(path) {
@@ -234,16 +241,37 @@ impl AssetIdent {
         if let Some(part) = part {
             4_u8.deterministic_hash(&mut hasher);
             match &*part.await? {
-                ModulePart::ModuleEvaluation => {
+                ModulePart::Evaluation => {
                     1_u8.deterministic_hash(&mut hasher);
                 }
                 ModulePart::Export(export) => {
                     2_u8.deterministic_hash(&mut hasher);
                     export.await?.deterministic_hash(&mut hasher);
                 }
-                ModulePart::Internal(id) => {
+                ModulePart::RenamedExport {
+                    original_export,
+                    export,
+                } => {
                     3_u8.deterministic_hash(&mut hasher);
+                    original_export.await?.deterministic_hash(&mut hasher);
+                    export.await?.deterministic_hash(&mut hasher);
+                }
+                ModulePart::RenamedNamespace { export } => {
+                    4_u8.deterministic_hash(&mut hasher);
+                    export.await?.deterministic_hash(&mut hasher);
+                }
+                ModulePart::Internal(id) => {
+                    5_u8.deterministic_hash(&mut hasher);
                     id.deterministic_hash(&mut hasher);
+                }
+                ModulePart::Locals => {
+                    6_u8.deterministic_hash(&mut hasher);
+                }
+                ModulePart::Exports => {
+                    7_u8.deterministic_hash(&mut hasher);
+                }
+                ModulePart::Facade => {
+                    8_u8.deterministic_hash(&mut hasher);
                 }
             }
 

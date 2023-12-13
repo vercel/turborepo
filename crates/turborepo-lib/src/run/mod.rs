@@ -13,7 +13,7 @@ use std::{
     collections::HashSet,
     io::{IsTerminal, Write},
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
 pub use cache::{RunCache, TaskCache};
@@ -27,7 +27,7 @@ use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::{
-    discovery::{FallbackPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscoveryBuilder},
+    discovery::{LocalPackageDiscoveryBuilder, PackageDiscoveryBuilder},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
 };
@@ -44,14 +44,11 @@ use crate::{
     engine::{Engine, EngineBuilder},
     opts::Opts,
     process::ProcessManager,
-    run::{
-        global_hash::get_global_hash_inputs, package_discovery::DaemonPackageDiscovery,
-        summary::RunTracker,
-    },
+    run::{global_hash::get_global_hash_inputs, summary::RunTracker},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
     task_graph::Visitor,
-    task_hash::{get_external_deps_hash, PackageInputsHashes, TaskHashTrackerState},
+    task_hash::{get_external_deps_hash, PackageInputsHashes},
 };
 
 #[derive(Debug)]
@@ -195,47 +192,47 @@ impl<'a> Run<'a> {
 
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
 
-        let mut daemon = if is_ci_or_not_tty && !opts.run_opts.no_daemon {
-            debug!("skipping turbod since we appear to be in a non-interactive context");
-            None
-        } else if !opts.run_opts.no_daemon {
-            let connector = DaemonConnector {
-                can_start_server: true,
-                can_kill_server: true,
-                pid_file: self.base.daemon_file_root().join_component("turbod.pid"),
-                sock_file: self.base.daemon_file_root().join_component("turbod.sock"),
-            };
+        let daemon = match (is_ci_or_not_tty, opts.run_opts.daemon) {
+            (true, None) => {
+                debug!("skipping turbod since we appear to be in a non-interactive context");
+                None
+            }
+            (_, Some(true)) | (false, None) => {
+                let connector = DaemonConnector {
+                    can_start_server: true,
+                    can_kill_server: true,
+                    pid_file: self.base.daemon_file_root().join_component("turbod.pid"),
+                    sock_file: self.base.daemon_file_root().join_component("turbod.sock"),
+                };
 
-            match connector.connect().await {
-                Ok(client) => {
-                    debug!("running in daemon mode");
-                    Some(client)
-                }
-                Err(e) => {
-                    debug!("failed to connect to daemon {e}");
-                    None
+                match connector.connect().await {
+                    Ok(client) => {
+                        debug!("running in daemon mode");
+                        Some(client)
+                    }
+                    Err(e) => {
+                        debug!("failed to connect to daemon {e}");
+                        None
+                    }
                 }
             }
-        } else {
-            // We are opted out of using the daemon
-            None
+            (_, Some(false)) => {
+                debug!("skipping turbod since --no-daemon was passed");
+                None
+            }
         };
 
         let mut pkg_dep_graph =
             PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
                 .with_single_package_mode(opts.run_opts.single_package)
-                .with_package_discovery(FallbackPackageDiscovery::new(
-                    daemon.as_mut().map(DaemonPackageDiscovery::new),
-                    // TODO: we may never need this fallback, so we could make this a builder
-                    // instead and instantiate it lazily
+                .with_package_discovery(
                     LocalPackageDiscoveryBuilder::new(
                         self.base.repo_root.clone(),
                         None,
                         Some(root_package_json.clone()),
                     )
                     .build()?,
-                    Duration::from_millis(10),
-                ))
+                )
                 .build()
                 .await?;
 
@@ -466,182 +463,6 @@ impl<'a> Run<'a> {
             .await?;
 
         Ok(exit_code)
-    }
-
-    #[tokio::main]
-    #[tracing::instrument(skip(self))]
-    pub async fn get_hashes(&self) -> Result<(String, TaskHashTrackerState), Error> {
-        let started_at = Local::now();
-        let env_at_execution_start = EnvironmentVariableMap::infer();
-
-        let package_json_path = self.base.repo_root.join_component("package.json");
-        let root_package_json = PackageJson::load(&package_json_path)?;
-
-        let opts = self.opts()?;
-
-        let is_single_package = opts.run_opts.single_package;
-
-        let mut pkg_dep_graph =
-            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-                .with_single_package_mode(opts.run_opts.single_package)
-                .build()
-                .await?;
-
-        let root_turbo_json =
-            TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
-
-        let root_workspace = pkg_dep_graph
-            .workspace_info(&WorkspaceName::Root)
-            .expect("must have root workspace");
-
-        let is_monorepo = !opts.run_opts.single_package;
-        let root_external_dependencies_hash =
-            is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
-
-        let mut global_hash_inputs = get_global_hash_inputs(
-            root_external_dependencies_hash.as_deref(),
-            &self.base.repo_root,
-            pkg_dep_graph.package_manager(),
-            pkg_dep_graph.lockfile(),
-            &root_turbo_json.global_deps,
-            &env_at_execution_start,
-            &root_turbo_json.global_env,
-            root_turbo_json.global_pass_through_env.as_deref(),
-            opts.run_opts.env_mode,
-            opts.run_opts.framework_inference,
-            root_turbo_json.global_dot_env.as_deref(),
-        )?;
-
-        let scm = SCM::new(&self.base.repo_root);
-
-        let filtered_pkgs = {
-            let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
-                &opts.scope_opts,
-                &self.base.repo_root,
-                &pkg_dep_graph,
-                &scm,
-            )?;
-
-            if is_all_packages {
-                for target in self.targets() {
-                    let task_name = TaskName::from(target.as_str()).into_root_task();
-
-                    if root_turbo_json.pipeline.contains_key(&task_name) {
-                        filtered_pkgs.insert(WorkspaceName::Root);
-                        break;
-                    }
-                }
-            }
-
-            filtered_pkgs
-        };
-
-        let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
-        let api_auth = self.base.api_auth()?;
-
-        let mut engine = EngineBuilder::new(
-            &self.base.repo_root,
-            &pkg_dep_graph,
-            opts.run_opts.single_package,
-        )
-        .with_root_tasks(root_turbo_json.pipeline.keys().cloned())
-        .with_turbo_jsons(Some(
-            Some((WorkspaceName::Root, root_turbo_json.clone()))
-                .into_iter()
-                .collect(),
-        ))
-        .with_tasks_only(opts.run_opts.only)
-        .with_workspaces(filtered_pkgs.clone().into_iter().collect())
-        .with_tasks(
-            opts.run_opts
-                .tasks
-                .iter()
-                .map(|task| TaskName::from(task.as_str()).into_owned()),
-        )
-        .build()?;
-
-        let mut global_env_mode = opts.run_opts.env_mode;
-        if matches!(global_env_mode, EnvMode::Infer)
-            && root_turbo_json.global_pass_through_env.is_some()
-        {
-            global_env_mode = EnvMode::Strict;
-        }
-
-        let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
-            &scm,
-            engine.tasks().par_bridge(),
-            pkg_dep_graph.workspaces().collect(),
-            engine.task_definitions(),
-            &self.base.repo_root,
-        )?;
-
-        if opts.run_opts.parallel {
-            pkg_dep_graph.remove_workspace_dependencies();
-            engine = self.build_engine(&pkg_dep_graph, &opts, &root_turbo_json, &filtered_pkgs)?;
-        }
-
-        let pkg_dep_graph = Arc::new(pkg_dep_graph);
-        let engine = Arc::new(engine);
-        let api_client = self.base.api_client()?;
-
-        let async_cache = AsyncCache::new(
-            &opts.cache_opts,
-            &self.base.repo_root,
-            api_client.clone(),
-            api_auth.clone(),
-            None,
-        )?;
-
-        let color_selector = ColorSelector::default();
-
-        let runcache = Arc::new(RunCache::new(
-            async_cache,
-            &self.base.repo_root,
-            &opts.runcache_opts,
-            color_selector,
-            None,
-            self.base.ui,
-            // Always dry run when getting hashes
-            true,
-        ));
-
-        let run_tracker = RunTracker::new(
-            started_at,
-            opts.synthesize_command(),
-            opts.scope_opts.pkg_inference_root.as_deref(),
-            &env_at_execution_start,
-            &self.base.repo_root,
-            self.base.version(),
-            opts.run_opts.experimental_space_id.clone(),
-            api_client,
-            api_auth,
-            Vendor::get_user(),
-        );
-
-        let mut visitor = Visitor::new(
-            pkg_dep_graph.clone(),
-            runcache,
-            run_tracker,
-            &opts,
-            package_inputs_hashes,
-            &env_at_execution_start,
-            &global_hash,
-            global_env_mode,
-            self.base.ui,
-            true,
-            self.processes.clone(),
-            &self.base.repo_root,
-            // TODO: this is only needed for full execution, figure out better way to model this
-            // not affecting a dry run
-            EnvironmentVariableMap::default(),
-        );
-
-        visitor.dry_run();
-
-        visitor.visit(engine.clone()).await?;
-        let task_hash_tracker = visitor.into_task_hash_tracker();
-
-        Ok((global_hash, task_hash_tracker))
     }
 
     fn build_engine(
