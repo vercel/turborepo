@@ -431,11 +431,6 @@ jobs:
           windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Make sure pnpm always has a cache
-        shell: bash
-        run: |
-          mkdir -p `pnpm store path`
-
       - name: Check examples
         shell: bash
         run: turbo run test -F "@turborepo-examples-tests/*" --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
