@@ -24,7 +24,7 @@ use turborepo_ui::UI;
 
 use crate::{
     commands::{
-        bin, daemon, generate, info, link, login, logout, prune, run, telemetry, unlink,
+        bin, daemon, generate, info, link, login, logout, prune, run, scan, telemetry, unlink,
         CommandBase,
     },
     get_version,
@@ -461,6 +461,9 @@ pub enum Command {
         #[serde(flatten)]
         command: Option<TelemetryCommand>,
     },
+    /// Turbo your monorepo by running a number of 'repo lints' to
+    /// identify common issues, suggest fixes, and improve performance.
+    Scan {},
     #[clap(hide = true)]
     Info {
         workspace: Option<String>,
@@ -1075,6 +1078,11 @@ pub async fn run(
             let mut base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
             let child_event = event.child();
             telemetry::configure(command, &mut base, child_event);
+            Ok(0)
+        }
+        Command::Scan {} => {
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
+            scan::run(base).await;
             Ok(0)
         }
         Command::Info { workspace, json } => {
