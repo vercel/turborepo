@@ -66,11 +66,9 @@ type DaemonLogLayered = layer::Layered<DaemonLogFiltered, StdErrLogLayered>;
 type ChromeLog = ChromeLayer<DaemonLogLayered>;
 /// This layer can be reloaded. `None` means the layer is disabled.
 type ChromeReload = reload::Layer<Option<ChromeLog>, DaemonLogLayered>;
-/// We filter this using an EnvFilter.
-type ChromeLogFiltered = Filtered<ChromeReload, EnvFilter, DaemonLogLayered>;
 /// When the `ChromeLogFiltered` is applied to the `DaemonLogLayered`, we get a
 /// `ChromeLogLayered`, which forms the base for the next layer.
-type ChromeLogLayered = layer::Layered<ChromeLogFiltered, DaemonLogLayered>;
+type ChromeLogLayered = layer::Layered<ChromeReload, DaemonLogLayered>;
 
 pub struct TurboSubscriber {
     daemon_update: Handle<Option<DaemonLog>, StdErrLogLayered>,
@@ -140,7 +138,6 @@ impl TurboSubscriber {
         let logrotate: DaemonLogFiltered = logrotate.with_filter(daemon_filter);
 
         let (chrome, chrome_update) = reload::Layer::new(Option::<ChromeLog>::None);
-        let chrome: ChromeLogFiltered = chrome.with_filter(env_filter());
 
         let registry = Registry::default()
             .with(stderr)
