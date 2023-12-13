@@ -182,12 +182,10 @@ jobs:
       turbopack_typescript: ${{ steps.ci.outputs.diff != '' || steps.turbopack_typescript.outputs.diff != '' }}
       turborepo_rust: ${{ steps.ci.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
       turbopack_bench: ${{ steps.ci.outputs.diff != '' || steps.turbopack_bench.outputs.diff != '' }}
-      turborepo_go_unit: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' }}
       turborepo_go_lint: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != ''}}
       turborepo_build: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' || steps.turborepo_integration.outputs.diff != ''}}
       turborepo_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
-      examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' || steps.turborepo_version.outputs.diff != '' }}
-      turborepo_js: ${{ steps.ci.outputs.diff != '' || steps.turborepo_js.outputs.diff != '' }}
+      turborepo_tests: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' || steps.examples.outputs.diff != '' || steps.turborepo_version.outputs.diff != '' || steps.turborepo_js.outputs.diff != ''}}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
       tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
@@ -280,11 +278,10 @@ jobs:
           working-directory: cli
           args: --new-from-rev=${{ github.event.pull_request.base.sha || 'HEAD~1' }}
 
-  go_unit:
-    name: Go Unit Tests
-    needs: determine_jobs
-    if: needs.determine_jobs.outputs.turborepo_go_unit == 'true'
-    timeout-minutes: 45
+  turborepo_tests:
+    name: Turborepo Tests
+    needs: [determine_jobs, build_turborepo]
+    if: needs.determine_jobs.outputs.turborepo_tests == 'true'
     runs-on: ${{ matrix.os.runner }}
     strategy:
       fail-fast: false
@@ -298,28 +295,6 @@ jobs:
               - "metal"
           - runner: macos-latest
           - runner: windows-latest
-
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.runner == 'windows-latest' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - run: turbo run test --filter=cli --color
-
-  turborepo_integration:
-    name: Turborepo Integration
-    needs: [determine_jobs, build_turborepo]
-    if: needs.determine_jobs.outputs.turborepo_integration == 'true'
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - runner: ubuntu-latest
-          - runner: macos-latest
-          - runner: windows-latest
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
       # the fixtures retain their line endings and don't get updated to CRLF.
@@ -331,7 +306,9 @@ jobs:
         if: matrix.os.runner == 'windows-latest'
         shell: bash
         run: git config --global core.autocrlf input
+
       - uses: actions/checkout@v3
+
       - uses: ./.github/actions/setup-turborepo-environment
         with:
           windows: ${{ matrix.os.runner == 'windows-latest' }}
@@ -351,10 +328,8 @@ jobs:
           path: cli/.cram_env
           key: prysk-venv-${{ matrix.os.runner }}
 
-      - name: Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
+      - name: Tests
+        run: turbo run check-types test --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --continue
 
   turborepo_integration_go:
     name: Turborepo Integration (Go Fallback)
@@ -402,96 +377,6 @@ jobs:
 
       - name: Integration Tests
         run: turbo run test:go-fallback --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
-
-  turborepo_examples:
-    name: Turborepo Examples
-    needs: [determine_jobs]
-    if: needs.determine_jobs.outputs.examples == 'true'
-    timeout-minutes: 40
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - runner: ubuntu-latest
-          - runner: macos-latest
-          # TODO: enable this
-          # - runner: windows-latest
-    runs-on: ${{ matrix.os.runner }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      # Disable corepack. actions/setup-node invokes other package managers and
-      # that causes corepack to throw an error, so we disable it first.
-      - name: Disable corepack
-        shell: bash
-        run: corepack disable
-
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.runner == 'windows-latest' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Check examples
-        shell: bash
-        run: turbo run test -F "@turborepo-examples-tests/*" --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
-
-      # Disable corepack again. actions/setup-node's "Post" step runs at the end of
-      # this job invokes other package managers, and corepack throws an error.
-      # (corepack was enabled from inside the tests above).
-      - name: Disable corepack again
-        shell: bash
-        run: corepack disable
-
-  js_packages:
-    name: JS Package Tests
-    timeout-minutes: 30
-    if: needs.determine_jobs.outputs.turborepo_js == 'true'
-    needs: [determine_jobs]
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: ubuntu
-            runner:
-              - "self-hosted"
-              - "linux"
-              - "x64"
-              - "metal"
-          - name: macos
-            runner: macos-latest
-    env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_REMOTE_ONLY: true
-
-    steps:
-      # on main -> current + prev commit
-      # pr -> pr commits + base commit
-      - name: Determine fetch depth
-        id: fetch-depth
-        run: |
-          echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
-
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ github.ref }}
-          fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
-
-      - name: Build turborepo CLI from source
-        uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Run tests
-        run: |
-          turbo run check-types test --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
 
   turbopack_typescript:
     name: Turbopack TypeScript files
@@ -1009,11 +894,8 @@ jobs:
     needs:
       - determine_jobs
       - go_lint
-      - go_unit
-      - turborepo_examples
-      - turborepo_integration
+      - turborepo_tests
       - turborepo_integration_go
-      - js_packages
       - rust_lint
       - turborepo_rust_check
       - turborepo_rust_clippy
@@ -1048,11 +930,8 @@ jobs:
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.go_lint.result}} "Go linting"
-          subjob ${{needs.go_unit.result}} "Go unit tests"
-          subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
-          subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
+          subjob ${{needs.turborepo_tests.result}} "Turborepo tests"
           subjob ${{needs.turborepo_integration_go.result}} "Turborepo integration tests (Go fallback)"
-          subjob ${{needs.js_packages.result}} "JS Package tests"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
           subjob ${{needs.turborepo_rust_clippy.result}} "Turborepo Rust clippy"
@@ -1163,9 +1042,7 @@ jobs:
       - final
       - determine_jobs
       - go_lint
-      - go_unit
-      - turborepo_examples
-      - turborepo_integration
+      - turborepo_tests
       - turborepo_integration_go
       - rust_lint
       - turborepo_rust_check
@@ -1204,9 +1081,7 @@ jobs:
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.go_lint.result}} "Go lints"
-          subjob ${{needs.go_unit.result}} "Go unit tests"
-          subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
-          subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
+          subjob ${{needs.turborepo_tests.result}} "Turborepo tests"
           subjob ${{needs.turborepo_integration_go.result}} "Turborepo integration tests (Go fallback)"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
