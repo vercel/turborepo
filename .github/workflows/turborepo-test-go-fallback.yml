@@ -101,8 +101,6 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: turbo run test --filter=cli --color
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
 
   integration:
     name: Integration
