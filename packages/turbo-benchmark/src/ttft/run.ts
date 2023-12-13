@@ -8,7 +8,7 @@ export function run(profilePath: string) {
   // Set up the monorepo we will run the benchmark on
   setup();
 
-  const turboFlags = `-vvv --dry --skip-infer --profile=${profilePath}`;
+  const turboFlags = `--dry --skip-infer --profile=${profilePath}`;
 
   console.log("Executing turbo build in child process", {
     cwd: process.cwd(),
