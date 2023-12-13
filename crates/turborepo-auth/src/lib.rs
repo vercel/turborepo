@@ -32,6 +32,12 @@ pub const TURBOREPO_CONFIG_DIR: &str = "turborepo";
 pub const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 pub const DEFAULT_API_URL: &str = "https://vercel.com/api";
 
+#[derive(Debug, Clone, serde::Deserialize)]
+// This is used to deserialize the auth file JSON and give back just the tokens.
+struct TokensContainer {
+    tokens: HashMap<String, String>,
+}
+
 /// Checks the auth file path first, then the config file path, and does the
 /// following:
 /// 1) If the auth file exists, read it and return the contents from it, if
@@ -53,10 +59,10 @@ pub async fn read_or_create_auth_file(
                 source: e,
                 path: auth_file_path.to_owned(),
             })?;
-        let tokens: HashMap<String, String> = serde_json::from_str(&content)
+        let tokens: TokensContainer = serde_json::from_str(&content)
             .map_err(|e| Error::FailedToDeserializeAuthFile { source: e })?;
         let mut auth_file = AuthFile::new();
-        for (api, token) in tokens {
+        for (api, token) in tokens.tokens {
             auth_file.insert(api, token);
         }
         return Ok(auth_file);
