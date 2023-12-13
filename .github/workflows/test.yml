@@ -38,7 +38,7 @@ jobs:
           comment-id: ${{ steps.comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
           body: |
-            ## :hourglass_flowing_sand: CI is running again... :hourglass_flowing_sand:
+            ## ⏳ CI is running again... ⏳
 
             [Wait for it...](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }})
 
@@ -202,7 +202,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
           - name: macos
             runner: macos-latest
           - name: windows
@@ -239,7 +243,11 @@ jobs:
 
   go_lint:
     name: Go linting
-    runs-on: ubuntu-latest
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     needs: determine_jobs
     if: needs.determine_jobs.outputs.turborepo_go_lint == 'true'
     steps:
@@ -252,6 +260,9 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
 
       - name: Setup Protos
         run: cd cli && make compile-protos
@@ -278,7 +289,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
           - name: macos
             runner: macos-latest
           - name: windows
@@ -475,7 +490,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest
+            runner:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
           - name: macos
             runner: macos-latest
     env:
@@ -511,7 +530,11 @@ jobs:
 
   turbopack_typescript:
     name: Turbopack TypeScript files
-    runs-on: ubuntu-latest
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     needs: determine_jobs
     if: needs.determine_jobs.outputs.turbopack_typescript == 'true'
     steps:
@@ -540,7 +563,11 @@ jobs:
     needs: [determine_jobs]
     if: needs.determine_jobs.outputs.rust == 'true'
     name: Rust lints
-    runs-on: ubuntu-latest
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -570,7 +597,11 @@ jobs:
       needs.determine_jobs.outputs.cargo_on_main == 'true' ||
       needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turborepo rust check
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -596,7 +627,11 @@ jobs:
   turborepo_rust_clippy:
     needs: [turborepo_rust_check]
     name: Turborepo rust clippy
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -631,7 +666,11 @@ jobs:
       needs.determine_jobs.outputs.cargo_on_main == 'true' ||
       needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turbopack rust check
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -654,7 +693,11 @@ jobs:
   turbopack_rust_clippy:
     needs: [turbopack_rust_check]
     name: Turbopack rust clippy
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -682,13 +725,14 @@ jobs:
     needs: [determine_jobs]
     if: needs.determine_jobs.outputs.turbopack == 'true' || needs.determine_jobs.outputs.cargo_on_main == 'true'
     name: Check next-swc
-    runs-on: ubuntu-latest-8-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     permissions:
       pull-requests: write
     steps:
-      - name: tune linux network
-        run: sudo ethtool -K eth0 tx off rx off
-
       - name: Checkout Next.js
         uses: actions/checkout@v3
         with:
@@ -728,7 +772,7 @@ jobs:
 
           # strip ansi colors with `sed`
           echo "\
-          :warning: This change may fail to build \`next-swc\`.
+          ⚠️ This change may fail to build \`next-swc\`.
 
           <details><summary>Logs</summary>
           <p>
@@ -758,7 +802,11 @@ jobs:
       matrix:
         os:
           - name: ubuntu
-            runner: ubuntu-latest-16-core-oss
+            runner:
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
             nextest: linux
           - name: macos
             runner: macos-latest
@@ -798,7 +846,11 @@ jobs:
 
   turbopack_rust_test1:
     needs: [turbopack_rust_check]
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     name: Turbopack Rust testing on ubuntu
     steps:
       - name: Checkout
@@ -935,7 +987,8 @@ jobs:
     name: Turbopack Rust testing benchmarks on linux
     uses: ./.github/workflows/test-turbopack-rust-bench-test.yml
     with:
-      runner: ubuntu-latest-16-core-oss
+      # custom runner label specific to workflow
+      runner: ubuntu-latest-metal
       os: linux
       all: ${{ needs.determine_jobs.outputs.turbopack_bench == 'true' }}
 
@@ -959,7 +1012,11 @@ jobs:
 
   format_lint:
     name: Formatting
-    runs-on: ubuntu-latest
+    runs-on:
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
     needs: determine_jobs
     if: needs.determine_jobs.outputs.format == 'true'
     env:
@@ -969,9 +1026,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
       - uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+
       - name: Lint
         # Filters some workspaces out:
         # - `cli` because it runs golangci-lint and this Job doesn't have all the dependencies for that.
@@ -1050,7 +1109,7 @@ jobs:
       - name: Add failure prose text
         if: steps.info.outputs.failure == 'true'
         run: |
-          echo "## :warning: CI failed :warning:" > comment.md
+          echo "## ⚠ CI failed ⚠" > comment.md
           echo >> comment.md
           echo "The following steps have failed in CI:" >> comment.md
           echo >> comment.md
@@ -1063,7 +1122,7 @@ jobs:
       - name: Add success prose text
         if: steps.info.outputs.success == 'true'
         run: |
-          echo "## :green_circle: CI likely successful :green_circle:" > comment.md
+          echo "## 🟢 CI likely successful 🟢" > comment.md
           echo >> comment.md
           echo "A few longer running steps are still running, but they should not be considered as blocking." >> comment.md
           echo >> comment.md
@@ -1207,7 +1266,7 @@ jobs:
       - name: Add failure prose text
         if: steps.info.outputs.failure == 'true'
         run: |
-          echo "## :warning: CI failed :warning:" > comment.md
+          echo "## ⚠️ CI failed ⚠️" > comment.md
           echo >> comment.md
           echo "The following steps have failed in CI:" >> comment.md
           echo >> comment.md
@@ -1220,7 +1279,7 @@ jobs:
       - name: Add success prose text
         if: steps.info.outputs.success == 'true'
         run: |
-          echo "## :green_circle: CI successful :green_circle:" > comment.md
+          echo "## 🟢 CI successful 🟢" > comment.md
           echo >> comment.md
           echo "Thanks" >> comment.md
           echo >> comment.md

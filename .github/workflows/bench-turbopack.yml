@@ -38,7 +38,7 @@ jobs:
           comment-id: ${{ steps.comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
           body: |
-            ## :hourglass_flowing_sand: Turbopack Benchmark CI is running again... :hourglass_flowing_sand:
+            ## ⏳ Turbopack Benchmark CI is running again... ⏳
 
             [Wait for it...](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }})
 
@@ -123,7 +123,12 @@ jobs:
       needs.determine_jobs.outputs.cargo_on_main == 'true' ||
       needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turbopack rust check
-    runs-on: ubuntu-latest-16-core-oss
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
+      
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -182,7 +187,12 @@ jobs:
             args: -p turbopack-cli
             TURBOPACK_BENCH_COUNTS: 1000,10000
 
-    runs-on: ubuntu-latest-8-core-oss
+    runs-on:
+      - 'self-hosted'
+      - 'linux'
+      - 'x64'
+      - 'metal'
+
     name: Benchmark on ${{ matrix.bench.name }}
 
     steps:
@@ -317,7 +327,11 @@ jobs:
           - name: linux
             title: Linux
             quiet: false
-            runner: ubuntu-latest-16-core-oss
+            runs-on:
+              - 'self-hosted'
+              - 'linux'
+              - 'x64'
+              - 'metal'
           # - name: macos
           #   title: MacOS
           #   quiet: true
@@ -403,7 +417,7 @@ jobs:
       - name: Add failure prose text
         if: steps.info.outputs.failure == 'true'
         run: |
-          echo "## :warning: Turbopack Benchmark CI failed :warning:" > comment.md
+          echo "## ⚠️ Turbopack Benchmark CI failed ⚠️" > comment.md
           echo >> comment.md
           echo "The following steps have failed in CI:" >> comment.md
           echo >> comment.md
@@ -416,7 +430,7 @@ jobs:
       - name: Add success prose text
         if: steps.info.outputs.success == 'true'
         run: |
-          echo "## :green_circle: Turbopack Benchmark CI successful :green_circle:" > comment.md
+          echo "## 🟢 Turbopack Benchmark CI successful 🟢" > comment.md
           echo >> comment.md
           echo "Thanks" >> comment.md
           echo >> comment.md
