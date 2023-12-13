@@ -422,7 +422,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # Disable corepack, actions/setup-node invokes other package managers and
+      # Disable corepack. actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it first.
       - name: Disable corepack
         shell: bash
