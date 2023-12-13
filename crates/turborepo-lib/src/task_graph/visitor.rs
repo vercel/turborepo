@@ -129,6 +129,9 @@ impl<'a> Visitor<'a> {
 
     #[tracing::instrument(skip(self))]
     pub async fn visit(&self, engine: Arc<Engine>) -> Result<Vec<TaskError>, Error> {
+        // Check if any tasks have interactive:true
+        // Instantiate a mutex here
+
         let concurrency = self.opts.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
         let engine_handle = {
@@ -793,13 +796,13 @@ impl ExecContext {
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
-        if self.expect_stdin {
-            debug!("piping stdin to parent process, because expect_stdin is true");
-            cmd.stdin(Stdio::piped());
-        } else {
-            debug!("piping stdin to Stdio::null, because expect_stdin is false");
-            cmd.stdin(Stdio::null());
-        }
+        // if self.expect_stdin {
+        //     debug!("piping stdin to parent process, because expect_stdin is true");
+        //     cmd.stdin(Stdio::piped());
+        // } else {
+        //     debug!("piping stdin to Stdio::null, because expect_stdin is false");
+        //     cmd.stdin(Stdio::null());
+        // }
 
         // We clear the env before populating it with variables we expect
         cmd.env_clear();
