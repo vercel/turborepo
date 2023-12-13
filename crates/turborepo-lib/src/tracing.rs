@@ -189,10 +189,14 @@ impl TurboSubscriber {
 
     /// Enables chrome tracing.
     #[tracing::instrument(skip(self, to_file))]
-    pub fn enable_chrome_tracing<P: AsRef<Path>>(&self, to_file: P) -> Result<(), Error> {
+    pub fn enable_chrome_tracing<P: AsRef<Path>>(
+        &self,
+        to_file: P,
+        include_args: bool,
+    ) -> Result<(), Error> {
         let (layer, guard) = tracing_chrome::ChromeLayerBuilder::new()
             .file(to_file)
-            .include_args(true)
+            .include_args(include_args)
             .include_locations(true)
             .build();
 
