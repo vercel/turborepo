@@ -180,22 +180,21 @@ impl ShimArgs {
         }
 
         if let Some(idx) = cwd_flag_idx {
-            let start_idx = Self::get_indices_in_args_string(vec![idx], env::args().skip(1));
-            let args_string = env::args().skip(1).join(" ");
+            let (spans, args_string) =
+                Self::get_spans_in_args_string(vec![idx], env::args().skip(1));
 
             return Err(Error::EmptyCwd {
                 backtrace: Backtrace::capture(),
                 args_string,
-                flag_range: (start_idx[0], "--cwd".len()).into(),
+                flag_range: spans[0],
             });
         }
 
         if cwds.len() > 1 {
-            let indices = Self::get_indices_in_args_string(
+            let (indices, args_string) = Self::get_spans_in_args_string(
                 cwds.iter().map(|(_, idx)| *idx).collect(),
                 env::args().skip(1),
             );
-            let args_string = env::args().skip(1).join(" ");
 
             let mut flags = indices.iter().map(|i| (*i, "--cwd".len()).into());
             return Err(Error::MultipleCwd(Box::new(MultipleCwd {
@@ -228,12 +227,12 @@ impl ShimArgs {
     }
 
     /// Takes a list of indices into a Vec of arguments, i.e. ["--graph", "foo",
-    /// "--cwd"] and converts them into indices into the string of those
+    /// "--cwd"] and converts them into `SourceSpan`'s into the string of those
     /// arguments, i.e. "-- graph foo --cwd"
-    pub(crate) fn get_indices_in_args_string(
+    fn get_spans_in_args_string(
         mut args_indices: Vec<usize>,
         args: impl Iterator<Item = impl Into<String>>,
-    ) -> Vec<usize> {
+    ) -> (Vec<SourceSpan>, String) {
         // Sort the indices to keep the invariant
         // that if i > j then output[i] > output[j]
         args_indices.sort();
@@ -249,13 +248,15 @@ impl ShimArgs {
             let arg = arg.into();
 
             if idx == *arg_idx {
-                indices_in_args_string.push(current_args_string_idx);
+                indices_in_args_string.push((current_args_string_idx, arg.len()).into());
                 i += 1;
             }
             current_args_string_idx += arg.len() + 1;
         }
 
-        indices_in_args_string
+        let args_string = env::args().skip(1).join(" ");
+
+        (indices_in_args_string, args_string)
     }
 
     // returns true if any flags result in pure json output to stdout
@@ -797,7 +798,7 @@ mod test {
         args: Vec<&'static str>,
         expected_indices_in_arg_string: Vec<usize>,
     ) {
-        let indices_in_args_string =
+        let (indices_in_args_string, _) =
             ShimArgs::get_indices_in_args_string(arg_indices, args.into_iter());
         assert_eq!(indices_in_args_string, expected_indices_in_arg_string);
     }

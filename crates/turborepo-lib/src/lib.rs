@@ -55,6 +55,10 @@ pub fn get_version() -> &'static str {
 pub fn main() -> Payload {
     match shim::run() {
         Ok(payload) => payload,
+        // We only print using miette for some errors because we want to keep
+        // compatibility with Go. When we've deleted the Go code we can
+        // move all errors to miette since it provides slightly nicer
+        // printing out of the box.
         Err(err @ (Error::MultipleCwd(..) | Error::EmptyCwd { .. })) => {
             println!("{:?}", Report::new(err));
 
