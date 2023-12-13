@@ -55,7 +55,7 @@ pub struct ImportAttributes {
 
 /// The accumulated list of conditions that should be applied to this module
 /// through its import path
-#[derive(Clone, Debug, Default, Hash)]
+#[derive(Debug, Default)]
 #[turbo_tasks::value(transparent)]
 pub struct ImportContext {
     pub layers: Vec<String>,
@@ -66,42 +66,13 @@ pub struct ImportContext {
 #[turbo_tasks::value_impl]
 impl ImportContext {
     #[turbo_tasks::function]
-    fn new(layers: Vec<String>, supports: Vec<String>, media: Vec<String>) -> Vc<Self> {
+    pub fn new(layers: Vec<String>, supports: Vec<String>, media: Vec<String>) -> Vc<Self> {
         ImportContext {
             layers,
             supports,
             media,
         }
         .cell()
-    }
-
-    #[turbo_tasks::function]
-    pub fn from_attributes(
-        attr_layer: Option<String>,
-        attr_media: Option<String>,
-        attr_supports: Option<String>,
-    ) -> Result<Vc<Self>> {
-        let mut layers = vec![];
-        if let Some(attr_layer) = attr_layer {
-            layers.push(attr_layer.to_owned());
-        }
-
-        let mut media = vec![];
-        if let Some(attr_media) = attr_media {
-            media.push(attr_media.to_owned());
-        }
-
-        let mut supports = vec![];
-        if let Some(attr_supports) = attr_supports {
-            supports.push(attr_supports.to_owned());
-        }
-
-        Ok(ImportContext {
-            layers,
-            media,
-            supports,
-        }
-        .cell())
     }
 
     #[turbo_tasks::function]

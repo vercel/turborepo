@@ -24,7 +24,6 @@ use crate::{
     chunk::CssImport,
     code_gen::{CodeGenerateable, CodeGeneration},
     references::css_resolve,
-    CssModuleAsset,
 };
 
 #[turbo_tasks::value(into = "new", eq = "manual", serialization = "none")]
@@ -193,6 +192,7 @@ pub struct ImportAssetReference {
     pub origin: Vc<Box<dyn ResolveOrigin>>,
     pub request: Vc<Request>,
     pub attributes: Vc<ImportAttributes>,
+    pub import_context: Vc<ImportContext>,
     pub issue_source: Vc<IssueSource>,
 }
 
@@ -203,12 +203,14 @@ impl ImportAssetReference {
         origin: Vc<Box<dyn ResolveOrigin>>,
         request: Vc<Request>,
         attributes: Vc<ImportAttributes>,
+        import_context: Vc<ImportContext>,
         issue_source: Vc<IssueSource>,
     ) -> Vc<Self> {
         Self::cell(ImportAssetReference {
             origin,
             request,
             attributes,
+            import_context,
             issue_source,
         })
     }
@@ -218,29 +220,10 @@ impl ImportAssetReference {
 impl ModuleReference for ImportAssetReference {
     #[turbo_tasks::function]
     async fn resolve_reference(&self) -> Result<Vc<ModuleResolveResult>> {
-        let css_asset = Vc::try_resolve_downcast_type::<CssModuleAsset>(self.origin).await?;
-
         let import_context = {
             let own_attrs = (&*self.attributes.await?).as_reference_import_attributes();
-            let import_context = if let Some(css_asset) = css_asset {
-                if let Some(import_context) = (&*css_asset.await?).import_context {
-                    import_context.add_attributes(
-                        own_attrs.layer,
-                        own_attrs.media,
-                        own_attrs.supports,
-                    )
-                } else {
-                    ImportContext::from_attributes(
-                        own_attrs.layer,
-                        own_attrs.media,
-                        own_attrs.supports,
-                    )
-                }
-            } else {
-                ImportContext::from_attributes(own_attrs.layer, own_attrs.media, own_attrs.supports)
-            };
-
-            import_context
+            self.import_context
+                .add_attributes(own_attrs.layer, own_attrs.media, own_attrs.supports)
         };
 
         Ok(css_resolve(

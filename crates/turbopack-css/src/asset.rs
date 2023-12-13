@@ -34,7 +34,7 @@ fn modifier() -> Vc<String> {
 pub struct CssModuleAsset {
     source: Vc<Box<dyn Source>>,
     asset_context: Vc<Box<dyn AssetContext>>,
-    pub import_context: Option<Vc<ImportContext>>,
+    import_context: Option<Vc<ImportContext>>,
     ty: CssModuleAssetType,
     use_lightningcss: bool,
 }
@@ -75,6 +75,8 @@ impl ParseCss for CssModuleAsset {
         Ok(parse_css(
             this.source,
             Vc::upcast(self),
+            this.import_context
+                .unwrap_or_else(|| ImportContext::new(vec![], vec![], vec![])),
             this.ty,
             this.use_lightningcss,
         ))
