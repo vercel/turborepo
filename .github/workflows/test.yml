@@ -415,6 +415,8 @@ jobs:
         os:
           - runner: ubuntu-latest
           - runner: macos-latest
+          # TODO: enable this
+          # - runner: windows-latest
     runs-on: ${{ matrix.os.runner }}
     steps:
       - name: Checkout
