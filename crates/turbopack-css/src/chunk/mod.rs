@@ -4,6 +4,7 @@ pub mod source_map;
 use std::fmt::Write;
 
 use anyhow::{bail, Result};
+use indexmap::IndexSet;
 use turbo_tasks::{TryJoinIterExt, Value, ValueDefault, ValueToString, Vc};
 use turbo_tasks_fs::{rope::Rope, File, FileSystem};
 use turbopack_core::{
@@ -65,13 +66,14 @@ impl CssChunk {
 
         let mut code = CodeBuilder::default();
         let mut body = CodeBuilder::default();
+        let mut external_imports = IndexSet::new();
         for css_item in &this.content.await?.chunk_items {
             let id = &*css_item.id().await?;
 
             let content = &css_item.content().await?;
             for import in &content.imports {
                 if let CssImport::External(external_import) = import {
-                    writeln!(code, "@import {};", stringify_js(&external_import.await?))?;
+                    external_imports.insert((&*external_import.await?).to_string());
                 }
             }
 
@@ -104,6 +106,10 @@ impl CssChunk {
                 body.push_source(&Rope::from(line.to_string()), None);
             }
             write!(body, "\n")?;
+        }
+
+        for external_import in external_imports {
+            writeln!(code, "@import {};", stringify_js(&external_import))?;
         }
 
         let built = &body.build();
