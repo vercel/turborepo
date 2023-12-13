@@ -73,7 +73,7 @@ impl CssChunk {
             let content = &css_item.content().await?;
             for import in &content.imports {
                 if let CssImport::External(external_import) = import {
-                    external_imports.insert((&*external_import.await?).to_string());
+                    external_imports.insert((*external_import.await?).to_string());
                 }
             }
 
@@ -100,12 +100,12 @@ impl CssChunk {
             }
 
             body.push_source(&content.inner_code, content.source_map.map(Vc::upcast));
-            write!(body, "\n")?;
+            writeln!(body)?;
 
             for line in &close {
                 body.push_source(&Rope::from(line.to_string()), None);
             }
-            write!(body, "\n")?;
+            writeln!(body)?;
         }
 
         for external_import in external_imports {
@@ -122,9 +122,9 @@ impl CssChunk {
             && code.has_source_map()
         {
             let chunk_path = self.path().await?;
-            write!(
+            writeln!(
                 code,
-                "/*# sourceMappingURL={}.map*/\n",
+                "/*# sourceMappingURL={}.map*/",
                 chunk_path.file_name()
             )?;
         }

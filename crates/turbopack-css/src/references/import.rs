@@ -161,11 +161,11 @@ impl ImportAttributes {
                 supports,
                 media,
             } => turbopack_core::reference_type::ImportAttributes {
-                layer: layer_name.as_ref().map(|l| gen_swc_node(l)),
-                supports: supports.as_ref().map(|s| gen_swc_node(s)),
+                layer: layer_name.as_ref().map(gen_swc_node),
+                supports: supports.as_ref().map(gen_swc_node),
                 media: media
                     .as_ref()
-                    .map(|queries| queries.iter().map(|q| gen_swc_node(q)).collect()),
+                    .map(|queries| queries.iter().map(gen_swc_node).collect()),
             },
         }
     }
@@ -221,7 +221,7 @@ impl ModuleReference for ImportAssetReference {
     #[turbo_tasks::function]
     async fn resolve_reference(&self) -> Result<Vc<ModuleResolveResult>> {
         let import_context = {
-            let own_attrs = (&*self.attributes.await?).as_reference_import_attributes();
+            let own_attrs = (*self.attributes.await?).as_reference_import_attributes();
             self.import_context
                 .add_attributes(own_attrs.layer, own_attrs.media, own_attrs.supports)
         };
