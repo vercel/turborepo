@@ -163,10 +163,6 @@ impl Engine<Built> {
                     // No need to check the root node if that's where we are.
                     return Ok(false);
                 };
-                let is_persistent = self
-                    .task_definitions
-                    .get(task_id)
-                    .map_or(false, |task_def| task_def.persistent);
 
                 for dep_index in self
                     .task_graph
@@ -203,7 +199,19 @@ impl Engine<Built> {
                     }
                 }
 
-                Ok(is_persistent)
+                // check if the package for the task has that task in its package.json
+                let info = package_graph
+                    .workspace_info(&WorkspaceName::Other(task_id.package().to_string()))
+                    .expect("package graph should contain workspace info for task package");
+
+                let package_has_task = info.package_json.scripts.contains_key(task_id.task());
+
+                let task_is_persistent = self
+                    .task_definitions
+                    .get(task_id)
+                    .map_or(false, |task_def| task_def.persistent);
+
+                Ok(task_is_persistent && package_has_task)
             })
             .fold((0, Vec::new()), |(mut count, mut errs), result| {
                 match result {
