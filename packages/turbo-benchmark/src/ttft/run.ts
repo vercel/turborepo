@@ -22,7 +22,7 @@ export function run(profilePath: string) {
   try {
     cp.execSync(cmd, {
       ...DEFAULT_EXEC_OPTS,
-      env: { ...process.env, EXPERIMENTAL_RUST_CODEPATH: "true" },
+      env: process.env,
     });
   } catch (e) {
     // catch errors and exit. the build command seems to be erroring out due to very large output?
