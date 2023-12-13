@@ -8,12 +8,6 @@ use tokio::sync::OnceCell;
 
 use crate::Error;
 
-#[derive(Debug, PartialEq)]
-pub enum UrlOpenStrategy {
-    Real,
-    Noop,
-}
-
 #[derive(Debug, Clone, Deserialize)]
 struct LoginPayload {
     token: String,
@@ -30,24 +24,8 @@ pub trait LoginServer {
     fn open_web_browser(&self, url: &str) -> std::io::Result<()>;
 }
 
-/// Default login server opens a real login server.
-pub struct DefaultLoginServer {
-    pub open_strategy: UrlOpenStrategy,
-}
-
-impl Default for DefaultLoginServer {
-    fn default() -> Self {
-        Self {
-            open_strategy: UrlOpenStrategy::Real,
-        }
-    }
-}
-
-impl DefaultLoginServer {
-    pub fn new(open_strategy: UrlOpenStrategy) -> Self {
-        Self { open_strategy }
-    }
-}
+/// Default login server. Does not handle SSO, and requires no configuration.
+pub struct DefaultLoginServer {}
 
 #[async_trait]
 impl LoginServer for DefaultLoginServer {
@@ -57,14 +35,6 @@ impl LoginServer for DefaultLoginServer {
         login_url_base: String,
         login_token: Arc<OnceCell<String>>,
     ) -> Result<(), Error> {
-        // Effectively acts as a mock server if the strategy is Noop.
-        if self.open_strategy == UrlOpenStrategy::Noop {
-            login_token
-                .set(turborepo_vercel_api_mock::EXPECTED_TOKEN.to_string())
-                .unwrap();
-            return Ok(());
-        }
-
         let handle = axum_server::Handle::new();
         let route_handle = handle.clone();
         let app = Router::new()
@@ -88,9 +58,6 @@ impl LoginServer for DefaultLoginServer {
         Ok(())
     }
     fn open_web_browser(&self, url: &str) -> std::io::Result<()> {
-        match self.open_strategy {
-            UrlOpenStrategy::Real => webbrowser::open(url),
-            UrlOpenStrategy::Noop => Ok(()),
-        }
+        webbrowser::open(url)
     }
 }

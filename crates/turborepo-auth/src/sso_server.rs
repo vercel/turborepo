@@ -6,7 +6,7 @@ use reqwest::Url;
 use serde::Deserialize;
 use tokio::sync::OnceCell;
 
-use crate::{mocks::EXPECTED_VERIFICATION_TOKEN, Error, UrlOpenStrategy};
+use crate::Error;
 
 #[derive(Debug, Default, Clone, Deserialize)]
 #[allow(dead_code)]
@@ -25,33 +25,12 @@ pub trait SSOLoginServer {
     fn open_web_browser(&self, url: &str) -> std::io::Result<()>;
 }
 
-/// TODO: Document this.
-pub struct DefaultSSOLoginServer {
-    pub open_strategy: UrlOpenStrategy,
-}
-impl Default for DefaultSSOLoginServer {
-    fn default() -> Self {
-        Self {
-            open_strategy: UrlOpenStrategy::Real,
-        }
-    }
-}
-impl DefaultSSOLoginServer {
-    pub fn new(open_strategy: UrlOpenStrategy) -> Self {
-        Self { open_strategy }
-    }
-}
+/// Basic SSO login server. No configuration required.
+pub struct DefaultSSOLoginServer {}
 
 #[async_trait]
 impl SSOLoginServer for DefaultSSOLoginServer {
     async fn run(&self, port: u16, verification_token: Arc<OnceCell<String>>) -> Result<(), Error> {
-        // Effectively acts as a mock server if the strategy is Noop.
-        if self.open_strategy == UrlOpenStrategy::Noop {
-            verification_token
-                .set(EXPECTED_VERIFICATION_TOKEN.to_string())
-                .unwrap();
-            return Ok(());
-        }
         let handle = axum_server::Handle::new();
         let route_handle = handle.clone();
         let app = Router::new()
@@ -79,10 +58,7 @@ impl SSOLoginServer for DefaultSSOLoginServer {
         Ok(())
     }
     fn open_web_browser(&self, url: &str) -> std::io::Result<()> {
-        match self.open_strategy {
-            UrlOpenStrategy::Real => webbrowser::open(url),
-            UrlOpenStrategy::Noop => Ok(()),
-        }
+        webbrowser::open(url)
     }
 }
 

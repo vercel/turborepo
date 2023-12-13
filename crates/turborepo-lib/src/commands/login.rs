@@ -1,59 +1,127 @@
 use turborepo_api_client::{APIClient, Client};
 use turborepo_auth::{
-    login as auth_login, read_or_create_auth_file, sso_login as auth_sso_login, DefaultLoginServer,
-    DefaultSSOLoginServer, UrlOpenStrategy,
+    login as auth_login, read_or_create_auth_file, sso_login as auth_sso_login, AuthFile,
+    DefaultLoginServer, DefaultSSOLoginServer, LoginServer, SSOLoginServer,
 };
 use turborepo_ui::{BOLD, CYAN, UI};
 use turborepo_vercel_api::TokenMetadata;
 
 use crate::{cli::Error, commands::CommandBase};
 
-/// Entry point for `turbo login --sso-team`.
-pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Error> {
-    let api_client: APIClient = base.api_client()?;
-    let ui = base.ui;
-    let login_url_config = base.config()?.login_url().to_string();
+pub struct Login<T> {
+    pub(crate) server: T,
+}
 
-    // Get both possible token paths for existing token(s) checks.
-    let global_auth_path = base.global_auth_path()?;
-    let global_config_path = base.global_config_path()?;
+impl<T: LoginServer> Login<T> {
+    pub(crate) async fn login(&self, base: &mut CommandBase) -> Result<(), Error> {
+        let api_client: APIClient = base.api_client()?;
+        let ui = base.ui;
+        let login_url_config = base.config()?.login_url().to_string();
 
-    let mut auth_file =
-        read_or_create_auth_file(&global_auth_path, &global_config_path, &api_client).await?;
+        // Get both possible token paths for existing token(s) checks.
+        let global_auth_path = base.global_auth_path()?;
+        let global_config_path = base.global_config_path()?;
 
-    // Check if there's an existing token.
-    if let Some(token) = auth_file.get_token(api_client.base_url()) {
-        let metadata: TokenMetadata = api_client.get_token_metadata(&token.token).await?;
-        let user_response = api_client.get_user(&token.token).await?;
-        // We get all teams here and do a filter because there's an issue where certain
-        // teams cause servers to go into a 508 loop.
-        let teams = api_client.get_teams(&token.token).await?;
+        let mut auth_file =
+            read_or_create_auth_file(&global_auth_path, &global_config_path, &api_client).await?;
 
-        if metadata.origin == "saml" && teams.teams.iter().any(|team| team.slug == sso_team) {
-            // Token already exists, return early.
-            println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
-            print_cli_authorized(&user_response.user.username, &ui);
+        if self
+            .has_existing_token(&api_client, &mut auth_file, &ui)
+            .await?
+        {
             return Ok(());
         }
+
+        let login_server = &self.server;
+
+        let auth_token = auth_login(&api_client, &ui, &login_url_config, login_server).await?;
+
+        auth_file.insert(api_client.base_url().to_owned(), auth_token.token);
+        auth_file.write_to_disk(&global_auth_path)?;
+        Ok(())
     }
 
-    // Note: Due to config test not being trasitive (cfg(test)), we state the
-    // browser opening strategy in the login server. If we're in a test
-    // environment, don't open a browser.
-    let browser_open_strategy = match cfg!(test) {
-        true => UrlOpenStrategy::Noop,
-        false => UrlOpenStrategy::Real,
-    };
+    async fn has_existing_token(
+        &self,
+        api_client: &APIClient,
+        auth_file: &mut AuthFile,
+        ui: &UI,
+    ) -> Result<bool, Error> {
+        if let Some(token) = auth_file.get_token(api_client.base_url()) {
+            let metadata: TokenMetadata = api_client.get_token_metadata(&token.token).await?;
+            let user_response = api_client.get_user(&token.token).await?;
+            if metadata.origin == "manual" {
+                println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
+                print_cli_authorized(&user_response.user.username, ui);
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+impl<T: SSOLoginServer> Login<T> {
+    pub(crate) async fn sso_login(
+        &self,
+        base: &mut CommandBase,
+        sso_team: &str,
+    ) -> Result<(), Error> {
+        let api_client: APIClient = base.api_client()?;
+        let ui = base.ui;
+        let login_url_config = base.config()?.login_url().to_string();
 
-    let login_server = DefaultSSOLoginServer::new(browser_open_strategy);
+        // Get both possible token paths for existing token(s) checks.
+        let global_auth_path = base.global_auth_path()?;
+        let global_config_path = base.global_config_path()?;
 
-    let auth_token =
-        auth_sso_login(&api_client, &ui, &login_url_config, sso_team, &login_server).await?;
+        let mut auth_file =
+            read_or_create_auth_file(&global_auth_path, &global_config_path, &api_client).await?;
 
-    auth_file.insert(api_client.base_url().to_owned(), auth_token.token);
-    auth_file.write_to_disk(&global_auth_path)?;
+        if self
+            .has_existing_sso_token(&api_client, &mut auth_file, &base.ui, sso_team)
+            .await?
+        {
+            return Ok(());
+        }
 
-    Ok(())
+        let login_server = &self.server;
+
+        let auth_token =
+            auth_sso_login(&api_client, &ui, &login_url_config, "sso", login_server).await?;
+
+        auth_file.insert(api_client.base_url().to_owned(), auth_token.token);
+        auth_file.write_to_disk(&global_auth_path)?;
+
+        Ok(())
+    }
+
+    async fn has_existing_sso_token(
+        &self,
+        api_client: &APIClient,
+        auth_file: &mut AuthFile,
+        ui: &UI,
+        sso_team: &str,
+    ) -> Result<bool, Error> {
+        if let Some(token) = auth_file.get_token(api_client.base_url()) {
+            let metadata: TokenMetadata = api_client.get_token_metadata(&token.token).await?;
+            let user_response = api_client.get_user(&token.token).await?;
+            let teams = api_client.get_teams(&token.token).await?;
+            if metadata.origin == "saml" && teams.teams.iter().any(|team| team.slug == sso_team) {
+                println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
+                print_cli_authorized(&user_response.user.username, ui);
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
+/// Entry point for `turbo login --sso-team`.
+pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Error> {
+    Login {
+        server: DefaultSSOLoginServer {},
+    }
+    .sso_login(base, sso_team)
+    .await
 }
 
 /// Entry point for `turbo login`. Checks for the existence of an auth file
@@ -61,47 +129,11 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Err
 /// returns that one instead of fetching a new one. Otherwise, fetches a new
 /// token and writes it to `auth.json` in the Turbo config directory.
 pub async fn login(base: &mut CommandBase) -> Result<(), Error> {
-    let api_client: APIClient = base.api_client()?;
-    let ui = base.ui;
-    let login_url_config = base.config()?.login_url().to_string();
-
-    // Get both possible token paths for existing token(s) checks.
-    let global_auth_path = base.global_auth_path()?;
-    let global_config_path = base.global_config_path()?;
-
-    let mut auth_file =
-        read_or_create_auth_file(&global_auth_path, &global_config_path, &api_client).await?;
-
-    // We might not have expiration on tokens, so checking that is iffy. Just make
-    // sure it's a non-SAML token.
-    if let Some(token) = auth_file.get_token(api_client.base_url()) {
-        // Non-SAML tokens have an origin of "manual", so we use that to make sure
-        // existing token is correctly scoped.
-        let metadata: TokenMetadata = api_client.get_token_metadata(&token.token).await?;
-        let user_response = api_client.get_user(&token.token).await?;
-        if metadata.origin == "manual" {
-            println!("{}", ui.apply(BOLD.apply_to("Existing token found!")));
-            print_cli_authorized(&user_response.user.username, &ui);
-            return Ok(());
-        }
+    Login {
+        server: DefaultLoginServer {},
     }
-
-    // Note: Due to config test not being trasitive (cfg(test)), we state the
-    // browser opening strategy in the login server. If we're in a test
-    // environment, don't open a browser.
-    let browser_open_strategy = match cfg!(test) {
-        true => UrlOpenStrategy::Noop,
-        false => UrlOpenStrategy::Real,
-    };
-
-    let login_server = DefaultLoginServer::new(browser_open_strategy);
-
-    let auth_token = auth_login(&api_client, &ui, &login_url_config, &login_server).await?;
-
-    auth_file.insert(api_client.base_url().to_owned(), auth_token.token);
-    auth_file.write_to_disk(&global_auth_path)?;
-
-    Ok(())
+    .login(base)
+    .await
 }
 
 fn print_cli_authorized(user: &str, ui: &UI) {
@@ -122,6 +154,8 @@ fn print_cli_authorized(user: &str, ui: &UI) {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use camino::Utf8PathBuf;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_auth::{mocks::*, AuthFile, TURBOREPO_AUTH_FILE_NAME};
@@ -178,7 +212,12 @@ mod tests {
 
         // Test: Call login function and see if we got the existing token on
         // the FS back.
-        let result = login(&mut base).await;
+        let login_with_mock_server = Login {
+            server: MockLoginServer {
+                hits: Arc::new(0.into()),
+            },
+        };
+        let result = login_with_mock_server.login(&mut base).await;
         assert!(result.is_ok());
 
         // Since we don't return anything if the login found an existing
@@ -213,7 +252,12 @@ mod tests {
         let mut base = setup_base(&auth_file_path, port);
 
         // Test: Call login function and see if we got the expected token.
-        let result = login(&mut base).await;
+        let login_with_mock_server = Login {
+            server: MockLoginServer {
+                hits: Arc::new(0.into()),
+            },
+        };
+        let result = login_with_mock_server.login(&mut base).await;
         assert!(result.is_ok());
 
         let found_auth_file =
