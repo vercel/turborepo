@@ -11,10 +11,14 @@ use std::{
 
 use anyhow::Result;
 use dunce::canonicalize as fs_canonicalize;
+use mimalloc::MiMalloc;
 use tracing::{debug, error, trace};
 use turborepo_lib::{spawn_child, ExecutionState, Payload};
 
 use crate::panic_handler::panic_handler;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn run_go_binary(execution_state: ExecutionState) -> Result<i32> {
     // canonicalize the binary path to ensure we can find go-turbo
