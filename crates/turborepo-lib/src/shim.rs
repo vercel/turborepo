@@ -764,6 +764,7 @@ pub fn run() -> Result<Payload, Error> {
 
 #[cfg(test)]
 mod test {
+    use miette::SourceSpan;
     use test_case::test_case;
 
     use super::turbo_version_has_shim;
@@ -790,17 +791,17 @@ mod test {
         assert!(!turbo_version_has_shim(old_canary));
     }
 
-    #[test_case(vec![3], vec!["--graph", "foo", "--cwd", "apple"], vec![18])]
-    #[test_case(vec![0], vec!["--graph", "foo", "--cwd"], vec![0])]
-    #[test_case(vec![0, 2], vec!["--graph", "foo", "--cwd"], vec![0, 12])]
+    #[test_case(vec![3], vec!["--graph", "foo", "--cwd", "apple"], vec![(18, 5).into()])]
+    #[test_case(vec![0], vec!["--graph", "foo", "--cwd"], vec![(0, 7).into()])]
+    #[test_case(vec![0, 2], vec!["--graph", "foo", "--cwd"], vec![(0, 7).into(), (12, 5).into()])]
     #[test_case(vec![], vec!["--cwd"], vec![])]
     fn test_get_indices_in_arg_string(
         arg_indices: Vec<usize>,
         args: Vec<&'static str>,
-        expected_indices_in_arg_string: Vec<usize>,
+        expected_indices_in_arg_string: Vec<SourceSpan>,
     ) {
         let (indices_in_args_string, _) =
-            ShimArgs::get_indices_in_args_string(arg_indices, args.into_iter());
+            ShimArgs::get_spans_in_args_string(arg_indices, args.into_iter());
         assert_eq!(indices_in_args_string, expected_indices_in_arg_string);
     }
 }
