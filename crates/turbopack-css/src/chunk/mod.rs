@@ -1,7 +1,7 @@
 pub(crate) mod single_item_chunk;
 pub mod source_map;
 
-use std::{collections::HashSet, fmt::Write};
+use std::fmt::Write;
 
 use anyhow::{bail, Result};
 use turbo_tasks::{TryJoinIterExt, Value, ValueDefault, ValueToString, Vc};
@@ -65,22 +65,8 @@ impl CssChunk {
 
         let mut code = CodeBuilder::default();
         let mut body = CodeBuilder::default();
-        let mut seen = HashSet::new();
-        for css_item in &this.content.strongly_consistent().await?.chunk_items {
-            // TODO(WEB-1261)
+        for css_item in &this.content.await?.chunk_items {
             let id = &*css_item.id().await?;
-            let content = &*css_item.content().await?;
-
-            let attr = match content.import_context {
-                Some(i) => Some((*i.await?).clone()),
-                None => None,
-            };
-
-            let key = (id.clone(), attr.clone());
-            if seen.contains(&key) {
-                continue;
-            }
-            seen.insert(key);
 
             let content = &css_item.content().await?;
             for import in &content.imports {

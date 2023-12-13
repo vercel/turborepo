@@ -27,7 +27,6 @@ use crate::{
     CssModuleAsset,
 };
 
-// #[derive(Clone)]
 #[turbo_tasks::value(into = "new", eq = "manual", serialization = "none")]
 pub enum ImportAttributes {
     LightningCss {
@@ -223,24 +222,22 @@ impl ModuleReference for ImportAssetReference {
 
         let import_context = {
             let own_attrs = (&*self.attributes.await?).as_reference_import_attributes();
-            let mut import_context: ImportContext = if let Some(my_css_asset) = css_asset {
-                if let Some(import_context) = (&*my_css_asset.await?).import_context {
-                    (*import_context.await?).to_owned()
+            let import_context = if let Some(css_asset) = css_asset {
+                if let Some(import_context) = (&*css_asset.await?).import_context {
+                    import_context.add_attributes(
+                        own_attrs.layer,
+                        own_attrs.media,
+                        own_attrs.supports,
+                    )
                 } else {
-                    Default::default()
+                    ImportContext::from_attributes(
+                        own_attrs.layer,
+                        own_attrs.media,
+                        own_attrs.supports,
+                    )
                 }
             } else {
-                Default::default()
-            };
-
-            if let Some(layer) = own_attrs.layer {
-                import_context.layers.push(layer);
-            };
-            if let Some(supports) = own_attrs.supports {
-                import_context.supports.push(supports);
-            };
-            if let Some(media) = own_attrs.media {
-                import_context.media.push(media);
+                ImportContext::from_attributes(own_attrs.layer, own_attrs.media, own_attrs.supports)
             };
 
             import_context
@@ -249,7 +246,7 @@ impl ModuleReference for ImportAssetReference {
         Ok(css_resolve(
             self.origin,
             self.request,
-            Value::new(CssReferenceSubType::AtImport(Some(import_context.cell()))),
+            Value::new(CssReferenceSubType::AtImport(Some(import_context))),
             Some(self.issue_source),
         ))
     }

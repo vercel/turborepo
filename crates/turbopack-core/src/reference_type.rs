@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use anyhow::Result;
 use indexmap::IndexMap;
 use turbo_tasks::Vc;
 
@@ -55,11 +56,100 @@ pub struct ImportAttributes {
 /// The accumulated list of conditions that should be applied to this module
 /// through its import path
 #[derive(Clone, Debug, Default, Hash)]
-#[turbo_tasks::value(shared)]
+#[turbo_tasks::value(transparent)]
 pub struct ImportContext {
     pub layers: Vec<String>,
     pub supports: Vec<String>,
     pub media: Vec<String>,
+}
+
+#[turbo_tasks::value_impl]
+impl ImportContext {
+    #[turbo_tasks::function]
+    fn new(layers: Vec<String>, supports: Vec<String>, media: Vec<String>) -> Vc<Self> {
+        ImportContext {
+            layers,
+            supports,
+            media,
+        }
+        .cell()
+    }
+
+    #[turbo_tasks::function]
+    pub fn from_attributes(
+        attr_layer: Option<String>,
+        attr_media: Option<String>,
+        attr_supports: Option<String>,
+    ) -> Result<Vc<Self>> {
+        let mut layers = vec![];
+        if let Some(attr_layer) = attr_layer {
+            layers.push(attr_layer.to_owned());
+        }
+
+        let mut media = vec![];
+        if let Some(attr_media) = attr_media {
+            media.push(attr_media.to_owned());
+        }
+
+        let mut supports = vec![];
+        if let Some(attr_supports) = attr_supports {
+            supports.push(attr_supports.to_owned());
+        }
+
+        Ok(ImportContext {
+            layers,
+            media,
+            supports,
+        }
+        .cell())
+    }
+
+    #[turbo_tasks::function]
+    pub async fn add_attributes(
+        self: Vc<Self>,
+        attr_layer: Option<String>,
+        attr_media: Option<String>,
+        attr_supports: Option<String>,
+    ) -> Result<Vc<Self>> {
+        let this = &*self.await?;
+
+        let layers = {
+            let mut layers = this.layers.clone();
+            if let Some(attr_layer) = attr_layer {
+                if !layers.contains(&attr_layer) {
+                    layers.push(attr_layer.to_owned());
+                }
+            }
+            layers
+        };
+
+        let media = {
+            let mut media = this.media.clone();
+            if let Some(attr_media) = attr_media {
+                if !media.contains(&attr_media) {
+                    media.push(attr_media.to_owned());
+                }
+            }
+            media
+        };
+
+        let supports = {
+            let mut supports = this.supports.clone();
+            if let Some(attr_supports) = attr_supports {
+                if !supports.contains(&attr_supports) {
+                    supports.push(attr_supports.to_owned());
+                }
+            }
+            supports
+        };
+
+        Ok(ImportContext {
+            layers,
+            media,
+            supports,
+        }
+        .cell())
+    }
 }
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
@@ -162,12 +252,12 @@ impl ReferenceType {
                 matches!(other, ReferenceType::EcmaScriptModules(_))
                     && matches!(sub_type, EcmaScriptModulesReferenceSubType::Undefined)
             }
+            ReferenceType::Css(CssReferenceSubType::AtImport(_)) => {
+                // For condition matching, treat any AtImport pair as identical.
+                matches!(other, ReferenceType::Css(CssReferenceSubType::AtImport(_)))
+            }
             ReferenceType::Css(sub_type) => {
-                (
-                    // For condition matching, treat any AtImport pair as identical.
-                    matches!(other, ReferenceType::Css(CssReferenceSubType::AtImport(_)))
-                        && matches!(sub_type, CssReferenceSubType::AtImport(_))
-                ) || matches!(other, ReferenceType::Css(_))
+                matches!(other, ReferenceType::Css(_))
                     && matches!(sub_type, CssReferenceSubType::Undefined)
             }
             ReferenceType::Url(sub_type) => {
