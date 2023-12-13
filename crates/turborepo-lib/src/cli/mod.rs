@@ -1,7 +1,10 @@
 use std::{backtrace, backtrace::Backtrace, env, io, mem, process};
 
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum};
+use clap::{
+    builder::NonEmptyStringValueParser, ArgAction, ArgGroup, CommandFactory, Parser, Subcommand,
+    ValueEnum,
+};
 use clap_complete::{generate, Shell};
 pub use error::Error;
 use serde::{Deserialize, Serialize};
@@ -569,8 +572,13 @@ pub struct RunArgs {
     /// File to write turbo's performance profile output into.
     /// You can load the file up in chrome://tracing to see
     /// which parts of your build were slow.
-    #[clap(long)]
+    #[clap(long, value_parser=NonEmptyStringValueParser::new(), conflicts_with = "anon_profile")]
     pub profile: Option<String>,
+    /// File to write turbo's performance profile output into.
+    /// All identifying data omitted from the profile.
+    #[serde(skip)]
+    #[clap(long, value_parser=NonEmptyStringValueParser::new(), conflicts_with = "profile")]
+    pub anon_profile: Option<String>,
     /// Ignore the local filesystem cache for all tasks. Only
     /// allow reading and caching artifacts using the remote cache.
     #[clap(long, env = "TURBO_REMOTE_ONLY", value_name = "BOOL", action = ArgAction::Set, default_value = "false", default_missing_value = "true", num_args = 0..=1)]
@@ -624,6 +632,15 @@ impl RunArgs {
             (false, true) => Some(false),
             (false, false) => None,
             (true, true) => unreachable!(), // guaranteed by mutually exclusive `ArgGroup`
+        }
+    }
+
+    pub fn profile_file_and_include_args(&self) -> Option<(&str, bool)> {
+        match (self.profile.as_deref(), self.anon_profile.as_deref()) {
+            (Some(file), None) => Some((file, true)),
+            (None, Some(file)) => Some((file, false)),
+            (Some(_), Some(_)) => unreachable!(),
+            (None, None) => None,
         }
     }
 }
@@ -849,9 +866,10 @@ pub async fn run(
             if args.tasks.is_empty() {
                 return Err(Error::NoTasks(backtrace::Backtrace::capture()));
             }
-            if let Some(file_path) = &args.profile {
+
+            if let Some((file_path, include_args)) = args.profile_file_and_include_args() {
                 // TODO: Do we want to handle the result / error?
-                let _ = logger.enable_chrome_tracing(file_path);
+                let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
@@ -1988,5 +2006,22 @@ mod test {
         ));
         assert!(Args::try_parse_from(["turbo", "build", "--go-fallback"]).is_ok(),);
         assert!(Args::try_parse_from(["turbo", "build", "--remote-cache-read-only",]).is_ok(),);
+    }
+
+    #[test]
+    fn test_profile_usage() {
+        assert!(Args::try_parse_from(["turbo", "build", "--profile", ""]).is_err());
+        assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", ""]).is_err());
+        assert!(Args::try_parse_from(["turbo", "build", "--profile", "foo.json"]).is_ok());
+        assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", "foo.json"]).is_ok());
+        assert!(Args::try_parse_from([
+            "turbo",
+            "build",
+            "--profile",
+            "foo.json",
+            "--anon-profile",
+            "bar.json"
+        ])
+        .is_err());
     }
 }
