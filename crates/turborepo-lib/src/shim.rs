@@ -196,7 +196,7 @@ impl ShimArgs {
                 env::args().skip(1),
             );
 
-            let mut flags = indices.iter().map(|i| (*i, "--cwd".len()).into());
+            let mut flags = indices.into_iter();
             return Err(Error::MultipleCwd(Box::new(MultipleCwd {
                 backtrace: Backtrace::capture(),
                 args_string,
@@ -228,7 +228,8 @@ impl ShimArgs {
 
     /// Takes a list of indices into a Vec of arguments, i.e. ["--graph", "foo",
     /// "--cwd"] and converts them into `SourceSpan`'s into the string of those
-    /// arguments, i.e. "-- graph foo --cwd"
+    /// arguments, i.e. "-- graph foo --cwd". Returns the spans and the args
+    /// string
     fn get_spans_in_args_string(
         mut args_indices: Vec<usize>,
         args: impl Iterator<Item = impl Into<String>>,
