@@ -197,13 +197,14 @@ impl ShimArgs {
             );
             let args_string = env::args().skip(1).join(" ");
 
+            let mut flags = indices.iter().map(|i| (*i, "--cwd".len()).into());
             return Err(Error::MultipleCwd(Box::new(MultipleCwd {
                 backtrace: Backtrace::capture(),
                 args_string,
-                flag1: indices.first().map(|i| (*i, "--cwd".len()).into()),
-                flag2: indices.get(1).map(|i| (*i, "--cwd".len()).into()),
-                flag3: indices.get(2).map(|i| (*i, "--cwd".len()).into()),
-                flag4: indices.get(3).map(|i| (*i, "--cwd".len()).into()),
+                flag1: flags.next(),
+                flag2: flags.next(),
+                flag3: flags.next(),
+                flag4: flags.next(),
             })));
         }
 
