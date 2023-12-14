@@ -1,5 +1,5 @@
 use turborepo_telemetry::config::TelemetryConfig;
-use turborepo_ui::{BOLD, BOLD_GREEN, BOLD_RED};
+use turborepo_ui::{color, BOLD, BOLD_GREEN, BOLD_RED};
 
 use super::CommandBase;
 use crate::cli::TelemetryCommand;
@@ -28,8 +28,8 @@ fn log_status(config: TelemetryConfig, base: &CommandBase) {
 fn log_error(message: &str, error: &str, base: &CommandBase) {
     println!(
         "{}: {}",
-        base.ui.apply(BOLD_RED.apply_to(message)),
-        base.ui.apply(BOLD_RED.apply_to(error.to_string()))
+        color!(base.ui, BOLD_RED, "{}", message),
+        color!(base.ui, BOLD_RED, "{}", error)
     );
 }
 
@@ -48,7 +48,7 @@ pub fn configure(command: &Option<Box<TelemetryCommand>>, base: &mut CommandBase
             let result = config.enable();
             match result {
                 Ok(_) => {
-                    println!("{}", base.ui.apply(BOLD.apply_to("Success!")));
+                    println!("{}", color!(base.ui, BOLD, "{}", "Success!"));
                     log_status(config, base);
                 }
                 Err(e) => log_error("Failed to enable telemetry", &e.to_string(), base),
@@ -58,7 +58,7 @@ pub fn configure(command: &Option<Box<TelemetryCommand>>, base: &mut CommandBase
             let result = config.disable();
             match result {
                 Ok(_) => {
-                    println!("{}", base.ui.apply(BOLD.apply_to("Success!")));
+                    println!("{}", color!(base.ui, BOLD, "{}", "Success!"));
                     log_status(config, base);
                 }
                 Err(e) => log_error("Failed to disable telemetry", &e.to_string(), base),

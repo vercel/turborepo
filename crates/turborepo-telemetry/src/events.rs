@@ -10,7 +10,6 @@ pub enum TelemetryEvent {
 
 /// Individual events are defined here
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct KeyVal {
     key: String,
     value: String,
@@ -37,4 +36,17 @@ impl KeyVal {
 pub struct Fallback {
     pub go_arg: bool,
     pub rust_env_var: bool,
+}
+
+#[cfg(test)]
+mod test {
+    use serde_json::json;
+    use test_case::test_case;
+
+    use super::*;
+
+    #[test_case(KeyVal::command("build"), json!({ "key": "command", "value": "build"}) ; "command - build")]
+    fn test_serialization(value: impl serde::Serialize, expected: serde_json::Value) {
+        assert_eq!(serde_json::to_value(value).unwrap(), expected);
+    }
 }

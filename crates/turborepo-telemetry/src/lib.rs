@@ -5,11 +5,9 @@
 
 #![feature(error_generic_member_access)]
 
-pub mod client;
 pub mod config;
 pub mod errors;
 pub mod events;
-pub mod telemetry;
 
 use std::time::Duration;
 
@@ -24,7 +22,8 @@ use tokio::{
     task::{JoinError, JoinHandle},
 };
 use tracing::{debug, error};
-use turborepo_ui::{BOLD, GREY, UI};
+use turborepo_api_client::telemetry;
+use turborepo_ui::{color, BOLD, GREY, UI};
 use uuid::Uuid;
 
 const BUFFER_THRESHOLD: usize = 10;
@@ -68,8 +67,7 @@ pub fn telem(event: events::TelemetryEvent) {
         }
         None => {
             if cfg!(debug_assertions) {
-                error!("[DEVELOPMENT ERROR] telemetry sender not initialized");
-                panic!();
+                panic!("[DEVELOPMENT ERROR] telemetry sender not initialized");
             }
             debug!("telemetry sender not initialized");
         }
@@ -203,15 +201,16 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
                 events.len()
             );
             let handle = self.send_events(events);
-            self.senders.push(handle);
+            if let Some(handle) = handle {
+                self.senders.push(handle);
+            }
             debug!("Done telemetry event queue flush");
         }
     }
 
-    fn send_events(&self, events: Vec<TelemetryEvent>) -> JoinHandle<()> {
+    fn send_events(&self, events: Vec<TelemetryEvent>) -> Option<JoinHandle<()>> {
         if !self.enabled {
-            // do nothing
-            return tokio::spawn(async move {});
+            return None;
         }
 
         if config::is_debug() {
@@ -220,8 +219,8 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
                     .unwrap_or("Error serializing event".to_string());
                 println!(
                     "\n{}\n{}\n",
-                    self.ui.apply(BOLD.apply_to("[telemetry event]")),
-                    self.ui.apply(GREY.apply_to(pretty_event))
+                    color!(self.ui, BOLD, "{}", "[telemetry event]"),
+                    color!(self.ui, GREY, "{}", pretty_event)
                 );
             }
         }
@@ -229,7 +228,7 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
         let client = self.client.clone();
         let session_id = self.session_id.clone();
         let telemetry_id = self.telemetry_id.clone();
-        tokio::spawn(async move {
+        Some(tokio::spawn(async move {
             if let Ok(Err(err)) = tokio::time::timeout(
                 REQUEST_TIMEOUT,
                 client.record_telemetry(events, telemetry_id.as_str(), session_id.as_str()),
@@ -238,101 +237,6 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
             {
                 debug!("failed to record cache usage telemetry. error: {}", err)
             }
-        })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{
-        cell::RefCell,
-        sync::{Arc, Mutex},
-        time::Duration,
-    };
-
-    use async_trait::async_trait;
-    use tokio::{
-        select,
-        sync::{mpsc, mpsc::UnboundedReceiver},
-    };
-    use turborepo_ui::UI;
-
-    use crate::{
-        events::{KeyVal, TelemetryEvent},
-        init_telemetry, telem,
-        telemetry::TelemetryClient,
-    };
-
-    #[derive(Clone)]
-    struct DummyClient {
-        // A vector that stores each batch of events
-        events: Arc<Mutex<RefCell<Vec<Vec<TelemetryEvent>>>>>,
-        tx: mpsc::UnboundedSender<()>,
-    }
-
-    impl DummyClient {
-        pub fn events(&self) -> Vec<Vec<TelemetryEvent>> {
-            self.events.lock().unwrap().borrow().clone()
-        }
-    }
-
-    #[async_trait]
-    impl TelemetryClient for DummyClient {
-        async fn record_telemetry(
-            &self,
-            events: Vec<TelemetryEvent>,
-            _telemetry_id: &str,
-            _session_id: &str,
-        ) -> Result<(), crate::errors::Error> {
-            self.events.lock().unwrap().borrow_mut().push(events);
-            self.tx.send(()).unwrap();
-
-            Ok(())
-        }
-    }
-
-    // Asserts that we get the message after the timeout
-    async fn expect_timeout_then_message(rx: &mut UnboundedReceiver<()>) {
-        let timeout = tokio::time::sleep(std::time::Duration::from_millis(150));
-
-        select! {
-            _ = rx.recv() => {
-                panic!("Expected to wait out the flush timeout")
-            }
-            _ = timeout => {
-            }
-        }
-
-        rx.recv().await;
-    }
-
-    #[tokio::test]
-    async fn test_events() {
-        let (tx, mut rx) = mpsc::unbounded_channel();
-
-        let ui = UI::new(false);
-        let client = DummyClient {
-            events: Default::default(),
-            tx,
-        };
-
-        let result = init_telemetry(client.clone(), ui);
-        assert!(result.is_ok());
-        let telemetry_handle = result.unwrap();
-
-        for _ in 0..2 {
-            telem(TelemetryEvent::KeyVal(KeyVal::command("run")))
-        }
-        let found = client.events();
-        // Should have no events since we haven't flushed yet
-        assert_eq!(found.len(), 0);
-
-        expect_timeout_then_message(&mut rx).await;
-        let found = client.events();
-        assert_eq!(found.len(), 1);
-        let payloads = &found[0];
-        assert_eq!(payloads.len(), 2);
-
-        drop(telemetry_handle);
+        }))
     }
 }

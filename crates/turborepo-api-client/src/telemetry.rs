@@ -1,29 +1,34 @@
 use async_trait::async_trait;
 use reqwest::Method;
-use turborepo_api_client::retry::make_retryable_request;
+use serde::Serialize;
 
-use crate::{client::AnonAPIClient, errors::Error, events::TelemetryEvent};
+use crate::{retry, AnonAPIClient, Error};
 
 #[async_trait]
 pub trait TelemetryClient {
-    async fn record_telemetry(
+    async fn record_telemetry<T>(
         &self,
-        events: Vec<TelemetryEvent>,
+        events: Vec<T>,
         telemetry_id: &str,
         session_id: &str,
-    ) -> Result<(), Error>;
+    ) -> Result<(), Error>
+    where
+        T: Serialize + std::marker::Send;
 }
 
 #[async_trait]
 impl TelemetryClient for AnonAPIClient {
-    async fn record_telemetry(
+    async fn record_telemetry<T>(
         &self,
-        events: Vec<TelemetryEvent>,
+        events: Vec<T>,
         telemetry_id: &str,
         session_id: &str,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    where
+        T: Serialize + std::marker::Send,
+    {
         let request_builder = self
-            .create_request_builder(
+            .create_telemetry_request_builder(
                 "/api/turborepo/v1/events",
                 Method::POST,
                 session_id,
@@ -32,7 +37,7 @@ impl TelemetryClient for AnonAPIClient {
             .await?
             .json(&events);
 
-        make_retryable_request(request_builder)
+        retry::make_retryable_request(request_builder)
             .await?
             .error_for_status()?;
 

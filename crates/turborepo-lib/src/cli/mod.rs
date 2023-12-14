@@ -10,9 +10,9 @@ pub use error::Error;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
-    client::AnonAPIClient,
     events::{Fallback, KeyVal, TelemetryEvent},
     init_telemetry, telem, TelemetryHandle,
 };
@@ -713,7 +713,7 @@ pub async fn run(
 
     // initialize telemetry and track handle to close at the end of the run
     let mut telemetry_handle: Option<TelemetryHandle> = None;
-    match AnonAPIClient::new("https://telemetry.vercel.com", 250, version) {
+    match AnonAPIClient::new("http://localhost:3000", 250, version) {
         Ok(anonymous_api_client) => {
             let handle = init_telemetry(anonymous_api_client, ui);
             match handle {

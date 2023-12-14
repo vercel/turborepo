@@ -9,6 +9,11 @@ license = "MPL-2.0"
 [lints]
 workspace = true
 
+[dev-dependencies]
+serde_json = { workspace = true }
+test-case = { workspace = true }
+turborepo-vercel-api-mock = { workspace = true }
+
 [dependencies]
 async-trait = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }

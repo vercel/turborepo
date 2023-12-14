@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use sha2::{Digest, Sha256};
 use tracing::{debug, error};
-use turborepo_ui::{BOLD, GREY, UI, UNDERLINE};
+use turborepo_ui::{color, BOLD, GREY, UI, UNDERLINE};
 use uuid::Uuid;
 
 static DEBUG_ENV_VAR: &str = "TURBO_TELEMETRY_DEBUG";
@@ -137,20 +137,37 @@ impl TelemetryConfig {
         if !self.has_seen_alert() && self.is_enabled() {
             println!(
                 "\n{}\n{}\n{}\n{}\n{}\n",
-                self.ui.apply(BOLD.apply_to("Attention:")),
-                self.ui.apply(GREY.apply_to(
+                color!(self.ui, BOLD, "{}", "Attention:"),
+                color!(
+                    self.ui,
+                    GREY,
+                    "{}",
                     "Turborepo now collects completely anonymous telemetry regarding usage."
-                )),
-                self.ui.apply(GREY.apply_to(
+                ),
+                color!(
+                    self.ui,
+                    GREY,
+                    "{}",
                     "This information is used to shape the Turborepo roadmap and prioritize \
                      features."
-                )),
-                self.ui.apply(GREY.apply_to(
+                ),
+                color!(
+                    self.ui,
+                    GREY,
+                    "{}",
                     "You can learn more, including how to opt-out if you'd not like to \
                      participate in this anonymous program, by visiting the following URL:"
-                )),
-                self.ui.apply(
-                    UNDERLINE.apply_to(GREY.apply_to("https://turbo.build/repo/docs/telemetry"))
+                ),
+                color!(
+                    self.ui,
+                    UNDERLINE,
+                    "{}",
+                    color!(
+                        self.ui,
+                        GREY,
+                        "{}",
+                        "https://turbo.build/repo/docs/telemetry"
+                    )
                 ),
             );
 
