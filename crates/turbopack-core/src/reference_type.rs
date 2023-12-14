@@ -56,7 +56,7 @@ pub struct ImportAttributes {
 /// The accumulated list of conditions that should be applied to this module
 /// through its import path
 #[derive(Debug, Default)]
-#[turbo_tasks::value(transparent)]
+#[turbo_tasks::value]
 pub struct ImportContext {
     pub layers: Vec<String>,
     pub supports: Vec<String>,
@@ -66,11 +66,11 @@ pub struct ImportContext {
 #[turbo_tasks::value_impl]
 impl ImportContext {
     #[turbo_tasks::function]
-    pub fn new(layers: Vec<String>, supports: Vec<String>, media: Vec<String>) -> Vc<Self> {
+    pub fn new(layers: Vec<String>, media: Vec<String>, supports: Vec<String>) -> Vc<Self> {
         ImportContext {
             layers,
-            supports,
             media,
+            supports,
         }
         .cell()
     }
@@ -114,12 +114,7 @@ impl ImportContext {
             supports
         };
 
-        Ok(ImportContext {
-            layers,
-            media,
-            supports,
-        }
-        .cell())
+        Ok(ImportContext::new(layers, media, supports))
     }
 }
 
