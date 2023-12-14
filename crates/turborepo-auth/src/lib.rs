@@ -32,12 +32,6 @@ pub const TURBOREPO_CONFIG_DIR: &str = "turborepo";
 pub const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 pub const DEFAULT_API_URL: &str = "https://vercel.com/api";
 
-#[derive(Debug, Clone, serde::Deserialize)]
-// This is used to deserialize the auth file JSON and give back just the tokens.
-struct TokensContainer {
-    tokens: HashMap<String, String>,
-}
-
 /// Checks the auth file path first, then the config file path, and does the
 /// following:
 /// 1) If the auth file exists, read it and return the contents from it, if
@@ -47,6 +41,11 @@ struct TokensContainer {
 ///    possible. Otherwise return a FailedToReadConfigFile error.
 /// 3) If neither file exists, return an empty auth file and write a blank one
 ///    to disk.
+///
+/// Note that we have a potential TOCTOU race condition in this function. If
+/// this is invoked and the file we're trying to read is deleted after a
+/// condition is met, we should simply error out on reading a file that no
+/// longer exists.
 pub async fn read_or_create_auth_file(
     auth_file_path: &AbsoluteSystemPath,
     config_file_path: &AbsoluteSystemPath,
@@ -59,11 +58,11 @@ pub async fn read_or_create_auth_file(
                 source: e,
                 path: auth_file_path.to_owned(),
             })?;
-        let tokens: TokensContainer = serde_json::from_str(&content)
+        let tokens: AuthFile = serde_json::from_str(&content)
             .map_err(|e| Error::FailedToDeserializeAuthFile { source: e })?;
         let mut auth_file = AuthFile::new();
-        for (api, token) in tokens.tokens {
-            auth_file.insert(api, token);
+        for (api, token) in tokens.tokens() {
+            auth_file.insert(api.to_owned(), token.to_owned());
         }
         return Ok(auth_file);
     } else if config_file_path.try_exists()? {
@@ -135,7 +134,7 @@ mod tests {
         let result = read_or_create_auth_file(auth_file_path, config_file_path, &client).await;
 
         assert!(result.is_ok());
-        assert!(std::fs::try_exists(auth_file_path).is_ok_and(|b| b));
+        assert!(std::fs::try_exists(auth_file_path).unwrap_or(false));
         assert!(result.unwrap().tokens().is_empty());
     }
 
