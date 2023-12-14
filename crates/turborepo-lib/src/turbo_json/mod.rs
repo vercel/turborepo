@@ -17,6 +17,8 @@ use crate::{
     task_graph::{TaskDefinition, TaskOutputs},
 };
 
+mod parser;
+
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesJson {
@@ -575,10 +577,6 @@ mod tests {
     use super::RawTurboJson;
     use crate::{
         cli::OutputLogsMode,
-        config::{
-            turbo::{Pipeline, RawTaskDefinition},
-            TurboJson,
-        },
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
     };

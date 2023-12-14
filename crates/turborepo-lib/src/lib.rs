@@ -28,6 +28,7 @@ mod signal;
 mod task_graph;
 mod task_hash;
 mod tracing;
+mod turbo_json;
 
 pub use child::spawn_child;
 use miette::Report;

@@ -604,7 +604,8 @@ mod test {
     use crate::{
         cli::LinkTarget,
         commands::{link, CommandBase},
-        config::{RawTurboJson, TurborepoConfigBuilder},
+        config::TurborepoConfigBuilder,
+        turbo_json::RawTurboJson,
         Args,
     };
 

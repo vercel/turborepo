@@ -15,7 +15,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
-use crate::config::RawTurboJson;
+use crate::turbo_json::RawTurboJson;
 
 pub const DEFAULT_OUTPUT_DIR: &str = "out";
 

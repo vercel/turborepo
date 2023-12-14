@@ -1,19 +1,80 @@
-use std::{collections::HashMap, ffi::OsString};
+use std::{collections::HashMap, ffi::OsString, io};
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_auth::read_or_create_auth_file;
 use turborepo_dirs::config_dir;
 use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
-use crate::{
-    commands::CommandBase,
-    config::{Error as ConfigError, RawTurboJson},
-};
+use crate::commands::CommandBase;
+pub use crate::turbo_json::RawTurboJson;
 
-const DEFAULT_API_URL: &str = "https://vercel.com/api";
-const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
-const DEFAULT_TIMEOUT: u64 = 20;
+#[allow(clippy::enum_variant_names)]
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Global config path not found")]
+    NoGlobalConfigPath,
+    #[error(transparent)]
+    PackageJson(#[from] turborepo_repository::package_json::Error),
+    #[error(
+        "Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create \
+         one"
+    )]
+    NoTurboJSON,
+    #[error(transparent)]
+    SerdeJson(#[from] serde_json::Error),
+    #[error(transparent)]
+    Io(#[from] io::Error),
+    #[error(transparent)]
+    Camino(#[from] camino::FromPathBufError),
+    #[error("Encountered an IO error while attempting to read {config_path}: {error}")]
+    FailedToReadConfig {
+        config_path: AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
+    #[error("Encountered an IO error while attempting to set {config_path}: {error}")]
+    FailedToSetConfig {
+        config_path: AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
+    #[error(
+        "Package tasks (<package>#<task>) are not allowed in single-package repositories: found \
+         {task_id}"
+    )]
+    PackageTaskInSinglePackageMode { task_id: String },
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+    #[error(
+        "You specified \"{value}\" in the \"{key}\" key. You should not prefix your environment \
+         variables with \"{env_pipeline_delimiter}\""
+    )]
+    InvalidEnvPrefix {
+        value: String,
+        key: String,
+        env_pipeline_delimiter: &'static str,
+    },
+    #[error(transparent)]
+    PathError(#[from] turbopath::PathError),
+    #[error("\"{actual}\". Use \"{wanted}\" instead")]
+    UnnecessaryPackageTaskSyntax { actual: String, wanted: String },
+    #[error("You can only extend from the root workspace")]
+    ExtendFromNonRoot,
+    #[error("No \"extends\" key found")]
+    NoExtends,
+    #[error("Failed to create APIClient: {0}")]
+    ApiClient(#[source] turborepo_api_client::Error),
+    #[error("{0} is not UTF8.")]
+    Encoding(String),
+    #[error("TURBO_SIGNATURE should be either 1 or 0.")]
+    InvalidSignature,
+    #[error("TURBO_REMOTE_CACHE_ENABLED should be either 1 or 0.")]
+    InvalidRemoteCacheEnabled,
+    #[error("TURBO_REMOTE_CACHE_TIMEOUT: error parsing timeout.")]
+    InvalidRemoteCacheTimeout(#[source] std::num::ParseIntError),
+    #[error("TURBO_PREFLIGHT should be either 1 or 0.")]
+    InvalidPreflight,
+}
 
 macro_rules! create_builder {
     ($func_name:ident, $property_name:ident, $type:ty) => {
@@ -23,6 +84,10 @@ macro_rules! create_builder {
         }
     };
 }
+
+const DEFAULT_API_URL: &str = "https://vercel.com/api";
+const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
+const DEFAULT_TIMEOUT: u64 = 20;
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -110,11 +175,11 @@ fn non_empty_str(s: Option<&str>) -> Option<&str> {
 }
 
 trait ResolvedConfigurationOptions {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, ConfigError>;
+    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error>;
 }
 
 impl ResolvedConfigurationOptions for PackageJson {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, ConfigError> {
+    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
         match &self.legacy_turbo_config {
             Some(legacy_turbo_config) => {
                 let synthetic_raw_turbo_json: RawTurboJson =
@@ -127,7 +192,7 @@ impl ResolvedConfigurationOptions for PackageJson {
 }
 
 impl ResolvedConfigurationOptions for RawTurboJson {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, ConfigError> {
+    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
         match &self.remote_cache {
             Some(configuration_options) => {
                 configuration_options
@@ -146,7 +211,7 @@ impl ResolvedConfigurationOptions for RawTurboJson {
 
 // Used for global config and local config.
 impl ResolvedConfigurationOptions for ConfigurationOptions {
-    fn get_configuration_options(self) -> Result<ConfigurationOptions, ConfigError> {
+    fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
         Ok(self)
     }
 }
@@ -159,7 +224,7 @@ fn get_lowercased_env_vars() -> HashMap<OsString, OsString> {
 
 fn get_env_var_config(
     environment: &HashMap<OsString, OsString>,
-) -> Result<ConfigurationOptions, ConfigError> {
+) -> Result<ConfigurationOptions, Error> {
     let mut turbo_mapping = HashMap::new();
     turbo_mapping.insert(OsString::from("turbo_api"), "api_url");
     turbo_mapping.insert(OsString::from("turbo_login"), "login_url");
@@ -176,10 +241,10 @@ fn get_env_var_config(
     let mut output_map = HashMap::new();
 
     turbo_mapping.into_iter().try_for_each(
-        |(mapping_key, mapped_property)| -> Result<(), ConfigError> {
+        |(mapping_key, mapped_property)| -> Result<(), Error> {
             if let Some(value) = environment.get(&mapping_key) {
                 let converted = value.to_str().ok_or_else(|| {
-                    ConfigError::Encoding(
+                    Error::Encoding(
                         // CORRECTNESS: the mapping_key is hardcoded above.
                         mapping_key.to_ascii_uppercase().into_string().unwrap(),
                     )
@@ -197,7 +262,7 @@ fn get_env_var_config(
         match signature.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => return Err(ConfigError::InvalidSignature),
+            _ => return Err(Error::InvalidSignature),
         }
     } else {
         None
@@ -208,7 +273,7 @@ fn get_env_var_config(
         match preflight.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => return Err(ConfigError::InvalidPreflight),
+            _ => return Err(Error::InvalidPreflight),
         }
     } else {
         None
@@ -219,7 +284,7 @@ fn get_env_var_config(
         match enabled.as_str() {
             "0" => Some(false),
             "1" => Some(true),
-            _ => return Err(ConfigError::InvalidRemoteCacheEnabled),
+            _ => return Err(Error::InvalidRemoteCacheEnabled),
         }
     } else {
         None
@@ -230,7 +295,7 @@ fn get_env_var_config(
         Some(
             timeout
                 .parse::<u64>()
-                .map_err(ConfigError::InvalidRemoteCacheTimeout)?,
+                .map_err(Error::InvalidRemoteCacheTimeout)?,
         )
     } else {
         None
@@ -257,7 +322,7 @@ fn get_env_var_config(
 
 fn get_override_env_var_config(
     environment: &HashMap<OsString, OsString>,
-) -> Result<ConfigurationOptions, ConfigError> {
+) -> Result<ConfigurationOptions, Error> {
     let mut vercel_artifacts_mapping = HashMap::new();
     vercel_artifacts_mapping.insert(OsString::from("vercel_artifacts_token"), "token");
     vercel_artifacts_mapping.insert(OsString::from("vercel_artifacts_owner"), "team_id");
@@ -266,10 +331,10 @@ fn get_override_env_var_config(
 
     // Process the VERCEL_ARTIFACTS_* next.
     vercel_artifacts_mapping.into_iter().try_for_each(
-        |(mapping_key, mapped_property)| -> Result<(), ConfigError> {
+        |(mapping_key, mapped_property)| -> Result<(), Error> {
             if let Some(value) = environment.get(&mapping_key) {
                 let converted = value.to_str().ok_or_else(|| {
-                    ConfigError::Encoding(
+                    Error::Encoding(
                         // CORRECTNESS: the mapping_key is hardcoded above.
                         mapping_key.to_ascii_uppercase().into_string().unwrap(),
                     )
@@ -313,15 +378,15 @@ impl TurborepoConfigBuilder {
     }
 
     // Getting all of the paths.
-    fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
+    fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
         #[cfg(test)]
         if let Some(global_config_path) = self.global_config_path.clone() {
             return Ok(global_config_path);
         }
 
-        let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
+        let config_dir = config_dir().ok_or(Error::NoGlobalConfigPath)?;
         let global_config_path = config_dir.join("turborepo").join("config.json");
-        AbsoluteSystemPathBuf::try_from(global_config_path).map_err(ConfigError::PathError)
+        AbsoluteSystemPathBuf::try_from(global_config_path).map_err(Error::PathError)
     }
     // Location of the auth file for Turborepo.
     fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
@@ -356,7 +421,7 @@ impl TurborepoConfigBuilder {
         get_lowercased_env_vars()
     }
 
-    fn get_global_auth(&self) -> Result<ConfigurationOptions, ConfigError> {
+    fn get_global_auth(&self) -> Result<ConfigurationOptions, Error> {
         let global_auth_path = self.global_auth_path()?;
         let global_config_path = self.global_config_path()?;
         let api = self
@@ -380,11 +445,11 @@ impl TurborepoConfigBuilder {
         Ok(global_auth)
     }
 
-    fn get_global_config(&self) -> Result<ConfigurationOptions, ConfigError> {
+    fn get_global_config(&self) -> Result<ConfigurationOptions, Error> {
         let global_config_path = self.global_config_path()?;
         let mut contents = global_config_path
             .read_existing_to_string_or(Ok("{}"))
-            .map_err(|error| ConfigError::FailedToReadConfig {
+            .map_err(|error| Error::FailedToReadConfig {
                 config_path: global_config_path.clone(),
                 error,
             })?;
@@ -395,11 +460,11 @@ impl TurborepoConfigBuilder {
         Ok(global_config)
     }
 
-    fn get_local_config(&self) -> Result<ConfigurationOptions, ConfigError> {
+    fn get_local_config(&self) -> Result<ConfigurationOptions, Error> {
         let local_config_path = self.local_config_path();
         let mut contents = local_config_path
             .read_existing_to_string_or(Ok("{}"))
-            .map_err(|error| ConfigError::FailedToReadConfig {
+            .map_err(|error| Error::FailedToReadConfig {
                 config_path: local_config_path.clone(),
                 error,
             })?;
@@ -420,7 +485,7 @@ impl TurborepoConfigBuilder {
     create_builder!(with_preflight, preflight, Option<bool>);
     create_builder!(with_timeout, timeout, Option<u64>);
 
-    pub fn build(&self) -> Result<ConfigurationOptions, ConfigError> {
+    pub fn build(&self) -> Result<ConfigurationOptions, Error> {
         // Priority, from least significant to most significant:
         // - shared configuration (package.json .turbo)
         // - shared configuration (turbo.json)
@@ -442,7 +507,7 @@ impl TurborepoConfigBuilder {
         })?;
         let turbo_json =
             RawTurboJson::read(&self.repo_root.join_component("turbo.json")).or_else(|e| {
-                if let ConfigError::Io(e) = &e {
+                if let Error::Io(e) = &e {
                     if matches!(e.kind(), std::io::ErrorKind::NotFound) {
                         return Ok(Default::default());
                     }
@@ -509,9 +574,16 @@ impl TurborepoConfigBuilder {
 
 #[cfg(test)]
 mod test {
-    use tempfile::TempDir;
+    use std::{collections::HashMap, ffi::OsString};
 
-    use super::*;
+    use tempfile::TempDir;
+    use turbopath::AbsoluteSystemPathBuf;
+
+    use crate::config::{
+        get_env_var_config, get_override_env_var_config, ConfigurationOptions, RawTurboJSON,
+        ResolvedConfigurationOptions, TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
+        DEFAULT_TIMEOUT,
+    };
 
     #[test]
     fn test_defaults() {
