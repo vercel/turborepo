@@ -413,58 +413,33 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
+          - runner: ubuntu-latest
+          - runner: macos-latest
+          # TODO: enable this
+          # - runner: windows-latest
     runs-on: ${{ matrix.os.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # Note: the setup-node action inside this is somehow required for
-      # the node setup below this step. Not sure why.
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      # TODO: .github/actions/setup-node is pretty similar to the following
-      # steps (Setup Pnpm, pnpm cache, corepack, setup node), but it didn't
-      # work out of box. We should take another stab at it later.
-      - name: Setup Pnpm
-        uses: pnpm/action-setup@v2.2.4
-
-      - name: Make sure pnpm always has a cache
-        shell: bash
-        run: |
-          mkdir -p `pnpm store path`
-
-      # Disable corepack, actions/setup-node invokes other package managers and
+      # Disable corepack. actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it first.
       - name: Disable corepack
         shell: bash
         run: corepack disable
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
-          node-version: 18
-          cache: ${{ matrix.manager }}
-          cache-dependency-path: package.json
+          windows: ${{ matrix.os.runner == 'windows-latest' }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Check examples
         shell: bash
-        # Note: using CLI flags instead of env vars because
-        # envs var would apply to the actual tests that exercise turbo also,
-        # making test output non-deterministic.
         run: turbo run test -F "@turborepo-examples-tests/*" --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
 
-      # Re-enable corepack, actions/setup-node invokes other package managers and
-      # that causes corepack to throw an error, so we disable it here. The "Post" step
-      # for actions/setup-node will run at the end of this job, so we need to prep for it.
+      # Disable corepack again. actions/setup-node's "Post" step runs at the end of
+      # this job invokes other package managers, and corepack throws an error.
+      # (corepack was enabled from inside the tests above).
       - name: Disable corepack again
         shell: bash
         run: corepack disable

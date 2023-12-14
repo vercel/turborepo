@@ -1,5 +1,6 @@
 use std::{backtrace, io};
 
+use miette::Diagnostic;
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::package_graph;
@@ -11,7 +12,7 @@ use crate::{
     run,
 };
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("No command specified")]
     NoCommand(#[backtrace] backtrace::Backtrace),
@@ -64,6 +65,7 @@ pub enum Error {
     #[error(transparent)]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Run(#[from] run::Error),
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
