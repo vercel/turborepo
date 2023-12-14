@@ -15,8 +15,6 @@ mod sso;
 mod sso_server;
 mod ui;
 
-use std::collections::HashMap;
-
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::Client;
 
