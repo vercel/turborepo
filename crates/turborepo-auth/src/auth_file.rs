@@ -109,10 +109,6 @@ mod tests {
         // Setup: Create a mock client and a fake token
         let mock_client = MockApiClient::new();
         let token = "test-token";
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        // Create the temp dir files.
-        fs::create_dir_all(temp_dir.path().join(TURBOREPO_CONFIG_DIR)).unwrap();
 
         // Test: Call the convert_to_auth_file function and check the result
         let auth_token = convert_to_auth_token(token, &mock_client);
@@ -131,7 +127,6 @@ mod tests {
             .join(TURBOREPO_CONFIG_DIR)
             .join(TURBOREPO_AUTH_FILE_NAME);
 
-        // unwrapping is fine because we know the path exists
         let absolute_auth_path = AbsoluteSystemPath::new(auth_file_path.to_str().unwrap()).unwrap();
 
         // Make sure the temp dir exists before writing to it.
@@ -145,7 +140,7 @@ mod tests {
         auth_file.write_to_disk(absolute_auth_path).unwrap();
 
         let read_back: AuthFile =
-            serde_json::from_str(&fs::read_to_string(absolute_auth_path).unwrap()).unwrap();
+            serde_json::from_str(&absolute_auth_path.read_to_string().unwrap()).unwrap();
         assert_eq!(read_back.tokens.len(), 1);
         assert!(read_back.tokens.contains_key("test-api"));
         assert_eq!(
