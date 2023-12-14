@@ -11,7 +11,8 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("error preparing engine: Invalid persistent task configuration:")]
+    #[diagnostic(code(turborepo::run::invalid_task_configuration))]
+    #[error("error preparing engine:")]
     EngineValidation {
         #[related]
         validation_errors: Vec<engine::ValidateError>,

@@ -59,7 +59,11 @@ pub fn main() -> Payload {
         // compatibility with Go. When we've deleted the Go code we can
         // move all errors to miette since it provides slightly nicer
         // printing out of the box.
-        Err(err @ (Error::MultipleCwd(..) | Error::EmptyCwd { .. })) => {
+        Err(
+            err @ (Error::MultipleCwd(..)
+            | Error::EmptyCwd { .. }
+            | Error::Cli(cli::Error::Run(run::Error::EngineValidation { .. }))),
+        ) => {
             println!("{:?}", Report::new(err));
 
             Payload::Rust(Ok(1))
