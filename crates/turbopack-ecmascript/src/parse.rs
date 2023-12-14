@@ -110,7 +110,7 @@ impl GenerateSourceMap for ParseResultSourceMap {
     #[turbo_tasks::function]
     async fn generate_source_map(&self) -> Result<Vc<OptionSourceMap>> {
         let original_src_map = if let Some(input) = self.original_source_map {
-            input.await?.to_source_map()
+            Some(input.await?.to_source_map().await?)
         } else {
             None
         };

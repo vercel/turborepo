@@ -1,9 +1,10 @@
 use std::{borrow::Cow, io::Write, ops::Deref, sync::Arc};
 
 use anyhow::Result;
+use async_recursion::async_recursion;
 use indexmap::IndexMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use sourcemap::{DecodedMap, SourceMap as RegularMap, SourceMapBuilder};
+use sourcemap::{DecodedMap, SourceMap as RegularMap, SourceMapBuilder, SourceMapIndex};
 use turbo_tasks::{TryJoinIterExt, Vc};
 use turbo_tasks_fs::{
     rope::{Rope, RopeBuilder},
@@ -191,11 +192,27 @@ impl SourceMap {
 }
 
 impl SourceMap {
-    pub fn to_source_map(&self) -> Option<Arc<CrateMapWrapper>> {
-        match self {
-            Self::Decoded(m) => Some(m.map.clone()),
-            Self::Sectioned(_) => None,
-        }
+    pub async fn to_source_map(&self) -> Result<Arc<CrateMapWrapper>> {
+        Ok(match self {
+            Self::Decoded(m) => m.map.clone(),
+            Self::Sectioned(m) => {
+                let wrapped = m.to_crate_wrapper().await?;
+                let sections = wrapped
+                    .sections
+                    .iter()
+                    .map(|s| {
+                        sourcemap::SourceMapSection::new(
+                            (s.offset.line as u32, s.offset.column as u32),
+                            None,
+                            Some(s.map.0.clone()),
+                        )
+                    })
+                    .collect::<Vec<sourcemap::SourceMapSection>>();
+                Arc::new(CrateMapWrapper(DecodedMap::Index(SourceMapIndex::new(
+                    None, sections,
+                ))))
+            }
+        })
     }
 }
 
@@ -382,6 +399,17 @@ pub struct CrateMapWrapper(DecodedMap);
 unsafe impl Send for CrateMapWrapper {}
 unsafe impl Sync for CrateMapWrapper {}
 
+#[derive(Debug)]
+pub struct CrateIndexWrapper {
+    pub sections: Vec<CrateSectionWrapper>,
+}
+
+#[derive(Debug)]
+pub struct CrateSectionWrapper {
+    pub offset: SourcePos,
+    pub map: Arc<CrateMapWrapper>,
+}
+
 impl CrateMapWrapper {
     pub fn as_regular_source_map(&self) -> Option<Cow<'_, RegularMap>> {
         match &self.0 {
@@ -429,6 +457,14 @@ impl SectionedSourceMap {
     pub fn new(sections: Vec<SourceMapSection>) -> Self {
         Self { sections }
     }
+
+    pub async fn to_crate_wrapper(&self) -> Result<CrateIndexWrapper> {
+        let mut sections = Vec::with_capacity(self.sections.len());
+        for section in &self.sections {
+            sections.push(section.to_crate_wrapper().await?);
+        }
+        Ok(CrateIndexWrapper { sections })
+    }
 }
 
 /// A section of a larger sectioned source map, which applies at source
@@ -442,5 +478,14 @@ pub struct SourceMapSection {
 impl SourceMapSection {
     pub fn new(offset: SourcePos, map: Vc<SourceMap>) -> Self {
         Self { offset, map }
+    }
+
+    #[async_recursion]
+    pub async fn to_crate_wrapper(&self) -> Result<CrateSectionWrapper> {
+        let map = (*self.map.await?).to_source_map().await?;
+        Ok(CrateSectionWrapper {
+            offset: self.offset,
+            map,
+        })
     }
 }
