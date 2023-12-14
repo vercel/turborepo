@@ -7,8 +7,8 @@ use turborepo_auth::read_or_create_auth_file;
 use turborepo_dirs::config_dir;
 use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
-use crate::commands::CommandBase;
 pub use crate::turbo_json::RawTurboJson;
+use crate::{commands::CommandBase, turbo_json};
 
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
@@ -74,6 +74,8 @@ pub enum Error {
     InvalidRemoteCacheTimeout(#[source] std::num::ParseIntError),
     #[error("TURBO_PREFLIGHT should be either 1 or 0.")]
     InvalidPreflight,
+    #[error(transparent)]
+    TurboJsonParseError(#[from] turbo_json::parser::Error),
 }
 
 macro_rules! create_builder {

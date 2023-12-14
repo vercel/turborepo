@@ -19,7 +19,7 @@ use crate::{
 };
 
 #[derive(Debug, Error, Diagnostic)]
-enum Error {
+pub enum Error {
     #[error("failed to parse turbo.json")]
     Parse {
         diagnostics: Vec<biome_diagnostics::Error>,
@@ -439,31 +439,31 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
     }
 }
 
-fn parse_turbo_json(text: &str, file_path: &str) -> Result<RawTurboJson, Error> {
-    let result = deserialize_from_json_str::<RawTurboJson>(
-        text,
-        JsonParserOptions::default().with_allow_comments(),
-    );
+impl RawTurboJson {
+    pub fn parse(text: &str, file_path: &str) -> Result<RawTurboJson, Error> {
+        let result = deserialize_from_json_str::<RawTurboJson>(
+            text,
+            JsonParserOptions::default().with_allow_comments(),
+        );
 
-    if !result.diagnostics().is_empty() {
-        let diagnostics = result
-            .into_diagnostics()
-            .into_iter()
-            .map(|d| d.with_file_source_code(text).with_file_path(file_path))
-            .collect();
+        if !result.diagnostics().is_empty() {
+            let diagnostics = result
+                .into_diagnostics()
+                .into_iter()
+                .map(|d| d.with_file_source_code(text).with_file_path(file_path))
+                .collect();
 
-        return Err(Error::Parse { diagnostics });
+            return Err(Error::Parse { diagnostics });
+        }
+
+        Ok(result
+            .into_deserialized()
+            .expect("should have turbo.json value if no errors"))
     }
-
-    Ok(result
-        .into_deserialized()
-        .expect("should have turbo.json value if no errors"))
 }
 
 #[cfg(test)]
 mod tests {
-    use std::assert_matches::assert_matches;
-
     use miette::Report;
 
     use super::Error;

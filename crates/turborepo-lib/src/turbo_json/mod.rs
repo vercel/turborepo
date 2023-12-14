@@ -17,7 +17,7 @@ use crate::{
     task_graph::{TaskDefinition, TaskOutputs},
 };
 
-mod parser;
+pub mod parser;
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -309,9 +309,8 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
 
 impl RawTurboJson {
     pub(crate) fn read(path: &AbsoluteSystemPath) -> Result<RawTurboJson, Error> {
-        let contents = path.read()?;
-        let raw_turbo_json: RawTurboJson =
-            serde_json::from_reader(json_comments::StripComments::new(contents.as_slice()))?;
+        let contents = path.read_to_string()?;
+        let raw_turbo_json = RawTurboJson::parse(&contents, path.as_str())?;
 
         Ok(raw_turbo_json)
     }
