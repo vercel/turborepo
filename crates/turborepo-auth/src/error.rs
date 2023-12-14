@@ -9,6 +9,8 @@ pub enum Error {
     UrlParseError(#[from] url::ParseError),
     #[error(transparent)]
     APIError(#[from] APIError),
+    #[error(transparent)]
+    IOError(#[from] io::Error),
 
     #[error("failed to get token")]
     FailedToGetToken,
