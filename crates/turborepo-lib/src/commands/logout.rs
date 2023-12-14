@@ -27,11 +27,7 @@ pub async fn logout(base: &mut CommandBase) -> Result<(), Error> {
                     api: t.0.to_string(),
                     token: t.1.to_string(),
                 };
-                format!(
-                    "{} ({})",
-                    token.friendly_api_display(),
-                    token.friendly_token_display()
-                )
+                token.friendly_api_display().to_string()
             })
             .collect::<Vec<_>>();
 
@@ -44,11 +40,7 @@ pub async fn logout(base: &mut CommandBase) -> Result<(), Error> {
         let api = items[index].split_whitespace().next().unwrap();
 
         if let Some(token) = auth_file.get_token(api) {
-            println!(
-                "Removing token: {} for {}",
-                token.friendly_token_display(),
-                token.friendly_api_display()
-            );
+            println!("Removing token for {}", token.friendly_api_display());
             auth_file.remove(api);
         } else {
             // This should never happen, but just in case.

@@ -77,13 +77,6 @@ pub struct AuthToken {
 }
 
 impl AuthToken {
-    pub fn friendly_token_display(&self) -> String {
-        format!(
-            "{}...{}",
-            &self.token[..3],
-            &self.token[self.token.len() - 3..]
-        )
-    }
     pub fn friendly_api_display(&self) -> &str {
         if self.api.contains("vercel.com") {
             // We're Vercel, let's make it look nice ;)
