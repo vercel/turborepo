@@ -26,7 +26,7 @@ pub trait SSOLoginServer {
 }
 
 /// Basic SSO login server. No configuration required.
-pub struct DefaultSSOLoginServer {}
+pub struct DefaultSSOLoginServer;
 
 #[async_trait]
 impl SSOLoginServer for DefaultSSOLoginServer {
