@@ -6,7 +6,7 @@ use turborepo_api_client::Client;
 
 use crate::Error;
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 /// AuthFile contains a list of domains, each with a token.
 pub struct AuthFile {
     tokens: HashMap<String, String>,

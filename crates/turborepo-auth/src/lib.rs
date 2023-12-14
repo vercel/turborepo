@@ -158,14 +158,22 @@ mod tests {
         file.write_all(mock_config_file_data.as_bytes()).unwrap();
 
         let client = MockApiClient::new();
+
+        // Test: Get the result of reading the auth file
         let result = read_or_create_auth_file(auth_file_path, config_file_path, &client).await;
 
         // Make sure no errors come back
         assert!(result.is_ok());
         // And then make sure the file was actually created on the fs
-        assert!(std::fs::try_exists(auth_file_path).is_ok_and(|b| b));
+        assert!(std::fs::try_exists(auth_file_path).unwrap_or(false));
+
+        // Then make sure the auth file contains the correct data
+        let auth_file_check: AuthFile =
+            serde_json::from_str(&auth_file_path.read_to_string().unwrap()).unwrap();
 
         let auth_file = result.unwrap();
+
+        assert_eq!(auth_file_check, auth_file);
         assert_eq!(auth_file.tokens().len(), 1);
     }
 }
