@@ -676,7 +676,11 @@ mod test {
 
         // auth file
         let auth_file = NamedTempFile::new().unwrap();
-        fs::write(auth_file.path(), r#"{ "token": "hello" }"#).unwrap();
+        fs::write(
+            auth_file.path(),
+            r#"{ "tokens": {"vercel.com/api": "hello"} }"#,
+        )
+        .unwrap();
 
         // repo
         let repo_root_tmp_dir = TempDir::new().unwrap();
