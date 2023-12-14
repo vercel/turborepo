@@ -7,10 +7,13 @@ mod logs;
 mod output;
 mod prefixed;
 
-use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
+use std::{borrow::Cow, env, f64::consts::PI, io, time::Duration};
 
 use console::{Style, StyledObject};
-use dialoguer::{theme::ColorfulTheme, FuzzySelect};
+use dialoguer::{
+    theme::{ColorfulTheme, SimpleTheme, Theme},
+    FuzzySelect,
+};
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use thiserror::Error;
@@ -186,13 +189,18 @@ impl UI {
         &self,
         prompt: &str,
         items: &[T],
-    ) -> Result<usize, std::io::Error> {
-        let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+    ) -> io::Result<usize> {
+        let theme: Box<dyn Theme> = if self.should_strip_ansi {
+            Box::<ColorfulTheme>::default()
+        } else {
+            Box::new(SimpleTheme {})
+        };
+
+        FuzzySelect::with_theme(&*theme)
             .with_prompt(prompt)
             .default(0)
             .items(items)
-            .interact()?;
-        Ok(selection)
+            .interact()
     }
 }
 
