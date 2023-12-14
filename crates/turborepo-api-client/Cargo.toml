@@ -10,8 +10,8 @@ native-tls = ["reqwest/native-tls"]
 rustls-tls = ["reqwest/rustls-tls"]
 
 [dev-dependencies]
+http = "0.2.9"
 port_scanner = { workspace = true }
-serde_json = { workspace = true }
 test-case = { workspace = true }
 turborepo-vercel-api-mock = { workspace = true }
 
@@ -27,6 +27,7 @@ regex = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 rustc_version_runtime = "0.2.1"
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 turbopath = { workspace = true }
