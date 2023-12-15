@@ -11,9 +11,10 @@ use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::{
+    io,
     io::AsyncWriteExt,
     process::Command,
-    sync::{mpsc, oneshot},
+    sync::{mpsc, oneshot, Mutex as TokioMutex},
 };
 use tracing::{debug, error, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -140,9 +141,12 @@ impl<'a> Visitor<'a> {
         };
         let mut tasks = FuturesUnordered::new();
 
+        // Create a mutex that holds the name of the task that has control of stdin
+        // TOOD: do we need the Arc here?
+        let stdin_lock = Arc::new(TokioMutex::new("")); // initial value is empty string
+
         tasks.push(tokio::spawn(async {
             let mut stdin_manager = Command::new("while true; do done");
-
             stdin_manager.stdin(Stdio::piped());
 
             let process = match self
@@ -154,15 +158,10 @@ impl<'a> Visitor<'a> {
                 None => None,
             };
 
-            loop {
-                if let Some(mut stdin) = process.unwrap().stdin.take() {
-                    stdin
-                        .write_all(b"Input to child process\n")
-                        .await
-                        .expect("Failed to write to stdin");
-                }
-
-                tokio::time::sleep(Duration::from_secs(1)).await;
+            let mut in_reader = io::BufReader::new(io::stdin()).lines();
+            while let Some(line) = in_reader.next_line().await.unwrap() {
+                // send line to stdin stream of the task that has the stdin_lock
+                // otherwise silently ignore the input.
             }
         }));
 
@@ -268,13 +267,17 @@ impl<'a> Visitor<'a> {
 
                     debug!("task_definition {:?}", task_definition);
                     let expect_stdin = task_definition.expect_stdin;
+
                     let mut exec_context = factory.exec_context(
                         info.clone(),
                         task_hash,
                         task_cache,
                         workspace_directory,
                         execution_env,
+                        // Give oure exec_context a copy of the stdin lock so it can
+                        // decide whether to acquire the lock or not
                         expect_stdin,
+                        stdin_lock.clone(),
                     );
 
                     let output_client = self.output_client(&info);
@@ -583,6 +586,7 @@ impl<'a> ExecContextFactory<'a> {
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
         expect_stdin: bool,
+        stdin_lock: Arc<TokioMutex<&str>>,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.opts.run_opts.args_for_task(&task_id);
@@ -607,7 +611,7 @@ impl<'a> ExecContextFactory<'a> {
             pass_through_args,
             errors: self.errors.clone(),
             expect_stdin: expect_stdin,
-            stdin_lock: Arc::new(Mutex::new(0)),
+            stdin_lock: stdin_lock,
         }
     }
 
@@ -642,7 +646,7 @@ struct ExecContext {
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
     expect_stdin: bool,
-    stdin_lock: Arc<Mutex<i32>>,
+    stdin_lock: Arc<TokioMutex<&str>>,
 }
 
 enum ExecOutcome {
@@ -781,6 +785,11 @@ impl ExecContext {
             return ExecOutcome::Internal;
         };
 
+        // TODO: only do this if expect_stdin is true
+        let mut guard = self.stdin_lock.lock().await;
+        *guard = self.task_id.task();
+        // Once we have this lock, the stdin manager task will send input to this task
+
         let mut cmd = Command::new(package_manager_binary);
         let mut args = vec!["run".to_string(), self.task_id.task().to_string()];
         if let Some(pass_through_args) = &self.pass_through_args {
@@ -795,14 +804,6 @@ impl ExecContext {
         cmd.current_dir(self.workspace_directory.as_path());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
-
-        // if self.expect_stdin {
-        //     debug!("piping stdin to parent process, because expect_stdin is true");
-        //     cmd.stdin(Stdio::piped());
-        // } else {
-        //     debug!("piping stdin to Stdio::null, because expect_stdin is false");
-        //     cmd.stdin(Stdio::null());
-        // }
 
         // We clear the env before populating it with variables we expect
         cmd.env_clear();
