@@ -822,10 +822,6 @@ impl ExecContext {
             }
         };
 
-        let stdin_mutex_clone = self.stdin_lock.clone();
-        debug!("acquiring stdin lock for {}", self.task_id);
-        let _guard = stdin_mutex_clone.lock();
-
         let mut process = match self.manager.spawn(cmd, Duration::from_millis(500)) {
             Some(Ok(child)) => child,
             // Turbo was unable to spawn a process
