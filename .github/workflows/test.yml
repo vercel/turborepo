@@ -166,6 +166,13 @@ jobs:
           PATTERNS: |
             packages/**
 
+      - name: Docs related changes
+        id: docs
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            docs/**
+
       - name: Formatting related changes
         id: format
         uses: technote-space/get-diff-action@v6
@@ -188,6 +195,7 @@ jobs:
       turborepo_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' || steps.turborepo_version.outputs.diff != '' }}
       turborepo_js: ${{ steps.ci.outputs.diff != '' || steps.turborepo_js.outputs.diff != '' }}
+      docs: ${{ steps.ci.outputs.diff != '' || steps.docs.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
       tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
@@ -447,7 +455,7 @@ jobs:
   js_packages:
     name: JS Package Tests
     timeout-minutes: 30
-    if: needs.determine_jobs.outputs.turborepo_js == 'true'
+    if: needs.determine_jobs.outputs.turborepo_js == 'true' || needs.determine_jobs.outputs.docs == 'true'
     needs: [determine_jobs]
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -489,7 +497,7 @@ jobs:
 
       - name: Run tests
         run: |
-          turbo run check-types test --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+          turbo run check-types test --filter=docs --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
