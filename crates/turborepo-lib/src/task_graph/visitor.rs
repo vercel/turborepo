@@ -1,7 +1,7 @@
 use std::{
     borrow::Cow,
     collections::HashSet,
-    io::Write,
+    io::{BufRead, Write},
     process::Stdio,
     sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
@@ -11,10 +11,9 @@ use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::{
-    io,
-    io::{AsyncBufReadExt, AsyncWriteExt},
+    io::AsyncWriteExt,
     process::Command,
-    sync::{mpsc, oneshot, Mutex as TokioMutex},
+    sync::{mpsc, oneshot},
 };
 use tracing::{debug, error, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -82,18 +81,6 @@ pub enum Error {
     RunSummary(#[from] summary::Error),
 }
 
-pub struct StdinManager {
-    lock: Arc<TokioMutex<&str>>,
-}
-
-impl StdinManager {
-    pub fn new() {
-        Self {
-            lock: Arc::new(TokioMutex::new("")),
-        }
-    }
-}
-
 impl<'a> Visitor<'a> {
     // Disabling this lint until we stop adding state to the visitor.
     // Once we have the full picture we will go about grouping these pieces of data
@@ -151,21 +138,9 @@ impl<'a> Visitor<'a> {
             let engine = engine.clone();
             tokio::spawn(engine.execute(ExecutionOptions::new(false, concurrency), node_sender))
         };
-        let stdin_manager = StdinManager::new();
         let mut tasks = FuturesUnordered::new();
-
-        tasks.push(tokio::spawn(async move {
-            let mut in_reader = io::BufReader::new(io::stdin()).lines();
-            while let Some(_line) = in_reader.next_line().await.unwrap() {
-                // send line to stdin stream of the task that has the stdin_lock
-                // otherwise silently ignore the input.
-            }
-        }));
-
         let errors = Arc::new(Mutex::new(Vec::new()));
-
         let span = Span::current();
-
         let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine);
 
         while let Some(message) = node_stream.recv().await {
@@ -274,7 +249,6 @@ impl<'a> Visitor<'a> {
                         // Give our exec_context a copy of the stdin lock so it can
                         // decide whether to acquire the lock or not
                         interactive,
-                        &stdin_manager,
                     );
 
                     let output_client = self.output_client(&info);
@@ -283,13 +257,6 @@ impl<'a> Visitor<'a> {
                     let parent_span = Span::current();
 
                     tasks.push(tokio::spawn(async move {
-                        // Get a lock on stdin, so stdin manager task will send user input to this
-                        // task.
-                        // TODO: only do this if interactive is true
-                        let mut lock = exec_context.stdin_mgr.lock().await;
-                        let task_id = exec_context.task_id.clone();
-                        *lock = &task_id.task();
-
                         exec_context
                             .execute(
                                 parent_span.id(),
@@ -590,7 +557,6 @@ impl<'a> ExecContextFactory<'a> {
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
         interactive: bool,
-        stdin_mgr: &StdinManager,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.opts.run_opts.args_for_task(&task_id);
@@ -615,7 +581,7 @@ impl<'a> ExecContextFactory<'a> {
             pass_through_args,
             errors: self.errors.clone(),
             interactive: interactive,
-            stdin_mgr: stdin_mgr,
+            // stdin_mgr: stdin_mgr,
         }
     }
 
@@ -650,7 +616,6 @@ struct ExecContext {
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
     interactive: bool,
-    stdin_mgr: &StdinManager,
 }
 
 enum ExecOutcome {
@@ -802,6 +767,14 @@ impl ExecContext {
         }
         cmd.args(args);
         cmd.current_dir(self.workspace_directory.as_path());
+
+        if self.interactive {
+            debug!("setting stdin to piped");
+            cmd.stdin(Stdio::piped());
+        } else {
+            cmd.stdin(Stdio::null());
+        }
+
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
@@ -821,6 +794,37 @@ impl ExecContext {
                 return ExecOutcome::Internal;
             }
         };
+
+        // declare a channel
+        let (sender, receiver) = std::sync::mpsc::sync_channel::<tokio::process::ChildStdin>(1);
+        if self.interactive {
+            std::thread::spawn(move || {
+                debug!("starting thread to read parent stdin");
+                let mut handle = std::io::stdin().lock();
+                debug!("locked parent stdin");
+
+                let mut child_stdin = match receiver.recv() {
+                    Ok(child_stdin) => child_stdin,
+                    Err(_) => {
+                        debug!("no notification form child, exiting stdin thread");
+                        // TODO: log the error
+                        return;
+                    }
+                };
+
+                debug!("child is ready to receive stdin");
+                let mut buffer = String::new();
+                debug!("got me a buffer");
+                // TODO: read_line doesn't cover the case of when the user doesn't hit enter
+                // TODO: handle error
+                debug!("started reading parent stdin handle");
+                let _ = handle.read_line(&mut buffer);
+
+                // write data from parent stdin to child_stdin
+                let _ = child_stdin.write_all(buffer.as_bytes());
+                debug!("wrote bytes to child stdin: {}", buffer.clone());
+            });
+        }
 
         let mut process = match self.manager.spawn(cmd, Duration::from_millis(500)) {
             Some(Ok(child)) => child,
@@ -843,6 +847,15 @@ impl ExecContext {
                 return ExecOutcome::Internal;
             }
         };
+
+        if self.interactive {
+            let stdin = process.stdin().unwrap();
+            debug!(
+                "Nottifying other thread that {} is ready to receive stdin from parent",
+                self.task_id_for_display
+            );
+            let _ = sender.send(stdin);
+        }
 
         let exit_status = match process
             .wait_with_piped_outputs(&mut stdout_writer, None)
