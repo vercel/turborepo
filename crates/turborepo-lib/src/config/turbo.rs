@@ -28,7 +28,9 @@ pub struct SpacesJson {
 // A turbo.json config that is synthesized but not yet resolved.
 // This means that we've done the work to synthesize the config from
 // package.json, but we haven't yet resolved the workspace
-// turbo.json files into a single definition.
+// turbo.json files into a single definition. Therefore we keep the
+// `RawTaskDefinition` type so we can determine which fields are actually
+// set when we resolve the configuration.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct SynthesizedTurboJson {
     pub(crate) extends: Vec<String>,
