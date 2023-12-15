@@ -9,6 +9,7 @@
     "build": "next build ",
     "lint": "next lint --max-warnings 170",
     "type-check": "tsc --noEmit",
+    "check-types": "tsc --noEmit",
     "rss": "node scripts/generate-rss.js",
     "schema": "turbo-types-generate ./public/schema.json",
     "lint:prettier": "prettier -c . --cache --ignore-path=../.prettierignore"
