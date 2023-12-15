@@ -55,7 +55,6 @@ impl Default for TelemetryConfigContents {
 #[derive(Debug)]
 pub struct TelemetryConfig {
     config_path: String,
-    ui: UI,
     config: TelemetryConfigContents,
 }
 
@@ -82,7 +81,7 @@ pub fn is_debug() -> bool {
 }
 
 impl TelemetryConfig {
-    pub fn new(ui: UI) -> Result<TelemetryConfig, ConfigError> {
+    pub fn new() -> Result<TelemetryConfig, ConfigError> {
         let file_path = &get_config_path()?;
         debug!("Telemetry config path: {}", file_path);
 
@@ -114,7 +113,6 @@ impl TelemetryConfig {
 
         let config = TelemetryConfig {
             config_path: file_path.to_string(),
-            ui,
             config,
         };
 
@@ -133,41 +131,36 @@ impl TelemetryConfig {
         salt_string(&self.config.telemetry_salt, input)
     }
 
-    pub fn show_alert(&mut self) {
+    pub fn show_alert(&mut self, ui: UI) {
         if !self.has_seen_alert() && self.is_enabled() {
             println!(
                 "\n{}\n{}\n{}\n{}\n{}\n",
-                color!(self.ui, BOLD, "{}", "Attention:"),
+                color!(ui, BOLD, "{}", "Attention:"),
                 color!(
-                    self.ui,
+                    ui,
                     GREY,
                     "{}",
                     "Turborepo now collects completely anonymous telemetry regarding usage."
                 ),
                 color!(
-                    self.ui,
+                    ui,
                     GREY,
                     "{}",
                     "This information is used to shape the Turborepo roadmap and prioritize \
                      features."
                 ),
                 color!(
-                    self.ui,
+                    ui,
                     GREY,
                     "{}",
                     "You can learn more, including how to opt-out if you'd not like to \
                      participate in this anonymous program, by visiting the following URL:"
                 ),
                 color!(
-                    self.ui,
+                    ui,
                     UNDERLINE,
                     "{}",
-                    color!(
-                        self.ui,
-                        GREY,
-                        "{}",
-                        "https://turbo.build/repo/docs/telemetry"
-                    )
+                    color!(ui, GREY, "{}", "https://turbo.build/repo/docs/telemetry")
                 ),
             );
 

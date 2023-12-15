@@ -13,8 +13,8 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
-    events::{Fallback, KeyVal, TelemetryEvent},
-    init_telemetry, telem, TelemetryHandle,
+    events::{command::CommandEventBuilder, Event, EventType, PubEventBuilder},
+    init_telemetry, TelemetryHandle,
 };
 use turborepo_ui::UI;
 
@@ -793,14 +793,14 @@ pub async fn run(
 
     let cli_result = match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
-            telem(TelemetryEvent::KeyVal(KeyVal::command("bin")));
+            CommandEventBuilder::new("bin").track_call();
             bin::run()?;
 
             Ok(Payload::Rust(Ok(0)))
         }
         #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {
-            telem(TelemetryEvent::KeyVal(KeyVal::command("daemon")));
+            CommandEventBuilder::new("daemon").track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
             match command {
@@ -823,7 +823,7 @@ pub async fn run(
             args,
             command,
         } => {
-            telem(TelemetryEvent::KeyVal(KeyVal::command("generate")));
+            let event = CommandEventBuilder::new("generate").track_call();
             // build GeneratorCustomArgs struct
             let args = GeneratorCustomArgs {
                 generator_name: generator_name.clone(),
@@ -831,18 +831,19 @@ pub async fn run(
                 root: root.clone(),
                 args: args.clone(),
             };
-
-            generate::run(tag, command, &args)?;
+            let mut child_event = event.child();
+            generate::run(tag, command, &args, &mut child_event)?;
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Telemetry { command } => {
-            telem(TelemetryEvent::KeyVal(KeyVal::command("telemetry")));
+            let event = CommandEventBuilder::new("telemetry").track_call();
             let mut base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
-            telemetry::configure(command, &mut base);
+            let mut child_event = event.child();
+            telemetry::configure(command, &mut base, &mut child_event);
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Info { workspace, json } => {
-            telem(TelemetryEvent::KeyVal(KeyVal::command("info")));
+            CommandEventBuilder::new("info").track_call();
             let json = *json;
             let workspace = workspace.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
@@ -854,7 +855,7 @@ pub async fn run(
             no_gitignore,
             target,
         } => {
-            telem(TelemetryEvent::KeyVal(KeyVal::command("link")));
+            CommandEventBuilder::new("link").track_call();
             if cli_args.test_run {
                 println!("Link test run successful");
                 return Ok(Payload::Rust(Ok(0)));
@@ -871,14 +872,14 @@ pub async fn run(
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Logout { .. } => {
-            telem(TelemetryEvent::KeyVal(KeyVal::command("logout")));
+            CommandEventBuilder::new("logout").track_call();
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
             logout::logout(&mut base)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Login { sso_team } => {
-            telem(TelemetryEvent::KeyVal(KeyVal::command("login")));
+            CommandEventBuilder::new("login").track_call();
             if cli_args.test_run {
                 println!("Login test run successful");
                 return Ok(Payload::Rust(Ok(0)));
@@ -897,7 +898,7 @@ pub async fn run(
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Unlink { target } => {
-            telem(TelemetryEvent::KeyVal(KeyVal::command("unlink")));
+            CommandEventBuilder::new("unlink").track_call();
             if cli_args.test_run {
                 println!("Unlink test run successful");
                 return Ok(Payload::Rust(Ok(0)));
@@ -911,7 +912,7 @@ pub async fn run(
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Run(args) => {
-            telem(TelemetryEvent::KeyVal(KeyVal::command("run")));
+            let event = CommandEventBuilder::new("run").track_call();
             // in the case of enabling the run stub, we want to be able to opt-in
             // to the rust codepath for running turbo
             if args.tasks.is_empty() {
@@ -927,10 +928,11 @@ pub async fn run(
             let should_use_go = args.go_fallback
                 || env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false");
 
-            telem(TelemetryEvent::Fallback(Fallback {
-                go_arg: args.go_fallback,
-                rust_env_var: env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false"),
-            }));
+            event.track(Event {
+                key: "go_fallback".to_string(),
+                value: should_use_go.to_string(),
+                is_sensitive: EventType::NonSensitive,
+            });
 
             if should_use_go {
                 // we have to clear the telemetry queue before we hand off to go
@@ -951,7 +953,7 @@ pub async fn run(
             docker,
             output_dir,
         } => {
-            telem(TelemetryEvent::KeyVal(KeyVal::command("prune")));
+            CommandEventBuilder::new("prune").track_call();
             let scope = scope_arg
                 .as_ref()
                 .or(scope.as_ref())
@@ -964,7 +966,7 @@ pub async fn run(
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Completion { shell } => {
-            telem(TelemetryEvent::KeyVal(KeyVal::command("completion")));
+            CommandEventBuilder::new("completion").track_call();
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
             Ok(Payload::Rust(Ok(0)))
         }

@@ -1,4 +1,7 @@
-use turborepo_telemetry::config::TelemetryConfig;
+use turborepo_telemetry::{
+    config::TelemetryConfig,
+    events::{command::CommandEventBuilder, Event, EventType, PubEventBuilder},
+};
 use turborepo_ui::{color, BOLD, BOLD_GREEN, BOLD_RED};
 
 use super::CommandBase;
@@ -33,8 +36,12 @@ fn log_error(message: &str, error: &str, base: &CommandBase) {
     );
 }
 
-pub fn configure(command: &Option<Box<TelemetryCommand>>, base: &mut CommandBase) {
-    let config = TelemetryConfig::new(base.ui);
+pub fn configure(
+    command: &Option<Box<TelemetryCommand>>,
+    base: &mut CommandBase,
+    telemetry: &mut CommandEventBuilder,
+) {
+    let config = TelemetryConfig::new();
     let mut config = match config {
         Ok(config) => config,
         Err(e) => {
@@ -50,6 +57,11 @@ pub fn configure(command: &Option<Box<TelemetryCommand>>, base: &mut CommandBase
                 Ok(_) => {
                     println!("{}", color!(base.ui, BOLD, "{}", "Success!"));
                     log_status(config, base);
+                    telemetry.track(Event {
+                        key: "action".to_string(),
+                        value: "enabled".to_string(),
+                        is_sensitive: EventType::NonSensitive,
+                    });
                 }
                 Err(e) => log_error("Failed to enable telemetry", &e.to_string(), base),
             }
@@ -60,6 +72,11 @@ pub fn configure(command: &Option<Box<TelemetryCommand>>, base: &mut CommandBase
                 Ok(_) => {
                     println!("{}", color!(base.ui, BOLD, "{}", "Success!"));
                     log_status(config, base);
+                    telemetry.track(Event {
+                        key: "action".to_string(),
+                        value: "disabled".to_string(),
+                        is_sensitive: EventType::NonSensitive,
+                    });
                 }
                 Err(e) => log_error("Failed to disable telemetry", &e.to_string(), base),
             }

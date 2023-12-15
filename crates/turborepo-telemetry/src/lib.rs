@@ -92,8 +92,8 @@ pub fn init_telemetry(
 
     let (tx, rx) = mpsc::unbounded_channel();
     let (cancel_tx, cancel_rx) = oneshot::channel();
-    let mut config = TelemetryConfig::new(ui)?;
-    config.show_alert();
+    let mut config = TelemetryConfig::new()?;
+    config.show_alert(ui);
 
     let session_id = Uuid::new_v4();
     let worker = Worker {
