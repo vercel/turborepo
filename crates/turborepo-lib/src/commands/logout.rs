@@ -9,42 +9,39 @@ pub async fn logout(base: &mut CommandBase) -> Result<(), Error> {
     let config_path = base.global_config_path()?;
     let mut auth_file = read_or_create_auth_file(&auth_path, &config_path, &client).await?;
 
-    if auth_file.tokens().is_empty() {
-        println!("No tokens to remove");
-        return Ok(());
-    }
+    match auth_file.tokens().len() {
+        0 => {
+            println!("No tokens to remove");
+            return Ok(());
+        }
+        1 => {
+            auth_file.tokens_mut().clear();
+        }
+        _ => {
+            let items = &auth_file
+                .tokens()
+                .iter()
+                .map(|t| {
+                    let token = AuthToken {
+                        api: t.0.to_string(),
+                        token: t.1.to_string(),
+                    };
+                    token.friendly_api_display().to_string()
+                })
+                .collect::<Vec<_>>();
 
-    // Don't prompt when there's only one token to logout for.
-    if auth_file.tokens().len() <= 1 {
-        auth_file.tokens_mut().clear();
-    } else {
-        // Make a friendly display for the user to select from.
-        let items = &auth_file
-            .tokens()
-            .iter()
-            .map(|t| {
-                let token = AuthToken {
-                    api: t.0.to_string(),
-                    token: t.1.to_string(),
-                };
-                token.friendly_api_display().to_string()
-            })
-            .collect::<Vec<_>>();
+            let index = base
+                .ui
+                .display_selectable_items("Select api to log out of:", items)
+                .unwrap();
 
-        let index = base
-            .ui
-            .display_selectable_items("Select api to log out of:", items)
-            .unwrap();
+            let api = items[index].split_whitespace().next().unwrap();
 
-        // Remove the token display from the api we're trying to remove.
-        let api = items[index].split_whitespace().next().unwrap();
-
-        if let Some(token) = auth_file.get_token(api) {
+            let token = auth_file
+                .get_token(api)
+                .ok_or(Error::Auth(turborepo_auth::Error::FailedToGetToken))?;
             println!("Removing token for {}", token.friendly_api_display());
             auth_file.remove(api);
-        } else {
-            // This should never happen, but just in case.
-            return Err(Error::Auth(turborepo_auth::Error::FailedToGetToken));
         }
     }
 
