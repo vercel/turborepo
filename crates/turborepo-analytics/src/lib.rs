@@ -84,6 +84,7 @@ impl AnalyticsHandle {
 
     /// Closes the handle with an explicit timeout. If the handle fails to close
     /// within that timeout, it will log an error and drop the handle.
+    #[tracing::instrument(skip_all)]
     pub async fn close_with_timeout(self) {
         if let Err(err) = tokio::time::timeout(EVENT_TIMEOUT, self.close()).await {
             debug!("failed to close analytics handle. error: {}", err)
