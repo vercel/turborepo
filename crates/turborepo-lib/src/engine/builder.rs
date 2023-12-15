@@ -9,9 +9,7 @@ use turborepo_repository::package_graph::{
 
 use super::Engine;
 use crate::{
-    config::{
-        validate_extends, validate_no_package_task_syntax, RawTaskDefinition, SynthesizedTurboJson,
-    },
+    config::{validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJson},
     run::task_id::{TaskId, TaskName},
     task_graph::TaskDefinition,
 };
@@ -45,7 +43,7 @@ pub struct EngineBuilder<'a> {
     repo_root: &'a AbsoluteSystemPath,
     package_graph: &'a PackageGraph,
     is_single: bool,
-    turbo_jsons: Option<HashMap<WorkspaceName, SynthesizedTurboJson>>,
+    turbo_jsons: Option<HashMap<WorkspaceName, TurboJson>>,
     workspaces: Vec<WorkspaceName>,
     tasks: Vec<TaskName<'static>>,
     root_enabled_tasks: HashSet<TaskName<'static>>,
@@ -72,7 +70,7 @@ impl<'a> EngineBuilder<'a> {
 
     pub fn with_turbo_jsons(
         mut self,
-        turbo_jsons: Option<HashMap<WorkspaceName, SynthesizedTurboJson>>,
+        turbo_jsons: Option<HashMap<WorkspaceName, TurboJson>>,
     ) -> Self {
         self.turbo_jsons = turbo_jsons;
         self
@@ -267,7 +265,7 @@ impl<'a> EngineBuilder<'a> {
 
     fn has_task_definition(
         &self,
-        turbo_jsons: &mut HashMap<WorkspaceName, SynthesizedTurboJson>,
+        turbo_jsons: &mut HashMap<WorkspaceName, TurboJson>,
         workspace: &WorkspaceName,
         task_name: &TaskName<'static>,
         task_id: &TaskId,
@@ -301,7 +299,7 @@ impl<'a> EngineBuilder<'a> {
 
     fn task_definition_chain(
         &self,
-        turbo_jsons: &mut HashMap<WorkspaceName, SynthesizedTurboJson>,
+        turbo_jsons: &mut HashMap<WorkspaceName, TurboJson>,
         task_id: &TaskId,
         task_name: &TaskName,
     ) -> Result<Vec<RawTaskDefinition>, Error> {
@@ -362,9 +360,9 @@ impl<'a> EngineBuilder<'a> {
 
     fn turbo_json<'b>(
         &self,
-        turbo_jsons: &'b mut HashMap<WorkspaceName, SynthesizedTurboJson>,
+        turbo_jsons: &'b mut HashMap<WorkspaceName, TurboJson>,
         workspace: &WorkspaceName,
-    ) -> Result<Option<&'b SynthesizedTurboJson>, Error> {
+    ) -> Result<Option<&'b TurboJson>, Error> {
         if turbo_jsons.get(workspace).is_none() {
             let json = self.load_turbo_json(workspace)?;
             turbo_jsons.insert(workspace.clone(), json);
@@ -372,7 +370,7 @@ impl<'a> EngineBuilder<'a> {
         Ok(turbo_jsons.get(workspace))
     }
 
-    fn load_turbo_json(&self, workspace: &WorkspaceName) -> Result<SynthesizedTurboJson, Error> {
+    fn load_turbo_json(&self, workspace: &WorkspaceName) -> Result<TurboJson, Error> {
         let package_json = self.package_graph.package_json(workspace).ok_or_else(|| {
             Error::MissingPackageJson {
                 workspace: workspace.clone(),
@@ -385,7 +383,7 @@ impl<'a> EngineBuilder<'a> {
                         workspace: workspace.clone(),
                     }
                 })?);
-        Ok(SynthesizedTurboJson::load(
+        Ok(TurboJson::load(
             &workspace_dir,
             package_json,
             self.is_single,
@@ -555,9 +553,9 @@ mod test {
         assert_eq!(turbo_json.pipeline.len(), 1);
     }
 
-    fn turbo_json(value: serde_json::Value) -> SynthesizedTurboJson {
+    fn turbo_json(value: serde_json::Value) -> TurboJson {
         let raw: RawTurboJson = serde_json::from_value(value).unwrap();
-        SynthesizedTurboJson::try_from(raw).unwrap()
+        TurboJson::try_from(raw).unwrap()
     }
 
     #[test_case(WorkspaceName::Root, "build", "//#build", true ; "root task")]

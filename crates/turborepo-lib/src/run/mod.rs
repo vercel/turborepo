@@ -39,7 +39,7 @@ pub use crate::run::error::Error;
 use crate::{
     cli::{DryRunMode, EnvMode},
     commands::CommandBase,
-    config::SynthesizedTurboJson,
+    config::TurboJson,
     daemon::DaemonConnector,
     engine::{Engine, EngineBuilder},
     opts::Opts,
@@ -236,11 +236,8 @@ impl<'a> Run<'a> {
                 .build()
                 .await?;
 
-        let root_turbo_json = SynthesizedTurboJson::load(
-            &self.base.repo_root,
-            &root_package_json,
-            is_single_package,
-        )?;
+        let root_turbo_json =
+            TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
 
         let team_id = root_turbo_json
             .remote_cache
@@ -472,7 +469,7 @@ impl<'a> Run<'a> {
         &self,
         pkg_dep_graph: &PackageGraph,
         opts: &Opts,
-        root_turbo_json: &SynthesizedTurboJson,
+        root_turbo_json: &TurboJson,
         filtered_pkgs: &HashSet<WorkspaceName>,
     ) -> Result<Engine, Error> {
         let engine = EngineBuilder::new(

@@ -32,7 +32,7 @@ pub struct SpacesJson {
 // `RawTaskDefinition` type so we can determine which fields are actually
 // set when we resolve the configuration.
 #[derive(Debug, Default, Clone, PartialEq)]
-pub struct SynthesizedTurboJson {
+pub struct TurboJson {
     pub(crate) extends: Vec<String>,
     pub(crate) global_deps: Vec<String>,
     pub(crate) global_dot_env: Option<Vec<RelativeUnixPathBuf>>,
@@ -331,7 +331,7 @@ impl RawTurboJson {
     }
 }
 
-impl TryFrom<RawTurboJson> for SynthesizedTurboJson {
+impl TryFrom<RawTurboJson> for TurboJson {
     type Error = Error;
 
     fn try_from(raw_turbo: RawTurboJson) -> Result<Self, Error> {
@@ -369,7 +369,7 @@ impl TryFrom<RawTurboJson> for SynthesizedTurboJson {
             }
         }
 
-        Ok(SynthesizedTurboJson {
+        Ok(TurboJson {
             global_env: {
                 let mut global_env: Vec<_> = global_env.into_iter().collect();
                 global_env.sort();
@@ -414,14 +414,14 @@ impl TryFrom<RawTurboJson> for SynthesizedTurboJson {
     }
 }
 
-impl SynthesizedTurboJson {
+impl TurboJson {
     /// Loads turbo.json by reading the file at `dir` and optionally combining
     /// with synthesized information from the provided package.json
     pub fn load(
         dir: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
         include_synthesized_from_root_package_json: bool,
-    ) -> Result<SynthesizedTurboJson, Error> {
+    ) -> Result<TurboJson, Error> {
         if root_package_json.legacy_turbo_config.is_some() {
             println!(
                 "[WARNING] \"turbo\" in package.json is no longer supported. Migrate to {} by \
@@ -441,7 +441,7 @@ impl SynthesizedTurboJson {
             // We're not synthesizing anything and there was no error, we're done
             (false, Ok(turbo)) => return Ok(turbo),
             // turbo.json doesn't exist, but we're going try to synthesize something
-            (true, Err(Error::Io(_))) => SynthesizedTurboJson::default(),
+            (true, Err(Error::Io(_))) => TurboJson::default(),
             // some other happened, we can't recover
             (true, Err(e)) => return Err(e),
             // we're synthesizing, but we have a starting point
@@ -496,7 +496,7 @@ impl SynthesizedTurboJson {
 
     /// Reads a `RawTurboJson` from the given path
     /// and then converts it into `TurboJson`
-    pub(crate) fn read(path: &AbsoluteSystemPath) -> Result<SynthesizedTurboJson, Error> {
+    pub(crate) fn read(path: &AbsoluteSystemPath) -> Result<TurboJson, Error> {
         let raw_turbo_json = RawTurboJson::read(path)?;
         raw_turbo_json.try_into()
     }
@@ -516,9 +516,9 @@ impl SynthesizedTurboJson {
     }
 }
 
-type TurboJSONValidation = fn(&SynthesizedTurboJson) -> Vec<Error>;
+type TurboJSONValidation = fn(&TurboJson) -> Vec<Error>;
 
-pub fn validate_no_package_task_syntax(turbo_json: &SynthesizedTurboJson) -> Vec<Error> {
+pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
     turbo_json
         .pipeline
         .keys()
@@ -530,7 +530,7 @@ pub fn validate_no_package_task_syntax(turbo_json: &SynthesizedTurboJson) -> Vec
         .collect()
 }
 
-pub fn validate_extends(turbo_json: &SynthesizedTurboJson) -> Vec<Error> {
+pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
     match turbo_json.extends.first() {
         Some(package_name) if package_name != ROOT_PKG_NAME || turbo_json.extends.len() > 1 => {
             vec![Error::ExtendFromNonRoot]
@@ -574,41 +574,41 @@ mod tests {
         cli::OutputLogsMode,
         config::{
             turbo::{Pipeline, RawTaskDefinition},
-            SynthesizedTurboJson,
+            TurboJson,
         },
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
     };
 
-    #[test_case(r"{}", SynthesizedTurboJson::default() ; "empty")]
+    #[test_case(r"{}", TurboJson::default() ; "empty")]
     #[test_case(r#"{ "globalDependencies": ["tsconfig.json", "jest.config.js"] }"#,
-        SynthesizedTurboJson {
+        TurboJson {
             global_deps: vec!["jest.config.js".to_string(), "tsconfig.json".to_string()],
-            ..SynthesizedTurboJson::default()
+            ..TurboJson::default()
         }
     ; "global dependencies (sorted)")]
     #[test_case(r#"{ "globalDotEnv": [".env.local", ".env"] }"#,
-        SynthesizedTurboJson {
+        TurboJson {
             global_dot_env: Some(vec![RelativeUnixPathBuf::new(".env.local").unwrap(), RelativeUnixPathBuf::new(".env").unwrap()]),
-            ..SynthesizedTurboJson::default()
+            ..TurboJson::default()
         }
     ; "global dot env (unsorted)")]
     #[test_case(r#"{ "globalPassThroughEnv": ["GITHUB_TOKEN", "AWS_SECRET_KEY"] }"#,
-        SynthesizedTurboJson {
+        TurboJson {
             global_pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string(), "GITHUB_TOKEN".to_string()]),
-            ..SynthesizedTurboJson::default()
+            ..TurboJson::default()
         }
     )]
     fn test_get_root_turbo_no_synthesizing(
         turbo_json_content: &str,
-        expected_turbo_json: SynthesizedTurboJson,
+        expected_turbo_json: TurboJson,
     ) -> Result<()> {
         let root_dir = tempdir()?;
         let root_package_json = PackageJson::default();
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
         fs::write(repo_root.join_component("turbo.json"), turbo_json_content)?;
 
-        let turbo_json = SynthesizedTurboJson::load(repo_root, &root_package_json, false)?;
+        let turbo_json = TurboJson::load(repo_root, &root_package_json, false)?;
         assert_eq!(turbo_json, expected_turbo_json);
 
         Ok(())
@@ -620,7 +620,7 @@ mod tests {
              scripts: [("build".to_string(), "echo build".to_string())].into_iter().collect(),
              ..PackageJson::default()
         },
-        SynthesizedTurboJson {
+        TurboJson {
             pipeline: Pipeline([(
                 "//#build".into(),
                 RawTaskDefinition {
@@ -628,7 +628,7 @@ mod tests {
                   ..RawTaskDefinition::default()
                 }
             )].into_iter().collect()),
-            ..SynthesizedTurboJson::default()
+            ..TurboJson::default()
         }
     )]
     #[test_case(
@@ -637,7 +637,7 @@ mod tests {
             legacy_turbo_config: Some(serde_json::Value::String("build".to_string())),
             ..PackageJson::default()
         },
-        SynthesizedTurboJson::default()
+        TurboJson::default()
     )]
     #[test_case(
         Some(r#"{
@@ -651,7 +651,7 @@ mod tests {
              scripts: [("test".to_string(), "echo test".to_string())].into_iter().collect(),
              ..PackageJson::default()
         },
-        SynthesizedTurboJson {
+        TurboJson {
             pipeline: Pipeline([(
                 "//#build".into(),
                 RawTaskDefinition {
@@ -666,13 +666,13 @@ mod tests {
                   ..RawTaskDefinition::default()
                 }
             )].into_iter().collect()),
-            ..SynthesizedTurboJson::default()
+            ..TurboJson::default()
         }
     )]
     fn test_get_root_turbo_with_synthesizing(
         turbo_json_content: Option<&str>,
         root_package_json: PackageJson,
-        expected_turbo_json: SynthesizedTurboJson,
+        expected_turbo_json: TurboJson,
     ) -> Result<()> {
         let root_dir = tempdir()?;
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
@@ -681,7 +681,7 @@ mod tests {
             fs::write(repo_root.join_component("turbo.json"), content)?;
         }
 
-        let turbo_json = SynthesizedTurboJson::load(repo_root, &root_package_json, true)?;
+        let turbo_json = TurboJson::load(repo_root, &root_package_json, true)?;
         assert_eq!(turbo_json, expected_turbo_json);
 
         Ok(())

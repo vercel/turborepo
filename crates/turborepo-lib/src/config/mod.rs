@@ -5,8 +5,7 @@ use std::io;
 
 use thiserror::Error;
 pub use turbo::{
-    validate_extends, validate_no_package_task_syntax, RawTaskDefinition, RawTurboJson,
-    SynthesizedTurboJson,
+    validate_extends, validate_no_package_task_syntax, RawTaskDefinition, RawTurboJson, TurboJson,
 };
 pub use turbo_config::{ConfigurationOptions, TurborepoConfigBuilder};
 use turbopath::AbsoluteSystemPathBuf;
