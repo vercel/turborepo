@@ -14,7 +14,7 @@ use tokio::{
     process::Command,
     sync::{mpsc, oneshot},
 };
-use tracing::{debug, error, Span};
+use tracing::{debug, error, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_ci::github_header_footer;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
@@ -217,6 +217,9 @@ impl<'a> Visitor<'a> {
                 info.clone(),
                 &task_hash,
             );
+
+            // Drop to avoid holding the span across an await
+            drop(_enter);
 
             // here is where we do the logic split
             match self.dry {
@@ -646,7 +649,9 @@ impl ExecContext {
         spaces_client: Option<SpacesTaskClient>,
     ) {
         let tracker = tracker.start().await;
-        let mut result = self.execute_inner(parent_span_id, &output_client).await;
+        let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
+        span.follows_from(parent_span_id);
+        let mut result = self.execute_inner(&output_client).instrument(span).await;
 
         let logs = match output_client.finish() {
             Ok(logs) => logs,
@@ -711,13 +716,9 @@ impl ExecContext {
 
     async fn execute_inner(
         &mut self,
-        parent_span_id: Option<tracing::Id>,
         output_client: &OutputClient<impl std::io::Write>,
     ) -> ExecOutcome {
-        let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
         let task_start = Instant::now();
-        span.follows_from(parent_span_id);
-        let _enter = span.enter();
 
         let mut prefixed_ui = Visitor::prefixed_ui(
             self.ui,
