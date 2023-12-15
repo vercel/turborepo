@@ -821,7 +821,7 @@ impl ExecContext {
                 let _ = handle.read_line(&mut buffer);
 
                 // write data from parent stdin to child_stdin
-                let _ = child_stdin.write_all(buffer.as_bytes());
+                let _ = futures::executor::block_on(child_stdin.write_all(buffer.as_bytes()));
                 debug!("wrote bytes to child stdin: {}", buffer.clone());
             });
         }
