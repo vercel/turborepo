@@ -1,5 +1,6 @@
 use std::{collections::HashMap, ffi::OsString, io};
 
+use miette::SourceSpan;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
@@ -52,6 +53,7 @@ pub enum Error {
     InvalidEnvPrefix {
         value: String,
         key: String,
+        span: Option<SourceSpan>,
         env_pipeline_delimiter: &'static str,
     },
     #[error(transparent)]
@@ -185,7 +187,7 @@ impl ResolvedConfigurationOptions for PackageJson {
         match &self.legacy_turbo_config {
             Some(legacy_turbo_config) => {
                 let synthetic_raw_turbo_json: RawTurboJson =
-                    serde_json::from_value(legacy_turbo_config.clone())?;
+                    RawTurboJson::parse(legacy_turbo_config, "package.json")?;
                 synthetic_raw_turbo_json.get_configuration_options()
             }
             None => Ok(ConfigurationOptions::default()),
@@ -582,7 +584,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use crate::config::{
-        get_env_var_config, get_override_env_var_config, ConfigurationOptions, RawTurboJSON,
+        get_env_var_config, get_override_env_var_config, ConfigurationOptions, RawTurboJson,
         ResolvedConfigurationOptions, TurborepoConfigBuilder, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
         DEFAULT_TIMEOUT,
     };

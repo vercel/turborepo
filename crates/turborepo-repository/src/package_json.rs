@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, str::FromStr};
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
@@ -22,8 +22,13 @@ pub struct PackageJson {
     pub optional_dependencies: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_dependencies: Option<BTreeMap<String, String>>,
-    #[serde(rename = "turbo", skip_serializing_if = "Option::is_none")]
-    pub legacy_turbo_config: Option<serde_json::Value>,
+    #[serde(
+        rename = "turbo",
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_to_string"
+    )]
+    pub legacy_turbo_config: Option<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub scripts: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,6 +38,14 @@ pub struct PackageJson {
     // Unstructured fields kept for round trip capabilities
     #[serde(flatten)]
     pub other: BTreeMap<String, Value>,
+}
+
+// Deserializes an arbitrary JSON value to a string
+fn deserialize_to_string<'d, D: Deserializer<'d>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
+    let value = Option::<Value>::deserialize(deserializer)?;
+    Ok(value.map(|v| v.to_string()))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

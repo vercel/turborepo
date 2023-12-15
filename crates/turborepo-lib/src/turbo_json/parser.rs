@@ -15,7 +15,7 @@ use crate::{
     cli::OutputLogsMode,
     config::ConfigurationOptions,
     run::task_id::TaskName,
-    turbo_json::{Pipeline, RawTaskDefinition, RawTurboJson, SpacesJson},
+    turbo_json::{Pipeline, RawTaskDefinition, RawTurboJson, SpacesJson, Spanned},
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -35,6 +35,18 @@ fn print_diagnostics(diagnostics: &[biome_diagnostics::Error], color: bool) {
     let mut console = EnvConsole::new(color_mode);
     for diagnostic in diagnostics {
         console.error(markup!({ PrintDiagnostic::simple(diagnostic) }));
+    }
+}
+
+impl<T: Deserializable> Deserializable for Spanned<T> {
+    fn deserialize(
+        value: &impl DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        let range = value.range();
+        let value = T::deserialize(value, name, diagnostics)?;
+        Some(Spanned(value, Some(range.into())))
     }
 }
 
@@ -107,20 +119,21 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
             let Some(key_text) = Text::deserialize(&key, "", diagnostics) else {
                 continue;
             };
+            let range = value.range();
             match key_text.text() {
                 "cache" => {
                     if let Some(cache) = bool::deserialize(&value, &key_text, diagnostics) {
-                        result.cache = Some(cache);
+                        result.cache = Some(Spanned::new(cache).with_range(range));
                     }
                 }
                 "dependsOn" => {
                     if let Some(depends_on) = Vec::deserialize(&value, &key_text, diagnostics) {
-                        result.depends_on = Some(depends_on);
+                        result.depends_on = Some(Spanned::new(depends_on).with_range(range));
                     }
                 }
                 "dotEnv" => {
                     if let Some(dot_env) = Vec::deserialize(&value, &key_text, diagnostics) {
-                        result.dot_env = Some(dot_env);
+                        result.dot_env = Some(Spanned::new(dot_env).with_range(range));
                     }
                 }
                 "env" => {
@@ -130,7 +143,7 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
                 }
                 "inputs" => {
                     if let Some(inputs) = Vec::deserialize(&value, &key_text, diagnostics) {
-                        result.inputs = Some(inputs);
+                        result.inputs = Some(Spanned::new(inputs).with_range(range));
                     }
                 }
                 "passThroughEnv" => {
@@ -141,19 +154,19 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
                 }
                 "persistent" => {
                     if let Some(persistent) = bool::deserialize(&value, &key_text, diagnostics) {
-                        result.persistent = Some(persistent);
+                        result.persistent = Some(Spanned::new(persistent).with_range(range));
                     }
                 }
                 "outputs" => {
                     if let Some(outputs) = Vec::deserialize(&value, &key_text, diagnostics) {
-                        result.outputs = Some(outputs);
+                        result.outputs = Some(Spanned::new(outputs).with_range(range));
                     }
                 }
-                "output_mode" => {
+                "outputMode" => {
                     if let Some(output_mode) =
                         OutputLogsMode::deserialize(&value, &key_text, diagnostics)
                     {
-                        result.output_mode = Some(output_mode);
+                        result.output_mode = Some(Spanned::new(output_mode).with_range(range));
                     }
                 }
                 _ => {
@@ -166,7 +179,7 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
                         "passThroughEnv",
                         "persistent",
                         "outputs",
-                        "output_mode",
+                        "outputMode",
                     ];
                     diagnostics.push(DeserializationDiagnostic::new_unknown_key(
                         key_text.text(),
@@ -201,7 +214,7 @@ impl DeserializationVisitor for SpacesJsonVisitor {
     fn visit_map(
         self,
         members: impl Iterator<Item = Option<(impl DeserializableValue, impl DeserializableValue)>>,
-        _: TextRange,
+        _range: TextRange,
         _name: &str,
         diagnostics: &mut Vec<DeserializationDiagnostic>,
     ) -> Option<Self::Output> {
@@ -210,14 +223,10 @@ impl DeserializationVisitor for SpacesJsonVisitor {
             let Some(key_text) = Text::deserialize(&key, "", diagnostics) else {
                 continue;
             };
-            match key_text.text() {
-                "id" => {
-                    if let Some(id) = String::deserialize(&value, &key_text, diagnostics) {
-                        result.id = Some(id);
-                    }
+            if key_text.text() == "id" {
+                if let Some(id) = String::deserialize(&value, &key_text, diagnostics) {
+                    result.id = Some(id);
                 }
-                // We don't care about other keys currently
-                _ => {}
             }
         }
         Some(result)
@@ -351,7 +360,7 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
         // Iterator of key-value pairs.
         members: impl Iterator<Item = Option<(impl DeserializableValue, impl DeserializableValue)>>,
         // range of the map in the source text.
-        _: TextRange,
+        _range: TextRange,
         _name: &str,
         diagnostics: &mut Vec<DeserializationDiagnostic>,
     ) -> Option<Self::Output> {
@@ -363,22 +372,24 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
                 // If this failed, then pass to the next key-value pair.
                 continue;
             };
+            let range = value.range();
             match key_text.text() {
-                "schema" => {
+                "$schema" => {
                     if let Some(name) = String::deserialize(&value, &key_text, diagnostics) {
                         result.schema = Some(name);
                     }
                 }
                 "extends" => {
                     if let Some(extends) = Vec::deserialize(&value, &key_text, diagnostics) {
-                        result.extends = Some(extends);
+                        result.extends = Some(Spanned::new(extends).with_range(range));
                     }
                 }
                 "globalDependencies" => {
                     if let Some(global_dependencies) =
                         Vec::deserialize(&value, &key_text, diagnostics)
                     {
-                        result.global_dependencies = Some(global_dependencies);
+                        result.global_dependencies =
+                            Some(Spanned::new(global_dependencies).with_range(range));
                     }
                 }
                 "globalEnv" => {
@@ -440,6 +451,12 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
 }
 
 impl RawTurboJson {
+    // A simple helper for tests
+    #[cfg(test)]
+    pub fn parse_from_serde(value: serde_json::Value) -> Result<RawTurboJson, Error> {
+        let json_string = serde_json::to_string(&value).expect("should be able to serialize");
+        Self::parse(&json_string, "turbo.json")
+    }
     pub fn parse(text: &str, file_path: &str) -> Result<RawTurboJson, Error> {
         let result = deserialize_from_json_str::<RawTurboJson>(
             text,
@@ -464,10 +481,8 @@ impl RawTurboJson {
 
 #[cfg(test)]
 mod tests {
-    use miette::Report;
-
     use super::Error;
-    use crate::turbo_json::parser::{parse_turbo_json, print_diagnostics};
+    use crate::{config::RawTurboJson, turbo_json::parser::print_diagnostics};
 
     #[test]
     fn test_parse_turbo() {
@@ -478,19 +493,18 @@ mod tests {
            "build": { "dependsOn": ["lint"] }
          }
         }"#;
-        let result = parse_turbo_json(text, "turbo.json").unwrap();
+        let result = RawTurboJson::parse(text, "turbo.json").unwrap();
         println!("{:?}", result);
     }
 
     #[test]
     fn test_root_not_object() {
         let text = r#"10"#;
-        let error = parse_turbo_json(text, "turbo.json").unwrap_err();
+        let error = RawTurboJson::parse(text, "turbo.json").unwrap_err();
         match error {
             Error::Parse { diagnostics } => {
                 print_diagnostics(&diagnostics, true);
             }
-            err => println!("{:?}", Report::new(err)),
         }
     }
 }

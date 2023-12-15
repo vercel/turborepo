@@ -30,6 +30,8 @@ pub enum Error {
     #[error("path error while pruning: {0}")]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
+    TurboJsonParser(#[from] crate::turbo_json::parser::Error),
+    #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(transparent)]
     PackageGraph(#[from] package_graph::Error),
@@ -425,7 +427,7 @@ impl<'a> Prune<'a> {
 
         let new_turbo_path = self.full_directory.resolve(turbo_json());
 
-        let turbo_json_contents = match original_turbo_path.read() {
+        let turbo_json_contents = match original_turbo_path.read_to_string() {
             Ok(contents) => contents,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 // If turbo.json doesn't exist skip copying
@@ -433,9 +435,8 @@ impl<'a> Prune<'a> {
             }
             Err(e) => return Err(e.into()),
         };
-        let turbo_json: RawTurboJson = serde_json::from_reader(json_comments::StripComments::new(
-            turbo_json_contents.as_slice(),
-        ))?;
+
+        let turbo_json = RawTurboJson::parse(&turbo_json_contents, original_turbo_path.as_str())?;
 
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
         new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;

@@ -554,7 +554,8 @@ mod test {
     }
 
     fn turbo_json(value: serde_json::Value) -> TurboJson {
-        let raw: RawTurboJson = serde_json::from_value(value).unwrap();
+        let json_text = serde_json::to_string(&value).unwrap();
+        let raw = RawTurboJson::parse(&json_text, "").unwrap();
         TurboJson::try_from(raw).unwrap()
     }
 
