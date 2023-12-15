@@ -646,7 +646,6 @@ impl ExecContext {
         spaces_client: Option<SpacesTaskClient>,
     ) {
         let tracker = tracker.start().await;
-
         let mut result = self.execute_inner(parent_span_id, &output_client).await;
 
         let logs = match output_client.finish() {
@@ -787,7 +786,6 @@ impl ExecContext {
             }
         };
 
-        // declare a channel
         let (sender, receiver) = std::sync::mpsc::sync_channel::<tokio::process::ChildStdin>(1);
         if self.is_interactive {
             std::thread::spawn(move || {
