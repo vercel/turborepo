@@ -792,11 +792,7 @@ impl ExecContext {
                 let mut parent_stdin_handle = std::io::stdin().lock();
                 let mut child_stdin = match receiver.recv() {
                     Ok(child_stdin) => child_stdin,
-                    Err(_) => {
-                        debug!("no notification form child, exiting stdin thread");
-                        // TODO: log the error
-                        return;
-                    }
+                    Err(_) => return,
                 };
 
                 let mut buffer = String::new();
@@ -806,7 +802,6 @@ impl ExecContext {
 
                 // write data from parent stdin to child_stdin
                 let _ = futures::executor::block_on(child_stdin.write_all(buffer.as_bytes()));
-                debug!("wrote bytes to child stdin: {}", buffer.clone());
             });
         }
 
