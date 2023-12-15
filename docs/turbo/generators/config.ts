@@ -1,8 +1,8 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
+import type { PlopTypes } from "@turbo/gen";
 import { releasePostStats } from "./utils";
 import * as helpers from "./helpers";
-import type { PlopTypes } from "@turbo/gen";
 
 export default function generator(plop: PlopTypes.NodePlopAPI): void {
   // add helpers for use in templates

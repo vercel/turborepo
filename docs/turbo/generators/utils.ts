@@ -1,6 +1,6 @@
 import fetch from "node-fetch";
 
-interface Answers extends Object {
+interface Answers {
   turboStars: string;
   turboDownloads: string;
   turboYearsSaved: string;
@@ -22,11 +22,11 @@ export async function releasePostStats(answers: Answers): Promise<string> {
     ]);
 
   const [starsData, downloadsData, timeSavedData] = await Promise.all([
-    starsResponse.json() as { stargazers_count: number },
-    downloadsResponse.json() as {
-      downloads: Array<{ [key: string]: number }>;
+    starsResponse.json() as unknown as { stargazers_count: number },
+    downloadsResponse.json() as unknown as {
+      downloads: Record<string, number>[];
     },
-    timeSavedResponse.json() as {
+    timeSavedResponse.json() as unknown as {
       data: [
         {
           remote_cache_minutes_saved: number;
@@ -51,10 +51,9 @@ export async function releasePostStats(answers: Answers): Promise<string> {
     if (num < 1000) {
       return num.toString();
     } else if (num < 1000000) {
-      return (num / 1000).toFixed(1) + "k";
-    } else {
-      return (num / 1000000).toFixed(1) + "M";
+      return `${(num / 1000).toFixed(1)}k`;
     }
+    return `${(num / 1000000).toFixed(1)}M`;
   };
 
   // extend answers
