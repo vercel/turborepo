@@ -68,6 +68,7 @@ impl ArtifactSignatureAuthenticator {
         Ok(mac)
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn generate_tag_bytes(
         &self,
         hash: &[u8],
@@ -80,6 +81,7 @@ impl ArtifactSignatureAuthenticator {
         Ok(hmac_output.into_bytes().to_vec())
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn generate_tag(
         &self,
         hash: &[u8],
