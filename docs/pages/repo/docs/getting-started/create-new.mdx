@@ -101,8 +101,8 @@ You might have noticed something in the terminal. `create-turbo` gave you a desc
  - apps/web: Next.js with TypeScript
  - apps/docs: Next.js with TypeScript
  - packages/ui: Shared React component library
- - packages/eslint-config-custom: Shared configuration (ESLint)
- - packages/tsconfig: Shared TypeScript `tsconfig.json`
+ - packages/eslint-config: Shared configuration (ESLint)
+ - packages/typescript-config: Shared TypeScript `tsconfig.json`
 ```
 
 Each of these is a _workspace_ - a folder containing a `package.json`. Each workspace can declare its own dependencies, run its own scripts, and export code for other workspaces to use.
@@ -174,7 +174,7 @@ export default function Page() {
 
 They're importing `Button` directly from a dependency called `@repo/ui/button`! How does that work? Where is `Button` coming from?
 
-Open `packages/ui/package.json`. You'll notice these two attributes:
+Open `packages/ui/package.json`. You'll notice the `exports` field:
 
 ```json filename="packages/ui/package.json"
 {
@@ -186,7 +186,7 @@ Open `packages/ui/package.json`. You'll notice these two attributes:
 }
 ```
 
-When workspaces import from `@repo/ui/button`, `export` tells them where to access the code they're importing.
+When workspaces import from `@repo/ui/button`, `exports` tells them where to access the code they're importing.
 
 So, let's look inside `packages/ui/src/button.tsx`:
 
@@ -398,19 +398,6 @@ It had saved the logs from the previous run, so it just replayed them.
 
 Let's try changing some code to see what happens. Make a change to a file inside `apps/docs`:
 
-```diff filename="apps/docs/app/page.tsx"
-import { Button, Header } from "ui";
-
-export default function Page() {
-  return (
-    <>
--     <Header text="Docs" />
-+     <Header text="My great docs" />
-      <Button />
-    <>
-  );
-}
-```
 
 ```diff filename="apps/docs/app/page.tsx"
 import { Button } from "@repo/ui/button";
