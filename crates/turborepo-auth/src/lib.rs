@@ -139,10 +139,12 @@ mod tests {
     #[tokio::test]
     async fn test_read_or_create_auth_file_existing_config_file() {
         let tempdir = tempfile::tempdir().unwrap();
-        let tempdir_path = tempdir.path().join(TURBOREPO_AUTH_FILE_NAME);
-        let auth_file_path = AbsoluteSystemPath::new(tempdir_path.to_str().unwrap())
+        let tempdir_path = tempdir.path();
+        let auth_file_path = tempdir_path.join(TURBOREPO_AUTH_FILE_NAME);
+        let config_file_path = tempdir_path.join(TURBOREPO_LEGACY_AUTH_FILE_NAME);
+        let full_auth_file_path = AbsoluteSystemPath::new(auth_file_path.to_str().unwrap())
             .expect("Failed to create auth file path");
-        let config_file_path = AbsoluteSystemPath::new(tempdir_path.to_str().unwrap())
+        let full_config_file_path = AbsoluteSystemPath::new(config_file_path.to_str().unwrap())
             .expect("Failed to create config file path");
 
         // Create config file data
@@ -152,22 +154,24 @@ mod tests {
         .unwrap();
 
         // Write config file data to system.
-        let mut file = File::create(config_file_path).unwrap();
+        let mut file = File::create(full_config_file_path).unwrap();
         file.write_all(mock_config_file_data.as_bytes()).unwrap();
 
         let client = MockApiClient::new();
 
         // Test: Get the result of reading the auth file
-        let result = read_or_create_auth_file(auth_file_path, config_file_path, &client).await;
+        let result =
+            read_or_create_auth_file(full_auth_file_path, full_config_file_path, &client).await;
+        println!("{:?}", result);
 
         // Make sure no errors come back
         assert!(result.is_ok());
         // And then make sure the file was actually created on the fs
-        assert!(std::fs::try_exists(auth_file_path).unwrap_or(false));
+        assert!(std::fs::try_exists(full_auth_file_path).unwrap_or(false));
 
         // Then make sure the auth file contains the correct data
         let auth_file_check: AuthFile =
-            serde_json::from_str(&auth_file_path.read_to_string().unwrap()).unwrap();
+            serde_json::from_str(&full_auth_file_path.read_to_string().unwrap()).unwrap();
 
         let auth_file = result.unwrap();
 
