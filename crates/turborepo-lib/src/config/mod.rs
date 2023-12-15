@@ -4,7 +4,10 @@ mod turbo_config;
 use std::io;
 
 use thiserror::Error;
-pub use turbo::{validate_extends, validate_no_package_task_syntax, RawTurboJSON, TurboJson};
+pub use turbo::{
+    validate_extends, validate_no_package_task_syntax, RawTaskDefinition, RawTurboJson,
+    SynthesizedTurboJson,
+};
 pub use turbo_config::{ConfigurationOptions, TurborepoConfigBuilder};
 use turbopath::AbsoluteSystemPathBuf;
 

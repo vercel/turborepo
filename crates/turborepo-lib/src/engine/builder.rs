@@ -9,9 +9,11 @@ use turborepo_repository::package_graph::{
 
 use super::Engine;
 use crate::{
-    config::{validate_extends, validate_no_package_task_syntax, TurboJson},
+    config::{
+        validate_extends, validate_no_package_task_syntax, RawTaskDefinition, SynthesizedTurboJson,
+    },
     run::task_id::{TaskId, TaskName},
-    task_graph::{BookkeepingTaskDefinition, TaskDefinition},
+    task_graph::TaskDefinition,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -43,7 +45,7 @@ pub struct EngineBuilder<'a> {
     repo_root: &'a AbsoluteSystemPath,
     package_graph: &'a PackageGraph,
     is_single: bool,
-    turbo_jsons: Option<HashMap<WorkspaceName, TurboJson>>,
+    turbo_jsons: Option<HashMap<WorkspaceName, SynthesizedTurboJson>>,
     workspaces: Vec<WorkspaceName>,
     tasks: Vec<TaskName<'static>>,
     root_enabled_tasks: HashSet<TaskName<'static>>,
@@ -70,7 +72,7 @@ impl<'a> EngineBuilder<'a> {
 
     pub fn with_turbo_jsons(
         mut self,
-        turbo_jsons: Option<HashMap<WorkspaceName, TurboJson>>,
+        turbo_jsons: Option<HashMap<WorkspaceName, SynthesizedTurboJson>>,
     ) -> Self {
         self.turbo_jsons = turbo_jsons;
         self
@@ -176,11 +178,13 @@ impl<'a> EngineBuilder<'a> {
                     task_id: task_id.to_string(),
                 });
             }
-            let task_definition = TaskDefinition::from_iter(self.task_definition_chain(
+            let raw_task_definition = RawTaskDefinition::from_iter(self.task_definition_chain(
                 &mut turbo_jsons,
                 &task_id,
                 &task_id.as_non_workspace_task_name(),
             )?);
+
+            let task_definition = TaskDefinition::try_from(raw_task_definition)?;
 
             // Skip this iteration of the loop if we've already seen this taskID
             if visited.contains(&task_id) {
@@ -225,7 +229,7 @@ impl<'a> EngineBuilder<'a> {
                     // We don't need to add an edge from the root node if we're in this branch
                     if let WorkspaceNode::Workspace(dependency_workspace) = dependency_workspace {
                         has_topo_deps = true;
-                        let from_task_id = TaskId::from_graph(dependency_workspace, from);
+                        let from_task_id = TaskId::from_graph(&dependency_workspace, from);
                         let from_task_index = engine.get_index(&from_task_id);
                         engine
                             .task_graph
@@ -263,7 +267,7 @@ impl<'a> EngineBuilder<'a> {
 
     fn has_task_definition(
         &self,
-        turbo_jsons: &mut HashMap<WorkspaceName, TurboJson>,
+        turbo_jsons: &mut HashMap<WorkspaceName, SynthesizedTurboJson>,
         workspace: &WorkspaceName,
         task_name: &TaskName<'static>,
         task_id: &TaskId,
@@ -297,10 +301,10 @@ impl<'a> EngineBuilder<'a> {
 
     fn task_definition_chain(
         &self,
-        turbo_jsons: &mut HashMap<WorkspaceName, TurboJson>,
+        turbo_jsons: &mut HashMap<WorkspaceName, SynthesizedTurboJson>,
         task_id: &TaskId,
         task_name: &TaskName,
-    ) -> Result<Vec<BookkeepingTaskDefinition>, Error> {
+    ) -> Result<Vec<RawTaskDefinition>, Error> {
         let mut task_definitions = Vec::new();
 
         let root_turbo_json = self
@@ -358,9 +362,9 @@ impl<'a> EngineBuilder<'a> {
 
     fn turbo_json<'b>(
         &self,
-        turbo_jsons: &'b mut HashMap<WorkspaceName, TurboJson>,
+        turbo_jsons: &'b mut HashMap<WorkspaceName, SynthesizedTurboJson>,
         workspace: &WorkspaceName,
-    ) -> Result<Option<&'b TurboJson>, Error> {
+    ) -> Result<Option<&'b SynthesizedTurboJson>, Error> {
         if turbo_jsons.get(workspace).is_none() {
             let json = self.load_turbo_json(workspace)?;
             turbo_jsons.insert(workspace.clone(), json);
@@ -368,7 +372,7 @@ impl<'a> EngineBuilder<'a> {
         Ok(turbo_jsons.get(workspace))
     }
 
-    fn load_turbo_json(&self, workspace: &WorkspaceName) -> Result<TurboJson, Error> {
+    fn load_turbo_json(&self, workspace: &WorkspaceName) -> Result<SynthesizedTurboJson, Error> {
         let package_json = self.package_graph.package_json(workspace).ok_or_else(|| {
             Error::MissingPackageJson {
                 workspace: workspace.clone(),
@@ -381,7 +385,7 @@ impl<'a> EngineBuilder<'a> {
                         workspace: workspace.clone(),
                     }
                 })?);
-        Ok(TurboJson::load(
+        Ok(SynthesizedTurboJson::load(
             &workspace_dir,
             package_json,
             self.is_single,
@@ -427,7 +431,7 @@ mod test {
     };
 
     use super::*;
-    use crate::{config::RawTurboJSON, engine::TaskNode};
+    use crate::{config::RawTurboJson, engine::TaskNode};
 
     // Only used to prevent package graph construction from attempting to read
     // lockfile from disk
@@ -551,9 +555,9 @@ mod test {
         assert_eq!(turbo_json.pipeline.len(), 1);
     }
 
-    fn turbo_json(value: serde_json::Value) -> TurboJson {
-        let raw: RawTurboJSON = serde_json::from_value(value).unwrap();
-        TurboJson::try_from(raw).unwrap()
+    fn turbo_json(value: serde_json::Value) -> SynthesizedTurboJson {
+        let raw: RawTurboJson = serde_json::from_value(value).unwrap();
+        SynthesizedTurboJson::try_from(raw).unwrap()
     }
 
     #[test_case(WorkspaceName::Root, "build", "//#build", true ; "root task")]

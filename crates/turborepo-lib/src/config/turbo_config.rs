@@ -7,7 +7,7 @@ use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson}
 
 use crate::{
     commands::CommandBase,
-    config::{Error as ConfigError, RawTurboJSON},
+    config::{Error as ConfigError, RawTurboJson},
 };
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
@@ -107,7 +107,7 @@ impl ResolvedConfigurationOptions for PackageJson {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, ConfigError> {
         match &self.legacy_turbo_config {
             Some(legacy_turbo_config) => {
-                let synthetic_raw_turbo_json: RawTurboJSON =
+                let synthetic_raw_turbo_json: RawTurboJson =
                     serde_json::from_value(legacy_turbo_config.clone())?;
                 synthetic_raw_turbo_json.get_configuration_options()
             }
@@ -116,7 +116,7 @@ impl ResolvedConfigurationOptions for PackageJson {
     }
 }
 
-impl ResolvedConfigurationOptions for RawTurboJSON {
+impl ResolvedConfigurationOptions for RawTurboJson {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, ConfigError> {
         match &self.remote_cache {
             Some(configuration_options) => {
@@ -394,7 +394,7 @@ impl TurborepoConfigBuilder {
             Err(e)
         })?;
         let turbo_json =
-            RawTurboJSON::read(&self.repo_root.join_component("turbo.json")).or_else(|e| {
+            RawTurboJson::read(&self.repo_root.join_component("turbo.json")).or_else(|e| {
                 if let ConfigError::Io(e) = &e {
                     if matches!(e.kind(), std::io::ErrorKind::NotFound) {
                         return Ok(Default::default());
@@ -574,7 +574,7 @@ mod test {
 
     #[test]
     fn test_shared_no_token() {
-        let mut test_shared_config: RawTurboJSON = Default::default();
+        let mut test_shared_config: RawTurboJson = Default::default();
         let configuration_options = ConfigurationOptions {
             token: Some("IF YOU CAN SEE THIS WE HAVE PROBLEMS".to_string()),
             ..Default::default()
