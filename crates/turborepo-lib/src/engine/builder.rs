@@ -9,9 +9,9 @@ use turborepo_repository::package_graph::{
 
 use super::Engine;
 use crate::{
-    config::{validate_extends, validate_no_package_task_syntax, TurboJson},
+    config::{validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJson},
     run::task_id::{TaskId, TaskName},
-    task_graph::{BookkeepingTaskDefinition, TaskDefinition},
+    task_graph::TaskDefinition,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -176,11 +176,13 @@ impl<'a> EngineBuilder<'a> {
                     task_id: task_id.to_string(),
                 });
             }
-            let task_definition = TaskDefinition::from_iter(self.task_definition_chain(
+            let raw_task_definition = RawTaskDefinition::from_iter(self.task_definition_chain(
                 &mut turbo_jsons,
                 &task_id,
                 &task_id.as_non_workspace_task_name(),
             )?);
+
+            let task_definition = TaskDefinition::try_from(raw_task_definition)?;
 
             // Skip this iteration of the loop if we've already seen this taskID
             if visited.contains(&task_id) {
@@ -300,7 +302,7 @@ impl<'a> EngineBuilder<'a> {
         turbo_jsons: &mut HashMap<WorkspaceName, TurboJson>,
         task_id: &TaskId,
         task_name: &TaskName,
-    ) -> Result<Vec<BookkeepingTaskDefinition>, Error> {
+    ) -> Result<Vec<RawTaskDefinition>, Error> {
         let mut task_definitions = Vec::new();
 
         let root_turbo_json = self
@@ -427,7 +429,7 @@ mod test {
     };
 
     use super::*;
-    use crate::{config::RawTurboJSON, engine::TaskNode};
+    use crate::{config::RawTurboJson, engine::TaskNode};
 
     // Only used to prevent package graph construction from attempting to read
     // lockfile from disk
@@ -552,7 +554,7 @@ mod test {
     }
 
     fn turbo_json(value: serde_json::Value) -> TurboJson {
-        let raw: RawTurboJSON = serde_json::from_value(value).unwrap();
+        let raw: RawTurboJson = serde_json::from_value(value).unwrap();
         TurboJson::try_from(raw).unwrap()
     }
 
