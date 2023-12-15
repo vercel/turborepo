@@ -2,12 +2,15 @@
   "name": "@turborepo-examples-tests/pnpm-gatsby",
   "private": true,
   "scripts": {
-    "test": "./node_modules/.bin/prysk test.t"
+    "test": "cross-env ./node_modules/.bin/prysk test.t"
   },
   "dependencies": {
-    "turborepo-tests-helpers": "workspace:*",
-    "turborepo-examples": "workspace:*",
+    "cli": "workspace:*",
     "prysk": "workspace:*",
-    "cli": "workspace:*"
+    "turborepo-examples": "workspace:*",
+    "turborepo-tests-helpers": "workspace:*"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
   }
 }
