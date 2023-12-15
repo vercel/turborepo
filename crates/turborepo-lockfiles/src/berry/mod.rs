@@ -57,6 +57,8 @@ pub struct BerryLockfile {
     extensions: HashSet<Descriptor<'static>>,
     // Package overrides
     overrides: Map<Resolution, String>,
+    // Map from workspace paths to package locators
+    workspace_path_to_locator: HashMap<String, Locator<'static>>,
 }
 
 // This is the direct representation of the lockfile as it appears on disk.
@@ -113,6 +115,7 @@ impl BerryLockfile {
         let mut locator_package = Map::new();
         let mut descriptor_locator = Map::new();
         let mut resolver = DescriptorResolver::default();
+        let mut workspace_path_to_locator = HashMap::new();
         for (key, package) in &lockfile.packages {
             let locator = Locator::try_from(package.resolution.as_str())?;
 
@@ -124,6 +127,10 @@ impl BerryLockfile {
             }
 
             locator_package.insert(locator.as_owned(), package.clone());
+
+            if let Some(path) = locator.reference.strip_prefix("workspace:") {
+                workspace_path_to_locator.insert(path.to_string(), locator.as_owned());
+            }
 
             for descriptor in Descriptor::from_lockfile_key(key) {
                 let descriptor = descriptor?;
@@ -150,6 +157,7 @@ impl BerryLockfile {
             patches,
             overrides,
             extensions: Default::default(),
+            workspace_path_to_locator,
         };
 
         this.populate_extensions()?;
@@ -340,6 +348,7 @@ impl BerryLockfile {
             resolver: self.resolver.clone(),
             extensions: self.extensions.clone(),
             overrides: self.overrides.clone(),
+            workspace_path_to_locator: self.workspace_path_to_locator.clone(),
         })
     }
 
@@ -369,6 +378,19 @@ impl BerryLockfile {
         // TODO Could we dedupe and wrap in Rc?
         Ok(dependency.into_owned())
     }
+
+    fn locator_for_workspace_path(&self, workspace_path: &str) -> Option<&Locator> {
+        self.workspace_path_to_locator
+            .get(workspace_path)
+            .or_else(|| {
+                // This is an inefficient fallback we use in case our old logic was catching
+                // edge cases that the eager approach misses.
+                self.locator_package.keys().find(|locator| {
+                    locator.reference.starts_with("workspace:")
+                        && locator.reference.ends_with(workspace_path)
+                })
+            })
+    }
 }
 
 impl Lockfile for BerryLockfile {
@@ -383,12 +405,7 @@ impl Lockfile for BerryLockfile {
         // In practice, this is extremely silly since changing the version of
         // the dependency in the workspace's package.json does the same thing.
         let workspace_locator = self
-            .locator_package
-            .keys()
-            .find(|locator| {
-                locator.reference.starts_with("workspace:")
-                    && locator.reference.ends_with(workspace_path)
-            })
+            .locator_for_workspace_path(workspace_path)
             .ok_or_else(|| crate::Error::MissingWorkspace(workspace_path.to_string()))?;
 
         let dependency = self
@@ -537,6 +554,7 @@ impl Lockfile for BerryLockfile {
             resolver: self.resolver.clone(),
             extensions: self.extensions.clone(),
             overrides: self.overrides.clone(),
+            workspace_path_to_locator: self.workspace_path_to_locator.clone(),
         }))
     }
 

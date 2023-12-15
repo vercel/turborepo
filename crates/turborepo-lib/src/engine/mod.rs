@@ -11,7 +11,9 @@ use std::{
 
 pub use builder::{EngineBuilder, Error as BuilderError};
 pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
+use miette::Diagnostic;
 use petgraph::Graph;
+use thiserror::Error;
 use turborepo_repository::package_graph::{PackageGraph, WorkspaceName};
 
 use crate::{run::task_id::TaskId, task_graph::TaskDefinition};
@@ -226,7 +228,7 @@ impl Engine<Built> {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum ValidateError {
     #[error("Cannot find task definition for {task_id} in package {package_name}")]
     MissingTask {
