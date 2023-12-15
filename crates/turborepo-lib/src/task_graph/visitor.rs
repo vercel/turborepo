@@ -286,6 +286,13 @@ impl<'a> Visitor<'a> {
                     let parent_span = Span::current();
 
                     tasks.push(tokio::spawn(async move {
+                        // Get a lock on stdin, so stdin manager task will send user input to this
+                        // task.
+                        // TODO: only do this if interactive is true
+                        let mut lock = exec_context.stdin_lock.lock().await;
+                        let task_id = exec_context.task_id.clone();
+                        *lock = &task_id.task();
+
                         exec_context
                             .execute(
                                 parent_span.id(),
@@ -684,6 +691,7 @@ impl ExecContext {
         spaces_client: Option<SpacesTaskClient>,
     ) {
         let tracker = tracker.start().await;
+
         let mut result = self.execute_inner(parent_span_id, &output_client).await;
 
         let logs = match output_client.finish() {
@@ -784,11 +792,6 @@ impl ExecContext {
         let Ok(package_manager_binary) = which(self.package_manager.command()) else {
             return ExecOutcome::Internal;
         };
-
-        // TODO: only do this if interactive is true
-        let mut guard = self.stdin_lock.lock().await;
-        *guard = self.task_id.task();
-        // Once we have this lock, the stdin manager task will send input to this task
 
         let mut cmd = Command::new(package_manager_binary);
         let mut args = vec!["run".to_string(), self.task_id.task().to_string()];
