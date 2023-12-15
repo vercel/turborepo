@@ -93,7 +93,7 @@ struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     output_mode: Option<OutputLogsMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    expect_stdin: Option<bool>,
+    interactive: Option<bool>,
 }
 
 const CONFIG_FILE: &str = "turbo.json";
@@ -266,8 +266,8 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
         if raw_task.persistent.is_some() {
             defined_fields.insert("Persistent".to_string());
         }
-        if raw_task.expect_stdin.is_some() {
-            defined_fields.insert("ExpectStdin".to_string());
+        if raw_task.interactive.is_some() {
+            defined_fields.insert("Interactive".to_string());
         }
 
         Ok(BookkeepingTaskDefinition {
@@ -285,7 +285,7 @@ impl TryFrom<RawTaskDefinition> for BookkeepingTaskDefinition {
                 dot_env,
                 output_mode: raw_task.output_mode.unwrap_or_default(),
                 persistent: raw_task.persistent.unwrap_or_default(),
-                expect_stdin: raw_task.expect_stdin.unwrap_or_default(),
+                interactive: raw_task.interactive.unwrap_or_default(),
             },
         })
     }

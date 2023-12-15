@@ -106,7 +106,7 @@ pub struct TaskSummaryTaskDefinition {
     env: Vec<String>,
     pass_through_env: Option<Vec<String>>,
     dot_env: Option<Vec<RelativeUnixPathBuf>>,
-    expect_stdin: bool,
+    interactive: bool,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -286,7 +286,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             mut inputs,
             output_mode,
             persistent,
-            expect_stdin,
+            interactive,
         } = value;
 
         let mut outputs = inclusions;
@@ -320,7 +320,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             persistent,
             env,
             pass_through_env,
-            expect_stdin,
+            interactive,
             // This should _not_ be sorted.
             dot_env,
         }

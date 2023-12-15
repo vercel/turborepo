@@ -266,7 +266,7 @@ impl<'a> Visitor<'a> {
                     let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
 
                     debug!("task_definition {:?}", task_definition);
-                    let expect_stdin = task_definition.expect_stdin;
+                    let interactive = task_definition.interactive;
 
                     let mut exec_context = factory.exec_context(
                         info.clone(),
@@ -276,7 +276,7 @@ impl<'a> Visitor<'a> {
                         execution_env,
                         // Give oure exec_context a copy of the stdin lock so it can
                         // decide whether to acquire the lock or not
-                        expect_stdin,
+                        interactive,
                         stdin_lock.clone(),
                     );
 
@@ -585,7 +585,7 @@ impl<'a> ExecContextFactory<'a> {
         task_cache: TaskCache,
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
-        expect_stdin: bool,
+        interactive: bool,
         stdin_lock: Arc<TokioMutex<&str>>,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
@@ -610,7 +610,7 @@ impl<'a> ExecContextFactory<'a> {
             continue_on_error: self.visitor.opts.run_opts.continue_on_error,
             pass_through_args,
             errors: self.errors.clone(),
-            expect_stdin: expect_stdin,
+            interactive: interactive,
             stdin_lock: stdin_lock,
         }
     }
@@ -645,7 +645,7 @@ struct ExecContext {
     continue_on_error: bool,
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
-    expect_stdin: bool,
+    interactive: bool,
     stdin_lock: Arc<TokioMutex<&str>>,
 }
 
@@ -785,7 +785,7 @@ impl ExecContext {
             return ExecOutcome::Internal;
         };
 
-        // TODO: only do this if expect_stdin is true
+        // TODO: only do this if interactive is true
         let mut guard = self.stdin_lock.lock().await;
         *guard = self.task_id.task();
         // Once we have this lock, the stdin manager task will send input to this task
