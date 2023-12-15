@@ -470,6 +470,9 @@ impl TurboJson {
             let task_name = TaskName::from(script_name.as_str());
             if !turbo_json.has_task(&task_name) {
                 let task_name = task_name.into_root_task();
+                // Explicitly set cache to Some(false) in this definition
+                // so we can pretend it was set on purpose. That way it
+                // won't get clobbered by the merge function.
                 turbo_json.pipeline.insert(
                     task_name,
                     RawTaskDefinition {
