@@ -166,6 +166,13 @@ jobs:
           PATTERNS: |
             packages/**
 
+      - name: Docs related changes
+        id: docs
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            docs/**
+
       - name: Formatting related changes
         id: format
         uses: technote-space/get-diff-action@v6
