@@ -14,7 +14,7 @@ use crate::{
     cli::OutputLogsMode,
     config::{ConfigurationOptions, Error},
     run::task_id::{TaskId, TaskName},
-    task_graph::{Pipeline, TaskDefinition, TaskOutputs},
+    task_graph::{TaskDefinition, TaskOutputs},
 };
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone)]
@@ -25,26 +25,10 @@ pub struct SpacesJson {
     pub other: Option<serde_json::Value>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-// The fully processed turbo.json config ready for use by Turborepo.
-// Contains fields that are fully resolved from both the root turbo.json
-// and the workspace turbo.json files. Also contains synthesized config
-// from root package.json in single package mode.
-pub struct FinalTurboJson {
-    pub(crate) extends: Vec<String>,
-    pub(crate) global_deps: Vec<String>,
-    pub(crate) global_dot_env: Vec<RelativeUnixPathBuf>,
-    pub(crate) global_env: Vec<String>,
-    pub(crate) global_pass_through_env: Vec<String>,
-    pub(crate) pipeline: Pipeline,
-    pub(crate) remote_cache: Option<ConfigurationOptions>,
-    pub(crate) space_id: Option<String>,
-}
-
 // A turbo.json config that is synthesized but not yet resolved.
 // This means that we've done the work to synthesize the config from
 // package.json, but we haven't yet resolved the workspace
-// turbo.json files into a single definition
+// turbo.json files into a single definition.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct SynthesizedTurboJson {
     pub(crate) extends: Vec<String>,
@@ -52,7 +36,7 @@ pub struct SynthesizedTurboJson {
     pub(crate) global_dot_env: Option<Vec<RelativeUnixPathBuf>>,
     pub(crate) global_env: Vec<String>,
     pub(crate) global_pass_through_env: Option<Vec<String>>,
-    pub(crate) pipeline: RawPipeline,
+    pub(crate) pipeline: Pipeline,
     pub(crate) remote_cache: Option<ConfigurationOptions>,
     pub(crate) space_id: Option<String>,
 }
@@ -81,7 +65,7 @@ pub struct RawTurboJson {
     // Pipeline is a map of Turbo pipeline entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub pipeline: Option<RawPipeline>,
+    pub pipeline: Option<Pipeline>,
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache: Option<ConfigurationOptions>,
@@ -89,9 +73,9 @@ pub struct RawTurboJson {
 
 #[derive(Serialize, Deserialize, Default, Debug, PartialEq, Clone)]
 #[serde(transparent)]
-pub struct RawPipeline(BTreeMap<TaskName<'static>, RawTaskDefinition>);
+pub struct Pipeline(BTreeMap<TaskName<'static>, RawTaskDefinition>);
 
-impl IntoIterator for RawPipeline {
+impl IntoIterator for Pipeline {
     type Item = (TaskName<'static>, RawTaskDefinition);
     type IntoIter = <BTreeMap<TaskName<'static>, RawTaskDefinition> as IntoIterator>::IntoIter;
 
@@ -100,7 +84,7 @@ impl IntoIterator for RawPipeline {
     }
 }
 
-impl Deref for RawPipeline {
+impl Deref for Pipeline {
     type Target = BTreeMap<TaskName<'static>, RawTaskDefinition>;
 
     fn deref(&self) -> &Self::Target {
@@ -108,7 +92,7 @@ impl Deref for RawPipeline {
     }
 }
 
-impl DerefMut for RawPipeline {
+impl DerefMut for Pipeline {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -463,7 +447,7 @@ impl SynthesizedTurboJson {
             // for now, we're going to error on any "root" tasks and turn non-root tasks into root
             // tasks
             (true, Ok(mut turbo_from_files)) => {
-                let mut pipeline = RawPipeline::default();
+                let mut pipeline = Pipeline::default();
                 for (task_name, task_definition) in turbo_from_files.pipeline {
                     if task_name.is_package_task() {
                         return Err(Error::PackageTaskInSinglePackageMode {
@@ -587,7 +571,7 @@ mod tests {
     use crate::{
         cli::OutputLogsMode,
         config::{
-            turbo::{RawPipeline, RawTaskDefinition},
+            turbo::{Pipeline, RawTaskDefinition},
             SynthesizedTurboJson,
         },
         run::task_id::TaskName,
@@ -635,7 +619,7 @@ mod tests {
              ..PackageJson::default()
         },
         SynthesizedTurboJson {
-            pipeline: RawPipeline([(
+            pipeline: Pipeline([(
                 "//#build".into(),
                 RawTaskDefinition {
                   cache: Some(false),
@@ -666,7 +650,7 @@ mod tests {
              ..PackageJson::default()
         },
         SynthesizedTurboJson {
-            pipeline: RawPipeline([(
+            pipeline: Pipeline([(
                 "//#build".into(),
                 RawTaskDefinition {
                     cache: Some(true),

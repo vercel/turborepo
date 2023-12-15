@@ -1,7 +1,5 @@
 mod visitor;
 
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 pub use visitor::{Error as VisitorError, Visitor};
@@ -11,8 +9,6 @@ use crate::{
     config::RawTaskDefinition,
     run::task_id::{TaskId, TaskName},
 };
-
-pub type Pipeline = HashMap<TaskName<'static>, TaskDefinition>;
 
 // TaskOutputs represents the patterns for including and excluding files from
 // outputs
