@@ -12,7 +12,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::{
     io,
-    io::AsyncWriteExt,
+    io::{AsyncBufReadExt, AsyncWriteExt},
     process::Command,
     sync::{mpsc, oneshot, Mutex as TokioMutex},
 };
@@ -146,20 +146,27 @@ impl<'a> Visitor<'a> {
         let stdin_lock = Arc::new(TokioMutex::new("")); // initial value is empty string
 
         tasks.push(tokio::spawn(async {
-            let mut stdin_manager = Command::new("while true; do done");
-            stdin_manager.stdin(Stdio::piped());
+            // TODO: maybe this manager is just the thing that holds the lock and doesn't
+            // need its own process?
+            let _stdin_manager = Command::new("while true; do done")
+                .stdin(Stdio::piped())
+                .spawn()
+                .expect("failed to execute process");
 
-            let process = match self
-                .manager
-                .spawn(stdin_manager, Duration::from_millis(500))
-            {
-                Some(Ok(child)) => Some(child),
-                Some(Err(e)) => None,
-                None => None,
-            };
+            // let process = match self
+            //     .manager
+            //     .spawn(stdin_manager, Duration::from_millis(500))
+            // {
+            //     Some(Ok(child)) => Some(child),
+            //     Some(Err(e)) => None,
+            //     None => None,
+            // };
 
-            let mut in_reader = io::BufReader::new(io::stdin()).lines();
-            while let Some(line) = in_reader.next_line().await.unwrap() {
+            let ts = io::stdin();
+            let xx = io::BufReader::new(ts);
+            let mut in_reader = xx.lines();
+            while let Some(_line) = in_reader.next_line().await.unwrap() {
+
                 // send line to stdin stream of the task that has the stdin_lock
                 // otherwise silently ignore the input.
             }
