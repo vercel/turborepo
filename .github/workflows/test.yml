@@ -405,7 +405,7 @@ jobs:
 
   turborepo_examples:
     name: Turborepo Examples
-    needs: [determine_jobs]
+    needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.examples == 'true'
     timeout-minutes: 40
 
