@@ -82,6 +82,18 @@ pub enum Error {
     RunSummary(#[from] summary::Error),
 }
 
+pub struct StdinManager {
+    lock: Arc<TokioMutex<&str>>,
+}
+
+impl StdinManager {
+    pub fn new() {
+        Self {
+            lock: Arc::new(TokioMutex::new("")),
+        }
+    }
+}
+
 impl<'a> Visitor<'a> {
     // Disabling this lint until we stop adding state to the visitor.
     // Once we have the full picture we will go about grouping these pieces of data
@@ -139,34 +151,12 @@ impl<'a> Visitor<'a> {
             let engine = engine.clone();
             tokio::spawn(engine.execute(ExecutionOptions::new(false, concurrency), node_sender))
         };
+        let stdin_manager = StdinManager::new();
         let mut tasks = FuturesUnordered::new();
 
-        // Create a mutex that holds the name of the task that has control of stdin
-        // TOOD: do we need the Arc here?
-        let stdin_lock = Arc::new(TokioMutex::new("")); // initial value is empty string
-
-        tasks.push(tokio::spawn(async {
-            // TODO: maybe this manager is just the thing that holds the lock and doesn't
-            // need its own process?
-            let _stdin_manager = Command::new("while true; do done")
-                .stdin(Stdio::piped())
-                .spawn()
-                .expect("failed to execute process");
-
-            // let process = match self
-            //     .manager
-            //     .spawn(stdin_manager, Duration::from_millis(500))
-            // {
-            //     Some(Ok(child)) => Some(child),
-            //     Some(Err(e)) => None,
-            //     None => None,
-            // };
-
-            let ts = io::stdin();
-            let xx = io::BufReader::new(ts);
-            let mut in_reader = xx.lines();
+        tasks.push(tokio::spawn(async move {
+            let mut in_reader = io::BufReader::new(io::stdin()).lines();
             while let Some(_line) = in_reader.next_line().await.unwrap() {
-
                 // send line to stdin stream of the task that has the stdin_lock
                 // otherwise silently ignore the input.
             }
@@ -281,10 +271,10 @@ impl<'a> Visitor<'a> {
                         task_cache,
                         workspace_directory,
                         execution_env,
-                        // Give oure exec_context a copy of the stdin lock so it can
+                        // Give our exec_context a copy of the stdin lock so it can
                         // decide whether to acquire the lock or not
                         interactive,
-                        stdin_lock.clone(),
+                        &stdin_manager,
                     );
 
                     let output_client = self.output_client(&info);
@@ -296,7 +286,7 @@ impl<'a> Visitor<'a> {
                         // Get a lock on stdin, so stdin manager task will send user input to this
                         // task.
                         // TODO: only do this if interactive is true
-                        let mut lock = exec_context.stdin_lock.lock().await;
+                        let mut lock = exec_context.stdin_mgr.lock().await;
                         let task_id = exec_context.task_id.clone();
                         *lock = &task_id.task();
 
@@ -600,7 +590,7 @@ impl<'a> ExecContextFactory<'a> {
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
         interactive: bool,
-        stdin_lock: Arc<TokioMutex<&str>>,
+        stdin_mgr: &StdinManager,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.opts.run_opts.args_for_task(&task_id);
@@ -625,7 +615,7 @@ impl<'a> ExecContextFactory<'a> {
             pass_through_args,
             errors: self.errors.clone(),
             interactive: interactive,
-            stdin_lock: stdin_lock,
+            stdin_mgr: stdin_mgr,
         }
     }
 
@@ -660,7 +650,7 @@ struct ExecContext {
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
     interactive: bool,
-    stdin_lock: Arc<TokioMutex<&str>>,
+    stdin_mgr: &StdinManager,
 }
 
 enum ExecOutcome {
