@@ -129,9 +129,6 @@ impl<'a> Visitor<'a> {
 
     #[tracing::instrument(skip(self))]
     pub async fn visit(&self, engine: Arc<Engine>) -> Result<Vec<TaskError>, Error> {
-        // Check if any tasks have interactive:true
-        // Instantiate a mutex here
-
         let concurrency = self.opts.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
         let engine_handle = {
@@ -140,7 +137,9 @@ impl<'a> Visitor<'a> {
         };
         let mut tasks = FuturesUnordered::new();
         let errors = Arc::new(Mutex::new(Vec::new()));
+
         let span = Span::current();
+
         let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine);
 
         while let Some(message) = node_stream.recv().await {
@@ -237,18 +236,13 @@ impl<'a> Visitor<'a> {
 
                     let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
 
-                    debug!("task_definition {:?}", task_definition);
-                    let interactive = task_definition.interactive;
-
                     let mut exec_context = factory.exec_context(
                         info.clone(),
                         task_hash,
                         task_cache,
                         workspace_directory,
                         execution_env,
-                        // Give our exec_context a copy of the stdin lock so it can
-                        // decide whether to acquire the lock or not
-                        interactive,
+                        task_definition.interactive,
                     );
 
                     let output_client = self.output_client(&info);
@@ -580,8 +574,7 @@ impl<'a> ExecContextFactory<'a> {
             continue_on_error: self.visitor.opts.run_opts.continue_on_error,
             pass_through_args,
             errors: self.errors.clone(),
-            interactive: interactive,
-            // stdin_mgr: stdin_mgr,
+            is_interactive: interactive,
         }
     }
 
@@ -615,7 +608,7 @@ struct ExecContext {
     continue_on_error: bool,
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
-    interactive: bool,
+    is_interactive: bool,
 }
 
 enum ExecOutcome {
@@ -768,8 +761,7 @@ impl ExecContext {
         cmd.args(args);
         cmd.current_dir(self.workspace_directory.as_path());
 
-        if self.interactive {
-            debug!("setting stdin to piped");
+        if self.is_interactive {
             cmd.stdin(Stdio::piped());
         } else {
             cmd.stdin(Stdio::null());
@@ -797,12 +789,9 @@ impl ExecContext {
 
         // declare a channel
         let (sender, receiver) = std::sync::mpsc::sync_channel::<tokio::process::ChildStdin>(1);
-        if self.interactive {
+        if self.is_interactive {
             std::thread::spawn(move || {
-                debug!("starting thread to read parent stdin");
-                let mut handle = std::io::stdin().lock();
-                debug!("locked parent stdin");
-
+                let mut parent_stdin_handle = std::io::stdin().lock();
                 let mut child_stdin = match receiver.recv() {
                     Ok(child_stdin) => child_stdin,
                     Err(_) => {
@@ -812,13 +801,10 @@ impl ExecContext {
                     }
                 };
 
-                debug!("child is ready to receive stdin");
                 let mut buffer = String::new();
-                debug!("got me a buffer");
                 // TODO: read_line doesn't cover the case of when the user doesn't hit enter
                 // TODO: handle error
-                debug!("started reading parent stdin handle");
-                let _ = handle.read_line(&mut buffer);
+                let _ = parent_stdin_handle.read_line(&mut buffer);
 
                 // write data from parent stdin to child_stdin
                 let _ = futures::executor::block_on(child_stdin.write_all(buffer.as_bytes()));
@@ -848,12 +834,10 @@ impl ExecContext {
             }
         };
 
-        if self.interactive {
+        // Notify the stdin thread that the child process has been spawned and can read
+        // input now
+        if self.is_interactive {
             let stdin = process.stdin().unwrap();
-            debug!(
-                "Nottifying other thread that {} is ready to receive stdin from parent",
-                self.task_id_for_display
-            );
             let _ = sender.send(stdin);
         }
 
