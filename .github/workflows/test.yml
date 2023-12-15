@@ -166,6 +166,13 @@ jobs:
           PATTERNS: |
             packages/**
 
+      - name: Docs related changes
+        id: docs
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            docs/**
+
       - name: Formatting related changes
         id: format
         uses: technote-space/get-diff-action@v6
@@ -188,6 +195,7 @@ jobs:
       turborepo_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' || steps.turborepo_version.outputs.diff != '' }}
       turborepo_js: ${{ steps.ci.outputs.diff != '' || steps.turborepo_js.outputs.diff != '' }}
+      docs: ${{ steps.ci.outputs.diff != '' || steps.docs.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
       tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
@@ -443,6 +451,42 @@ jobs:
       - name: Disable corepack again
         shell: bash
         run: corepack disable
+
+  docs:
+    name: Docs Checks
+    timeout-minutes: 30
+    if: needs.determine_jobs.outputs.docs == 'true'
+    needs: [determine_jobs]
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_REMOTE_ONLY: true
+
+    steps:
+      # on main -> current + prev commit
+      # pr -> pr commits + base commit
+      - name: Determine fetch depth
+        id: fetch-depth
+        run: |
+          echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
+
+      - name: Build turborepo CLI from source
+        uses: ./.github/actions/setup-turborepo-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Run checks
+        run: |
+          turbo run check-types lint --filter=docs --color --env-mode=strict
+        env:
+          EXPERIMENTAL_RUST_CODEPATH: true
 
   js_packages:
     name: JS Package Tests
