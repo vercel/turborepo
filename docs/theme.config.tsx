@@ -9,6 +9,13 @@ import { Discord, Github } from "./components/Social";
 
 const SITE_ROOT = "https://turbo.build";
 
+interface Frontmatter {
+  title: string;
+  overrideTitle: string;
+  description: string;
+  ogImage: string;
+}
+
 const config: DocsThemeConfig = {
   sidebar: {
     defaultMenuCollapseLevel: 1,
@@ -17,7 +24,9 @@ const config: DocsThemeConfig = {
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
   useNextSeoProps: function SEO() {
     const router = useRouter();
-    const { frontMatter } = useConfig();
+    const nextraConfig = useConfig();
+
+    const frontMatter = nextraConfig.frontMatter as Frontmatter;
 
     let section = "Turbo";
     if (router.pathname.startsWith("/pack")) {
@@ -48,10 +57,10 @@ const config: DocsThemeConfig = {
     };
   },
   gitTimestamp({ timestamp }) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- Following Nextra docs: https://nextra.site/docs/docs-theme/theme-configuration#last-updated-date
     const [dateString, setDateString] = useState(timestamp.toISOString());
 
-    // eslint-disable-next-line react-hooks/rules-of-hooks
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- Following Nextra docs: https://nextra.site/docs/docs-theme/theme-configuration#last-updated-date
     useEffect(() => {
       try {
         setDateString(
@@ -80,19 +89,22 @@ const config: DocsThemeConfig = {
   head: function Head() {
     const router = useRouter();
     const { systemTheme = "dark" } = useTheme();
-    const { frontMatter } = useConfig();
+    const nextraConfig = useConfig();
+
+    const frontMatter = nextraConfig.frontMatter as Frontmatter;
     const fullUrl =
       router.asPath === "/" ? SITE_ROOT : `${SITE_ROOT}${router.asPath}`;
 
     const asPath = router.asPath;
 
-    let ogUrl;
+    let ogUrl: string;
 
     if (asPath === "/") {
       ogUrl = `${SITE_ROOT}/api/og`;
-    } else if (frontMatter?.ogImage) {
+    } else if (frontMatter.ogImage) {
       ogUrl = `${SITE_ROOT}${frontMatter.ogImage}`;
     } else {
+      // eslint-disable-next-line no-nested-ternary -- This is fine.
       const type = asPath.startsWith("/repo")
         ? "repo"
         : asPath.startsWith("/pack")

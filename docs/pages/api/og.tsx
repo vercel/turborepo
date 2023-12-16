@@ -69,16 +69,22 @@ export default async function openGraphImage(
 ): Promise<ImageResponse> {
   try {
     const [fonts, bg] = await loadAssets();
-    const { searchParams } = new URL(req.url!);
+    // @ts-expect-error -- Shouldn't a request always have a url?
+    const { searchParams } = new URL(req.url);
 
-    const type = searchParams.get("type")!;
+    const type = searchParams.get("type");
+
+    if (!type) {
+      throw new Error("No type provided to /api/og.");
+    }
 
     // Start with the default title for the type
     let title = TITLE_FOR_TYPE[type];
 
-    // If there'sa a ?title=<title> query param, always prefer that.
+    // If there's a ?title=<title> query param, always prefer that.
     if (searchParams.has("title")) {
-      title = searchParams.get("title")!.slice(0, 100);
+      // @ts-expect-error -- We just checked .has so we know its there.
+      title = searchParams.get("title").slice(0, 100);
     }
 
     return new ImageResponse(createElement(OGImage, { title, type, bg }), {

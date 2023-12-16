@@ -6,13 +6,23 @@ const TRAY_URL = process.env.TRAY_URL;
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === "POST") {
+    const reqBody = req.body as { email?: string };
+
+    if (!reqBody.email) {
+      throw new Error("No email was provided.");
+    }
+
     const user = {
-      email: req.body.email,
+      email: reqBody.email,
       campaign_id: CAMPAIGN_ID,
     };
 
+    if (!TRAY_URL) {
+      throw new Error("No TRAY_URL was provided.");
+    }
+
     try {
-      await fetch(TRAY_URL!, {
+      await fetch(TRAY_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
