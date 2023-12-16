@@ -41,7 +41,7 @@ function MenuItem({
     if (type === "copy") {
       setCopied(true);
     } else {
-      closeMenu();
+      closeMenu?.();
     }
   };
 
@@ -49,7 +49,7 @@ function MenuItem({
     if (copied) {
       const timeout = setTimeout(() => {
         setCopied(false);
-        closeMenu();
+        closeMenu?.();
       }, 2000);
       return () => {
         clearTimeout(timeout);
@@ -63,7 +63,7 @@ function MenuItem({
   );
   if (type === "internal") {
     return (
-      <Link className={classes} href={href} onClick={handleClick} {...other}>
+      <Link className={classes} href={href!} onClick={handleClick} {...other}>
         {prefix}
         {children}
       </Link>
@@ -98,12 +98,13 @@ function MenuItem({
       </button>
     );
   }
+  return null;
 }
 
 export function LogoContext() {
   const [open, setOpen] = useState(false);
-  const site = useTurboSite();
-  const menu = useRef(null);
+  const site = useTurboSite()!;
+  const menu = useRef<any>(null);
   const { theme = "dark" } = useTheme();
 
   const toggleMenu = (e: MouseEvent<HTMLButtonElement>) => {

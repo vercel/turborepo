@@ -7,4 +7,6 @@ export default function ExtraContent() {
   if (site === "repo") {
     return <RemoteCacheCounter />;
   }
+
+  return null;
 }

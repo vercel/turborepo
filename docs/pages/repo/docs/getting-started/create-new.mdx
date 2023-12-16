@@ -213,9 +213,9 @@ export const Button = ({ children, className, appName }: ButtonProps) => {
 };
 ```
 
-We've found our button! 
+We've found our button!
 
-Everything inside this file will be able to be used by workspaces that depend on `@repo/ui/button`. 
+Everything inside this file will be able to be used by workspaces that depend on `@repo/ui/button`.
 
 Any changes we make in this file will be shared across `web` and `docs`. Pretty cool!
 
@@ -237,7 +237,7 @@ We have two more workspaces to look at, `typescript-config` and `eslint-config`.
 }
 ```
 
-Here we see the name of the package is `@repo/typescript-config`. 
+Here we see the name of the package is `@repo/typescript-config`.
 
 New, let's take a look in the `tsconfig.json` file located in our `web` app.
 
@@ -247,7 +247,7 @@ New, let's take a look in the `tsconfig.json` file located in our `web` app.
 }
 ```
 
-As you can see, we're importing `@repo/typescript-config/nextjs.json` directly into our `tsconfig.json` file. 
+As you can see, we're importing `@repo/typescript-config/nextjs.json` directly into our `tsconfig.json` file.
 
 This pattern allows for a monorepo to share a single `tsconfig.json` across all its workspaces, reducing code duplication.
 
@@ -397,7 +397,6 @@ Something interesting just happened. Turborepo realised that **our code hadn't c
 It had saved the logs from the previous run, so it just replayed them.
 
 Let's try changing some code to see what happens. Make a change to a file inside `apps/docs`:
-
 
 ```diff filename="apps/docs/app/page.tsx"
 import { Button } from "@repo/ui/button";

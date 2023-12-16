@@ -28,15 +28,15 @@ import BeakerIconLight from "../public/images/docs/shared/feature-icons/beaker-l
 
 type NextImageSrc = Parameters<typeof Image>[0]["src"];
 
-export type Feature = {
+export interface Feature {
   name: string;
   description: string;
   iconDark: NextImageSrc;
   iconLight: NextImageSrc;
   page: "all" | "home" | "docs";
-};
+}
 
-export type Features = Array<Feature>;
+export type Features = Feature[];
 
 const REPO_FEATURES: Features = [
   {

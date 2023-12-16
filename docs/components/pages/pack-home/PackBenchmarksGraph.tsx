@@ -221,7 +221,7 @@ function GraphTimer({
   timer,
   duration,
 }: {
-  turbo: boolean;
+  turbo?: boolean;
   timer: number;
   duration: number;
 }) {
