@@ -31,7 +31,7 @@ export function useTurborepoMinutesSaved():
       local_cache_minutes_saved: number;
     }
   | undefined {
-  const swr = useSWR<QueryResponse, { test: string }>(path, fetcher, {
+  const swr = useSWR<QueryResponse, unknown>(path, fetcher, {
     refreshInterval: REFRESH_INTERVAL_IN_MS,
   });
 
