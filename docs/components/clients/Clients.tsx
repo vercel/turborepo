@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import React from "react";
 import cn from "classnames";
 import { users } from "./users";
@@ -12,8 +13,8 @@ export function Clients({
   staticWidth?: boolean;
   companyList?: string[];
 }) {
-  const showcaseDark = [];
-  const showcaseLight = [];
+  const showcaseDark: ReactElement[] = [];
+  const showcaseLight: ReactElement[] = [];
 
   function LogoWrapper({ className, children }) {
     if (!staticWidth) return children;
@@ -38,7 +39,7 @@ export function Clients({
             className="flex dark:hidden"
             key={`${user.caption}-dark`}
           >
-            <Logo isLink={linked} theme="dark" user={user} />
+            <Logo isLink={linked ?? false} theme="dark" user={user} />
           </LogoWrapper>
         );
         showcaseLight.push(
@@ -46,7 +47,7 @@ export function Clients({
             className="hidden dark:flex"
             key={`${user.caption}-light`}
           >
-            <Logo isLink={linked} theme="light" user={user} />
+            <Logo isLink={linked ?? false} theme="light" user={user} />
           </LogoWrapper>
         );
       }

@@ -1,6 +1,6 @@
 // Remove when docs is refactored to use the new icons (see ./features.ts)
 
-import React from "react";
+import type React from "react";
 import {
   ArrowsExpandIcon,
   BeakerIcon,
@@ -12,16 +12,16 @@ import {
   LightningBoltIcon,
   RefreshIcon,
 } from "@heroicons/react/outline";
-import { IconType } from "../components/Icons";
+import type { IconType } from "../components/Icons";
 
-export type Feature = {
+export interface Feature {
   name: string;
   description: React.ReactNode;
   Icon: IconType;
   page: "all" | "home" | "docs";
-};
+}
 
-export type Features = Array<Feature>;
+export type Features = Feature[];
 
 const LEGACY_REPO_FEATURES: Features = [
   {

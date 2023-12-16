@@ -120,7 +120,7 @@ export function FooterContent() {
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Company</FooterHeader>
                 <ul className="mt-4 space-y-1.5 list-none ml-0" role="list">
-                  {navigation.company(site).map((item) => (
+                  {navigation.company(site!).map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
                     </li>

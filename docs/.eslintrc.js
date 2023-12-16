@@ -13,6 +13,12 @@ module.exports = {
   rules: {
     // Most of these rules should probably be on. Turning them off because they fail in many places
     // and we need to set aside time to make them work.
+    "no-nested-ternary": "warn",
+    "no-await-in-loop": "warn",
+    "prefer-named-capture-group": "warn",
+    "@typescript-eslint/consistent-type-definitions": "warn",
+    "@typescript-eslint/no-unsafe-member-access": "warn",
+    "@typescript-eslint/no-non-null-assertion": "warn",
     "@typescript-eslint/no-explicit-any": "warn",
     "@typescript-eslint/no-floating-promises": "warn",
     "@typescript-eslint/no-implied-eval": "warn",

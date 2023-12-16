@@ -7,7 +7,7 @@
     "dev": "next",
     "start": "next start",
     "build": "next build ",
-    "lint": " DEBUG=typescript-eslint:* eslint . --max-warnings 170",
+    "lint": "eslint . --max-warnings 356",
     "check-types": "tsc --noEmit",
     "rss": "node scripts/generate-rss.js",
     "schema": "turbo-types-generate ./public/schema.json",

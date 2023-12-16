@@ -68,16 +68,16 @@ export default async function openGraphImage(
 ): Promise<ImageResponse> {
   try {
     const [fonts, bg] = await loadAssets();
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = new URL(req.url!);
 
-    const type = searchParams.get("type");
+    const type = searchParams.get("type")!;
 
     // Start with the default title for the type
     let title = TITLE_FOR_TYPE[type];
 
     // If there'sa a ?title=<title> query param, always prefer that.
     if (searchParams.has("title")) {
-      title = searchParams.get("title").slice(0, 100);
+      title = searchParams.get("title")!.slice(0, 100);
     }
 
     return new ImageResponse(createElement(OGImage, { title, type, bg }), {
