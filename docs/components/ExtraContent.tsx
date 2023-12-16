@@ -1,7 +1,7 @@
-import RemoteCacheCounter from "./RemoteCacheCounter";
+import { RemoteCacheCounter } from "./RemoteCacheCounter";
 import { useTurboSite } from "./SiteSwitcher";
 
-export default function ExtraContent() {
+export function ExtraContent() {
   const site = useTurboSite();
 
   if (site === "repo") {

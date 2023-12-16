@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import React, { createElement } from "react";
 import { ImageResponse } from "@vercel/og";
 import type { NextApiRequest } from "next/index";
@@ -6,7 +7,7 @@ import RepoLogo from "../../components/logos/og/RepoLogo";
 import TurboLogo from "../../components/logos/og/TurboLogo";
 import VercelLogo from "../../components/logos/og/VercelLogo";
 
-function _arrayBufferToBase64(buffer) {
+function _arrayBufferToBase64(buffer: ArrayBuffer) {
   let binary = "";
   const bytes = new Uint8Array(buffer);
   const len = bytes.byteLength;
@@ -103,7 +104,7 @@ export function OGImage({
   title: string;
   type: string;
   bg: string;
-}): JSX.Element {
+}): ReactElement {
   return (
     <div
       style={{
@@ -158,7 +159,7 @@ export function OGImage({
   );
 }
 
-function Logo({ type }: { type: string | undefined }): JSX.Element {
+function Logo({ type }: { type: string | undefined }): ReactElement {
   if (type === "pack") {
     return <PackLogo height={103 * 1.1} width={697 * 1.1} />;
   }
