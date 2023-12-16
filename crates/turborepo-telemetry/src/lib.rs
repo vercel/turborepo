@@ -66,30 +66,19 @@ pub fn telem(event: events::TelemetryEvent) {
             }
         }
         None => {
-            if cfg!(debug_assertions) {
-                panic!("[DEVELOPMENT ERROR] telemetry sender not initialized");
+            // If we're in debug mode - log a warning
+            if cfg!(debug_assertions) && !cfg!(test) {
+                println!("\n[DEVELOPMENT ERROR] telemetry sender not initialized\n");
             }
             debug!("telemetry sender not initialized");
         }
     }
 }
 
-/// Starts the `Worker` on a separate tokio thread. Returns an `TelemetrySender`
-/// and an `TelemetryHandle`.
-///
-/// We have two different types because the TelemetrySender should be shared
-/// across threads (i.e. Clone + Send), while the TelemetryHandle cannot be
-/// shared since it contains the structs necessary to shut down the worker.
-pub fn init_telemetry(
+fn init(
     client: impl telemetry::TelemetryClient + Clone + Send + Sync + 'static,
     ui: UI,
-) -> Result<TelemetryHandle, Error> {
-    // make sure we're not already initialized
-    if SENDER_INSTANCE.get().is_some() {
-        debug!("telemetry already initialized");
-        return Err(Error::AlreadyInitialized());
-    }
-
+) -> Result<(TelemetryHandle, TelemetrySender), Box<dyn std::error::Error>> {
     let (tx, rx) = mpsc::unbounded_channel();
     let (cancel_tx, cancel_rx) = oneshot::channel();
     let mut config = TelemetryConfig::new()?;
@@ -114,11 +103,28 @@ pub fn init_telemetry(
         handle,
     };
 
-    // track the sender as global to avoid passing it around
-    SENDER_INSTANCE.set(tx).unwrap();
-
     // return
-    Ok(telemetry_handle)
+    Ok((telemetry_handle, tx))
+}
+
+/// Starts the `Worker` on a separate tokio thread. Returns an `TelemetrySender`
+/// and an `TelemetryHandle`.
+///
+/// We have two different types because the TelemetrySender should be shared
+/// across threads (i.e. Clone + Send), while the TelemetryHandle cannot be
+/// shared since it contains the structs necessary to shut down the worker.
+pub fn init_telemetry(
+    client: impl telemetry::TelemetryClient + Clone + Send + Sync + 'static,
+    ui: UI,
+) -> Result<TelemetryHandle, Box<dyn std::error::Error>> {
+    // make sure we're not already initialized
+    if SENDER_INSTANCE.get().is_some() {
+        debug!("telemetry already initialized");
+        return Err(Box::new(Error::AlreadyInitialized()));
+    }
+    let (handle, sender) = init(client, ui)?;
+    SENDER_INSTANCE.set(sender).unwrap();
+    Ok(handle)
 }
 
 impl TelemetryHandle {
@@ -238,5 +244,188 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
                 debug!("failed to record cache usage telemetry. error: {}", err)
             }
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        cell::RefCell,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
+
+    use async_trait::async_trait;
+    use serde::Serialize;
+    use tokio::{
+        select,
+        sync::{mpsc, mpsc::UnboundedReceiver},
+    };
+    use turborepo_api_client::telemetry::TelemetryClient;
+    use turborepo_ui::UI;
+
+    use crate::{events::TelemetryEvent, init};
+
+    #[derive(Clone)]
+    struct DummyClient {
+        // A vector that stores each batch of events
+        events: Arc<Mutex<RefCell<Vec<Vec<TelemetryEvent>>>>>,
+        tx: mpsc::UnboundedSender<()>,
+    }
+
+    impl DummyClient {
+        pub fn events(&self) -> Vec<Vec<TelemetryEvent>> {
+            self.events.lock().unwrap().borrow().clone()
+        }
+    }
+
+    #[async_trait]
+    impl TelemetryClient for DummyClient {
+        async fn record_telemetry<T>(
+            &self,
+            events: Vec<T>,
+            _telemetry_id: &str,
+            _session_id: &str,
+        ) -> Result<(), turborepo_api_client::Error>
+        where
+            T: Serialize + std::marker::Send,
+        {
+            // convert the events to TelemetryEvents
+            let events = events
+                .into_iter()
+                .map(|_event| TelemetryEvent::TestVariant)
+                .collect();
+
+            self.events.lock().unwrap().borrow_mut().push(events);
+            self.tx.send(()).unwrap();
+
+            Ok(())
+        }
+    }
+
+    // Asserts that we get the message after the timeout
+    async fn expect_timeout_then_message(rx: &mut UnboundedReceiver<()>) {
+        let timeout = tokio::time::sleep(std::time::Duration::from_millis(150));
+
+        select! {
+            _ = rx.recv() => {
+                panic!("Expected to wait out the flush timeout")
+            }
+            _ = timeout => {
+            }
+        }
+
+        rx.recv().await;
+    }
+
+    // Asserts that we get the message immediately before the timeout
+    async fn expected_immediate_message(rx: &mut UnboundedReceiver<()>) {
+        let timeout = tokio::time::sleep(std::time::Duration::from_millis(150));
+
+        select! {
+            _ = rx.recv() => {
+            }
+            _ = timeout => {
+                panic!("expected to not wait out the flush timeout")
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_batching() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        let client = DummyClient {
+            events: Default::default(),
+            tx,
+        };
+
+        let result = init(client.clone(), UI::new(false));
+        assert!(result.is_ok());
+
+        let (telemetry_handle, telemetry_sender) = result.unwrap();
+
+        for _ in 0..2 {
+            telemetry_sender.send(TelemetryEvent::TestVariant).unwrap();
+        }
+        let found = client.events();
+        // Should have no events since we haven't flushed yet
+        assert_eq!(found.len(), 0);
+
+        expect_timeout_then_message(&mut rx).await;
+        let found = client.events();
+        assert_eq!(found.len(), 1);
+        let payloads = &found[0];
+        assert_eq!(payloads.len(), 2);
+
+        drop(telemetry_handle);
+    }
+
+    #[tokio::test]
+    async fn test_batching_across_two_batches() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        let client = DummyClient {
+            events: Default::default(),
+            tx,
+        };
+
+        let result = init(client.clone(), UI::new(false));
+        assert!(result.is_ok());
+
+        let (telemetry_handle, telemetry_sender) = result.unwrap();
+
+        for _ in 0..12 {
+            telemetry_sender.send(TelemetryEvent::TestVariant).unwrap();
+        }
+
+        expected_immediate_message(&mut rx).await;
+
+        let found = client.events();
+        assert_eq!(found.len(), 1);
+
+        let payloads = &found[0];
+        assert_eq!(payloads.len(), 10);
+
+        expect_timeout_then_message(&mut rx).await;
+        let found = client.events();
+        assert_eq!(found.len(), 2);
+
+        let payloads = &found[1];
+        assert_eq!(payloads.len(), 2);
+
+        drop(telemetry_handle);
+    }
+
+    #[tokio::test]
+    async fn test_closing() {
+        let (tx, mut _rx) = mpsc::unbounded_channel();
+
+        let client = DummyClient {
+            events: Default::default(),
+            tx,
+        };
+
+        let result = init(client.clone(), UI::new(false));
+        assert!(result.is_ok());
+
+        let (telemetry_handle, telemetry_sender) = result.unwrap();
+
+        for _ in 0..2 {
+            telemetry_sender.send(TelemetryEvent::TestVariant).unwrap();
+        }
+        drop(telemetry_sender);
+
+        let found = client.events();
+        assert!(found.is_empty());
+
+        tokio::time::timeout(Duration::from_millis(5), telemetry_handle.close())
+            .await
+            .expect("timeout before close")
+            .expect("analytics worker panicked");
+        let found = client.events();
+        assert_eq!(found.len(), 1);
+        let payloads = &found[0];
+        assert_eq!(payloads.len(), 2);
     }
 }

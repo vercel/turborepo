@@ -48,10 +48,7 @@ impl EventBuilder<PackageTaskEventBuilder> for PackageTaskEventBuilder {
 impl PubEventBuilder for PackageTaskEventBuilder {
     fn track(&self, event: Event) {
         let val = match event.is_sensitive {
-            EventType::Sensitive => {
-                let config = TelemetryConfig::new().unwrap();
-                config.salt(&event.value)
-            }
+            EventType::Sensitive => TelemetryConfig::one_way_hash(&event.value),
             EventType::NonSensitive => event.value.to_string(),
         };
 
@@ -72,21 +69,18 @@ impl PubEventBuilder for PackageTaskEventBuilder {
 
 impl PackageTaskEventBuilder {
     pub fn new(package: &str, task: &str) -> Self {
-        // TODO don't unwrap this
-        let config = TelemetryConfig::new().unwrap();
-
         // don't obfuscate the package in development mode
         let package = if cfg!(debug_assertions) {
             package.to_string()
         } else {
-            config.salt(package)
+            TelemetryConfig::one_way_hash(package)
         };
 
         // don't obfuscate the task in development mode or if it's in the allowlist
         let task = if cfg!(debug_assertions) || ALLOWLIST.contains(&task) {
             task.to_string()
         } else {
-            config.salt(task)
+            TelemetryConfig::one_way_hash(task)
         };
 
         Self {

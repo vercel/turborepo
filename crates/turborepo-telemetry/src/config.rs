@@ -14,7 +14,7 @@ static DEBUG_ENV_VAR: &str = "TURBO_TELEMETRY_DEBUG";
 static DISABLED_ENV_VAR: &str = "TURBO_TELEMETRY_DISABLED";
 static DO_NOT_TRACK_ENV_VAR: &str = "DO_NOT_TRACK";
 
-fn salt_string(salt: &str, input: &str) -> String {
+fn one_way_hash_with_salt(salt: &str, input: &str) -> String {
     let salted = format!("{}{}", salt, input);
     let mut hasher = Sha256::new();
     hasher.update(salted.as_bytes());
@@ -41,7 +41,7 @@ impl Default for TelemetryConfigContents {
     fn default() -> Self {
         let telemetry_salt = Uuid::new_v4().to_string();
         let raw_telemetry_id = Uuid::new_v4().to_string();
-        let telemetry_id = salt_string(&telemetry_salt, &raw_telemetry_id);
+        let telemetry_id = one_way_hash_with_salt(&telemetry_salt, &raw_telemetry_id);
 
         TelemetryConfigContents {
             telemetry_enabled: true,
@@ -59,19 +59,43 @@ pub struct TelemetryConfig {
 }
 
 fn get_config_path() -> Result<String, ConfigError> {
-    let config_dir = dirs_next::config_dir().ok_or(ConfigError::Message(
-        "Could find telemetry config directory".to_string(),
-    ))?;
-    // stored as a sibling to the turbo global config
-    let config_path = config_dir.join("turborepo").join("telemetry.json");
-    Ok(config_path.to_str().unwrap().to_string())
+    if cfg!(test) {
+        let tmp_dir = env::temp_dir();
+        let config_path = tmp_dir.join("test-telemetry.json");
+        Ok(config_path.to_str().unwrap().to_string())
+    } else {
+        let config_dir = dirs_next::config_dir().ok_or(ConfigError::Message(
+            "Could find telemetry config directory".to_string(),
+        ))?;
+        // stored as a sibling to the turbo global config
+        let config_path = config_dir.join("turborepo").join("telemetry.json");
+        Ok(config_path.to_str().unwrap().to_string())
+    }
 }
 
 fn write_new_config() -> Result<(), ConfigError> {
-    let file_path = &get_config_path()?;
+    let file_path = get_config_path()?;
     let serialized = serde_json::to_string_pretty(&TelemetryConfigContents::default())
         .map_err(|e| ConfigError::Message(e.to_string()))?;
-    fs::write(file_path, serialized).map_err(|e| ConfigError::Message(e.to_string()))?;
+
+    // Extract the directory path from the file path
+    let dir_path = Path::new(&file_path).parent().ok_or_else(|| {
+        ConfigError::Message("Failed to extract directory path from file path".to_string())
+    })?;
+
+    // Create the directory if it doesn't exist
+    if !dir_path.try_exists().unwrap_or(false) {
+        fs::create_dir_all(dir_path).map_err(|e| {
+            ConfigError::Message(format!(
+                "Failed to create directory {}: {}",
+                dir_path.display(),
+                e
+            ))
+        })?;
+    }
+
+    // Write the file
+    fs::write(&file_path, serialized).map_err(|e| ConfigError::Message(e.to_string()))?;
     Ok(())
 }
 
@@ -84,9 +108,8 @@ impl TelemetryConfig {
     pub fn new() -> Result<TelemetryConfig, ConfigError> {
         let file_path = &get_config_path()?;
         debug!("Telemetry config path: {}", file_path);
-
-        if !Path::new(file_path).exists() {
-            write_new_config()?
+        if !Path::new(file_path).try_exists().unwrap_or(false) {
+            write_new_config()?;
         }
 
         let mut settings = Config::builder();
@@ -127,8 +150,28 @@ impl TelemetryConfig {
         Ok(())
     }
 
-    pub fn salt(&self, input: &str) -> String {
-        salt_string(&self.config.telemetry_salt, input)
+    pub fn one_way_hash(input: &str) -> String {
+        match TelemetryConfig::new() {
+            Ok(config) => config.one_way_hash_with_config_salt(input),
+            Err(_) => TelemetryConfig::one_way_hash_with_tmp_salt(input),
+        }
+    }
+
+    /// Obfuscate with the config salt - this is used for all sensitive event
+    /// data
+    fn one_way_hash_with_config_salt(&self, input: &str) -> String {
+        one_way_hash_with_salt(&self.config.telemetry_salt, input)
+    }
+
+    /// Obfuscate with a temporary salt - this is used as a fallback when the
+    /// config salt is not available (e.g. config loading failed etc.)
+    ///
+    /// This is just as secure as the config salt, but it prevents us from
+    /// linking together events that include obfuscated data generated with
+    /// this method as each call will generate a new salt.
+    fn one_way_hash_with_tmp_salt(input: &str) -> String {
+        let tmp_salt = Uuid::new_v4().to_string();
+        one_way_hash_with_salt(&tmp_salt, input)
     }
 
     pub fn show_alert(&mut self, ui: UI) {

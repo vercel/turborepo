@@ -364,6 +364,7 @@ pub enum Command {
         #[serde(skip)]
         command: Option<Box<GenerateCommand>>,
     },
+    /// Enable or disable anonymous telemetry
     Telemetry {
         #[clap(subcommand)]
         #[serde(flatten)]
@@ -713,15 +714,19 @@ pub async fn run(
 
     // initialize telemetry and track handle to close at the end of the run
     let mut telemetry_handle: Option<TelemetryHandle> = None;
-    match AnonAPIClient::new("http://localhost:3000", 250, version) {
+    match AnonAPIClient::new("https://telemetry.vercel.com", 250, version) {
         Ok(anonymous_api_client) => {
             let handle = init_telemetry(anonymous_api_client, ui);
             match handle {
                 Ok(h) => telemetry_handle = Some(h),
-                Err(error) => debug!("failed to start telemetry: {:?}", error),
+                Err(error) => {
+                    debug!("failed to start telemetry: {:?}", error)
+                }
             }
         }
-        Err(error) => debug!("Failed to create AnonAPIClient: {:?}", error),
+        Err(error) => {
+            debug!("Failed to create AnonAPIClient: {:?}", error);
+        }
     }
 
     // If there is no command, we set the command to `Command::Run` with

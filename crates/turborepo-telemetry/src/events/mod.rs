@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+// all event builders and their event methods
 pub mod command;
+pub mod repo;
 pub mod task;
 
 /// All possible telemetry events must be included in this enum.
@@ -13,6 +15,9 @@ pub mod task;
 pub enum TelemetryEvent {
     PackageTask(task::EventData),
     Command(command::EventData),
+    Repo(repo::EventData),
+    #[cfg(test)]
+    TestVariant,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

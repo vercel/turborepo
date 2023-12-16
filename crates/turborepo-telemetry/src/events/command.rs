@@ -34,10 +34,7 @@ impl EventBuilder<CommandEventBuilder> for CommandEventBuilder {
 impl PubEventBuilder for CommandEventBuilder {
     fn track(&self, event: Event) {
         let val = match event.is_sensitive {
-            EventType::Sensitive => {
-                let config = TelemetryConfig::new().unwrap();
-                config.salt(&event.value)
-            }
+            EventType::Sensitive => TelemetryConfig::one_way_hash(&event.value),
             EventType::NonSensitive => event.value.to_string(),
         };
 
