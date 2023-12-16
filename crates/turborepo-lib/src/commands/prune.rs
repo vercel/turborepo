@@ -14,7 +14,7 @@ use turborepo_repository::{
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
-use crate::config::RawTurboJSON;
+use crate::config::RawTurboJson;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -426,7 +426,7 @@ impl<'a> Prune<'a> {
             }
             Err(e) => return Err(e.into()),
         };
-        let turbo_json: RawTurboJSON = serde_json::from_reader(json_comments::StripComments::new(
+        let turbo_json: RawTurboJson = serde_json::from_reader(json_comments::StripComments::new(
             turbo_json_contents.as_slice(),
         ))?;
 
