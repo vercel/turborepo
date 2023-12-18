@@ -1,3 +1,5 @@
+/* eslint-disable -- Lots of SWR and local storage. Not worth fixing so we'll ignore. */
+
 import type { FC, ReactElement } from "react";
 import { Tabs as NextraTabs, Tab } from "nextra-theme-docs";
 import useSWR from "swr";

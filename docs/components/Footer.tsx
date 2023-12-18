@@ -77,7 +77,8 @@ const navigation = {
 };
 
 export function FooterContent() {
-  const site = useTurboSite();
+  // Turborepo is used by default
+  const site = useTurboSite() ?? "repo";
   return (
     <div aria-labelledby="footer-heading" className="w-full">
       <h2 className="sr-only" id="footer-heading">
@@ -120,7 +121,7 @@ export function FooterContent() {
               <div className="mt-12 md:!mt-0">
                 <FooterHeader>Company</FooterHeader>
                 <ul className="mt-4 space-y-1.5 list-none ml-0">
-                  {navigation.company(site!).map((item) => (
+                  {navigation.company(site).map((item) => (
                     <li key={item.name}>
                       <FooterLink href={item.href}>{item.name}</FooterLink>
                     </li>
@@ -197,6 +198,10 @@ function SubmitForm() {
         })
           .then((res) => res.json())
           .then(() => {
+            return router.push("/confirm");
+          })
+          .catch(() => {
+            // We'll trust the API route to let us know if something is going wrong.
             return router.push("/confirm");
           });
         e.preventDefault();
