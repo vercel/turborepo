@@ -127,7 +127,7 @@ impl<'a> Visitor<'a> {
         }
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     pub async fn visit(&self, engine: Arc<Engine>) -> Result<Vec<TaskError>, Error> {
         let concurrency = self.opts.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
