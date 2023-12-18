@@ -1,7 +1,7 @@
-/* eslint-disable react/no-unescaped-entities */
+/* eslint-disable react/no-unescaped-entities -- Because it's a pain. */
 import { Clients } from "../clients/Clients";
 
-export default function Showcase() {
+export function Showcase() {
   return (
     <main className="relative">
       <div className="mx-auto">

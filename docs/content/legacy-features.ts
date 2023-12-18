@@ -87,5 +87,3 @@ export const LEGACY_REPO_DOCS_FEATURES = LEGACY_REPO_FEATURES.filter(
 export const LEGACY_REPO_HOME_FEATURES = LEGACY_REPO_FEATURES.filter(
   (f) => f.page === "home" || f.page === "all"
 );
-
-export default LEGACY_REPO_FEATURES;

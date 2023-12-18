@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment -- SVGs. */
 import type Image from "next/image";
 import EcosystemIconDark from "../public/images/docs/shared/feature-icons/ecosystem-dark.svg";
 import EcosystemIconLight from "../public/images/docs/shared/feature-icons/ecosystem-light.svg";

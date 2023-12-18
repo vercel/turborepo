@@ -53,6 +53,7 @@ const OLD_TURBOREPO_ROUTES = [
   "/docs/upgrading-to-v1",
 ];
 
+/** @type {import('next').NextConfig} */
 const nextConfig = withNextra({
   sentry: {
     autoInstrumentServerFunctions: false,

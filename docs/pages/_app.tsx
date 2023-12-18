@@ -15,9 +15,11 @@ type NextraAppProps = AppProps & {
 // Shim requestIdleCallback in Safari
 if (typeof window !== "undefined" && !("requestIdleCallback" in window)) {
   // @ts-expect-error -- window isn't typed
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-argument  -- Not sure what this code is so let's play it safe and leave it here.
   window.requestIdleCallback = (fn) => setTimeout(fn, 1);
   // @ts-expect-error -- window isn't typed
   window.cancelIdleCallback = (e) => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- Not sure what this code is so let's play it safe and leave it here.
     clearTimeout(e);
   };
 }
