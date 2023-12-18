@@ -2,7 +2,7 @@
 
 read -r -d '' CONFIG <<- EOF
 {
-  "token": "normal-user-token"
+  "vercel.com/api": "normal-user-token"
 }
 EOF
 
@@ -20,3 +20,8 @@ echo $CONFIG > "$TMP_DIR/turborepo/config.json"
 MACOS_DIR="$TMP_DIR/Library/Application Support"
 mkdir -p "$MACOS_DIR/turborepo"
 echo "$CONFIG" > "$MACOS_DIR/turborepo/config.json"
+
+# XDG_CONFIG_HOME equivalent for Windows is {FOLDERID_RoamingAppData} which is roughly C:\Users\{username}\AppData\Roaming
+WINDOWS_DIR="$TMP_DIR/AppData/Roaming"
+mkdir -p "$WINDOWS_DIR/turborepo"
+echo "$CONFIG" > "$WINDOWS_DIR/turborepo/config.json"
