@@ -2,10 +2,10 @@ import type { ReactElement } from "react";
 import React, { createElement } from "react";
 import { ImageResponse } from "@vercel/og";
 import type { NextApiRequest } from "next/index";
-import PackLogo from "../../components/logos/og/PackLogo";
-import RepoLogo from "../../components/logos/og/RepoLogo";
-import TurboLogo from "../../components/logos/og/TurboLogo";
-import VercelLogo from "../../components/logos/og/VercelLogo";
+import { PackLogo } from "../../components/logos/og/PackLogo";
+import { RepoLogo } from "../../components/logos/og/RepoLogo";
+import { TurboLogo } from "../../components/logos/og/TurboLogo";
+import { VercelLogo } from "../../components/logos/og/VercelLogo";
 
 function _arrayBufferToBase64(buffer: ArrayBuffer) {
   let binary = "";

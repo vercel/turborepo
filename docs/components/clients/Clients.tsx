@@ -4,6 +4,27 @@ import cn from "classnames";
 import { users } from "./users";
 import { Logo } from "./Logo";
 
+interface LogoWrapperProps {
+  className: string;
+  children: JSX.Element;
+  staticWidth?: boolean;
+}
+
+function LogoWrapper({
+  className,
+  children,
+  staticWidth,
+}: LogoWrapperProps): JSX.Element {
+  if (!staticWidth) return children;
+  return (
+    <div
+      className={cn("w-48 lg:w-40 flex items-center justify-center", className)}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function Clients({
   linked,
   staticWidth,
@@ -16,20 +37,6 @@ export function Clients({
   const showcaseDark: ReactElement[] = [];
   const showcaseLight: ReactElement[] = [];
 
-  function LogoWrapper({ className, children }) {
-    if (!staticWidth) return children;
-    return (
-      <div
-        className={cn(
-          "w-48 lg:w-40 flex items-center justify-center",
-          className
-        )}
-      >
-        {children}
-      </div>
-    );
-  }
-
   users
     .filter((i) => (companyList ? companyList.includes(i.caption) : true))
     .forEach((user) => {
@@ -38,6 +45,7 @@ export function Clients({
           <LogoWrapper
             className="flex dark:hidden"
             key={`${user.caption}-dark`}
+            staticWidth={staticWidth}
           >
             <Logo isLink={linked ?? false} theme="dark" user={user} />
           </LogoWrapper>
@@ -46,6 +54,7 @@ export function Clients({
           <LogoWrapper
             className="hidden dark:flex"
             key={`${user.caption}-light`}
+            staticWidth={staticWidth}
           >
             <Logo isLink={linked ?? false} theme="light" user={user} />
           </LogoWrapper>

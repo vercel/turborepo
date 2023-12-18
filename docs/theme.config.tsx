@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useConfig, useTheme, type DocsThemeConfig } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
-import Navigation from "./components/Navigation";
-import HeaderLogo from "./components/HeaderLogo";
+import { Navigation } from "./components/Navigation";
+import { HeaderLogo } from "./components/HeaderLogo";
 import { ExtraContent } from "./components/ExtraContent";
 import { Discord, Github } from "./components/Social";
 
