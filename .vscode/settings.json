@@ -6,6 +6,7 @@
     "typescriptreact"
   ],
   "eslint.workingDirectories": [{ "mode": "auto" }],
+  "eslint.rules.customizations": [{ "rule": "*", "severity": "warn" }],
   "debug.javascript.unmapMissingSources": true,
   "go.lintTool": "golangci-lint",
   "go.buildTags": "rust",
@@ -21,5 +22,5 @@
   },
   "search.exclude": {
     "crates/turbopack-tests/tests/snapshot/**": true
-  },
+  }
 }
