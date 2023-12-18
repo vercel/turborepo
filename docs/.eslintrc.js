@@ -40,4 +40,7 @@ module.exports = {
     "react/no-unknown-property": "warn",
     "react/no-unstable-nested-components": "warn",
   },
+  overrides: [
+    { files: "./pages/**", rules: { "import/no-default-export": "off" } },
+  ],
 };

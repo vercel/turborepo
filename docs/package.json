@@ -7,7 +7,7 @@
     "dev": "next",
     "start": "next start",
     "build": "next build ",
-    "lint": "next lint --max-warnings 356",
+    "lint": "eslint . --max-warnings 293 --fix",
     "check-types": "tsc --noEmit",
     "rss": "node scripts/generate-rss.js",
     "schema": "turbo-types-generate ./public/schema.json",
