@@ -3,6 +3,7 @@ use std::{
     io::Write,
     ops::{Deref, DerefMut, Range},
     path::Path,
+    sync::Arc,
 };
 
 use camino::Utf8Path;
@@ -77,27 +78,47 @@ pub struct RawTurboJson {
 
 #[derive(Debug, Default, Clone, Serialize)]
 #[serde(transparent)]
-pub struct Spanned<T>(T, #[serde(skip)] Option<Range<usize>>);
+pub struct Spanned<T> {
+    value: T,
+    #[serde(skip)]
+    range: Option<Range<usize>>,
+    #[serde(skip)]
+    path: Option<Arc<str>>,
+    #[serde(skip)]
+    text: Option<Arc<str>>,
+}
 
 // We do *not* check for the range equality because that's too finicky
 // to get right in tests.
 impl<T: PartialEq> PartialEq for Spanned<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        self.value == other.value
     }
 }
 
 impl<T> Spanned<T> {
     pub fn new(t: T) -> Self {
-        Self(t, None)
+        Self {
+            value: t,
+            range: None,
+            path: None,
+            text: None,
+        }
     }
 
     pub fn with_range(self, range: impl Into<Range<usize>>) -> Self {
-        Self(self.0, Some(range.into()))
+        Self {
+            range: Some(range.into()),
+            ..self
+        }
+    }
+
+    pub fn add_path(&mut self, path: Arc<str>) {
+        self.path = Some(path);
     }
 
     pub fn into_inner(self) -> T {
-        self.0
+        self.value
     }
 }
 
@@ -105,7 +126,7 @@ impl<T> Deref for Spanned<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.value
     }
 }
 
@@ -379,16 +400,16 @@ impl TryFrom<RawTurboJson> for TurboJson {
 
         // TODO: In the rust port, warnings should be refactored to a post-parse
         // validation step
-        let global_dependencies_range = raw_turbo
+        let (global_dependencies_range, global_dependencies_text) = raw_turbo
             .global_dependencies
             .as_ref()
-            .map(|d| d.1.clone())
+            .map(|d| (d.range.clone(), d.text.clone()))
             .unwrap_or_default();
 
         for value in raw_turbo
             .global_dependencies
             .into_iter()
-            .flat_map(|deps| deps.0)
+            .flat_map(|deps| deps.value)
         {
             if let Some(env_var) = value.strip_prefix(ENV_PIPELINE_DELIMITER) {
                 println!(
@@ -434,7 +455,12 @@ impl TryFrom<RawTurboJson> for TurboJson {
             global_deps: {
                 let mut global_deps: Vec<_> = global_file_dependencies.into_iter().collect();
                 global_deps.sort();
-                Spanned(global_deps, global_dependencies_range)
+                Spanned {
+                    value: global_deps,
+                    range: global_dependencies_range,
+                    path: None,
+                    text: global_dependencies_text,
+                }
             },
             global_dot_env: raw_turbo
                 .global_dot_env
@@ -598,13 +624,18 @@ fn gather_env_vars(
 ) -> Result<(), Error> {
     for value in vars {
         if value.starts_with(ENV_PIPELINE_DELIMITER) {
-            let span = value.1.clone();
+            let span = value.range.clone();
+            let (span, text) = match (span, &value.text) {
+                (Some(span), Some(text)) => (Some(span.into()), text.to_string()),
+                (_, _) => (None, String::new()),
+            };
             // Hard error to help people specify this correctly during migration.
             // TODO: Remove this error after we have run summary.
             return Err(Error::InvalidEnvPrefix {
                 key: key.to_string(),
                 value: value.into_inner(),
-                span: span.map(|s| s.into()),
+                span,
+                text,
                 env_pipeline_delimiter: ENV_PIPELINE_DELIMITER,
             });
         }
@@ -760,7 +791,12 @@ mod tests {
     #[test_case(
         r#"{ "dotEnv": [] }"#,
         RawTaskDefinition {
-            dot_env: Some(Spanned(Vec::new(), Some(12..14))),
+            dot_env: Some(Spanned {
+                value: Vec::new(),
+                range: Some(12..14),
+                path: None,
+                text: None,
+            }),
             ..RawTaskDefinition::default()
         },
         TaskDefinition {

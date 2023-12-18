@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use itertools::Itertools;
+use miette::Diagnostic;
 use turbopath::AbsoluteSystemPath;
 use turborepo_graph_utils as graph;
 use turborepo_repository::package_graph::{
@@ -14,7 +15,7 @@ use crate::{
     turbo_json::{validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJson},
 };
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("Could not find the following tasks in project: {0}")]
     MissingTasks(String),
@@ -30,6 +31,7 @@ pub enum Error {
     #[error("Could not find \"{task_id}\" in root turbo.json or \"{task_name}\" in workspace")]
     MissingWorkspaceTask { task_id: String, task_name: String },
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
     #[error("Invalid turbo.json:\n{error_lines}")]
     Validation { error_lines: String },

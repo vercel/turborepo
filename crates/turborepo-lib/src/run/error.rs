@@ -18,6 +18,7 @@ pub enum Error {
     #[error(transparent)]
     Graph(#[from] graph_visualizer::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Builder(#[from] engine::BuilderError),
     #[error(transparent)]
     Env(#[from] turborepo_env::Error),

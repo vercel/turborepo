@@ -1,6 +1,6 @@
 use std::{collections::HashMap, ffi::OsString, io};
 
-use miette::SourceSpan;
+use miette::{Diagnostic, SourceSpan};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
@@ -12,7 +12,7 @@ pub use crate::turbo_json::RawTurboJson;
 use crate::{commands::CommandBase, turbo_json};
 
 #[allow(clippy::enum_variant_names)]
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("Global config path not found")]
     NoGlobalConfigPath,
@@ -46,13 +46,14 @@ pub enum Error {
     PackageTaskInSinglePackageMode { task_id: String },
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
-    #[error(
-        "You specified \"{value}\" in the \"{key}\" key. You should not prefix your environment \
-         variables with \"{env_pipeline_delimiter}\""
-    )]
+    #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
+    #[diagnostic(code(turbo::config::invalid_env_prefix))]
     InvalidEnvPrefix {
         value: String,
         key: String,
+        #[source_code]
+        text: String,
+        #[label("variable with invalid prefix declared here")]
         span: Option<SourceSpan>,
         env_pipeline_delimiter: &'static str,
     },

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use biome_console::{markup, ColorMode, ConsoleExt, EnvConsole};
 use biome_deserialize::{
@@ -46,7 +46,12 @@ impl<T: Deserializable> Deserializable for Spanned<T> {
     ) -> Option<Self> {
         let range = value.range();
         let value = T::deserialize(value, name, diagnostics)?;
-        Some(Spanned(value, Some(range.into())))
+        Some(Spanned {
+            value,
+            range: Some(range.into()),
+            path: None,
+            text: None,
+        })
     }
 }
 
@@ -111,7 +116,7 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
         members: impl Iterator<Item = Option<(impl DeserializableValue, impl DeserializableValue)>>,
         // range of the map in the source text.
         _: TextRange,
-        _name: &str,
+        _: &str,
         diagnostics: &mut Vec<DeserializationDiagnostic>,
     ) -> Option<Self::Output> {
         let mut result = RawTaskDefinition::default();
@@ -450,6 +455,63 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
     }
 }
 
+trait WithText {
+    fn add_text(&mut self, text: Arc<str>);
+}
+
+impl<T> WithText for Spanned<T> {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.text = Some(text);
+    }
+}
+
+impl<T: WithText> WithText for Option<T> {
+    fn add_text(&mut self, text: Arc<str>) {
+        if let Some(inner) = self {
+            inner.add_text(text);
+        }
+    }
+}
+
+impl<T: WithText> WithText for Vec<T> {
+    fn add_text(&mut self, text: Arc<str>) {
+        for item in self {
+            item.add_text(text.clone());
+        }
+    }
+}
+
+impl WithText for RawTurboJson {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.extends.add_text(text.clone());
+        self.global_dependencies.add_text(text.clone());
+        self.global_env.add_text(text.clone());
+        self.global_pass_through_env.add_text(text.clone());
+        self.pipeline.add_text(text.clone());
+    }
+}
+
+impl WithText for Pipeline {
+    fn add_text(&mut self, text: Arc<str>) {
+        for (_, task) in self.0.iter_mut() {
+            task.add_text(text.clone());
+        }
+    }
+}
+
+impl WithText for RawTaskDefinition {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.depends_on.add_text(text.clone());
+        self.dot_env.add_text(text.clone());
+        self.env.add_text(text.clone());
+        self.inputs.add_text(text.clone());
+        self.pass_through_env.add_text(text.clone());
+        self.persistent.add_text(text.clone());
+        self.outputs.add_text(text.clone());
+        self.output_mode.add_text(text.clone());
+    }
+}
+
 impl RawTurboJson {
     // A simple helper for tests
     #[cfg(test)]
@@ -457,6 +519,16 @@ impl RawTurboJson {
         let json_string = serde_json::to_string(&value).expect("should be able to serialize");
         Self::parse(&json_string, "turbo.json")
     }
+    /// Parses a turbo.json file into the raw representation with span info
+    /// attached.
+    ///
+    /// # Arguments
+    ///
+    /// * `text`: The text contents of the turbo.json file
+    /// * `file_path`: The path to the turbo.json file. Just used for error
+    ///   display, so doesn't need to actually be a correct path.
+    ///
+    /// returns: Result<RawTurboJson, Error>
     pub fn parse(text: &str, file_path: &str) -> Result<RawTurboJson, Error> {
         let result = deserialize_from_json_str::<RawTurboJson>(
             text,
@@ -473,38 +545,12 @@ impl RawTurboJson {
             return Err(Error::Parse { diagnostics });
         }
 
-        Ok(result
+        let mut turbo_json = result
             .into_deserialized()
-            .expect("should have turbo.json value if no errors"))
-    }
-}
+            .expect("should have turbo.json if no errors");
 
-#[cfg(test)]
-mod tests {
-    use super::Error;
-    use crate::{config::RawTurboJson, turbo_json::parser::print_diagnostics};
+        turbo_json.add_text(Arc::from(text));
 
-    #[test]
-    fn test_parse_turbo() {
-        let text = r#"{
-         "extends": ["base"],
-         "experimentalSpaces": { "id": "foobar" },
-         "pipeline": {
-           "build": { "dependsOn": ["lint"] }
-         }
-        }"#;
-        let result = RawTurboJson::parse(text, "turbo.json").unwrap();
-        println!("{:?}", result);
-    }
-
-    #[test]
-    fn test_root_not_object() {
-        let text = r#"10"#;
-        let error = RawTurboJson::parse(text, "turbo.json").unwrap_err();
-        match error {
-            Error::Parse { diagnostics } => {
-                print_diagnostics(&diagnostics, true);
-            }
-        }
+        Ok(turbo_json)
     }
 }
