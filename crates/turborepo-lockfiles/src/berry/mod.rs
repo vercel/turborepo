@@ -394,6 +394,7 @@ impl BerryLockfile {
 }
 
 impl Lockfile for BerryLockfile {
+    #[tracing::instrument(skip(self))]
     fn resolve_package(
         &self,
         workspace_path: &str,
@@ -427,6 +428,7 @@ impl Lockfile for BerryLockfile {
         }))
     }
 
+    #[tracing::instrument(skip(self))]
     fn all_dependencies(
         &self,
         key: &str,
