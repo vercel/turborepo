@@ -37,9 +37,9 @@ export function ExamplesArea({
     .filter(({ featured }) => (filter === "featured" ? featured : true))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const withBoost = [];
-  const withTemplate = [];
-  const withoutTemplate = [];
+  const withBoost: Example[] = [];
+  const withTemplate: Example[] = [];
+  const withoutTemplate: Example[] = [];
   sortedExamples.forEach((e) => {
     if (e.boost) {
       withBoost.push(e);

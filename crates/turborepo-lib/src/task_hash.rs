@@ -114,7 +114,6 @@ impl PackageInputsHashes {
                     Ok(hash_object) => hash_object,
                     Err(err) => return Some(Err(err.into())),
                 };
-
                 if let Some(dot_env) = &task_definition.dot_env {
                     if !dot_env.is_empty() {
                         let absolute_package_path = repo_root.resolve(package_path);
@@ -411,12 +410,13 @@ impl<'a> TaskHasher<'a> {
                 pass_through_env.union(global_env);
                 pass_through_env.union(&tracker_env.all);
 
-                if let Some(definition_pass_through) = &task_definition.pass_through_env {
-                    let env_var_pass_through_map = self
-                        .env_at_execution_start
-                        .from_wildcards(definition_pass_through)?;
-                    pass_through_env.union(&env_var_pass_through_map);
-                }
+                let env_var_pass_through_map = self.env_at_execution_start.from_wildcards(
+                    task_definition
+                        .pass_through_env
+                        .as_deref()
+                        .unwrap_or_default(),
+                )?;
+                pass_through_env.union(&env_var_pass_through_map);
 
                 Ok(pass_through_env)
             }

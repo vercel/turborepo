@@ -303,9 +303,19 @@ impl Client for APIClient {
         struct WrappedAPIError {
             error: APIError,
         }
-        let WrappedAPIError { error: api_error } = match response.json().await {
-            Ok(api_error) => api_error,
+        let body = match response.text().await {
+            Ok(body) => body,
             Err(e) => return Error::ReqwestError(e),
+        };
+
+        let WrappedAPIError { error: api_error } = match serde_json::from_str(&body) {
+            Ok(api_error) => api_error,
+            Err(err) => {
+                return Error::InvalidJson {
+                    err,
+                    text: body.clone(),
+                }
+            }
         };
 
         if let Some(status_string) = api_error.code.strip_prefix("remote_caching_") {
@@ -610,5 +620,30 @@ mod test {
 
         handle.abort();
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_handle_403_includes_text_on_invalid_json() {
+        let response = reqwest::Response::from(
+            http::Response::builder()
+                .body("this isn't valid JSON")
+                .unwrap(),
+        );
+        let err = APIClient::handle_403(response).await;
+        assert_eq!(
+            err.to_string(),
+            "unable to parse 'this isn't valid JSON' as JSON: expected ident at line 1 column 2"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_403_parses_error_if_present() {
+        let response = reqwest::Response::from(
+            http::Response::builder()
+                .body(r#"{"error": {"code": "forbidden", "message": "Not authorized"}}"#)
+                .unwrap(),
+        );
+        let err = APIClient::handle_403(response).await;
+        assert_eq!(err.to_string(), "unknown status forbidden: Not authorized");
     }
 }

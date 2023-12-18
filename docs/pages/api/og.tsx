@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import React, { createElement } from "react";
 import { ImageResponse } from "@vercel/og";
 import type { NextApiRequest } from "next/index";
@@ -6,7 +7,7 @@ import RepoLogo from "../../components/logos/og/RepoLogo";
 import TurboLogo from "../../components/logos/og/TurboLogo";
 import VercelLogo from "../../components/logos/og/VercelLogo";
 
-function _arrayBufferToBase64(buffer) {
+function _arrayBufferToBase64(buffer: ArrayBuffer) {
   let binary = "";
   const bytes = new Uint8Array(buffer);
   const len = bytes.byteLength;
@@ -68,16 +69,16 @@ export default async function openGraphImage(
 ): Promise<ImageResponse> {
   try {
     const [fonts, bg] = await loadAssets();
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = new URL(req.url!);
 
-    const type = searchParams.get("type");
+    const type = searchParams.get("type")!;
 
     // Start with the default title for the type
     let title = TITLE_FOR_TYPE[type];
 
     // If there'sa a ?title=<title> query param, always prefer that.
     if (searchParams.has("title")) {
-      title = searchParams.get("title").slice(0, 100);
+      title = searchParams.get("title")!.slice(0, 100);
     }
 
     return new ImageResponse(createElement(OGImage, { title, type, bg }), {
@@ -103,7 +104,7 @@ export function OGImage({
   title: string;
   type: string;
   bg: string;
-}): JSX.Element {
+}): ReactElement {
   return (
     <div
       style={{
@@ -158,7 +159,7 @@ export function OGImage({
   );
 }
 
-function Logo({ type }: { type: string | undefined }): JSX.Element {
+function Logo({ type }: { type: string | undefined }): ReactElement {
   if (type === "pack") {
     return <PackLogo height={103 * 1.1} width={697 * 1.1} />;
   }

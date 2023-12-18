@@ -12,7 +12,7 @@ export const Tabs: FC<{
   // Use SWR so all tabs with the same key can sync their states.
   const { data, mutate } = useSWR(storageKey, (key) => {
     try {
-      return JSON.parse(localStorage.getItem(key));
+      return JSON.parse(localStorage.getItem(key)!);
     } catch (e) {
       return null;
     }

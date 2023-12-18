@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { withSentry } from "@sentry/nextjs";
+import { wrapApiHandlerWithSentry } from "@sentry/nextjs";
 
 const CAMPAIGN_ID = process.env.TURBOREPO_SFDC_CAMPAIGN_ID;
 const TRAY_URL = process.env.TRAY_URL;
@@ -12,7 +12,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     };
 
     try {
-      await fetch(TRAY_URL, {
+      await fetch(TRAY_URL!, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -30,4 +30,4 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-export default withSentry(handler);
+export default wrapApiHandlerWithSentry(handler, "/api/signup");

@@ -36,14 +36,14 @@ export function Logo({
         "hidden dark:inline": theme !== "dark",
         "dark:hidden inline": theme === "dark",
       })}
-      height={numericHeight}
+      height={numericHeight!}
       priority
       src={user.image.replace(
         "/logos",
         theme === "light" ? "/logos/white" : "/logos/color"
       )}
       style={styles}
-      width={numericWidth}
+      width={numericWidth!}
     />
   );
 
