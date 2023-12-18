@@ -222,6 +222,7 @@ impl HTTPCache {
         )))
     }
 
+    #[tracing::instrument(skip_all)]
     pub(crate) fn restore_tar(
         root: &AbsoluteSystemPath,
         body: &[u8],

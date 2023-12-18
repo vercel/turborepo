@@ -94,6 +94,7 @@ impl ArtifactSignatureAuthenticator {
         Ok(BASE64_STANDARD.encode(hmac_output.into_bytes()))
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn validate(
         &self,
         hash: &[u8],
