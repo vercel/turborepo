@@ -761,6 +761,14 @@ impl ExecContext {
         cmd.current_dir(self.workspace_directory.as_path());
 
         if self.is_interactive {
+            debug!(
+                "{} is interactive, setting cmd stdin to piped",
+                self.task_id
+            );
+            // TODO: piped makes `process.stdin.isTTY` undefined in Node
+            // which some tools will throw over.
+            // https://github.com/Shopify/cli/blob/dccb00a3eebfe1c298bec6fb9e0a13faac546dbb/packages/cli-kit/src/public/node/ui.tsx#L697C1-L701
+            // https://github.com/Shopify/cli/blob/dccb00a3eebfe1c298bec6fb9e0a13faac546dbb/packages/cli-kit/src/public/node/system.ts#L138-L141
             cmd.stdin(Stdio::piped());
         } else {
             cmd.stdin(Stdio::null());
@@ -786,19 +794,32 @@ impl ExecContext {
             }
         };
 
-        let (sender, receiver) = std::sync::mpsc::sync_channel::<tokio::process::ChildStdin>(1);
+        let (sender, receiver) =
+            std::sync::mpsc::sync_channel::<(tokio::process::ChildStdin, TaskId<'_>)>(1);
+
         if self.is_interactive {
             std::thread::spawn(move || {
                 let mut parent_stdin_handle = std::io::stdin().lock();
-                let mut child_stdin = match receiver.recv() {
-                    Ok(child_stdin) => child_stdin,
-                    Err(_) => return,
+                debug!("Locked parent stdin");
+                let (mut child_stdin, task_id) = match receiver.recv() {
+                    Ok(xx) => xx,
+                    Err(_) => {
+                        debug!(
+                            "No message from child process for stdin readiness, exiting and \
+                             releasing parent stdin lock"
+                        );
+                        return;
+                    }
                 };
+
+                debug!("Granting stdin lock to {}", task_id);
 
                 let mut buffer = String::new();
                 // TODO: read_line doesn't cover the case of when the user doesn't hit enter
                 // TODO: handle error
                 let _ = parent_stdin_handle.read_line(&mut buffer);
+
+                debug!("Granting stdin lock to {}", task_id);
 
                 // write data from parent stdin to child_stdin
                 let _ = futures::executor::block_on(child_stdin.write_all(buffer.as_bytes()));
@@ -831,7 +852,7 @@ impl ExecContext {
         // input now
         if self.is_interactive {
             let stdin = process.stdin().unwrap();
-            let _ = sender.send(stdin);
+            let _ = sender.send((stdin, self.task_id.clone()));
         }
 
         let exit_status = match process
