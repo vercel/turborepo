@@ -1,7 +1,4 @@
-use turborepo_telemetry::{
-    config::TelemetryConfig,
-    events::{command::CommandEventBuilder, Event, EventType, PubEventBuilder},
-};
+use turborepo_telemetry::{config::TelemetryConfig, events::command::CommandEventBuilder};
 use turborepo_ui::{color, BOLD, BOLD_GREEN, BOLD_RED};
 
 use super::CommandBase;
@@ -37,9 +34,9 @@ fn log_error(message: &str, error: &str, base: &CommandBase) {
 }
 
 pub fn configure(
-    command: &Option<Box<TelemetryCommand>>,
+    command: &Option<TelemetryCommand>,
     base: &mut CommandBase,
-    telemetry: &mut CommandEventBuilder,
+    telemetry: CommandEventBuilder,
 ) {
     let config = TelemetryConfig::new();
     let mut config = match config {
@@ -51,32 +48,24 @@ pub fn configure(
     };
 
     match command {
-        Some(box TelemetryCommand::Enable) => {
+        Some(TelemetryCommand::Enable) => {
             let result = config.enable();
             match result {
                 Ok(_) => {
                     println!("{}", color!(base.ui, BOLD, "{}", "Success!"));
                     log_status(config, base);
-                    telemetry.track(Event {
-                        key: "action".to_string(),
-                        value: "enabled".to_string(),
-                        is_sensitive: EventType::NonSensitive,
-                    });
+                    telemetry.track_telemetry_config(true);
                 }
                 Err(e) => log_error("Failed to enable telemetry", &e.to_string(), base),
             }
         }
-        Some(box TelemetryCommand::Disable) => {
+        Some(TelemetryCommand::Disable) => {
             let result = config.disable();
             match result {
                 Ok(_) => {
                     println!("{}", color!(base.ui, BOLD, "{}", "Success!"));
                     log_status(config, base);
-                    telemetry.track(Event {
-                        key: "action".to_string(),
-                        value: "disabled".to_string(),
-                        is_sensitive: EventType::NonSensitive,
-                    });
+                    telemetry.track_telemetry_config(false);
                 }
                 Err(e) => log_error("Failed to disable telemetry", &e.to_string(), base),
             }

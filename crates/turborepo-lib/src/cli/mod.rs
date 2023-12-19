@@ -13,7 +13,10 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
-    events::{command::CommandEventBuilder, Event, EventType, PubEventBuilder},
+    events::{
+        command::{CodePath, CommandEventBuilder},
+        PubEventBuilder,
+    },
     init_telemetry, TelemetryHandle,
 };
 use turborepo_ui::UI;
@@ -370,7 +373,7 @@ pub enum Command {
     Telemetry {
         #[clap(subcommand)]
         #[serde(flatten)]
-        command: Option<Box<TelemetryCommand>>,
+        command: Option<TelemetryCommand>,
     },
     #[clap(hide = true)]
     Info {
@@ -834,7 +837,8 @@ pub async fn run(
             args,
             command,
         } => {
-            let event = CommandEventBuilder::new("generate").track_call();
+            let event = CommandEventBuilder::new("generate");
+            event.track_call();
             // build GeneratorCustomArgs struct
             let args = GeneratorCustomArgs {
                 generator_name: generator_name.clone(),
@@ -842,15 +846,16 @@ pub async fn run(
                 root: root.clone(),
                 args: args.clone(),
             };
-            let mut child_event = event.child();
-            generate::run(tag, command, &args, &mut child_event)?;
+            let child_event = event.child();
+            generate::run(tag, command, &args, child_event)?;
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Telemetry { command } => {
-            let event = CommandEventBuilder::new("telemetry").track_call();
+            let event = CommandEventBuilder::new("telemetry");
+            event.track_call();
             let mut base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
-            let mut child_event = event.child();
-            telemetry::configure(command, &mut base, &mut child_event);
+            let child_event = event.child();
+            telemetry::configure(command, &mut base, child_event);
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Info { workspace, json } => {
@@ -923,7 +928,8 @@ pub async fn run(
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Run(args) => {
-            let event = CommandEventBuilder::new("run").track_call();
+            let event = CommandEventBuilder::new("run");
+            event.track_call();
             // in the case of enabling the run stub, we want to be able to opt-in
             // to the rust codepath for running turbo
             if args.tasks.is_empty() {
@@ -939,13 +945,8 @@ pub async fn run(
             let should_use_go = args.go_fallback
                 || env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false");
 
-            event.track(Event {
-                key: "go_fallback".to_string(),
-                value: should_use_go.to_string(),
-                is_sensitive: EventType::NonSensitive,
-            });
-
             if should_use_go {
+                event.track_run_code_path(CodePath::Go);
                 // we have to clear the telemetry queue before we hand off to go
                 if telemetry_handle.is_some() {
                     let handle = telemetry_handle.take().unwrap();
@@ -954,6 +955,7 @@ pub async fn run(
                 Ok(Payload::Go(Box::new(base)))
             } else {
                 use crate::commands::run;
+                event.track_run_code_path(CodePath::Rust);
                 let exit_code = run::run(base).await?;
                 Ok(Payload::Rust(Ok(exit_code)))
             }

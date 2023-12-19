@@ -28,13 +28,13 @@ pub enum EventType {
 
 /// Key-value pairs that are sent with each even - if the value is
 /// sensitive, it will be hashed and anonymized before being sent
-/// using the users private salt
+/// using the users private salt.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Event {
-    pub key: String,
-    pub value: String,
-    pub is_sensitive: EventType,
+    key: String,
+    value: String,
+    is_sensitive: EventType,
 }
 
 /// Private trait that can be used for building telemetry events.

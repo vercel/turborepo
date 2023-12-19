@@ -92,7 +92,7 @@ impl PackageTaskEventBuilder {
     }
 
     // event methods
-    pub fn track_recursive_error(self) -> Self {
+    pub fn track_recursive_error(&self) -> &Self {
         self.track(Event {
             key: "error".to_string(),
             value: "recursive".to_string(),
@@ -101,7 +101,7 @@ impl PackageTaskEventBuilder {
         self
     }
 
-    pub fn track_hash(self, hash: &str) -> Self {
+    pub fn track_hash(&self, hash: &str) -> &Self {
         self.track(Event {
             key: "hash".to_string(),
             value: hash.to_string(),
@@ -110,7 +110,7 @@ impl PackageTaskEventBuilder {
         self
     }
 
-    pub fn track_framework(self, framework: &str) -> Self {
+    pub fn track_framework(&self, framework: &str) -> &Self {
         self.track(Event {
             key: "framework".to_string(),
             value: framework.to_string(),

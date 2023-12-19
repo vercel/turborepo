@@ -69,21 +69,19 @@ impl TelemetryConfig {
         let settings = settings.build();
 
         // If this is a FileParse error, we assume something corrupted the file or
-        // structure. In this case, try to remove the config file and write a
-        // new one, otherwise return the error
-        if let Err(ConfigError::FileParse { .. }) = settings {
-            fs::remove_file(file_path).map_err(|e| ConfigError::Message(e.to_string()))?;
-            write_new_config()?;
-            return Err(settings.unwrap_err());
-        } else if let Err(err) = settings {
+        // its structure. In this case, because the telemetry config is intentionally
+        // isolated from other turborepo config, try to remove the entire config
+        // file and write a new one, otherwise return the error
+        let config = match settings {
+            Ok(settings) => settings.try_deserialize::<TelemetryConfigContents>()?,
+            Err(ConfigError::FileParse { .. }) => {
+                fs::remove_file(file_path).map_err(|e| ConfigError::Message(e.to_string()))?;
+                write_new_config()?;
+                return Err(settings.unwrap_err());
+            }
             // Propagate other errors
-            return Err(err);
-        }
-
-        // this is safe because we just checked the error case above
-        let config = settings
-            .unwrap()
-            .try_deserialize::<TelemetryConfigContents>()?;
+            Err(err) => return Err(err),
+        };
 
         let config = TelemetryConfig {
             config_path: file_path.to_string(),
@@ -158,13 +156,11 @@ impl TelemetryConfig {
                 ),
             );
 
-            let updated_config = self.alert_shown();
-            match updated_config {
-                Ok(_) => (),
-                Err(err) => error!(
+            if let Err(err) = self.alert_shown() {
+                error!(
                     "Error saving seen alert event to telemetry config: {:?}",
                     err
-                ),
+                );
             }
         }
     }

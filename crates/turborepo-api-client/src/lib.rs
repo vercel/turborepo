@@ -532,12 +532,6 @@ impl APIAuth {
 }
 
 // Anon Client
-
-#[async_trait]
-pub trait AnonClient {
-    fn make_url(&self, endpoint: &str) -> String;
-}
-
 #[derive(Clone)]
 pub struct AnonAPIClient {
     client: reqwest::Client,
@@ -545,13 +539,11 @@ pub struct AnonAPIClient {
     user_agent: String,
 }
 
-impl AnonClient for AnonAPIClient {
+impl AnonAPIClient {
     fn make_url(&self, endpoint: &str) -> String {
         format!("{}{}", self.base_url, endpoint)
     }
-}
 
-impl AnonAPIClient {
     pub fn new(base_url: impl AsRef<str>, timeout: u64, version: &str) -> Result<Self> {
         let client_build = if timeout != 0 {
             reqwest::Client::builder()
@@ -569,26 +561,6 @@ impl AnonAPIClient {
             base_url: base_url.as_ref().to_string(),
             user_agent,
         })
-    }
-
-    pub(crate) async fn create_telemetry_request_builder(
-        &self,
-        url: &str,
-        method: Method,
-        session_id: &str,
-        telemetry_id: &str,
-    ) -> Result<RequestBuilder> {
-        let url = self.make_url(url);
-
-        let request_builder = self
-            .client
-            .request(method, url)
-            .header("User-Agent", self.user_agent.clone())
-            .header("Content-Type", "application/json")
-            .header("x-turbo-telemetry-id", telemetry_id)
-            .header("x-turbo-session-id", session_id);
-
-        Ok(request_builder)
     }
 }
 

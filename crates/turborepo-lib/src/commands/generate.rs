@@ -5,9 +5,7 @@ use std::{
 
 use thiserror::Error;
 use tracing::debug;
-use turborepo_telemetry::events::{
-    command::CommandEventBuilder, Event, EventType, PubEventBuilder,
-};
+use turborepo_telemetry::events::command::CommandEventBuilder;
 use which::which;
 
 use crate::{
@@ -49,30 +47,18 @@ pub fn run(
     tag: &String,
     command: &Option<Box<GenerateCommand>>,
     args: &GeneratorCustomArgs,
-    telemetry: &mut CommandEventBuilder,
+    telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
+    telemetry.track_generator_tag(tag);
     // check if a subcommand was passed
     if let Some(box GenerateCommand::Workspace(workspace_args)) = command {
         let raw_args = serde_json::to_string(&workspace_args)?;
-        telemetry.track(Event {
-            key: "option".to_string(),
-            value: "workspace".to_string(),
-            is_sensitive: EventType::NonSensitive,
-        });
+        telemetry.track_generator_option("workspace");
         call_turbo_gen("workspace", tag, &raw_args)?;
     } else {
         // if no subcommand was passed, run the generate command as default
         let raw_args = serde_json::to_string(&args)?;
-        telemetry.track(Event {
-            key: "option".to_string(),
-            value: "run".to_string(),
-            is_sensitive: EventType::NonSensitive,
-        });
-        telemetry.track(Event {
-            key: "tag".to_string(),
-            value: tag.clone(),
-            is_sensitive: EventType::NonSensitive,
-        });
+        telemetry.track_generator_option("run");
         call_turbo_gen("run", tag, &raw_args)?;
     }
 

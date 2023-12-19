@@ -53,6 +53,13 @@ impl PubEventBuilder for CommandEventBuilder {
 }
 
 // events
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CodePath {
+    Go,
+    Rust,
+}
+
 impl CommandEventBuilder {
     pub fn new(command: &str) -> Self {
         Self {
@@ -62,10 +69,49 @@ impl CommandEventBuilder {
         }
     }
 
-    pub fn track_call(self) -> Self {
+    pub fn track_call(&self) -> &Self {
         self.track(Event {
             key: "command".to_string(),
             value: "called".to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    pub fn track_run_code_path(&self, path: CodePath) -> &Self {
+        self.track(Event {
+            key: "binary".to_string(),
+            value: match path {
+                CodePath::Go => "go".to_string(),
+                CodePath::Rust => "rust".to_string(),
+            },
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    pub fn track_telemetry_config(&self, enabled: bool) -> &Self {
+        self.track(Event {
+            key: "action".to_string(),
+            value: if enabled { "enabled" } else { "disabled" }.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    pub fn track_generator_option(&self, option: &str) -> &Self {
+        self.track(Event {
+            key: "option".to_string(),
+            value: option.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    pub fn track_generator_tag(&self, tag: &str) -> &Self {
+        self.track(Event {
+            key: "tag".to_string(),
+            value: tag.to_string(),
             is_sensitive: EventType::NonSensitive,
         });
         self

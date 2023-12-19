@@ -62,7 +62,7 @@ impl RepoEventBuilder {
         }
     }
 
-    pub fn track_package_manager_name(self, name: &str) -> Self {
+    pub fn track_package_manager_name(&self, name: &str) -> &Self {
         self.track(Event {
             key: "package_manager_name".to_string(),
             value: name.to_string(),
@@ -71,7 +71,7 @@ impl RepoEventBuilder {
         self
     }
 
-    pub fn track_package_manager_version(self, version: &str) -> Self {
+    pub fn track_package_manager_version(&self, version: &str) -> &Self {
         self.track(Event {
             key: "package_manager_version".to_string(),
             value: version.to_string(),
@@ -80,7 +80,7 @@ impl RepoEventBuilder {
         self
     }
 
-    pub fn track_is_monorepo(self, is_monorepo: bool) -> Self {
+    pub fn track_is_monorepo(&self, is_monorepo: bool) -> &Self {
         self.track(Event {
             key: "is_monorepo".to_string(),
             value: is_monorepo.to_string(),
