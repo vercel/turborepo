@@ -69,8 +69,9 @@ export default async function openGraphImage(
 ): Promise<ImageResponse> {
   try {
     const [fonts, bg] = await loadAssets();
-    // @ts-expect-error -- Shouldn't a request always have a url?
-    const { searchParams } = new URL(req.url);
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- It's safe for us to assume that this is coming from `http.Server` here.
+    const { searchParams } = new URL(req.url!);
 
     const type = searchParams.get("type");
 

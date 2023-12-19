@@ -240,6 +240,12 @@ const nextConfig = withNextra({
         destination: "/repo/docs/:path*",
         permanent: true,
       },
+      {
+        // Redirect old blog posts to new blog.
+        source: "/posts/:path*",
+        destination: "/blog/:path*",
+        permanent: true,
+      },
     ];
   },
 });
