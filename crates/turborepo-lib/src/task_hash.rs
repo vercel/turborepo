@@ -12,6 +12,7 @@ use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_repository::package_graph::{WorkspaceInfo, WorkspaceName};
 use turborepo_scm::SCM;
+use turborepo_telemetry::events::task::PackageTaskEventBuilder;
 
 use crate::{
     engine::TaskNode,
@@ -205,6 +206,7 @@ impl<'a> TaskHasher<'a> {
         task_env_mode: ResolvedEnvMode,
         workspace: &WorkspaceInfo,
         dependency_set: HashSet<&TaskNode>,
+        telemetry: PackageTaskEventBuilder,
     ) -> Result<String, Error> {
         let do_framework_inference = self.opts.run_opts.framework_inference;
         let is_monorepo = !self.opts.run_opts.single_package;
@@ -226,6 +228,7 @@ impl<'a> TaskHasher<'a> {
                     framework.slug(),
                     framework.env_wildcards()
                 );
+                telemetry.track_framework(framework.slug());
                 let mut computed_wildcards = framework
                     .env_wildcards()
                     .iter()
