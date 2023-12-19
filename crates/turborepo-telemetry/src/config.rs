@@ -10,17 +10,15 @@ use tracing::{debug, error};
 use turborepo_ui::{color, BOLD, GREY, UI, UNDERLINE};
 use uuid::Uuid;
 
+// Telemetry ships disabled by default until we can announce it publicly, this
+// allows us to test it internally, and will be removed in 1.12
+// TODO:[telemetry] Remove this in `1.12`
+static ENABLED_ENV_VAR: &str = "TURBO_TELEMETRY_ENABLED";
+
 static DEBUG_ENV_VAR: &str = "TURBO_TELEMETRY_DEBUG";
 static DISABLED_ENV_VAR: &str = "TURBO_TELEMETRY_DISABLED";
+static DISABLED_MESSAGE_ENV_VAR: &str = "TURBO_TELEMETRY_MESSAGE_DISABLED";
 static DO_NOT_TRACK_ENV_VAR: &str = "DO_NOT_TRACK";
-
-fn one_way_hash_with_salt(salt: &str, input: &str) -> String {
-    let salted = format!("{}{}", salt, input);
-    let mut hasher = Sha256::new();
-    hasher.update(salted.as_bytes());
-    let generic = hasher.finalize();
-    hex::encode(generic)
-}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TelemetryConfigContents {
@@ -58,52 +56,6 @@ pub struct TelemetryConfig {
     config: TelemetryConfigContents,
 }
 
-fn get_config_path() -> Result<String, ConfigError> {
-    if cfg!(test) {
-        let tmp_dir = env::temp_dir();
-        let config_path = tmp_dir.join("test-telemetry.json");
-        Ok(config_path.to_str().unwrap().to_string())
-    } else {
-        let config_dir = dirs_next::config_dir().ok_or(ConfigError::Message(
-            "Could find telemetry config directory".to_string(),
-        ))?;
-        // stored as a sibling to the turbo global config
-        let config_path = config_dir.join("turborepo").join("telemetry.json");
-        Ok(config_path.to_str().unwrap().to_string())
-    }
-}
-
-fn write_new_config() -> Result<(), ConfigError> {
-    let file_path = get_config_path()?;
-    let serialized = serde_json::to_string_pretty(&TelemetryConfigContents::default())
-        .map_err(|e| ConfigError::Message(e.to_string()))?;
-
-    // Extract the directory path from the file path
-    let dir_path = Path::new(&file_path).parent().ok_or_else(|| {
-        ConfigError::Message("Failed to extract directory path from file path".to_string())
-    })?;
-
-    // Create the directory if it doesn't exist
-    if !dir_path.try_exists().unwrap_or(false) {
-        fs::create_dir_all(dir_path).map_err(|e| {
-            ConfigError::Message(format!(
-                "Failed to create directory {}: {}",
-                dir_path.display(),
-                e
-            ))
-        })?;
-    }
-
-    // Write the file
-    fs::write(&file_path, serialized).map_err(|e| ConfigError::Message(e.to_string()))?;
-    Ok(())
-}
-
-pub fn is_debug() -> bool {
-    let debug = env::var(DEBUG_ENV_VAR).unwrap_or("0".to_string());
-    debug == "1" || debug == "true"
-}
-
 impl TelemetryConfig {
     pub fn new() -> Result<TelemetryConfig, ConfigError> {
         let file_path = &get_config_path()?;
@@ -114,7 +66,6 @@ impl TelemetryConfig {
 
         let mut settings = Config::builder();
         settings = settings.add_source(File::new(file_path, FileFormat::Json));
-
         let settings = settings.build();
 
         // If this is a FileParse error, we assume something corrupted the file or
@@ -175,7 +126,7 @@ impl TelemetryConfig {
     }
 
     pub fn show_alert(&mut self, ui: UI) {
-        if !self.has_seen_alert() && self.is_enabled() {
+        if !self.has_seen_alert() && self.is_enabled() && Self::is_telemetry_warning_enabled() {
             println!(
                 "\n{}\n{}\n{}\n{}\n{}\n",
                 color!(ui, BOLD, "{}", "Attention:"),
@@ -238,6 +189,12 @@ impl TelemetryConfig {
         self.config.telemetry_enabled
     }
 
+    pub fn is_telemetry_warning_enabled() -> bool {
+        let turbo_telemetry_msg_disabled =
+            env::var(DISABLED_MESSAGE_ENV_VAR).unwrap_or("0".to_string());
+        turbo_telemetry_msg_disabled != "1" && turbo_telemetry_msg_disabled != "true"
+    }
+
     pub fn get_id(&self) -> &str {
         &self.config.telemetry_id
     }
@@ -265,4 +222,63 @@ impl TelemetryConfig {
             }
         }
     }
+}
+
+fn get_config_path() -> Result<String, ConfigError> {
+    if cfg!(test) {
+        let tmp_dir = env::temp_dir();
+        let config_path = tmp_dir.join("test-telemetry.json");
+        Ok(config_path.to_str().unwrap().to_string())
+    } else {
+        let config_dir = dirs_next::config_dir().ok_or(ConfigError::Message(
+            "Could find telemetry config directory".to_string(),
+        ))?;
+        // stored as a sibling to the turbo global config
+        let config_path = config_dir.join("turborepo").join("telemetry.json");
+        Ok(config_path.to_str().unwrap().to_string())
+    }
+}
+
+fn write_new_config() -> Result<(), ConfigError> {
+    let file_path = get_config_path()?;
+    let serialized = serde_json::to_string_pretty(&TelemetryConfigContents::default())
+        .map_err(|e| ConfigError::Message(e.to_string()))?;
+
+    // Extract the directory path from the file path
+    let dir_path = Path::new(&file_path).parent().ok_or_else(|| {
+        ConfigError::Message("Failed to extract directory path from file path".to_string())
+    })?;
+
+    // Create the directory if it doesn't exist
+    if !dir_path.try_exists().unwrap_or(false) {
+        fs::create_dir_all(dir_path).map_err(|e| {
+            ConfigError::Message(format!(
+                "Failed to create directory {}: {}",
+                dir_path.display(),
+                e
+            ))
+        })?;
+    }
+
+    // Write the file
+    fs::write(&file_path, serialized).map_err(|e| ConfigError::Message(e.to_string()))?;
+    Ok(())
+}
+
+pub fn is_debug() -> bool {
+    let debug = env::var(DEBUG_ENV_VAR).unwrap_or("0".to_string());
+    debug == "1" || debug == "true"
+}
+
+fn one_way_hash_with_salt(salt: &str, input: &str) -> String {
+    let salted = format!("{}{}", salt, input);
+    let mut hasher = Sha256::new();
+    hasher.update(salted.as_bytes());
+    let generic = hasher.finalize();
+    hex::encode(generic)
+}
+
+// TODO:[telemetry] Remove this in `1.12`
+pub fn is_telemetry_internal_test() -> bool {
+    env::var(ENABLED_ENV_VAR).unwrap_or("0".to_string()) == "1"
 }

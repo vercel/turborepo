@@ -12,7 +12,6 @@ Test help flag
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
     generate    Generate a new app / package
-    telemetry   Enable or disable anonymous telemetry
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
@@ -116,7 +115,6 @@ Test help flag
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
     generate    Generate a new app / package
-    telemetry   Enable or disable anonymous telemetry
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account

@@ -21,7 +21,7 @@ pub use crate::error::{Error, Result};
 
 pub mod analytics;
 mod error;
-pub mod retry;
+mod retry;
 pub mod spaces;
 pub mod telemetry;
 
@@ -453,13 +453,7 @@ impl APIClient {
 
         let client = client_build.map_err(Error::TlsError)?;
 
-        let user_agent = format!(
-            "turbo {} {} {} {}",
-            version,
-            rustc_version_runtime::version(),
-            env::consts::OS,
-            env::consts::ARCH
-        );
+        let user_agent = build_user_agent(version);
         Ok(APIClient {
             client,
             base_url: base_url.as_ref().to_string(),
@@ -569,13 +563,7 @@ impl AnonAPIClient {
 
         let client = client_build.map_err(Error::TlsError)?;
 
-        let user_agent = format!(
-            "turbo {} {} {} {}",
-            version,
-            rustc_version_runtime::version(),
-            env::consts::OS,
-            env::consts::ARCH
-        );
+        let user_agent = build_user_agent(version);
         Ok(AnonAPIClient {
             client,
             base_url: base_url.as_ref().to_string(),
@@ -602,6 +590,16 @@ impl AnonAPIClient {
 
         Ok(request_builder)
     }
+}
+
+fn build_user_agent(version: &str) -> String {
+    format!(
+        "turbo {} {} {} {}",
+        version,
+        rustc_version_runtime::version(),
+        env::consts::OS,
+        env::consts::ARCH
+    )
 }
 
 #[cfg(test)]
