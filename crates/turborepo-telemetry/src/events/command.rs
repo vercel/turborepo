@@ -1,17 +1,9 @@
 use serde::{Deserialize, Serialize};
+use turborepo_vercel_api::{TelemetryCommandEvent, TelemetryEvent};
 use uuid::Uuid;
 
-use super::{Event, EventBuilder, EventType, PubEventBuilder, TelemetryEvent};
+use super::{Event, EventBuilder, EventType, PubEventBuilder};
 use crate::{config::TelemetryConfig, telem};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EventData {
-    id: String,
-    command: String,
-    key: String,
-    value: String,
-    parent: Option<String>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommandEventBuilder {
@@ -38,7 +30,7 @@ impl PubEventBuilder for CommandEventBuilder {
             EventType::NonSensitive => event.value.to_string(),
         };
 
-        telem(TelemetryEvent::Command(EventData {
+        telem(TelemetryEvent::Command(TelemetryCommandEvent {
             id: self.id.clone(),
             command: self.command.clone(),
             parent: self.parent.clone(),

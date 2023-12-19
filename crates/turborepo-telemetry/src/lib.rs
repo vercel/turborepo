@@ -257,15 +257,15 @@ mod tests {
     };
 
     use async_trait::async_trait;
-    use serde::Serialize;
     use tokio::{
         select,
         sync::{mpsc, mpsc::UnboundedReceiver},
     };
     use turborepo_api_client::telemetry::TelemetryClient;
     use turborepo_ui::UI;
+    use turborepo_vercel_api::{TelemetryCommandEvent, TelemetryEvent};
 
-    use crate::{events::TelemetryEvent, init};
+    use crate::init;
 
     #[derive(Clone)]
     struct DummyClient {
@@ -282,21 +282,12 @@ mod tests {
 
     #[async_trait]
     impl TelemetryClient for DummyClient {
-        async fn record_telemetry<T>(
+        async fn record_telemetry(
             &self,
-            events: Vec<T>,
+            events: Vec<TelemetryEvent>,
             _telemetry_id: &str,
             _session_id: &str,
-        ) -> Result<(), turborepo_api_client::Error>
-        where
-            T: Serialize + std::marker::Send,
-        {
-            // convert the events to TelemetryEvents
-            let events = events
-                .into_iter()
-                .map(|_event| TelemetryEvent::TestVariant)
-                .collect();
-
+        ) -> Result<(), turborepo_api_client::Error> {
             self.events.lock().unwrap().borrow_mut().push(events);
             self.tx.send(()).unwrap();
 
@@ -347,7 +338,15 @@ mod tests {
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
         for _ in 0..2 {
-            telemetry_sender.send(TelemetryEvent::TestVariant).unwrap();
+            telemetry_sender
+                .send(TelemetryEvent::Command(TelemetryCommandEvent {
+                    id: "id".to_string(),
+                    command: "command".to_string(),
+                    key: "key".to_string(),
+                    value: "value".to_string(),
+                    parent: None,
+                }))
+                .unwrap();
         }
         let found = client.events();
         // Should have no events since we haven't flushed yet
@@ -377,7 +376,15 @@ mod tests {
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
         for _ in 0..12 {
-            telemetry_sender.send(TelemetryEvent::TestVariant).unwrap();
+            telemetry_sender
+                .send(TelemetryEvent::Command(TelemetryCommandEvent {
+                    id: "id".to_string(),
+                    command: "command".to_string(),
+                    key: "key".to_string(),
+                    value: "value".to_string(),
+                    parent: None,
+                }))
+                .unwrap();
         }
 
         expected_immediate_message(&mut rx).await;
@@ -413,7 +420,15 @@ mod tests {
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
         for _ in 0..2 {
-            telemetry_sender.send(TelemetryEvent::TestVariant).unwrap();
+            telemetry_sender
+                .send(TelemetryEvent::Command(TelemetryCommandEvent {
+                    id: "id".to_string(),
+                    command: "command".to_string(),
+                    key: "key".to_string(),
+                    value: "value".to_string(),
+                    parent: None,
+                }))
+                .unwrap();
         }
         drop(telemetry_sender);
 

@@ -6,19 +6,10 @@ pub mod repo;
 pub mod task;
 
 /// All possible telemetry events must be included in this enum.
-///
 /// These events must be added to the backend (telemetry.vercel.com)
 /// before they can be tracked - invalid or unknown events will be
 /// ignored.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum TelemetryEvent {
-    PackageTask(task::EventData),
-    Command(command::EventData),
-    Repo(repo::EventData),
-    #[cfg(test)]
-    TestVariant,
-}
+pub use turborepo_vercel_api::TelemetryEvent;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventType {

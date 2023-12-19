@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
+use turborepo_vercel_api::{TelemetryEvent, TelemetryTaskEvent};
 use uuid::Uuid;
 
-use super::{Event, EventBuilder, EventType, PubEventBuilder, TelemetryEvent};
+use super::{Event, EventBuilder, EventType, PubEventBuilder};
 use crate::{config::TelemetryConfig, telem};
 
 // task names that will be passed through to the API without obfuscation
@@ -15,16 +16,6 @@ const ALLOWLIST: [&str; 8] = [
     "type-check",
     "check",
 ];
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EventData {
-    id: String,
-    package: String,
-    task: String,
-    key: String,
-    value: String,
-    parent: Option<String>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageTaskEventBuilder {
@@ -52,7 +43,7 @@ impl PubEventBuilder for PackageTaskEventBuilder {
             EventType::NonSensitive => event.value.to_string(),
         };
 
-        telem(TelemetryEvent::PackageTask(EventData {
+        telem(TelemetryEvent::Task(TelemetryTaskEvent {
             id: self.id.clone(),
             package: self.package.clone(),
             task: self.task.clone(),

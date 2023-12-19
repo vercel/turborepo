@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use reqwest::Method;
-use serde::Serialize;
+use turborepo_vercel_api::TelemetryEvent;
 
 use crate::{retry, AnonAPIClient, Error};
 
@@ -8,27 +8,22 @@ const TELEMETRY_ENDPOINT: &str = "/api/turborepo/v1/events";
 
 #[async_trait]
 pub trait TelemetryClient {
-    async fn record_telemetry<T>(
+    async fn record_telemetry(
         &self,
-        events: Vec<T>,
+        events: Vec<TelemetryEvent>,
         telemetry_id: &str,
         session_id: &str,
-    ) -> Result<(), Error>
-    where
-        T: Serialize + std::marker::Send;
+    ) -> Result<(), Error>;
 }
 
 #[async_trait]
 impl TelemetryClient for AnonAPIClient {
-    async fn record_telemetry<T>(
+    async fn record_telemetry(
         &self,
-        events: Vec<T>,
+        events: Vec<TelemetryEvent>,
         telemetry_id: &str,
         session_id: &str,
-    ) -> Result<(), Error>
-    where
-        T: Serialize + std::marker::Send,
-    {
+    ) -> Result<(), Error> {
         let url = self.make_url(TELEMETRY_ENDPOINT);
         let telemetry_request = self
             .client
