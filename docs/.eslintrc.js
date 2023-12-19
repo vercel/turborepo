@@ -9,6 +9,8 @@ module.exports = {
   ignorePatterns: [
     // Ignore dotfiles
     ".*.js",
+    "tailwind.config.js",
+    "scripts/**",
   ],
   rules: {
     // Most of these rules should probably be on. Turning them off because they fail in many places
@@ -41,6 +43,9 @@ module.exports = {
     "react/no-unstable-nested-components": "warn",
   },
   overrides: [
-    { files: "./pages/**", rules: { "import/no-default-export": "off" } },
+    {
+      files: ["./pages/**", "./turbo/generators/**", "theme.config.tsx"],
+      rules: { "import/no-default-export": "off" },
+    },
   ],
 };
