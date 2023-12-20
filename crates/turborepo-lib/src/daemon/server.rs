@@ -28,6 +28,7 @@ use tokio::{
     select,
     sync::{mpsc, oneshot, watch, Mutex as AsyncMutex},
 };
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::{NamedService, Server};
 use tower::ServiceBuilder;
 use tracing::{error, info, trace, warn};
@@ -48,7 +49,7 @@ use super::{
     proto::{self},
 };
 use crate::{
-    daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket},
+    daemon::{bump_timeout_layer::BumpTimeoutLayer, endpoint::listen_socket, proto::WatchEvent},
     run::package_discovery::WatchingPackageDiscovery,
 };
 
@@ -511,10 +512,14 @@ where
         }))
     }
 
+    type GetChangedPackagesStream = ReceiverStream<WatchEvent>;
     async fn get_changed_packages(
         &self,
         _: tonic::Request<proto::GetChangedPackagesRequest>,
     ) -> Result<tonic::Response<Self::GetChangedPackagesStream>, tonic::Status> {
+        let (mut tx, rx) = mpsc::unbounded_channel();
+
+        tokio::spawn(async move {})
     }
 
     async fn discover_packages(

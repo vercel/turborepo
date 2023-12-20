@@ -17,7 +17,6 @@ service Turbod {
   // Since 1.11.0
   rpc DiscoverPackages (DiscoverPackagesRequest) returns (DiscoverPackagesResponse);
 
-
   rpc GetChangedPackages (GetChangedPackagesRequest) returns (stream WatchEvent);
 }
 
@@ -102,7 +101,7 @@ message WatchEvent {
   string id = 1;
   oneof response {
     PackageUpdateEvent package_update = 2;
-    RediscoveryEvent rediscovery = 3;
+    DiscoverPackagesResponse rediscovery = 3;
   }
 }
 
@@ -111,9 +110,6 @@ message PackageUpdateEvent {
   string package = 1;
   repeated string files = 2;
 }
-
-// Indicates that all packages are changed
-message RediscoveryEvent {}
 
 enum PackageManager {
   Berry = 0;

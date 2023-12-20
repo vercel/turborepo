@@ -13,7 +13,7 @@ use tokio::{
     join,
     sync::{
         broadcast::{self, error::RecvError},
-        oneshot, watch,
+        mpsc, oneshot, watch,
     },
 };
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -37,18 +37,30 @@ pub struct PackageWatcher {
     manager_rx: watch::Receiver<PackageManager>,
 }
 
+enum PackageWatchEvent {
+    PackageUpdate {
+        package: AbsoluteSystemPathBuf,
+        files: Vec<AbsoluteSystemPathBuf>,
+    },
+    RediscoverPackages {
+        packages: HashMap<AbsoluteSystemPathBuf, WorkspaceData>,
+        package_manager: PackageManager,
+    },
+}
+
 impl PackageWatcher {
     /// Creates a new package watcher whose current package data can be queried.
     pub async fn new<T: PackageDiscovery + Send + 'static>(
         root: AbsoluteSystemPathBuf,
         recv: broadcast::Receiver<Result<Event, NotifyError>>,
+        tx: mpsc::Sender<PackageManager>,
         backup_discovery: T,
     ) -> Result<Self, package_manager::Error> {
         let (exit_tx, exit_rx) = oneshot::channel();
         let subscriber = Subscriber::new(exit_rx, root, recv, backup_discovery).await?;
         let manager_rx = subscriber.manager_receiver();
         let package_data = subscriber.package_data();
-        let handle = tokio::spawn(subscriber.watch());
+        let handle = tokio::spawn(subscriber.watch(tx));
         Ok(Self {
             _exit_tx: exit_tx,
             _handle: handle,
@@ -121,9 +133,9 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
         })
     }
 
-    async fn watch(mut self) {
+    async fn watch(mut self, tx: mpsc::UnboundedSender<PackageWatchEvent>) {
         // initialize the contents
-        self.rediscover_packages().await;
+        self.rediscover_packages(tx.clone()).await;
 
         // respond to changes
         loop {
@@ -134,14 +146,14 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
                     return
                 },
                 file_event = self.recv.recv().into_future() => match file_event {
-                    Ok(Ok(event)) => self.handle_file_event(event).await,
+                    Ok(Ok(event)) => self.handle_file_event(event, tx).await,
                     // if we get an error, we need to re-discover the packages
-                    Ok(Err(_)) => self.rediscover_packages().await,
+                    Ok(Err(_)) => self.rediscover_packages(tx).await,
                     Err(RecvError::Closed) => return,
                     // if we end up lagging, warn and rediscover packages
                     Err(RecvError::Lagged(count)) => {
                         tracing::warn!("lagged behind {count} processing file watching events");
-                        self.rediscover_packages().await;
+                        self.rediscover_packages(tx).await;
                     },
                 }
             }
@@ -313,7 +325,7 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
         }
     }
 
-    async fn rediscover_packages(&mut self) {
+    async fn rediscover_packages(&mut self, tx: mpsc::UnboundedSender<PackageWatchEvent>) {
         tracing::debug!("rediscovering packages");
         if let Ok(data) = self.backup_discovery.discover_packages().await {
             let workspace = data
@@ -321,6 +333,13 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
                 .into_iter()
                 .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
                 .collect();
+
+            tx.send(PackageWatchEvent::RediscoverPackages {
+                packages: workspace.clone(),
+                package_manager: self.manager().clone(),
+            })
+            .unwrap();
+
             let mut data = self.package_data.lock().expect("not poisoned");
             *data = workspace;
         } else {
