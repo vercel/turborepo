@@ -1,4 +1,3 @@
-import type { ReactElement } from "react";
 import React, { createElement } from "react";
 import { ImageResponse } from "@vercel/og";
 import type { NextApiRequest } from "next/index";
@@ -111,7 +110,7 @@ export function OGImage({
   title: string;
   type: string;
   bg: string;
-}): ReactElement {
+}): JSX.Element {
   return (
     <div
       style={{
@@ -166,7 +165,7 @@ export function OGImage({
   );
 }
 
-function Logo({ type }: { type: string | undefined }): ReactElement {
+function Logo({ type }: { type: string | undefined }): JSX.Element {
   if (type === "pack") {
     return <PackLogo height={103 * 1.1} width={697 * 1.1} />;
   }
