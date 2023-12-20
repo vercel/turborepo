@@ -265,6 +265,35 @@ impl EcmascriptModuleAsset {
     }
 }
 
+#[turbo_tasks::value]
+#[derive(Copy, Clone)]
+pub(crate) struct ModuleTypeResult {
+    pub module_type: SpecifiedModuleType,
+    pub referenced_package_json: Option<Vc<FileSystemPath>>,
+}
+
+#[turbo_tasks::value_impl]
+impl ModuleTypeResult {
+    #[turbo_tasks::function]
+    fn new(module_type: SpecifiedModuleType) -> Vc<Self> {
+        Self::cell(ModuleTypeResult {
+            module_type,
+            referenced_package_json: None,
+        })
+    }
+
+    #[turbo_tasks::function]
+    fn new_with_package_json(
+        module_type: SpecifiedModuleType,
+        package_json: Vc<FileSystemPath>,
+    ) -> Vc<Self> {
+        Self::cell(ModuleTypeResult {
+            module_type,
+            referenced_package_json: Some(package_json),
+        })
+    }
+}
+
 #[turbo_tasks::value_impl]
 impl EcmascriptModuleAsset {
     #[turbo_tasks::function]
@@ -381,32 +410,42 @@ impl EcmascriptModuleAsset {
     }
 
     #[turbo_tasks::function]
-    pub(crate) async fn determine_module_type(self: Vc<Self>) -> Result<Vc<SpecifiedModuleType>> {
+    pub(crate) async fn determine_module_type(self: Vc<Self>) -> Result<Vc<ModuleTypeResult>> {
         let this = self.await?;
 
         match this.options.specified_module_type {
-            SpecifiedModuleType::EcmaScript => return Ok(SpecifiedModuleType::EcmaScript.cell()),
-            SpecifiedModuleType::CommonJs => return Ok(SpecifiedModuleType::CommonJs.cell()),
+            SpecifiedModuleType::EcmaScript => {
+                return Ok(ModuleTypeResult::new(SpecifiedModuleType::EcmaScript))
+            }
+            SpecifiedModuleType::CommonJs => {
+                return Ok(ModuleTypeResult::new(SpecifiedModuleType::CommonJs))
+            }
             SpecifiedModuleType::Automatic => {}
         }
 
         let find_package_json = find_context_file(self.origin_path(), package_json()).await?;
         let FindContextFileResult::Found(package_json, _) = *find_package_json else {
-            return Ok(SpecifiedModuleType::Automatic.cell());
+            return Ok(ModuleTypeResult::new(SpecifiedModuleType::Automatic));
         };
 
         // analysis.add_reference(PackageJsonReference::new(package_json));
         if let FileJsonContent::Content(content) = &*package_json.read_json().await? {
             if let Some(r#type) = content.get("type") {
-                match r#type.as_str() {
-                    Some("module") => return Ok(SpecifiedModuleType::EcmaScript.cell()),
-                    Some("commonjs") => return Ok(SpecifiedModuleType::CommonJs.cell()),
-                    _ => {}
-                }
+                return Ok(ModuleTypeResult::new_with_package_json(
+                    match r#type.as_str() {
+                        Some("module") => SpecifiedModuleType::EcmaScript,
+                        Some("commonjs") => SpecifiedModuleType::CommonJs,
+                        _ => SpecifiedModuleType::Automatic,
+                    },
+                    package_json,
+                ));
             }
         }
 
-        Ok(SpecifiedModuleType::Automatic.cell())
+        Ok(ModuleTypeResult::new_with_package_json(
+            SpecifiedModuleType::Automatic,
+            package_json,
+        ))
     }
 
     /// Generates module contents without an analysis pass. This is useful for
@@ -440,12 +479,12 @@ impl EcmascriptModuleAsset {
 
         let analyze = self.analyze().await?;
 
-        let specified_module_type = *self.determine_module_type().await?;
+        let module_type_result = *self.determine_module_type().await?;
 
         Ok(EcmascriptModuleContent::new(
             parsed,
             self.ident(),
-            specified_module_type,
+            module_type_result.module_type,
             chunking_context,
             analyze.references,
             analyze.code_generation,

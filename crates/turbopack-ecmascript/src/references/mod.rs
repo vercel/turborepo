@@ -102,7 +102,7 @@ use super::{
         parse::{webpack_runtime, WebpackRuntime},
         WebpackChunkAssetReference, WebpackEntryAssetReference, WebpackRuntimeAssetReference,
     },
-    EcmascriptModuleAssetType,
+    EcmascriptModuleAssetType, ModuleTypeResult,
 };
 pub use crate::references::esm::export::{follow_reexports, FollowExportsResult};
 use crate::{
@@ -121,6 +121,7 @@ use crate::{
         async_module::{AsyncModule, OptionAsyncModule},
         cjs::{CjsRequireAssetReference, CjsRequireCacheAccess, CjsRequireResolveAssetReference},
         esm::{module_id::EsmModuleIdAssetReference, EsmBinding, UrlRewriteBehavior},
+        node::PackageJsonReference,
         require_context::{RequireContextAssetReference, RequireContextMap},
         type_issue::SpecifiedModuleTypeIssue,
     },
@@ -407,7 +408,14 @@ pub(crate) async fn analyse_ecmascript_module_internal(
         parse(source, ty, transforms)
     };
 
-    let specified_type = *module.determine_module_type().await?;
+    let ModuleTypeResult {
+        module_type: specified_type,
+        referenced_package_json,
+    } = *module.determine_module_type().await?;
+
+    if let Some(package_json) = referenced_package_json {
+        analysis.add_reference(PackageJsonReference::new(package_json));
+    }
 
     if analyze_types {
         match &*find_context_file(path.parent(), tsconfig()).await? {
