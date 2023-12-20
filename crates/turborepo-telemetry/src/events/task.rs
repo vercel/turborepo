@@ -92,15 +92,6 @@ impl PackageTaskEventBuilder {
         self
     }
 
-    pub fn track_hash(&self, hash: &str) -> &Self {
-        self.track(Event {
-            key: "hash".to_string(),
-            value: hash.to_string(),
-            is_sensitive: EventType::NonSensitive,
-        });
-        self
-    }
-
     pub fn track_framework(&self, framework: &str) -> &Self {
         self.track(Event {
             key: "framework".to_string(),

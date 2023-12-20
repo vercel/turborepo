@@ -203,7 +203,6 @@ impl<'a> Visitor<'a> {
                 package_task_event_child,
             )?;
 
-            package_task_event.track_hash(&task_hash.to_string());
             debug!("task {} hash is {}", info, task_hash);
             // We do this calculation earlier than we do in Go due to the `task_hasher`
             // being !Send. In the future we can look at doing this right before
