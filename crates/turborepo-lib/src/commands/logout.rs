@@ -1,9 +1,10 @@
 use tracing::error;
 use turborepo_auth::logout as auth_logout;
+use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{cli::Error, commands::CommandBase, config, rewrite_json::unset_path};
 
-pub fn logout(base: &mut CommandBase) -> Result<(), Error> {
+pub fn logout(base: &mut CommandBase, _telemetry: CommandEventBuilder) -> Result<(), Error> {
     if let Err(err) = remove_token(base) {
         error!("could not logout. Something went wrong: {}", err);
         return Err(err);
