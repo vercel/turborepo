@@ -4,7 +4,7 @@ import type { Author } from "../content/team";
 import { Avatar } from "./Avatar";
 
 export function Authors({ authors }: { authors: Author[] }) {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- This does what is is meant to?
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- This does what is is meant to.
   const validAuthors = authors.filter((author) => TURBO_TEAM[author]);
   return (
     <div className="w-full border-b border-gray-400 authors border-opacity-20">
