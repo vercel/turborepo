@@ -51,8 +51,10 @@ pub use transform::{
     CustomTransformer, EcmascriptInputTransform, EcmascriptInputTransforms, OptionTransformPlugin,
     TransformContext, TransformPlugin, UnsupportedServerActionIssue,
 };
-use turbo_tasks::{trace::TraceRawVcs, ReadRef, TryJoinIterExt, Value, ValueToString, Vc};
-use turbo_tasks_fs::{rope::Rope, FileSystemPath};
+use turbo_tasks::{
+    trace::TraceRawVcs, ReadRef, TaskInput, TryJoinIterExt, Value, ValueToString, Vc,
+};
+use turbo_tasks_fs::{rope::Rope, FileJsonContent, FileSystemPath};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{
@@ -64,7 +66,10 @@ use turbopack_core::{
     module::{Module, OptionModule},
     reference::ModuleReferences,
     reference_type::InnerAssets,
-    resolve::{origin::ResolveOrigin, parse::Request, ModulePart},
+    resolve::{
+        find_context_file, origin::ResolveOrigin, package_json, parse::Request,
+        FindContextFileResult, ModulePart,
+    },
     source::Source,
     source_map::{GenerateSourceMap, SourceMap},
 };
@@ -81,7 +86,7 @@ use crate::{
 };
 
 #[turbo_tasks::value(serialization = "auto_for_input")]
-#[derive(PartialOrd, Ord, Hash, Debug, Clone, Copy, Default)]
+#[derive(PartialOrd, Ord, Hash, Debug, Clone, Copy, Default, TaskInput)]
 pub enum SpecifiedModuleType {
     #[default]
     Automatic,
@@ -318,8 +323,10 @@ impl EcmascriptModuleAsset {
     #[turbo_tasks::function]
     pub async fn failsafe_analyze(self: Vc<Self>) -> Result<Vc<AnalyzeEcmascriptModuleResult>> {
         let this = self.await?;
+
         let result = self.analyze();
         let result_value = result.await?;
+
         if result_value.successful {
             this.last_successful_analysis
                 .set(Some(MemoizedSuccessfulAnalysis {
@@ -373,6 +380,35 @@ impl EcmascriptModuleAsset {
         parse(self.source, Value::new(self.ty), self.transforms)
     }
 
+    #[turbo_tasks::function]
+    pub(crate) async fn determine_module_type(self: Vc<Self>) -> Result<Vc<SpecifiedModuleType>> {
+        let this = self.await?;
+
+        match this.options.specified_module_type {
+            SpecifiedModuleType::EcmaScript => return Ok(SpecifiedModuleType::EcmaScript.cell()),
+            SpecifiedModuleType::CommonJs => return Ok(SpecifiedModuleType::CommonJs.cell()),
+            SpecifiedModuleType::Automatic => {}
+        }
+
+        let find_package_json = find_context_file(self.origin_path(), package_json()).await?;
+        let FindContextFileResult::Found(package_json, _) = *find_package_json else {
+            return Ok(SpecifiedModuleType::Automatic.cell());
+        };
+
+        // analysis.add_reference(PackageJsonReference::new(package_json));
+        if let FileJsonContent::Content(content) = &*package_json.read_json().await? {
+            if let Some(r#type) = content.get("type") {
+                match r#type.as_str() {
+                    Some("module") => return Ok(SpecifiedModuleType::EcmaScript.cell()),
+                    Some("commonjs") => return Ok(SpecifiedModuleType::CommonJs.cell()),
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(SpecifiedModuleType::Automatic.cell())
+    }
+
     /// Generates module contents without an analysis pass. This is useful for
     /// transforming code that is not a module, e.g. runtime code.
     #[turbo_tasks::function]
@@ -386,6 +422,7 @@ impl EcmascriptModuleAsset {
         Ok(EcmascriptModuleContent::new_without_analysis(
             parsed,
             self.ident(),
+            this.options.specified_module_type,
         ))
     }
 
@@ -402,9 +439,13 @@ impl EcmascriptModuleAsset {
             .await?;
 
         let analyze = self.analyze().await?;
+
+        let specified_module_type = *self.determine_module_type().await?;
+
         Ok(EcmascriptModuleContent::new(
             parsed,
             self.ident(),
+            specified_module_type,
             chunking_context,
             analyze.references,
             analyze.code_generation,
@@ -615,6 +656,7 @@ impl EcmascriptModuleContent {
     pub async fn new(
         parsed: Vc<ParseResult>,
         ident: Vc<AssetIdent>,
+        specified_module_type: SpecifiedModuleType,
         chunking_context: Vc<Box<dyn EcmascriptChunkingContext>>,
         references: Vc<ModuleReferences>,
         code_generation: Vc<CodeGenerateables>,
@@ -664,7 +706,15 @@ impl EcmascriptModuleContent {
             }
         }
 
-        gen_content_with_visitors(parsed, ident, visitors, root_visitors, source_map).await
+        gen_content_with_visitors(
+            parsed,
+            ident,
+            specified_module_type,
+            visitors,
+            root_visitors,
+            source_map,
+        )
+        .await
     }
 
     /// Creates a new [`Vc<EcmascriptModuleContent>`] without an analysis pass.
@@ -672,14 +722,24 @@ impl EcmascriptModuleContent {
     pub async fn new_without_analysis(
         parsed: Vc<ParseResult>,
         ident: Vc<AssetIdent>,
+        specified_module_type: SpecifiedModuleType,
     ) -> Result<Vc<Self>> {
-        gen_content_with_visitors(parsed, ident, Vec::new(), Vec::new(), None).await
+        gen_content_with_visitors(
+            parsed,
+            ident,
+            specified_module_type,
+            Vec::new(),
+            Vec::new(),
+            None,
+        )
+        .await
     }
 }
 
 async fn gen_content_with_visitors(
     parsed: Vc<ParseResult>,
     ident: Vc<AssetIdent>,
+    specified_module_type: SpecifiedModuleType,
     visitors: Vec<(
         &Vec<swc_core::ecma::visit::AstParentKind>,
         &dyn VisitorFactory,
@@ -741,7 +801,8 @@ async fn gen_content_with_visitors(
         Ok(EcmascriptModuleContent {
             inner_code: bytes.into(),
             source_map: Some(Vc::upcast(srcmap)),
-            is_esm: eval_context.is_esm(),
+            is_esm: eval_context.is_esm()
+                || specified_module_type == SpecifiedModuleType::EcmaScript,
         }
         .cell())
     } else {
