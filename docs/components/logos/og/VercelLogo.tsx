@@ -1,4 +1,4 @@
-function VercelLogo({
+export function VercelLogo({
   fill = "none",
   height = 20,
 }: {
@@ -14,5 +14,3 @@ function VercelLogo({
     </svg>
   );
 }
-
-export default VercelLogo;

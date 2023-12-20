@@ -1,7 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call -- Lots of Nextra magic. */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access -- Lots of Nextra magic. */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment -- Lots of Nextra magic. */
 import { Navbar } from "nextra-theme-docs";
 import { useTurboSite } from "./SiteSwitcher";
 
-function Navigation(props) {
+export function Navigation(props) {
   const site = useTurboSite();
 
   /*
@@ -10,7 +13,7 @@ function Navigation(props) {
     2. Points to /pack/docs when on /pack
   */
   const leadingItem = props.items[0];
-  if (leadingItem?.id !== "contextual-docs" && site) {
+  if (leadingItem.id !== "contextual-docs" && site) {
     props.items.unshift({
       title: "Docs",
       type: "page",
@@ -21,7 +24,7 @@ function Navigation(props) {
   }
 
   const lastItem = props.items[props.items.length - 1];
-  if (lastItem?.id !== "contextual-enterprise") {
+  if (lastItem.id !== "contextual-enterprise") {
     props.items.push({
       title: "Enterprise",
       newWindow: true,
@@ -43,5 +46,3 @@ function Navigation(props) {
   // items last to override the default
   return <Navbar {...props} items={headerItems} />;
 }
-
-export default Navigation;

@@ -16,7 +16,7 @@ interface ThemeAwareImageProps {
   dark: ImageAttrs;
 }
 
-export default function ThemeAwareImage({
+export function ThemeAwareImage({
   className,
   light,
   dark,
