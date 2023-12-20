@@ -31,10 +31,10 @@ echo $AUTH > "$TMP_DIR/turborepo/auth.json"
 MACOS_DIR="$TMP_DIR/Library/Application Support"
 mkdir -p "$MACOS_DIR/turborepo"
 echo "$CONFIG" > "$MACOS_DIR/turborepo/config.json"
-echo $AUTH > "$TMP_DIR/turborepo/auth.json"
+echo "$AUTH" > "$MACOS_DIR/turborepo/auth.json"
 
 # XDG_CONFIG_HOME equivalent for Windows is {FOLDERID_RoamingAppData} which is roughly C:\Users\{username}\AppData\Roaming
 WINDOWS_DIR="$TMP_DIR/AppData/Roaming"
 mkdir -p "$WINDOWS_DIR/turborepo"
 echo "$CONFIG" > "$WINDOWS_DIR/turborepo/config.json"
-echo "$AUTH" > "$TMP_DIR/turborepo/auth.json"
+echo "$AUTH" > "$WINDOWS_DIR/turborepo/auth.json"
