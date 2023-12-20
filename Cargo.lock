@@ -1477,6 +1477,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "config"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23738e11972c7643e4ec947840fc463b6a571afcd3e735bdfce7d03c7a784aca"
+dependencies = [
+ "async-trait",
+ "json5",
+ "lazy_static",
+ "nom",
+ "pathdiff",
+ "ron",
+ "rust-ini",
+ "serde",
+ "serde_json",
+ "toml 0.5.11",
+ "yaml-rust",
+]
+
+[[package]]
 name = "console"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2386,6 +2405,12 @@ checksum = "ac1b7517328c04c2aa68422fc60a41b92208182142ed04a25879c26c8f878794"
 dependencies = [
  "libloading 0.7.4",
 ]
+
+[[package]]
+name = "dlv-list"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0688c2a7f92e427f44895cd63841bff7b29f8d7a1648b9e7e07a4a365b2e1257"
 
 [[package]]
 name = "doc-comment"
@@ -3912,6 +3937,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "json5"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96b0db21af676c1ce64250b5f40f3ce2cf27e4e47cb91ed91eb6fe9350b430c1"
+dependencies = [
+ "pest",
+ "pest_derive",
+ "serde",
+]
+
+[[package]]
 name = "json_comments"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5197,6 +5233,16 @@ name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
+name = "ordered-multimap"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ccd746e37177e1711c20dd619a1620f34f5c8b569c53590a72dedd5344d8924a"
+dependencies = [
+ "dlv-list",
+ "hashbrown 0.12.3",
+]
 
 [[package]]
 name = "os_info"
@@ -6536,6 +6582,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ron"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88073939a61e5b7680558e6be56b419e208420c2adb92be54921fa6b72283f1a"
+dependencies = [
+ "base64 0.13.1",
+ "bitflags 1.3.2",
+ "serde",
+]
+
+[[package]]
 name = "rstest"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6571,6 +6628,16 @@ dependencies = [
  "rand 0.8.5",
  "rustc_version 0.4.0",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "rust-ini"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6d5f2436026b4f6e79dc829837d467cc7e9a55ee40e750d716713540715a2df"
+dependencies = [
+ "cfg-if 1.0.0",
+ "ordered-multimap",
 ]
 
 [[package]]
@@ -6633,6 +6700,16 @@ checksum = "d31b7153270ebf48bf91c65ae5b0c00e749c4cfad505f66530ac74950249582f"
 dependencies = [
  "rustc_version 0.2.3",
  "semver 0.9.0",
+]
+
+[[package]]
+name = "rustc_version_runtime"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2dd18cd2bae1820af0b6ad5e54f4a51d0f3fcc53b05f845675074efcc7af071d"
+dependencies = [
+ "rustc_version 0.4.0",
+ "semver 1.0.18",
 ]
 
 [[package]]
@@ -7032,9 +7109,9 @@ checksum = "ae1a47186c03a32177042e55dbc5fd5aee900b8e0069a8d70fba96a9375cd012"
 
 [[package]]
 name = "sha2"
-version = "0.10.6"
+version = "0.10.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82e6b795fe2e3b1e845bafcb27aa35405c4d47cdfc92af5fc8d3002f76cebdc0"
+checksum = "793db75ad2bcafc3ffa7c68b215fee268f537982cd901d132f89c6343f3a3dc8"
 dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
@@ -10893,7 +10970,7 @@ dependencies = [
  "port_scanner",
  "regex",
  "reqwest",
- "rustc_version_runtime",
+ "rustc_version_runtime 0.2.1",
  "serde",
  "serde_json",
  "test-case",
@@ -11114,7 +11191,7 @@ dependencies = [
  "rayon",
  "regex",
  "reqwest",
- "rustc_version_runtime",
+ "rustc_version_runtime 0.2.1",
  "semver 1.0.18",
  "serde",
  "serde_json",
@@ -11156,6 +11233,7 @@ dependencies = [
  "turborepo-lockfiles",
  "turborepo-repository",
  "turborepo-scm",
+ "turborepo-telemetry",
  "turborepo-ui",
  "turborepo-vercel-api",
  "turborepo-vercel-api-mock",
@@ -11247,6 +11325,34 @@ dependencies = [
  "turbopath",
  "wax",
  "which",
+]
+
+[[package]]
+name = "turborepo-telemetry"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "config",
+ "dirs-next",
+ "futures 0.3.28",
+ "hex",
+ "once_cell",
+ "reqwest",
+ "rustc_version_runtime 0.3.0",
+ "serde",
+ "serde_json",
+ "sha2",
+ "test-case",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "turborepo-api-client",
+ "turborepo-ui",
+ "turborepo-vercel-api",
+ "turborepo-vercel-api-mock",
+ "url 2.4.1",
+ "uuid",
 ]
 
 [[package]]

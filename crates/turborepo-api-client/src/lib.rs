@@ -24,6 +24,7 @@ pub mod analytics;
 mod error;
 mod retry;
 pub mod spaces;
+pub mod telemetry;
 
 lazy_static! {
     static ref AUTHORIZATION_REGEX: Regex =
@@ -473,13 +474,7 @@ impl APIClient {
 
         let client = client_build.map_err(Error::TlsError)?;
 
-        let user_agent = format!(
-            "turbo {} {} {} {}",
-            version,
-            rustc_version_runtime::version(),
-            env::consts::OS,
-            env::consts::ARCH
-        );
+        let user_agent = build_user_agent(version);
         Ok(APIClient {
             client,
             base_url: base_url.as_ref().to_string(),
@@ -555,6 +550,49 @@ impl APIAuth {
     pub fn is_linked(&self) -> bool {
         self.team_id.is_some() || self.team_slug.is_some()
     }
+}
+
+// Anon Client
+#[derive(Clone)]
+pub struct AnonAPIClient {
+    client: reqwest::Client,
+    base_url: String,
+    user_agent: String,
+}
+
+impl AnonAPIClient {
+    fn make_url(&self, endpoint: &str) -> String {
+        format!("{}{}", self.base_url, endpoint)
+    }
+
+    pub fn new(base_url: impl AsRef<str>, timeout: u64, version: &str) -> Result<Self> {
+        let client_build = if timeout != 0 {
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(timeout))
+                .build()
+        } else {
+            reqwest::Client::builder().build()
+        };
+
+        let client = client_build.map_err(Error::TlsError)?;
+
+        let user_agent = build_user_agent(version);
+        Ok(AnonAPIClient {
+            client,
+            base_url: base_url.as_ref().to_string(),
+            user_agent,
+        })
+    }
+}
+
+fn build_user_agent(version: &str) -> String {
+    format!(
+        "turbo {} {} {} {}",
+        version,
+        rustc_version_runtime::version(),
+        env::consts::OS,
+        env::consts::ARCH
+    )
 }
 
 #[cfg(test)]

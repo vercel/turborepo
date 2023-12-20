@@ -10,8 +10,14 @@ module.exports = {
     // Ignore dotfiles
     ".*.js",
     "tailwind.config.js",
+    "next.config.js",
     "scripts/**",
   ],
+  globals: {
+    JSX: true,
+    React: true,
+    NodeJS: true,
+  },
   rules: {
     // Most of these rules should probably be on. Turning them off because they fail in many places
     // and we need to set aside time to make them work.
