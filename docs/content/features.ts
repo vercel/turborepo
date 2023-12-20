@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment -- SVGs. */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment -- SVGs from static assets aren't TypeScript friendly. */
 import type Image from "next/image";
 import EcosystemIconDark from "../public/images/docs/shared/feature-icons/ecosystem-dark.svg";
 import EcosystemIconLight from "../public/images/docs/shared/feature-icons/ecosystem-light.svg";

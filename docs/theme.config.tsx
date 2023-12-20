@@ -104,17 +104,21 @@ const config: DocsThemeConfig = {
     } else if (frontMatter.ogImage) {
       ogUrl = `${SITE_ROOT}${frontMatter.ogImage}`;
     } else {
-      // eslint-disable-next-line no-nested-ternary -- This is fine.
-      const type = asPath.startsWith("/repo")
-        ? "repo"
-        : asPath.startsWith("/pack")
-        ? "pack"
-        : "";
+      const type = () => {
+        if (asPath.startsWith("/repo")) {
+          return "repo";
+        }
+
+        if (asPath.startsWith("/pack")) {
+          return "pack";
+        }
+        return "";
+      };
       const title = frontMatter.title
         ? `&title=${encodeURIComponent(frontMatter.title)}`
         : "";
 
-      ogUrl = `${SITE_ROOT}/api/og?type=${type}${title}`;
+      ogUrl = `${SITE_ROOT}/api/og?type=${type()}${title}`;
     }
 
     return (

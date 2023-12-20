@@ -77,6 +77,7 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
 }
 
 // this should get replaced by petgraph in the future :)
+#[tracing::instrument(skip_all)]
 pub fn transitive_closure<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspace_path: &str,
