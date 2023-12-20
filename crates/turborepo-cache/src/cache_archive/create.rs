@@ -7,7 +7,7 @@ use std::{
 };
 
 use tar::{EntryType, Header};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, IntoUnix};
 
 use crate::CacheError;
 
@@ -24,6 +24,15 @@ impl<'a> CacheWriter<'a> {
         body: impl Read,
     ) -> Result<(), CacheError> {
         Ok(self.builder.append_data(header, path, body)?)
+    }
+
+    fn append_link(
+        &mut self,
+        header: &mut Header,
+        path: impl AsRef<Path>,
+        target: impl AsRef<Path>,
+    ) -> Result<(), CacheError> {
+        Ok(self.builder.append_link(header, path, target)?)
     }
 
     pub fn finish(mut self) -> Result<(), CacheError> {
@@ -86,11 +95,14 @@ impl<'a> CacheWriter<'a> {
         let mut file_path = file_path.to_unix();
         file_path.make_canonical_for_tar(file_info.is_dir());
 
-        let mut header = Self::create_header(&source_path, &file_info)?;
+        let mut header = Self::create_header(&file_info)?;
 
         if matches!(header.entry_type(), EntryType::Regular) && file_info.len() > 0 {
             let file = source_path.open()?;
             self.append_data(&mut header, file_path.as_str(), file)?;
+        } else if matches!(header.entry_type(), EntryType::Symlink) {
+            let target = source_path.read_link()?.into_unix();
+            self.append_link(&mut header, file_path.as_str(), &target)?;
         } else {
             self.append_data(&mut header, file_path.as_str(), &mut std::io::empty())?;
         }
@@ -98,10 +110,7 @@ impl<'a> CacheWriter<'a> {
         Ok(())
     }
 
-    fn create_header(
-        source_path: &AbsoluteSystemPath,
-        file_info: &fs::Metadata,
-    ) -> Result<Header, CacheError> {
+    fn create_header(file_info: &fs::Metadata) -> Result<Header, CacheError> {
         let mut header = Header::new_gnu();
 
         let mode: u32;
@@ -118,10 +127,9 @@ impl<'a> CacheWriter<'a> {
         }
         header.set_mode(mode);
 
-        // Do we need to populate the additional linkname field in Header?
         if file_info.is_symlink() {
-            let link = source_path.read_link()?;
-            header.set_link_name(link)?;
+            // We do *not* set the linkname here because it could be too long
+            // Instead we set it when we add the file to the archive
             header.set_entry_type(EntryType::Symlink);
         } else if file_info.is_dir() {
             header.set_size(0);
