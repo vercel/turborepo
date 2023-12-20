@@ -27,6 +27,7 @@ export function CTAButton({
           monospace ? "font-mono" : ""
         }`}
         onClick={onClick}
+        type="button"
       >
         {children}
       </button>

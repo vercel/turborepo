@@ -1,4 +1,4 @@
-function RepoLogo(props) {
+export function RepoLogo(props) {
   return (
     <svg {...props} viewBox="0 0 506 50" xmlns="http://www.w3.org/2000/svg">
       <title>Turborepo logo</title>
@@ -14,5 +14,3 @@ function RepoLogo(props) {
     </svg>
   );
 }
-
-export default RepoLogo;

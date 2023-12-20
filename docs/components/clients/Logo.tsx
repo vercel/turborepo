@@ -36,6 +36,7 @@ export function Logo({
         "hidden dark:inline": theme !== "dark",
         "dark:hidden inline": theme === "dark",
       })}
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- It's declared above.
       height={numericHeight!}
       priority
       src={user.image.replace(
@@ -43,6 +44,7 @@ export function Logo({
         theme === "light" ? "/logos/white" : "/logos/color"
       )}
       style={styles}
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- It's declared above.
       width={numericWidth!}
     />
   );
