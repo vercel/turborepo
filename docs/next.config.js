@@ -1,4 +1,5 @@
 const { withSentryConfig } = require("@sentry/nextjs");
+const withVercelToolbar = require("@vercel/toolbar/plugins/next")();
 const withNextra = require("nextra")({
   theme: "nextra-theme-docs",
   themeConfig: "./theme.config.tsx",
@@ -250,4 +251,6 @@ const nextConfig = withNextra({
   },
 });
 
-module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);
+module.exports = withVercelToolbar(
+  withSentryConfig(nextConfig, sentryWebpackPluginOptions)
+);

@@ -5,6 +5,7 @@ import { SSRProvider } from "@react-aria/ssr";
 import type { AppProps } from "next/app";
 import type { ReactNode } from "react";
 import { Analytics } from "@vercel/analytics/react";
+import { VercelToolbar } from "@vercel/toolbar/next";
 
 type NextraAppProps = AppProps & {
   Component: AppProps["Component"] & {
@@ -48,6 +49,7 @@ export default function Nextra({ Component, pageProps }: NextraAppProps) {
       </>
       <Component {...pageProps} />
       <Analytics />
+      <VercelToolbar />
     </SSRProvider>
   );
 }
