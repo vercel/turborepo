@@ -188,7 +188,7 @@ function SubmitForm() {
   return (
     <form
       className="mt-4 sm:flex sm:max-w-md"
-      onSubmit={(e) => {
+      onSubmit={(ev) => {
         fetch("/api/signup", {
           method: "POST",
           headers: {
@@ -200,11 +200,14 @@ function SubmitForm() {
           .then(() => {
             return router.push("/confirm");
           })
-          .catch(() => {
-            // We'll trust the API route to let us know if something is going wrong.
+          .catch((e: unknown) => {
+            if (e instanceof Error) {
+              // eslint-disable-next-line no-console -- We'd like to see something weird is happening in Logs.
+              console.error(e.message);
+            }
             return router.push("/confirm");
           });
-        e.preventDefault();
+        ev.preventDefault();
       }}
     >
       <label className="sr-only" htmlFor="email-address">
