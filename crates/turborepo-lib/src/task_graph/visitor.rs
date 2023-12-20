@@ -22,7 +22,7 @@ use turborepo_repository::{
     package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
     package_manager::PackageManager,
 };
-use turborepo_telemetry::events::{task::PackageTaskEventBuilder, PubEventBuilder};
+use turborepo_telemetry::events::{task::PackageTaskEventBuilder, EventBuilder};
 use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
 use which::which;
 

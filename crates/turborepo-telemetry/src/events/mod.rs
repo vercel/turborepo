@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 // all event builders and their event methods
 pub mod command;
+pub mod generic;
 pub mod repo;
 pub mod task;
 
@@ -28,17 +29,15 @@ pub struct Event {
     is_sensitive: EventType,
 }
 
-/// Private trait that can be used for building telemetry events.
-///
-/// Supports connecting events via a parent-child relationship
-/// to aid in connecting events together.
-trait EventBuilder<T> {
+pub trait Identifiable {
     fn get_id(&self) -> &String;
-    fn with_parent(self, parent_event: &T) -> Self;
 }
 
 /// Public trait that can be used for building telemetry events.
-pub trait PubEventBuilder {
+/// Supports connecting events via a parent-child relationship
+/// to aid in connecting events together.
+pub trait EventBuilder {
+    fn with_parent<U: Identifiable>(self, parent_event: &U) -> Self;
     fn track(&self, event: Event);
     fn child(&self) -> Self;
 }

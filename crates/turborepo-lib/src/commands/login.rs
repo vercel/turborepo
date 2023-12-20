@@ -2,10 +2,16 @@ use turborepo_api_client::APIClient;
 use turborepo_auth::{
     login as auth_login, sso_login as auth_sso_login, DefaultLoginServer, DefaultSSOLoginServer,
 };
+use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
 
 use crate::{cli::Error, commands::CommandBase, config, rewrite_json::set_path};
 
-pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Error> {
+pub async fn sso_login(
+    base: &mut CommandBase,
+    sso_team: &str,
+    telemetry: CommandEventBuilder,
+) -> Result<(), Error> {
+    telemetry.track_login_method(LoginMethod::SSO);
     let api_client: APIClient = base.api_client()?;
     let ui = base.ui;
     let login_url_config = base.config()?.login_url().to_string();
@@ -47,7 +53,8 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Err
     Ok(())
 }
 
-pub async fn login(base: &mut CommandBase) -> Result<(), Error> {
+pub async fn login(base: &mut CommandBase, telemetry: CommandEventBuilder) -> Result<(), Error> {
+    telemetry.track_login_method(LoginMethod::Standard);
     let api_client: APIClient = base.api_client()?;
     let ui = base.ui;
     let login_url_config = base.config()?.login_url().to_string();

@@ -263,7 +263,7 @@ mod tests {
     };
     use turborepo_api_client::telemetry::TelemetryClient;
     use turborepo_ui::UI;
-    use turborepo_vercel_api::{TelemetryCommandEvent, TelemetryEvent};
+    use turborepo_vercel_api::{TelemetryEvent, TelemetryGenericEvent};
 
     use crate::init;
 
@@ -339,12 +339,11 @@ mod tests {
 
         for _ in 0..2 {
             telemetry_sender
-                .send(TelemetryEvent::Command(TelemetryCommandEvent {
+                .send(TelemetryEvent::Generic(TelemetryGenericEvent {
                     id: "id".to_string(),
-                    command: "command".to_string(),
                     key: "key".to_string(),
                     value: "value".to_string(),
-                    parent: None,
+                    parent_id: None,
                 }))
                 .unwrap();
         }
@@ -377,12 +376,11 @@ mod tests {
 
         for _ in 0..12 {
             telemetry_sender
-                .send(TelemetryEvent::Command(TelemetryCommandEvent {
+                .send(TelemetryEvent::Generic(TelemetryGenericEvent {
                     id: "id".to_string(),
-                    command: "command".to_string(),
                     key: "key".to_string(),
                     value: "value".to_string(),
-                    parent: None,
+                    parent_id: None,
                 }))
                 .unwrap();
         }
@@ -421,12 +419,11 @@ mod tests {
 
         for _ in 0..2 {
             telemetry_sender
-                .send(TelemetryEvent::Command(TelemetryCommandEvent {
+                .send(TelemetryEvent::Generic(TelemetryGenericEvent {
                     id: "id".to_string(),
-                    command: "command".to_string(),
                     key: "key".to_string(),
                     value: "value".to_string(),
-                    parent: None,
+                    parent_id: None,
                 }))
                 .unwrap();
         }

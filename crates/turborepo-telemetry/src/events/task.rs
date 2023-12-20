@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use turborepo_vercel_api::{TelemetryEvent, TelemetryTaskEvent};
 use uuid::Uuid;
 
-use super::{Event, EventBuilder, EventType, PubEventBuilder};
+use super::{Event, EventBuilder, EventType, Identifiable};
 use crate::{config::TelemetryConfig, telem};
 
 // task names that will be passed through to the API without obfuscation
@@ -22,21 +22,21 @@ pub struct PackageTaskEventBuilder {
     id: String,
     package: String,
     task: String,
-    parent: Option<String>,
+    parent_id: Option<String>,
 }
 
-impl EventBuilder<PackageTaskEventBuilder> for PackageTaskEventBuilder {
+impl Identifiable for PackageTaskEventBuilder {
     fn get_id(&self) -> &String {
         &self.id
     }
-
-    fn with_parent(mut self, parent_event: &PackageTaskEventBuilder) -> Self {
-        self.parent = Some(parent_event.get_id().clone());
-        self
-    }
 }
 
-impl PubEventBuilder for PackageTaskEventBuilder {
+impl EventBuilder for PackageTaskEventBuilder {
+    fn with_parent<U: Identifiable>(mut self, parent_event: &U) -> Self {
+        self.parent_id = Some(parent_event.get_id().clone());
+        self
+    }
+
     fn track(&self, event: Event) {
         let val = match event.is_sensitive {
             EventType::Sensitive => TelemetryConfig::one_way_hash(&event.value),
@@ -47,7 +47,7 @@ impl PubEventBuilder for PackageTaskEventBuilder {
             id: self.id.clone(),
             package: self.package.clone(),
             task: self.task.clone(),
-            parent: self.parent.clone(),
+            parent_id: self.parent_id.clone(),
             key: event.key,
             value: val,
         }));
@@ -76,7 +76,7 @@ impl PackageTaskEventBuilder {
 
         Self {
             id: Uuid::new_v4().to_string(),
-            parent: None,
+            parent_id: None,
             package,
             task,
         }
