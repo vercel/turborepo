@@ -9,4 +9,3 @@ Logout while logged in
 Logout while logged out
   $ ${TURBO} logout
   No tokens to remove
-
