@@ -20,7 +20,7 @@ module.exports = {
   },
   overrides: [
     {
-      files: ["./pages/**/*", "./turbo/generators/**", "theme.config.tsx"],
+      files: ["./pages/**", "./turbo/generators/**", "theme.config.tsx"],
       rules: { "import/no-default-export": "off" },
     },
   ],

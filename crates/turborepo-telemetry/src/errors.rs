@@ -3,8 +3,6 @@ use std::backtrace::Backtrace;
 use reqwest::header::ToStrError;
 use thiserror::Error;
 
-use crate::CachingStatus;
-
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Error making HTTP request: {0}")]
@@ -17,8 +15,6 @@ pub enum Error {
     InvalidHeader(#[from] ToStrError),
     #[error("Error parsing URL: {0}")]
     InvalidUrl(#[from] url::ParseError),
-    #[error("unknown caching status: {0}")]
-    UnknownCachingStatus(String, #[backtrace] Backtrace),
     #[error("unknown status {code}: {message}")]
     UnknownStatus {
         code: String,
@@ -26,16 +22,8 @@ pub enum Error {
         #[backtrace]
         backtrace: Backtrace,
     },
-    #[error("{message}")]
-    CacheDisabled {
-        status: CachingStatus,
-        message: String,
-    },
-    #[error("unable to parse '{text}' as JSON: {err}")]
-    InvalidJson {
-        err: serde_json::Error,
-        text: String,
-    },
+    #[error("Error making retryable request: {0}")]
+    RetryError(#[from] turborepo_api_client::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

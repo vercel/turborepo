@@ -80,10 +80,8 @@ export default async function handler(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const name = searchParams.get("name") || DEFAULT_NAME;
-    const tag = (searchParams.get("tag") || DEFAULT_TAG) as
-      | "latest"
-      | "next"
-      | "canary";
+    const tag = (searchParams.get("tag") ||
+      DEFAULT_TAG) as keyof FetchDistTags["dist-tags"];
 
     if (!SUPPORTED_PACKAGES.includes(name)) {
       return errorResponse({
