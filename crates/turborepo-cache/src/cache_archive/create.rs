@@ -101,6 +101,8 @@ impl<'a> CacheWriter<'a> {
             let file = source_path.open()?;
             self.append_data(&mut header, file_path.as_str(), file)?;
         } else if matches!(header.entry_type(), EntryType::Symlink) {
+            // We convert to a Unix path because all paths in tar should be
+            // Unix-style. This will get restored to a system path.
             let target = source_path.read_link()?.into_unix();
             self.append_link(&mut header, file_path.as_str(), &target)?;
         } else {
