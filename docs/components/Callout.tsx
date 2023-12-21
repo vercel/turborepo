@@ -30,7 +30,7 @@ const THEMES = {
   },
 };
 
-export default function Callout({
+export function Callout({
   children,
   type = "default",
   icon,

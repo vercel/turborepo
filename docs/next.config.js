@@ -53,7 +53,6 @@ const OLD_TURBOREPO_ROUTES = [
   "/docs/upgrading-to-v1",
 ];
 
-/** @type {import('next').NextConfig} */
 const nextConfig = withNextra({
   sentry: {
     autoInstrumentServerFunctions: false,
@@ -64,7 +63,6 @@ const nextConfig = withNextra({
     legacyBrowsers: false,
   },
   eslint: {
-    // TODO: remove after eslint has been fixed from new config introduced in vercel/turbo/pull/5752
     ignoreDuringBuilds: true,
   },
   webpack: (config, { webpack }) => {
