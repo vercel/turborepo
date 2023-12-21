@@ -53,6 +53,9 @@ pub struct TaskDefinition {
     // Persistent indicates whether the Task is expected to exit or not
     // Tasks marked Persistent do not exit (e.g. --watch mode or dev servers)
     pub persistent: bool,
+
+    // interactive indicates whether the Task expects to read from stdin
+    pub interactive: bool,
 }
 
 impl Default for TaskDefinition {
@@ -68,6 +71,7 @@ impl Default for TaskDefinition {
             output_mode: Default::default(),
             persistent: Default::default(),
             dot_env: Default::default(),
+            interactive: Default::default(),
         }
     }
 }

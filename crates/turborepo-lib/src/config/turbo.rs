@@ -121,6 +121,8 @@ pub struct RawTaskDefinition {
     outputs: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     output_mode: Option<OutputLogsMode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    interactive: Option<bool>,
 }
 
 macro_rules! set_field {
@@ -146,6 +148,7 @@ impl RawTaskDefinition {
         set_field!(self, other, env);
         set_field!(self, other, pass_through_env);
         set_field!(self, other, dot_env);
+        set_field!(self, other, interactive);
     }
 }
 
@@ -301,6 +304,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             dot_env,
             output_mode: raw_task.output_mode.unwrap_or_default(),
             persistent: raw_task.persistent.unwrap_or_default(),
+            interactive: raw_task.interactive.unwrap_or_default(),
         })
     }
 }
