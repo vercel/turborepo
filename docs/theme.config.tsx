@@ -8,7 +8,7 @@ import { HeaderLogo } from "./components/HeaderLogo";
 import { ExtraContent } from "./components/ExtraContent";
 import { Discord, Github } from "./components/Social";
 
-const NoSSR = dynamic(
+const NoSSRCommentsButton = dynamic(
   () => import("./components/CommentsButton").then((mod) => mod.CommentsButton),
   {
     ssr: false,
@@ -191,7 +191,7 @@ const config: DocsThemeConfig = {
     extraContent: (
       <>
         <div className="w-6 h-6 rounded-tl-none rounded-full border-2 border-white">
-          <NoSSR />
+          <NoSSRCommentsButton />
         </div>
         <Github />
         <Discord />
