@@ -18,6 +18,7 @@ export function CommentsButton() {
       onClick={() => {
         setCommentsState(router);
       }}
+      type="button"
     >
       <PlusSmIcon className="w-4 h-4 translate-x-[.1rem] stroke-2" />
     </button>
