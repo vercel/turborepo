@@ -1,8 +1,34 @@
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
-export default function SearchPage() {
-  const [query, setQuery] = useState("");
+function Result({ result }) {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    async function fetchData() {
+      const data = await result.data();
+      setData(data);
+    }
+    fetchData();
+  }, [result]);
+
+  if (!data) return null;
+
+  return (
+    <Link
+      className="hover:bg-gray-300 flex flex-col gap-2"
+      href={data.url
+        .replace("_next/static/chunks/pages/server/pages/", "")
+        .replace(".html", "")}
+    >
+      <h3 className="text-lg font-bold">{data.meta.title}</h3>
+      <p>{data.excerpt}</p>
+    </Link>
+  );
+}
+
+export function CommandMenu() {
+  const [value, setValue] = useState("");
   const [results, setResults] = useState([]);
 
   useEffect(() => {
@@ -21,50 +47,35 @@ export default function SearchPage() {
     loadPagefind();
   }, []);
 
-  async function handleSearch() {
-    if (window.pagefind) {
-      const search = await window.pagefind.search(query);
-      setResults(search.results);
-    }
-  }
+  useEffect(() => {
+    const thing = async () => {
+      if (window.pagefind) {
+        const search = await window.pagefind.search(value);
+        setResults(search.results);
+      }
+    };
+    thing();
+  }, [value]);
 
   return (
-    <div>
+    <>
       <input
         onChange={(e) => {
-          setQuery(e.target.value);
+          setValue(e.target.value);
         }}
-        onInput={handleSearch}
-        placeholder="Search..."
-        type="text"
-        value={query}
+        value={value}
       />
-      <div className="flex gap-4 flex-col" id="results">
-        {results.map((result, index) => (
-          <Result key={result.id} result={result} />
-        ))}
+      <div className="flex flex-col gap-6">
+        {results.map((result) => {
+          return <Result key={result.id} result={result} />;
+        })}
       </div>
-    </div>
+    </>
   );
 }
 
-function Result({ result }) {
-  const [data, setData] = useState(null);
-
-  useEffect(() => {
-    async function fetchData() {
-      const data = await result.data();
-      setData(data);
-    }
-    fetchData();
-  }, [result]);
-
-  if (!data) return null;
-
-  return (
-    <Link className="hover:bg-gray-300" href={data.url}>
-      <h3>{data.meta.title}</h3>
-      <p>{data.excerpt}</p>
-    </Link>
-  );
+function Page() {
+  return <CommandMenu />;
 }
+
+export default Page;
