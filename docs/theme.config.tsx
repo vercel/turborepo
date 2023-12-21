@@ -190,7 +190,9 @@ const config: DocsThemeConfig = {
     component: Navigation,
     extraContent: (
       <>
-        <NoSSR />
+        <div className="w-6 h-6 rounded-tl-none rounded-full border-2 border-white">
+          <NoSSR />
+        </div>
         <Github />
         <Discord />
       </>
