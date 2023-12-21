@@ -6,6 +6,7 @@ import { Navigation } from "./components/Navigation";
 import { HeaderLogo } from "./components/HeaderLogo";
 import { ExtraContent } from "./components/ExtraContent";
 import { Discord, Github } from "./components/Social";
+import { Main } from "./components/Main";
 
 const SITE_ROOT = "https://turbo.build";
 
@@ -188,6 +189,10 @@ const config: DocsThemeConfig = {
       </>
     ),
   },
+  components: {
+    pre: (props) => <pre {...props} data-pagefind-weight=".5" />,
+  },
+  main: (props) => <Main>{props.children}</Main>,
   search: {
     placeholder: "Search documentation…",
   },
