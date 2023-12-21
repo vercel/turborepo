@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 function Result({ result }) {
   const [data, setData] = useState(null);
 
+  console.log(data);
+
   useEffect(() => {
     async function fetchData() {
       const data = await result.data();

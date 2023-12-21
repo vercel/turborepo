@@ -7,6 +7,7 @@ import { HeaderLogo } from "./components/HeaderLogo";
 import { ExtraContent } from "./components/ExtraContent";
 import { Discord, Github } from "./components/Social";
 import { Main } from "./components/Main";
+import { Search } from "./components/Search";
 
 const SITE_ROOT = "https://turbo.build";
 
@@ -194,6 +195,7 @@ const config: DocsThemeConfig = {
   },
   main: (props) => <Main>{props.children}</Main>,
   search: {
+    component: Search,
     placeholder: "Search documentation…",
   },
   footer: {
