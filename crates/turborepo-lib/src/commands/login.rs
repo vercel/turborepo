@@ -3,11 +3,9 @@ use turborepo_auth::{
     login as auth_login, read_or_create_auth_file, sso_login as auth_sso_login, AuthFile,
     DefaultLoginServer, DefaultSSOLoginServer, LoginServer, SSOLoginServer,
 };
-
+use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
 use turborepo_ui::{BOLD, CYAN, UI};
 use turborepo_vercel_api::TokenMetadata;
-
-use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
 
 use crate::{cli::Error, commands::CommandBase};
 
@@ -16,7 +14,11 @@ pub struct Login<T> {
 }
 
 impl<T: LoginServer> Login<T> {
-    pub(crate) async fn login(&self, base: &mut CommandBase, telemetry: CommandBaseBuilder) -> Result<(), Error> {
+    pub(crate) async fn login(
+        &self,
+        base: &mut CommandBase,
+        telemetry: CommandEventBuilder,
+    ) -> Result<(), Error> {
         telemetry.track_login_method(LoginMethod::Standard);
         let api_client: APIClient = base.api_client()?;
         let ui = base.ui;
@@ -68,6 +70,7 @@ impl<T: SSOLoginServer> Login<T> {
         &self,
         base: &mut CommandBase,
         sso_team: &str,
+        telemetry: CommandEventBuilder,
     ) -> Result<(), Error> {
         telemetry.track_login_method(LoginMethod::SSO);
         let api_client: APIClient = base.api_client()?;
@@ -121,11 +124,15 @@ impl<T: SSOLoginServer> Login<T> {
 }
 
 /// Entry point for `turbo login --sso-team`.
-pub async fn sso_login(base: &mut CommandBase, sso_team: &str, telemetry: CommandEventBuilder) -> Result<(), Error> {
+pub async fn sso_login(
+    base: &mut CommandBase,
+    sso_team: &str,
+    telemetry: CommandEventBuilder,
+) -> Result<(), Error> {
     Login {
         server: DefaultSSOLoginServer {},
     }
-    .sso_login(base, sso_team)
+    .sso_login(base, sso_team, telemetry)
     .await
 }
 
@@ -133,11 +140,11 @@ pub async fn sso_login(base: &mut CommandBase, sso_team: &str, telemetry: Comman
 /// token that matches the API base URL, and if we already have a token for it,
 /// returns that one instead of fetching a new one. Otherwise, fetches a new
 /// token and writes it to `auth.json` in the Turbo config directory.
-pub async fn login(base: &mut CommandBase) -> Result<(), Error> {
+pub async fn login(base: &mut CommandBase, telemetry: CommandEventBuilder) -> Result<(), Error> {
     Login {
         server: DefaultLoginServer {},
     }
-    .login(base)
+    .login(base, telemetry)
     .await
 }
 
@@ -222,7 +229,8 @@ mod tests {
                 hits: Arc::new(0.into()),
             },
         };
-        let result = login_with_mock_server.login(&mut base).await;
+        let telemetry = CommandEventBuilder::new("login");
+        let result = login_with_mock_server.login(&mut base, telemetry).await;
         assert!(result.is_ok());
 
         // Since we don't return anything if the login found an existing
@@ -262,7 +270,8 @@ mod tests {
                 hits: Arc::new(0.into()),
             },
         };
-        let result = login_with_mock_server.login(&mut base).await;
+        let telemetry = CommandEventBuilder::new("login");
+        let result = login_with_mock_server.login(&mut base, telemetry).await;
         assert!(result.is_ok());
 
         let found_auth_file =
