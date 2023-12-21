@@ -17,6 +17,7 @@ read -r -d '' AUTH <<- EOF
 EOF
 
 TMP_DIR=$(mktemp -d -t turbo-XXXXXXXXXX)
+export TURBO_CONFIG_DIR_PATH=$TMP_DIR
 
 # duplicate over to XDG var so that turbo picks it up
 export XDG_CONFIG_HOME=$TMP_DIR
@@ -35,9 +36,6 @@ echo "$AUTH" > "$MACOS_DIR/turborepo/auth.json"
 
 # XDG_CONFIG_HOME equivalent for Windows is {FOLDERID_RoamingAppData} which is roughly C:\Users\{username}\AppData\Roaming
 WINDOWS_DIR="$TMP_DIR/AppData/Roaming"
-echo $WINDOWS_DIR
 mkdir -p "$WINDOWS_DIR/turborepo"
 echo "$CONFIG" > "$WINDOWS_DIR/turborepo/config.json"
 echo "$AUTH" > "$WINDOWS_DIR/turborepo/auth.json"
-
-echo $WINDOWS_DIR/turborepo/auth.json
