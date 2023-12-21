@@ -6,7 +6,7 @@ import type { AppProps } from "next/app";
 import { type ReactNode } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { VercelToolbar } from "@vercel/toolbar/next";
-import { useCommentsState } from "../lib/comments";
+import { getCommentsState } from "../lib/comments";
 
 type NextraAppProps = AppProps & {
   Component: AppProps["Component"] & {
@@ -27,8 +27,6 @@ if (typeof window !== "undefined" && !("requestIdleCallback" in window)) {
 }
 
 export default function Nextra({ Component, pageProps }: NextraAppProps) {
-  const comments = useCommentsState();
-
   return (
     <SSRProvider>
       <>
@@ -52,7 +50,7 @@ export default function Nextra({ Component, pageProps }: NextraAppProps) {
       </>
       <Component {...pageProps} />
       <Analytics />
-      {comments ? <VercelToolbar /> : null}
+      {getCommentsState() ? <VercelToolbar /> : null}
     </SSRProvider>
   );
 }

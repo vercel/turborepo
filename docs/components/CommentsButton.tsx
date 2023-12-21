@@ -1,8 +1,8 @@
 import { useRouter } from "next/router";
-import { useCommentsState, setCommentsState } from "../lib/comments";
+import { getCommentsState, setCommentsState } from "../lib/comments";
 
 export function CommentsButton() {
-  const comments = useCommentsState();
+  const comments = getCommentsState();
   const router = useRouter();
 
   return (
