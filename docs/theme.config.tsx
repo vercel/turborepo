@@ -1,12 +1,19 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useConfig, useTheme, type DocsThemeConfig } from "nextra-theme-docs";
+import dynamic from "next/dynamic";
 import { Footer } from "./components/Footer";
 import { Navigation } from "./components/Navigation";
 import { HeaderLogo } from "./components/HeaderLogo";
 import { ExtraContent } from "./components/ExtraContent";
 import { Discord, Github } from "./components/Social";
 
+const NoSSR = dynamic(
+  () => import("./components/CommentsButton").then((mod) => mod.CommentsButton),
+  {
+    ssr: false,
+  }
+);
 const SITE_ROOT = "https://turbo.build";
 
 interface Frontmatter {
@@ -183,6 +190,7 @@ const config: DocsThemeConfig = {
     component: Navigation,
     extraContent: (
       <>
+        <NoSSR />
         <Github />
         <Discord />
       </>
