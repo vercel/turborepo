@@ -8,6 +8,7 @@ export function CommentsButton() {
   const router = useRouter();
 
   return (
+    // eslint-disable-next-line react/button-has-type -- Can't set it here because it messes up background color. There's a style that sets the background to transparent that I believe is coming from deep within Nextra.
     <button
       className={cn(
         "transition-all duration-700 w-6 h-6 -translate-x-0.5 -translate-y-0.5 rounded-tl-none rounded-full border-2 border-white",
@@ -18,7 +19,6 @@ export function CommentsButton() {
       onClick={() => {
         setCommentsState(router);
       }}
-      type="button"
     >
       <PlusSmIcon className="w-4 h-4 translate-x-[.1rem] stroke-2" />
     </button>
