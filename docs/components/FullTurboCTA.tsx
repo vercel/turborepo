@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-function FullTurboCTA() {
+export function FullTurboCTA() {
   return (
     <div className="flex flex-col items-start w-full gap-4 p-6 mt-8 bg-white shadow-lg md:items-center md:flex-row rounded-xl dark:bg-opacity-5">
       <div className="justify-start flex-1">
@@ -21,6 +21,7 @@ function FullTurboCTA() {
           Talk to an Expert
         </Link>
       </div>
+      {/* eslint-disable-next-line react/no-unknown-property -- styled-jsx stuff */}
       <style global jsx>{`
         .full-turbo {
           background-image: linear-gradient(
@@ -35,5 +36,3 @@ function FullTurboCTA() {
     </div>
   );
 }
-
-export default FullTurboCTA;

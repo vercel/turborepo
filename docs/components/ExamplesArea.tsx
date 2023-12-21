@@ -31,6 +31,7 @@ export function ExamplesArea({
 }: {
   filter: "featured" | "all";
 }) {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Awkward typing from Nextra.
   const { examples }: { examples: Example[] } = useSSG();
 
   const sortedExamples = examples
