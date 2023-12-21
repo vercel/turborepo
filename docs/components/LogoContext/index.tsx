@@ -61,8 +61,10 @@ function MenuItem({
     className,
     "group flex items-center px-4 py-2 text-sm dark:hover:bg-gray-800 hover:bg-gray-200 w-full rounded-md"
   );
+
   if (type === "internal") {
     return (
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Going to allow it here...but it's not truly correct.
       <Link className={classes} href={href!} onClick={handleClick} {...other}>
         {prefix}
         {children}
@@ -85,26 +87,26 @@ function MenuItem({
     );
   }
 
-  if (type === "copy") {
-    return (
-      <button
-        className={classes}
-        disabled={disabled}
-        onClick={handleClick}
-        {...other}
-      >
-        {prefix}
-        {copied ? "Copied to clipboard!" : children}
-      </button>
-    );
-  }
-  return null;
+  // Copy button
+  return (
+    <button
+      className={classes}
+      disabled={disabled}
+      onClick={handleClick}
+      type="button"
+      {...other}
+    >
+      {prefix}
+      {copied ? "Copied to clipboard!" : children}
+    </button>
+  );
 }
 
 export function LogoContext() {
   const [open, setOpen] = useState(false);
-  const site = useTurboSite()!;
-  const menu = useRef<any>(null);
+  // By default, the repo logo is used.
+  const site = useTurboSite() || "repo";
+  const menu = useRef<HTMLDivElement | null>(null);
   const { theme = "dark" } = useTheme();
 
   const toggleMenu = (e: MouseEvent<HTMLButtonElement>) => {
@@ -119,6 +121,7 @@ export function LogoContext() {
 
   const onClickOutside: EventListener = useCallback(
     (e) => {
+      // @ts-expect-error -- Event listener typing is weird.
       if (menu.current && open && !menu.current.contains(e.target)) {
         setOpen(false);
       }
@@ -135,7 +138,12 @@ export function LogoContext() {
 
   return (
     <div className="block relative">
-      <button className="flex" onClick={toggleMenu} onContextMenu={toggleMenu}>
+      <button
+        className="flex"
+        onClick={toggleMenu}
+        onContextMenu={toggleMenu}
+        type="button"
+      >
         <VercelLogo />
       </button>
       {open ? (

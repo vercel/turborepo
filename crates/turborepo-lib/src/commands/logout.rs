@@ -1,9 +1,12 @@
 use tracing::error;
+
 use turborepo_auth::{logout as auth_logout, read_or_create_auth_file, AuthToken};
+
+use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{cli::Error, commands::CommandBase};
 
-pub async fn logout(base: &mut CommandBase) -> Result<(), Error> {
+pub async fn logout(base: &mut CommandBase, _telemetry: CommandEventBuilder) -> Result<(), Error> {
     let client = base.api_client()?;
     let auth_path = base.global_auth_path()?;
     let config_path = base.global_config_path()?;

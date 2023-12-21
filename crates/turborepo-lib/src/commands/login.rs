@@ -3,8 +3,11 @@ use turborepo_auth::{
     login as auth_login, read_or_create_auth_file, sso_login as auth_sso_login, AuthFile,
     DefaultLoginServer, DefaultSSOLoginServer, LoginServer, SSOLoginServer,
 };
+
 use turborepo_ui::{BOLD, CYAN, UI};
 use turborepo_vercel_api::TokenMetadata;
+
+use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
 
 use crate::{cli::Error, commands::CommandBase};
 
@@ -13,7 +16,8 @@ pub struct Login<T> {
 }
 
 impl<T: LoginServer> Login<T> {
-    pub(crate) async fn login(&self, base: &mut CommandBase) -> Result<(), Error> {
+    pub(crate) async fn login(&self, base: &mut CommandBase, telemetry: CommandBaseBuilder) -> Result<(), Error> {
+        telemetry.track_login_method(LoginMethod::Standard);
         let api_client: APIClient = base.api_client()?;
         let ui = base.ui;
         let login_url_config = base.config()?.login_url().to_string();
@@ -65,6 +69,7 @@ impl<T: SSOLoginServer> Login<T> {
         base: &mut CommandBase,
         sso_team: &str,
     ) -> Result<(), Error> {
+        telemetry.track_login_method(LoginMethod::SSO);
         let api_client: APIClient = base.api_client()?;
         let ui = base.ui;
         let login_url_config = base.config()?.login_url().to_string();
@@ -116,7 +121,7 @@ impl<T: SSOLoginServer> Login<T> {
 }
 
 /// Entry point for `turbo login --sso-team`.
-pub async fn sso_login(base: &mut CommandBase, sso_team: &str) -> Result<(), Error> {
+pub async fn sso_login(base: &mut CommandBase, sso_team: &str, telemetry: CommandEventBuilder) -> Result<(), Error> {
     Login {
         server: DefaultSSOLoginServer {},
     }

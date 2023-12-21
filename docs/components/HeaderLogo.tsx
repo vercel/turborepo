@@ -1,5 +1,5 @@
 import Link from "next/link";
-import SiteSwitcher from "./SiteSwitcher";
+import { SiteSwitcher } from "./SiteSwitcher";
 import styles from "./header-logo.module.css";
 import { TurboAnimated } from "./logos/TurboAnimated";
 import { LogoContext } from "./LogoContext";

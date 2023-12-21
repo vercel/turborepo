@@ -203,6 +203,7 @@ pub enum TelemetryEvent {
     Task(TelemetryTaskEvent),
     Command(TelemetryCommandEvent),
     Repo(TelemetryRepoEvent),
+    Generic(TelemetryGenericEvent),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -211,7 +212,7 @@ pub struct TelemetryCommandEvent {
     pub command: String,
     pub key: String,
     pub value: String,
-    pub parent: Option<String>,
+    pub parent_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -220,7 +221,7 @@ pub struct TelemetryRepoEvent {
     pub repo: String,
     pub key: String,
     pub value: String,
-    pub parent: Option<String>,
+    pub parent_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,7 +231,15 @@ pub struct TelemetryTaskEvent {
     pub task: String,
     pub key: String,
     pub value: String,
-    pub parent: Option<String>,
+    pub parent_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TelemetryGenericEvent {
+    pub id: String,
+    pub key: String,
+    pub value: String,
+    pub parent_id: Option<String>,
 }
 
 #[cfg(test)]

@@ -2,28 +2,28 @@ use serde::{Deserialize, Serialize};
 use turborepo_vercel_api::{TelemetryCommandEvent, TelemetryEvent};
 use uuid::Uuid;
 
-use super::{Event, EventBuilder, EventType, PubEventBuilder};
+use super::{Event, EventBuilder, EventType, Identifiable};
 use crate::{config::TelemetryConfig, telem};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommandEventBuilder {
     id: String,
     command: String,
-    parent: Option<String>,
+    parent_id: Option<String>,
 }
 
-impl EventBuilder<CommandEventBuilder> for CommandEventBuilder {
+impl Identifiable for CommandEventBuilder {
     fn get_id(&self) -> &String {
         &self.id
     }
-
-    fn with_parent(mut self, parent_event: &CommandEventBuilder) -> Self {
-        self.parent = Some(parent_event.get_id().clone());
-        self
-    }
 }
 
-impl PubEventBuilder for CommandEventBuilder {
+impl EventBuilder for CommandEventBuilder {
+    fn with_parent<U: Identifiable>(mut self, parent_event: &U) -> Self {
+        self.parent_id = Some(parent_event.get_id().clone());
+        self
+    }
+
     fn track(&self, event: Event) {
         let val = match event.is_sensitive {
             EventType::Sensitive => TelemetryConfig::one_way_hash(&event.value),
@@ -33,7 +33,7 @@ impl PubEventBuilder for CommandEventBuilder {
         telem(TelemetryEvent::Command(TelemetryCommandEvent {
             id: self.id.clone(),
             command: self.command.clone(),
-            parent: self.parent.clone(),
+            parent_id: self.parent_id.clone(),
             key: event.key,
             value: val,
         }));
@@ -52,12 +52,18 @@ pub enum CodePath {
     Rust,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LoginMethod {
+    SSO,
+    Standard,
+}
+
 impl CommandEventBuilder {
     pub fn new(command: &str) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             command: command.to_string(),
-            parent: None,
+            parent_id: None,
         }
     }
 
@@ -65,6 +71,45 @@ impl CommandEventBuilder {
         self.track(Event {
             key: "command".to_string(),
             value: "called".to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    // telemetry
+    pub fn track_telemetry_config(&self, enabled: bool) -> &Self {
+        self.track(Event {
+            key: "action".to_string(),
+            value: if enabled { "enabled" } else { "disabled" }.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    // gen
+    pub fn track_generator_option(&self, option: &str) -> &Self {
+        self.track(Event {
+            key: "option".to_string(),
+            value: option.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    pub fn track_generator_tag(&self, tag: &str) -> &Self {
+        self.track(Event {
+            key: "tag".to_string(),
+            value: tag.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    // run
+    pub fn track_run_chrome_tracing(&self) -> &Self {
+        self.track(Event {
+            key: "chrome_tracing".to_string(),
+            value: "enabled".to_string(),
             is_sensitive: EventType::NonSensitive,
         });
         self
@@ -82,28 +127,24 @@ impl CommandEventBuilder {
         self
     }
 
-    pub fn track_telemetry_config(&self, enabled: bool) -> &Self {
+    // prune
+    pub fn track_prune_method(&self, is_docker: bool) -> &Self {
         self.track(Event {
-            key: "action".to_string(),
-            value: if enabled { "enabled" } else { "disabled" }.to_string(),
+            key: "method".to_string(),
+            value: if is_docker { "docker" } else { "default" }.to_string(),
             is_sensitive: EventType::NonSensitive,
         });
         self
     }
 
-    pub fn track_generator_option(&self, option: &str) -> &Self {
+    // login
+    pub fn track_login_method(&self, method: LoginMethod) -> &Self {
         self.track(Event {
-            key: "option".to_string(),
-            value: option.to_string(),
-            is_sensitive: EventType::NonSensitive,
-        });
-        self
-    }
-
-    pub fn track_generator_tag(&self, tag: &str) -> &Self {
-        self.track(Event {
-            key: "tag".to_string(),
-            value: tag.to_string(),
+            key: "method".to_string(),
+            value: match method {
+                LoginMethod::SSO => "sso".to_string(),
+                LoginMethod::Standard => "standard".to_string(),
+            },
             is_sensitive: EventType::NonSensitive,
         });
         self

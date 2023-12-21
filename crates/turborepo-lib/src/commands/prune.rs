@@ -11,6 +11,7 @@ use turborepo_repository::{
     package_graph::{self, PackageGraph, WorkspaceName, WorkspaceNode},
     package_json::PackageJson,
 };
+use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
@@ -84,7 +85,9 @@ pub async fn prune(
     scope: &[String],
     docker: bool,
     output_dir: &str,
+    telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
+    telemetry.track_prune_method(docker);
     let prune = Prune::new(base, scope, docker, output_dir).await?;
 
     if matches!(
