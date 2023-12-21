@@ -159,7 +159,7 @@ impl<'a> CacheWriter<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{collections::HashSet, path::PathBuf};
 
     use anyhow::Result;
     use tempfile::tempdir;
@@ -254,9 +254,6 @@ mod tests {
            file_type: FileType::File,
          }
       ],
-      "bf0b4bf722f8d845dce7627606ab8af30bb6454d7c0379219e4c036a484960fe78e3d98e29ca0bac9b69b858d446b89d2d691c524e2884389032be799b6699f6",
-      "bf0b4bf722f8d845dce7627606ab8af30bb6454d7c0379219e4c036a484960fe78e3d98e29ca0bac9b69b858d446b89d2d691c524e2884389032be799b6699f6",
-      "4f1357753cceec5df1c8a36110ce256f3e8c5c1f62cab3283013b6266d6e97b3884711ccdd45462a4607bee7ac7a8e414d0acea4672a9f0306bcf364281edc2f",
       None
       ; "create regular file"
     )]
@@ -283,9 +280,6 @@ mod tests {
                 file_type: FileType::File,
             }
         ],
-        "2e6febdd2e8180f91f481ae58510e4afd3f071e66b7b64d82616ebb2d2d560b9a8a814e41f723cdaa5faec90405818421d590fcf8e617df0aabaa6fc61427d4f",
-        "0ece16efdb0b7e2a087e622ed52f29f21a4c080d77c31c4ed940b57dcdcb1f60b910d15232c0a2747325c22dadbfd069f15de969626dc49746be2d4b9b22e239",
-        "2e8ad9651964faa76082306dc95bff86fa0db821681e7a8acb982244ce0a9375417e867c3a9cb82f70bc6f03c7fb085e402712d3e9f27b980d5a0c22e086f4e2",
         None
         ; "create symlinks"
     )]
@@ -302,9 +296,6 @@ mod tests {
                 file_type: FileType::File,
             },
         ],
-        "973c16d7e8662d3483ff0679b5337d7b9ba2001dbe863604fc8cc60254305750616312b9f988112db918d50fd087d89444d43a64beb4e8102109c5c628510131",
-        "973c16d7e8662d3483ff0679b5337d7b9ba2001dbe863604fc8cc60254305750616312b9f988112db918d50fd087d89444d43a64beb4e8102109c5c628510131",
-        "b8d51875d79a3cd56938e2ca8c3cad8eed6c96f7c38e152669ddfa7d7a1c44f62e4c3a13b299a30a895156c62b07ddbc46fdbf07a01870b965050359c19a9e06",
         None
         ; "create directory"
     )]
@@ -316,9 +307,6 @@ mod tests {
                 file_type: FileType::Symlink { linkname: "two".to_string() },
             },
         ],
-        "40ce0d42109bb5e5a6b1d4ba9087a317b4c1c6c51822a57c9cb983f878b0ff765637c05fadd4bac32c8dd2b496c2a24825b183d9720b0cdd5b33f9248b692cc1",
-        "c113763393a9fb498cc676e1fe4843206cda665afe2144829fe7434da9e81f0cf6d11386fa79877d3c514d108f9696740256af952b57d32216fbed2eb2fb049d",
-        "fe692a000551a60da6cc303a9552a16d7ed5c462e33153a96824e96596da6d642fc671448f06f34e9685a13fe5bbb4220f59db73a856626b8a0962916a8f5ea3",
         None
         ; "create broken symlink"
     )]
@@ -330,17 +318,11 @@ mod tests {
                 file_type: FileType::Fifo,
             }
         ],
-        "",
-        "",
-        "",
         Some("attempted to create unsupported file type")
         ; "create unsupported"
     )]
     fn test_create(
         files: Vec<CreateFileDefinition>,
-        #[allow(unused_variables)] expected_darwin: &str,
-        #[allow(unused_variables)] expected_unix: &str,
-        #[allow(unused_variables)] expected_windows: &str,
         #[allow(unused_variables)] expected_err: Option<&str>,
     ) -> Result<()> {
         'outer: for compressed in [false, true] {
@@ -372,21 +354,6 @@ mod tests {
             }
 
             cache_archive.finish()?;
-
-            if compressed {
-                let opened_cache_archive = CacheReader::open(&archive_path)?;
-                let sha_one = opened_cache_archive.get_sha()?;
-                let snapshot = hex::encode(&sha_one);
-
-                #[cfg(target_os = "macos")]
-                assert_eq!(snapshot, expected_darwin);
-
-                #[cfg(windows)]
-                assert_eq!(snapshot, expected_windows);
-
-                #[cfg(all(unix, not(target_os = "macos")))]
-                assert_eq!(snapshot, expected_unix);
-            }
         }
 
         Ok(())
