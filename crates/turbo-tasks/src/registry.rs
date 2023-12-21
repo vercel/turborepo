@@ -90,7 +90,7 @@ pub fn get_function(id: FunctionId) -> &'static NativeFunction {
 }
 
 pub fn get_function_global_name(id: FunctionId) -> &'static str {
-    &FUNCTIONS.get(*id).unwrap().1
+    FUNCTIONS.get(*id).unwrap().1
 }
 
 pub fn register_value_type(global_name: &'static str, ty: &'static ValueType) {
@@ -117,7 +117,7 @@ pub fn get_value_type(id: ValueTypeId) -> &'static ValueType {
 }
 
 pub fn get_value_type_global_name(id: ValueTypeId) -> &'static str {
-    &VALUE_TYPES.get(*id).unwrap().1
+    VALUE_TYPES.get(*id).unwrap().1
 }
 
 pub fn register_trait_type(global_name: &'static str, ty: &'static TraitType) {
@@ -144,5 +144,5 @@ pub fn get_trait(id: TraitTypeId) -> &'static TraitType {
 }
 
 pub fn get_trait_type_global_name(id: TraitTypeId) -> &'static str {
-    &TRAIT_TYPES.get(*id).unwrap().1
+    TRAIT_TYPES.get(*id).unwrap().1
 }
