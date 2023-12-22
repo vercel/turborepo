@@ -106,15 +106,9 @@ impl CommandBase {
         }
 
         let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
-        let mut global_auth_path: PathBuf = if self.args.api.is_some() {
-            config_dir
-                .join(TURBOREPO_CONFIG_DIR)
-                .join(TURBOREPO_AUTH_FILE_NAME)
-        } else {
-            config_dir
-                .join(VERCEL_CONFIG_DIR)
-                .join(VERCEL_AUTH_FILE_NAME)
-        };
+        let mut global_auth_path: PathBuf = config_dir
+            .join(TURBOREPO_CONFIG_DIR)
+            .join(TURBOREPO_AUTH_FILE_NAME);
 
         AbsoluteSystemPathBuf::try_from(global_auth_path).map_err(ConfigError::PathError)
     }
