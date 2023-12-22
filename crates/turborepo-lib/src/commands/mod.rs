@@ -1,10 +1,11 @@
-use std::cell::OnceCell;
+use std::{cell::OnceCell, path::PathBuf};
 
 use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_auth::{
     TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR, TURBOREPO_LEGACY_AUTH_FILE_NAME,
+    VERCEL_AUTH_FILE_NAME, VERCEL_CONFIG_DIR,
 };
 use turborepo_dirs::config_dir;
 use turborepo_ui::UI;
@@ -104,10 +105,17 @@ impl CommandBase {
             return Ok(global_auth_path.clone());
         }
 
-        let config_dir = config_dir().ok_or(ConfigError::NoGlobalAuthFilePath)?;
-        let global_auth_path = config_dir
-            .join(TURBOREPO_CONFIG_DIR)
-            .join(TURBOREPO_AUTH_FILE_NAME);
+        let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
+        let mut global_auth_path: PathBuf = if self.args.api.is_some() {
+            config_dir
+                .join(TURBOREPO_CONFIG_DIR)
+                .join(TURBOREPO_AUTH_FILE_NAME)
+        } else {
+            config_dir
+                .join(VERCEL_CONFIG_DIR)
+                .join(VERCEL_AUTH_FILE_NAME)
+        };
+
         AbsoluteSystemPathBuf::try_from(global_auth_path).map_err(ConfigError::PathError)
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
