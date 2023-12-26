@@ -71,8 +71,8 @@ Test help flag
             Include the dependencies of tasks in execution
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
-        --no-daemon
-            Run without using turbo's daemon process
+        --[no-]daemon
+            Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
         --no-deps
             Exclude dependent task consumers from execution
         --output-logs <OUTPUT_LOGS>
@@ -85,6 +85,8 @@ Test help flag
             Execute all tasks in parallel
         --profile <PROFILE>
             File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
+        --anon-profile <ANON_PROFILE>
+            File to write turbo's performance profile output into. All identifying data omitted from the profile
         --remote-only [<BOOL>]
             Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache [env: TURBO_REMOTE_ONLY=] [default: false] [possible values: true, false]
         --remote-cache-read-only [<BOOL>]
@@ -172,8 +174,8 @@ Test help flag
             Include the dependencies of tasks in execution
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
-        --no-daemon
-            Run without using turbo's daemon process
+        --[no-]daemon
+            Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
         --no-deps
             Exclude dependent task consumers from execution
         --output-logs <OUTPUT_LOGS>
@@ -186,6 +188,8 @@ Test help flag
             Execute all tasks in parallel
         --profile <PROFILE>
             File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
+        --anon-profile <ANON_PROFILE>
+            File to write turbo's performance profile output into. All identifying data omitted from the profile
         --remote-only [<BOOL>]
             Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache [env: TURBO_REMOTE_ONLY=] [default: false] [possible values: true, false]
         --remote-cache-read-only [<BOOL>]

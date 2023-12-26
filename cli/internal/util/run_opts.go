@@ -42,6 +42,7 @@ type RunOpts struct {
 	// Graph flags
 	GraphDot      bool
 	GraphFile     string
+	Daemon        bool
 	NoDaemon      bool
 	SinglePackage bool
 

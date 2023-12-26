@@ -8,7 +8,7 @@ export function run(profilePath: string) {
   // Set up the monorepo we will run the benchmark on
   setup();
 
-  const turboFlags = `-vvv --dry --skip-infer --profile=${profilePath}`;
+  const turboFlags = `--dry --skip-infer --profile=${profilePath}`;
 
   console.log("Executing turbo build in child process", {
     cwd: process.cwd(),
@@ -22,7 +22,7 @@ export function run(profilePath: string) {
   try {
     cp.execSync(cmd, {
       ...DEFAULT_EXEC_OPTS,
-      env: { ...process.env, EXPERIMENTAL_RUST_CODEPATH: "true" },
+      env: process.env,
     });
   } catch (e) {
     // catch errors and exit. the build command seems to be erroring out due to very large output?

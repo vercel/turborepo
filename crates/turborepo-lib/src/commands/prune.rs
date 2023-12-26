@@ -11,10 +11,11 @@ use turborepo_repository::{
     package_graph::{self, PackageGraph, WorkspaceName, WorkspaceNode},
     package_json::PackageJson,
 };
+use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
-use crate::config::RawTurboJSON;
+use crate::config::RawTurboJson;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -84,7 +85,9 @@ pub async fn prune(
     scope: &[String],
     docker: bool,
     output_dir: &str,
+    telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
+    telemetry.track_prune_method(docker);
     let prune = Prune::new(base, scope, docker, output_dir).await?;
 
     if matches!(
@@ -426,7 +429,7 @@ impl<'a> Prune<'a> {
             }
             Err(e) => return Err(e.into()),
         };
-        let turbo_json: RawTurboJSON = serde_json::from_reader(json_comments::StripComments::new(
+        let turbo_json: RawTurboJson = serde_json::from_reader(json_comments::StripComments::new(
             turbo_json_contents.as_slice(),
         ))?;
 

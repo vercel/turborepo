@@ -1,12 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import cn from "classnames";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Clients } from "../../clients/Clients";
 import { FadeIn } from "../home-shared/FadeIn";
 import { LandingPageGlobalStyles } from "../home-shared/GlobalStyles";
-import PackLogo from "../../logos/PackLogo";
-import RepoLogo from "../../logos/RepoLogo";
+import { PackLogo } from "../../logos/PackLogo";
+import { RepoLogo } from "../../logos/RepoLogo";
 import { TurboheroBackground } from "./TurboHeroBackground";
 import { Turborepo } from "./Turborepo";
 import { Turbopack } from "./Turbopack";
@@ -63,7 +63,7 @@ function Card({
   className?: string;
   children: React.ReactNode;
 }) {
-  const [hovering, setHovering] = React.useState(false);
+  const [hovering, setHovering] = useState(false);
   return (
     <Link
       className={cn(
@@ -174,7 +174,7 @@ function Teams() {
   );
 }
 
-function LandingPage() {
+export function LandingPage() {
   return (
     <>
       <LandingPageGlobalStyles />
@@ -197,5 +197,3 @@ function LandingPage() {
     </>
   );
 }
-
-export default LandingPage;

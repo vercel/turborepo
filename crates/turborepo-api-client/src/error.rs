@@ -31,8 +31,11 @@ pub enum Error {
         status: CachingStatus,
         message: String,
     },
-    #[error("cache miss")]
-    CacheMiss,
+    #[error("unable to parse '{text}' as JSON: {err}")]
+    InvalidJson {
+        err: serde_json::Error,
+        text: String,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

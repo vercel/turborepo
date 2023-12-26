@@ -1,4 +1,4 @@
-function PackLogo(props) {
+export function PackLogo(props) {
   return (
     <svg {...props} viewBox="0 0 485 49" xmlns="http://www.w3.org/2000/svg">
       <title>Turbopack logo</title>
@@ -14,5 +14,3 @@ function PackLogo(props) {
     </svg>
   );
 }
-
-export default PackLogo;

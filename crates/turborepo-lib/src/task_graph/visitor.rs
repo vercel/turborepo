@@ -4,7 +4,7 @@ use std::{
     io::Write,
     process::Stdio,
     sync::{Arc, Mutex, OnceLock},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use console::{Style, StyledObject};
@@ -22,6 +22,7 @@ use turborepo_repository::{
     package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
     package_manager::PackageManager,
 };
+use turborepo_telemetry::events::{task::PackageTaskEventBuilder, EventBuilder};
 use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
 use which::which;
 
@@ -155,6 +156,7 @@ impl<'a> Visitor<'a> {
                     task_id: info.clone(),
                 })?;
 
+            let package_task_event = PackageTaskEventBuilder::new(info.package(), info.task());
             let command = workspace_info
                 .package_json
                 .scripts
@@ -163,10 +165,11 @@ impl<'a> Visitor<'a> {
 
             match command {
                 Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(&cmd) => {
+                    package_task_event.track_recursive_error();
                     return Err(Error::RecursiveTurbo {
                         task_name: info.to_string(),
                         command: cmd.to_string(),
-                    })
+                    });
                 }
                 _ => (),
             }
@@ -190,12 +193,14 @@ impl<'a> Visitor<'a> {
 
             let dependency_set = engine.dependencies(&info).ok_or(Error::MissingDefinition)?;
 
+            let package_task_event_child = package_task_event.child();
             let task_hash = self.task_hasher.calculate_task_hash(
                 &info,
                 task_definition,
                 task_env_mode,
                 workspace_info,
                 dependency_set,
+                package_task_event_child,
             )?;
 
             debug!("task {} hash is {}", info, task_hash);
@@ -710,6 +715,7 @@ impl ExecContext {
         output_client: &OutputClient<impl std::io::Write>,
     ) -> ExecOutcome {
         let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
+        let task_start = Instant::now();
         span.follows_from(parent_span_id);
         let _enter = span.enter();
 
@@ -812,6 +818,7 @@ impl ExecContext {
                 return ExecOutcome::Internal;
             }
         };
+        let task_duration = task_start.elapsed();
 
         match exit_status {
             ChildExit::Finished(Some(0)) => {
@@ -819,7 +826,7 @@ impl ExecContext {
                     error!("{e}");
                 } else if let Err(e) = self
                     .task_cache
-                    .save_outputs(&mut prefixed_ui, Duration::from_secs(1))
+                    .save_outputs(&mut prefixed_ui, task_duration)
                     .await
                 {
                     error!("error caching output: {e}");

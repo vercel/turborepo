@@ -4,7 +4,7 @@ import { HeroText, SectionSubtext } from "../home-shared/Headings";
 import { Gradient } from "../home-shared/Gradient";
 import { FadeIn } from "../home-shared/FadeIn";
 import { CTAButton } from "../home-shared/CTAButton";
-import PackLogo from "../../logos/PackLogo";
+import { PackLogo } from "../../logos/PackLogo";
 
 export function PackHero() {
   return (
