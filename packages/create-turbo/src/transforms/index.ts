@@ -2,7 +2,6 @@ import { transform as packageManagerTransform } from "./package-manager";
 import { transform as officialStarter } from "./official-starter";
 import { transform as gitIgnoreTransform } from "./git-ignore";
 import { transform as pnpmEslintTransform } from "./pnpm-eslint";
-import { transform as updateCommandsInREADME } from "./update-commands-in-readme";
 import type { TransformInput, TransformResult } from "./types";
 
 /**
@@ -13,5 +12,4 @@ export const transforms: Array<(args: TransformInput) => TransformResult> = [
   gitIgnoreTransform,
   packageManagerTransform,
   pnpmEslintTransform,
-  updateCommandsInREADME,
 ];
