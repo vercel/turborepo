@@ -131,6 +131,8 @@ jobs:
             !**.md
             !**.mdx
 
+      # We need to keep detecting changes to cli/ because they impact the final build and
+      # we want to build and test turborepo on these changes.
       - name: Turborepo Go related changes
         id: turborepo_go
         uses: technote-space/get-diff-action@v6
@@ -164,6 +166,13 @@ jobs:
           PATTERNS: |
             packages/**
 
+      - name: Docs related changes
+        id: docs
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            docs/**
+
       - name: Formatting related changes
         id: format
         uses: technote-space/get-diff-action@v6
@@ -186,6 +195,7 @@ jobs:
       turborepo_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
       examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' || steps.turborepo_version.outputs.diff != '' }}
       turborepo_js: ${{ steps.ci.outputs.diff != '' || steps.turborepo_js.outputs.diff != '' }}
+      docs: ${{ steps.ci.outputs.diff != '' || steps.docs.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
       push: ${{ steps.ci.outputs.diff != '' || github.event_name == 'push' }}
       tag: ${{ steps.ci.outputs.diff != '' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/node-file-trace')) }}
@@ -294,24 +304,20 @@ jobs:
               - "linux"
               - "x64"
               - "metal"
-          - name: macos
-            runner: macos-latest
-          - name: windows
-            runner: windows-latest
+          - runner: macos-latest
+          - runner: windows-latest
 
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
+          windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - run: turbo run test --filter=cli --color
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
 
   turborepo_integration:
-    name: Turborepo Integration Tests
+    name: Turborepo Integration
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
     runs-on: ${{ matrix.os.runner }}
@@ -319,12 +325,9 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-          - name: windows
-            runner: windows-latest
+          - runner: ubuntu-latest
+          - runner: macos-latest
+          - runner: windows-latest
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
       # the fixtures retain their line endings and don't get updated to CRLF.
@@ -333,13 +336,13 @@ jobs:
       # the line endings on checkout, the file hashes will change.
       # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
       - name: set crlf
-        if: matrix.os.name == 'windows'
+        if: matrix.os.runner == 'windows-latest'
         shell: bash
         run: git config --global core.autocrlf input
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
+          windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Graphviz
@@ -354,15 +357,15 @@ jobs:
         uses: actions/cache@v3
         with:
           path: cli/.cram_env
-          key: prysk-venv-${{ matrix.os.name }}
+          key: prysk-venv-${{ matrix.os.runner }}
 
       - name: Integration Tests
         run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
-  turborepo_integration_rust:
-    name: Turborepo Integration Tests (Rust Codepath)
+  turborepo_integration_go:
+    name: Turborepo Integration (Go Fallback)
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
     runs-on: ${{ matrix.os.runner }}
@@ -370,12 +373,9 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-          - name: windows
-            runner: windows-latest
+          - runner: ubuntu-latest
+          - runner: macos-latest
+          - runner: windows-latest
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
       # the fixtures retain their line endings and don't get updated to CRLF.
@@ -384,14 +384,14 @@ jobs:
       # the line endings on checkout, the file hashes will change.
       # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
       - name: set crlf
-        if: matrix.os.name == 'windows'
+        if: matrix.os.runner == 'windows-latest'
         shell: bash
         run: git config --global core.autocrlf input
 
       - uses: actions/checkout@v3
       - uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
+          windows: ${{ matrix.os.runner == 'windows-latest' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Graphviz
@@ -406,12 +406,10 @@ jobs:
         uses: actions/cache@v3
         with:
           path: cli/.cram_env
-          key: prysk-venv-${{ matrix.os.name }}
+          key: prysk-venv-${{ matrix.os.runner }}
 
       - name: Integration Tests
-        run: turbo run test:rust-codepath --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
+        run: turbo run test:go-fallback --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
 
   turborepo_examples:
     name: Turborepo Examples
@@ -423,58 +421,33 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
+          - runner: ubuntu-latest
+          - runner: macos-latest
+          # TODO: enable this
+          # - runner: windows-latest
     runs-on: ${{ matrix.os.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # Note: the setup-node action inside this is somehow required for
-      # the node setup below this step. Not sure why.
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.name == 'windows' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      # TODO: .github/actions/setup-node is pretty similar to the following
-      # steps (Setup Pnpm, pnpm cache, corepack, setup node), but it didn't
-      # work out of box. We should take another stab at it later.
-      - name: Setup Pnpm
-        uses: pnpm/action-setup@v2.2.4
-
-      - name: Make sure pnpm always has a cache
-        shell: bash
-        run: |
-          mkdir -p `pnpm store path`
-
-      # Disable corepack, actions/setup-node invokes other package managers and
+      # Disable corepack. actions/setup-node invokes other package managers and
       # that causes corepack to throw an error, so we disable it first.
       - name: Disable corepack
         shell: bash
         run: corepack disable
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - uses: ./.github/actions/setup-turborepo-environment
         with:
-          node-version: 18
-          cache: ${{ matrix.manager }}
-          cache-dependency-path: package.json
+          windows: ${{ matrix.os.runner == 'windows-latest' }}
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Check examples
         shell: bash
-        # Note: using CLI flags instead of env vars because
-        # envs var would apply to the actual tests that exercise turbo also,
-        # making test output non-deterministic.
         run: turbo run test -F "@turborepo-examples-tests/*" --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
-        env:
-          EXPERIMENTAL_RUST_CODEPATH: true
 
-      # Re-enable corepack, actions/setup-node invokes other package managers and
-      # that causes corepack to throw an error, so we disable it here. The "Post" step
-      # for actions/setup-node will run at the end of this job, so we need to prep for it.
+      # Disable corepack again. actions/setup-node's "Post" step runs at the end of
+      # this job invokes other package managers, and corepack throws an error.
+      # (corepack was enabled from inside the tests above).
       - name: Disable corepack again
         shell: bash
         run: corepack disable
@@ -482,7 +455,7 @@ jobs:
   js_packages:
     name: JS Package Tests
     timeout-minutes: 30
-    if: needs.determine_jobs.outputs.turborepo_js == 'true'
+    if: needs.determine_jobs.outputs.turborepo_js == 'true' || needs.determine_jobs.outputs.docs == 'true'
     needs: [determine_jobs]
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -524,7 +497,7 @@ jobs:
 
       - name: Run tests
         run: |
-          turbo run check-types test --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+          turbo run check-types test --filter=docs --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
@@ -1047,7 +1020,7 @@ jobs:
       - go_unit
       - turborepo_examples
       - turborepo_integration
-      - turborepo_integration_rust
+      - turborepo_integration_go
       - js_packages
       - rust_lint
       - turborepo_rust_check
@@ -1082,11 +1055,11 @@ jobs:
             fi
           }
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
-          subjob ${{needs.go_lint.result}} "Go lints"
+          subjob ${{needs.go_lint.result}} "Go linting"
           subjob ${{needs.go_unit.result}} "Go unit tests"
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
-          subjob ${{needs.turborepo_integration_rust.result}} "Turborepo integration tests (Rust codepath)"
+          subjob ${{needs.turborepo_integration_go.result}} "Turborepo integration tests (Go fallback)"
           subjob ${{needs.js_packages.result}} "JS Package tests"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
@@ -1201,7 +1174,7 @@ jobs:
       - go_unit
       - turborepo_examples
       - turborepo_integration
-      - turborepo_integration_rust
+      - turborepo_integration_go
       - rust_lint
       - turborepo_rust_check
       - turborepo_rust_clippy
@@ -1242,7 +1215,7 @@ jobs:
           subjob ${{needs.go_unit.result}} "Go unit tests"
           subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
-          subjob ${{needs.turborepo_integration_rust.result}} "Turborepo integration tests (Rust codepath)"
+          subjob ${{needs.turborepo_integration_go.result}} "Turborepo integration tests (Go fallback)"
           subjob ${{needs.rust_lint.result}} "Rust lints"
           subjob ${{needs.turborepo_rust_check.result}} "Turborepo Rust checks"
           subjob ${{needs.turborepo_rust_clippy.result}} "Turborepo Rust clippy"

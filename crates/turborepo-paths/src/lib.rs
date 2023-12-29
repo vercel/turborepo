@@ -53,14 +53,16 @@ pub use absolute_system_path_buf::AbsoluteSystemPathBuf;
 pub use anchored_system_path::AnchoredSystemPath;
 pub use anchored_system_path_buf::AnchoredSystemPathBuf;
 use camino::{Utf8Path, Utf8PathBuf};
+use miette::Diagnostic;
 pub use relative_unix_path::RelativeUnixPath;
 pub use relative_unix_path_buf::{RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
+use thiserror::Error;
 
 // Lets windows know that we're going to be reading this file sequentially
 #[cfg(windows)]
 pub const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x08000000;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum PathError {
     #[error("Path is non-UTF-8: {0}")]
     InvalidUnicode(String),

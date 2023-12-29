@@ -2,12 +2,19 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useConfig, useTheme, type DocsThemeConfig } from "nextra-theme-docs";
 import { Footer } from "./components/Footer";
-import Navigation from "./components/Navigation";
-import HeaderLogo from "./components/HeaderLogo";
-import ExtraContent from "./components/ExtraContent";
+import { Navigation } from "./components/Navigation";
+import { HeaderLogo } from "./components/HeaderLogo";
+import { ExtraContent } from "./components/ExtraContent";
 import { Discord, Github } from "./components/Social";
 
 const SITE_ROOT = "https://turbo.build";
+
+interface Frontmatter {
+  title: string;
+  overrideTitle: string;
+  description: string;
+  ogImage: string;
+}
 
 const config: DocsThemeConfig = {
   sidebar: {
@@ -17,25 +24,27 @@ const config: DocsThemeConfig = {
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
   useNextSeoProps: function SEO() {
     const router = useRouter();
-    const { frontMatter } = useConfig();
+    const nextraConfig = useConfig();
+
+    const frontMatter = nextraConfig.frontMatter as Frontmatter;
 
     let section = "Turbo";
-    if (router?.pathname.startsWith("/pack")) {
+    if (router.pathname.startsWith("/pack")) {
       section = "Turbopack";
     }
-    if (router?.pathname.startsWith("/repo")) {
+    if (router.pathname.startsWith("/repo")) {
       section = "Turborepo";
     }
 
     // only show section if we're not on a landing page (these show as "Index")
     let titleTemplate = `%s – ${section}`;
-    if (router?.pathname === "/repo") {
+    if (router.pathname === "/repo") {
       titleTemplate = `Turborepo`;
     }
-    if (router?.pathname === "/pack") {
+    if (router.pathname === "/pack") {
       titleTemplate = `Turbopack`;
     }
-    if (router?.pathname === "/") {
+    if (router.pathname === "/") {
       titleTemplate = `Turbo`;
     }
 
@@ -48,10 +57,10 @@ const config: DocsThemeConfig = {
     };
   },
   gitTimestamp({ timestamp }) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- Following Nextra docs: https://nextra.site/docs/docs-theme/theme-configuration#last-updated-date
     const [dateString, setDateString] = useState(timestamp.toISOString());
 
-    // eslint-disable-next-line react-hooks/rules-of-hooks
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- Following Nextra docs: https://nextra.site/docs/docs-theme/theme-configuration#last-updated-date
     useEffect(() => {
       try {
         setDateString(
@@ -80,81 +89,88 @@ const config: DocsThemeConfig = {
   head: function Head() {
     const router = useRouter();
     const { systemTheme = "dark" } = useTheme();
-    const { frontMatter } = useConfig();
+    const nextraConfig = useConfig();
+
+    const frontMatter = nextraConfig.frontMatter as Frontmatter;
     const fullUrl =
       router.asPath === "/" ? SITE_ROOT : `${SITE_ROOT}${router.asPath}`;
 
     const asPath = router.asPath;
 
-    let ogUrl;
+    let ogUrl: string;
 
     if (asPath === "/") {
       ogUrl = `${SITE_ROOT}/api/og`;
-    } else if (frontMatter?.ogImage) {
+    } else if (frontMatter.ogImage) {
       ogUrl = `${SITE_ROOT}${frontMatter.ogImage}`;
     } else {
-      const type = asPath.startsWith("/repo")
-        ? "repo"
-        : asPath.startsWith("/pack")
-        ? "pack"
-        : "";
+      const type = () => {
+        if (asPath.startsWith("/repo")) {
+          return "repo";
+        }
+
+        if (asPath.startsWith("/pack")) {
+          return "pack";
+        }
+        return "";
+      };
       const title = frontMatter.title
         ? `&title=${encodeURIComponent(frontMatter.title)}`
         : "";
 
-      ogUrl = `${SITE_ROOT}/api/og?type=${type}${title}`;
+      ogUrl = `${SITE_ROOT}/api/og?type=${type()}${title}`;
     }
 
     return (
       <>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta content="width=device-width, initial-scale=1.0" name="viewport" />
         <link
+          href={`/images/favicon-${systemTheme}/apple-touch-icon.png`}
           rel="apple-touch-icon"
           sizes="180x180"
-          href={`/images/favicon-${systemTheme}/apple-touch-icon.png`}
         />
         <link
-          rel="icon"
-          type="image/png"
-          sizes="32x32"
           href={`/images/favicon-${systemTheme}/favicon-32x32.png`}
-        />
-        <link
           rel="icon"
+          sizes="32x32"
           type="image/png"
-          sizes="16x16"
+        />
+        <link
           href={`/images/favicon-${systemTheme}/favicon-16x16.png`}
+          rel="icon"
+          sizes="16x16"
+          type="image/png"
         />
         <link
-          rel="mask-icon"
-          href={`/images/favicon-${systemTheme}/safari-pinned-tab.svg`}
           color="#000000"
+          href={`/images/favicon-${systemTheme}/safari-pinned-tab.svg`}
+          rel="mask-icon"
         />
         <link
-          rel="shortcut icon"
           href={`/images/favicon-${systemTheme}/favicon.ico`}
+          rel="shortcut icon"
         />
-        <meta name="msapplication-TileColor" content="#000000" />
-        <meta name="theme-color" content="#000" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:site" content="@turborepo" />
-        <meta name="twitter:creator" content="@turborepo" />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={fullUrl} />
-        <link rel="canonical" href={fullUrl} />
-        <meta property="twitter:image" content={ogUrl} />
-        <meta property="og:image" content={ogUrl} />
-        <meta property="og:locale" content="en_IE" />
-        <meta property="og:site_name" content="Turbo" />
-        <link rel="prefetch" href="/repo" as="document" />
-        <link rel="prefetch" href="/repo/docs" as="document" />
-        <link rel="prefetch" href="/pack" as="document" />
-        <link rel="prefetch" href="/pack/docs" as="document" />
+        <meta content="#000000" name="msapplication-TileColor" />
+        <meta content="#000" name="theme-color" />
+        <meta content="summary_large_image" name="twitter:card" />
+        <meta content="@turborepo" name="twitter:site" />
+        <meta content="@turborepo" name="twitter:creator" />
+        <meta content="website" property="og:type" />
+        <meta content={fullUrl} property="og:url" />
+        <link href={fullUrl} rel="canonical" />
+        <meta content={ogUrl} property="twitter:image" />
+        <meta content={ogUrl} property="og:image" />
+        <meta content="en_IE" property="og:locale" />
+        <meta content="Turbo" property="og:site_name" />
+        <link as="document" href="/repo" rel="prefetch" />
+        <link as="document" href="/repo/docs" rel="prefetch" />
+        <link as="document" href="/pack" rel="prefetch" />
+        <link as="document" href="/pack/docs" rel="prefetch" />
         <link
-          rel="alternate"
-          type="application/rss+xml"
-          title="Turbo Blog"
           href="https://turbo.build/feed.xml"
+          rel="alternate"
+          title="Turbo Blog"
+          type="application/rss+xml"
         />
       </>
     );

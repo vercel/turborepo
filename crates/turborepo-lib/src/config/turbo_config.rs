@@ -7,7 +7,7 @@ use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson}
 
 use crate::{
     commands::CommandBase,
-    config::{Error as ConfigError, RawTurboJSON},
+    config::{Error as ConfigError, RawTurboJson},
 };
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
@@ -56,6 +56,8 @@ pub struct TurborepoConfigBuilder {
 
     #[cfg(test)]
     global_config_path: Option<AbsoluteSystemPathBuf>,
+    #[cfg(test)]
+    global_auth_path: Option<AbsoluteSystemPathBuf>,
     #[cfg(test)]
     environment: HashMap<OsString, OsString>,
 }
@@ -107,7 +109,7 @@ impl ResolvedConfigurationOptions for PackageJson {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, ConfigError> {
         match &self.legacy_turbo_config {
             Some(legacy_turbo_config) => {
-                let synthetic_raw_turbo_json: RawTurboJSON =
+                let synthetic_raw_turbo_json: RawTurboJson =
                     serde_json::from_value(legacy_turbo_config.clone())?;
                 synthetic_raw_turbo_json.get_configuration_options()
             }
@@ -116,7 +118,7 @@ impl ResolvedConfigurationOptions for PackageJson {
     }
 }
 
-impl ResolvedConfigurationOptions for RawTurboJSON {
+impl ResolvedConfigurationOptions for RawTurboJson {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, ConfigError> {
         match &self.remote_cache {
             Some(configuration_options) => {
@@ -296,6 +298,8 @@ impl TurborepoConfigBuilder {
             #[cfg(test)]
             global_config_path: base.global_config_path.clone(),
             #[cfg(test)]
+            global_auth_path: base.global_auth_path.clone(),
+            #[cfg(test)]
             environment: Default::default(),
         }
     }
@@ -310,6 +314,17 @@ impl TurborepoConfigBuilder {
         let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
         let global_config_path = config_dir.join("turborepo").join("config.json");
         AbsoluteSystemPathBuf::try_from(global_config_path).map_err(ConfigError::PathError)
+    }
+    // Location of the auth file for Turborepo.
+    fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
+        #[cfg(test)]
+        if let Some(global_auth_path) = self.global_auth_path.clone() {
+            return Ok(global_auth_path);
+        }
+
+        let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
+        let global_auth_path = config_dir.join("turborepo").join("auth.json");
+        AbsoluteSystemPathBuf::try_from(global_auth_path).map_err(ConfigError::PathError)
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
@@ -394,7 +409,7 @@ impl TurborepoConfigBuilder {
             Err(e)
         })?;
         let turbo_json =
-            RawTurboJSON::read(&self.repo_root.join_component("turbo.json")).or_else(|e| {
+            RawTurboJson::read(&self.repo_root.join_component("turbo.json")).or_else(|e| {
                 if let ConfigError::Io(e) = &e {
                     if matches!(e.kind(), std::io::ErrorKind::NotFound) {
                         return Ok(Default::default());
@@ -537,6 +552,11 @@ mod test {
         )
         .unwrap();
 
+        let global_auth_path = AbsoluteSystemPathBuf::try_from(
+            TempDir::new().unwrap().path().join("nonexistent-auth.json"),
+        )
+        .unwrap();
+
         let turbo_teamid = "team_nLlpyC6REAqxydlFKbrMDlud";
         let turbo_token = "abcdef1234567890abcdef";
         let vercel_artifacts_owner = "team_SOMEHASH";
@@ -564,6 +584,7 @@ mod test {
             repo_root,
             override_config,
             global_config_path: Some(global_config_path),
+            global_auth_path: Some(global_auth_path),
             environment: env,
         };
 
@@ -574,7 +595,7 @@ mod test {
 
     #[test]
     fn test_shared_no_token() {
-        let mut test_shared_config: RawTurboJSON = Default::default();
+        let mut test_shared_config: RawTurboJson = Default::default();
         let configuration_options = ConfigurationOptions {
             token: Some("IF YOU CAN SEE THIS WE HAVE PROBLEMS".to_string()),
             ..Default::default()

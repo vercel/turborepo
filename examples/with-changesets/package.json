@@ -11,11 +11,11 @@
     "release": "turbo build --filter=docs^... && changeset publish"
   },
   "devDependencies": {
+    "@acme/eslint-config": "workspace:*",
     "@changesets/cli": "^2.26.2",
     "eslint": "^8.54.0",
-    "@acme/eslint-config": "workspace:*",
     "prettier": "^2.8.8",
-    "turbo": "^1.10.16"
+    "turbo": "^1.11.1"
   },
   "packageManager": "pnpm@8.9.0",
   "engines": {

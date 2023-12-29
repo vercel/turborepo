@@ -19,12 +19,16 @@ export function subscribeToForm({
   formId: string;
   email: string;
   firstName: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- It really can be anything.
   fields?: Record<string, any>;
 }): Promise<Subscriber> {
   return Http(`/forms/${formId}/subscribe`, {
     method: "POST",
     data: { api_key: API_KEY, email, first_name: firstName, fields },
-  }).then((res) => res.data.subscription?.subscriber);
+  }).then(
+    (res: { data: { subscription: { subscriber: Subscriber } } }) =>
+      res.data.subscription.subscriber
+  );
 }
 
 export function updateSubscriber(
@@ -37,7 +41,7 @@ export function updateSubscriber(
       api_secret: API_SECRET,
       ...update,
     },
-  }).then((res) => res.data);
+  }).then((res: { data: { subscriber: Subscriber } }) => res.data);
 }
 
 export interface Subscriber {
@@ -46,6 +50,7 @@ export interface Subscriber {
   email_address: string;
   state: string; // maybe 'active' | 'inactive'
   created_at: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- It really can be anything.
   fields: Record<string, any>;
 }
 
@@ -55,5 +60,5 @@ export function getSubscriber(id: string): Promise<Subscriber> {
     data: {
       api_secret: API_SECRET,
     },
-  }).then((res) => res.data.subscriber);
+  }).then((res: { data: { subscriber: Subscriber } }) => res.data.subscriber);
 }

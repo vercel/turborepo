@@ -63,7 +63,6 @@ const nextConfig = withNextra({
     legacyBrowsers: false,
   },
   eslint: {
-    // TODO: remove after eslint has been fixed from new config introduced in vercel/turbo/pull/5752
     ignoreDuringBuilds: true,
   },
   webpack: (config, { webpack }) => {
@@ -237,6 +236,12 @@ const nextConfig = withNextra({
         // redirects we added above to fix them.
         source: "/docs/:path*",
         destination: "/repo/docs/:path*",
+        permanent: true,
+      },
+      {
+        // Redirect old blog posts to new blog.
+        source: "/posts/:path*",
+        destination: "/blog/:path*",
         permanent: true,
       },
     ];

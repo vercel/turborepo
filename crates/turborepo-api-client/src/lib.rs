@@ -13,7 +13,8 @@ use serde::Deserialize;
 use turborepo_ci::{is_ci, Vendor};
 use turborepo_vercel_api::{
     APIError, CachingStatus, CachingStatusResponse, PreflightResponse, SpacesResponse, Team,
-    TeamsResponse, UserResponse, VerificationResponse, VerifiedSsoUser,
+    TeamsResponse, TokenMetadata, TokenMetadataResponse, UserResponse, VerificationResponse,
+    VerifiedSsoUser,
 };
 use url::Url;
 
@@ -23,6 +24,7 @@ pub mod analytics;
 mod error;
 mod retry;
 pub mod spaces;
+pub mod telemetry;
 
 lazy_static! {
     static ref AUTHORIZATION_REGEX: Regex =
@@ -31,6 +33,7 @@ lazy_static! {
 
 #[async_trait]
 pub trait Client {
+    fn base_url(&self) -> &str;
     async fn get_user(&self, token: &str) -> Result<UserResponse>;
     async fn get_teams(&self, token: &str) -> Result<TeamsResponse>;
     async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>>;
@@ -43,6 +46,7 @@ pub trait Client {
     ) -> Result<CachingStatusResponse>;
     async fn get_spaces(&self, token: &str, team_id: Option<&str>) -> Result<SpacesResponse>;
     async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser>;
+    async fn get_token_metadata(&self, token: &str) -> Result<TokenMetadata>;
     #[allow(clippy::too_many_arguments)]
     async fn put_artifact(
         &self,
@@ -104,6 +108,24 @@ pub struct APIAuth {
 
 #[async_trait]
 impl Client for APIClient {
+    fn base_url(&self) -> &str {
+        &self.base_url
+    }
+    async fn get_token_metadata(&self, token: &str) -> Result<TokenMetadata> {
+        let url = self.make_url("/v5/user/tokens/current");
+        let request_builder = self
+            .client
+            .get(url)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Content-Type", "application/json");
+        let response = retry::make_retryable_request(request_builder)
+            .await?
+            .error_for_status()?;
+        let json: TokenMetadataResponse = response.json().await?;
+
+        Ok(json.token)
+    }
     async fn get_user(&self, token: &str) -> Result<UserResponse> {
         let url = self.make_url("/v2/user");
         let request_builder = self
@@ -282,9 +304,19 @@ impl Client for APIClient {
         struct WrappedAPIError {
             error: APIError,
         }
-        let WrappedAPIError { error: api_error } = match response.json().await {
-            Ok(api_error) => api_error,
+        let body = match response.text().await {
+            Ok(body) => body,
             Err(e) => return Error::ReqwestError(e),
+        };
+
+        let WrappedAPIError { error: api_error } = match serde_json::from_str(&body) {
+            Ok(api_error) => api_error,
+            Err(err) => {
+                return Error::InvalidJson {
+                    err,
+                    text: body.clone(),
+                }
+            }
         };
 
         if let Some(status_string) = api_error.code.strip_prefix("remote_caching_") {
@@ -442,13 +474,7 @@ impl APIClient {
 
         let client = client_build.map_err(Error::TlsError)?;
 
-        let user_agent = format!(
-            "turbo {} {} {} {}",
-            version,
-            rustc_version_runtime::version(),
-            env::consts::OS,
-            env::consts::ARCH
-        );
+        let user_agent = build_user_agent(version);
         Ok(APIClient {
             client,
             base_url: base_url.as_ref().to_string(),
@@ -526,6 +552,49 @@ impl APIAuth {
     }
 }
 
+// Anon Client
+#[derive(Clone)]
+pub struct AnonAPIClient {
+    client: reqwest::Client,
+    base_url: String,
+    user_agent: String,
+}
+
+impl AnonAPIClient {
+    fn make_url(&self, endpoint: &str) -> String {
+        format!("{}{}", self.base_url, endpoint)
+    }
+
+    pub fn new(base_url: impl AsRef<str>, timeout: u64, version: &str) -> Result<Self> {
+        let client_build = if timeout != 0 {
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(timeout))
+                .build()
+        } else {
+            reqwest::Client::builder().build()
+        };
+
+        let client = client_build.map_err(Error::TlsError)?;
+
+        let user_agent = build_user_agent(version);
+        Ok(AnonAPIClient {
+            client,
+            base_url: base_url.as_ref().to_string(),
+            user_agent,
+        })
+    }
+}
+
+fn build_user_agent(version: &str) -> String {
+    format!(
+        "turbo {} {} {} {}",
+        version,
+        rustc_version_runtime::version(),
+        env::consts::OS,
+        env::consts::ARCH
+    )
+}
+
 #[cfg(test)]
 mod test {
     use anyhow::Result;
@@ -589,5 +658,30 @@ mod test {
 
         handle.abort();
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_handle_403_includes_text_on_invalid_json() {
+        let response = reqwest::Response::from(
+            http::Response::builder()
+                .body("this isn't valid JSON")
+                .unwrap(),
+        );
+        let err = APIClient::handle_403(response).await;
+        assert_eq!(
+            err.to_string(),
+            "unable to parse 'this isn't valid JSON' as JSON: expected ident at line 1 column 2"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_403_parses_error_if_present() {
+        let response = reqwest::Response::from(
+            http::Response::builder()
+                .body(r#"{"error": {"code": "forbidden", "message": "Not authorized"}}"#)
+                .unwrap(),
+        );
+        let err = APIClient::handle_403(response).await;
+        assert_eq!(err.to_string(), "unknown status forbidden: Not authorized");
     }
 }

@@ -6,9 +6,19 @@ const SUPPORTED_PACKAGES = ["turbo"];
 const SUPPORTED_METHODS = ["GET"];
 const [DEFAULT_NAME] = SUPPORTED_PACKAGES;
 
+// There are other properties returned
+// but this is the one we care about.
+interface FetchDistTags {
+  "dist-tags": {
+    latest: string;
+    next: string;
+    canary: string;
+  };
+}
+
 async function fetchDistTags({ name }: { name: string }) {
   const result = await fetch(`${REGISTRY}/${name}`);
-  const json = await result.json();
+  const json = (await result.json()) as FetchDistTags;
   return json["dist-tags"];
 }
 
@@ -70,7 +80,8 @@ export default async function handler(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const name = searchParams.get("name") || DEFAULT_NAME;
-    const tag = searchParams.get("tag") || DEFAULT_TAG;
+    const tag = (searchParams.get("tag") ||
+      DEFAULT_TAG) as keyof FetchDistTags["dist-tags"];
 
     if (!SUPPORTED_PACKAGES.includes(name)) {
       return errorResponse({
@@ -80,7 +91,7 @@ export default async function handler(req: NextRequest) {
     }
 
     const versions = await fetchDistTags({ name });
-    if (!versions?.[tag]) {
+    if (!versions[tag]) {
       return errorResponse({
         status: 404,
         message: `unsupported tag - ${tag}`,
@@ -103,8 +114,11 @@ export default async function handler(req: NextRequest) {
       }
     );
   } catch (e) {
-    console.error(e);
-    return errorResponse({ status: 500, message: e.message });
+    const error = e as Error;
+
+    // eslint-disable-next-line no-console -- We're alright with this.
+    console.error(error);
+    return errorResponse({ status: 500, message: error.message });
   }
 }
 

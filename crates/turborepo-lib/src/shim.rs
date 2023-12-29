@@ -11,6 +11,8 @@ use std::{
 use camino::Utf8PathBuf;
 use const_format::formatcp;
 use dunce::canonicalize as fs_canonicalize;
+use itertools::Itertools;
+use miette::{Diagnostic, SourceSpan};
 use semver::Version;
 use serde::Deserialize;
 use thiserror::Error;
@@ -26,13 +28,42 @@ use turborepo_ui::UI;
 
 use crate::{cli, get_version, spawn_child, tracing::TurboSubscriber, Payload};
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
+#[error("cannot have multiple `--cwd` flags in command")]
+#[diagnostic(code(turbo::shim::empty_cwd))]
+pub struct MultipleCwd {
+    #[backtrace]
+    backtrace: Backtrace,
+    #[source_code]
+    args_string: String,
+    #[label("first flag declared here")]
+    flag1: Option<SourceSpan>,
+    #[label("but second flag declared here")]
+    flag2: Option<SourceSpan>,
+    #[label("and here")]
+    flag3: Option<SourceSpan>,
+    // The user should get the idea after the first 4 examples
+    #[label("and here")]
+    flag4: Option<SourceSpan>,
+}
+
+#[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("cannot have multiple `--cwd` flags in command")]
-    MultipleCwd(#[backtrace] Backtrace),
-    #[error("No value assigned to `--cwd` argument")]
-    EmptyCwd(#[backtrace] Backtrace),
     #[error(transparent)]
+    #[diagnostic(transparent)]
+    MultipleCwd(Box<MultipleCwd>),
+    #[error("No value assigned to `--cwd` flag")]
+    #[diagnostic(code(turbo::shim::empty_cwd))]
+    EmptyCwd {
+        #[backtrace]
+        backtrace: Backtrace,
+        #[source_code]
+        args_string: String,
+        #[label = "Requires a path to be passed after it"]
+        flag_range: SourceSpan,
+    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     Cli(#[from] cli::Error),
     #[error(transparent)]
     Inference(#[from] turborepo_repository::inference::Error),
@@ -86,8 +117,8 @@ struct ShimArgs {
 
 impl ShimArgs {
     pub fn parse() -> Result<Self, Error> {
-        let mut found_cwd_flag = false;
-        let mut cwd: Option<AbsoluteSystemPathBuf> = None;
+        let mut cwd_flag_idx = None;
+        let mut cwds = Vec::new();
         let mut skip_infer = false;
         let mut found_verbosity_flag = false;
         let mut verbosity = 0;
@@ -97,8 +128,9 @@ impl ShimArgs {
         let mut is_forwarded_args = false;
         let mut color = false;
         let mut no_color = false;
+
         let args = env::args().skip(1);
-        for arg in args {
+        for (idx, arg) in args.enumerate() {
             // We've seen a `--` and therefore we do no parsing
             if is_forwarded_args {
                 forwarded_args.push(arg);
@@ -126,24 +158,18 @@ impl ShimArgs {
             } else if arg == "-v" || arg.starts_with("-vv") {
                 verbosity = arg[1..].len();
                 remaining_turbo_args.push(arg);
-            } else if found_cwd_flag {
-                // We've seen a `--cwd` and therefore set the cwd to this arg.
-                //cwd = Some(arg.into());
-                cwd = Some(AbsoluteSystemPathBuf::from_cwd(arg)?);
-                found_cwd_flag = false;
+            } else if cwd_flag_idx.is_some() {
+                // We've seen a `--cwd` and therefore add this to the cwds list along with
+                // the index of the `--cwd` (*not* the value)
+                cwds.push((AbsoluteSystemPathBuf::from_cwd(arg)?, idx - 1));
+                cwd_flag_idx = None;
             } else if arg == "--cwd" {
-                if cwd.is_some() {
-                    return Err(Error::MultipleCwd(Backtrace::capture()));
-                }
                 // If we see a `--cwd` we expect the next arg to be a path.
-                found_cwd_flag = true
+                cwd_flag_idx = Some(idx)
             } else if let Some(cwd_arg) = arg.strip_prefix("--cwd=") {
                 // In the case where `--cwd` is passed as `--cwd=./path/to/foo`, that
                 // entire chunk is a single arg, so we need to split it up.
-                if cwd.is_some() {
-                    return Err(Error::MultipleCwd(Backtrace::capture()));
-                }
-                cwd = Some(AbsoluteSystemPathBuf::from_cwd(cwd_arg)?);
+                cwds.push((AbsoluteSystemPathBuf::from_cwd(cwd_arg)?, idx));
             } else if arg == "--color" {
                 color = true;
             } else if arg == "--no-color" {
@@ -153,24 +179,85 @@ impl ShimArgs {
             }
         }
 
-        if found_cwd_flag {
-            Err(Error::EmptyCwd(Backtrace::capture()))
-        } else {
-            let invocation_dir = AbsoluteSystemPathBuf::cwd()?;
-            let cwd = cwd.unwrap_or_else(|| invocation_dir.clone());
+        if let Some(idx) = cwd_flag_idx {
+            let (spans, args_string) =
+                Self::get_spans_in_args_string(vec![idx], env::args().skip(1));
 
-            Ok(ShimArgs {
-                cwd,
-                invocation_dir,
-                skip_infer,
-                verbosity,
-                force_update_check,
-                remaining_turbo_args,
-                forwarded_args,
-                color,
-                no_color,
-            })
+            return Err(Error::EmptyCwd {
+                backtrace: Backtrace::capture(),
+                args_string,
+                flag_range: spans[0],
+            });
         }
+
+        if cwds.len() > 1 {
+            let (indices, args_string) = Self::get_spans_in_args_string(
+                cwds.iter().map(|(_, idx)| *idx).collect(),
+                env::args().skip(1),
+            );
+
+            let mut flags = indices.into_iter();
+            return Err(Error::MultipleCwd(Box::new(MultipleCwd {
+                backtrace: Backtrace::capture(),
+                args_string,
+                flag1: flags.next(),
+                flag2: flags.next(),
+                flag3: flags.next(),
+                flag4: flags.next(),
+            })));
+        }
+
+        let invocation_dir = AbsoluteSystemPathBuf::cwd()?;
+        let cwd = cwds
+            .pop()
+            .map(|(cwd, _)| cwd)
+            .unwrap_or_else(|| invocation_dir.clone());
+
+        Ok(ShimArgs {
+            cwd,
+            invocation_dir,
+            skip_infer,
+            verbosity,
+            force_update_check,
+            remaining_turbo_args,
+            forwarded_args,
+            color,
+            no_color,
+        })
+    }
+
+    /// Takes a list of indices into a Vec of arguments, i.e. ["--graph", "foo",
+    /// "--cwd"] and converts them into `SourceSpan`'s into the string of those
+    /// arguments, i.e. "-- graph foo --cwd". Returns the spans and the args
+    /// string
+    fn get_spans_in_args_string(
+        mut args_indices: Vec<usize>,
+        args: impl Iterator<Item = impl Into<String>>,
+    ) -> (Vec<SourceSpan>, String) {
+        // Sort the indices to keep the invariant
+        // that if i > j then output[i] > output[j]
+        args_indices.sort();
+        let mut indices_in_args_string = Vec::new();
+        let mut i = 0;
+        let mut current_args_string_idx = 0;
+
+        for (idx, arg) in args.enumerate() {
+            let Some(arg_idx) = args_indices.get(i) else {
+                break;
+            };
+
+            let arg = arg.into();
+
+            if idx == *arg_idx {
+                indices_in_args_string.push((current_args_string_idx, arg.len()).into());
+                i += 1;
+            }
+            current_args_string_idx += arg.len() + 1;
+        }
+
+        let args_string = env::args().skip(1).join(" ");
+
+        (indices_in_args_string, args_string)
     }
 
     // returns true if any flags result in pure json output to stdout
@@ -629,6 +716,17 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
 pub fn run() -> Result<Payload, Error> {
     let args = ShimArgs::parse()?;
     let ui = args.ui();
+    if ui.should_strip_ansi {
+        // Let's not crash just because we failed to set up the hook
+        let _ = miette::set_hook(Box::new(|_| {
+            Box::new(
+                miette::MietteHandlerOpts::new()
+                    .color(false)
+                    .unicode(false)
+                    .build(),
+            )
+        }));
+    }
     let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &ui);
 
     debug!("Global turbo version: {}", get_version());
@@ -666,7 +764,11 @@ pub fn run() -> Result<Payload, Error> {
 
 #[cfg(test)]
 mod test {
+    use miette::SourceSpan;
+    use test_case::test_case;
+
     use super::turbo_version_has_shim;
+    use crate::shim::ShimArgs;
 
     #[test]
     fn test_skip_infer_version_constraint() {
@@ -687,5 +789,19 @@ mod test {
         assert!(turbo_version_has_shim(new_major));
         assert!(!turbo_version_has_shim(old));
         assert!(!turbo_version_has_shim(old_canary));
+    }
+
+    #[test_case(vec![3], vec!["--graph", "foo", "--cwd", "apple"], vec![(18, 5).into()])]
+    #[test_case(vec![0], vec!["--graph", "foo", "--cwd"], vec![(0, 7).into()])]
+    #[test_case(vec![0, 2], vec!["--graph", "foo", "--cwd"], vec![(0, 7).into(), (12, 5).into()])]
+    #[test_case(vec![], vec!["--cwd"], vec![])]
+    fn test_get_indices_in_arg_string(
+        arg_indices: Vec<usize>,
+        args: Vec<&'static str>,
+        expected_indices_in_arg_string: Vec<SourceSpan>,
+    ) {
+        let (indices_in_args_string, _) =
+            ShimArgs::get_spans_in_args_string(arg_indices, args.into_iter());
+        assert_eq!(indices_in_args_string, expected_indices_in_arg_string);
     }
 }
