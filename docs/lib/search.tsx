@@ -1,39 +1,46 @@
 import { useEffect, useState } from "react";
+import type {
+  PagefindSearchFragment,
+  PagefindSearchResult,
+  PagefindSearchResults,
+} from "./search-types";
 
-export const useResult = (result: any) => {
-  const [finalData, setFinalData] = useState(null);
-
-  useEffect(() => {
-    async function fetchData() {
-      const data = await result.data();
-      setFinalData(data);
-    }
-    fetchData();
-  }, [result]);
-
-  return finalData;
-};
+declare global {
+  interface Window {
+    pagefind?: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Not sure where this type comes from.
+      search: (...args: any[]) => Promise<PagefindSearchResults>;
+    };
+  }
+}
 
 export const usePageFindSearch = () => {
   useEffect(() => {
     async function loadPagefind() {
       if (typeof window.pagefind === "undefined") {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Not sure where to get this type.
           window.pagefind = await import(
-            // @ts-expect-error pagefind.js generated after build
+            // @ts-expect-error -- Generated at buildtime
+            // eslint-disable-next-line import/no-unresolved -- Generated at buildtime
             /* webpackIgnore: true */ "./pagefind/pagefind.js"
           );
         } catch (e) {
-          window.pagefind = { search: () => ({ results: [] }) };
+          window.pagefind = {
+            search: () =>
+              new Promise((resolve) => {
+                resolve({ results: [] } as unknown as PagefindSearchResults);
+              }),
+          };
         }
       }
     }
-    loadPagefind();
+    void loadPagefind();
   }, []);
 };
 
 export const useSearchResults = (query: string) => {
-  const [results, setResults] = useState();
+  const [results, setResults] = useState<PagefindSearchResults["results"]>();
 
   useEffect(() => {
     const thing = async () => {
@@ -42,8 +49,23 @@ export const useSearchResults = (query: string) => {
         setResults(search.results);
       }
     };
-    thing();
+    void thing();
   }, [query]);
 
   return results;
+};
+export const useResult = (result: PagefindSearchResult) => {
+  const [finalData, setFinalData] = useState<PagefindSearchFragment | null>(
+    null
+  );
+
+  useEffect(() => {
+    async function fetchData() {
+      const data = await result.data();
+      setFinalData(data);
+    }
+    void fetchData();
+  }, [result]);
+
+  return finalData;
 };

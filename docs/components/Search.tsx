@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePageFindSearch, useResult, useSearchResults } from "../lib/search";
+import type { PagefindSearchResult } from "../lib/search-types";
 
-function Result({ result }) {
-  // const [data, setData] = useState(null);
-
+function Result({ result }: { result: PagefindSearchResult }) {
   const data = useResult(result);
 
   if (!data) return null;
