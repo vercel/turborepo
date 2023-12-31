@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next",
     "start": "next start",
-    "build": "next build && pagefind --site .next --output-path .next/static/chunks/pages/pagefind",
+    "build": "next build && pagefind --site .next --output-path .next/static/chunks/pagefind",
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
     "rss": "node scripts/generate-rss.js",

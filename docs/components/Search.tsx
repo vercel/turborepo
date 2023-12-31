@@ -1,7 +1,32 @@
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { usePageFindSearch, useResult, useSearchResults } from "../lib/search";
+
+function Result({ result }) {
+  // const [data, setData] = useState(null);
+
+  const data = useResult(result);
+
+  if (!data) return null;
+
+  return (
+    <Link
+      className="hover:bg-gray-300 flex flex-col gap-2"
+      href={data.url
+        .replace("_next/static/chunks/pages/server/pages/", "")
+        .replace(".html", "")}
+    >
+      <h3 className="text-lg font-bold">{data.meta.title}</h3>
+      <p>{data.excerpt}</p>
+    </Link>
+  );
+}
 
 export function Search() {
   const [query, setQuery] = useState("");
+
+  usePageFindSearch();
+  const results = useSearchResults(query);
 
   const ref = useRef<HTMLInputElement | null>(null);
 
@@ -38,7 +63,11 @@ export function Search() {
         ref={ref}
         value={query}
       />
-      {query.length > 0 ? <p>hi</p> : null}
+      {query.length > 0 && results
+        ? results.map((result) => {
+            return <Result key={result.id} result={result} />;
+          })
+        : null}
     </div>
   );
 }
