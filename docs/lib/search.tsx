@@ -4,6 +4,7 @@ import type {
   PagefindSearchResult,
   PagefindSearchResults,
 } from "./search-types";
+import { mockSearchData } from "./mock-search-data";
 
 declare global {
   interface Window {
@@ -26,6 +27,18 @@ export const usePageFindSearch = () => {
             /* webpackIgnore: true */ "./pagefind/pagefind.js"
           );
         } catch (e) {
+          if (process.env.NODE_ENV === "development") {
+            window.pagefind = {
+              search: () =>
+                new Promise((resolve) => {
+                  resolve({
+                    results: mockSearchData,
+                  } as unknown as PagefindSearchResults);
+                }),
+            };
+            return;
+          }
+
           window.pagefind = {
             search: () =>
               new Promise((resolve) => {
