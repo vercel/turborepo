@@ -89,7 +89,7 @@ pub fn read_or_create_auth_file(
     Ok(auth_file)
 }
 
-/// Sync version of `read_or_create_auth_file`.
+/// Attempt to read a Turborepo auth file.
 pub fn read_auth_file(auth_file_path: &AbsoluteSystemPath) -> Result<AuthFile, Error> {
     if auth_file_path.try_exists()? {
         let content = auth_file_path
@@ -98,12 +98,8 @@ pub fn read_auth_file(auth_file_path: &AbsoluteSystemPath) -> Result<AuthFile, E
                 source: e,
                 path: auth_file_path.to_owned(),
             })?;
-        let tokens: AuthFile = serde_json::from_str(&content)
+        let auth_file: AuthFile = serde_json::from_str(&content)
             .map_err(|e| Error::FailedToDeserializeAuthFile { source: e })?;
-        let mut auth_file = AuthFile::new();
-        for (api, token) in tokens.tokens() {
-            auth_file.insert(api.to_owned(), token.to_owned());
-        }
         return Ok(auth_file);
     }
 
