@@ -333,6 +333,9 @@ mod tests {
         };
 
         let result = init(client.clone(), UI::new(false));
+        if let Err(ref e) = result {
+            println!("error: {:?}", e);
+        }
         assert!(result.is_ok());
 
         let (telemetry_handle, telemetry_sender) = result.unwrap();
