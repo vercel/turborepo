@@ -1204,7 +1204,11 @@ mod test {
     }
 
     fn setup_files(files: &[&str]) -> tempdir::TempDir {
-        let tmp = tempdir::TempDir::new("globwalk").unwrap();
+        setup_files_with_prefix("globwalk", files)
+    }
+
+    fn setup_files_with_prefix(prefix: &str, files: &[&str]) -> tempdir::TempDir {
+        let tmp = tempdir::TempDir::new(prefix).unwrap();
         for file in files {
             let file = file.trim_start_matches('/');
             let path = tmp.path().join(file);
@@ -1268,6 +1272,25 @@ mod test {
                 .replace('/', std::path::MAIN_SEPARATOR_STR)
                 .to_string(),
         ]);
+        assert_eq!(paths, expected);
+    }
+
+    #[test]
+    fn test_base_with_brackets() {
+        let files = &["foo", "bar", "baz"];
+        let tmp = setup_files_with_prefix("[path]", files);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let include = &["ba*".to_string()];
+        let exclude = &[];
+        let iter = globwalk(&root, include, exclude, WalkType::Files).unwrap();
+        let paths = iter
+            .into_iter()
+            .map(|path| {
+                let relative = root.anchor(path).unwrap();
+                relative.to_string()
+            })
+            .collect::<HashSet<_>>();
+        let expected: HashSet<String> = HashSet::from_iter(["bar".to_string(), "baz".to_string()]);
         assert_eq!(paths, expected);
     }
 }
