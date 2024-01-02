@@ -94,7 +94,7 @@ impl<T: SSOLoginServer> Login<T> {
         let login_server = &self.server;
 
         let auth_token =
-            auth_sso_login(&api_client, &ui, &login_url_config, "sso", login_server).await?;
+            auth_sso_login(&api_client, &ui, &login_url_config, sso_team, login_server).await?;
 
         auth_file.insert(api_client.base_url().to_owned(), auth_token.token);
         auth_file.write_to_disk(&global_auth_path)?;
