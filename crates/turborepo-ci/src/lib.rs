@@ -83,8 +83,7 @@ impl Vendor {
         None
     }
 
-    #[allow(dead_code)]
-    fn get_name() -> Option<&'static str> {
+    pub fn get_name() -> Option<&'static str> {
         Self::infer().map(|v| v.name)
     }
 
