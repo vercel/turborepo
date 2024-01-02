@@ -6,6 +6,7 @@ import type { AppProps } from "next/app";
 import { type ReactNode } from "react";
 import { Analytics } from "@vercel/analytics/react";
 import { VercelToolbar } from "@vercel/toolbar/next";
+import { useRouter } from "next/router";
 import { getCommentsState } from "../lib/comments";
 
 type NextraAppProps = AppProps & {
@@ -26,7 +27,15 @@ if (typeof window !== "undefined" && !("requestIdleCallback" in window)) {
   };
 }
 
+const toolbarEnabledPaths = ["/repo/docs", "/pack/docs"];
+
 export default function Nextra({ Component, pageProps }: NextraAppProps) {
+  const router = useRouter();
+
+  const pathHasToolbar = toolbarEnabledPaths.some((path) =>
+    router.asPath.startsWith(path)
+  );
+
   return (
     <SSRProvider>
       <>
@@ -50,7 +59,7 @@ export default function Nextra({ Component, pageProps }: NextraAppProps) {
       </>
       <Component {...pageProps} />
       <Analytics />
-      {getCommentsState() ? <VercelToolbar /> : null}
+      {getCommentsState() && pathHasToolbar ? <VercelToolbar /> : null}
     </SSRProvider>
   );
 }
