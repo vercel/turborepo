@@ -75,6 +75,7 @@ export function PackBenchmarkTabs({
                 onClick={() => {
                   onTabClick(index);
                 }}
+                type="button"
               >
                 {TABS[activeTab].id === tab.id && (
                   <motion.div
@@ -112,7 +113,13 @@ export function PackBenchmarkTabs({
   );
 }
 
-function ToolTip({ text, children }: { text; children: React.ReactNode }) {
+function ToolTip({
+  text,
+  children,
+}: {
+  text: string;
+  children: React.ReactNode;
+}) {
   const [show, setShow] = useState(false);
   const timeout = useRef<NodeJS.Timeout>();
 

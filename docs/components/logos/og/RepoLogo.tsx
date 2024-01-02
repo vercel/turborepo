@@ -1,4 +1,4 @@
-function RepoLogo(props) {
+export function RepoLogo(props) {
   return (
     <svg
       {...props}
@@ -68,5 +68,3 @@ function RepoLogo(props) {
     </svg>
   );
 }
-
-export default RepoLogo;

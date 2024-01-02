@@ -1,3 +1,4 @@
+use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_repository::package_graph;
 
@@ -8,12 +9,12 @@ use crate::{
     task_graph, task_hash,
 };
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error(transparent)]
-    Graph(#[from] graph_visualizer::Error),
     #[error("error preparing engine: Invalid persistent task configuration:\n{0}")]
     EngineValidation(String),
+    #[error(transparent)]
+    Graph(#[from] graph_visualizer::Error),
     #[error(transparent)]
     Builder(#[from] engine::BuilderError),
     #[error(transparent)]
@@ -42,4 +43,6 @@ pub enum Error {
     TaskHash(#[from] task_hash::Error),
     #[error(transparent)]
     Visitor(#[from] task_graph::VisitorError),
+    #[error("error registering signal handler: {0}")]
+    SignalHandler(std::io::Error),
 }

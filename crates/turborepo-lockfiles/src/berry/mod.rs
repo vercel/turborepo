@@ -34,6 +34,11 @@ pub enum Error {
     MissingPackageForLocator(Locator<'static>),
     #[error("unable to find any locator for {0}")]
     MissingLocator(Descriptor<'static>),
+    #[error("Descriptor collision {descriptor} and {other}")]
+    DescriptorCollision {
+        descriptor: Descriptor<'static>,
+        other: String,
+    },
 }
 
 // We depend on BTree iteration being sorted for correct serialization
@@ -52,6 +57,8 @@ pub struct BerryLockfile {
     extensions: HashSet<Descriptor<'static>>,
     // Package overrides
     overrides: Map<Resolution, String>,
+    // Map from workspace paths to package locators
+    workspace_path_to_locator: HashMap<String, Locator<'static>>,
 }
 
 // This is the direct representation of the lockfile as it appears on disk.
@@ -108,6 +115,7 @@ impl BerryLockfile {
         let mut locator_package = Map::new();
         let mut descriptor_locator = Map::new();
         let mut resolver = DescriptorResolver::default();
+        let mut workspace_path_to_locator = HashMap::new();
         for (key, package) in &lockfile.packages {
             let locator = Locator::try_from(package.resolution.as_str())?;
 
@@ -120,10 +128,17 @@ impl BerryLockfile {
 
             locator_package.insert(locator.as_owned(), package.clone());
 
+            if let Some(path) = locator.reference.strip_prefix("workspace:") {
+                workspace_path_to_locator.insert(path.to_string(), locator.as_owned());
+            }
+
             for descriptor in Descriptor::from_lockfile_key(key) {
                 let descriptor = descriptor?;
                 if let Some(other) = resolver.insert(&descriptor) {
-                    panic!("Descriptor collision {descriptor} and {other}");
+                    Err(Error::DescriptorCollision {
+                        descriptor: descriptor.clone().into_owned(),
+                        other,
+                    })?;
                 }
                 descriptor_locator.insert(descriptor.into_owned(), locator.as_owned());
             }
@@ -142,6 +157,7 @@ impl BerryLockfile {
             patches,
             overrides,
             extensions: Default::default(),
+            workspace_path_to_locator,
         };
 
         this.populate_extensions()?;
@@ -212,16 +228,19 @@ impl BerryLockfile {
         }
 
         // If there aren't any checksums in the lockfile, then cache key is omitted
-        if self
-            .resolutions
-            .values()
-            .map(|locator| {
-                self.locator_package
-                    .get(locator)
-                    .unwrap_or_else(|| panic!("No entry found for {locator}"))
-            })
-            .all(|pkg| pkg.checksum.is_none())
-        {
+        let mut no_checksum = true;
+        for pkg in self.resolutions.values().map(|locator| {
+            self.locator_package
+                .get(locator)
+                .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))
+        }) {
+            let pkg = pkg?;
+            no_checksum = pkg.checksum.is_none();
+            if !no_checksum {
+                break;
+            }
+        }
+        if no_checksum {
             metadata.cache_key = None;
         }
 
@@ -254,7 +273,7 @@ impl BerryLockfile {
                     let dep_locator = self
                         .resolutions
                         .get(&dependency)
-                        .unwrap_or_else(|| panic!("No locator found for {dependency}"));
+                        .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
                     resolutions.insert(dependency, dep_locator.clone());
                 }
 
@@ -329,6 +348,7 @@ impl BerryLockfile {
             resolver: self.resolver.clone(),
             extensions: self.extensions.clone(),
             overrides: self.overrides.clone(),
+            workspace_path_to_locator: self.workspace_path_to_locator.clone(),
         })
     }
 
@@ -358,9 +378,23 @@ impl BerryLockfile {
         // TODO Could we dedupe and wrap in Rc?
         Ok(dependency.into_owned())
     }
+
+    fn locator_for_workspace_path(&self, workspace_path: &str) -> Option<&Locator> {
+        self.workspace_path_to_locator
+            .get(workspace_path)
+            .or_else(|| {
+                // This is an inefficient fallback we use in case our old logic was catching
+                // edge cases that the eager approach misses.
+                self.locator_package.keys().find(|locator| {
+                    locator.reference.starts_with("workspace:")
+                        && locator.reference.ends_with(workspace_path)
+                })
+            })
+    }
 }
 
 impl Lockfile for BerryLockfile {
+    #[tracing::instrument(skip(self))]
     fn resolve_package(
         &self,
         workspace_path: &str,
@@ -372,17 +406,12 @@ impl Lockfile for BerryLockfile {
         // In practice, this is extremely silly since changing the version of
         // the dependency in the workspace's package.json does the same thing.
         let workspace_locator = self
-            .locator_package
-            .keys()
-            .find(|locator| {
-                locator.reference.starts_with("workspace:")
-                    && locator.reference.ends_with(workspace_path)
-            })
+            .locator_for_workspace_path(workspace_path)
             .ok_or_else(|| crate::Error::MissingWorkspace(workspace_path.to_string()))?;
 
         let dependency = self
             .resolve_dependency(workspace_locator, name, version)
-            .unwrap_or_else(|_| panic!("{name} is an invalid lockfile identifier"));
+            .map_err(Error::from)?;
 
         let Some(locator) = self.resolutions.get(&dependency) else {
             return Ok(None);
@@ -399,12 +428,12 @@ impl Lockfile for BerryLockfile {
         }))
     }
 
+    #[tracing::instrument(skip(self))]
     fn all_dependencies(
         &self,
         key: &str,
     ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
-        let locator =
-            Locator::try_from(key).unwrap_or_else(|_| panic!("Was passed invalid locator: {key}"));
+        let locator = Locator::try_from(key).map_err(Error::from)?;
 
         let Some(package) = self.locator_package.get(&locator) else {
             return Ok(None);
@@ -451,7 +480,7 @@ impl Lockfile for BerryLockfile {
                     let dep_locator = self
                         .resolutions
                         .get(&dependency)
-                        .unwrap_or_else(|| panic!("No locator found for {dependency}"));
+                        .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
                     resolutions.insert(dependency, dep_locator.clone());
                 }
 
@@ -527,6 +556,7 @@ impl Lockfile for BerryLockfile {
             resolver: self.resolver.clone(),
             extensions: self.extensions.clone(),
             overrides: self.overrides.clone(),
+            workspace_path_to_locator: self.workspace_path_to_locator.clone(),
         }))
     }
 

@@ -25,7 +25,7 @@ export function Gradient({
   return (
     <span
       className={cn(
-        "absolute",
+        "absolute max-w-full rounded-full",
         gradients.glow,
         {
           [gradients.glowPink]: pink,
@@ -40,7 +40,6 @@ export function Gradient({
         width,
         height,
         opacity,
-        borderRadius: "100%",
       }}
     />
   );

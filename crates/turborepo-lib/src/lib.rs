@@ -30,9 +30,10 @@ mod task_hash;
 mod tracing;
 
 pub use child::spawn_child;
+use miette::Report;
 
-use crate::commands::CommandBase;
 pub use crate::{cli::Args, execution_state::ExecutionState};
+use crate::{commands::CommandBase, shim::Error};
 
 /// The payload from running main, if the program can complete without using Go
 /// the Rust variant will be returned. If Go is needed then the execution state
@@ -54,12 +55,22 @@ pub fn get_version() -> &'static str {
 pub fn main() -> Payload {
     match shim::run() {
         Ok(payload) => payload,
+        // We only print using miette for some errors because we want to keep
+        // compatibility with Go. When we've deleted the Go code we can
+        // move all errors to miette since it provides slightly nicer
+        // printing out of the box.
+        Err(err @ (Error::MultipleCwd(..) | Error::EmptyCwd { .. })) => {
+            println!("{:?}", Report::new(err));
+
+            Payload::Rust(Ok(1))
+        }
         // We don't need to print "Turbo error" for Run errors
         Err(err @ shim::Error::Cli(cli::Error::Run(_))) => Payload::Rust(Err(err)),
         Err(err) => {
             // This raw print matches the Go behavior, once we no longer care
             // about matching formatting we should remove this.
             println!("Turbo error: {err}");
+
             Payload::Rust(Err(err))
         }
     }

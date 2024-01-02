@@ -1,3 +1,10 @@
+/* eslint-disable @typescript-eslint/no-floating-promises --  Lots of SWR and local storage. Not worth fixing so we'll ignore. */
+/* eslint-disable @typescript-eslint/no-unsafe-argument --  Lots of SWR and local storage. Not worth fixing so we'll ignore. */
+/* eslint-disable @typescript-eslint/no-non-null-assertion --  Lots of SWR and local storage. Not worth fixing so we'll ignore. */
+/* eslint-disable @typescript-eslint/no-unsafe-return --  Lots of SWR and local storage. Not worth fixing so we'll ignore. */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment --  Lots of SWR and local storage. Not worth fixing so we'll ignore. */
+/* eslint-disable react/function-component-definition --  Lots of SWR and local storage. Not worth fixing so we'll ignore. */
+
 import type { FC, ReactElement } from "react";
 import { Tabs as NextraTabs, Tab } from "nextra-theme-docs";
 import useSWR from "swr";
@@ -12,7 +19,7 @@ export const Tabs: FC<{
   // Use SWR so all tabs with the same key can sync their states.
   const { data, mutate } = useSWR(storageKey, (key) => {
     try {
-      return JSON.parse(localStorage.getItem(key));
+      return JSON.parse(localStorage.getItem(key)!);
     } catch (e) {
       return null;
     }

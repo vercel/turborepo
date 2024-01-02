@@ -1,4 +1,4 @@
-function TurboLogo(props) {
+export function TurboLogo(props) {
   return (
     <svg
       {...props}
@@ -52,5 +52,3 @@ function TurboLogo(props) {
     </svg>
   );
 }
-
-export default TurboLogo;

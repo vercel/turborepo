@@ -1,7 +1,6 @@
-/* eslint-disable react/no-unescaped-entities */
 import { Clients } from "../clients/Clients";
 
-export default function Showcase() {
+export function Showcase() {
   return (
     <main className="relative">
       <div className="mx-auto">
@@ -10,13 +9,13 @@ export default function Showcase() {
             Showcase
           </p>
           <h1 className="mt-2 text-3xl font-extrabold leading-8 tracking-tight text-gray-900 md:text-5xl dark:text-white sm:text-4xl sm:leading-10">
-            Who's using Turbo?
+            Who&apos;s using Turbo?
           </h1>
           <p className="max-w-3xl mt-4 text-xl leading-7 text-gray-500 dark:text-gray-400 lg:mx-auto font-space-grotesk">
             Turbo is the one of the fastest growing toolchains in the frontend
-            ecosystem. It's trusted by thousands of developers in production
-            including teams at Vercel, AWS, Netflix, Microsoft, Disney, and
-            more.
+            ecosystem. It&apos;s trusted by thousands of developers in
+            production including teams at Vercel, AWS, Netflix, Microsoft,
+            Disney, and more.
           </p>
         </div>
       </div>

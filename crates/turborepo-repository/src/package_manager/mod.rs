@@ -136,7 +136,11 @@ impl WorkspaceGlobs {
             .iter()
             .map(|s| {
                 let mut s: String = s.clone();
-                s.push_str("/package.json");
+                if s.ends_with('/') {
+                    s.push_str("package.json");
+                } else {
+                    s.push_str("/package.json");
+                }
                 s
             })
             .collect::<Vec<_>>();
@@ -508,7 +512,7 @@ impl PackageManager {
         self.parse_lockfile(root_package_json, &contents)
     }
 
-    #[tracing::instrument(skip(self, root_package_json))]
+    #[tracing::instrument(skip(self, root_package_json, contents))]
     pub fn parse_lockfile(
         &self,
         root_package_json: &PackageJson,
@@ -869,5 +873,15 @@ mod tests {
             serde_json::from_str("{ \"workspaces\": {\"packages\": [\"packages/**\"]}}")?;
         assert_eq!(nested.workspaces.as_ref(), vec!["packages/**"]);
         Ok(())
+    }
+
+    #[test]
+    fn test_workspace_globs_trailing_slash() {
+        let globs =
+            WorkspaceGlobs::new(vec!["scripts/", "packages/**"], vec!["package/template"]).unwrap();
+        assert_eq!(
+            &globs.package_json_inclusions,
+            &["scripts/package.json", "packages/**/package.json"]
+        );
     }
 }
