@@ -454,6 +454,11 @@ impl AbsoluteSystemPath {
 
         Ok(())
     }
+
+    pub fn try_exists(&self) -> Result<bool, PathError> {
+        // try_exists is an experimental API and not yet in fs_err
+        Ok(std::fs::try_exists(&self.0)?)
+    }
 }
 
 impl<'a> From<&'a AbsoluteSystemPath> for CandidatePath<'a> {
