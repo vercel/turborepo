@@ -128,13 +128,8 @@ impl CommandBase {
         let auth_file_path = self.global_auth_path()?;
         let config_file_path = self.global_config_path()?;
         let client = self.api_client()?;
-        let auth = match turborepo_auth::read_auth_file(&auth_file_path) {
-            Ok(auth) => auth,
-            Err(_) => match turborepo_auth::read_auth_file(&config_file_path) {
-                Ok(auth) => auth,
-                Err(e) => return Err(ConfigError::Auth(e)),
-            },
-        };
+        let auth =
+            turborepo_auth::read_or_create_auth_file(&auth_file_path, &config_file_path, &client)?;
 
         let auth_token = auth.get_token(client.base_url());
         if let Some(auth_token) = auth_token {

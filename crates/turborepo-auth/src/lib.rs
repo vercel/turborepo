@@ -74,7 +74,7 @@ pub fn read_or_create_auth_file(
         let config_token: ConfigToken = serde_json::from_str(&content)
             .map_err(|e| Error::FailedToDeserializeConfigToken { source: e })?;
 
-        let auth_token = convert_to_auth_token(&config_token.token, client);
+        let auth_token = convert_to_auth_token(&config_token.token, client.base_url());
 
         let mut auth_file = AuthFile::new();
         auth_file.insert(client.base_url().to_owned(), auth_token.token);
@@ -87,26 +87,6 @@ pub fn read_or_create_auth_file(
     let auth_file = AuthFile::default();
     auth_file.write_to_disk(auth_file_path)?;
     Ok(auth_file)
-}
-
-/// Attempt to read a Turborepo auth file.
-pub fn read_auth_file(auth_file_path: &AbsoluteSystemPath) -> Result<AuthFile, Error> {
-    if auth_file_path.try_exists()? {
-        let content = auth_file_path
-            .read_to_string()
-            .map_err(|e| Error::FailedToReadAuthFile {
-                source: e,
-                path: auth_file_path.to_owned(),
-            })?;
-        let auth_file: AuthFile = serde_json::from_str(&content)
-            .map_err(|e| Error::FailedToDeserializeAuthFile { source: e })?;
-        return Ok(auth_file);
-    }
-
-    Err(Error::FailedToReadAuthFile {
-        source: std::io::Error::new(std::io::ErrorKind::NotFound, "Auth file not found"),
-        path: auth_file_path.to_owned(),
-    })
 }
 
 #[cfg(test)]
