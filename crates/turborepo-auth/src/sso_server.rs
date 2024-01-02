@@ -22,9 +22,10 @@ pub struct SsoPayload {
 #[async_trait]
 pub trait SSOLoginServer {
     async fn run(&self, port: u16, verification_token: Arc<OnceCell<String>>) -> Result<(), Error>;
+    fn open_web_browser(&self, url: &str) -> std::io::Result<()>;
 }
 
-/// TODO: Document this.
+/// Basic SSO login server. No configuration required.
 pub struct DefaultSSOLoginServer;
 
 #[async_trait]
@@ -55,6 +56,9 @@ impl SSOLoginServer for DefaultSSOLoginServer {
             .expect("failed to start one-shot server");
 
         Ok(())
+    }
+    fn open_web_browser(&self, url: &str) -> std::io::Result<()> {
+        webbrowser::open(url)
     }
 }
 
