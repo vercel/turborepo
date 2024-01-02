@@ -18,6 +18,7 @@ use dirs_next::home_dir;
 use rand::Rng;
 use thiserror::Error;
 use turborepo_api_client::Client;
+use turborepo_auth::read_or_create_auth_file;
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
 use turborepo_ui::{BOLD, GREY, UNDERLINE};
@@ -171,9 +172,19 @@ pub async fn link(
     let homedir = homedir_path.to_string_lossy();
     let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
     let api_client = base.api_client()?;
-    let token = base.config()?.token().ok_or_else(|| Error::TokenNotFound {
-        command: base.ui.apply(BOLD.apply_to("`npx turbo login`")),
-    })?;
+    let auth_file_path = base.global_auth_path()?;
+    let config_file_path = base.global_config_path()?;
+    let auth = read_or_create_auth_file(&auth_file_path, &config_file_path, &api_client)
+        .await
+        .map_err(|_| Error::TokenNotFound {
+            command: base.ui.apply(BOLD.apply_to("npx turbo login")),
+        })?;
+    let token = &auth
+        .get_token(api_client.base_url())
+        .ok_or_else(|| Error::TokenNotFound {
+            command: base.ui.apply(BOLD.apply_to("npx turbo login")),
+        })?
+        .token;
 
     match target {
         LinkTarget::RemoteCache => {
