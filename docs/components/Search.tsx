@@ -62,13 +62,13 @@ export function Search() {
   }, []);
 
   return (
-    <div className="hidden relative md:block">
+    <div className="relative lg:w-60">
       <input
-        className="p-2 px-3 rounded-lg text-sm md:w-40 lg:w-60 bg-gray-100 dark:bg-gray-900"
+        className="p-2 px-3 rounded-lg text-sm w-full bg-gray-100 dark:bg-gray-900"
         onChange={(e) => {
           setQuery(e.target.value);
         }}
-        placeholder="Search documentation..."
+        placeholder="Search..."
         ref={ref}
         value={query}
       />
