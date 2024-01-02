@@ -2,9 +2,9 @@ use std::cell::OnceCell;
 
 use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_api_client::{APIAuth, APIClient};
+use turborepo_api_client::{APIAuth, APIClient, Client};
 use turborepo_auth::{
-    TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR, TURBOREPO_LEGACY_AUTH_FILE_NAME,
+    AuthFile, TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR, TURBOREPO_LEGACY_AUTH_FILE_NAME,
 };
 use turborepo_dirs::config_dir;
 use turborepo_ui::UI;
@@ -125,15 +125,27 @@ impl CommandBase {
         let team_id = config.team_id();
         let team_slug = config.team_slug();
 
-        let Some(token) = config.token() else {
-            return Ok(None);
+        let auth_file_path = self.global_auth_path()?;
+        let config_file_path = self.global_config_path()?;
+        let client = self.api_client()?;
+        let auth = match turborepo_auth::read_auth_file(&auth_file_path) {
+            Ok(auth) => auth,
+            Err(_) => match turborepo_auth::read_auth_file(&config_file_path) {
+                Ok(auth) => auth,
+                Err(e) => return Err(ConfigError::Auth(e)),
+            },
         };
 
-        Ok(Some(APIAuth {
-            team_id: team_id.map(|s| s.to_string()),
-            token: token.to_string(),
-            team_slug: team_slug.map(|s| s.to_string()),
-        }))
+        let auth_token = auth.get_token(client.base_url());
+        if let Some(auth_token) = auth_token {
+            Ok(Some(APIAuth {
+                team_id: team_id.map(|s| s.to_string()),
+                token: auth_token.token,
+                team_slug: team_slug.map(|s| s.to_string()),
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn args(&self) -> &Args {
