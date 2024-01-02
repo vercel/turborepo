@@ -596,6 +596,7 @@ mod test {
     use std::{cell::OnceCell, fs};
 
     use anyhow::Result;
+    use serde_json::json;
     use tempfile::{NamedTempFile, TempDir};
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_ui::UI;
@@ -610,12 +611,22 @@ mod test {
 
     #[tokio::test]
     async fn test_link_remote_cache() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+
         // user config
         let user_config_file = NamedTempFile::new().unwrap();
 
         // auth file
         let auth_file = NamedTempFile::new().unwrap();
-        fs::write(auth_file.path(), r#"{ "token": "hello" }"#).unwrap();
+        let host_with_port = format!("http://localhost:{}", port);
+        let raw_token_json = json!({
+            "tokens": {
+                host_with_port.clone(): "token"
+            }
+        });
+        let raw_json = serde_json::to_string_pretty(&raw_token_json).unwrap();
+
+        fs::write(auth_file.path(), raw_json).unwrap();
 
         // repo
         let repo_root_tmp_dir = TempDir::new().unwrap();
@@ -636,7 +647,6 @@ mod test {
             .create_with_contents(r#"{ "apiurl": "http://localhost:3000" }"#)
             .unwrap();
 
-        let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
             global_config_path: Some(
@@ -654,8 +664,8 @@ mod test {
         base.config
             .set(
                 TurborepoConfigBuilder::new(&base)
-                    .with_api_url(Some(format!("http://localhost:{}", port)))
-                    .with_login_url(Some(format!("http://localhost:{}", port)))
+                    .with_api_url(Some(host_with_port.clone()))
+                    .with_login_url(Some(host_with_port.clone()))
                     .with_token(Some("token".to_string()))
                     .build()
                     .unwrap(),
@@ -682,16 +692,22 @@ mod test {
 
     #[tokio::test]
     async fn test_link_spaces() {
+        let port = port_scanner::request_open_port().unwrap();
+
         // user config
         let user_config_file = NamedTempFile::new().unwrap();
 
         // auth file
         let auth_file = NamedTempFile::new().unwrap();
-        fs::write(
-            auth_file.path(),
-            r#"{ "tokens": {"vercel.com/api": "hello"} }"#,
-        )
-        .unwrap();
+        let host_with_port = format!("http://localhost:{}", port);
+        let raw_token_json = json!({
+            "tokens": {
+                host_with_port: "hello"
+            }
+        });
+        let raw_json = serde_json::to_string_pretty(&raw_token_json).unwrap();
+
+        fs::write(auth_file.path(), raw_json).unwrap();
 
         // repo
         let repo_root_tmp_dir = TempDir::new().unwrap();
@@ -712,7 +728,6 @@ mod test {
             .create_with_contents(r#"{ "apiurl": "http://localhost:3000" }"#)
             .unwrap();
 
-        let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
             global_config_path: Some(
