@@ -8,6 +8,7 @@ export function CommentsButton() {
   const router = useRouter();
 
   return (
+    // Tailwind preflight breaks button styles when type is set: https://github.com/shuding/nextra/issues/1403
     // eslint-disable-next-line react/button-has-type -- Can't set it here because it messes up background color. There's a style that sets the background to transparent that I believe is coming from deep within Nextra.
     <button
       className={cn(
