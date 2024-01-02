@@ -6,18 +6,28 @@ import type { PagefindSearchResult } from "../lib/search-types";
 function Result({ result }: { result: PagefindSearchResult }) {
   const data = useResult(result);
 
-  if (!data) return null;
+  if (!data) return <p className="text-gray-400 m-2">No results.</p>;
+
+  // const formattedExcerpt = data.excerpt.replaceAll(
+  //   "<mark>",
+  //   '<mark className="bg-green-300"'
+  // );
 
   return (
-    <Link
-      className="hover:bg-gray-300 flex flex-col gap-2"
-      href={data.url
-        .replace("_next/static/chunks/pages/server/pages/", "")
-        .replace(".html", "")}
-    >
-      <h3 className="text-lg font-bold">{data.meta.title}</h3>
-      <p>{data.excerpt}</p>
-    </Link>
+    <li className="mx-2 border-b border-gray-200 pb-2 dark:border-gray-700 dark:text-white text-gray-700">
+      <Link
+        className="hover:bg-blue-300/30 flex flex-col gap-2 p-2 px-3"
+        href={data.url
+          .replace("_next/static/chunks/pages/server/pages/", "")
+          .replace(".html", "")}
+      >
+        <p className="text-lg font-semibold truncate">{data.meta.title}</p>
+        <p
+          className="line-clamp-3"
+          dangerouslySetInnerHTML={{ __html: data.excerpt }}
+        />
+      </Link>
+    </li>
   );
 }
 
@@ -54,7 +64,7 @@ export function Search() {
   return (
     <div className="hidden relative md:block">
       <input
-        className="p-2 px-3 rounded-lg text-sm w-60  bg-gray-100 dark:bg-gray-900"
+        className="p-2 px-3 rounded-lg text-sm md:w-40 lg:w-60 bg-gray-100 dark:bg-gray-900"
         onChange={(e) => {
           setQuery(e.target.value);
         }}
@@ -62,11 +72,13 @@ export function Search() {
         ref={ref}
         value={query}
       />
-      {query.length > 0 && results
-        ? results.map((result) => {
+      {query.length > 0 && results ? (
+        <ul className="border no-scrollbar border-gray-200 flex flex-col gap-1 bg-white text-gray-100 dark:border-neutral-800 dark:bg-neutral-900 absolute top-full z-20 mt-2 overflow-auto overscroll-contain rounded-xl py-2.5 shadow-xl max-h-[min(calc(50vh-11rem-env(safe-area-inset-bottom)),400px)] md:max-h-[min(calc(100vh-5rem-env(safe-area-inset-bottom)),400px)] inset-x-0 ltr:md:left-auto rtl:md:right-auto contrast-more:border contrast-more:border-gray-900 contrast-more:dark:border-gray-50 w-screen min-h-[100px] max-w-[min(calc(100vw-2rem),calc(100%+20rem))]">
+          {results.map((result) => {
             return <Result key={result.id} result={result} />;
-          })
-        : null}
+          })}
+        </ul>
+      ) : null}
     </div>
   );
 }
