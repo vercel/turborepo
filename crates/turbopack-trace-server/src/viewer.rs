@@ -459,6 +459,7 @@ impl Viewer {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn add_child_item<'a>(
     children: &mut Vec<ChildItem<'a>>,
     current: &mut u64,
