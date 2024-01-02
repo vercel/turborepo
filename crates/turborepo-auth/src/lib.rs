@@ -44,7 +44,7 @@ pub const DEFAULT_API_URL: &str = "https://vercel.com/api";
 /// this is invoked and the file we're trying to read is deleted after a
 /// condition is met, we should simply error out on reading a file that no
 /// longer exists.
-pub async fn read_or_create_auth_file(
+pub fn read_or_create_auth_file(
     auth_file_path: &AbsoluteSystemPath,
     config_file_path: &AbsoluteSystemPath,
     client: &impl Client,
@@ -89,6 +89,30 @@ pub async fn read_or_create_auth_file(
     Ok(auth_file)
 }
 
+/// Sync version of `read_or_create_auth_file`.
+pub fn read_auth_file(auth_file_path: &AbsoluteSystemPath) -> Result<AuthFile, Error> {
+    if auth_file_path.try_exists()? {
+        let content = auth_file_path
+            .read_to_string()
+            .map_err(|e| Error::FailedToReadAuthFile {
+                source: e,
+                path: auth_file_path.to_owned(),
+            })?;
+        let tokens: AuthFile = serde_json::from_str(&content)
+            .map_err(|e| Error::FailedToDeserializeAuthFile { source: e })?;
+        let mut auth_file = AuthFile::new();
+        for (api, token) in tokens.tokens() {
+            auth_file.insert(api.to_owned(), token.to_owned());
+        }
+        return Ok(auth_file);
+    }
+
+    Err(Error::FailedToReadAuthFile {
+        source: std::io::Error::new(std::io::ErrorKind::NotFound, "Auth file not found"),
+        path: auth_file_path.to_owned(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::{fs::File, io::Write};
@@ -112,7 +136,7 @@ mod tests {
 
         let client = MockApiClient::new();
 
-        let result = read_or_create_auth_file(auth_file_path, config_file_path, &client).await;
+        let result = read_or_create_auth_file(auth_file_path, config_file_path, &client);
 
         assert!(result.is_ok());
         let auth_file = result.unwrap();
@@ -129,7 +153,7 @@ mod tests {
             .expect("Failed to create config file path");
 
         let client = MockApiClient::new();
-        let result = read_or_create_auth_file(auth_file_path, config_file_path, &client).await;
+        let result = read_or_create_auth_file(auth_file_path, config_file_path, &client);
 
         assert!(result.is_ok());
         assert!(std::fs::try_exists(auth_file_path).unwrap_or(false));
@@ -160,9 +184,7 @@ mod tests {
         let client = MockApiClient::new();
 
         // Test: Get the result of reading the auth file
-        let result =
-            read_or_create_auth_file(full_auth_file_path, full_config_file_path, &client).await;
-        println!("{:?}", result);
+        let result = read_or_create_auth_file(full_auth_file_path, full_config_file_path, &client);
 
         // Make sure no errors come back
         assert!(result.is_ok());
