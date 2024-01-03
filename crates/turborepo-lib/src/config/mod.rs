@@ -13,6 +13,8 @@ use turbopath::AbsoluteSystemPathBuf;
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("Authentication error: {0}")]
+    Auth(#[from] turborepo_auth::Error),
     #[error("Global config path not found")]
     NoGlobalConfigPath,
     #[error("Global auth file path not found")]

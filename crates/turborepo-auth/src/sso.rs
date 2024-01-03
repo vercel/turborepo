@@ -74,7 +74,7 @@ pub async fn sso_login<'a>(
         .await
         .map_err(Error::FailedToFetchUser)?;
 
-    let auth_token = convert_to_auth_token(&verified_user.token, api_client);
+    let auth_token = convert_to_auth_token(&verified_user.token, api_client.base_url());
 
     ui::print_cli_authorized(&user_response.user.email, ui);
 
