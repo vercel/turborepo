@@ -9,14 +9,12 @@ use std::{
 
 use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
-use pty_process;
 use regex::Regex;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    process::Command,
+    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     sync::{mpsc, oneshot},
+    task,
 };
-// use tokio_pty_process::{AsyncPtyMaster, CommandExt};
 use tracing::{debug, error, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_ci::github_header_footer;
@@ -44,6 +42,7 @@ use crate::{
         RunCache, TaskCache,
     },
     task_hash::{self, PackageInputsHashes, TaskHashTracker, TaskHashTrackerState, TaskHasher},
+    tokioprocesspty::Command as TokioProcessPTYCommand,
 };
 
 // This holds the whole world
@@ -754,38 +753,11 @@ impl ExecContext {
             return ExecOutcome::Internal;
         };
 
-        let mut cmd = Command::new(package_manager_binary);
-
-        // let cmd = match self.is_interactive {
-        //     true => {
-        //         let mut pty = pty_process::Pty::new().unwrap();
-        //         pty.resize(pty_process::Size::new(24, 80)).unwrap();
-        //         pty_process::Command::new(package_manager_binary)
-        //     }
-        //     false => Command::new(package_manager_binary),
-        // };
-        // // TODO: only add pty when is_interactive?
-        // let mut pty = match pty_process::Pty::new() {
-        //     Ok(pty) => pty,
-        //     Err(e) => {
-        //         error!("failed to create pty: {e}");
-        //         return ExecOutcome::Internal;
-        //     }
-        // };
-        // pty.resize(pty_process::Size::new(24, 80)).unwrap();
-        // let mut cmd = pty_process::Command::new(package_manager_binary);
-        // let mut process = cmd.spawn(&pty.pts().unwrap()).unwrap();
-        // if self.is_interactive {
-        //     let stdin = process.stdin.take().unwrap();
-        //     let _ = sender.send((stdin, self.task_id.clone()));
-        // }
-        // match process.wait_with_output().await {
-        //     Ok(_) => return ExecOutcome::Success(SuccessOutcome::Run),
-        //     Err(e) => {
-        //         error!("unable to pipe outputs from command: {e}");
-        //         return ExecOutcome::Success(SuccessOutcome::Run);
-        //     }
-        // }
+        let (rows, cols) = termion::terminal_size().expect("unable to get terminal size");
+        let mut cmd = TokioProcessPTYCommand::new(package_manager_binary)
+            .pty()
+            .pty_size(cols, rows)
+            .new_session();
 
         let mut args = vec!["run".to_string(), self.task_id.task().to_string()];
         if let Some(pass_through_args) = &self.pass_through_args {
@@ -798,8 +770,6 @@ impl ExecContext {
         }
         cmd.args(args);
         cmd.current_dir(self.workspace_directory.as_path());
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
 
         // We clear the env before populating it with variables we expect
         cmd.env_clear();
@@ -818,36 +788,7 @@ impl ExecContext {
             }
         };
 
-        let (sender, receiver) =
-            std::sync::mpsc::sync_channel::<(tokio::process::ChildStdin, TaskId<'_>)>(1);
-
-        if self.is_interactive {
-            std::thread::spawn(move || {
-                let mut parent_stdin_handle = std::io::stdin().lock();
-                debug!("Locked parent stdin");
-                let (mut child_stdin, task_id) = match receiver.recv() {
-                    Ok(xx) => xx,
-                    Err(_) => {
-                        debug!(
-                            "No message from child process for stdin readiness, exiting and \
-                             releasing parent stdin lock"
-                        );
-                        return;
-                    }
-                };
-
-                debug!("Granting stdin lock to {}", task_id);
-
-                let mut buffer = String::new();
-                // TODO: cover the case of when the user doesn't hit enter and handle error
-                let _ = parent_stdin_handle.read_line(&mut buffer);
-
-                debug!("Granting stdin lock to {}", task_id);
-
-                // write data from parent stdin to child_stdin
-                let _ = futures::executor::block_on(child_stdin.write_all(buffer.as_bytes()));
-            });
-        }
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
 
         let mut process = match self.manager.spawn(cmd, Duration::from_millis(500)) {
             Some(Ok(child)) => child,
@@ -871,11 +812,33 @@ impl ExecContext {
             }
         };
 
-        // Notify the stdin thread that the child process has been spawned and can read
-        // input now
         if self.is_interactive {
             let stdin = process.stdin().take().unwrap();
-            let _ = sender.send((stdin, self.task_id.clone()));
+            let stdout = process.stdout().take().unwrap();
+            let stderr = process.stderr().take().unwrap();
+
+            std::thread::spawn(move || {
+                let mut parent_stdin_handle = std::io::stdin().lock();
+                let task_id = self.task_id.clone();
+                println!("Granted stdin lock to {task_id}");
+                let mut buffer = String::new();
+                let _ = parent_stdin_handle.read_line(&mut buffer);
+                sender.send(buffer.into_bytes()).unwrap();
+            });
+
+            tokio::spawn(async move {
+                match receiver.recv().await {
+                    Some(bytes) => {
+                        stdin.write_all(&bytes).await.unwrap();
+                    }
+                    None => println!("No bytes received"),
+                }
+            });
+
+            tokio::spawn(async move {
+                copy_pty_tty(stdout, std::io::stdout()).await.unwrap();
+                copy_pty_tty(stderr, std::io::stderr()).await.unwrap();
+            });
         }
 
         let exit_status = match process
@@ -984,4 +947,25 @@ impl DryRunExecContext {
         }
         tracker.dry_run().await;
     }
+}
+
+// copy AsyncRead -> Write.
+async fn copy_pty_tty<R, W>(mut from: R, mut to: W) -> std::io::Result<()>
+where
+    R: AsyncRead + Unpin,
+    W: std::io::Write + Send + 'static,
+{
+    let mut buffer = [0u8; 1000];
+    loop {
+        let n = from.read(&mut buffer[..]).await?;
+        if n == 0 {
+            break;
+        }
+        // tokio doesn't have async-write to stdout, so use block-in-place.
+        task::block_in_place(|| {
+            to.write_all(&buffer[0..n])?;
+            to.flush()
+        })?;
+    }
+    Ok(())
 }

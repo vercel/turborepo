@@ -27,6 +27,7 @@ mod shim;
 mod signal;
 mod task_graph;
 mod task_hash;
+mod tokioprocesspty;
 mod tracing;
 
 pub use child::spawn_child;

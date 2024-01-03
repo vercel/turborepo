@@ -75,6 +75,7 @@ serde_yaml = { workspace = true }
 sha2 = { workspace = true }
 shared_child = "1.0.0"
 sysinfo = "0.27.7"
+termion = "*"
 thiserror = "1.0.38"
 time = "0.3.20"
 tiny-gradient = { workspace = true }
@@ -99,11 +100,14 @@ url = "2.3.1"
 camino = "1.1.4"
 capnp = "0.17.2"
 const_format = "0.2.30"
+futures-util = "0.3.1"
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 go-parse-duration = "0.1.1"
 is-terminal = "0.4.7"
 lazy-regex = "2.5.0"
 miette = { workspace = true, features = ["fancy"] }
+mio = "0.6.20"
+nix = "0.16.1"
 node-semver = "2.1.0"
 num_cpus = "1.15.0"
 owo-colors.workspace = true
@@ -134,7 +138,6 @@ twox-hash = "1.6.3"
 wax = { workspace = true }
 webbrowser = { workspace = true }
 which = { workspace = true }
-
 
 [target.'cfg(target_os = "windows")'.dependencies]
 uds_windows = "1.0.2"
