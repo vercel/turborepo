@@ -30,7 +30,9 @@ pub(crate) mod unlink;
 pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,
     pub ui: UI,
+    #[cfg(test)]
     pub global_config_path: Option<AbsoluteSystemPathBuf>,
+    #[cfg(test)]
     pub global_auth_path: Option<AbsoluteSystemPathBuf>,
     config: OnceCell<ConfigurationOptions>,
     args: Args,
@@ -48,7 +50,9 @@ impl CommandBase {
             repo_root,
             ui,
             args,
+            #[cfg(test)]
             global_config_path: None,
+            #[cfg(test)]
             global_auth_path: None,
             config: OnceCell::new(),
             version,
