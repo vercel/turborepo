@@ -64,29 +64,27 @@ export const useSearchResults = (query: string) => {
   const [results, setResults] = useState<PagefindSearchResults["results"]>();
 
   useEffect(() => {
-    const thing = async () => {
+    const handleSearch = async () => {
       if (window.pagefind) {
         const search = await window.pagefind.search(query);
         setResults(search.results);
       }
     };
-    void thing();
+    void handleSearch();
   }, [query]);
 
   return results;
 };
 export const useResult = (result: PagefindSearchResult) => {
-  const [finalData, setFinalData] = useState<PagefindSearchFragment | null>(
-    null
-  );
+  const [data, setData] = useState<PagefindSearchFragment | null>(null);
 
   useEffect(() => {
     async function fetchData() {
-      const data = await result.data();
-      setFinalData(data);
+      const rawData = await result.data();
+      setData(rawData);
     }
     void fetchData();
   }, [result]);
 
-  return finalData;
+  return data;
 };

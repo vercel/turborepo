@@ -65,9 +65,6 @@ const nextConfig = withNextra({
   eslint: {
     ignoreDuringBuilds: true,
   },
-  typescript: {
-    ignoreBuildErrors: process.env.VERCEL_ENV !== "production",
-  },
   webpack: (config, { webpack }) => {
     config.plugins.push(
       new webpack.DefinePlugin({

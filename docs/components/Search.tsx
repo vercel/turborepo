@@ -11,14 +11,19 @@ function Result({ result }: { result: PagefindSearchResult }) {
 
   const createHashLink = () => {
     const toHashlink = data.anchors
+      // Only `a` tags. This gives us hashlink-able headers.
+      // Pagefind already filters away `a` tags from copy.
       .filter((elem) => elem.element === "a")
+      // Pagefind provides a "location" of the searched term in the indexed search result.
+      // We're using that to find every `a` tag that is *before* the search result
+      // so we can use the last one as the hashlink.
       .filter((anchor) => anchor.location < data.locations[0]);
 
     if (toHashlink.length === 0) {
       return "";
     }
 
-    return `#${toHashlink[toHashlink.length - 1].id}`;
+    return `#${toHashlink.at(-1)?.id ?? ""}`;
   };
 
   return (
@@ -65,6 +70,7 @@ function useKeyboardListener(
       ref.current?.blur();
     }
 
+    // Handle both macOS and Windows modifier keys.
     const modifier = e.metaKey || e.ctrlKey;
 
     if (modifier && e.key === "k") {
@@ -106,10 +112,14 @@ export function Search() {
 
   const showResultsDropdown = query.length > 0 && isFocused;
 
+  // These classes are taken directly from the Nextra search results box styling.
+  const nextraSearchResultsBox =
+    "border no-scrollbar border-gray-200 flex flex-col gap-1 bg-white text-gray-100 dark:border-neutral-800 dark:bg-neutral-900 absolute top-full z-20 mt-2 overflow-auto overscroll-contain rounded-xl py-2.5 shadow-xl max-h-[min(calc(50vh-11rem-env(safe-area-inset-bottom)),400px)] md:max-h-[min(calc(100vh-5rem-env(safe-area-inset-bottom)),400px)] inset-x-0 ltr:md:left-auto rtl:md:right-auto contrast-more:border contrast-more:border-gray-900 contrast-more:dark:border-gray-50 w-screen min-h-[100px] max-w-[min(calc(100vw-2rem),calc(100%+20rem))]";
+
   return (
     <div
       className="relative lg:w-60"
-      // Used by custom.css to hide the search box in the navbar (but not in the mobile menu)
+      // Used by custom.css to hide the search box in the navbar (but not in the mobile menu) for small screens.
       id="search-container"
     >
       <kbd className="pointer-events-none absolute right-1 top-[5px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-neutral-800 border-gray-400 dark:border-gray-600 whitespace-nowrap border-[1px] text-xs py-1 px-2 rounded">
@@ -123,12 +133,12 @@ export function Search() {
         onClick={() => {
           setIsFocused(true);
         }}
-        placeholder="Search..."
+        placeholder="Search documentation..."
         ref={ref}
         value={query}
       />
       {showResultsDropdown && results?.length ? (
-        <ul className="border no-scrollbar border-gray-200 flex flex-col gap-1 bg-white text-gray-100 dark:border-neutral-800 dark:bg-neutral-900 absolute top-full z-20 mt-2 overflow-auto overscroll-contain rounded-xl py-2.5 shadow-xl max-h-[min(calc(50vh-11rem-env(safe-area-inset-bottom)),400px)] md:max-h-[min(calc(100vh-5rem-env(safe-area-inset-bottom)),400px)] inset-x-0 ltr:md:left-auto rtl:md:right-auto contrast-more:border contrast-more:border-gray-900 contrast-more:dark:border-gray-50 w-screen min-h-[100px] max-w-[min(calc(100vw-2rem),calc(100%+20rem))]">
+        <ul className={nextraSearchResultsBox}>
           {results.slice(0, 10).map((result) => {
             return <Result key={result.id} result={result} />;
           })}
@@ -137,7 +147,7 @@ export function Search() {
 
       {/* When no results to show. */}
       {showResultsDropdown && !results?.length ? (
-        <div className="border no-scrollbar border-gray-200 flex flex-col gap-1 bg-white text-gray-100 dark:border-neutral-800 dark:bg-neutral-900 absolute top-full z-20 mt-2 overflow-auto overscroll-contain rounded-xl py-2.5 shadow-xl max-h-[min(calc(50vh-11rem-env(safe-area-inset-bottom)),400px)] md:max-h-[min(calc(100vh-5rem-env(safe-area-inset-bottom)),400px)] inset-x-0 ltr:md:left-auto rtl:md:right-auto contrast-more:border contrast-more:border-gray-900 contrast-more:dark:border-gray-50 w-screen min-h-[100px] max-w-[min(calc(100vw-2rem),calc(100%+20rem))]">
+        <div className={nextraSearchResultsBox}>
           <p className="text-gray-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
             No results.
           </p>

@@ -1,29 +1,10 @@
-// An edited version of
-// https://github.com/CloudCannon/pagefind/blob/production-docs/pagefind_web_js/types/index.d.ts#L128
-// Most comments are removed. `Object` as types for properties are also removed.
-
-/** Global index options that can be passed to pagefind.options() */
-export interface PagefindIndexOptions {
-  basePath?: string;
-  baseUrl?: string;
-  excerptLength?: number;
-  indexWeight?: number;
-  mergeFilter?: object;
-  highlightParam?: string;
-  language?: string;
-  primary?: boolean;
-}
-
-/** Options that can be passed to pagefind.search() */
-export interface PagefindSearchOptions {
-  preload?: boolean;
-  verbose?: boolean;
-  filters?: object;
-  sort?: object;
-}
+// A modified version of https://github.com/CloudCannon/pagefind/blob/production-docs/pagefind_web_js/types/index.d.ts#L128
+// Types we aren't using are removed.
+// Most comments are removed.
+// `Object` for types is replaced by `object`.
 
 /** Filter counts returned from pagefind.filters(), and alongside results from pagefind.search() */
-export type PagefindFilterCounts = Record<string, Record<string, number>>;
+type PagefindFilterCounts = Record<string, Record<string, number>>;
 
 /** The main results object returned from a call to pagefind.search() */
 export interface PagefindSearchResults {

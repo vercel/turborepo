@@ -20,11 +20,11 @@ export function Main(props: { children: ReactNode }) {
     );
   }
 
-  interface RecursiveProps {
+  interface NestedProps {
     props: { children: ReactNode[] };
   }
 
-  const footerNode = (props.children as RecursiveProps).props.children;
+  const footerNode = (props.children as NestedProps).props.children;
 
   // Hiding the "previous page, next page" footer from search
   // because it produces many erroneous results.
@@ -33,7 +33,7 @@ export function Main(props: { children: ReactNode }) {
   return (
     <main data-pagefind-body {...props}>
       {footerNode.slice(0, -1)}
-      <div data-pagefind-ignore="all">{footerNode[footerNode.length - 1]}</div>
+      <div data-pagefind-ignore="all">{footerNode.at(-1)}</div>
     </main>
   );
 }
