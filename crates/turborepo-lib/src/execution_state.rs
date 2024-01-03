@@ -49,8 +49,6 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
 
         let config = base.config()?;
 
-        // TODO(voz): Don't unwrap here. Should be fine since this can rarely ever be
-        // None.
         let auth_file_path = base.global_auth_path()?;
         let config_file_path = base.global_config_path()?;
         let auth = turborepo_auth::read_or_create_auth_file(
