@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Deref};
 
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPath;
