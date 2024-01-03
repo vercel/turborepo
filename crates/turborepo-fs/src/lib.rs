@@ -219,7 +219,16 @@ mod tests {
         //     link -> ../b
         //     broken -> missing
         //     circle -> ../child
+        //     other -> ../sibling
+        //   sibling/
+        //     c
         let (_src_tmp, src_dir) = tmp_dir()?;
+
+        let sibling_dir = src_dir.join_component("sibling");
+        let c_path = sibling_dir.join_component("c");
+        c_path.ensure_dir()?;
+        c_path.create_with_contents("right here")?;
+
         let child_dir = src_dir.join_component("child");
         let a_path = child_dir.join_component("a");
         a_path.ensure_dir()?;
@@ -236,6 +245,9 @@ mod tests {
 
         let circle_path = child_dir.join_component("circle");
         circle_path.symlink_to_dir(["..", "child"].join(std::path::MAIN_SEPARATOR_STR))?;
+
+        let other_path = child_dir.join_component("other");
+        other_path.symlink_to_dir(["..", "sibling"].join(std::path::MAIN_SEPARATOR_STR))?;
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
 
@@ -269,6 +281,18 @@ mod tests {
 
         let num_files = fs::read_dir(dst_circle_path.as_path())?.count();
         assert_eq!(num_files, 0);
+
+        let dst_other_path = dst_child_path.join_component("other");
+
+        let dst_other_metadata = fs::symlink_metadata(dst_other_path.as_path())?;
+        assert!(dst_other_metadata.is_symlink());
+
+        let num_files = fs::read_dir(dst_other_path.as_path())?.count();
+        assert_eq!(num_files, 1);
+
+        let dst_c_path = dst_child_path.join_component("c");
+
+        assert_file_matches(&c_path, dst_c_path);
 
         Ok(())
     }
