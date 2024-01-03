@@ -28,11 +28,8 @@ impl<T: LoginServer> Login<T> {
         let global_auth_path = base.global_auth_path()?;
         let global_config_path = base.global_config_path()?;
 
-        let mut auth_file = read_or_create_auth_file(
-            &global_auth_path,
-            &global_config_path,
-            api_client.base_url(),
-        )?;
+        let mut auth_file =
+            read_or_create_auth_file(&global_auth_path, &global_config_path, &api_client)?;
 
         if self
             .has_existing_token(&api_client, &mut auth_file, &ui)
@@ -84,11 +81,8 @@ impl<T: SSOLoginServer> Login<T> {
         let global_auth_path = base.global_auth_path()?;
         let global_config_path = base.global_config_path()?;
 
-        let mut auth_file = read_or_create_auth_file(
-            &global_auth_path,
-            &global_config_path,
-            api_client.base_url(),
-        )?;
+        let mut auth_file =
+            read_or_create_auth_file(&global_auth_path, &global_config_path, &api_client)?;
 
         if self
             .has_existing_sso_token(&api_client, &mut auth_file, &base.ui, sso_team)
@@ -245,8 +239,7 @@ mod tests {
         // Pass in the auth file path for both possible paths becuase we
         // should never read the config from here.
         let found_auth_file =
-            read_or_create_auth_file(&auth_file_path, &auth_file_path, mock_api_client.base_url())
-                .unwrap();
+            read_or_create_auth_file(&auth_file_path, &auth_file_path, &mock_api_client).unwrap();
 
         api_server.abort();
         assert_eq!(
@@ -280,8 +273,7 @@ mod tests {
         assert!(result.is_ok());
 
         let found_auth_file =
-            read_or_create_auth_file(&auth_file_path, &auth_file_path, mock_api_client.base_url())
-                .unwrap();
+            read_or_create_auth_file(&auth_file_path, &auth_file_path, &mock_api_client).unwrap();
 
         api_server.abort();
 
