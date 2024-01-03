@@ -48,6 +48,12 @@ fn join_unix_like_paths(a: &str, b: &str) -> String {
     [a.trim_end_matches('/'), "/", b.trim_start_matches('/')].concat()
 }
 
+fn escape_glob_literals(literal_glob: &str) -> Cow<str> {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").unwrap())
+        .replace_all(literal_glob, "\\$literal")
+}
+
 #[tracing::instrument]
 fn preprocess_paths_and_globs(
     base_path: &AbsoluteSystemPath,
@@ -57,8 +63,11 @@ fn preprocess_paths_and_globs(
     let base_path_slash = base_path
         .as_std_path()
         .to_slash()
-        // Windows drive paths need to be escaped, and ':' is a valid token in unix paths
-        .map(|s| s.replace(':', "\\:"))
+        .map(|s| {
+            // Paths can contain various tokens that have special meaning when parsing as a
+            // glob We escape them to avoid any unintended consequences.
+            escape_glob_literals(&s).into_owned()
+        })
         .ok_or(WalkError::InvalidPath)?;
 
     let (include_paths, lowest_segment) = include
@@ -307,7 +316,9 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::{collapse_path, fix_glob_pattern, globwalk, WalkError, WalkType};
+    use crate::{
+        collapse_path, escape_glob_literals, fix_glob_pattern, globwalk, WalkError, WalkType,
+    };
 
     #[cfg(unix)]
     const ROOT: &str = "/";
@@ -1204,7 +1215,11 @@ mod test {
     }
 
     fn setup_files(files: &[&str]) -> tempdir::TempDir {
-        let tmp = tempdir::TempDir::new("globwalk").unwrap();
+        setup_files_with_prefix("globwalk", files)
+    }
+
+    fn setup_files_with_prefix(prefix: &str, files: &[&str]) -> tempdir::TempDir {
+        let tmp = tempdir::TempDir::new(prefix).unwrap();
         for file in files {
             let file = file.trim_start_matches('/');
             let path = tmp.path().join(file);
@@ -1269,5 +1284,32 @@ mod test {
                 .to_string(),
         ]);
         assert_eq!(paths, expected);
+    }
+
+    #[test]
+    fn test_base_with_brackets() {
+        let files = &["foo", "bar", "baz"];
+        let tmp = setup_files_with_prefix("[path]", files);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let include = &["ba*".to_string()];
+        let exclude = &[];
+        let iter = globwalk(&root, include, exclude, WalkType::Files).unwrap();
+        let paths = iter
+            .into_iter()
+            .map(|path| {
+                let relative = root.anchor(path).unwrap();
+                relative.to_string()
+            })
+            .collect::<HashSet<_>>();
+        let expected: HashSet<String> = HashSet::from_iter(["bar".to_string(), "baz".to_string()]);
+        assert_eq!(paths, expected);
+    }
+
+    #[test]
+    fn test_escape_glob_literals() {
+        assert_eq!(
+            escape_glob_literals("?*$:<>()[]{},"),
+            r"\?\*\$\:\<\>\(\)\[\]\{\}\,"
+        );
     }
 }
