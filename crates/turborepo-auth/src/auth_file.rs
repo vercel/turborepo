@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Deref};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPath;
@@ -83,12 +83,6 @@ impl AuthToken {
         } else {
             &self.api
         }
-    }
-    pub fn api(&self) -> &str {
-        &self.api
-    }
-    pub fn token(&self) -> &str {
-        &self.token
     }
 }
 
