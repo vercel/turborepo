@@ -8,12 +8,11 @@
     "pretest:parallel": ".cram_env/bin/pip3 install --quiet pytest \"prysk[pytest-plugin]\" pytest-xdist"
   },
   "dependencies": {
+    "turborepo-tests-helpers": "workspace:*",
     "@turbo/exe-stub": "workspace:*",
-    "prysk": "workspace:*",
-    "turborepo-tests-helpers": "workspace:*"
+    "prysk": "workspace:*"
   },
   "devDependencies": {
     "cross-env": "^7.0.3"
-  },
-  "version": "0.0.0"
+  }
 }
