@@ -96,10 +96,10 @@ impl AuthToken {
 }
 
 /// Converts our old style of token held in `config.json` into the new schema.
-pub fn convert_to_auth_token(token: &str, client: &impl Client) -> AuthToken {
+pub fn convert_to_auth_token(token: &str, api: &str) -> AuthToken {
     AuthToken {
         token: token.to_string(),
-        api: client.base_url().to_owned(),
+        api: api.to_string(),
     }
 }
 
@@ -108,6 +108,7 @@ mod tests {
     use std::{fs, ops::Deref};
 
     use tempfile::tempdir;
+    use turborepo_api_client::Client;
 
     use super::*;
     use crate::{mocks::*, TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR};
@@ -119,7 +120,7 @@ mod tests {
         let token = "test-token";
 
         // Test: Call the convert_to_auth_file function and check the result
-        let auth_token = convert_to_auth_token(token, &mock_client);
+        let auth_token = convert_to_auth_token(token, mock_client.base_url());
 
         // Check that the AuthFile contains the correct data
         assert_eq!(auth_token.token, "test-token".to_string());
