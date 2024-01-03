@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import Link from "next/link";
 import { usePageFindSearch, useResult, useSearchResults } from "../lib/search";
-import type { PagefindSearchResult } from "../lib/search-types";
+import type { PagefindSearchResult } from "../lib/search/search-types";
 
 function Result({ result }: { result: PagefindSearchResult }) {
   const data = useResult(result);

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
+import { mockSearchData } from "../mock-search-data";
 import type {
   PagefindSearchFragment,
   PagefindSearchResult,
   PagefindSearchResults,
 } from "./search-types";
-import { mockSearchData } from "./mock-search-data";
 
 export const ignoredRoutes = ["/blog", "/terms", "/privacy", "/confirm"];
 
