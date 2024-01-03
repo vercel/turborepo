@@ -10,7 +10,7 @@ function Result({ result }: { result: PagefindSearchResult }) {
   if (!data) return <p className="text-gray-400 m-2">No result.</p>;
 
   const createHashLink = () => {
-    const toHashlink = data.anchors
+    const hashlinkCandidates = data.anchors
       // Only `a` tags. This gives us hashlink-able headers.
       // Pagefind already filters away `a` tags from copy.
       .filter((elem) => elem.element === "a")
@@ -19,11 +19,11 @@ function Result({ result }: { result: PagefindSearchResult }) {
       // so we can use the last one as the hashlink.
       .filter((anchor) => anchor.location < data.locations[0]);
 
-    if (toHashlink.length === 0) {
+    if (hashlinkCandidates.length === 0) {
       return "";
     }
 
-    return `#${toHashlink.at(-1)?.id ?? ""}`;
+    return `#${hashlinkCandidates.at(-1)?.id ?? ""}`;
   };
 
   return (
@@ -31,9 +31,10 @@ function Result({ result }: { result: PagefindSearchResult }) {
       <Link
         className="hover:bg-blue-300/30 flex flex-col gap-2 p-2 px-3"
         href={data.url
+          // The Pagefind generation isn't Next.js native
+          // so we need to remove the link fragments that don't make sense.
           .replace("_next/static/chunks/server/pages/", "")
           .replace(".html", "")
-          // Add a hash link as needed
           .concat(createHashLink())}
       >
         <p className="text-lg font-semibold truncate">{data.meta.title}</p>

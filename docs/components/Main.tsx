@@ -29,7 +29,7 @@ export function Main(props: { children: ReactNode }) {
   // Hiding the "previous page, next page" footer from search
   // because it produces many erroneous results.
   // We don't need to worry about adding this ignore to the returns above
-  // because the entire page is already either ignored or downranked.
+  // because those entire pages are already either ignored or downranked.
   return (
     <main data-pagefind-body {...props}>
       {footerNode.slice(0, -1)}
