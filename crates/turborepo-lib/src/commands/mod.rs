@@ -125,6 +125,15 @@ impl CommandBase {
         let team_id = config.team_id();
         let team_slug = config.team_slug();
 
+        // Check to see if token was passed in. If so, use that.
+        if let Some(token) = self.args.token.clone() {
+            return Ok(Some(APIAuth {
+                team_id: team_id.map(|s| s.to_string()),
+                token: token.to_string(),
+                team_slug: team_slug.map(|s| s.to_string()),
+            }));
+        }
+
         let auth_file_path = self.global_auth_path()?;
         let config_file_path = self.global_config_path()?;
         let client = self.api_client()?;
