@@ -48,6 +48,12 @@ fn join_unix_like_paths(a: &str, b: &str) -> String {
     [a.trim_end_matches('/'), "/", b.trim_start_matches('/')].concat()
 }
 
+fn escape_glob_literals(literal_glob: &str) -> Cow<str> {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").unwrap())
+        .replace_all(literal_glob, "\\$literal")
+}
+
 #[tracing::instrument]
 fn preprocess_paths_and_globs(
     base_path: &AbsoluteSystemPath,
@@ -58,12 +64,9 @@ fn preprocess_paths_and_globs(
         .as_std_path()
         .to_slash()
         .map(|s| {
-            // Windows drive paths need to be escaped, and ':' is a valid token in unix
-            // paths
-            s.replace(':', "\\:")
-                // [] are valid tokens in paths and need to be escaped
-                .replace('[', "\\[")
-                .replace(']', "\\]")
+            // Paths can contain various tokens that have special meaning when parsing as a
+            // glob We escape them to avoid any unintended consequences.
+            escape_glob_literals(&s).into_owned()
         })
         .ok_or(WalkError::InvalidPath)?;
 
@@ -313,7 +316,9 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::{collapse_path, fix_glob_pattern, globwalk, WalkError, WalkType};
+    use crate::{
+        collapse_path, escape_glob_literals, fix_glob_pattern, globwalk, WalkError, WalkType,
+    };
 
     #[cfg(unix)]
     const ROOT: &str = "/";
@@ -1298,5 +1303,13 @@ mod test {
             .collect::<HashSet<_>>();
         let expected: HashSet<String> = HashSet::from_iter(["bar".to_string(), "baz".to_string()]);
         assert_eq!(paths, expected);
+    }
+
+    #[test]
+    fn test_escape_glob_literals() {
+        assert_eq!(
+            escape_glob_literals("?*$:<>()[]{},"),
+            r"\?\*\$\:\<\>\(\)\[\]\{\}\,"
+        );
     }
 }
