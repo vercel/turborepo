@@ -117,6 +117,7 @@ mod imp;
 #[cfg(windows)]
 mod imp;
 
+mod commandgroup;
 mod kill;
 
 #[cfg(unix)]
@@ -660,11 +661,6 @@ impl Command {
 
     pub fn as_std(&self) -> &StdCommand {
         &self.std
-    }
-
-    // TODO: implement me
-    pub fn group(self) -> Command {
-        return self;
     }
 
     /// Executes a command as a child process, waiting for it to finish and

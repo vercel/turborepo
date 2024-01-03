@@ -22,7 +22,6 @@ use tokio::task::JoinSet;
 use tracing::{debug, trace};
 
 pub use self::child::{Child, ChildExit};
-use crate::tokioprocesspty;
 
 /// A process manager that is responsible for spawning and managing child
 /// processes. When the manager is Open, new child processes can be spawned

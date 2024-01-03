@@ -2,7 +2,6 @@ use std::{
     borrow::Cow,
     collections::HashSet,
     io::{BufRead, Write},
-    process::Stdio,
     sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
@@ -813,13 +812,14 @@ impl ExecContext {
         };
 
         if self.is_interactive {
-            let stdin = process.stdin().take().unwrap();
+            let mut stdin = process.stdin().take().unwrap();
             let stdout = process.stdout().take().unwrap();
             let stderr = process.stderr().take().unwrap();
 
+            let task_id = self.task_id.clone();
+
             std::thread::spawn(move || {
                 let mut parent_stdin_handle = std::io::stdin().lock();
-                let task_id = self.task_id.clone();
                 println!("Granted stdin lock to {task_id}");
                 let mut buffer = String::new();
                 let _ = parent_stdin_handle.read_line(&mut buffer);
