@@ -92,4 +92,31 @@ impl GenericEventBuilder {
         });
         self
     }
+
+    pub fn track_platform(&self, platform: &str) -> &Self {
+        self.track(Event {
+            key: "platform".to_string(),
+            value: platform.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    pub fn track_cpus(&self, cpus: usize) -> &Self {
+        self.track(Event {
+            key: "cpu_count".to_string(),
+            value: cpus.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    pub fn track_version(&self, version: &str) -> &Self {
+        self.track(Event {
+            key: "turbo_version".to_string(),
+            value: version.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
 }

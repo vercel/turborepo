@@ -27,6 +27,7 @@ use crate::{
         bin, daemon, generate, info, link, login, logout, prune, telemetry, unlink, CommandBase,
     },
     get_version,
+    shim::TurboState,
     tracing::TurboSubscriber,
     Payload,
 };
@@ -809,6 +810,11 @@ pub async fn run(
     let root_telemetry = GenericEventBuilder::new();
     root_telemetry.track_start();
 
+    // track system info
+    root_telemetry.track_platform(TurboState::platform_name());
+    root_telemetry.track_version(TurboState::version());
+    root_telemetry.track_cpus(num_cpus::get());
+
     let cli_result = match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
             CommandEventBuilder::new("bin")
@@ -903,8 +909,9 @@ pub async fn run(
             let event = CommandEventBuilder::new("logout").with_parent(&root_telemetry);
             event.track_call();
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
+
             let event_child = event.child();
-            logout::logout(&mut base, event_child)?;
+            logout::logout(&mut base, event_child).await?;
 
             Ok(Payload::Rust(Ok(0)))
         }

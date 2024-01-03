@@ -53,7 +53,6 @@ const OLD_TURBOREPO_ROUTES = [
   "/docs/upgrading-to-v1",
 ];
 
-/** @type {import('next').NextConfig} */
 const nextConfig = withNextra({
   sentry: {
     autoInstrumentServerFunctions: false,
@@ -64,7 +63,6 @@ const nextConfig = withNextra({
     legacyBrowsers: false,
   },
   eslint: {
-    // TODO: remove after eslint has been fixed from new config introduced in vercel/turbo/pull/5752
     ignoreDuringBuilds: true,
   },
   webpack: (config, { webpack }) => {
@@ -184,60 +182,6 @@ const nextConfig = withNextra({
       {
         source: "/pack/docs/comparisons/turbopack-vs-webpack",
         destination: "/pack/docs/comparisons/webpack",
-        permanent: true,
-      },
-      {
-        // Accidentally created, eventually removable. See below.
-        source: "/repo/docs/core-concepts/running-tasks",
-        destination: "/repo/docs/core-concepts/monorepos/running-tasks",
-        permanent: true,
-      },
-      {
-        // Accidentally created, eventually removable. See below.
-        source: "/repo/docs/core-concepts/why-turborepo",
-        destination: "/repo/docs/core-concepts/monorepos",
-        permanent: true,
-      },
-      {
-        // Accidentally created, eventually removable. See below.
-        source: "/repo/docs/core-concepts/filtering",
-        destination: "/repo/docs/core-concepts/monorepos/filtering",
-        permanent: true,
-      },
-      {
-        // Accidentally created, eventually removable. See below.
-        source: "/repo/docs/core-concepts/pipelines",
-        destination: "/repo/docs/core-concepts/monorepos/running-tasks",
-        permanent: true,
-      },
-      {
-        // This rule accidentally created a bunch of URLs.
-        //
-        // They've _never_ resolved, so _eventually_ we should be able to remove the
-        // redirects we added above to fix them.
-        source: "/docs/features/:path*",
-        destination: "/repo/docs/core-concepts/:path*",
-        permanent: true,
-      },
-      {
-        // Accidentally created, eventually removable. See below.
-        source: "/repo/docs/getting-started",
-        destination: "/repo/docs",
-        permanent: true,
-      },
-      {
-        // Accidentally created, eventually removable. See below.
-        source: "/repo/docs/guides/workspaces",
-        destination: "/repo/docs/handbook/workspaces",
-        permanent: true,
-      },
-      {
-        // This rule accidentally created a bunch of URLs.
-        //
-        // They've _never_ resolved, so _eventually_ we should be able to remove the
-        // redirects we added above to fix them.
-        source: "/docs/:path*",
-        destination: "/repo/docs/:path*",
         permanent: true,
       },
       {
