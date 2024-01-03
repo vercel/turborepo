@@ -6,6 +6,14 @@ import type {
 } from "./search-types";
 import { mockSearchData } from "./mock-search-data";
 
+export const ignoredRoutes = ["/blog", "/terms", "/privacy", "/confirm"];
+
+export const downrankedRoutes = [
+  "/repo/docs/acknowledgements",
+  // Deprecations
+  "/repo/docs/core-concepts/scopes",
+];
+
 declare global {
   interface Window {
     pagefind?: {

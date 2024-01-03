@@ -7,7 +7,19 @@ import type { PagefindSearchResult } from "../lib/search-types";
 function Result({ result }: { result: PagefindSearchResult }) {
   const data = useResult(result);
 
-  if (!data) return <p className="text-gray-400 m-2">No results.</p>;
+  if (!data) return <p className="text-gray-400 m-2">No result.</p>;
+
+  const createHashLink = () => {
+    const toHashlink = data.anchors
+      .filter((elem) => elem.element === "a")
+      .filter((anchor) => anchor.location < data.locations[0]);
+
+    if (toHashlink.length === 0) {
+      return "";
+    }
+
+    return `#${toHashlink[toHashlink.length - 1].id}`;
+  };
 
   return (
     <li className="mx-2 border-b border-gray-200 pb-2 dark:border-gray-700 dark:text-white text-gray-700">
@@ -15,7 +27,9 @@ function Result({ result }: { result: PagefindSearchResult }) {
         className="hover:bg-blue-300/30 flex flex-col gap-2 p-2 px-3"
         href={data.url
           .replace("_next/static/chunks/server/pages/", "")
-          .replace(".html", "")}
+          .replace(".html", "")
+          // Add a hash link as needed
+          .concat(createHashLink())}
       >
         <p className="text-lg font-semibold truncate">{data.meta.title}</p>
         <p
@@ -90,13 +104,15 @@ export function Search() {
   });
   useKeyboardListener(ref, setIsFocused);
 
+  const showResultsDropdown = query.length > 0 && isFocused;
+
   return (
     <div
       className="relative lg:w-60"
       // Used by custom.css to hide the search box in the navbar (but not in the mobile menu)
       id="search-container"
     >
-      <kbd className="absolute right-1 top-[5px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-neutral-800 border-gray-400 dark:border-gray-600 whitespace-nowrap border-[1px] text-xs py-1 px-2 rounded">
+      <kbd className="pointer-events-none absolute right-1 top-[5px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-neutral-800 border-gray-400 dark:border-gray-600 whitespace-nowrap border-[1px] text-xs py-1 px-2 rounded">
         ⌘ K
       </kbd>
       <input
@@ -111,12 +127,21 @@ export function Search() {
         ref={ref}
         value={query}
       />
-      {query.length > 0 && isFocused && results ? (
+      {showResultsDropdown && results?.length ? (
         <ul className="border no-scrollbar border-gray-200 flex flex-col gap-1 bg-white text-gray-100 dark:border-neutral-800 dark:bg-neutral-900 absolute top-full z-20 mt-2 overflow-auto overscroll-contain rounded-xl py-2.5 shadow-xl max-h-[min(calc(50vh-11rem-env(safe-area-inset-bottom)),400px)] md:max-h-[min(calc(100vh-5rem-env(safe-area-inset-bottom)),400px)] inset-x-0 ltr:md:left-auto rtl:md:right-auto contrast-more:border contrast-more:border-gray-900 contrast-more:dark:border-gray-50 w-screen min-h-[100px] max-w-[min(calc(100vw-2rem),calc(100%+20rem))]">
-          {results.map((result) => {
+          {results.slice(0, 10).map((result) => {
             return <Result key={result.id} result={result} />;
           })}
         </ul>
+      ) : null}
+
+      {/* When no results to show. */}
+      {showResultsDropdown && !results?.length ? (
+        <div className="border no-scrollbar border-gray-200 flex flex-col gap-1 bg-white text-gray-100 dark:border-neutral-800 dark:bg-neutral-900 absolute top-full z-20 mt-2 overflow-auto overscroll-contain rounded-xl py-2.5 shadow-xl max-h-[min(calc(50vh-11rem-env(safe-area-inset-bottom)),400px)] md:max-h-[min(calc(100vh-5rem-env(safe-area-inset-bottom)),400px)] inset-x-0 ltr:md:left-auto rtl:md:right-auto contrast-more:border contrast-more:border-gray-900 contrast-more:dark:border-gray-50 w-screen min-h-[100px] max-w-[min(calc(100vw-2rem),calc(100%+20rem))]">
+          <p className="text-gray-400 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+            No results.
+          </p>
+        </div>
       ) : null}
     </div>
   );

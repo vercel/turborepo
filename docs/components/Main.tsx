@@ -1,14 +1,8 @@
+import type { ReactNode } from "react";
 import { useRouter } from "next/router";
+import { ignoredRoutes, downrankedRoutes } from "../lib/search";
 
-const ignoredRoutes = ["/blog", "/terms", "/privacy", "/confirm"];
-
-const downrankedRoutes = [
-  "/repo/docs/acknowledgements",
-  // Deprecations
-  "/repo/docs/core-concepts/scopes",
-];
-
-export function Main(props) {
+export function Main(props: { children: ReactNode }) {
   const router = useRouter();
 
   if (ignoredRoutes.some((route) => route === router.asPath)) {
@@ -26,17 +20,20 @@ export function Main(props) {
     );
   }
 
-  // Hiding the footer from search.
+  interface RecursiveProps {
+    props: { children: ReactNode[] };
+  }
+
+  const footerNode = (props.children as RecursiveProps).props.children;
+
+  // Hiding the "previous page, next page" footer from search
+  // because it produces many erroneous results.
+  // We don't need to worry about adding this ignore to the returns above
+  // because the entire page is already either ignored or downranked.
   return (
     <main data-pagefind-body {...props}>
-      {props.children.props.children.slice(0, -1)}
-      <div data-pagefind-ignore="all">
-        {
-          props.children.props.children[
-            props.children.props.children.length - 1
-          ]
-        }
-      </div>
+      {footerNode.slice(0, -1)}
+      <div data-pagefind-ignore="all">{footerNode[footerNode.length - 1]}</div>
     </main>
   );
 }
