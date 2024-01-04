@@ -71,3 +71,10 @@ html[class~="dark"] .dark\:nx-text-neutral-500.dark\:nx-text-neutral-500 {
   outline: none !important;
   box-shadow: none !important;
 }
+
+/* Hide navbar in header nav but not mobile nav */
+@media (max-width: 767px) {
+  nav #search-container {
+    display: none;
+  }
+}
