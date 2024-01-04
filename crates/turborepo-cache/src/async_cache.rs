@@ -5,7 +5,7 @@ use tokio::{
     sync::{mpsc, Semaphore},
     task::JoinHandle,
 };
-use tracing::warn;
+use tracing::{warn, Instrument, Level};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
@@ -67,22 +67,27 @@ impl AsyncCache {
                         let permit = semaphore.clone().acquire_owned().await.unwrap();
                         let real_cache = real_cache.clone();
                         let warnings = warnings.clone();
-                        workers.push(tokio::spawn(async move {
-                            if let Err(err) = real_cache.put(&anchor, &key, &files, duration).await
-                            {
-                                let num_warnings =
-                                    warnings.load(std::sync::atomic::Ordering::Acquire);
-                                if num_warnings <= WARNING_CUTOFF {
-                                    warnings.store(
-                                        num_warnings + 1,
-                                        std::sync::atomic::Ordering::Release,
-                                    );
-                                    warn!("{err}");
+                        let worker_span = tracing::span!(Level::TRACE, "cache worker: cache PUT");
+                        workers.push(tokio::spawn(
+                            async move {
+                                if let Err(err) =
+                                    real_cache.put(&anchor, &key, &files, duration).await
+                                {
+                                    let num_warnings =
+                                        warnings.load(std::sync::atomic::Ordering::Acquire);
+                                    if num_warnings <= WARNING_CUTOFF {
+                                        warnings.store(
+                                            num_warnings + 1,
+                                            std::sync::atomic::Ordering::Release,
+                                        );
+                                        warn!("{err}");
+                                    }
                                 }
+                                // Release permit once we're done with the write
+                                drop(permit);
                             }
-                            // Release permit once we're done with the write
-                            drop(permit);
-                        }))
+                            .instrument(worker_span),
+                        ))
                     }
                     WorkerRequest::Flush(callback) => {
                         // Wait on all workers to finish writing
@@ -107,6 +112,7 @@ impl AsyncCache {
         })
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn put(
         &self,
         anchor: AbsoluteSystemPathBuf,
@@ -131,10 +137,12 @@ impl AsyncCache {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         self.real_cache.exists(key).await
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn fetch(
         &self,
         anchor: &AbsoluteSystemPath,
@@ -145,6 +153,7 @@ impl AsyncCache {
 
     // Used for testing to ensure that the workers resolve
     // before checking the cache.
+    #[tracing::instrument(skip_all)]
     pub async fn wait(&self) {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.writer_sender
