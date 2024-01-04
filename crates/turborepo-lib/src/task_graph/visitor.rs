@@ -3,7 +3,7 @@ use std::{
     collections::HashSet,
     io::{BufRead, Write},
     process::Stdio,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{mpsc::sync_channel as std_sync_channel, Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -801,8 +801,7 @@ impl ExecContext {
             }
         };
 
-        let (sender, receiver) =
-            std::sync::mpsc::sync_channel::<(tokio::process::ChildStdin, TaskId<'_>)>(1);
+        let (sender, receiver) = std_sync_channel::<(tokio::process::ChildStdin, TaskId<'_>)>(1);
 
         if self.is_interactive {
             std::thread::spawn(move || {
