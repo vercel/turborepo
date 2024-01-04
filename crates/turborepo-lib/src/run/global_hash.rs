@@ -16,7 +16,7 @@ use crate::{
 
 static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 
-const GLOBAL_CACHE_KEY: &str = "HEY STELLLLLLLAAAAAAAAAAAAA";
+const GLOBAL_CACHE_KEY: &str = "Say hello to Lumberg for me";
 
 #[derive(Debug, Error)]
 pub enum Error {
