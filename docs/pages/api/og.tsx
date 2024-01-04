@@ -1,12 +1,13 @@
+import type { ReactElement } from "react";
 import React, { createElement } from "react";
 import { ImageResponse } from "@vercel/og";
 import type { NextApiRequest } from "next/index";
-import PackLogo from "../../components/logos/og/PackLogo";
-import RepoLogo from "../../components/logos/og/RepoLogo";
-import TurboLogo from "../../components/logos/og/TurboLogo";
-import VercelLogo from "../../components/logos/og/VercelLogo";
+import { PackLogo } from "../../components/logos/og/PackLogo";
+import { RepoLogo } from "../../components/logos/og/RepoLogo";
+import { TurboLogo } from "../../components/logos/og/TurboLogo";
+import { VercelLogo } from "../../components/logos/og/VercelLogo";
 
-function _arrayBufferToBase64(buffer) {
+function _arrayBufferToBase64(buffer: ArrayBuffer) {
   let binary = "";
   const bytes = new Uint8Array(buffer);
   const len = bytes.byteLength;
@@ -68,15 +69,22 @@ export default async function openGraphImage(
 ): Promise<ImageResponse> {
   try {
     const [fonts, bg] = await loadAssets();
-    const { searchParams } = new URL(req.url);
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- It's safe for us to assume that this is coming from `http.Server` here.
+    const { searchParams } = new URL(req.url!);
 
     const type = searchParams.get("type");
+
+    if (!type) {
+      throw new Error("No type provided to /api/og.");
+    }
 
     // Start with the default title for the type
     let title = TITLE_FOR_TYPE[type];
 
-    // If there'sa a ?title=<title> query param, always prefer that.
+    // If there's a ?title=<title> query param, always prefer that.
     if (searchParams.has("title")) {
+      // @ts-expect-error -- We just checked .has so we know its there.
       title = searchParams.get("title").slice(0, 100);
     }
 
@@ -103,7 +111,7 @@ export function OGImage({
   title: string;
   type: string;
   bg: string;
-}): JSX.Element {
+}): ReactElement {
   return (
     <div
       style={{
@@ -158,7 +166,7 @@ export function OGImage({
   );
 }
 
-function Logo({ type }: { type: string | undefined }): JSX.Element {
+function Logo({ type }: { type: string | undefined }): ReactElement {
   if (type === "pack") {
     return <PackLogo height={103 * 1.1} width={697 * 1.1} />;
   }

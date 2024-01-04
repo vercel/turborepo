@@ -15,7 +15,7 @@ use tokio::{
     process::Command,
     sync::{mpsc, oneshot},
 };
-use tracing::{debug, error, Span};
+use tracing::{debug, error, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_ci::github_header_footer;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
@@ -23,6 +23,7 @@ use turborepo_repository::{
     package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
     package_manager::PackageManager,
 };
+use turborepo_telemetry::events::{task::PackageTaskEventBuilder, EventBuilder};
 use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
 use which::which;
 
@@ -127,7 +128,7 @@ impl<'a> Visitor<'a> {
         }
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     pub async fn visit(&self, engine: Arc<Engine>) -> Result<Vec<TaskError>, Error> {
         let concurrency = self.opts.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
@@ -156,6 +157,7 @@ impl<'a> Visitor<'a> {
                     task_id: info.clone(),
                 })?;
 
+            let package_task_event = PackageTaskEventBuilder::new(info.package(), info.task());
             let command = workspace_info
                 .package_json
                 .scripts
@@ -164,10 +166,11 @@ impl<'a> Visitor<'a> {
 
             match command {
                 Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(&cmd) => {
+                    package_task_event.track_recursive_error();
                     return Err(Error::RecursiveTurbo {
                         task_name: info.to_string(),
                         command: cmd.to_string(),
-                    })
+                    });
                 }
                 _ => (),
             }
@@ -188,15 +191,18 @@ impl<'a> Visitor<'a> {
                 EnvMode::Strict => ResolvedEnvMode::Strict,
                 EnvMode::Loose => ResolvedEnvMode::Loose,
             };
+            package_task_event.track_env_mode(&task_env_mode.to_string());
 
             let dependency_set = engine.dependencies(&info).ok_or(Error::MissingDefinition)?;
 
+            let package_task_event_child = package_task_event.child();
             let task_hash = self.task_hasher.calculate_task_hash(
                 &info,
                 task_definition,
                 task_env_mode,
                 workspace_info,
                 dependency_set,
+                package_task_event_child,
             )?;
 
             debug!("task {} hash is {}", info, task_hash);
@@ -213,6 +219,9 @@ impl<'a> Visitor<'a> {
                 info.clone(),
                 &task_hash,
             );
+
+            // Drop to avoid holding the span across an await
+            drop(_enter);
 
             // here is where we do the logic split
             match self.dry {
@@ -646,7 +655,9 @@ impl ExecContext {
         spaces_client: Option<SpacesTaskClient>,
     ) {
         let tracker = tracker.start().await;
-        let mut result = self.execute_inner(parent_span_id, &output_client).await;
+        let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
+        span.follows_from(parent_span_id);
+        let mut result = self.execute_inner(&output_client).instrument(span).await;
 
         let logs = match output_client.finish() {
             Ok(logs) => logs,
@@ -711,13 +722,9 @@ impl ExecContext {
 
     async fn execute_inner(
         &mut self,
-        parent_span_id: Option<tracing::Id>,
         output_client: &OutputClient<impl std::io::Write>,
     ) -> ExecOutcome {
-        let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
         let task_start = Instant::now();
-        span.follows_from(parent_span_id);
-        let _enter = span.enter();
 
         let mut prefixed_ui = Visitor::prefixed_ui(
             self.ui,

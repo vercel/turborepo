@@ -250,7 +250,7 @@ pub extern "C" fn get_package_file_hashes(buffer: Buffer) -> Buffer {
     };
     let inputs = req.inputs.as_slice();
     let hasher = turborepo_scm::SCM::new(&turbo_root);
-    let response = match hasher.get_package_file_hashes(&turbo_root, &package_path, inputs) {
+    let response = match hasher.get_package_file_hashes(&turbo_root, &package_path, inputs, None) {
         Ok(hashes) => {
             let mut to_return = HashMap::new();
             for (filename, hash) in hashes {

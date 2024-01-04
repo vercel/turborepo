@@ -512,7 +512,7 @@ impl PackageManager {
         self.parse_lockfile(root_package_json, &contents)
     }
 
-    #[tracing::instrument(skip(self, root_package_json))]
+    #[tracing::instrument(skip(self, root_package_json, contents))]
     pub fn parse_lockfile(
         &self,
         root_package_json: &PackageJson,

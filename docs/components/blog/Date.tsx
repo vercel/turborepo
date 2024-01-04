@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
-function Date({
+export function Date({
   children,
-  update = null,
+  update = undefined,
 }: {
   children: ReactNode;
   update?: string;
@@ -11,11 +11,9 @@ function Date({
     <div className="text-sm mt-2 text-center text-gray-500 dark:text-gray-400 font-space-grotesk">
       {children}
 
-      {update !== null && (
+      {update !== undefined && (
         <div className="text-xs mt-1 text-center">Last updated {update}</div>
       )}
     </div>
   );
 }
-
-export default Date;

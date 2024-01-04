@@ -4,15 +4,21 @@ mod turbo_config;
 use std::io;
 
 use thiserror::Error;
-pub use turbo::{validate_extends, validate_no_package_task_syntax, RawTurboJSON, TurboJson};
+pub use turbo::{
+    validate_extends, validate_no_package_task_syntax, RawTaskDefinition, RawTurboJson, TurboJson,
+};
 pub use turbo_config::{ConfigurationOptions, TurborepoConfigBuilder};
 use turbopath::AbsoluteSystemPathBuf;
 
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("Authentication error: {0}")]
+    Auth(#[from] turborepo_auth::Error),
     #[error("Global config path not found")]
     NoGlobalConfigPath,
+    #[error("Global auth file path not found")]
+    NoGlobalAuthFilePath,
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
@@ -29,6 +35,11 @@ pub enum Error {
     #[error("Encountered an IO error while attempting to read {config_path}: {error}")]
     FailedToReadConfig {
         config_path: AbsoluteSystemPathBuf,
+        error: io::Error,
+    },
+    #[error("Encountered an IO error while attempting to read {auth_path}: {error}")]
+    FailedToReadAuth {
+        auth_path: AbsoluteSystemPathBuf,
         error: io::Error,
     },
     #[error("Encountered an IO error while attempting to set {config_path}: {error}")]

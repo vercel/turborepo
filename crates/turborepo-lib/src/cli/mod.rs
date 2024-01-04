@@ -10,12 +10,24 @@ pub use error::Error;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
+use turborepo_telemetry::{
+    events::{
+        command::{CodePath, CommandEventBuilder},
+        generic::GenericEventBuilder,
+        EventBuilder,
+    },
+    init_telemetry, TelemetryHandle,
+};
 use turborepo_ui::UI;
 
 use crate::{
-    commands::{bin, daemon, generate, info, link, login, logout, prune, unlink, CommandBase},
+    commands::{
+        bin, daemon, generate, info, link, login, logout, prune, telemetry, unlink, CommandBase,
+    },
     get_version,
+    shim::TurboState,
     tracing::TurboSubscriber,
     Payload,
 };
@@ -200,6 +212,17 @@ pub enum DaemonCommand {
     Clean,
 }
 
+#[derive(Subcommand, Copy, Clone, Debug, Serialize, PartialEq)]
+#[serde(tag = "command")]
+pub enum TelemetryCommand {
+    /// Enables anonymous telemetry
+    Enable,
+    /// Disables anonymous telemetry
+    Disable,
+    /// Reports the status of telemetry
+    Status,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum LinkTarget {
     RemoteCache,
@@ -345,6 +368,14 @@ pub enum Command {
         #[clap(subcommand)]
         #[serde(skip)]
         command: Option<Box<GenerateCommand>>,
+    },
+    // TODO:[telemetry] Unhide this in `1.12`
+    /// Enable or disable anonymous telemetry
+    #[clap(hide = true)]
+    Telemetry {
+        #[clap(subcommand)]
+        #[serde(flatten)]
+        command: Option<TelemetryCommand>,
     },
     #[clap(hide = true)]
     Info {
@@ -686,6 +717,29 @@ pub async fn run(
     ui: UI,
 ) -> Result<Payload, Error> {
     let mut cli_args = Args::new();
+    let version = get_version();
+
+    // track telemetry handle to close at the end of the run
+    let mut telemetry_handle: Option<TelemetryHandle> = None;
+    // TODO:[telemetry] Remove this check in `1.12`
+    if turborepo_telemetry::config::is_telemetry_internal_test() {
+        // initialize telemetry
+        match AnonAPIClient::new("https://telemetry.vercel.com", 250, version) {
+            Ok(anonymous_api_client) => {
+                let handle = init_telemetry(anonymous_api_client, ui);
+                match handle {
+                    Ok(h) => telemetry_handle = Some(h),
+                    Err(error) => {
+                        debug!("failed to start telemetry: {:?}", error)
+                    }
+                }
+            }
+            Err(error) => {
+                debug!("Failed to create AnonAPIClient: {:?}", error);
+            }
+        }
+    }
+
     // If there is no command, we set the command to `Command::Run` with
     // `self.parsed_args.run_args` as arguments.
     let mut command = if let Some(command) = mem::take(&mut cli_args.command) {
@@ -750,19 +804,31 @@ pub async fn run(
         AbsoluteSystemPathBuf::cwd()?
     };
 
-    let version = get_version();
-
     cli_args.command = Some(command);
     cli_args.cwd = Some(repo_root.as_path().to_owned());
 
-    match cli_args.command.as_ref().unwrap() {
+    let root_telemetry = GenericEventBuilder::new();
+    root_telemetry.track_start();
+
+    // track system info
+    root_telemetry.track_platform(TurboState::platform_name());
+    root_telemetry.track_version(TurboState::version());
+    root_telemetry.track_cpus(num_cpus::get());
+
+    let cli_result = match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {
+            CommandEventBuilder::new("bin")
+                .with_parent(&root_telemetry)
+                .track_call();
             bin::run()?;
 
             Ok(Payload::Rust(Ok(0)))
         }
         #[allow(unused_variables)]
         Command::Daemon { command, idle_time } => {
+            CommandEventBuilder::new("daemon")
+                .with_parent(&root_telemetry)
+                .track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
 
             match command {
@@ -785,6 +851,8 @@ pub async fn run(
             args,
             command,
         } => {
+            let event = CommandEventBuilder::new("generate").with_parent(&root_telemetry);
+            event.track_call();
             // build GeneratorCustomArgs struct
             let args = GeneratorCustomArgs {
                 generator_name: generator_name.clone(),
@@ -792,11 +860,22 @@ pub async fn run(
                 root: root.clone(),
                 args: args.clone(),
             };
-
-            generate::run(tag, command, &args)?;
+            let child_event = event.child();
+            generate::run(tag, command, &args, child_event)?;
+            Ok(Payload::Rust(Ok(0)))
+        }
+        Command::Telemetry { command } => {
+            let event = CommandEventBuilder::new("telemetry").with_parent(&root_telemetry);
+            event.track_call();
+            let mut base = CommandBase::new(cli_args.clone(), repo_root, version, ui);
+            let child_event = event.child();
+            telemetry::configure(command, &mut base, child_event);
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Info { workspace, json } => {
+            CommandEventBuilder::new("info")
+                .with_parent(&root_telemetry)
+                .track_call();
             let json = *json;
             let workspace = workspace.clone();
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
@@ -808,6 +887,9 @@ pub async fn run(
             no_gitignore,
             target,
         } => {
+            CommandEventBuilder::new("link")
+                .with_parent(&root_telemetry)
+                .track_call();
             if cli_args.test_run {
                 println!("Link test run successful");
                 return Ok(Payload::Rust(Ok(0)));
@@ -824,12 +906,18 @@ pub async fn run(
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Logout { .. } => {
+            let event = CommandEventBuilder::new("logout").with_parent(&root_telemetry);
+            event.track_call();
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
-            logout::logout(&mut base)?;
+
+            let event_child = event.child();
+            logout::logout(&mut base, event_child).await?;
 
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Login { sso_team } => {
+            let event = CommandEventBuilder::new("login").with_parent(&root_telemetry);
+            event.track_call();
             if cli_args.test_run {
                 println!("Login test run successful");
                 return Ok(Payload::Rust(Ok(0)));
@@ -838,16 +926,20 @@ pub async fn run(
             let sso_team = sso_team.clone();
 
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
+            let event_child = event.child();
 
             if let Some(sso_team) = sso_team {
-                login::sso_login(&mut base, &sso_team).await?;
+                login::sso_login(&mut base, &sso_team, event_child).await?;
             } else {
-                login::login(&mut base).await?;
+                login::login(&mut base, event_child).await?;
             }
 
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Unlink { target } => {
+            CommandEventBuilder::new("unlink")
+                .with_parent(&root_telemetry)
+                .track_call();
             if cli_args.test_run {
                 println!("Unlink test run successful");
                 return Ok(Payload::Rust(Ok(0)));
@@ -861,6 +953,8 @@ pub async fn run(
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Run(args) => {
+            let event = CommandEventBuilder::new("run").with_parent(&root_telemetry);
+            event.track_call();
             // in the case of enabling the run stub, we want to be able to opt-in
             // to the rust codepath for running turbo
             if args.tasks.is_empty() {
@@ -868,6 +962,7 @@ pub async fn run(
             }
 
             if let Some((file_path, include_args)) = args.profile_file_and_include_args() {
+                event.track_run_chrome_tracing();
                 // TODO: Do we want to handle the result / error?
                 let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
@@ -875,10 +970,18 @@ pub async fn run(
 
             let should_use_go = args.go_fallback
                 || env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false");
+
             if should_use_go {
+                event.track_run_code_path(CodePath::Go);
+                // we have to clear the telemetry queue before we hand off to go
+                if telemetry_handle.is_some() {
+                    let handle = telemetry_handle.take().unwrap();
+                    handle.close_with_timeout().await;
+                }
                 Ok(Payload::Go(Box::new(base)))
             } else {
                 use crate::commands::run;
+                event.track_run_code_path(CodePath::Rust);
                 let exit_code = run::run(base).await?;
                 Ok(Payload::Rust(Ok(exit_code)))
             }
@@ -889,6 +992,8 @@ pub async fn run(
             docker,
             output_dir,
         } => {
+            let event = CommandEventBuilder::new("prune").with_parent(&root_telemetry);
+            event.track_call();
             let scope = scope_arg
                 .as_ref()
                 .or(scope.as_ref())
@@ -897,15 +1002,31 @@ pub async fn run(
             let docker = *docker;
             let output_dir = output_dir.clone();
             let base = CommandBase::new(cli_args, repo_root, version, ui);
-            prune::prune(&base, &scope, docker, &output_dir).await?;
+            let event_child = event.child();
+            prune::prune(&base, &scope, docker, &output_dir, event_child).await?;
             Ok(Payload::Rust(Ok(0)))
         }
         Command::Completion { shell } => {
+            CommandEventBuilder::new("completion")
+                .with_parent(&root_telemetry)
+                .track_call();
             generate(*shell, &mut Args::command(), "turbo", &mut io::stdout());
-
             Ok(Payload::Rust(Ok(0)))
         }
+    };
+
+    if cli_result.is_err() {
+        root_telemetry.track_failure();
+    } else {
+        root_telemetry.track_success();
     }
+    root_telemetry.track_end();
+    match telemetry_handle {
+        Some(handle) => handle.close_with_timeout().await,
+        None => debug!("Skipping telemetry close - not initialized"),
+    }
+
+    cli_result
 }
 
 #[cfg(test)]

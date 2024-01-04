@@ -36,14 +36,16 @@ export function Logo({
         "hidden dark:inline": theme !== "dark",
         "dark:hidden inline": theme === "dark",
       })}
-      height={numericHeight}
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- It's declared above.
+      height={numericHeight!}
       priority
       src={user.image.replace(
         "/logos",
         theme === "light" ? "/logos/white" : "/logos/color"
       )}
       style={styles}
-      width={numericWidth}
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- It's declared above.
+      width={numericWidth!}
     />
   );
 

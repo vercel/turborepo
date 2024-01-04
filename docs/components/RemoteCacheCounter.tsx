@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
 import { animated, useSpring, config } from "@react-spring/web";
 import Link from "next/link";
-import useTurborepoMinutesSaved from "../lib/useTurborepoMinutesSaved";
+import { useTurborepoMinutesSaved } from "../lib/useTurborepoMinutesSaved";
 
 const counterFormatter = Intl.NumberFormat(undefined, {
   minimumIntegerDigits: 7,
   maximumFractionDigits: 0,
 });
 
-export default function RemoteCacheCounter() {
+export function RemoteCacheCounter() {
   const [targetMinutes, setTargetMinutes] = useState(0);
   const timeSaved = useTurborepoMinutesSaved();
   useEffect(() => {
