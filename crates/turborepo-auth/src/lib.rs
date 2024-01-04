@@ -15,7 +15,7 @@ mod sso;
 mod sso_server;
 mod ui;
 
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::Client;
 
 pub use self::{
@@ -26,9 +26,79 @@ pub use self::{
 pub const TURBOREPO_AUTH_FILE_NAME: &str = "auth.json";
 pub const TURBOREPO_LEGACY_AUTH_FILE_NAME: &str = "config.json";
 pub const TURBOREPO_CONFIG_DIR: &str = "turborepo";
+pub const VERCEL_CONFIG_DIR: &str = "com.vercel.cli";
+pub const VERCEL_AUTH_FILE_NAME: &str = "auth.json";
 
 pub const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 pub const DEFAULT_API_URL: &str = "https://vercel.com/api";
+
+/// AuthSource determines where the auth file should be read from. Each of the
+/// variants has different initialization and permissions.
+pub enum AuthSource {
+    /// A token passed in via the CLI. This is the most ephemeral of the auth
+    /// sources. It will no-op on any and all fs write operations.
+    CLI(String),
+    /// Our custom auth file. This is allowed to read/write.
+    Turborepo(AbsoluteSystemPathBuf),
+    /// The Vercel auth file. This is a read-only source issued from the Vercel
+    /// CLI. Write operations will no-op.
+    Vercel(AbsoluteSystemPathBuf),
+}
+
+/// Auth is an enum that contains either a token or a file. This is used for
+/// holding a/many token(s), depending on the variant.
+pub enum Auth {
+    Token(AuthToken),
+    File(AuthFile),
+}
+impl Auth {
+    /// Creates a new Auth enum from an AuthSource.
+    /// ## Arguments
+    /// * `source`: The AuthSource to create the Auth enum from.
+    /// ## Returns
+    /// * `Auth`: The Auth enum.
+    /// ## Examples
+    /// ```
+    /// use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+    /// use turborepo_auth::{Auth, AuthSource};
+    /// let auth_file_path = AbsoluteSystemPath::new("/path/to/auth/file").unwrap();
+    ///
+    /// // Create an Auth enum from a file.
+    /// let auth_file = Auth::new(AuthSource::Turborepo(auth_file_path));
+    /// // Create an Auth enum from a token.
+    /// let auth_token = Auth::new(AuthSource::CLI("test-token".to_string()));
+    ///
+    /// assert!(auth_file.is_file());
+    /// assert!(!auth_token.is_file()
+    /// ```
+    pub fn new(source: AuthSource) -> Self {
+        match source {
+            // Any token coming in from the CLI is a one-off, so we don't give it any file checks,
+            // api keys, or permissions. If we add functionality, like refreshing tokens
+            // or anything that might allow for a passed in token to be written to disk,
+            // we'll update this arm.
+            AuthSource::CLI(t) => Auth::Token(AuthToken {
+                token: t,
+                api: "".to_string(),
+            }),
+            AuthSource::Turborepo(source) => Auth::File(AuthFile::new(source)),
+            AuthSource::Vercel(source) => Auth::File(AuthFile::new(source)),
+        }
+    }
+    /// Determines if this enum is a file or a token.
+    pub fn is_file(&self) -> bool {
+        matches!(self, Auth::File(_))
+    }
+    /// Returns the underlying token. If the enum is a `Token`, it will return
+    /// the token used to construct it. Otherwise, the `api` argument is used to
+    /// look up the token in the file, if it exists.
+    pub fn get_token(&self, api: &str) -> Option<AuthToken> {
+        match self {
+            Auth::Token(t) => Some(t.clone()),
+            Auth::File(f) => f.get_token(api),
+        }
+    }
+}
 
 /// Checks the auth file path first, then the config file path, and does the
 /// following:
@@ -58,7 +128,7 @@ pub async fn read_or_create_auth_file(
             })?;
         let tokens: AuthFile = serde_json::from_str(&content)
             .map_err(|e| Error::FailedToDeserializeAuthFile { source: e })?;
-        let mut auth_file = AuthFile::new();
+        let mut auth_file = AuthFile::new(auth_file_path.to_owned());
         for (api, token) in tokens.tokens() {
             auth_file.insert(api.to_owned(), token.to_owned());
         }
@@ -76,7 +146,7 @@ pub async fn read_or_create_auth_file(
 
         let auth_token = convert_to_auth_token(&config_token.token, client);
 
-        let mut auth_file = AuthFile::new();
+        let mut auth_file = AuthFile::new(auth_file_path.to_owned());
         auth_file.insert(client.base_url().to_owned(), auth_token.token);
         auth_file.write_to_disk(auth_file_path)?;
         return Ok(auth_file);
@@ -106,7 +176,7 @@ mod tests {
             .expect("Failed to create config file path");
 
         // Create auth file
-        let mut mock_auth_file = AuthFile::new();
+        let mut mock_auth_file = AuthFile::new(auth_file_path.to_owned());
         mock_auth_file.insert("mock-api".to_owned(), "mock-token".to_owned());
         mock_auth_file.write_to_disk(auth_file_path).unwrap();
 
