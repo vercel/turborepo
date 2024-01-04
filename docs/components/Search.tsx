@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { usePageFindSearch, useResult, useSearchResults } from "../lib/search";
 import type { PagefindSearchResult } from "../lib/search/search-types";
 
@@ -69,6 +70,7 @@ function useKeyboardListener(
   const handleKeyboard = (e: KeyboardEvent) => {
     if (e.key === "Escape" && document.activeElement === ref.current) {
       ref.current?.blur();
+      setIsFocused(false);
     }
 
     // Handle both macOS and Windows modifier keys.
@@ -110,6 +112,12 @@ export function Search() {
     setIsFocused(false);
   });
   useKeyboardListener(ref, setIsFocused);
+
+  const router = useRouter();
+
+  router.events.on("routeChangeStart", () => {
+    setQuery("");
+  });
 
   const showResultsDropdown = query.length > 0 && isFocused;
 

@@ -14,6 +14,11 @@ export const downrankedRoutes = [
   "/repo/docs/core-concepts/scopes",
 ];
 
+export const uprankedRoutes = [
+  "/repo/docs/core-concepts/caching",
+  "/repo/docs/reference/configuration",
+];
+
 declare global {
   interface Window {
     pagefind?: {
