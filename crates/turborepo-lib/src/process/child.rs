@@ -30,8 +30,6 @@ use tokio::{
 };
 use tracing::debug;
 
-use crate::tokioprocesspty::AsyncCommandGroup;
-
 #[derive(Debug)]
 pub enum ChildState {
     Running(ChildCommandChannel),
