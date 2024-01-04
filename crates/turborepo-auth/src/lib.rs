@@ -1,18 +1,11 @@
 #![feature(cow_is_borrowed)]
-#![feature(fs_try_exists)] // Used in tests
 #![deny(clippy::all)]
 //! Turborepo's library for authenticating with the Vercel API.
 //! Handles logging into Vercel, verifying SSO, and storing the token.
 
-mod auth_file;
-mod config_token;
+mod auth;
 mod error;
-mod login;
-mod login_server;
-mod logout;
-pub mod mocks;
-mod sso;
-mod sso_server;
+mod server;
 mod ui;
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
