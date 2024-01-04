@@ -1,9 +1,9 @@
 use std::{
     borrow::Cow,
     collections::HashSet,
-    io::Write,
+    io::{BufRead, Write},
     process::Stdio,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{mpsc::sync_channel as std_sync_channel, Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -11,6 +11,7 @@ use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::{
+    io::AsyncWriteExt,
     process::Command,
     sync::{mpsc, oneshot},
 };
@@ -250,6 +251,7 @@ impl<'a> Visitor<'a> {
                         task_cache,
                         workspace_directory,
                         execution_env,
+                        task_definition.interactive,
                     );
 
                     let output_client = self.output_client(&info);
@@ -557,6 +559,7 @@ impl<'a> ExecContextFactory<'a> {
         task_cache: TaskCache,
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
+        interactive: bool,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.opts.run_opts.args_for_task(&task_id);
@@ -580,6 +583,7 @@ impl<'a> ExecContextFactory<'a> {
             continue_on_error: self.visitor.opts.run_opts.continue_on_error,
             pass_through_args,
             errors: self.errors.clone(),
+            is_interactive: interactive,
         }
     }
 
@@ -613,6 +617,7 @@ struct ExecContext {
     continue_on_error: bool,
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
+    is_interactive: bool,
 }
 
 enum ExecOutcome {
@@ -761,6 +766,21 @@ impl ExecContext {
         }
         cmd.args(args);
         cmd.current_dir(self.workspace_directory.as_path());
+
+        if self.is_interactive {
+            debug!(
+                "{} is interactive, setting cmd stdin to piped",
+                self.task_id
+            );
+            // TODO: piped makes `process.stdin.isTTY` undefined in Node
+            // which some tools will throw over.
+            // https://github.com/Shopify/cli/blob/dccb00a3eebfe1c298bec6fb9e0a13faac546dbb/packages/cli-kit/src/public/node/ui.tsx#L697C1-L701
+            // https://github.com/Shopify/cli/blob/dccb00a3eebfe1c298bec6fb9e0a13faac546dbb/packages/cli-kit/src/public/node/system.ts#L138-L141
+            cmd.stdin(Stdio::piped());
+        } else {
+            cmd.stdin(Stdio::null());
+        }
+
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
@@ -780,6 +800,37 @@ impl ExecContext {
                 return ExecOutcome::Internal;
             }
         };
+
+        let (sender, receiver) = std_sync_channel::<(tokio::process::ChildStdin, TaskId<'_>)>(1);
+
+        if self.is_interactive {
+            std::thread::spawn(move || {
+                let mut parent_stdin_handle = std::io::stdin().lock();
+                debug!("Locked parent stdin");
+                let (mut child_stdin, task_id) = match receiver.recv() {
+                    Ok(stdin) => stdin,
+                    Err(_) => {
+                        debug!(
+                            "No message from child process for stdin readiness, exiting and \
+                             releasing parent stdin lock"
+                        );
+                        return;
+                    }
+                };
+
+                debug!("Granting stdin lock to {}", task_id);
+
+                let mut buffer = String::new();
+                // TODO: read_line doesn't cover the case of when the user doesn't hit enter
+                // TODO: handle error
+                let _ = parent_stdin_handle.read_line(&mut buffer);
+
+                debug!("Granting stdin lock to {}", task_id);
+
+                // write data from parent stdin to child_stdin
+                let _ = futures::executor::block_on(child_stdin.write_all(buffer.as_bytes()));
+            });
+        }
 
         let mut process = match self.manager.spawn(cmd, Duration::from_millis(500)) {
             Some(Ok(child)) => child,
@@ -802,6 +853,13 @@ impl ExecContext {
                 return ExecOutcome::Internal;
             }
         };
+
+        // Notify the stdin thread that the child process has been spawned and can read
+        // input now
+        if self.is_interactive {
+            let stdin = process.stdin().unwrap();
+            let _ = sender.send((stdin, self.task_id.clone()));
+        }
 
         let exit_status = match process
             .wait_with_piped_outputs(&mut stdout_writer, None)
