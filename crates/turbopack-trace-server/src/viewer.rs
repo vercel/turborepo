@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     server::ViewRect,
-    store::{SpanGraphEventRef, SpanGraphRef, SpanId, SpanRef, Store},
+    span_graph_ref::{SpanGraphEventRef, SpanGraphRef},
+    span_ref::SpanRef,
+    store::{SpanId, Store},
     u64_empty_string,
 };
 
