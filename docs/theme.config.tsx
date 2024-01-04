@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useConfig, useTheme, type DocsThemeConfig } from "nextra-theme-docs";
+import dynamic from "next/dynamic";
 import { Footer } from "./components/Footer";
 import { Navigation } from "./components/Navigation";
 import { HeaderLogo } from "./components/HeaderLogo";
@@ -9,6 +10,12 @@ import { Discord, Github } from "./components/Social";
 import { Main } from "./components/Main";
 import { Search } from "./components/Search";
 
+const NoSSRCommentsButton = dynamic(
+  () => import("./components/CommentsButton").then((mod) => mod.CommentsButton),
+  {
+    ssr: false,
+  }
+);
 const SITE_ROOT = "https://turbo.build";
 
 interface Frontmatter {
@@ -185,6 +192,9 @@ const config: DocsThemeConfig = {
     component: Navigation,
     extraContent: (
       <>
+        <div className="w-6 h-6 ml-2 rounded-tl-none rounded-full border-2 border-white">
+          <NoSSRCommentsButton />
+        </div>
         <Github />
         <Discord />
       </>
