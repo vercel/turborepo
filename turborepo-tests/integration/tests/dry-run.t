@@ -18,7 +18,7 @@ Setup
   Global Hash Inputs
     Global Files                          = 1
     External Dependencies Hash            = 459c029558afe716
-    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
+    Global Cache Key                      = Say hello to Lumberg for me
     Global .env Files Considered          = 0
     Global Env Vars                       = SOME_ENV_VAR
     Global Env Vars Values                = 
@@ -31,7 +31,7 @@ Setup
   my-app#build
     Task                           = build\s* (re)
     Package                        = my-app\s* (re)
-    Hash                           = f5b905676d8a275c\s* (re)
+    Hash                           = 374d3cba3d47d81b
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Directory                      = apps(\/|\\)my-app\s* (re)
@@ -52,7 +52,7 @@ Setup
   util#build
     Task                           = build\s* (re)
     Package                        = util\s* (re)
-    Hash                           = 1ce33e04f265f95c\s* (re)
+    Hash                           = 66888ae9d76026cd
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Directory                      = packages(\/|\\)util\s* (re)

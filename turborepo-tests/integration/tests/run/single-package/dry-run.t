@@ -7,7 +7,7 @@ Check
   Global Hash Inputs
     Global Files                          = 3
     External Dependencies Hash            = 
-    Global Cache Key                      = HEY STELLLLLLLAAAAAAAAAAAAA
+    Global Cache Key                      = Say hello to Lumberg for me
     Global .env Files Considered          = 0
     Global Env Vars                       = 
     Global Env Vars Values                = 
@@ -18,7 +18,7 @@ Check
   Tasks to Run
   build
     Task                           = build\s* (re)
-    Hash                           = f09bf783beacf5c9\s* (re)
+    Hash                           = 5e76df026a0e4e9f
     Cached \(Local\)                 = false\s* (re)
     Cached \(Remote\)                = false\s* (re)
     Command                        = echo building > foo.txt\s* (re)

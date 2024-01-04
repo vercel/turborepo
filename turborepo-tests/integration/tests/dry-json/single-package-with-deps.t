@@ -8,7 +8,7 @@ Setup
     "turboVersion": "[a-z0-9\.-]+", (re)
     "monorepo": false,
     "globalCacheInputs": {
-      "rootKey": "HEY STELLLLLLLAAAAAAAAAAAAA",
+      "rootKey": "Say hello to Lumberg for me",
       "files": {
         "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
         "package.json": "5519edda652c463054307421a3c05ff49f080328",
@@ -32,7 +32,7 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "f09bf783beacf5c9",
+        "hash": "5e76df026a0e4e9f",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
@@ -88,7 +88,7 @@ Setup
       {
         "taskId": "test",
         "task": "test",
-        "hash": "8bfab5dc6b4ccb3b",
+        "hash": "6c5d4109195c36f8",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
