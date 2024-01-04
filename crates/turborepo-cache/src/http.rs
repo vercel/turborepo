@@ -22,6 +22,7 @@ pub struct HTTPCache {
 }
 
 impl HTTPCache {
+    #[tracing::instrument(skip_all)]
     pub fn new(
         client: APIClient,
         opts: &CacheOpts,
@@ -56,6 +57,7 @@ impl HTTPCache {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn put(
         &self,
         anchor: &AbsoluteSystemPath,
@@ -87,6 +89,7 @@ impl HTTPCache {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     async fn write(
         &self,
         writer: impl Write,
@@ -101,6 +104,7 @@ impl HTTPCache {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn exists(&self, hash: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         let Some(response) = self
             .client
@@ -152,6 +156,7 @@ impl HTTPCache {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn fetch(
         &self,
         hash: &str,
@@ -217,6 +222,7 @@ impl HTTPCache {
         )))
     }
 
+    #[tracing::instrument(skip_all)]
     pub(crate) fn restore_tar(
         root: &AbsoluteSystemPath,
         body: &[u8],
