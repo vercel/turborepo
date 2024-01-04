@@ -1401,9 +1401,13 @@ mod test {
         let files = &["foo", "bar", "baz"];
         let tmp = setup_files_with_prefix("[path]", files);
         let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
-        let include = &["ba*".to_string()];
+        let include = ["ba*"]
+            .into_iter()
+            .map(ValidatedGlob::from_str)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
         let exclude = &[];
-        let iter = globwalk(&root, include, exclude, WalkType::Files).unwrap();
+        let iter = globwalk(&root, &include, exclude, WalkType::Files).unwrap();
         let paths = iter
             .into_iter()
             .map(|path| {
