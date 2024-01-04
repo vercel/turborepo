@@ -243,7 +243,10 @@ impl<'a> Locator<'a> {
             .and_then(|caps| caps.get(2))
             .map(|m| {
                 let s = m.as_str();
-                s.strip_prefix("./").unwrap_or(s)
+                s.strip_prefix("./")
+                    // Yarn 4 uses ~ to indicate the yarn root
+                    .or_else(|| s.strip_prefix("~/"))
+                    .unwrap_or(s)
             })
     }
 

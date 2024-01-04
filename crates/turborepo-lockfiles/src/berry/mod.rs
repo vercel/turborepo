@@ -39,6 +39,8 @@ pub enum Error {
         descriptor: Descriptor<'static>,
         other: String,
     },
+    #[error("unable to parse as patch reference: {0}")]
+    InvalidPatchReference(String),
 }
 
 // We depend on BTree iteration being sorted for correct serialization
@@ -305,6 +307,17 @@ impl BerryLockfile {
             // If the package has an associated patch we include it in the subgraph
             if let Some(patch_locator) = self.patches.get(&locator) {
                 patches.insert(locator.as_owned(), patch_locator.clone());
+            }
+
+            // Yarn 4 allows workspaces to depend directly on patched dependencies instead
+            // of using resolutions this results in the patched dependency appearing in the
+            // closure instead of the original.
+            if locator.patch_file().is_some() {
+                if let Some((original, _)) =
+                    self.patches.iter().find(|(_, patch)| patch == &&locator)
+                {
+                    patches.insert(original.as_owned(), locator.as_owned());
+                }
             }
         }
 
@@ -1047,5 +1060,84 @@ mod test {
             .unwrap()
             .unwrap();
         assert_eq!(c_pkg.key, "c@workspace:pkgs/c");
+    }
+
+    #[test]
+    fn test_yarn4_patches_direct_dependency() {
+        let data =
+            LockfileData::from_bytes(include_bytes!("../../fixtures/yarn4-patch.lock")).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+
+        let is_odd_locator = lockfile
+            .resolve_package(
+                "packages/b",
+                "is-odd",
+                "patch:is-odd@npm%3A3.0.1#~/.yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch",
+            )
+            .unwrap()
+            .unwrap();
+
+        let expected_key = "is-odd@patch:is-odd@npm%3A3.0.1#~/.yarn/patches/is-odd-npm-3.0.\
+                            1-93c3c3f41b.patch::version=3.0.1&hash=9b90ad";
+
+        assert_eq!(
+            is_odd_locator,
+            crate::Package {
+                key: expected_key.into(),
+                version: "3.0.1".into(),
+            }
+        );
+
+        let deps = crate::transitive_closure(
+            &lockfile,
+            "packages/b",
+            vec![(
+                "is-odd".to_string(),
+                "patch:is-odd@npm%3A3.0.1#~/.yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch"
+                    .to_string(),
+            )]
+            .into_iter()
+            .collect(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            deps,
+            vec![
+                crate::Package {
+                    key: expected_key.into(),
+                    version: "3.0.1".into()
+                },
+                crate::Package {
+                    key: "is-number@npm:6.0.0".into(),
+                    version: "6.0.0".into()
+                }
+            ]
+            .into_iter()
+            .collect()
+        );
+
+        let subgraph = lockfile
+            .subgraph(
+                &["packages/b".into(), "packages/c".into()],
+                &[expected_key.into(), "is-number@npm:6.0.0".into()],
+            )
+            .unwrap();
+
+        let sublockfile = subgraph.lockfile().unwrap();
+
+        // Should contain both patched dependency and original
+        assert!(sublockfile.packages.contains_key("is-odd@npm:3.0.1"));
+        assert!(sublockfile.packages.contains_key(
+            "is-odd@patch:is-odd@npm%3A3.0.1#~/.yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch"
+        ));
+
+        let patches =
+            vec![
+                RelativeUnixPathBuf::new(".yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch")
+                    .unwrap(),
+            ];
+        assert_eq!(lockfile.patches().unwrap(), patches);
+        assert_eq!(subgraph.patches().unwrap(), patches);
     }
 }
