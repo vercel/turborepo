@@ -403,6 +403,7 @@ impl<'a> RunSummary<'a> {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     async fn send_to_space(
         &self,
         spaces_client_handle: SpacesClientHandle,
