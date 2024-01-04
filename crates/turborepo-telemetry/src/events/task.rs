@@ -17,6 +17,11 @@ const ALLOWLIST: [&str; 8] = [
     "check",
 ];
 
+pub enum FileHashMethod {
+    Git,
+    Manual,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageTaskEventBuilder {
     id: String,
@@ -96,6 +101,36 @@ impl PackageTaskEventBuilder {
         self.track(Event {
             key: "framework".to_string(),
             value: framework.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    pub fn track_env_mode(&self, mode: &str) -> &Self {
+        self.track(Event {
+            key: "env_mode".to_string(),
+            value: mode.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    pub fn track_file_hash_method(&self, method: FileHashMethod) -> &Self {
+        self.track(Event {
+            key: "file_hash_method".to_string(),
+            value: match method {
+                FileHashMethod::Git => "git".to_string(),
+                FileHashMethod::Manual => "manual".to_string(),
+            },
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    pub fn track_scm_mode(&self, method: &str) -> &Self {
+        self.track(Event {
+            key: "scm_mode".to_string(),
+            value: method.to_string(),
             is_sensitive: EventType::NonSensitive,
         });
         self
