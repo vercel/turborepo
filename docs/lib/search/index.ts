@@ -15,9 +15,9 @@ export const ignoredRoutes = ["/blog", "/terms", "/privacy", "/confirm"];
 // Ignore a route with 0.
 
 export const weightedRoutes: [string, number][] = [
-  ["/repo/docs/core-concepts/caching", 1.2],
   ["/repo/docs/reference/configuration", 4],
   ["/repo/docs/reference/command-line-reference", 4],
+  ["/repo/docs/core-concepts/caching", 1.2],
   ["/repo/docs/handbook/linting", 0.8],
   ["/repo/docs/handbook/linting/eslint", 0.8],
   ["/repo/docs/acknowledgements", 0.2],
@@ -83,6 +83,7 @@ export const useSearchResults = (query: string) => {
     const handleSearch = async () => {
       if (window.pagefind) {
         const search = await window.pagefind.search(query);
+        // Filter away distant matches.
         setResults(search.results.filter((result) => result.score > 0.01));
       }
     };
