@@ -6,13 +6,13 @@ Check my-app#build output
   \xe2\x80\xa2 Packages in scope: //, my-app, util (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
-  util:build: cache miss, executing d8a403c3594c01e7
+  util:build: cache miss, executing 45f8db0ff59c17b4
   util:build: 
   util:build: > build
   util:build: > echo building
   util:build: 
   util:build: building
-  my-app:build: cache miss, executing 6f5a797f7b88130e
+  my-app:build: cache miss, executing 147fddffbfdad6f9
   my-app:build: 
   my-app:build: > build
   my-app:build: > echo building
