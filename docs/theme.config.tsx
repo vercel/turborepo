@@ -7,6 +7,8 @@ import { Navigation } from "./components/Navigation";
 import { HeaderLogo } from "./components/HeaderLogo";
 import { ExtraContent } from "./components/ExtraContent";
 import { Discord, Github } from "./components/Social";
+import { Main } from "./components/Main";
+import { Search } from "./components/Search";
 
 const NoSSRCommentsButton = dynamic(
   () => import("./components/CommentsButton").then((mod) => mod.CommentsButton),
@@ -198,7 +200,12 @@ const config: DocsThemeConfig = {
       </>
     ),
   },
+  components: {
+    pre: (props) => <pre {...props} data-pagefind-weight=".5" />,
+  },
+  main: (props) => <Main>{props.children}</Main>,
   search: {
+    component: Search,
     placeholder: "Search documentation…",
   },
   footer: {
