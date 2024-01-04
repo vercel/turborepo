@@ -192,7 +192,7 @@ const config: DocsThemeConfig = {
     component: Navigation,
     extraContent: (
       <>
-        <div className="w-6 h-6 rounded-tl-none rounded-full border-2 border-white">
+        <div className="w-6 h-6 ml-2 rounded-tl-none rounded-full border-2 border-white">
           <NoSSRCommentsButton />
         </div>
         <Github />
