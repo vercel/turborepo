@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useRouter } from "next/router";
-import { ignoredRoutes, downrankedRoutes, uprankedRoutes } from "../lib/search";
+import { weightedRoutes } from "../lib/search";
 
 interface NestedProps {
   props: { children: ReactNode[] };
@@ -14,29 +14,30 @@ function Layout({ children, ...rest }: { children: ReactNode }) {
   const contentNodes = (children as NestedProps).props.children;
 
   return (
-    <main {...rest}>
-      {contentNodes.slice(1, -1)}
+    <div {...rest}>
+      {contentNodes.slice(0, -1)}
       <div data-pagefind-ignore="all">{contentNodes.at(-1)}</div>
-    </main>
+    </div>
   );
 }
 
 export function Main(props: { children: ReactNode }) {
   const router = useRouter();
 
-  if (ignoredRoutes.some((route) => route === router.asPath)) {
-    return <Layout data-pagefind-ignore="all" {...props} />;
-  }
-
-  if (
-    downrankedRoutes.some((route) => route === router.asPath) ||
-    router.asPath.startsWith("/blog")
-  ) {
+  if (router.asPath.startsWith("/blog")) {
     return <Layout data-pagefind-body data-pagefind-weight=".2" {...props} />;
   }
 
-  if (uprankedRoutes.some((route) => route === router.asPath)) {
-    return <Layout data-pagefind-body data-pagefind-weight="1.2" {...props} />;
+  if (weightedRoutes.some((route) => route[0] === router.asPath)) {
+    return (
+      <Layout
+        data-pagefind-body
+        data-pagefind-weight={
+          weightedRoutes.find((route) => route[0] === router.asPath)?.[1] ?? 1
+        }
+        {...props}
+      />
+    );
   }
 
   return <Layout data-pagefind-body {...props} />;

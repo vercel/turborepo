@@ -8,14 +8,27 @@ import type {
 
 export const ignoredRoutes = ["/blog", "/terms", "/privacy", "/confirm"];
 
-export const downrankedRoutes = [
-  "/repo/docs/acknowledgements",
-  "/repo/docs/core-concepts/caching/to-cache-or-not-to-cache",
-  // Deprecations
-  "/repo/docs/core-concepts/scopes",
-];
+// Default weight is 1.
+// Recommended values (Acceptable to use different values as needed):
+// Uprank: 1.2
+// Downrank .2
+// Ignore a route with 0.
 
-export const uprankedRoutes = ["/repo/docs/core-concepts/caching"];
+export const weightedRoutes: [string, number][] = [
+  ["/repo/docs/core-concepts/caching", 1.2],
+  ["/repo/docs/reference/configuration", 4],
+  ["/repo/docs/reference/command-line-reference", 4],
+  ["/repo/docs/handbook/linting", 0.8],
+  ["/repo/docs/handbook/linting/eslint", 0.8],
+  ["/repo/docs/acknowledgements", 0.2],
+  ["/repo/docs/core-concepts/caching/to-cache-or-not-to-cache", 0.2],
+  // Deprecations
+  ["/repo/docs/core-concepts/scopes", 0.2],
+  ["/blog", 0],
+  ["/terms", 0],
+  ["/privacy", 0],
+  ["/confirm", 0],
+];
 
 declare global {
   interface Window {
