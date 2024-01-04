@@ -242,6 +242,7 @@ impl Client for APIClient {
         })
     }
 
+    #[tracing::instrument(skip_all)]
     async fn put_artifact(
         &self,
         hash: &str,
@@ -346,6 +347,7 @@ impl Client for APIClient {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     async fn fetch_artifact(
         &self,
         hash: &str,
@@ -357,6 +359,7 @@ impl Client for APIClient {
             .await
     }
 
+    #[tracing::instrument(skip_all)]
     async fn artifact_exists(
         &self,
         hash: &str,
