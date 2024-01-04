@@ -48,18 +48,20 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
         trace!("Found {} as package manager", package_manager);
 
         let config = base.config()?;
+        let token: Option<String> = if let Some(token) = config.token() {
+            Some(token.to_string())
+        } else {
+            let auth_file_path = base.global_auth_path()?;
+            let config_file_path = base.global_config_path()?;
+            let auth = turborepo_auth::read_or_create_auth_file(
+                &auth_file_path,
+                &config_file_path,
+                config.api_url(),
+            )?;
 
-        let auth_file_path = base.global_auth_path()?;
-        let config_file_path = base.global_config_path()?;
-        let auth = turborepo_auth::read_or_create_auth_file(
-            &auth_file_path,
-            &config_file_path,
-            config.api_url(),
-        )?;
-
-        let token = auth
-            .get_token(config.login_url())
-            .map(|t| t.token().to_owned());
+            auth.get_token(config.login_url())
+                .map(|t| t.token().to_owned())
+        };
 
         let api_client_config = APIClientConfig {
             token: token.clone(),
