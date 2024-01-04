@@ -1,6 +1,5 @@
 use std::{cell::OnceCell, path::PathBuf};
 
-use dirs_next::config_dir;
 use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient, Client};
@@ -34,6 +33,8 @@ pub struct CommandBase {
     pub ui: UI,
     #[cfg(test)]
     pub global_config_path: Option<AbsoluteSystemPathBuf>,
+    #[cfg(test)]
+    pub global_auth_path: Option<AbsoluteSystemPathBuf>,
     config: OnceCell<ConfigurationOptions>,
     args: Args,
     version: &'static str,
@@ -52,6 +53,8 @@ impl CommandBase {
             args,
             #[cfg(test)]
             global_config_path: None,
+            #[cfg(test)]
+            global_auth_path: None,
             config: OnceCell::new(),
             version,
         }
@@ -62,10 +65,14 @@ impl CommandBase {
         self.global_config_path = Some(path);
         self
     }
+    #[cfg(test)]
+    pub fn with_global_auth_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
+        self.global_auth_path = Some(path);
+        self
+    }
 
     fn config_init(&self) -> Result<ConfigurationOptions, ConfigError> {
         TurborepoConfigBuilder::new(self)
-            // The below should be deprecated and removed.
             .with_api_url(self.args.api.clone())
             .with_login_url(self.args.login.clone())
             .with_team_slug(self.args.team.clone())
@@ -86,7 +93,9 @@ impl CommandBase {
         }
 
         let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
-        let global_config_path = config_dir.join("turborepo").join("config.json");
+        let global_config_path = config_dir
+            .join(TURBOREPO_CONFIG_DIR)
+            .join(TURBOREPO_LEGACY_AUTH_FILE_NAME);
         AbsoluteSystemPathBuf::try_from(global_config_path).map_err(ConfigError::PathError)
     }
     /// Returns the path to the global auth file (auth.json).
@@ -96,11 +105,10 @@ impl CommandBase {
             return Ok(global_auth_path.clone());
         }
 
-        let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
-        let mut global_auth_path: PathBuf = config_dir
+        let config_dir = config_dir().ok_or(ConfigError::NoGlobalAuthFilePath)?;
+        let global_auth_path = config_dir
             .join(TURBOREPO_CONFIG_DIR)
             .join(TURBOREPO_AUTH_FILE_NAME);
-
         AbsoluteSystemPathBuf::try_from(global_auth_path).map_err(ConfigError::PathError)
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
@@ -118,15 +126,31 @@ impl CommandBase {
         let team_id = config.team_id();
         let team_slug = config.team_slug();
 
-        let Some(token) = config.token() else {
-            return Ok(None);
-        };
+        // Check to see if token was passed in. If so, use that.
+        if let Some(token) = self.args.token.clone() {
+            return Ok(Some(APIAuth {
+                team_id: team_id.map(|s| s.to_string()),
+                token: token.to_string(),
+                team_slug: team_slug.map(|s| s.to_string()),
+            }));
+        }
 
-        Ok(Some(APIAuth {
-            team_id: team_id.map(|s| s.to_string()),
-            token: token.to_string(),
-            team_slug: team_slug.map(|s| s.to_string()),
-        }))
+        let auth_file_path = self.global_auth_path()?;
+        let config_file_path = self.global_config_path()?;
+        let client = self.api_client()?;
+        let auth =
+            turborepo_auth::read_or_create_auth_file(&auth_file_path, &config_file_path, &client)?;
+
+        let auth_token = auth.get_token(client.base_url());
+        if let Some(auth_token) = auth_token {
+            Ok(Some(APIAuth {
+                team_id: team_id.map(|s| s.to_string()),
+                token: auth_token.token,
+                team_slug: team_slug.map(|s| s.to_string()),
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn args(&self) -> &Args {
