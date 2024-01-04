@@ -462,6 +462,10 @@ impl APIClient {
         })
     }
 
+    pub fn base_url(&self) -> &str {
+        self.base_url.as_str()
+    }
+
     /// Create a new request builder with the preflight check done,
     /// team parameters added, CI header, and a content type of json.
     pub(crate) async fn create_request_builder(
