@@ -809,7 +809,7 @@ impl ExecContext {
                 let mut parent_stdin_handle = std::io::stdin().lock();
                 debug!("Locked parent stdin");
                 let (mut child_stdin, task_id) = match receiver.recv() {
-                    Ok(xx) => xx,
+                    Ok(stdin) => stdin,
                     Err(_) => {
                         debug!(
                             "No message from child process for stdin readiness, exiting and \
