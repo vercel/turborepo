@@ -10,14 +10,12 @@ export const ignoredRoutes = ["/blog", "/terms", "/privacy", "/confirm"];
 
 export const downrankedRoutes = [
   "/repo/docs/acknowledgements",
+  "/repo/docs/core-concepts/caching/to-cache-or-not-to-cache",
   // Deprecations
   "/repo/docs/core-concepts/scopes",
 ];
 
-export const uprankedRoutes = [
-  "/repo/docs/core-concepts/caching",
-  "/repo/docs/reference/configuration",
-];
+export const uprankedRoutes = ["/repo/docs/core-concepts/caching"];
 
 declare global {
   interface Window {
@@ -72,7 +70,7 @@ export const useSearchResults = (query: string) => {
     const handleSearch = async () => {
       if (window.pagefind) {
         const search = await window.pagefind.search(query);
-        setResults(search.results);
+        setResults(search.results.filter((result) => result.score > 0.01));
       }
     };
     void handleSearch();

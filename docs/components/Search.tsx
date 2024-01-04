@@ -38,9 +38,9 @@ function Result({ result }: { result: PagefindSearchResult }) {
           .replace(".html", "")
           .concat(createHashLink())}
       >
-        <p className="text-lg font-semibold truncate">{data.meta.title}</p>
+        <p className="font-semibold truncate">{data.meta.title}</p>
         <p
-          className="line-clamp-3"
+          className="line-clamp-3 text-sm"
           dangerouslySetInnerHTML={{ __html: data.excerpt }}
         />
       </Link>
@@ -115,9 +115,17 @@ export function Search() {
 
   const router = useRouter();
 
-  router.events.on("routeChangeStart", () => {
-    setQuery("");
-  });
+  useEffect(() => {
+    const handleRouteChange = () => {
+      setQuery("");
+    };
+
+    router.events.on("routeChangeStart", handleRouteChange);
+
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChange);
+    };
+  }, [router]);
 
   const showResultsDropdown = query.length > 0 && isFocused;
 
@@ -127,7 +135,7 @@ export function Search() {
 
   return (
     <div
-      className="relative lg:w-60"
+      className="relative md:w-60"
       // Used by custom.css to hide the search box in the navbar (but not in the mobile menu) for small screens.
       id="search-container"
     >
