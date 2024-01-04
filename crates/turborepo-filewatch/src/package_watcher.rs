@@ -337,8 +337,8 @@ mod test {
     use tokio::sync::broadcast;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_repository::{
-        discovery::{self, DiscoveryResponse, PackageDiscovery, WorkspaceData},
-        package_manager::{self, PackageManager},
+        discovery::{self, DiscoveryResponse, WorkspaceData},
+        package_manager::PackageManager,
     };
 
     use super::Subscriber;
@@ -352,7 +352,7 @@ mod test {
     impl super::PackageDiscovery for MockDiscovery {
         async fn discover_packages(&mut self) -> Result<DiscoveryResponse, discovery::Error> {
             Ok(DiscoveryResponse {
-                package_manager: self.manager.clone(),
+                package_manager: self.manager,
                 workspaces: self.package_data.lock().unwrap().clone(),
             })
         }
@@ -400,7 +400,7 @@ mod test {
         .unwrap();
 
         let mock_discovery = MockDiscovery {
-            manager: manager.clone(),
+            manager,
             package_data: Arc::new(Mutex::new(package_data)),
         };
 
@@ -533,7 +533,7 @@ mod test {
         let package_data_raw = Arc::new(Mutex::new(package_data));
 
         let mock_discovery = MockDiscovery {
-            manager: manager.clone(),
+            manager,
             package_data: package_data_raw.clone(),
         };
 

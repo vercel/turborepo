@@ -57,8 +57,6 @@ pub struct TurborepoConfigBuilder {
     #[cfg(test)]
     global_config_path: Option<AbsoluteSystemPathBuf>,
     #[cfg(test)]
-    global_auth_path: Option<AbsoluteSystemPathBuf>,
-    #[cfg(test)]
     environment: HashMap<OsString, OsString>,
 }
 
@@ -298,8 +296,6 @@ impl TurborepoConfigBuilder {
             #[cfg(test)]
             global_config_path: base.global_config_path.clone(),
             #[cfg(test)]
-            global_auth_path: base.global_auth_path.clone(),
-            #[cfg(test)]
             environment: Default::default(),
         }
     }
@@ -314,17 +310,6 @@ impl TurborepoConfigBuilder {
         let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
         let global_config_path = config_dir.join("turborepo").join("config.json");
         AbsoluteSystemPathBuf::try_from(global_config_path).map_err(ConfigError::PathError)
-    }
-    // Location of the auth file for Turborepo.
-    fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
-        #[cfg(test)]
-        if let Some(global_auth_path) = self.global_auth_path.clone() {
-            return Ok(global_auth_path);
-        }
-
-        let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
-        let global_auth_path = config_dir.join("turborepo").join("auth.json");
-        AbsoluteSystemPathBuf::try_from(global_auth_path).map_err(ConfigError::PathError)
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
@@ -552,11 +537,6 @@ mod test {
         )
         .unwrap();
 
-        let global_auth_path = AbsoluteSystemPathBuf::try_from(
-            TempDir::new().unwrap().path().join("nonexistent-auth.json"),
-        )
-        .unwrap();
-
         let turbo_teamid = "team_nLlpyC6REAqxydlFKbrMDlud";
         let turbo_token = "abcdef1234567890abcdef";
         let vercel_artifacts_owner = "team_SOMEHASH";
@@ -584,7 +564,6 @@ mod test {
             repo_root,
             override_config,
             global_config_path: Some(global_config_path),
-            global_auth_path: Some(global_auth_path),
             environment: env,
         };
 

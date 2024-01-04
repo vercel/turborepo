@@ -601,10 +601,7 @@ mod test {
     async fn test_link_remote_cache() -> Result<()> {
         // user config
         let user_config_file = NamedTempFile::new().unwrap();
-
-        // auth file
-        let auth_file = NamedTempFile::new().unwrap();
-        fs::write(auth_file.path(), r#"{ "token": "hello" }"#).unwrap();
+        fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
 
         // repo
         let repo_root_tmp_dir = TempDir::new().unwrap();
@@ -630,9 +627,6 @@ mod test {
         let mut base = CommandBase {
             global_config_path: Some(
                 AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
-            ),
-            global_auth_path: Some(
-                AbsoluteSystemPathBuf::try_from(auth_file.path().to_path_buf()).unwrap(),
             ),
             repo_root: repo_root.clone(),
             ui: UI::new(false),
@@ -673,14 +667,7 @@ mod test {
     async fn test_link_spaces() {
         // user config
         let user_config_file = NamedTempFile::new().unwrap();
-
-        // auth file
-        let auth_file = NamedTempFile::new().unwrap();
-        fs::write(
-            auth_file.path(),
-            r#"{ "tokens": {"vercel.com/api": "hello"} }"#,
-        )
-        .unwrap();
+        fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
 
         // repo
         let repo_root_tmp_dir = TempDir::new().unwrap();
@@ -706,9 +693,6 @@ mod test {
         let mut base = CommandBase {
             global_config_path: Some(
                 AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
-            ),
-            global_auth_path: Some(
-                AbsoluteSystemPathBuf::try_from(auth_file.path().to_path_buf()).unwrap(),
             ),
             repo_root: repo_root.clone(),
             ui: UI::new(false),

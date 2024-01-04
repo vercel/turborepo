@@ -22,7 +22,7 @@ use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tracing::debug;
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
-use turborepo_api_client::{APIAuth, APIClient};
+use turborepo_api_client::{APIAuth, APIClient, Client};
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
@@ -32,6 +32,10 @@ use turborepo_repository::{
     package_json::PackageJson,
 };
 use turborepo_scm::SCM;
+use turborepo_telemetry::events::{
+    generic::{DaemonInitStatus, GenericEventBuilder},
+    repo::{RepoEventBuilder, RepoType},
+};
 use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY};
 
 use self::task_id::TaskName;
@@ -170,6 +174,8 @@ impl<'a> Run<'a> {
         let package_json_path = self.base.repo_root.join_component("package.json");
         let root_package_json = PackageJson::load(&package_json_path)?;
         let mut opts = self.opts()?;
+        let run_telemetry = GenericEventBuilder::new();
+        let repo_telemetry = RepoEventBuilder::new(&self.base.repo_root.to_string());
 
         let config = self.base.config()?;
 
@@ -184,16 +190,28 @@ impl<'a> Run<'a> {
             // value
             opts.cache_opts.skip_remote = !enabled;
         }
-
+        run_telemetry.track_is_linked(is_linked);
+        // we only track the remote cache if we're linked because this defaults to
+        // Vercel
+        if is_linked {
+            run_telemetry.track_remote_cache(api_client.base_url());
+        }
         let _is_structured_output = opts.run_opts.graph.is_some()
             || matches!(opts.run_opts.dry_run, Some(DryRunMode::Json));
 
         let is_single_package = opts.run_opts.single_package;
+        repo_telemetry.track_type(if is_single_package {
+            RepoType::SinglePackage
+        } else {
+            RepoType::Monorepo
+        });
 
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
+        run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
 
         let daemon = match (is_ci_or_not_tty, opts.run_opts.daemon) {
             (true, None) => {
+                run_telemetry.track_daemon_init(DaemonInitStatus::Skipped);
                 debug!("skipping turbod since we appear to be in a non-interactive context");
                 None
             }
@@ -207,16 +225,19 @@ impl<'a> Run<'a> {
 
                 match connector.connect().await {
                     Ok(client) => {
+                        run_telemetry.track_daemon_init(DaemonInitStatus::Started);
                         debug!("running in daemon mode");
                         Some(client)
                     }
                     Err(e) => {
+                        run_telemetry.track_daemon_init(DaemonInitStatus::Failed);
                         debug!("failed to connect to daemon {e}");
                         None
                     }
                 }
             }
             (_, Some(false)) => {
+                run_telemetry.track_daemon_init(DaemonInitStatus::Disabled);
                 debug!("skipping turbod since --no-daemon was passed");
                 None
             }
@@ -235,6 +256,10 @@ impl<'a> Run<'a> {
                 )
                 .build()
                 .await?;
+
+        repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().to_string());
+        repo_telemetry.track_size(pkg_dep_graph.len());
+        run_telemetry.track_run_type(opts.run_opts.dry_run.is_some());
 
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
@@ -366,6 +391,7 @@ impl<'a> Run<'a> {
             workspaces,
             engine.task_definitions(),
             &self.base.repo_root,
+            &run_telemetry,
         )?;
 
         if opts.run_opts.parallel {

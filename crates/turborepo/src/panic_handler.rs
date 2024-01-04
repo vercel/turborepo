@@ -36,7 +36,7 @@ Please open an issue at \
 
     eprintln!(
         "Oops! Turbo has crashed.
-
+         
 {}",
         report_message
     );
