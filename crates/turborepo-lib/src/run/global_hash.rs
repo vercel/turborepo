@@ -132,10 +132,6 @@ fn collect_global_deps(
     if global_file_dependencies.is_empty() {
         return Ok(HashSet::new());
     }
-    let inclusions = global_file_dependencies
-        .iter()
-        .map(|i| ValidatedGlob::from_str(i))
-        .collect::<Result<Vec<_>, _>>()?;
     let raw_exclusions = match package_manager.get_workspace_globs(root_path) {
         Ok(globs) => globs.raw_exclusions,
         // If we hit a missing workspaces error, we could be in single package mode
@@ -153,6 +149,11 @@ fn collect_global_deps(
         .map(|e| ValidatedGlob::from_str(e))
         .collect::<Result<Vec<_>, _>>()?;
 
+    #[cfg(not(windows))]
+    let inclusions = global_file_dependencies
+        .iter()
+        .map(|i| ValidatedGlob::from_str(i))
+        .collect::<Result<Vec<_>, _>>()?;
     // This is a bit of a hack to ensure that we don't crash
     // when given an absolute path on Windows. We don't support
     // absolute paths, but the ':' from the drive letter will also
@@ -162,17 +163,14 @@ fn collect_global_deps(
     // behavior, which tacked it on to the end of the base path unmodified,
     // and then would produce no files.
     #[cfg(windows)]
-    let windows_global_file_dependencies: Vec<ValidatedGlob> = global_file_dependencies
+    let inclusions: Vec<ValidatedGlob> = global_file_dependencies
         .iter()
         .map(|s| ValidatedGlob::from_str(&s.replace(":", "")))
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(globwalk::globwalk(
         root_path,
-        #[cfg(not(windows))]
         &inclusions,
-        #[cfg(windows)]
-        windows_global_file_dependencies.as_slice(),
         &exclusions,
         WalkType::Files,
     )?)
