@@ -96,6 +96,11 @@ struct SpanOptions {
     view_mode: Option<(ViewMode, bool)>,
 }
 
+pub struct Update {
+    pub lines: Vec<ViewLineUpdate>,
+    pub max: u64,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewLineUpdate {
@@ -169,7 +174,7 @@ impl Viewer {
         self.span_options.entry(id).or_default().view_mode = view_mode;
     }
 
-    pub fn compute_update(&mut self, store: &Store, view_rect: &ViewRect) -> Vec<ViewLineUpdate> {
+    pub fn compute_update(&mut self, store: &Store, view_rect: &ViewRect) -> Update {
         let mut highlighted_spans: HashSet<SpanId> = HashSet::new();
         let search_mode = !view_rect.query.is_empty();
 
@@ -411,7 +416,7 @@ impl Viewer {
             }
         }
 
-        lines
+        let lines = lines
             .into_iter()
             .enumerate()
             .map(|(y, line)| ViewLineUpdate {
@@ -455,7 +460,11 @@ impl Viewer {
                     })
                     .collect(),
             })
-            .collect()
+            .collect();
+        Update {
+            lines,
+            max: current,
+        }
     }
 }
 

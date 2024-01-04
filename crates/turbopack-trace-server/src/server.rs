@@ -20,7 +20,7 @@ use crate::{
     store::SpanId,
     store_container::StoreContainer,
     u64_string,
-    viewer::{ViewLineUpdate, ViewMode, Viewer},
+    viewer::{Update, ViewLineUpdate, ViewMode, Viewer},
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -33,6 +33,7 @@ pub enum ServerToClientMessage {
     },
     ViewLinesCount {
         count: usize,
+        max: u64,
     },
     #[serde(rename_all = "camelCase")]
     QueryResult {
@@ -161,14 +162,17 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                         return Ok(());
                     }
                     state.last_update_generation = store.generation();
-                    let updates = state.viewer.compute_update(&store, &state.view_rect);
+                    let Update {
+                        lines: updates,
+                        max,
+                    } = state.viewer.compute_update(&store, &state.view_rect);
                     let count = updates.len();
                     for update in updates {
                         let message = ServerToClientMessage::ViewLine { update };
                         let message = serde_json::to_string(&message).unwrap();
                         state.writer.send_message(&OwnedMessage::Text(message))?;
                     }
-                    let message = ServerToClientMessage::ViewLinesCount { count };
+                    let message = ServerToClientMessage::ViewLinesCount { count, max };
                     let message = serde_json::to_string(&message).unwrap();
                     state.writer.send_message(&OwnedMessage::Text(message))?;
                     ready_for_update.store(false, Ordering::SeqCst);
