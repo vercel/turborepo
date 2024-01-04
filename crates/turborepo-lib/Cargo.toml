@@ -64,6 +64,7 @@ path-clean = "1.0.1"
 petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
 prost = "0.11.6"
+pty-process = { version = "*", features = ["async"] }
 rand = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json"] }
 rustc_version_runtime = "0.2.1"
@@ -78,6 +79,7 @@ thiserror = "1.0.38"
 time = "0.3.20"
 tiny-gradient = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
+tokio-pty-process = "*"
 tokio-stream = { version = "0.1.12", features = ["net"] }
 tokio-util = { version = "0.7.7", features = ["compat"] }
 tonic = { version = "0.8.3", features = ["transport"] }

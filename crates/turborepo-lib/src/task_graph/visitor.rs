@@ -1,19 +1,22 @@
 use std::{
     borrow::Cow,
     collections::HashSet,
-    io::Write,
+    io::{BufRead, Write},
     process::Stdio,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{mpsc::sync_channel as std_sync_channel, Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
 use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
+use pty_process;
 use regex::Regex;
 use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
     sync::{mpsc, oneshot},
 };
+// use tokio_pty_process::{AsyncPtyMaster, CommandExt};
 use tracing::{debug, error, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_ci::github_header_footer;
@@ -250,6 +253,7 @@ impl<'a> Visitor<'a> {
                         task_cache,
                         workspace_directory,
                         execution_env,
+                        task_definition.interactive,
                     );
 
                     let output_client = self.output_client(&info);
@@ -557,6 +561,7 @@ impl<'a> ExecContextFactory<'a> {
         task_cache: TaskCache,
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
+        interactive: bool,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.opts.run_opts.args_for_task(&task_id);
@@ -580,6 +585,7 @@ impl<'a> ExecContextFactory<'a> {
             continue_on_error: self.visitor.opts.run_opts.continue_on_error,
             pass_through_args,
             errors: self.errors.clone(),
+            is_interactive: interactive,
         }
     }
 
@@ -613,6 +619,7 @@ struct ExecContext {
     continue_on_error: bool,
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
+    is_interactive: bool,
 }
 
 enum ExecOutcome {
@@ -749,7 +756,43 @@ impl ExecContext {
             return ExecOutcome::Internal;
         };
 
+        let (sender, receiver) = std_sync_channel::<(tokio::process::ChildStdin, TaskId<'_>)>(1);
+
         let mut cmd = Command::new(package_manager_binary);
+
+        let cmd = match self.is_interactive {
+            true => {
+                let mut pty = pty_process::Pty::new().unwrap();
+                pty.resize(pty_process::Size::new(24, 80)).unwrap();
+                pty_process::Command::new(package_manager_binary)
+            }
+            false => Command::new(package_manager_binary),
+        };
+
+        // TODO: only add pty when interactive?
+        let mut pty = match pty_process::Pty::new() {
+            Ok(pty) => pty,
+            Err(e) => {
+                error!("failed to create pty: {e}");
+                return ExecOutcome::Internal;
+            }
+        };
+        pty.resize(pty_process::Size::new(24, 80)).unwrap();
+        let mut cmd = pty_process::Command::new(package_manager_binary);
+        let mut process = cmd.spawn(&pty.pts().unwrap()).unwrap();
+        if self.is_interactive {
+            let stdin = process.stdin.take().unwrap();
+            let _ = sender.send((stdin, self.task_id.clone()));
+        }
+
+        match process.wait_with_output().await {
+            Ok(_) => return ExecOutcome::Success(SuccessOutcome::Run),
+            Err(e) => {
+                error!("unable to pipe outputs from command: {e}");
+                return ExecOutcome::Success(SuccessOutcome::Run);
+            }
+        }
+
         let mut args = vec!["run".to_string(), self.task_id.task().to_string()];
         if let Some(pass_through_args) = &self.pass_through_args {
             args.extend(
@@ -761,6 +804,7 @@ impl ExecContext {
         }
         cmd.args(args);
         cmd.current_dir(self.workspace_directory.as_path());
+
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
