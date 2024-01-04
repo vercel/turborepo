@@ -12,7 +12,9 @@ use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_repository::package_graph::{WorkspaceInfo, WorkspaceName};
 use turborepo_scm::SCM;
-use turborepo_telemetry::events::task::PackageTaskEventBuilder;
+use turborepo_telemetry::events::{
+    generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
+};
 
 use crate::{
     engine::TaskNode,
@@ -71,6 +73,7 @@ impl PackageInputsHashes {
         workspaces: HashMap<&WorkspaceName, &WorkspaceInfo>,
         task_definitions: &HashMap<TaskId<'static>, TaskDefinition>,
         repo_root: &AbsoluteSystemPath,
+        telemetry: &GenericEventBuilder,
     ) -> Result<PackageInputsHashes, Error> {
         tracing::trace!(scm_manual=%scm.is_manual(), "scm running in {} mode", if scm.is_manual() { "manual" } else { "git" });
 
@@ -91,7 +94,11 @@ impl PackageInputsHashes {
                     Ok(def) => def,
                     Err(err) => return Some(Err(err)),
                 };
+                let package_task_event =
+                    PackageTaskEventBuilder::new(task_id.package(), task_id.task())
+                        .with_parent(telemetry);
 
+                package_task_event.track_scm_mode(if scm.is_manual() { "manual" } else { "git" });
                 let workspace_name = task_id.to_workspace_name();
 
                 let pkg = match workspaces
@@ -107,10 +114,12 @@ impl PackageInputsHashes {
                     .parent()
                     .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
 
+                let scm_telemetry = package_task_event.child();
                 let mut hash_object = match scm.get_package_file_hashes(
                     repo_root,
                     package_path,
                     &task_definition.inputs,
+                    Some(scm_telemetry),
                 ) {
                     Ok(hash_object) => hash_object,
                     Err(err) => return Some(Err(err.into())),

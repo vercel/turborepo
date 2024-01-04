@@ -190,6 +190,7 @@ impl<'a> Visitor<'a> {
                 EnvMode::Strict => ResolvedEnvMode::Strict,
                 EnvMode::Loose => ResolvedEnvMode::Loose,
             };
+            package_task_event.track_env_mode(&task_env_mode.to_string());
 
             let dependency_set = engine.dependencies(&info).ok_or(Error::MissingDefinition)?;
 
