@@ -71,7 +71,7 @@ impl Default for TaskDefinition {
             output_mode: Default::default(),
             persistent: Default::default(),
             dot_env: Default::default(),
-            interactive: false,
+            interactive: Default::default(),
         }
     }
 }

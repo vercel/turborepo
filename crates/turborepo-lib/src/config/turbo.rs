@@ -149,6 +149,7 @@ impl RawTaskDefinition {
         set_field!(self, other, env);
         set_field!(self, other, pass_through_env);
         set_field!(self, other, dot_env);
+        set_field!(self, other, interactive);
     }
 }
 
