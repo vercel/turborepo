@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useConfig, useTheme, type DocsThemeConfig } from "nextra-theme-docs";
@@ -201,7 +202,98 @@ const config: DocsThemeConfig = {
     ),
   },
   components: {
-    pre: (props) => <pre {...props} data-pagefind-weight=".5" />,
+    pre: (props: ReactElement) => {
+      function getTextContent(elem: ReactElement | string): string {
+        if (elem instanceof Array) {
+          return elem.map(getTextContent).join("");
+        }
+        if (!elem) {
+          return "";
+        }
+        if (typeof elem === "string") {
+          return elem;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- `any` is technically correct here.
+        const children = elem.props.children;
+        if (children instanceof Array) {
+          return children.map(getTextContent).join("");
+        }
+
+        return getTextContent(children as ReactElement | string);
+      }
+
+      // Taken from original Nextra docs theme.
+      // Only functional change is adding `data-pagefind-weight`.
+      return (
+        <div className="relative">
+          <pre
+            className="nx-bg-primary-700/5 nx-mb-4 nx-overflow-x-auto nx-rounded-xl nx-subpixel-antialiased dark:nx-bg-primary-300/10 nx-text-[.9em] contrast-more:nx-border contrast-more:nx-border-primary-900/20 contrast-more:nx-contrast-150 contrast-more:dark:nx-border-primary-100/40 nx-py-4"
+            {...props}
+            data-pagefind-weight=".5"
+          />
+          <div className="nx-opacity-0 nx-transition [div:hover>&amp;]:nx-opacity-100 focus-within:nx-opacity-100 nx-flex nx-gap-1 nx-absolute nx-m-[11px] nx-right-0 nx-top-0">
+            <button
+              className="nextra-button nx-transition-all active:nx-opacity-50 nx-bg-primary-700/5 nx-border nx-border-black/5 nx-text-gray-600 hover:nx-text-gray-900 nx-rounded-md nx-p-1.5 dark:nx-bg-primary-300/10 dark:nx-border-white/10 dark:nx-text-gray-400 dark:hover:nx-text-gray-50 md:nx-hidden"
+              title="Toggle word wrap"
+              type="button"
+            >
+              <svg
+                className="nx-pointer-events-none nx-h-4 nx-w-4"
+                height="24"
+                viewBox="0 0 24 24"
+                width="24"
+              >
+                <path
+                  d="M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3l3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z"
+                  fill="currentColor"
+                />
+              </svg>
+            </button>
+            <button
+              className="nextra-button nx-transition-all active:nx-opacity-50 nx-bg-primary-700/5 nx-border nx-border-black/5 nx-text-gray-600 hover:nx-text-gray-900 nx-rounded-md nx-p-1.5 dark:nx-bg-primary-300/10 dark:nx-border-white/10 dark:nx-text-gray-400 dark:hover:nx-text-gray-50"
+              onClick={() => {
+                void navigator.clipboard.writeText(
+                  // @ts-expect-error -- `any` is technically correct here.
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access -- `any` is technically correct here.
+                  getTextContent(props.children.props.children)
+                );
+              }}
+              tabIndex={0}
+              title="Copy code"
+              type="button"
+            >
+              <svg
+                className="nextra-copy-icon nx-pointer-events-none nx-h-4 nx-w-4"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect
+                  height="13"
+                  rx="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  width="13"
+                  x="9"
+                  y="9"
+                />
+                <path
+                  d="M5 15H4C2.89543 15 2 14.1046 2 13V4C2 2.89543 2.89543 2 4 2H13C14.1046 2 15 2.89543 15 4V5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      );
+    },
   },
   main: (props) => <Main>{props.children}</Main>,
   search: {
