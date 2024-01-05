@@ -145,27 +145,37 @@ impl CommandBase {
 
         let auth_token = auth.get_token(client.base_url());
         if let Some(auth_token) = auth_token {
+            println!("why are we here");
             Ok(Some(APIAuth {
                 team_id: team_id.map(|s| s.to_string()),
                 token: auth_token.token,
                 team_slug: team_slug.map(|s| s.to_string()),
             }))
         } else {
+            println!("we should be here");
             let base = client.base_url();
             let login_command = if base.contains("vercel") {
                 "turbo login".to_string()
             } else {
                 format!("turbo login --api {}", base)
             };
+            let apis_with_tokens = auth.tokens().iter().map(|(api, _)| api.to_string());
+            // Don't show the message if there are no tokens to display.
+            let api_message = if apis_with_tokens.len() > 0 {
+                format!(
+                    "Found the following apis with tokens:\n  - {}",
+                    apis_with_tokens
+                        .clone()
+                        .collect::<Vec<String>>()
+                        .join("\n  - ")
+                )
+            } else {
+                "".to_string()
+            };
+
             let message = format!(
-                "No token found for {base}. Run `turbo link` or `{login_command} first.\nFound \
-                 the following apis with tokens:\n{apis}",
-                apis = auth
-                    .tokens()
-                    .iter()
-                    .map(|(api, _)| api.to_string())
-                    .collect::<Vec<String>>()
-                    .join("\n")
+                "No token found for {base}. Run `turbo link` or `{login_command} \
+                 first.\n{api_message}",
             );
             self.ui.apply(turborepo_ui::YELLOW.apply_to(message));
             Ok(None)
