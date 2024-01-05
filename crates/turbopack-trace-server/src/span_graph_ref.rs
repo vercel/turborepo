@@ -8,6 +8,7 @@ use indexmap::IndexMap;
 
 use crate::{
     span::{SpanGraph, SpanGraphEvent, SpanIndex},
+    span_bottom_up_ref::SpanBottomUpRef,
     span_ref::SpanRef,
     store::{SpanId, Store},
 };
@@ -32,10 +33,14 @@ impl<'a> SpanGraphRef<'a> {
 
     pub fn nice_name(&self) -> (&str, &str) {
         if self.count() == 1 {
-            return self.first_span().nice_name();
+            self.first_span().nice_name()
         } else {
-            return ("", self.first_span().group_name());
+            ("", self.first_span().group_name())
         }
+    }
+
+    pub fn group_name(&self) -> &'a str {
+        self.first_span().group_name()
     }
 
     pub fn count(&self) -> usize {
@@ -136,6 +141,12 @@ impl<'a> SpanGraphRef<'a> {
             SpanGraphEventRef::SelfTime { .. } => None,
             SpanGraphEventRef::Child { graph: span } => Some(span),
         })
+    }
+
+    pub fn bottom_up(&self) -> impl Iterator<Item = SpanBottomUpRef<'a>> + '_ {
+        self.root_spans()
+            .map(move |span| span.bottom_up())
+            .flatten()
     }
 
     pub fn max_depth(&self) -> u32 {

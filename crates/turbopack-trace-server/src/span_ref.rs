@@ -9,7 +9,9 @@ use std::{
 use indexmap::IndexMap;
 
 use crate::{
+    bottom_up::build_bottom_up_graph,
     span::{Span, SpanEvent, SpanGraph, SpanGraphEvent, SpanIndex},
+    span_bottom_up_ref::SpanBottomUpRef,
     span_graph_ref::{SpanGraphEventRef, SpanGraphRef},
     store::{SpanId, Store},
 };
@@ -23,6 +25,10 @@ pub struct SpanRef<'a> {
 impl<'a> SpanRef<'a> {
     pub fn id(&self) -> SpanId {
         unsafe { SpanId::new_unchecked(self.span.index.get() << 1) }
+    }
+
+    pub fn index(&self) -> SpanIndex {
+        self.span.index
     }
 
     pub fn parent(&self) -> Option<SpanRef<'a>> {
@@ -294,6 +300,22 @@ impl<'a> SpanRef<'a> {
                         store: self.store,
                     },
                 },
+            })
+    }
+
+    pub fn bottom_up(self) -> impl Iterator<Item = SpanBottomUpRef<'a>> {
+        self.span
+            .bottom_up
+            .get_or_init(|| {
+                build_bottom_up_graph(SpanRef {
+                    span: self.span,
+                    store: self.store,
+                })
+            })
+            .iter()
+            .map(|bottom_up| SpanBottomUpRef {
+                bottom_up,
+                store: self.store,
             })
     }
 

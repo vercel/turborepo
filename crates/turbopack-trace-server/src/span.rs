@@ -41,6 +41,7 @@ pub struct Span {
     pub corrected_self_time: OnceLock<u64>,
     pub corrected_total_time: OnceLock<u64>,
     pub graph: OnceLock<Vec<SpanGraphEvent>>,
+    pub bottom_up: OnceLock<Vec<SpanBottomUp>>,
     pub search_index: OnceLock<HashMap<String, Vec<SpanIndex>>>,
 }
 
@@ -82,4 +83,37 @@ pub struct SpanGraph {
     pub total_allocation_count: OnceLock<u64>,
     pub corrected_self_time: OnceLock<u64>,
     pub corrected_total_time: OnceLock<u64>,
+}
+
+pub struct SpanBottomUp {
+    // These values won't change after creation:
+    pub self_spans: Vec<SpanIndex>,
+    pub children: HashMap<String, SpanBottomUp>,
+    pub example_span: SpanIndex,
+
+    // These values are computed when accessed:
+    pub max_depth: OnceLock<u32>,
+    pub self_time: OnceLock<u64>,
+    pub corrected_self_time: OnceLock<u64>,
+    pub self_allocations: OnceLock<u64>,
+    pub self_deallocations: OnceLock<u64>,
+    pub self_persistent_allocations: OnceLock<u64>,
+    pub self_allocation_count: OnceLock<u64>,
+}
+
+impl SpanBottomUp {
+    pub fn new(example_span: SpanIndex) -> Self {
+        Self {
+            self_spans: vec![],
+            children: HashMap::new(),
+            example_span,
+            max_depth: OnceLock::new(),
+            self_time: OnceLock::new(),
+            corrected_self_time: OnceLock::new(),
+            self_allocations: OnceLock::new(),
+            self_deallocations: OnceLock::new(),
+            self_persistent_allocations: OnceLock::new(),
+            self_allocation_count: OnceLock::new(),
+        }
+    }
 }

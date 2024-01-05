@@ -216,41 +216,29 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                                     )?;
                                 }
                                 ClientToServerMessage::ViewMode { id, mode, inherit } => {
-                                    match mode.as_str() {
+                                    let (mode, sorted) =
+                                        if let Some(mode) = mode.strip_suffix("-sorted") {
+                                            (mode, true)
+                                        } else {
+                                            (mode.as_str(), false)
+                                        };
+                                    match mode {
                                         "raw-spans" => {
                                             state.viewer.set_view_mode(
                                                 id,
-                                                Some((
-                                                    ViewMode::RawSpans { sorted: false },
-                                                    inherit,
-                                                )),
-                                            );
-                                        }
-                                        "raw-spans-sorted" => {
-                                            state.viewer.set_view_mode(
-                                                id,
-                                                Some((
-                                                    ViewMode::RawSpans { sorted: true },
-                                                    inherit,
-                                                )),
+                                                Some((ViewMode::RawSpans { sorted }, inherit)),
                                             );
                                         }
                                         "aggregated" => {
                                             state.viewer.set_view_mode(
                                                 id,
-                                                Some((
-                                                    ViewMode::Aggregated { sorted: false },
-                                                    inherit,
-                                                )),
+                                                Some((ViewMode::Aggregated { sorted }, inherit)),
                                             );
                                         }
-                                        "aggregated-sorted" => {
+                                        "bottom-up" => {
                                             state.viewer.set_view_mode(
                                                 id,
-                                                Some((
-                                                    ViewMode::Aggregated { sorted: true },
-                                                    inherit,
-                                                )),
+                                                Some((ViewMode::BottomUp { sorted }, inherit)),
                                             );
                                         }
                                         _ => {
