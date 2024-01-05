@@ -151,7 +151,6 @@ impl CommandBase {
                 team_slug: team_slug.map(|s| s.to_string()),
             }))
         } else {
-            println!("we should be here");
             let base = client.base_url();
             let login_command = if base.contains("vercel") {
                 "turbo login".to_string()
