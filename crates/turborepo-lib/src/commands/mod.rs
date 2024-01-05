@@ -145,7 +145,6 @@ impl CommandBase {
 
         let auth_token = auth.get_token(client.base_url());
         if let Some(auth_token) = auth_token {
-            println!("why are we here");
             Ok(Some(APIAuth {
                 team_id: team_id.map(|s| s.to_string()),
                 token: auth_token.token,
