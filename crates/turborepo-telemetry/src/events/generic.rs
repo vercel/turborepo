@@ -5,6 +5,9 @@ use uuid::Uuid;
 use super::{Event, EventBuilder, EventType, Identifiable};
 use crate::{config::TelemetryConfig, telem};
 
+// Remote cache URL's that will be passed through to the API without obfuscation
+const RC_URL_ALLOWLIST: [&str; 1] = ["https://vercel.com/api"];
+
 pub enum DaemonInitStatus {
     // skipped due to context (running in CI etc)
     Skipped,
@@ -146,7 +149,11 @@ impl GenericEventBuilder {
         self.track(Event {
             key: "remote_cache_url".to_string(),
             value: cache_url.to_string(),
-            is_sensitive: EventType::NonSensitive,
+            is_sensitive: if RC_URL_ALLOWLIST.contains(&cache_url) {
+                EventType::NonSensitive
+            } else {
+                EventType::Sensitive
+            },
         });
         self
     }
