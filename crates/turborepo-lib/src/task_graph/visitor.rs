@@ -9,6 +9,7 @@ use std::{
 
 use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
+use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
 use regex::Regex;
 use tokio::{
     process::Command,
@@ -748,6 +749,17 @@ impl ExecContext {
         let Ok(package_manager_binary) = which(self.package_manager.command()) else {
             return ExecOutcome::Internal;
         };
+
+        let pty_system = NativePtySystem::default();
+
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24, // TODO: change this
+                cols: 80, // TODO: change this
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
 
         let mut cmd = Command::new(package_manager_binary);
         let mut args = vec!["run".to_string(), self.task_id.task().to_string()];
