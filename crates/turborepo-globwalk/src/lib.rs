@@ -271,12 +271,17 @@ impl FromStr for ValidatedGlob {
         // 4. single `.`s removed
         // 5. colons escaped on unix, error on windows
 
+        // Lexically clean the path
+        let path_buf = Utf8PathBuf::from_str(s).expect("infallible");
+        let cleaned_path = path_buf.as_std_path().clean();
+        let cleaned = cleaned_path.to_str().expect("valid utf-8");
+
         // Check slashes + ':'
         #[cfg(not(windows))]
-        let cross_platform = s.replace(':', "\\:");
+        let cross_platform = cleaned.trim_start_matches('/').replace(':', "\\:");
         #[cfg(windows)]
         let cross_platform = {
-            let to_slashed = s.replace('\\', "/");
+            let to_slashed = cleaned.replace('\\', "/");
             if let Some(index) = to_slashed.find(':') {
                 return Err(GlobError {
                     raw_input: s.to_owned(),
@@ -294,13 +299,10 @@ impl FromStr for ValidatedGlob {
         // if cross_platform.chars().next() == Some('/') {
         //     return Err(err("globs must be relative paths".to_string()));
         // }
-        let cross_platform = cross_platform.trim_start_matches('/').to_owned();
+        //let cross_platform = cross_platform.trim_start_matches('/').to_owned();
 
-        // TODO: path clean goes here
-        let path_buf = Utf8PathBuf::from_str(&cross_platform).expect("infallible");
-        let cleaned = path_buf.as_std_path().clean();
         Ok(Self {
-            inner: cleaned.to_str().expect("valid utf-8").to_string(),
+            inner: cross_platform,
         })
     }
 }
