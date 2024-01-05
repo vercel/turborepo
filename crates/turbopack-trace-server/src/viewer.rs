@@ -463,13 +463,13 @@ impl Viewer {
                 }
                 QueueItem::SpanBottomUp(bottom_up) => {
                     let bottom_up = if view_mode.sort_children() {
-                        Either::Left(bottom_up.children().sorted_by_cached_key(|(_, child)| {
+                        Either::Left(bottom_up.children().sorted_by_cached_key(|child| {
                             Reverse(value_mode.value_from_bottom_up(child))
                         }))
                     } else {
                         Either::Right(bottom_up.children())
                     };
-                    for (name, child) in bottom_up {
+                    for child in bottom_up {
                         // TODO search
                         add_child_item(
                             &mut children,

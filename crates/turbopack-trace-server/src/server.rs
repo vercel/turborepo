@@ -45,6 +45,8 @@ pub enum ServerToClientMessage {
         duration: u64,
         allocations: u64,
         deallocations: u64,
+        allocation_count: u64,
+        persistent_allocations: u64,
         args: Vec<(String, String)>,
         path: Vec<String>,
     },
@@ -270,6 +272,9 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                                         let duration = span.corrected_total_time();
                                         let allocations = span.total_allocations();
                                         let deallocations = span.total_deallocations();
+                                        let allocation_count = span.total_allocation_count();
+                                        let persistent_allocations =
+                                            span.total_persistent_allocations();
                                         let args = span
                                             .args()
                                             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -289,6 +294,8 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                                             duration,
                                             allocations,
                                             deallocations,
+                                            allocation_count,
+                                            persistent_allocations,
                                             args,
                                             path,
                                         }
@@ -301,6 +308,8 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                                             duration: 0,
                                             allocations: 0,
                                             deallocations: 0,
+                                            allocation_count: 0,
+                                            persistent_allocations: 0,
                                             args: Vec::new(),
                                             path: Vec::new(),
                                         }

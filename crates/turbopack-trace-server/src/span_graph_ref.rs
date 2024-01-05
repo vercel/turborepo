@@ -39,10 +39,6 @@ impl<'a> SpanGraphRef<'a> {
         }
     }
 
-    pub fn group_name(&self) -> &'a str {
-        self.first_span().group_name()
-    }
-
     pub fn count(&self) -> usize {
         self.graph.root_spans.len() + self.graph.recursive_spans.len()
     }

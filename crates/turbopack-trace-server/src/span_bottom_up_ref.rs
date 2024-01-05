@@ -46,25 +46,27 @@ impl<'a> SpanBottomUpRef<'a> {
     }
 
     pub fn nice_name(&self) -> (&'a str, &'a str) {
-        self.example_span().nice_name()
+        if self.count() == 1 {
+            self.example_span().nice_name()
+        } else {
+            ("", self.example_span().group_name())
+        }
     }
 
-    pub fn children(&self) -> impl Iterator<Item = (&'a str, SpanBottomUpRef<'a>)> + 'a {
-        self.bottom_up.children.iter().map(|(name, bottom_up)| {
-            (
-                name.as_str(),
-                SpanBottomUpRef {
-                    bottom_up,
-                    store: self.store,
-                },
-            )
-        })
+    pub fn children(&self) -> impl Iterator<Item = SpanBottomUpRef<'a>> + 'a {
+        self.bottom_up
+            .children
+            .values()
+            .map(|bottom_up| SpanBottomUpRef {
+                bottom_up,
+                store: self.store,
+            })
     }
 
     pub fn max_depth(&self) -> u32 {
         *self.bottom_up.max_depth.get_or_init(|| {
             self.children()
-                .map(|(_, bottom_up)| bottom_up.max_depth() + 1)
+                .map(|bottom_up| bottom_up.max_depth() + 1)
                 .max()
                 .unwrap_or(0)
         })
