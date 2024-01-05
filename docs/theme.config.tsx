@@ -226,7 +226,7 @@ const config: DocsThemeConfig = {
       // Taken from original Nextra docs theme.
       // Only functional change is adding `data-pagefind-weight`.
       return (
-        <div className="relative">
+        <div className="relative mt-6" id="custom-code-block">
           <pre
             className="nx-bg-primary-700/5 nx-mb-4 nx-overflow-x-auto nx-rounded-xl nx-subpixel-antialiased dark:nx-bg-primary-300/10 nx-text-[.9em] contrast-more:nx-border contrast-more:nx-border-primary-900/20 contrast-more:nx-contrast-150 contrast-more:dark:nx-border-primary-100/40 nx-py-4"
             {...props}
