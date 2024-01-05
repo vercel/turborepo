@@ -45,13 +45,13 @@ pub enum AuthSource {
     Vercel(AbsoluteSystemPathBuf),
 }
 
-/// Auth is an enum that contains either a token or a file. This is used for
-/// holding a/many token(s), depending on the variant.
-pub enum Auth {
+/// AuthProvider is an enum that contains either a token or a file. This is used
+/// for holding a/many token(s), depending on the variant.
+pub enum AuthProvider {
     Token(AuthToken),
     File(AuthFile),
 }
-impl Auth {
+impl AuthProvider {
     /// Creates a new Auth enum from an AuthSource.
     /// ## Arguments
     /// * `source`: The AuthSource to create the Auth enum from.
@@ -77,25 +77,25 @@ impl Auth {
             // api keys, or permissions. If we add functionality, like refreshing tokens
             // or anything that might allow for a passed in token to be written to disk,
             // we'll update this arm.
-            AuthSource::CLI(t) => Auth::Token(AuthToken {
+            AuthSource::CLI(t) => Self::Token(AuthToken {
                 token: t,
                 api: "".to_string(),
             }),
-            AuthSource::Turborepo(source) => Auth::File(AuthFile::new(source)),
-            AuthSource::Vercel(source) => Auth::File(AuthFile::new(source)),
+            AuthSource::Turborepo(source) => Self::File(AuthFile::new(source)),
+            AuthSource::Vercel(source) => Self::File(AuthFile::new(source)),
         }
     }
     /// Determines if this enum is a file or a token.
     pub fn is_file(&self) -> bool {
-        matches!(self, Auth::File(_))
+        matches!(self, Self::File(_))
     }
     /// Returns the underlying token. If the enum is a `Token`, it will return
     /// the token used to construct it. Otherwise, the `api` argument is used to
     /// look up the token in the file, if it exists.
     pub fn get_token(&self, api: &str) -> Option<AuthToken> {
         match self {
-            Auth::Token(t) => Some(t.clone()),
-            Auth::File(f) => f.get_token(api),
+            Self::Token(t) => Some(t.clone()),
+            Self::File(f) => f.get_token(api),
         }
     }
 }
