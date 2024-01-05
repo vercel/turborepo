@@ -1,12 +1,302 @@
 version: 2
 updates:
   - package-ecosystem: "npm"
-    directory: "/examples"
+    directory: "/examples/basic"
     schedule:
-      interval: "weekly"
+      interval: "daily"
     labels:
       - "area: examples"
     open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/design-system"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/kitchen-sink"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/non-monorepo"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-berry"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-changesets"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-docker"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-gatsby"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-npm"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-prisma"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-react-native-web"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-rollup"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-shell-commands"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-svelte"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-tailwind"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-vite"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-vue-nuxt"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
+    allow:
+      - dependency-type: "direct"
+    assignees:
+      - "anthonyshew"
+    groups:
+      example-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/examples/with-yarn"
+    schedule:
+      interval: "daily"
+    labels:
+      - "area: examples"
+    open-pull-requests-limit: 1
+    versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
     assignees:
