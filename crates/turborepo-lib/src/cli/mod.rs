@@ -27,6 +27,7 @@ use crate::{
         bin, daemon, generate, info, link, login, logout, prune, telemetry, unlink, CommandBase,
     },
     get_version,
+    shim::TurboState,
     tracing::TurboSubscriber,
     Payload,
 };
@@ -808,6 +809,11 @@ pub async fn run(
 
     let root_telemetry = GenericEventBuilder::new();
     root_telemetry.track_start();
+
+    // track system info
+    root_telemetry.track_platform(TurboState::platform_name());
+    root_telemetry.track_version(TurboState::version());
+    root_telemetry.track_cpus(num_cpus::get());
 
     let cli_result = match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {

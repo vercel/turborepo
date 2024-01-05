@@ -13,7 +13,7 @@ use tracing_subscriber::{
     filter::{Filtered, Targets},
     fmt::{
         self,
-        format::{DefaultFields, Writer},
+        format::{DefaultFields, FmtSpan, Writer},
         FmtContext, FormatEvent, FormatFields, MakeWriter,
     },
     layer,
@@ -172,6 +172,7 @@ impl TurboSubscriber {
         trace!("created non-blocking file writer");
 
         let layer: DaemonLog = tracing_subscriber::fmt::layer()
+            .with_span_events(FmtSpan::FULL)
             .with_writer(file_writer)
             .with_ansi(false);
 
@@ -195,6 +196,7 @@ impl TurboSubscriber {
             .file(to_file)
             .include_args(include_args)
             .include_locations(true)
+            .trace_style(tracing_chrome::TraceStyle::Async)
             .build();
 
         self.chrome_update.reload(Some(layer))?;

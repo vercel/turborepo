@@ -786,9 +786,10 @@ mod test {
             });
         }
 
-        while let Some(_) = tokio::time::timeout(Duration::from_secs(5), stops.next())
+        while tokio::time::timeout(Duration::from_secs(5), stops.next())
             .await
             .expect("timed out")
+            .is_some()
         {}
     }
 }

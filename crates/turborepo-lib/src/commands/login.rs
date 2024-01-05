@@ -29,7 +29,7 @@ impl<T: LoginServer> Login<T> {
         let global_config_path = base.global_config_path()?;
 
         let mut auth_file =
-            read_or_create_auth_file(&global_auth_path, &global_config_path, &api_client).await?;
+            read_or_create_auth_file(&global_auth_path, &global_config_path, &api_client)?;
 
         if self
             .has_existing_token(&api_client, &mut auth_file, &ui)
@@ -82,7 +82,7 @@ impl<T: SSOLoginServer> Login<T> {
         let global_config_path = base.global_config_path()?;
 
         let mut auth_file =
-            read_or_create_auth_file(&global_auth_path, &global_config_path, &api_client).await?;
+            read_or_create_auth_file(&global_auth_path, &global_config_path, &api_client)?;
 
         if self
             .has_existing_sso_token(&api_client, &mut auth_file, &base.ui, sso_team)
@@ -94,7 +94,7 @@ impl<T: SSOLoginServer> Login<T> {
         let login_server = &self.server;
 
         let auth_token =
-            auth_sso_login(&api_client, &ui, &login_url_config, "sso", login_server).await?;
+            auth_sso_login(&api_client, &ui, &login_url_config, sso_team, login_server).await?;
 
         auth_file.insert(api_client.base_url().to_owned(), auth_token.token);
         auth_file.write_to_disk(&global_auth_path)?;
@@ -239,9 +239,7 @@ mod tests {
         // Pass in the auth file path for both possible paths becuase we
         // should never read the config from here.
         let found_auth_file =
-            read_or_create_auth_file(&auth_file_path, &auth_file_path, &mock_api_client)
-                .await
-                .unwrap();
+            read_or_create_auth_file(&auth_file_path, &auth_file_path, &mock_api_client).unwrap();
 
         api_server.abort();
         assert_eq!(
@@ -275,9 +273,7 @@ mod tests {
         assert!(result.is_ok());
 
         let found_auth_file =
-            read_or_create_auth_file(&auth_file_path, &auth_file_path, &mock_api_client)
-                .await
-                .unwrap();
+            read_or_create_auth_file(&auth_file_path, &auth_file_path, &mock_api_client).unwrap();
 
         api_server.abort();
 

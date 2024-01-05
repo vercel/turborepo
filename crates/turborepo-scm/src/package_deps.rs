@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use itertools::{Either, Itertools};
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError, RelativeUnixPathBuf};
+use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
 
 use crate::{hash_object::hash_objects, Error, Git, SCM};
 
@@ -28,26 +29,44 @@ impl SCM {
         turbo_root: &AbsoluteSystemPath,
         package_path: &AnchoredSystemPath,
         inputs: &[S],
+        telemetry: Option<PackageTaskEventBuilder>,
     ) -> Result<GitHashes, Error> {
         match self {
-            SCM::Manual => crate::manual::get_package_file_hashes_from_processing_gitignore(
-                turbo_root,
-                package_path,
-                inputs,
-            ),
-            SCM::Git(git) => git
-                .get_package_file_hashes(turbo_root, package_path, inputs)
-                .or_else(|e| {
-                    debug!(
-                        "failed to use git to hash files: {}. Falling back to manual",
-                        e
-                    );
-                    crate::manual::get_package_file_hashes_from_processing_gitignore(
-                        turbo_root,
-                        package_path,
-                        inputs,
-                    )
-                }),
+            SCM::Manual => {
+                if let Some(telemetry) = telemetry {
+                    telemetry.track_file_hash_method(FileHashMethod::Manual);
+                }
+                crate::manual::get_package_file_hashes_from_processing_gitignore(
+                    turbo_root,
+                    package_path,
+                    inputs,
+                )
+            }
+            SCM::Git(git) => {
+                let result = git.get_package_file_hashes(turbo_root, package_path, inputs);
+                match result {
+                    Ok(hashes) => {
+                        if let Some(telemetry) = telemetry {
+                            telemetry.track_file_hash_method(FileHashMethod::Git);
+                        }
+                        Ok(hashes)
+                    }
+                    Err(err) => {
+                        debug!(
+                            "failed to use git to hash files: {}. Falling back to manual",
+                            err
+                        );
+                        if let Some(telemetry) = telemetry {
+                            telemetry.track_file_hash_method(FileHashMethod::Manual);
+                        }
+                        crate::manual::get_package_file_hashes_from_processing_gitignore(
+                            turbo_root,
+                            package_path,
+                            inputs,
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -272,7 +291,12 @@ mod tests {
         repo_root.join_component(".git").remove_dir_all().unwrap();
         let pkg_path = repo_root.anchor(&my_pkg_dir).unwrap();
         let hashes = git
-            .get_package_file_hashes::<&str>(&repo_root, &pkg_path, &[])
+            .get_package_file_hashes::<&str>(
+                &repo_root,
+                &pkg_path,
+                &[],
+                Some(PackageTaskEventBuilder::new("my-pkg", "test")),
+            )
             .unwrap();
         let mut expected = GitHashes::new();
         expected.insert(

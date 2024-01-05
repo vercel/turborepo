@@ -2,7 +2,8 @@ use std::{
     borrow::Cow,
     collections::HashSet,
     io::{BufRead, Write},
-    sync::{Arc, Mutex, OnceLock},
+    process::Stdio,
+    sync::{mpsc::sync_channel as std_sync_channel, Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -11,10 +12,11 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
+    process::Command,
     sync::{mpsc, oneshot},
     task,
 };
-use tracing::{debug, error, Span};
+use tracing::{debug, error, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_ci::github_header_footer;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
@@ -128,7 +130,7 @@ impl<'a> Visitor<'a> {
         }
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all)]
     pub async fn visit(&self, engine: Arc<Engine>) -> Result<Vec<TaskError>, Error> {
         let concurrency = self.opts.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
@@ -191,6 +193,7 @@ impl<'a> Visitor<'a> {
                 EnvMode::Strict => ResolvedEnvMode::Strict,
                 EnvMode::Loose => ResolvedEnvMode::Loose,
             };
+            package_task_event.track_env_mode(&task_env_mode.to_string());
 
             let dependency_set = engine.dependencies(&info).ok_or(Error::MissingDefinition)?;
 
@@ -218,6 +221,9 @@ impl<'a> Visitor<'a> {
                 info.clone(),
                 &task_hash,
             );
+
+            // Drop to avoid holding the span across an await
+            drop(_enter);
 
             // here is where we do the logic split
             match self.dry {
@@ -555,7 +561,7 @@ impl<'a> ExecContextFactory<'a> {
         task_cache: TaskCache,
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
-        is_interactive: bool,
+        interactive: bool,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.opts.run_opts.args_for_task(&task_id);
@@ -579,7 +585,7 @@ impl<'a> ExecContextFactory<'a> {
             continue_on_error: self.visitor.opts.run_opts.continue_on_error,
             pass_through_args,
             errors: self.errors.clone(),
-            is_interactive: is_interactive,
+            is_interactive: interactive,
         }
     }
 
@@ -651,7 +657,9 @@ impl ExecContext {
         spaces_client: Option<SpacesTaskClient>,
     ) {
         let tracker = tracker.start().await;
-        let mut result = self.execute_inner(parent_span_id, &output_client).await;
+        let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
+        span.follows_from(parent_span_id);
+        let mut result = self.execute_inner(&output_client).instrument(span).await;
 
         let logs = match output_client.finish() {
             Ok(logs) => logs,
@@ -716,13 +724,9 @@ impl ExecContext {
 
     async fn execute_inner(
         &mut self,
-        parent_span_id: Option<tracing::Id>,
         output_client: &OutputClient<impl std::io::Write>,
     ) -> ExecOutcome {
-        let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
         let task_start = Instant::now();
-        span.follows_from(parent_span_id);
-        let _enter = span.enter();
 
         let mut prefixed_ui = Visitor::prefixed_ui(
             self.ui,
