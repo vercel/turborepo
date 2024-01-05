@@ -177,7 +177,7 @@ impl CommandBase {
                 "No token found for {base}. Run `turbo link` or `{login_command} \
                  first.\n{api_message}",
             );
-            self.ui.apply(turborepo_ui::YELLOW.apply_to(message));
+            println!("{}", self.ui.apply(turborepo_ui::YELLOW.apply_to(message)));
             Ok(None)
         }
     }
