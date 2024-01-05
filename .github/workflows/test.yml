@@ -417,15 +417,7 @@ jobs:
     if: needs.determine_jobs.outputs.examples == 'true'
     timeout-minutes: 40
 
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - runner: ubuntu-latest
-          - runner: macos-latest
-          # TODO: enable this
-          # - runner: windows-latest
-    runs-on: ${{ matrix.os.runner }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
