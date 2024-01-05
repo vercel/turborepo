@@ -105,7 +105,7 @@ impl Client for APIClient {
         &self.base_url
     }
     async fn get_token_metadata(&self, token: &str) -> Result<TokenMetadata> {
-        let url = self.make_url("/v5/user/tokens/current");
+        let url = self.make_url("/v5/user/tokens/current")?;
         let request_builder = self
             .client
             .get(url)

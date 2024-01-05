@@ -7,6 +7,7 @@ use turborepo_vercel_api::{
     CachingStatusResponse, Membership, PreflightResponse, Role, Space, SpacesResponse, Team,
     TeamsResponse, TokenMetadata, User, UserResponse, VerifiedSsoUser,
 };
+use url::Url;
 
 #[derive(Debug, thiserror::Error)]
 pub enum MockApiError {
@@ -173,7 +174,8 @@ impl Client for MockApiClient {
     ) -> turborepo_api_client::Result<Option<Response>> {
         unimplemented!("get_artifact")
     }
-    fn make_url(&self, endpoint: &str) -> String {
-        format!("{}{}", self.base_url, endpoint)
+    fn make_url(&self, endpoint: &str) -> turborepo_api_client::Result<Url> {
+        let url = format!("{}{}", self.base_url, endpoint);
+        Url::parse(&url).map_err(|err| turborepo_api_client::Error::InvalidUrl { url, err })
     }
 }
