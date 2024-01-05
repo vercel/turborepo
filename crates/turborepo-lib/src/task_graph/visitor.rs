@@ -2,8 +2,7 @@ use std::{
     borrow::Cow,
     collections::HashSet,
     io::{BufRead, Write},
-    process::Stdio,
-    sync::{mpsc::sync_channel as std_sync_channel, Arc, Mutex, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -12,7 +11,6 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
-    process::Command,
     sync::{mpsc, oneshot},
     task,
 };
