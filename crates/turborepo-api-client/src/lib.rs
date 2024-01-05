@@ -410,7 +410,8 @@ impl Client for APIClient {
     }
 
     fn make_url(&self, endpoint: &str) -> Result<Url> {
-        Ok(Url::parse(&format!("{}{}", self.base_url, endpoint))?)
+        let url = format!("{}{}", self.base_url, endpoint);
+        Url::parse(&url).map_err(|err| Error::InvalidUrl { url, err })
     }
 }
 
@@ -467,10 +468,22 @@ impl APIClient {
 
             match Url::parse(location) {
                 Ok(location_url) => location_url,
-                Err(url::ParseError::RelativeUrlWithoutBase) => {
-                    Url::parse(&self.base_url)?.join(location)?
+                Err(url::ParseError::RelativeUrlWithoutBase) => Url::parse(&self.base_url)
+                    .map_err(|err| Error::InvalidUrl {
+                        url: self.base_url.clone(),
+                        err,
+                    })?
+                    .join(location)
+                    .map_err(|err| Error::InvalidUrl {
+                        url: location.to_string(),
+                        err,
+                    })?,
+                Err(e) => {
+                    return Err(Error::InvalidUrl {
+                        url: location.to_string(),
+                        err: e,
+                    })
                 }
-                Err(e) => return Err(e.into()),
             }
         } else {
             response.url().clone()
