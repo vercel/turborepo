@@ -174,7 +174,7 @@ impl CommandBase {
             };
 
             let message = format!(
-                "No token found for {base}. Run `turbo link` or `{login_command} \
+                "No token found for {base}. Run `turbo link` or `{login_command}` \
                  first.\n{api_message}",
             );
             println!("{}", self.ui.apply(turborepo_ui::YELLOW.apply_to(message)));
