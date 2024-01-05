@@ -60,13 +60,13 @@ impl AuthProvider {
     /// ## Examples
     /// ```
     /// use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-    /// use turborepo_auth::{Auth, AuthSource};
+    /// use turborepo_auth::{AuthProvider, AuthSource};
     /// let auth_file_path = AbsoluteSystemPath::new("/path/to/auth/file").unwrap();
     ///
     /// // Create an Auth enum from a file.
-    /// let auth_file = Auth::new(AuthSource::Turborepo(auth_file_path));
+    /// let auth_file = AuthProvider::new(AuthSource::Turborepo(auth_file_path));
     /// // Create an Auth enum from a token.
-    /// let auth_token = Auth::new(AuthSource::CLI("test-token".to_string()));
+    /// let auth_token = AuthProvider::new(AuthSource::CLI("test-token".to_string()));
     ///
     /// assert!(auth_file.is_file());
     /// assert!(!auth_token.is_file()
