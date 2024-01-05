@@ -148,9 +148,16 @@ impl SpacesClient {
         let space_id = space_id?;
         let is_linked = api_auth.as_ref().map_or(false, |auth| auth.is_linked());
         if !is_linked {
+            let base = api_client.base_url();
+            let login_command = if base.contains("vercel") {
+                "turbo login".to_string()
+            } else {
+                format!("turbo login --api {}", base)
+            };
+
             eprintln!(
-                "Error: experimentalSpaceId is enabled, but repo is not linked to API. Run `turbo \
-                 link` or `turbo login` first"
+                "Error: experimentalSpaceId is enabled, but repo is not linked to {base}. Run \
+                 `turbo link` or `{login_command}` first",
             );
             return None;
         }
