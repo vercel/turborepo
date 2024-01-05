@@ -274,6 +274,8 @@ impl FromStr for ValidatedGlob {
         // Lexically clean the path
         let path_buf = Utf8PathBuf::from_str(s).expect("infallible");
         let cleaned_path = path_buf.as_std_path().clean();
+        // TODO: fully deprecate allowing absolute paths (that won't work anyways),
+        // and return an error here if cleaned_path is absolute
         let cleaned = cleaned_path.to_str().expect("valid utf-8");
 
         // Check slashes + ':'
@@ -292,14 +294,6 @@ impl FromStr for ValidatedGlob {
             }
             to_slashed
         };
-
-        // Check relative path. Since we've errored on ':' and converted to slashes
-        // already, we just need to check for leading /
-        // TODO: fully deprecate allowing absolute paths (that won't work anyways)
-        // if cross_platform.chars().next() == Some('/') {
-        //     return Err(err("globs must be relative paths".to_string()));
-        // }
-        //let cross_platform = cross_platform.trim_start_matches('/').to_owned();
 
         Ok(Self {
             inner: cross_platform,
