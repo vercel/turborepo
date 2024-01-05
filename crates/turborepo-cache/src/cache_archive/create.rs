@@ -159,7 +159,7 @@ impl<'a> CacheWriter<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, path::PathBuf};
+    use std::path::PathBuf;
 
     use anyhow::Result;
     use tempfile::tempdir;

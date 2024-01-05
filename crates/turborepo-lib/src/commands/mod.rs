@@ -1,11 +1,10 @@
-use std::{cell::OnceCell, path::PathBuf};
+use std::cell::OnceCell;
 
 use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_api_client::{APIAuth, APIClient, Client};
+use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_auth::{
     TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR, TURBOREPO_LEGACY_AUTH_FILE_NAME,
-    VERCEL_AUTH_FILE_NAME, VERCEL_CONFIG_DIR,
 };
 use turborepo_dirs::config_dir;
 use turborepo_ui::UI;

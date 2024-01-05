@@ -22,7 +22,7 @@ use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tracing::debug;
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
-use turborepo_api_client::{APIAuth, APIClient, Client};
+use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
