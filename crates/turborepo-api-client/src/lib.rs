@@ -81,13 +81,6 @@ pub trait Client {
         team_slug: Option<&str>,
         method: Method,
     ) -> Result<Option<Response>>;
-    async fn do_preflight(
-        &self,
-        token: &str,
-        request_url: &str,
-        request_method: &str,
-        request_headers: &str,
-    ) -> Result<PreflightResponse>;
     fn make_url(&self, endpoint: &str) -> String;
 }
 
@@ -411,6 +404,41 @@ impl Client for APIClient {
         }
     }
 
+    fn make_url(&self, endpoint: &str) -> String {
+        format!("{}{}", self.base_url, endpoint)
+    }
+}
+
+impl APIClient {
+    pub fn new(
+        base_url: impl AsRef<str>,
+        timeout: u64,
+        version: &str,
+        use_preflight: bool,
+    ) -> Result<Self> {
+        let client_build = if timeout != 0 {
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(timeout))
+                .build()
+        } else {
+            reqwest::Client::builder().build()
+        };
+
+        let client = client_build.map_err(Error::TlsError)?;
+
+        let user_agent = build_user_agent(version);
+        Ok(APIClient {
+            client,
+            base_url: base_url.as_ref().to_string(),
+            user_agent,
+            use_preflight,
+        })
+    }
+
+    pub fn base_url(&self) -> &str {
+        self.base_url.as_str()
+    }
+
     async fn do_preflight(
         &self,
         token: &str,
@@ -454,42 +482,6 @@ impl Client for APIClient {
             allow_authorization_header: allow_auth,
         })
     }
-
-    fn make_url(&self, endpoint: &str) -> String {
-        format!("{}{}", self.base_url, endpoint)
-    }
-}
-
-impl APIClient {
-    pub fn new(
-        base_url: impl AsRef<str>,
-        timeout: u64,
-        version: &str,
-        use_preflight: bool,
-    ) -> Result<Self> {
-        let client_build = if timeout != 0 {
-            reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(timeout))
-                .build()
-        } else {
-            reqwest::Client::builder().build()
-        };
-
-        let client = client_build.map_err(Error::TlsError)?;
-
-        let user_agent = build_user_agent(version);
-        Ok(APIClient {
-            client,
-            base_url: base_url.as_ref().to_string(),
-            user_agent,
-            use_preflight,
-        })
-    }
-
-    pub fn base_url(&self) -> &str {
-        self.base_url.as_str()
-    }
-
     /// Create a new request builder with the preflight check done,
     /// team parameters added, CI header, and a content type of json.
     pub(crate) async fn create_request_builder(
