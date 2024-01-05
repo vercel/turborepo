@@ -16,7 +16,7 @@ pub struct ExecutionState<'a> {
 #[derive(Debug, Serialize, Default)]
 pub struct APIClientConfig<'a> {
     // Comes from user config, i.e. $XDG_CONFIG_HOME/turborepo/config.json
-    pub token: Option<&'a str>,
+    pub token: Option<String>,
     // Comes from repo config, i.e. ./.turbo/config.json
     pub team_id: Option<&'a str>,
     pub team_slug: Option<&'a str>,
@@ -28,7 +28,7 @@ pub struct APIClientConfig<'a> {
 #[derive(Debug, Serialize, Default)]
 pub struct SpacesAPIClientConfig<'a> {
     // Comes from user config, i.e. $XDG_CONFIG_HOME/turborepo/config.json
-    pub token: Option<&'a str>,
+    pub token: Option<String>,
     // Comes from repo config, i.e. ./.turbo/config.json
     pub team_id: Option<&'a str>,
     pub team_slug: Option<&'a str>,
@@ -48,9 +48,23 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
         trace!("Found {} as package manager", package_manager);
 
         let config = base.config()?;
+        let token: Option<String> = if let Some(token) = config.token() {
+            Some(token.to_string())
+        } else {
+            let auth_file_path = base.global_auth_path()?;
+            let config_file_path = base.global_config_path()?;
+            let auth = turborepo_auth::read_or_create_auth_file(
+                &auth_file_path,
+                &config_file_path,
+                config.api_url(),
+            )?;
+
+            auth.get_token(config.login_url())
+                .map(|t| t.token().to_owned())
+        };
 
         let api_client_config = APIClientConfig {
-            token: config.token(),
+            token: token.clone(),
             team_id: config.team_id(),
             team_slug: config.team_slug(),
             api_url: config.api_url(),
@@ -59,7 +73,7 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
         };
 
         let spaces_api_client_config = SpacesAPIClientConfig {
-            token: config.token(),
+            token,
             team_id: config.team_id(),
             team_slug: config.team_slug(),
             api_url: config.api_url(),

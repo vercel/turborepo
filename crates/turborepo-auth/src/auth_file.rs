@@ -84,6 +84,12 @@ impl AuthToken {
             &self.api
         }
     }
+    pub fn api(&self) -> &str {
+        &self.api
+    }
+    pub fn token(&self) -> &str {
+        &self.token
+    }
 }
 
 /// Converts our old style of token held in `config.json` into the new schema.

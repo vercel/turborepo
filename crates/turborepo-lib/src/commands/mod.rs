@@ -85,7 +85,7 @@ impl CommandBase {
     }
 
     // Getting all of the paths.
-    fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
+    pub fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
         #[cfg(test)]
         if let Some(global_config_path) = self.global_config_path.clone() {
             return Ok(global_config_path);
@@ -98,7 +98,7 @@ impl CommandBase {
         AbsoluteSystemPathBuf::try_from(global_config_path).map_err(ConfigError::PathError)
     }
     /// Returns the path to the global auth file (auth.json).
-    fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
+    pub fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
         #[cfg(test)]
         if let Some(global_auth_path) = &self.global_auth_path {
             return Ok(global_auth_path.clone());
@@ -137,8 +137,11 @@ impl CommandBase {
         let auth_file_path = self.global_auth_path()?;
         let config_file_path = self.global_config_path()?;
         let client = self.api_client()?;
-        let auth =
-            turborepo_auth::read_or_create_auth_file(&auth_file_path, &config_file_path, &client)?;
+        let auth = turborepo_auth::read_or_create_auth_file(
+            &auth_file_path,
+            &config_file_path,
+            client.base_url(),
+        )?;
 
         let auth_token = auth.get_token(client.base_url());
         if let Some(auth_token) = auth_token {

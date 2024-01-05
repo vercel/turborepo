@@ -174,11 +174,10 @@ pub async fn link(
     let api_client = base.api_client()?;
     let auth_file_path = base.global_auth_path()?;
     let config_file_path = base.global_config_path()?;
-    let auth = read_or_create_auth_file(&auth_file_path, &config_file_path, &api_client).map_err(
-        |_| Error::TokenNotFound {
+    let auth = read_or_create_auth_file(&auth_file_path, &config_file_path, api_client.base_url())
+        .map_err(|_| Error::TokenNotFound {
             command: base.ui.apply(BOLD.apply_to("npx turbo login")),
-        },
-    )?;
+        })?;
     let token = &auth
         .get_token(api_client.base_url())
         .ok_or_else(|| Error::TokenNotFound {
