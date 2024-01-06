@@ -65,23 +65,25 @@ pub struct TurborepoConfigBuilder {
 // Getters
 impl ConfigurationOptions {
     pub fn api_url(&self) -> &str {
-        self.api_url.as_deref().unwrap_or(DEFAULT_API_URL)
+        non_empty_str(self.api_url.as_deref()).unwrap_or(DEFAULT_API_URL)
     }
 
     pub fn login_url(&self) -> &str {
-        self.login_url.as_deref().unwrap_or(DEFAULT_LOGIN_URL)
+        non_empty_str(self.login_url.as_deref()).unwrap_or(DEFAULT_LOGIN_URL)
     }
 
     pub fn team_slug(&self) -> Option<&str> {
-        self.team_slug.as_deref()
+        self.team_slug
+            .as_deref()
+            .and_then(|slug| (!slug.is_empty()).then_some(slug))
     }
 
     pub fn team_id(&self) -> Option<&str> {
-        self.team_id.as_deref()
+        non_empty_str(self.team_id.as_deref())
     }
 
     pub fn token(&self) -> Option<&str> {
-        self.token.as_deref()
+        non_empty_str(self.token.as_deref())
     }
 
     pub fn signature(&self) -> bool {
@@ -99,6 +101,11 @@ impl ConfigurationOptions {
     pub fn timeout(&self) -> u64 {
         self.timeout.unwrap_or(DEFAULT_TIMEOUT)
     }
+}
+
+// Maps Some("") to None to emulate how Go handles empty strings
+fn non_empty_str(s: Option<&str>) -> Option<&str> {
+    s.and_then(|s| (!s.is_empty()).then_some(s))
 }
 
 trait ResolvedConfigurationOptions {
@@ -521,6 +528,23 @@ mod test {
         assert_eq!(turbo_teamid, config.team_id.unwrap());
         assert_eq!(turbo_token, config.token.unwrap());
         assert_eq!(turbo_remote_cache_timeout, config.timeout.unwrap());
+    }
+
+    #[test]
+    fn test_empty_env_setting() {
+        let mut env: HashMap<OsString, OsString> = HashMap::new();
+        env.insert("turbo_api".into(), "".into());
+        env.insert("turbo_login".into(), "".into());
+        env.insert("turbo_team".into(), "".into());
+        env.insert("turbo_teamid".into(), "".into());
+        env.insert("turbo_token".into(), "".into());
+
+        let config = get_env_var_config(&env).unwrap();
+        assert_eq!(config.api_url(), DEFAULT_API_URL);
+        assert_eq!(config.login_url(), DEFAULT_LOGIN_URL);
+        assert_eq!(config.team_slug(), None);
+        assert_eq!(config.team_id(), None);
+        assert_eq!(config.token(), None);
     }
 
     #[test]
