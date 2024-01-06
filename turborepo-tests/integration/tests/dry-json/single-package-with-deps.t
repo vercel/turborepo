@@ -2,6 +2,7 @@ Setup
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh single_package
 
   $ ${TURBO} run test --dry=json
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   {
     "id": "[a-zA-Z0-9]+", (re)
     "version": "1",

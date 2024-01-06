@@ -3,6 +3,7 @@ Setup
  
 Run a dry run
   $ ${TURBO} build --dry=json | jq .packages
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   [
     "another",
     "my-app",
@@ -11,6 +12,7 @@ Run a dry run
 
 Run a dry run in packages with a glob filter
   $ ${TURBO} build --dry=json -F "./packages/*" | jq .packages
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   [
     "another",
     "util"
@@ -18,6 +20,7 @@ Run a dry run in packages with a glob filter
 
 Run a dry run in packages with a name glob
   $ ${TURBO} build --dry=json -F "*-app" | jq .packages
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   [
     "my-app"
   ]
@@ -25,17 +28,20 @@ Run a dry run in packages with a name glob
 Run a dry run in packages with a filter
   $ cd packages
   $ ${TURBO} build --dry=json -F "{./util}" | jq .packages
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   [
     "util"
   ]
 Run a dry run with a filter from a sibling directory
   $ ${TURBO} build --dry=json -F "../apps/*" | jq .packages
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   [
     "my-app"
   ]
 
 Run a dry run with a filter name glob
   $ ${TURBO} build --dry=json -F "*-app" | jq .packages
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   [
     "my-app"
   ]
@@ -43,12 +49,14 @@ Run a dry run with a filter name glob
 Run a dry run in a directory
   $ cd util
   $ ${TURBO} build --dry=json | jq .packages
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   [
     "util"
   ]
 
 Ensure we don't infer packages if --cwd is supplied
   $ ${TURBO} build --cwd=../.. --dry=json | jq .packages
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   [
     "another",
     "my-app",
@@ -57,12 +65,14 @@ Ensure we don't infer packages if --cwd is supplied
 
 Run a dry run in packages with a glob filter from directory
   $ ${TURBO} build --dry=json -F "../*" | jq .packages
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   [
     "util"
   ]
 
 Run a dry run in packages with a name glob from directory
   $ ${TURBO} build --dry=json -F "*nother" | jq .packages
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   [
     "another"
   ]

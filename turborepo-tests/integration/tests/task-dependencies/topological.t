@@ -3,6 +3,7 @@ Setup
 
 Check my-app#build output
   $ ${TURBO} run build
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: //, my-app, util (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -29,6 +30,7 @@ Check my-app#build output
 
 Graph
   $ ${TURBO} run build --graph
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   digraph {
   \tcompound = "true" (esc)

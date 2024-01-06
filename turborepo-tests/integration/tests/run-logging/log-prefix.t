@@ -3,6 +3,7 @@ Setup
 
 # Run for the first time with --log-prefix=none
   $ ${TURBO} run build --log-prefix=none
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -27,6 +28,7 @@ Setup
 
 # Running again should get a cache hit and no prefixes
   $ ${TURBO} run build --log-prefix=none
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -43,6 +45,7 @@ Setup
   
 # Running again withuot `--log-prefix` should get a cache hit, but should print prefixes this time
   $ ${TURBO} run build
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

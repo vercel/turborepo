@@ -12,6 +12,7 @@ Set the env vars
 Run as `infer`
   $ rm -rf .turbo/runs
   $ ${TURBO} run build --summarize > /dev/null
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   infer
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -25,6 +26,7 @@ Run as `infer`
 Run as `strict`
   $ rm -rf .turbo/runs
   $ ${TURBO} run build --env-mode=strict --summarize > /dev/null
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -38,6 +40,7 @@ Run as `strict`
 Run as `loose`
   $ rm -rf .turbo/runs
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -52,6 +55,7 @@ All specified + infer
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/all.json"
   $ ${TURBO} run build --summarize > /dev/null
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -68,6 +72,7 @@ All specified + loose
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/all.json"
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -84,6 +89,7 @@ Global passthrough specified empty array + infer
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/global_pt-empty.json"
   $ ${TURBO} run build --summarize > /dev/null
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -98,6 +104,7 @@ Global passthrough specified value + infer
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/global_pt.json"
   $ ${TURBO} run build --summarize > /dev/null
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   strict
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -112,6 +119,7 @@ Global passthrough specified empty array + loose
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/global_pt-empty.json"
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -126,6 +134,7 @@ Global passthrough specified value + loose
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/global_pt.json"
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -140,6 +149,7 @@ Task passthrough specified empty array + infer
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/task_pt-empty.json"
   $ ${TURBO} run build --summarize > /dev/null
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   infer
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -154,6 +164,7 @@ Task passthrough specified value + infer
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/task_pt.json"
   $ ${TURBO} run build --summarize > /dev/null
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   infer
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -170,6 +181,7 @@ Task passthrough specified empty array + loose
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/task_pt-empty.json"
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'
@@ -184,6 +196,7 @@ Task passthrough specified value + loose
   $ rm -rf .turbo/runs
   $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $(pwd) "strict_env_vars/task_pt.json"
   $ ${TURBO} run build --env-mode=loose --summarize > /dev/null
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat .turbo/runs/*.json | jq -r '.envMode'
   loose
   $ cat .turbo/runs/*.json | jq -r '.tasks[0].envMode'

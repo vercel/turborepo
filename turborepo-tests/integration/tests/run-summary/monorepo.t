@@ -5,6 +5,7 @@ Setup
   $ rm -rf .turbo/runs
 
   $ ${TURBO} run build --summarize -- someargs > /dev/null # first run (should be cache miss)
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
 
 # HACK: Generated run summaries are named with a ksuid, which is a time-sorted ID. This _generally_ works
 # but we're seeing in this test that sometimes a summary file is not sorted (with /bin/ls) in the order we expect
@@ -17,6 +18,7 @@ Setup
 # failures, it *should* be safe to remove.
   $ sleep 1
   $ ${TURBO} run build --summarize -- someargs > /dev/null # run again (expecting full turbo here)
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
 
 # no output, just check for 0 status code, which means the directory was created
   $ test -d .turbo/runs
@@ -126,6 +128,7 @@ Setup
   $ rm -rf .turbo/runs
 
   $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} run build --summarize --no-daemon -- someargs > /dev/null # first run (should be cache miss)
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
 
 # HACK: Generated run summaries are named with a ksuid, which is a time-sorted ID. This _generally_ works
 # but we're seeing in this test that sometimes a summary file is not sorted (with /bin/ls) in the order we expect
@@ -138,6 +141,7 @@ Setup
 # failures, it *should* be safe to remove.
   $ sleep 1
   $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} run build --summarize --no-daemon -- someargs > /dev/null # run again (expecting full turbo here)
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
 
 # no output, just check for 0 status code, which means the directory was created
   $ test -d .turbo/runs

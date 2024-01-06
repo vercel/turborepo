@@ -4,6 +4,7 @@ Setup
   $ git commit -am "Delete turbo config" --quiet
 
   $ ${TURBO} run build --dry=json
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   {
     "id": "[a-zA-Z0-9]+", (re)
     "version": "1",

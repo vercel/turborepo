@@ -2,6 +2,7 @@ Setup
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh monorepo_dependency_error
 Run without --continue
   $ ${TURBO} build
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app, other-app, some-lib (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -28,6 +29,7 @@ Run without --continue
 
 Run without --continue, and with only errors.
   $ ${TURBO} build --output-logs=errors-only
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app, other-app, some-lib (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -53,6 +55,7 @@ Run without --continue, and with only errors.
 
 Run with --continue
   $ ${TURBO} build --output-logs=errors-only --continue
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app, other-app, some-lib (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

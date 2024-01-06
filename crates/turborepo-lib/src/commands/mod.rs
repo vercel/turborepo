@@ -161,7 +161,7 @@ impl CommandBase {
             // Don't show the message if there are no tokens to display.
             let api_message = if apis_with_tokens.len() > 0 {
                 format!(
-                    "Found the following apis with tokens:\n  - {}",
+                    "\nFound the following apis with tokens:\n  - {}",
                     apis_with_tokens
                         .clone()
                         .collect::<Vec<String>>()
@@ -173,7 +173,7 @@ impl CommandBase {
 
             let message = format!(
                 "No token found for {base}. Run `turbo link` or `{login_command}` \
-                 first.\n{api_message}",
+                 first.{api_message}",
             );
             eprintln!("{}", self.ui.apply(turborepo_ui::YELLOW.apply_to(message)));
             Ok(None)

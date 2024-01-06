@@ -10,6 +10,7 @@ Setup
 
 # 1. First run, assert for `dependsOn` and `outputs` keys
   $ ${TURBO} run add-keys-task --filter=add-keys > tmp.log
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
@@ -39,6 +40,7 @@ Setup
 
 # 2. Second run, test there was a cache hit (`cache` config`) and `output` was suppressed (`outputMode`)
   $ ${TURBO} run add-keys-task --filter=add-keys
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -57,6 +59,7 @@ Setup
 # 3. Change input file and assert cache miss
   $ echo "more text" >> $TARGET_DIR/apps/add-keys/src/foo.txt
   $ ${TURBO} run add-keys-task --filter=add-keys
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -78,6 +81,7 @@ Setup
   
 # 4. Set env var and assert cache miss
   $ SOME_VAR=somevalue ${TURBO} run add-keys-task --filter=add-keys
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: add-keys (esc)
   \xe2\x80\xa2 Running add-keys-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

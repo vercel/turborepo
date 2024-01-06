@@ -4,6 +4,7 @@ Setup
 Baseline task hashes
   $ cp "$TESTDIR/fixture-configs/a-baseline.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   {
     "taskId": "another#build",
     "hash": "02f55362198a6c3d"
@@ -20,6 +21,7 @@ Baseline task hashes
 Change only my-app#build
   $ cp "$TESTDIR/fixture-configs/b-change-only-my-app.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   {
     "taskId": "another#build",
     "hash": "02f55362198a6c3d"
@@ -36,6 +38,7 @@ Change only my-app#build
 Change my-app#build dependsOn
   $ cp "$TESTDIR/fixture-configs/c-my-app-depends-on.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   {
     "taskId": "another#build",
     "hash": "02f55362198a6c3d"
@@ -52,6 +55,7 @@ Change my-app#build dependsOn
 Non-materially modifying the dep graph does nothing.
   $ cp "$TESTDIR/fixture-configs/d-depends-on-util.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   {
     "taskId": "another#build",
     "hash": "02f55362198a6c3d"
@@ -69,6 +73,7 @@ Non-materially modifying the dep graph does nothing.
 Change util#build impacts itself and my-app
   $ cp "$TESTDIR/fixture-configs/e-depends-on-util-but-modified.json" "$(pwd)/turbo.json" && git commit -am "no comment" --quiet
   $ ${TURBO} build --dry=json | jq -r '.tasks | sort_by(.taskId)[] | {taskId, hash}'
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   {
     "taskId": "another#build",
     "hash": "02f55362198a6c3d"

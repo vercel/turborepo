@@ -7,6 +7,7 @@ Setup
 
 # 1. First run, assert for `outputs`
   $ ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config > tmp.log
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
@@ -30,6 +31,7 @@ Setup
 
 2. Run again and assert cache hit, and that output is suppressed
   $ ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -42,6 +44,7 @@ Setup
 3. Change input file and assert cache miss, and not FULL TURBO
   $ echo "more text" >> $TARGET_DIR/apps/missing-workspace-config/src/foo.txt
   $ ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -59,6 +62,7 @@ Setup
 3a. Changing a different file (that is not in `inputs` config) gets cache hit and FULL TURBO
   $ echo "more text" >> $TARGET_DIR/apps/missing-workspace-config/src/bar.txt
   $ ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -70,6 +74,7 @@ Setup
   
 4. Set env var and assert cache miss, and that hash is different from above
   $ SOME_VAR=somevalue ${TURBO} run missing-workspace-config-task --filter=missing-workspace-config
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running missing-workspace-config-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -85,6 +90,7 @@ Setup
   
 5. Assert that task with cache:false doesn't get cached
   $ ${TURBO} run cached-task-4 --filter=missing-workspace-config > tmp.log
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running cached-task-4 in 1 packages (esc)

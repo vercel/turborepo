@@ -2,6 +2,7 @@ This tests asserts that root tasks can depend on workspace#task
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh task_dependencies/root-to-workspace
 
   $ ${TURBO} run mytask
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: //, lib-a (esc)
   \xe2\x80\xa2 Running mytask in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

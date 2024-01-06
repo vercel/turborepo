@@ -13,6 +13,7 @@
 // app-a#dev
 // └── pkg-a#dev
   $ ${TURBO} run dev
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "pkg-a#dev" is a persistent task, "app-a#dev" cannot depend on it
   [1]

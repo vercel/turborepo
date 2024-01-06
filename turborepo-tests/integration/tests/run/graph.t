@@ -3,6 +3,7 @@ Setup
 
 Graph to stdout
   $ ${TURBO} build -F my-app --graph
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   digraph {
   \tcompound = "true" (esc)
@@ -14,6 +15,7 @@ Graph to stdout
   }
   
   $ ${TURBO} build -F my-app --graph=graph.dot
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   .*Generated task graph in .*graph\.dot.* (re)
   $ cat graph.dot | grep -o "\"[^\"]*\" -> \"[^\"]*\""
@@ -21,11 +23,13 @@ Graph to stdout
   "[root] util#build" -> "[root] ___ROOT___"
 
   $ ${TURBO} build -F my-app --graph=graph.html
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   .*Generated task graph in .*graph\.html.* (re)
   $ cat graph.html | grep --quiet "DOCTYPE"
 
   $ ${TURBO} build -F my-app --graph=graph.mermaid
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   .*Generated task graph in .*graph\.mermaid.* (re)
 

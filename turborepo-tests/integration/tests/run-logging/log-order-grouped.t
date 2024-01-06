@@ -3,6 +3,7 @@
 
 # Build in grouped order.
   $ ${TURBO} run build --log-order grouped --force
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -28,6 +29,7 @@
 
 # We can get the same behavior with an env var
   $ TURBO_LOG_ORDER=grouped ${TURBO} run build --force
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -52,6 +54,7 @@
   
 # The flag wins over the env var
   $ TURBO_LOG_ORDER=stream ${TURBO} run build --log-order grouped --force
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

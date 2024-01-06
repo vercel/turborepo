@@ -3,6 +3,7 @@ Setup
 
 Run a build to get a local cache.
   $ SOME_ENV_VAR=hi ${TURBO} run build --output-logs=none --filter=my-app
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -14,6 +15,7 @@ Run a build to get a local cache.
 
 Run again to get cache hit
   $ SOME_ENV_VAR=hi ${TURBO} run build --output-logs=none --filter=my-app
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -25,6 +27,7 @@ Run again to get cache hit
 
 Run again without env var to get cache miss
   $ ${TURBO} run build --output-logs=none --filter=my-app
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

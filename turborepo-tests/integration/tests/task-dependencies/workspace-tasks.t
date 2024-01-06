@@ -4,6 +4,7 @@ Setup
 
 Test that root tasks are included in the graph. In this case, "//#build" task should be there
   $ ${TURBO} run build1 --graph
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   digraph {
   \tcompound = "true" (esc)
@@ -20,6 +21,7 @@ Test that root tasks are included in the graph. In this case, "//#build" task sh
 
 Can depend on root tasks
   $ ${TURBO} run build2 --graph
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   digraph {
   \tcompound = "true" (esc)
@@ -42,6 +44,7 @@ Can't depend on a missing root task
 
 Package tasks can depend on things
   $ ${TURBO} run special --graph
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   digraph {
   \tcompound = "true" (esc)

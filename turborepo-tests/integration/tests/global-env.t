@@ -5,6 +5,7 @@ Setup
 
 # run the first time to get basline hash
   $ ${TURBO} run build --filter=util --output-logs=hash-only
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -16,6 +17,7 @@ Setup
   
 # run again and ensure there's a cache hit
   $ ${TURBO} run build --filter=util --output-logs=hash-only
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -27,6 +29,7 @@ Setup
   
 # set global env var and ensure cache miss
   $ SOME_ENV_VAR=hi ${TURBO} run build --filter=util --output-logs=hash-only
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -38,6 +41,7 @@ Setup
   
 # set env var with "THASH" and ensure cache miss
   $ SOMETHING_THASH_YES=hi ${TURBO} run build --filter=util --output-logs=hash-only
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -49,6 +53,7 @@ Setup
   
 # set vercel analytics env var and ensure cache miss
   $ VERCEL_ANALYTICS_ID=hi ${TURBO} run build --filter=util --output-logs=hash-only
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -60,10 +65,12 @@ Setup
   
 # THASH deprecation doesn't break --dry=json
   $ SOMETHING_THASH_YES=hi ${TURBO} run build --filter=util --dry=json | jq -r '.tasks[0].environmentVariables.global[0]'
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   null
 
 # THASH deprecation doesn't break --graph
   $ SOMETHING_THASH_YES=hi ${TURBO} run build --filter=util --graph
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   digraph {
   \tcompound = "true" (esc)
