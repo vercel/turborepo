@@ -9,6 +9,7 @@ This test covers:
 
 # cache:false in root, override to cache:true in workspace
   $ ${TURBO} run cached-task-1 --filter=cached > tmp.log
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: cached (esc)
   \xe2\x80\xa2 Running cached-task-1 in 1 packages (esc)
@@ -34,6 +35,7 @@ This test covers:
 
 # cache:true in root, override to cache:false in workspace
   $ ${TURBO} run cached-task-2 --filter=cached > tmp.log
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: cached (esc)
   \xe2\x80\xa2 Running cached-task-2 in 1 packages (esc)
@@ -56,6 +58,7 @@ This test covers:
 
 no `cache` config in root, cache:false in workspace
   $ ${TURBO} run cached-task-3 --filter=cached > tmp.log
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: cached (esc)
   \xe2\x80\xa2 Running cached-task-3 in 1 packages (esc)
@@ -80,6 +83,7 @@ cache:false in root, no turbo.json in workspace.
 Note that this is run against another workspace than the other tests, because
 we already have a workspace that doesn't have a config
   $ ${TURBO} run cached-task-4 --filter=missing-workspace-config > tmp.log
+  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: missing-workspace-config (esc)
   \xe2\x80\xa2 Running cached-task-4 in 1 packages (esc)
