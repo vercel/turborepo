@@ -100,10 +100,7 @@ impl ViewMode {
     }
 
     fn bottom_up(&self) -> bool {
-        match self {
-            ViewMode::BottomUp { .. } => true,
-            _ => false,
-        }
+        matches!(self, ViewMode::BottomUp { .. })
     }
 
     fn sort_children(&self) -> bool {

@@ -140,9 +140,7 @@ impl<'a> SpanGraphRef<'a> {
     }
 
     pub fn bottom_up(&self) -> impl Iterator<Item = SpanBottomUpRef<'a>> + '_ {
-        self.root_spans()
-            .map(move |span| span.bottom_up())
-            .flatten()
+        self.root_spans().flat_map(move |span| span.bottom_up())
     }
 
     pub fn max_depth(&self) -> u32 {
