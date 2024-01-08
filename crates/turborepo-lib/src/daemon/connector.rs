@@ -35,7 +35,7 @@ pub enum DaemonConnectorError {
     #[error("unable to make handshake: {0}")]
     Handshake(#[from] Box<DaemonError>),
     /// Waiting for the socket timed out.
-    #[error("timeout while watchin directory: {0}")]
+    #[error("timeout while watching directory: {0}")]
     Timeout(#[from] tokio::time::error::Elapsed),
     /// There was an issue in the file watcher.
     #[error("unable to watch directory: {0}")]
