@@ -333,7 +333,6 @@ mod tests {
         };
 
         let result = init(client.clone(), UI::new(false));
-        assert!(result.is_ok());
 
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
@@ -370,7 +369,6 @@ mod tests {
         };
 
         let result = init(client.clone(), UI::new(false));
-        assert!(result.is_ok());
 
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
@@ -413,7 +411,6 @@ mod tests {
         };
 
         let result = init(client.clone(), UI::new(false));
-        assert!(result.is_ok());
 
         let (telemetry_handle, telemetry_sender) = result.unwrap();
 
