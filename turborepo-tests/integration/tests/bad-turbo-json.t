@@ -75,9 +75,8 @@ Use our custom turbo config with syntax errors
 
 Run build with syntax errors in turbo.json
   $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build
-   ERROR  run failed: failed to parse turbo json
-  turbo_json_parse_error
-  
+  turbo_json::parser::parse_error
+
     x failed to parse turbo json
   
   Error: turbo_json_parse_error

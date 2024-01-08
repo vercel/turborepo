@@ -25,7 +25,7 @@ pub enum Error {
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
-        "Could not find turbo.json. Follow directions at https://turbo.build/repo/docs to create \
+        "Could not find turbo.json.\nFollow directions at https://turbo.build/repo/docs to create \
          one"
     )]
     NoTurboJSON,
