@@ -7,3 +7,6 @@ Running a build with the daemon forced should run in daemon mode
   $ grep -E "turborepo_lib::process::child: child process exited normally" tmp.log
   (.+) turborepo_lib::process::child: child process exited normally (re)
   (.+) turborepo_lib::process::child: child process exited normally (re)
+
+On some platforms we can't perform cleanup if the daemon is running, so stop it
+  $ ${TURBO} daemon stop
