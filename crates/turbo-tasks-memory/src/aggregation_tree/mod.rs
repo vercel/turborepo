@@ -133,7 +133,7 @@ pub fn aggregation_info<C: AggregationContext>(
     reference: &C::ItemRef,
 ) -> AggregationInfoReference<C::Info> {
     AggregationInfoReference {
-        tree: top_tree(aggregation_context, reference, 0),
+        tree: top_tree(aggregation_context, reference),
     }
 }
 

@@ -265,7 +265,7 @@ fn chain() {
 
     leaf.incr(&ctx);
     // The change need to propagate through 5 top trees and 5 bottom trees
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 6);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 8);
     ctx.additions.store(0, Ordering::SeqCst);
 
     {
@@ -298,12 +298,12 @@ fn chain() {
         assert_eq!(aggregated.value, 25151);
     }
     // This should be way less the 100 to prove that we are reusing trees
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 1);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 13);
     ctx.additions.store(0, Ordering::SeqCst);
 
     leaf.incr(&ctx);
     // This should be less the 20 to prove that we are reusing trees
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 9);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 10);
     ctx.additions.store(0, Ordering::SeqCst);
 
     {
@@ -352,9 +352,9 @@ fn chain_double_connected() {
 
     {
         let aggregated = aggregation_info(&ctx, &current);
-        assert_eq!(aggregated.lock().value, 8230);
+        assert_eq!(aggregated.lock().value, 9883);
     }
-    assert_eq!(ctx.additions.load(Ordering::SeqCst), 204);
+    assert_eq!(ctx.additions.load(Ordering::SeqCst), 217);
     ctx.additions.store(0, Ordering::SeqCst);
 }
 
@@ -442,7 +442,7 @@ fn rectangle_adding_tree() {
                 let parent = &nodes[y - 1][x];
                 add_child(parent, &node, &ctx);
             }
-            if x == 0 && y == 0 {
+            if x == 0 || y == 0 {
                 aggregation_info(&ctx, &NodeRef(node.clone())).lock().active = true;
             }
         }
@@ -582,7 +582,7 @@ fn connect_child(
 fn print(aggregation_context: &NodeAggregationContext<'_>, current: &NodeRef) {
     println!("digraph {{");
     let start = 0;
-    let end = 3;
+    let end = 4;
     for i in start..end {
         print_graph(aggregation_context, current, i, false, |item| {
             format!("{}", item.0.inner.lock().value)

@@ -100,7 +100,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         let top_upper = state.top_upper.iter().cloned().collect::<Vec<_>>();
         drop(state);
         for TopRef { upper } in top_upper {
-            upper.add_children_of_child(aggregation_context, children.iter().copied());
+            upper.add_children_of_child(aggregation_context, children.iter().copied(), self.height);
         }
         buttom_uppers.add_children_of_child(aggregation_context, children.iter().copied());
     }
@@ -154,7 +154,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             ChildLocation::Inner => {
                 if nesting_level <= CONNECTIVITY_LIMIT {
                     // the inner child has a new child
-                    // but it's not a blue node and we are not too deep
+                    // but we are not too deep
                     // this means it's a inner child of this node
                     // if it's not already a following child
                     if !self.add_child_of_child_if_following(child_of_child) {
@@ -190,7 +190,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             return;
         }
 
-        propagate_new_following_to_uppers(state, aggregation_context, child_of_child);
+        propagate_new_following_to_uppers(state, aggregation_context, child_of_child, self.height);
     }
 
     fn add_child_of_child_inner<C: AggregationContext<Info = T, ItemRef = I>>(
@@ -243,7 +243,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             RemoveIfEntryResult::NotPresent => return false,
             RemoveIfEntryResult::Removed => {}
         }
-        propagate_lost_following_to_uppers(state, aggregation_context, child_of_child);
+        propagate_lost_following_to_uppers(state, aggregation_context, child_of_child, self.height);
         true
     }
 
@@ -263,7 +263,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             }
         });
         if !removed.is_empty() {
-            propagate_lost_followings_to_uppers(state, aggregation_context, removed);
+            propagate_lost_followings_to_uppers(state, aggregation_context, removed, self.height);
         }
     }
 
@@ -277,7 +277,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
             // no present, nothing to do
             return false;
         }
-        propagate_lost_following_to_uppers(state, aggregation_context, child_of_child);
+        propagate_lost_following_to_uppers(state, aggregation_context, child_of_child, self.height);
         true
     }
 
@@ -288,7 +288,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
     ) {
         let mut state = self.state.write();
         children.retain(|&mut child| state.following.remove_clonable(child));
-        propagate_lost_followings_to_uppers(state, aggregation_context, children);
+        propagate_lost_followings_to_uppers(state, aggregation_context, children, self.height);
     }
 
     fn remove_child_of_child_inner<C: AggregationContext<Info = T, ItemRef = I>>(
@@ -401,7 +401,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         if count > 0 {
             // add as following
             if state.following.add_count(item.clone(), count as usize) {
-                propagate_new_following_to_uppers(state, aggregation_context, item);
+                propagate_new_following_to_uppers(state, aggregation_context, item, self.height);
             } else {
                 drop(state);
             }
@@ -413,7 +413,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
         } else {
             // remove count from following instead
             if state.following.remove_count(item.clone(), -count as usize) {
-                propagate_lost_following_to_uppers(state, aggregation_context, item);
+                propagate_lost_following_to_uppers(state, aggregation_context, item, self.height);
             }
         }
     }
@@ -507,12 +507,11 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 upper.child_change(aggregation_context, &change);
             }
             for following in state.following.iter() {
-                upper.add_child_of_child(aggregation_context, following);
+                upper.add_child_of_child(aggregation_context, following, self.height);
             }
         }
     }
 
-    #[allow(dead_code)]
     pub fn remove_top_tree_upper<C: AggregationContext<Info = T, ItemRef = I>>(
         self: &Arc<Self>,
         aggregation_context: &C,
@@ -525,13 +524,7 @@ impl<T, I: Clone + Eq + Hash + IsEnabled> BottomTree<T, I> {
                 upper.child_change(aggregation_context, &change);
             }
             for following in state.following.iter() {
-                upper.remove_child_of_child(aggregation_context, following);
-            }
-            if state.top_upper.is_empty()
-                && !matches!(state.bottom_upper, BottomConnection::Left(_))
-            {
-                drop(state);
-                self.remove_self_from_lower(aggregation_context);
+                upper.remove_child_of_child(aggregation_context, following, self.height);
             }
         }
     }
@@ -587,12 +580,13 @@ fn propagate_lost_following_to_uppers<C: AggregationContext>(
     state: RwLockWriteGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
     aggregation_context: &C,
     child_of_child: &C::ItemRef,
+    height: u8,
 ) {
     let bottom_uppers = state.bottom_upper.as_cloned_uppers();
     let top_upper = state.top_upper.iter().cloned().collect::<StackVec<_>>();
     drop(state);
     for TopRef { upper } in top_upper {
-        upper.remove_child_of_child(aggregation_context, child_of_child);
+        upper.remove_child_of_child(aggregation_context, child_of_child, height);
     }
     bottom_uppers.remove_child_of_child(aggregation_context, child_of_child);
 }
@@ -601,6 +595,7 @@ fn propagate_lost_followings_to_uppers<'a, C: AggregationContext>(
     state: RwLockWriteGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
     aggregation_context: &C,
     children: impl IntoIterator<Item = &'a C::ItemRef> + Clone,
+    height: u8,
 ) where
     C::ItemRef: 'a,
 {
@@ -608,7 +603,7 @@ fn propagate_lost_followings_to_uppers<'a, C: AggregationContext>(
     let top_upper = state.top_upper.iter().cloned().collect::<Vec<_>>();
     drop(state);
     for TopRef { upper } in top_upper {
-        upper.remove_children_of_child(aggregation_context, children.clone());
+        upper.remove_children_of_child(aggregation_context, children.clone(), height);
     }
     bottom_uppers.remove_children_of_child(aggregation_context, children);
 }
@@ -617,12 +612,13 @@ fn propagate_new_following_to_uppers<C: AggregationContext>(
     state: RwLockWriteGuard<'_, BottomTreeState<C::Info, C::ItemRef>>,
     aggregation_context: &C,
     child_of_child: &C::ItemRef,
+    height: u8,
 ) {
     let bottom_uppers = state.bottom_upper.as_cloned_uppers();
     let top_upper = state.top_upper.iter().cloned().collect::<Vec<_>>();
     drop(state);
     for TopRef { upper } in top_upper {
-        upper.add_child_of_child(aggregation_context, child_of_child);
+        upper.add_child_of_child(aggregation_context, child_of_child, height);
     }
     bottom_uppers.add_child_of_child(aggregation_context, child_of_child);
 }

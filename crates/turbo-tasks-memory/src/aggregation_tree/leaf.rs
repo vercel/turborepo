@@ -18,7 +18,7 @@ use super::{
 /// [BottomTree]s created from that node. And it also stores the upper bottom
 /// trees.
 pub struct AggregationTreeLeaf<T, I: IsEnabled> {
-    top_trees: Vec<Option<Arc<TopTree<T>>>>,
+    top_tree: Option<Arc<TopTree<T>>>,
     bottom_trees: Vec<Option<Arc<BottomTree<T, I>>>>,
     upper: BottomConnection<T, I>,
 }
@@ -26,7 +26,7 @@ pub struct AggregationTreeLeaf<T, I: IsEnabled> {
 impl<T, I: Clone + Eq + Hash + IsEnabled> AggregationTreeLeaf<T, I> {
     pub fn new() -> Self {
         Self {
-            top_trees: Vec::new(),
+            top_tree: None,
             bottom_trees: Vec::new(),
             upper: BottomConnection::new(),
         }
@@ -165,20 +165,19 @@ fn get_or_create_in_vec<T>(
 pub fn top_tree<C: AggregationContext>(
     aggregation_context: &C,
     reference: &C::ItemRef,
-    depth: u8,
 ) -> Arc<TopTree<C::Info>> {
     let new_top_tree = {
         let mut item = aggregation_context.item(reference);
         let leaf = item.leaf();
-        let (tree, new) = get_or_create_in_vec(&mut leaf.top_trees, depth as usize, || {
-            Arc::new(TopTree::new(depth))
-        });
-        if !new {
+        if let Some(tree) = &leaf.top_tree {
             return tree.clone();
+        } else {
+            let tree = Arc::new(TopTree::new());
+            leaf.top_tree = Some(tree.clone());
+            tree
         }
-        tree.clone()
     };
-    let bottom_tree = bottom_tree(aggregation_context, reference, depth + 4);
+    let bottom_tree = bottom_tree(aggregation_context, reference, 1);
     bottom_tree.add_top_tree_upper(aggregation_context, &new_top_tree);
     new_top_tree
 }
