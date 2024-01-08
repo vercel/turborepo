@@ -1382,6 +1382,40 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(windows))] // Windows doesn't support ':' at all, so just test not-Windows for correct
+                         // behavior
+    fn test_weird_filenames() {
+        let files = &[
+            "apps/foo",
+            "apps/foo:bar",
+            "apps/foo::bar",
+            "apps/foo\\:bar",
+        ];
+        let tmp = setup_files(files);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let include = ["apps/*:bar"]
+            .into_iter()
+            .map(ValidatedGlob::from_str)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let exclude = &[];
+        let iter = globwalk(&root, &include, exclude, WalkType::Files).unwrap();
+        let paths = iter
+            .into_iter()
+            .map(|path| {
+                let relative = root.anchor(path).unwrap();
+                relative.to_string()
+            })
+            .collect::<HashSet<_>>();
+        let expected: HashSet<String> = HashSet::from_iter([
+            "apps/foo:bar".to_string(),
+            "apps/foo::bar".to_string(),
+            "apps/foo\\:bar".to_string(),
+        ]);
+        assert_eq!(paths, expected);
+    }
+
+    #[test]
     fn test_base_with_brackets() {
         let files = &["foo", "bar", "baz"];
         let tmp = setup_files_with_prefix("[path]", files);
