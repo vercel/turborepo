@@ -9,11 +9,7 @@ Populate cache
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   a:build: cache miss, executing [0-9a-f]+ (re)
-  a:build: yarn run v1.22.19
-  a:build: warning package.json: No license field
-  a:build: $ echo building
   a:build: building
-  a:build: Done in 0.03s.
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -25,11 +21,7 @@ Populate cache
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   b:build: cache miss, executing [0-9a-f]+ (re)
-  b:build: yarn run v1.22.19
-  b:build: warning package.json: No license field
-  b:build: $ echo building
   b:build: building
-  b:build: Done in 0.03s.
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -46,11 +38,7 @@ Only b should have a cache miss
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   a:build: cache hit, replaying logs [0-9a-f]+ (re)
-  a:build: yarn run v1.22.19
-  a:build: warning package.json: No license field
-  a:build: $ echo building
   a:build: building
-  a:build: Done in 0.03s.
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -63,11 +51,7 @@ Only b should have a cache miss
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   b:build: cache miss, executing [0-9a-f]+ (re)
-  b:build: yarn run v1.22.19
-  b:build: warning package.json: No license field
-  b:build: $ echo building
   b:build: building
-  b:build: Done in 0.03s.
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -92,11 +76,7 @@ Bump of root workspace invalidates all packages
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   a:build: cache miss, executing [0-9a-f]+ (re)
-  a:build: yarn run v1.22.19
-  a:build: warning package.json: No license field
-  a:build: $ echo building
   a:build: building
-  a:build: Done in 0.03s.
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -108,11 +88,7 @@ Bump of root workspace invalidates all packages
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   b:build: cache miss, executing [0-9a-f]+ (re)
-  b:build: yarn run v1.22.19
-  b:build: warning package.json: No license field
-  b:build: $ echo building
   b:build: building
-  b:build: Done in 0.03s.
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
