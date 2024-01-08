@@ -201,10 +201,15 @@ impl Engine<Built> {
 
                 // check if the package for the task has that task in its package.json
                 let info = package_graph
-                    .workspace_info(&WorkspaceName::Other(task_id.package().to_string()))
+                    .workspace_info(&WorkspaceName::from(task_id.package().to_string()))
                     .expect("package graph should contain workspace info for task package");
 
-                let package_has_task = info.package_json.scripts.contains_key(task_id.task());
+                let package_has_task = info
+                    .package_json
+                    .scripts
+                    .get(task_id.task())
+                    // handle legacy behaviour from go where an empty string may appear
+                    .map_or(false, |script| !script.is_empty());
 
                 let task_is_persistent = self
                     .task_definitions
