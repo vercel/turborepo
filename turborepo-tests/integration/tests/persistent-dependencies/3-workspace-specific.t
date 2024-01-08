@@ -20,4 +20,8 @@
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "pkg-a#dev" is a persistent task, "app-a#build" cannot depend on it
   "pkg-a#dev" is a persistent task, "pkg-a#build" cannot depend on it
+    x error preparing engine: Invalid persistent task configuration:
+    | "pkg-a#dev" is a persistent task, "app-a#build" cannot depend on it
+    | "pkg-a#dev" is a persistent task, "pkg-a#build" cannot depend on it
+  
   [1]

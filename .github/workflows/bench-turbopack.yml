@@ -124,11 +124,11 @@ jobs:
       needs.determine_jobs.outputs.cargo_only == 'true'
     name: Turbopack rust check
     runs-on:
-      - 'self-hosted'
-      - 'linux'
-      - 'x64'
-      - 'metal'
-      
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -138,11 +138,6 @@ jobs:
         with:
           components: clippy
           targets: wasm32-unknown-unknown
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo check release
         run: |
@@ -188,21 +183,16 @@ jobs:
             TURBOPACK_BENCH_COUNTS: 1000,10000
 
     runs-on:
-      - 'self-hosted'
-      - 'linux'
-      - 'x64'
-      - 'metal'
+      - "self-hosted"
+      - "linux"
+      - "x64"
+      - "metal"
 
     name: Benchmark on ${{ matrix.bench.name }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
@@ -328,10 +318,10 @@ jobs:
             title: Linux
             quiet: false
             runs-on:
-              - 'self-hosted'
-              - 'linux'
-              - 'x64'
-              - 'metal'
+              - "self-hosted"
+              - "linux"
+              - "x64"
+              - "metal"
           # - name: macos
           #   title: MacOS
           #   quiet: true
@@ -351,11 +341,6 @@ jobs:
 
       - name: Fetch the base branch
         run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
