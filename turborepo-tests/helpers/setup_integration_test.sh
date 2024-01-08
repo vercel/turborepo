@@ -11,6 +11,13 @@ TURBOREPO_TESTS_DIR="${MONOREPO_ROOT_DIR}/turborepo-tests"
 
 TARGET_DIR="$(pwd)"
 
+# on macos, using the tmp dir set by prysk can fail, so set it
+# to /tmp which is less secure (777) but wont crash
+if [[ "$OSTYPE" == darwin* ]]; then
+  export TMPDIR=/tmp
+fi
+
+
 "${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
 "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
 "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$PACKAGE_MANAGER"
