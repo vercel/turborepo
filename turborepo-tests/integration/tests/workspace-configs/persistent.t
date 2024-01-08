@@ -12,6 +12,10 @@ This test covers:
   $ ${TURBO} run persistent-task-1-parent --filter=persistent
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "persistent#persistent-task-1" is a persistent task, "persistent#persistent-task-1-parent" cannot depend on it
+    x error preparing engine: Invalid persistent task configuration:
+    | "persistent#persistent-task-1" is a persistent task,
+    | "persistent#persistent-task-1-parent" cannot depend on it
+  
   [1]
 
 # persistent-task-2-parent dependsOn persistent-task-2
@@ -43,6 +47,10 @@ This test covers:
   $ ${TURBO} run persistent-task-3-parent --filter=persistent
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "persistent#persistent-task-3" is a persistent task, "persistent#persistent-task-3-parent" cannot depend on it
+    x error preparing engine: Invalid persistent task configuration:
+    | "persistent#persistent-task-3" is a persistent task,
+    | "persistent#persistent-task-3-parent" cannot depend on it
+  
   [1]
 
 # persistent-task-4-parent dependsOn persistent-task-4
@@ -50,4 +58,8 @@ This test covers:
   $ ${TURBO} run persistent-task-4-parent --filter=persistent
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "persistent#persistent-task-4" is a persistent task, "persistent#persistent-task-4-parent" cannot depend on it
+    x error preparing engine: Invalid persistent task configuration:
+    | "persistent#persistent-task-4" is a persistent task,
+    | "persistent#persistent-task-4-parent" cannot depend on it
+  
   [1]

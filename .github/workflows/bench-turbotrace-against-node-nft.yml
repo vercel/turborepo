@@ -32,10 +32,6 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
 
-      - uses: ./.github/actions/setup-go
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
       - name: Install hoisted npm dependencies
         working-directory: crates/turbopack/tests/node-file-trace
         run: |
