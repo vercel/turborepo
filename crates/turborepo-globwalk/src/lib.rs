@@ -227,23 +227,12 @@ fn glob_with_contextual_error<S: AsRef<str> + std::fmt::Debug>(
         .map_err(|e| WalkError::BadPattern(raw.to_string(), Box::new(e)))
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid globwalking input {raw_input}: {reason}")]
 pub struct GlobError {
     raw_input: String,
     reason: String,
 }
-
-impl Display for GlobError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Invalid globwalking input {}: {}",
-            self.raw_input, self.reason
-        )
-    }
-}
-
-impl Error for GlobError {}
 
 /// ValidatedGlob represents an input string that we have either validated or
 /// modified to fit our constraints. It does not _yet_ validate that the glob is
