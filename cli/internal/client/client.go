@@ -47,6 +47,8 @@ const _maxRemoteFailCount = uint64(3)
 func (c *APIClient) SetToken(token string) {
 	c.token = token
 }
+
+// BaseURL returns the APIClient's base URL
 func (c *APIClient) BaseURL() string {
 	return c.baseURL
 }
