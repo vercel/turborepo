@@ -25,7 +25,7 @@ fn multikey() -> &'static Regex {
 
 fn builtin() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^builtin<([^>]+)>$").unwrap())
+    RE.get_or_init(|| Regex::new(r"^(?:optional!)?builtin<([^>]+)>$").unwrap())
 }
 
 #[derive(Debug, Error)]
