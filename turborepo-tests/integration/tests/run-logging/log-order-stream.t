@@ -3,7 +3,6 @@
 
 # Build in stream order. All the .*'s are unpredictable lines, however the amount of lines is predictable.
   $ ${TURBO} run build --log-order stream --force
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -29,7 +28,6 @@
 The env var set to stream works (this is default, so this test doesn't guarantee the env var is "working"),
 it just guarantees setting this env var won't crash.
   $ TURBO_LOG_ORDER=stream ${TURBO} run build --force
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -54,7 +52,6 @@ it just guarantees setting this env var won't crash.
   
 The flag wins over the env var
   $ TURBO_LOG_ORDER=grouped ${TURBO} run build --log-order stream --force
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

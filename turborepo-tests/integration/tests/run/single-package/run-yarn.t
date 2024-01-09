@@ -3,7 +3,6 @@ Setup
 
 Check
   $ ${TURBO} run build
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache miss, executing c1d6153f4a6d83b5
@@ -17,7 +16,6 @@ Check
     Time:\s*[\.0-9]+m?s  (re)
   
   $ ${TURBO} run build
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, replaying logs c1d6153f4a6d83b5
