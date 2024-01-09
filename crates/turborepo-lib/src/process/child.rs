@@ -182,7 +182,8 @@ impl Child {
     /// with it. The command will be started immediately.
     pub fn spawn(
         pty: portable_pty::PtyPair,
-        mut command: portable_pty::CommandBuilder,
+        mut cmd_builder: portable_pty::CommandBuilder,
+        mut command: Command,
         shutdown_style: ShutdownStyle,
     ) -> io::Result<Self> {
         let label = {
@@ -196,6 +197,8 @@ impl Child {
                 cmd.get_args().map(|s| s.to_string_lossy()).join(" ")
             )
         };
+
+        pty.slave.spawn_command(cmd_builder);
 
         // Create a process group for the child on unix like systems
         #[cfg(unix)]

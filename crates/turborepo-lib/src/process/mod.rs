@@ -57,7 +57,8 @@ impl ProcessManager {
     pub fn spawn(
         &self,
         pty: portable_pty::PtyPair,
-        command: portable_pty::CommandBuilder,
+        cmd_builder: portable_pty::CommandBuilder,
+        command: child::Command,
         stop_timeout: Duration,
     ) -> Option<io::Result<child::Child>> {
         let mut lock = self.0.lock().unwrap();
@@ -65,8 +66,12 @@ impl ProcessManager {
             return None;
         }
 
-        let std_cmd = command.as_command();
-        let child = child::Child::spawn(pty, command, child::ShutdownStyle::Graceful(stop_timeout));
+        let child = child::Child::spawn(
+            pty,
+            cmd_builder,
+            command,
+            child::ShutdownStyle::Graceful(stop_timeout),
+        );
         if let Ok(child) = &child {
             lock.children.push(child.clone());
         }
