@@ -4,9 +4,9 @@
 //! and in ffi.go before modifying this file.
 mod lockfile;
 
-use std::{collections::HashMap, mem::ManuallyDrop};
+use std::{collections::HashMap, mem::ManuallyDrop, str::FromStr};
 
-use globwalk::globwalk;
+use globwalk::{globwalk, ValidatedGlob};
 pub use lockfile::{patches, subgraph, transitive_closure};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
 use turborepo_env::EnvironmentVariableMap;
@@ -361,10 +361,40 @@ pub extern "C" fn glob(buffer: Buffer) -> Buffer {
         false => globwalk::WalkType::All,
     };
 
+    let inclusions = match req
+        .include_patterns
+        .iter()
+        .map(|i| ValidatedGlob::from_str(i))
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(inclusions) => inclusions,
+        Err(err) => {
+            let resp = proto::GlobResp {
+                response: Some(proto::glob_resp::Response::Error(err.to_string())),
+            };
+            return resp.into();
+        }
+    };
+
+    let exclusions = match req
+        .exclude_patterns
+        .iter()
+        .map(|e| ValidatedGlob::from_str(e))
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(exclusions) => exclusions,
+        Err(err) => {
+            let resp = proto::GlobResp {
+                response: Some(proto::glob_resp::Response::Error(err.to_string())),
+            };
+            return resp.into();
+        }
+    };
+
     let files = match globwalk(
         &AbsoluteSystemPathBuf::new(req.base_path).expect("absolute"),
-        &req.include_patterns,
-        &req.exclude_patterns,
+        &inclusions,
+        &exclusions,
         walk_type,
     ) {
         Ok(files) => files,
