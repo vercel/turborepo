@@ -283,14 +283,14 @@ impl<'a> SpanRef<'a> {
         self.span
             .bottom_up
             .get_or_init(|| {
-                build_bottom_up_graph(SpanRef {
+                build_bottom_up_graph([SpanRef {
                     span: self.span,
                     store: self.store,
-                })
+                }])
             })
             .iter()
             .map(|bottom_up| SpanBottomUpRef {
-                bottom_up,
+                bottom_up: bottom_up.clone(),
                 store: self.store,
             })
     }

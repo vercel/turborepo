@@ -1,6 +1,7 @@
 use std::{
     collections::VecDeque,
     fmt::{Debug, Formatter},
+    sync::Arc,
 };
 
 use indexmap::IndexMap;
@@ -13,7 +14,7 @@ use crate::{
 };
 
 pub struct SpanBottomUpRef<'a> {
-    pub(crate) bottom_up: &'a SpanBottomUp,
+    pub(crate) bottom_up: Arc<SpanBottomUp>,
     pub(crate) store: &'a Store,
 }
 
@@ -36,7 +37,7 @@ impl<'a> SpanBottomUpRef<'a> {
         }
     }
 
-    pub fn spans(&self) -> impl Iterator<Item = SpanRef<'a>> + 'a {
+    pub fn spans(&self) -> impl Iterator<Item = SpanRef<'a>> + '_ {
         let store = self.store;
         self.bottom_up.self_spans.iter().map(move |span| SpanRef {
             span: &store.spans[span.get()],
@@ -60,18 +61,18 @@ impl<'a> SpanBottomUpRef<'a> {
         }
     }
 
-    pub fn children(&self) -> impl Iterator<Item = SpanBottomUpRef<'a>> + 'a {
+    pub fn children(&self) -> impl Iterator<Item = SpanBottomUpRef<'a>> + '_ {
         self.bottom_up
             .children
-            .values()
+            .iter()
             .map(|bottom_up| SpanBottomUpRef {
-                bottom_up,
+                bottom_up: bottom_up.clone(),
                 store: self.store,
             })
     }
 
     #[allow(dead_code)]
-    pub fn graph(&self) -> impl Iterator<Item = SpanGraphEventRef<'a>> + 'a {
+    pub fn graph(&self) -> impl Iterator<Item = SpanGraphEventRef<'a>> + '_ {
         self.bottom_up
             .events
             .get_or_init(|| {

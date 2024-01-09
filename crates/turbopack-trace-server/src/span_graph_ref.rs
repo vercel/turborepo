@@ -7,6 +7,7 @@ use std::{
 use indexmap::IndexMap;
 
 use crate::{
+    bottom_up::build_bottom_up_graph,
     span::{SpanGraph, SpanGraphEvent, SpanIndex},
     span_bottom_up_ref::SpanBottomUpRef,
     span_ref::SpanRef,
@@ -116,7 +117,14 @@ impl<'a> SpanGraphRef<'a> {
     }
 
     pub fn bottom_up(&self) -> impl Iterator<Item = SpanBottomUpRef<'a>> + '_ {
-        self.root_spans().flat_map(move |span| span.bottom_up())
+        self.graph
+            .bottom_up
+            .get_or_init(|| build_bottom_up_graph(self.root_spans()))
+            .iter()
+            .map(move |bottom_up| SpanBottomUpRef {
+                bottom_up: bottom_up.clone(),
+                store: self.store,
+            })
     }
 
     pub fn max_depth(&self) -> u32 {
@@ -269,6 +277,7 @@ pub fn event_map_to_list(
                 total_allocation_count: OnceLock::new(),
                 corrected_self_time: OnceLock::new(),
                 corrected_total_time: OnceLock::new(),
+                bottom_up: OnceLock::new(),
             };
             SpanGraphEvent::Child {
                 child: Arc::new(graph),

@@ -369,7 +369,8 @@ impl Viewer {
                                 );
                             }
                         } else {
-                            let bottom_up = bottom_up.flat_map(|bottom_up| bottom_up.spans());
+                            let bottom_up = bottom_up
+                                .flat_map(|bottom_up| bottom_up.spans().collect::<Vec<_>>());
                             let bottom_up = if selected_view_mode.sort_children() {
                                 Either::Left(bottom_up.sorted_by_cached_key(|child| {
                                     Reverse(value_mode.value_from_bottom_up_span(child))
@@ -476,7 +477,8 @@ impl Viewer {
                                 );
                             }
                         } else {
-                            let bottom_up = bottom_up.flat_map(|bottom_up| bottom_up.spans());
+                            let bottom_up = bottom_up
+                                .flat_map(|bottom_up| bottom_up.spans().collect::<Vec<_>>());
                             let bottom_up = if selected_view_mode.sort_children() {
                                 Either::Left(bottom_up.sorted_by_cached_key(|child| {
                                     Reverse(value_mode.value_from_bottom_up_span(child))
