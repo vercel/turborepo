@@ -433,7 +433,6 @@ func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
 
 	if apiClient.IsLinked() {
 		analyticsSink = apiClient
-	} else {
 		if r.base.Config.Token == "" {
 			apiBase := r.base.APIClient.BaseURL()
 			// If it's a third party cache, tell the user to login with that API.
@@ -448,6 +447,7 @@ func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
 
 			r.base.UI.Warn(missingTokenMessage)
 		}
+	} else {
 		r.opts.cacheOpts.SkipRemote = true
 		analyticsSink = analytics.NullSink
 	}
