@@ -372,10 +372,11 @@ pub fn globwalk_internal(
                             ),
                             Err(e) => {
                                 let io_err = std::io::Error::from(e);
-                                if io_err.kind() == std::io::ErrorKind::NotFound {
-                                    None
-                                } else {
-                                    Some(Err(io_err.into()))
+                                match io_err.kind() {
+                                    // Ignore DNE and permission errors
+                                    std::io::ErrorKind::NotFound
+                                    | std::io::ErrorKind::PermissionDenied => None,
+                                    _ => Some(Err(io_err.into())),
                                 }
                             }
                         }
