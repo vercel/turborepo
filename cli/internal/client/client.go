@@ -47,6 +47,9 @@ const _maxRemoteFailCount = uint64(3)
 func (c *APIClient) SetToken(token string) {
 	c.token = token
 }
+func (c *APIClient) BaseURL() string {
+	return c.baseURL
+}
 
 // NewClient creates a new APIClient
 func NewClient(config turbostate.APIClientConfig, logger hclog.Logger, turboVersion string) *APIClient {

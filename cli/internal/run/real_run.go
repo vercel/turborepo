@@ -149,7 +149,7 @@ func RealRun(
 	}
 
 	if base.Config.Token == "" {
-		apiBase := executionState.CLIArgs.API
+		apiBase := base.APIClient.BaseURL()
 		// If it's a third party cache, tell the user to login with that API.
 		loginCommand := fmt.Sprintf("turbo login%s", func() string {
 			if strings.Contains(apiBase, "vercel") {
