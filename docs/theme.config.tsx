@@ -10,6 +10,7 @@ import { ExtraContent } from "./components/ExtraContent";
 import { Discord, Github } from "./components/Social";
 import { Main } from "./components/Main";
 import { Search } from "./components/Search";
+import { pathHasToolbar } from "./lib/comments";
 
 const NoSSRCommentsButton = dynamic(
   () => import("./components/CommentsButton").then((mod) => mod.CommentsButton),
@@ -191,15 +192,22 @@ const config: DocsThemeConfig = {
   },
   navbar: {
     component: Navigation,
-    extraContent: (
-      <>
-        <div className="w-6 h-6 ml-2 rounded-tl-none rounded-full border-2 border-white">
-          <NoSSRCommentsButton />
-        </div>
-        <Github />
-        <Discord />
-      </>
-    ),
+    extraContent: (): JSX.Element => {
+      // eslint-disable-next-line react-hooks/rules-of-hooks -- Nextra does not infer the type of extraContent correctly.
+      const router = useRouter();
+
+      return (
+        <>
+          {pathHasToolbar(router) ? (
+            <div className="w-6 h-6 ml-2 rounded-tl-none rounded-full border-2 border-white">
+              <NoSSRCommentsButton />
+            </div>
+          ) : null}
+          <Github />
+          <Discord />
+        </>
+      );
+    },
   },
   components: {
     pre: (props: ReactElement) => {
