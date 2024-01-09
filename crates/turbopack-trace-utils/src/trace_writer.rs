@@ -23,7 +23,7 @@ impl TraceWriter {
         let (back_tx, back_rx) = bounded::<Vec<u8>>(1024 * 10);
 
         let handle: std::thread::JoinHandle<()> = std::thread::spawn(move || {
-            let mut buf = Vec::with_capacity(1024 * 1024);
+            let mut buf = Vec::with_capacity(1024 * 1024 * 1024);
             'outer: loop {
                 if !buf.is_empty() {
                     let _ = writer.write_all(&buf);
