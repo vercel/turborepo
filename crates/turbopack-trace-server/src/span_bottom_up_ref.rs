@@ -70,6 +70,7 @@ impl<'a> SpanBottomUpRef<'a> {
             })
     }
 
+    #[allow(dead_code)]
     pub fn graph(&self) -> impl Iterator<Item = SpanGraphEventRef<'a>> + 'a {
         self.bottom_up
             .events
