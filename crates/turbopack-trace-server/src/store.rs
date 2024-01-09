@@ -166,6 +166,7 @@ impl Store {
                 span.corrected_self_time.take();
                 span.corrected_total_time.take();
                 span.graph.take();
+                span.bottom_up.take();
                 span.search_index.take();
                 let Some(parent) = span.parent else {
                     break;
