@@ -8,7 +8,7 @@ use std::{
 use indexmap::IndexMap;
 
 use crate::{
-    bottom_up::{self, build_bottom_up_graph},
+    bottom_up::build_bottom_up_graph,
     span::{Span, SpanEvent, SpanGraphEvent, SpanIndex},
     span_bottom_up_ref::SpanBottomUpRef,
     span_graph_ref::{event_map_to_list, SpanGraphEventRef, SpanGraphRef},
@@ -121,7 +121,8 @@ impl<'a> SpanRef<'a> {
     }
 
     pub fn self_allocations(&self) -> u64 {
-        self.span.self_allocations
+        // 32 bytes for the tracing itself
+        self.span.self_allocations.saturating_sub(32)
     }
 
     pub fn self_deallocations(&self) -> u64 {
@@ -129,13 +130,13 @@ impl<'a> SpanRef<'a> {
     }
 
     pub fn self_persistent_allocations(&self) -> u64 {
-        self.span
-            .self_allocations
+        self.self_allocations()
             .saturating_sub(self.span.self_deallocations)
     }
 
     pub fn self_allocation_count(&self) -> u64 {
-        self.span.self_allocation_count
+        // 4 allocations for the tracing itself
+        self.span.self_allocation_count.saturating_sub(4)
     }
 
     // TODO(sokra) use events instead of children for visualizing span graphs
