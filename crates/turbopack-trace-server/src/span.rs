@@ -93,6 +93,7 @@ pub struct SpanBottomUp {
 
     // These values are computed when accessed:
     pub max_depth: OnceLock<u32>,
+    pub events: OnceLock<Vec<SpanGraphEvent>>,
     pub self_time: OnceLock<u64>,
     pub corrected_self_time: OnceLock<u64>,
     pub self_allocations: OnceLock<u64>,
@@ -108,6 +109,7 @@ impl SpanBottomUp {
             children: HashMap::new(),
             example_span,
             max_depth: OnceLock::new(),
+            events: OnceLock::new(),
             self_time: OnceLock::new(),
             corrected_self_time: OnceLock::new(),
             self_allocations: OnceLock::new(),

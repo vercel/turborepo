@@ -1,7 +1,13 @@
-use std::fmt::{Debug, Formatter};
+use std::{
+    collections::VecDeque,
+    fmt::{Debug, Formatter},
+};
+
+use indexmap::IndexMap;
 
 use crate::{
-    span::SpanBottomUp,
+    span::{SpanBottomUp, SpanGraphEvent, SpanIndex},
+    span_graph_ref::{event_map_to_list, SpanGraphEventRef, SpanGraphRef},
     span_ref::SpanRef,
     store::{SpanId, Store},
 };
@@ -30,10 +36,11 @@ impl<'a> SpanBottomUpRef<'a> {
         }
     }
 
-    pub fn spans(&'a self) -> impl Iterator<Item = SpanRef<'a>> + 'a {
+    pub fn spans(&self) -> impl Iterator<Item = SpanRef<'a>> + 'a {
+        let store = self.store;
         self.bottom_up.self_spans.iter().map(move |span| SpanRef {
-            span: &self.store.spans[span.get()],
-            store: self.store,
+            span: &store.spans[span.get()],
+            store,
         })
     }
 
@@ -60,6 +67,48 @@ impl<'a> SpanBottomUpRef<'a> {
             .map(|bottom_up| SpanBottomUpRef {
                 bottom_up,
                 store: self.store,
+            })
+    }
+
+    pub fn graph(&self) -> impl Iterator<Item = SpanGraphEventRef<'a>> + 'a {
+        self.bottom_up
+            .events
+            .get_or_init(|| {
+                if self.count() == 1 {
+                    let _ = self.first_span().graph();
+                    self.first_span().span.graph.get().unwrap().clone()
+                } else {
+                    let mut map: IndexMap<&str, (Vec<SpanIndex>, Vec<SpanIndex>)> = IndexMap::new();
+                    let mut queue = VecDeque::with_capacity(8);
+                    for child in self.spans() {
+                        let name = child.group_name();
+                        let (list, recursive_list) = map.entry(name).or_default();
+                        list.push(child.span.index);
+                        queue.push_back(child);
+                        while let Some(child) = queue.pop_front() {
+                            for nested_child in child.children() {
+                                let nested_name = nested_child.group_name();
+                                if name == nested_name {
+                                    recursive_list.push(nested_child.span.index);
+                                    queue.push_back(nested_child);
+                                }
+                            }
+                        }
+                    }
+                    event_map_to_list(map)
+                }
+            })
+            .iter()
+            .map(|graph| match graph {
+                SpanGraphEvent::SelfTime { duration } => SpanGraphEventRef::SelfTime {
+                    duration: *duration,
+                },
+                SpanGraphEvent::Child { child } => SpanGraphEventRef::Child {
+                    graph: SpanGraphRef {
+                        graph: child.clone(),
+                        store: self.store,
+                    },
+                },
             })
     }
 

@@ -73,6 +73,16 @@ impl ValueMode {
             ValueMode::AllocationCount => bottom_up.self_allocation_count(),
         }
     }
+
+    fn value_from_bottom_up_span(&self, bottom_up_span: &SpanRef<'_>) -> u64 {
+        match self {
+            ValueMode::Duration => bottom_up_span.corrected_self_time(),
+            ValueMode::Allocations => bottom_up_span.self_allocations(),
+            ValueMode::Deallocations => bottom_up_span.self_deallocations(),
+            ValueMode::PersistentAllocations => bottom_up_span.self_persistent_allocations(),
+            ValueMode::AllocationCount => bottom_up_span.self_allocation_count(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -80,6 +90,7 @@ pub enum ViewMode {
     RawSpans { sorted: bool },
     Aggregated { sorted: bool },
     BottomUp { sorted: bool },
+    AggregatedBottomUp { sorted: bool },
 }
 
 impl ViewMode {
@@ -88,6 +99,16 @@ impl ViewMode {
             ViewMode::RawSpans { sorted } => ViewMode::RawSpans { sorted },
             ViewMode::Aggregated { sorted } => ViewMode::RawSpans { sorted },
             ViewMode::BottomUp { sorted } => ViewMode::BottomUp { sorted },
+            ViewMode::AggregatedBottomUp { sorted } => ViewMode::BottomUp { sorted },
+        }
+    }
+
+    fn as_bottom_up(self) -> Self {
+        match self {
+            ViewMode::RawSpans { sorted } => ViewMode::BottomUp { sorted },
+            ViewMode::Aggregated { sorted } => ViewMode::AggregatedBottomUp { sorted },
+            ViewMode::BottomUp { sorted } => ViewMode::BottomUp { sorted },
+            ViewMode::AggregatedBottomUp { sorted } => ViewMode::AggregatedBottomUp { sorted },
         }
     }
 
@@ -95,12 +116,18 @@ impl ViewMode {
         match self {
             ViewMode::RawSpans { .. } => false,
             ViewMode::Aggregated { .. } => true,
-            ViewMode::BottomUp { .. } => todo!(),
+            ViewMode::BottomUp { .. } => false,
+            ViewMode::AggregatedBottomUp { .. } => true,
         }
     }
 
     fn bottom_up(&self) -> bool {
-        matches!(self, ViewMode::BottomUp { .. })
+        match self {
+            ViewMode::RawSpans { .. } => false,
+            ViewMode::Aggregated { .. } => false,
+            ViewMode::BottomUp { .. } => true,
+            ViewMode::AggregatedBottomUp { .. } => true,
+        }
     }
 
     fn sort_children(&self) -> bool {
@@ -108,6 +135,7 @@ impl ViewMode {
             ViewMode::RawSpans { sorted } => *sorted,
             ViewMode::Aggregated { sorted } => *sorted,
             ViewMode::BottomUp { sorted } => *sorted,
+            ViewMode::AggregatedBottomUp { sorted } => *sorted,
         }
     }
 }
@@ -153,6 +181,7 @@ enum QueueItem<'a> {
     Span(SpanRef<'a>),
     SpanGraph(SpanGraphRef<'a>),
     SpanBottomUp(SpanBottomUpRef<'a>),
+    SpanBottomUpSpan(SpanRef<'a>),
 }
 
 impl<'a> QueueItem<'a> {
@@ -163,6 +192,7 @@ impl<'a> QueueItem<'a> {
             QueueItem::SpanBottomUp(span_bottom_up) => {
                 value_mode.value_from_bottom_up(span_bottom_up)
             }
+            QueueItem::SpanBottomUpSpan(span) => value_mode.value_from_bottom_up_span(span),
         }
     }
 
@@ -171,6 +201,7 @@ impl<'a> QueueItem<'a> {
             QueueItem::Span(span) => span.max_depth(),
             QueueItem::SpanGraph(span_graph) => span_graph.max_depth(),
             QueueItem::SpanBottomUp(span_bottom_up) => span_bottom_up.max_depth(),
+            QueueItem::SpanBottomUpSpan(span) => span.max_depth(),
         }
     }
 }
@@ -216,6 +247,9 @@ impl Viewer {
                 sorted: default_sorted,
             },
             "bottom-up" => ViewMode::BottomUp {
+                sorted: default_sorted,
+            },
+            "aggregated-bottom-up" => ViewMode::AggregatedBottomUp {
                 sorted: default_sorted,
             },
             _ => ViewMode::Aggregated {
@@ -295,13 +329,15 @@ impl Viewer {
             let mut current = start;
             match &span {
                 QueueItem::Span(span) => {
-                    let (selected_view_mode, inherit) = if span.is_complete() {
-                        self.span_options
-                            .get(&span.id())
-                            .and_then(|o| o.view_mode)
-                            .unwrap_or((view_mode, false))
+                    let (selected_view_mode, inherit) = self
+                        .span_options
+                        .get(&span.id())
+                        .and_then(|o| o.view_mode)
+                        .unwrap_or((view_mode, false));
+                    let selected_view_mode = if span.is_complete() {
+                        selected_view_mode
                     } else {
-                        (ViewMode::RawSpans { sorted: false }, false)
+                        selected_view_mode.as_spans()
                     };
 
                     let view_mode = if inherit {
@@ -311,25 +347,50 @@ impl Viewer {
                     };
                     if selected_view_mode.bottom_up() {
                         let bottom_up = span.bottom_up();
-                        let bottom_up = if selected_view_mode.sort_children() {
-                            Either::Left(bottom_up.sorted_by_cached_key(|child| {
-                                Reverse(value_mode.value_from_bottom_up(child))
-                            }))
+                        if selected_view_mode.aggregate_children() {
+                            let bottom_up = if selected_view_mode.sort_children() {
+                                Either::Left(bottom_up.sorted_by_cached_key(|child| {
+                                    Reverse(value_mode.value_from_bottom_up(child))
+                                }))
+                            } else {
+                                Either::Right(bottom_up)
+                            };
+                            for child in bottom_up {
+                                // TODO search
+                                add_child_item(
+                                    &mut children,
+                                    &mut current,
+                                    view_rect,
+                                    line_index + 1,
+                                    view_mode,
+                                    value_mode,
+                                    QueueItem::SpanBottomUp(child),
+                                    false,
+                                );
+                            }
                         } else {
-                            Either::Right(bottom_up)
-                        };
-                        for child in bottom_up {
-                            // TODO search
-                            add_child_item(
-                                &mut children,
-                                &mut current,
-                                view_rect,
-                                line_index + 1,
-                                view_mode,
-                                value_mode,
-                                QueueItem::SpanBottomUp(child),
-                                false,
-                            );
+                            let bottom_up = bottom_up.flat_map(|bottom_up| bottom_up.spans());
+                            let bottom_up = if selected_view_mode.sort_children() {
+                                Either::Left(bottom_up.sorted_by_cached_key(|child| {
+                                    Reverse(value_mode.value_from_bottom_up_span(child))
+                                }))
+                            } else {
+                                Either::Right(bottom_up)
+                            };
+                            for child in bottom_up {
+                                let filtered =
+                                    search_mode && !highlighted_spans.contains(&child.id());
+                                add_child_item(
+                                    &mut children,
+                                    &mut current,
+                                    view_rect,
+                                    line_index + 1,
+                                    view_mode,
+                                    value_mode,
+                                    QueueItem::SpanBottomUpSpan(child),
+                                    filtered,
+                                );
+                            }
                         }
                     } else if !selected_view_mode.aggregate_children() {
                         let spans = if selected_view_mode.sort_children() {
@@ -393,25 +454,50 @@ impl Viewer {
                     };
                     if selected_view_mode.bottom_up() {
                         let bottom_up = span_graph.bottom_up();
-                        let bottom_up = if selected_view_mode.sort_children() {
-                            Either::Left(bottom_up.sorted_by_cached_key(|child| {
-                                Reverse(value_mode.value_from_bottom_up(child))
-                            }))
+                        if selected_view_mode.aggregate_children() {
+                            let bottom_up = if selected_view_mode.sort_children() {
+                                Either::Left(bottom_up.sorted_by_cached_key(|child| {
+                                    Reverse(value_mode.value_from_bottom_up(child))
+                                }))
+                            } else {
+                                Either::Right(bottom_up)
+                            };
+                            for child in bottom_up {
+                                // TODO search
+                                add_child_item(
+                                    &mut children,
+                                    &mut current,
+                                    view_rect,
+                                    line_index + 1,
+                                    view_mode,
+                                    value_mode,
+                                    QueueItem::SpanBottomUp(child),
+                                    false,
+                                );
+                            }
                         } else {
-                            Either::Right(bottom_up)
-                        };
-                        for child in bottom_up {
-                            // TODO search
-                            add_child_item(
-                                &mut children,
-                                &mut current,
-                                view_rect,
-                                line_index + 1,
-                                view_mode,
-                                value_mode,
-                                QueueItem::SpanBottomUp(child),
-                                false,
-                            );
+                            let bottom_up = bottom_up.flat_map(|bottom_up| bottom_up.spans());
+                            let bottom_up = if selected_view_mode.sort_children() {
+                                Either::Left(bottom_up.sorted_by_cached_key(|child| {
+                                    Reverse(value_mode.value_from_bottom_up_span(child))
+                                }))
+                            } else {
+                                Either::Right(bottom_up)
+                            };
+                            for child in bottom_up {
+                                let filtered =
+                                    search_mode && !highlighted_spans.contains(&child.id());
+                                add_child_item(
+                                    &mut children,
+                                    &mut current,
+                                    view_rect,
+                                    line_index + 1,
+                                    view_mode,
+                                    value_mode,
+                                    QueueItem::SpanBottomUpSpan(child),
+                                    filtered,
+                                );
+                            }
                         }
                     } else if !selected_view_mode.aggregate_children() && span_graph.count() > 1 {
                         let spans = if selected_view_mode.sort_children() {
@@ -459,26 +545,59 @@ impl Viewer {
                     }
                 }
                 QueueItem::SpanBottomUp(bottom_up) => {
-                    let bottom_up = if view_mode.sort_children() {
-                        Either::Left(bottom_up.children().sorted_by_cached_key(|child| {
-                            Reverse(value_mode.value_from_bottom_up(child))
-                        }))
+                    let view_mode = self
+                        .span_options
+                        .get(&bottom_up.id())
+                        .and_then(|o| o.view_mode)
+                        .map(|(v, _)| v.as_bottom_up())
+                        .unwrap_or(view_mode);
+
+                    if view_mode.aggregate_children() {
+                        let bottom_up = if view_mode.sort_children() {
+                            Either::Left(bottom_up.children().sorted_by_cached_key(|child| {
+                                Reverse(value_mode.value_from_bottom_up(child))
+                            }))
+                        } else {
+                            Either::Right(bottom_up.children())
+                        };
+                        for child in bottom_up {
+                            // TODO search
+                            add_child_item(
+                                &mut children,
+                                &mut current,
+                                view_rect,
+                                line_index + 1,
+                                view_mode,
+                                value_mode,
+                                QueueItem::SpanBottomUp(child),
+                                false,
+                            );
+                        }
                     } else {
-                        Either::Right(bottom_up.children())
-                    };
-                    for child in bottom_up {
-                        // TODO search
-                        add_child_item(
-                            &mut children,
-                            &mut current,
-                            view_rect,
-                            line_index + 1,
-                            view_mode,
-                            value_mode,
-                            QueueItem::SpanBottomUp(child),
-                            false,
-                        );
+                        let spans = if view_mode.sort_children() {
+                            Either::Left(bottom_up.spans().sorted_by_cached_key(|child| {
+                                Reverse(value_mode.value_from_bottom_up_span(child))
+                            }))
+                        } else {
+                            Either::Right(bottom_up.spans())
+                        };
+                        for child in spans {
+                            let filtered = search_mode && !highlighted_spans.contains(&child.id());
+                            add_child_item(
+                                &mut children,
+                                &mut current,
+                                view_rect,
+                                line_index + 1,
+                                view_mode,
+                                value_mode,
+                                QueueItem::SpanBottomUpSpan(child),
+                                filtered,
+                            );
+                        }
                     }
+                }
+                QueueItem::SpanBottomUpSpan(_) => {
+                    // no children
                 }
             }
 
@@ -516,6 +635,9 @@ impl Viewer {
                         }
                         QueueItem::SpanBottomUp(bottom_up) => {
                             LineEntryType::SpanBottomUp(bottom_up, filtered)
+                        }
+                        QueueItem::SpanBottomUpSpan(bottom_up_span) => {
+                            LineEntryType::SpanBottomUpSpan(bottom_up_span, filtered)
                         }
                     },
                 });
@@ -572,6 +694,18 @@ impl Viewer {
                                 category: category.to_string(),
                                 text: text.to_string(),
                                 count: bottom_up.count() as u64,
+                                kind: if filtered { 12 } else { 2 },
+                            }
+                        }
+                        LineEntryType::SpanBottomUpSpan(bottom_up_span, filtered) => {
+                            let (category, text) = bottom_up_span.nice_name();
+                            ViewSpan {
+                                id: bottom_up_span.id().get() as u64,
+                                start: entry.start,
+                                width: entry.width,
+                                category: category.to_string(),
+                                text: text.to_string(),
+                                count: 1,
                                 kind: if filtered { 12 } else { 2 },
                             }
                         }
@@ -687,4 +821,5 @@ enum LineEntryType<'a> {
     Span(SpanRef<'a>, bool),
     SpanGraph(SpanGraphRef<'a>, bool),
     SpanBottomUp(SpanBottomUpRef<'a>, bool),
+    SpanBottomUpSpan(SpanRef<'a>, bool),
 }

@@ -2,17 +2,16 @@ use std::{
     cmp::max,
     collections::{HashMap, HashSet, VecDeque},
     fmt::{Debug, Formatter},
-    sync::{Arc, OnceLock},
     vec,
 };
 
 use indexmap::IndexMap;
 
 use crate::{
-    bottom_up::build_bottom_up_graph,
-    span::{Span, SpanEvent, SpanGraph, SpanGraphEvent, SpanIndex},
+    bottom_up::{self, build_bottom_up_graph},
+    span::{Span, SpanEvent, SpanGraphEvent, SpanIndex},
     span_bottom_up_ref::SpanBottomUpRef,
-    span_graph_ref::{SpanGraphEventRef, SpanGraphRef},
+    span_graph_ref::{event_map_to_list, SpanGraphEventRef, SpanGraphRef},
     store::{SpanId, Store},
 };
 
@@ -263,31 +262,7 @@ impl<'a> SpanRef<'a> {
                         }
                     }
                 }
-                map.into_iter()
-                    .map(|(_, (root_spans, recursive_spans))| {
-                        let graph = SpanGraph {
-                            root_spans,
-                            recursive_spans,
-                            max_depth: OnceLock::new(),
-                            events: OnceLock::new(),
-                            self_time: OnceLock::new(),
-                            self_allocations: OnceLock::new(),
-                            self_deallocations: OnceLock::new(),
-                            self_persistent_allocations: OnceLock::new(),
-                            self_allocation_count: OnceLock::new(),
-                            total_time: OnceLock::new(),
-                            total_allocations: OnceLock::new(),
-                            total_deallocations: OnceLock::new(),
-                            total_persistent_allocations: OnceLock::new(),
-                            total_allocation_count: OnceLock::new(),
-                            corrected_self_time: OnceLock::new(),
-                            corrected_total_time: OnceLock::new(),
-                        };
-                        SpanGraphEvent::Child {
-                            child: Arc::new(graph),
-                        }
-                    })
-                    .collect()
+                event_map_to_list(map)
             })
             .iter()
             .map(|event| match event {

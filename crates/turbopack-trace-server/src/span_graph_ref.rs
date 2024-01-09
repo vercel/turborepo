@@ -91,31 +91,7 @@ impl<'a> SpanGraphRef<'a> {
                             }
                         }
                     }
-                    map.into_iter()
-                        .map(|(_, (root_spans, recursive_spans))| {
-                            let graph = SpanGraph {
-                                root_spans,
-                                recursive_spans,
-                                max_depth: OnceLock::new(),
-                                events: OnceLock::new(),
-                                self_time: OnceLock::new(),
-                                self_allocations: OnceLock::new(),
-                                self_deallocations: OnceLock::new(),
-                                self_persistent_allocations: OnceLock::new(),
-                                self_allocation_count: OnceLock::new(),
-                                total_time: OnceLock::new(),
-                                total_allocations: OnceLock::new(),
-                                total_deallocations: OnceLock::new(),
-                                total_persistent_allocations: OnceLock::new(),
-                                total_allocation_count: OnceLock::new(),
-                                corrected_self_time: OnceLock::new(),
-                                corrected_total_time: OnceLock::new(),
-                            };
-                            SpanGraphEvent::Child {
-                                child: Arc::new(graph),
-                            }
-                        })
-                        .collect()
+                    event_map_to_list(map)
                 }
             })
             .iter()
@@ -269,6 +245,36 @@ impl<'a> SpanGraphRef<'a> {
                 + self.corrected_self_time()
         })
     }
+}
+
+pub fn event_map_to_list(
+    map: IndexMap<&str, (Vec<SpanIndex>, Vec<SpanIndex>)>,
+) -> Vec<SpanGraphEvent> {
+    map.into_iter()
+        .map(|(_, (root_spans, recursive_spans))| {
+            let graph = SpanGraph {
+                root_spans,
+                recursive_spans,
+                max_depth: OnceLock::new(),
+                events: OnceLock::new(),
+                self_time: OnceLock::new(),
+                self_allocations: OnceLock::new(),
+                self_deallocations: OnceLock::new(),
+                self_persistent_allocations: OnceLock::new(),
+                self_allocation_count: OnceLock::new(),
+                total_time: OnceLock::new(),
+                total_allocations: OnceLock::new(),
+                total_deallocations: OnceLock::new(),
+                total_persistent_allocations: OnceLock::new(),
+                total_allocation_count: OnceLock::new(),
+                corrected_self_time: OnceLock::new(),
+                corrected_total_time: OnceLock::new(),
+            };
+            SpanGraphEvent::Child {
+                child: Arc::new(graph),
+            }
+        })
+        .collect()
 }
 
 impl<'a> Debug for SpanGraphRef<'a> {

@@ -243,6 +243,15 @@ pub fn serve(store: Arc<StoreContainer>) -> Result<()> {
                                                 Some((ViewMode::BottomUp { sorted }, inherit)),
                                             );
                                         }
+                                        "aggregated-bottom-up" => {
+                                            state.viewer.set_view_mode(
+                                                id,
+                                                Some((
+                                                    ViewMode::AggregatedBottomUp { sorted },
+                                                    inherit,
+                                                )),
+                                            );
+                                        }
                                         _ => {
                                             bail!("unknown view mode: {}", mode)
                                         }
