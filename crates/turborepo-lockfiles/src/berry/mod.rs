@@ -183,6 +183,14 @@ impl BerryLockfile {
                 }
                 possible_extensions.remove(&descriptor);
             }
+
+            // For Yarn 4, remove any patch sources that are accounted for by a patch
+            if let Some(Locator { ident, reference }) = locator.patched_locator() {
+                possible_extensions.remove(&Descriptor {
+                    ident,
+                    range: reference,
+                });
+            }
         }
 
         self.extensions.extend(
@@ -310,13 +318,22 @@ impl BerryLockfile {
             }
 
             // Yarn 4 allows workspaces to depend directly on patched dependencies instead
-            // of using resolutions this results in the patched dependency appearing in the
+            // of using resolutions. This results in the patched dependency appearing in the
             // closure instead of the original.
             if locator.patch_file().is_some() {
                 if let Some((original, _)) =
                     self.patches.iter().find(|(_, patch)| patch == &&locator)
                 {
                     patches.insert(original.as_owned(), locator.as_owned());
+                    // We include the patched dependency resolution
+                    let Locator { ident, reference } = original.as_owned();
+                    resolutions.insert(
+                        Descriptor {
+                            ident,
+                            range: reference,
+                        },
+                        original.as_owned(),
+                    );
                 }
             }
         }
@@ -674,7 +691,7 @@ mod test {
 
         assert_eq!(
             &lockfile.extensions,
-            &(["@babel/types@npm:^7.8.3", "lodash@npm:4.17.21"]
+            &(["@babel/types@npm:^7.8.3"]
                 .iter()
                 .map(|s| Descriptor::try_from(*s).unwrap())
                 .collect::<HashSet<_>>())
@@ -1044,5 +1061,46 @@ mod test {
             ];
         assert_eq!(lockfile.patches().unwrap(), patches);
         assert_eq!(subgraph.patches().unwrap(), patches);
+    }
+
+    #[test]
+    fn test_yarn4_patches_direct_and_indirect_dependency() {
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/yarn4-direct-and-indirect.lock"
+        ))
+        .unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+
+        let b_closure = lockfile
+            .subgraph(
+                &["packages/b".into()],
+                &[
+                    "is-even@npm:1.0.0".into(),
+                    "is-odd@npm:0.1.2".into(),
+                    "is-number@npm:3.0.0".into(),
+                ],
+            )
+            .unwrap();
+
+        assert_eq!(b_closure.patches().unwrap(), vec![]);
+
+        let mut locators = b_closure
+            .lockfile()
+            .unwrap()
+            .packages
+            .values()
+            .map(|package| package.resolution.clone())
+            .collect::<Vec<_>>();
+        locators.sort();
+        assert_eq!(
+            locators,
+            vec![
+                "b@workspace:packages/b".to_string(),
+                "is-even@npm:1.0.0".to_string(),
+                "is-number@npm:3.0.0".to_string(),
+                "is-odd@npm:0.1.2".to_string(),
+                "small-yarn4@workspace:.".to_string(),
+            ]
+        );
     }
 }
