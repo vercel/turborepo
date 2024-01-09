@@ -17,6 +17,8 @@ use turborepo_ui::BOLD;
 use super::CommandBase;
 use crate::config::RawTurboJson;
 
+pub const DEFAULT_OUTPUT_DIR: &str = "out";
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("io error while pruning: {0}")]
@@ -87,7 +89,9 @@ pub async fn prune(
     output_dir: &str,
     telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
-    telemetry.track_prune_method(docker);
+    telemetry.track_prune_arg_method(docker);
+    telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
+
     let prune = Prune::new(base, scope, docker, output_dir).await?;
 
     if matches!(

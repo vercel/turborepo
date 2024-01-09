@@ -76,6 +76,15 @@ impl CommandEventBuilder {
         self
     }
 
+    pub fn track_arg_usage(&self, arg: &str, is_set: bool) -> &Self {
+        self.track(Event {
+            key: format!("arg:{}", arg),
+            value: if is_set { "set" } else { "default" }.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
     // telemetry
     pub fn track_telemetry_config(&self, enabled: bool) -> &Self {
         self.track(Event {
@@ -128,9 +137,9 @@ impl CommandEventBuilder {
     }
 
     // prune
-    pub fn track_prune_method(&self, is_docker: bool) -> &Self {
+    pub fn track_prune_arg_method(&self, is_docker: bool) -> &Self {
         self.track(Event {
-            key: "method".to_string(),
+            key: "arg:docker".to_string(),
             value: if is_docker { "docker" } else { "default" }.to_string(),
             is_sensitive: EventType::NonSensitive,
         });
