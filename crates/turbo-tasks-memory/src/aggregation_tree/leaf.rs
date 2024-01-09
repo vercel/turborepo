@@ -391,6 +391,7 @@ pub fn ensure_thresholds<'a, C: AggregationContext>(
     }
     || {
         if let Some((result, reference, new_bottom_tree)) = result {
+            let _span = tracing::trace_span!("aggregation_tree::reorganize").entered();
             add_left_upper_to_item_step_2(
                 aggregation_context,
                 &reference,
