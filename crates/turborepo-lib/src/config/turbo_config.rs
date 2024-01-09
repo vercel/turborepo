@@ -2,6 +2,7 @@ use std::{collections::HashMap, ffi::OsString};
 
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_auth::read_or_create_auth_file;
 use turborepo_dirs::config_dir;
 use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
