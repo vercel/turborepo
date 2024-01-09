@@ -1,8 +1,9 @@
 use std::{collections::HashMap, ffi::OsString};
 
-use dirs_next::config_dir;
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_auth::read_or_create_auth_file;
+use turborepo_dirs::config_dir;
 use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
 use crate::{
@@ -355,6 +356,30 @@ impl TurborepoConfigBuilder {
         get_lowercased_env_vars()
     }
 
+    fn get_global_auth(&self) -> Result<ConfigurationOptions, ConfigError> {
+        let global_auth_path = self.global_auth_path()?;
+        let global_config_path = self.global_config_path()?;
+        let api = self
+            .override_config
+            .api_url
+            .clone()
+            .unwrap_or(DEFAULT_API_URL.to_string());
+
+        let auth = read_or_create_auth_file(&global_auth_path, &global_config_path, &api)?;
+        let auth_token = auth.get_token(&api).unwrap_or_default().token;
+        let token = if auth_token.is_empty() {
+            None
+        } else {
+            Some(auth_token)
+        };
+
+        let global_auth: ConfigurationOptions = ConfigurationOptions {
+            token,
+            ..Default::default()
+        };
+        Ok(global_auth)
+    }
+
     fn get_global_config(&self) -> Result<ConfigurationOptions, ConfigError> {
         let global_config_path = self.global_config_path()?;
         let mut contents = global_config_path
@@ -426,6 +451,7 @@ impl TurborepoConfigBuilder {
                 Err(e)
             })?;
         let global_config = self.get_global_config()?;
+        let global_auth = self.get_global_auth()?;
         let local_config = self.get_local_config()?;
         let env_vars = self.get_environment();
         let env_var_config = get_env_var_config(&env_vars)?;
@@ -435,6 +461,7 @@ impl TurborepoConfigBuilder {
             root_package_json.get_configuration_options(),
             turbo_json.get_configuration_options(),
             global_config.get_configuration_options(),
+            global_auth.get_configuration_options(),
             local_config.get_configuration_options(),
             env_var_config.get_configuration_options(),
             Ok(self.override_config.clone()),
