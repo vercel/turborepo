@@ -1,5 +1,4 @@
 use tracing::error;
-use turborepo_api_client::Client;
 use turborepo_auth::{logout as auth_logout, read_or_create_auth_file, AuthToken};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
