@@ -19,3 +19,8 @@ export const setCommentsState = (router: NextRouter) => {
   }
   router.reload();
 };
+
+const toolbarEnabledPaths = ["/repo/docs", "/pack/docs"];
+
+export const pathHasToolbar = (router: NextRouter) =>
+  toolbarEnabledPaths.some((path) => router.asPath.startsWith(path));
