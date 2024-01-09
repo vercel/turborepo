@@ -1,6 +1,7 @@
 use std::{collections::HashMap, ffi::OsString};
 
 use dirs_next::config_dir;
+use jsonc_parser::tokens::Token;
 use serde::{Deserialize, Serialize};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_auth::{read_or_create_auth_file, AuthToken};
@@ -366,10 +367,14 @@ impl TurborepoConfigBuilder {
             .unwrap_or(DEFAULT_API_URL.to_string());
 
         let auth = read_or_create_auth_file(&global_auth_path, &global_config_path, &api)?;
-        let token = auth.get_token(&api).unwrap_or_default().token;
+        let auth_token = auth.get_token(&api).unwrap_or_default().token;
 
         let global_auth: ConfigurationOptions = ConfigurationOptions {
-            token: Some(token),
+            token: if auth_token.is_empty() {
+                None
+            } else {
+                Some(auth_token)
+            },
             ..Default::default()
         };
         Ok(global_auth)
