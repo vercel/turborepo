@@ -4,8 +4,6 @@
 use std::{
     borrow::Cow,
     collections::HashSet,
-    error::Error,
-    fmt::Display,
     io::ErrorKind,
     path::{Path, PathBuf},
     str::FromStr,
