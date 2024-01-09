@@ -14,8 +14,12 @@ use crate::{commands::CommandBase, turbo_json};
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
+    #[error("Authentication error: {0}")]
+    Auth(#[from] turborepo_auth::Error),
     #[error("Global config path not found")]
     NoGlobalConfigPath,
+    #[error("Global auth file path not found")]
+    NoGlobalAuthFilePath,
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(
@@ -188,7 +192,7 @@ impl ResolvedConfigurationOptions for PackageJson {
         match &self.legacy_turbo_config {
             Some(legacy_turbo_config) => {
                 let synthetic_raw_turbo_json: RawTurboJson =
-                    RawTurboJson::parse(legacy_turbo_config, "package.json")?;
+                    RawTurboJson::parse(&legacy_turbo_config.to_string(), "package.json")?;
                 synthetic_raw_turbo_json.get_configuration_options()
             }
             None => Ok(ConfigurationOptions::default()),
@@ -394,15 +398,15 @@ impl TurborepoConfigBuilder {
         AbsoluteSystemPathBuf::try_from(global_config_path).map_err(Error::PathError)
     }
     // Location of the auth file for Turborepo.
-    fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
+    fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
         #[cfg(test)]
         if let Some(global_auth_path) = self.global_auth_path.clone() {
             return Ok(global_auth_path);
         }
 
-        let config_dir = config_dir().ok_or(ConfigError::NoGlobalConfigPath)?;
+        let config_dir = config_dir().ok_or(Error::NoGlobalConfigPath)?;
         let global_auth_path = config_dir.join("turborepo").join("auth.json");
-        AbsoluteSystemPathBuf::try_from(global_auth_path).map_err(ConfigError::PathError)
+        AbsoluteSystemPathBuf::try_from(global_auth_path).map_err(Error::PathError)
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])

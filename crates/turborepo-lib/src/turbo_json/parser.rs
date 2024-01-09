@@ -1,13 +1,17 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, fmt::Write, sync::Arc};
 
-use biome_console::{markup, ColorMode, ConsoleExt, EnvConsole};
+use biome_console::{
+    fmt::{Formatter, Termcolor},
+    markup,
+};
 use biome_deserialize::{
     json::deserialize_from_json_str, Deserializable, DeserializableValue,
     DeserializationDiagnostic, DeserializationVisitor, Text, VisitableType,
 };
-use biome_diagnostics::{DiagnosticExt, PrintDiagnostic};
+use biome_diagnostics::{termcolor, termcolor::ColorChoice, DiagnosticExt, PrintDiagnostic};
 use biome_json_parser::JsonParserOptions;
 use biome_json_syntax::TextRange;
+use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 
@@ -20,22 +24,8 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("failed to parse turbo.json")]
-    Parse {
-        diagnostics: Vec<biome_diagnostics::Error>,
-    },
-}
-
-fn print_diagnostics(diagnostics: &[biome_diagnostics::Error], color: bool) {
-    let color_mode = if color {
-        ColorMode::Enabled
-    } else {
-        ColorMode::Disabled
-    };
-    let mut console = EnvConsole::new(color_mode);
-    for diagnostic in diagnostics {
-        console.error(markup!({ PrintDiagnostic::simple(diagnostic) }));
-    }
+    #[error("failed to parse turbo.json:\n{diagnostics}")]
+    Parse { diagnostics: String },
 }
 
 impl<T: Deserializable> Deserializable for Spanned<T> {
@@ -455,7 +445,7 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
     }
 }
 
-trait WithText {
+pub trait WithText {
     fn add_text(&mut self, text: Arc<str>);
 }
 
@@ -539,15 +529,22 @@ impl RawTurboJson {
             let diagnostics = result
                 .into_diagnostics()
                 .into_iter()
-                .map(|d| d.with_file_source_code(text).with_file_path(file_path))
-                .collect();
+                .map(|d| {
+                    print_diagnostic_to_string(
+                        &d.with_file_source_code(text).with_file_path(file_path),
+                    )
+                })
+                .join("\n");
 
             return Err(Error::Parse { diagnostics });
         }
 
-        let mut turbo_json = result
-            .into_deserialized()
-            .expect("should have turbo.json if no errors");
+        // It's highly unlikely that biome would fail to produce a deserialized value
+        // *and* not return any errors, but it's still possible. In that case, we
+        // just print that there is an error and return.
+        let mut turbo_json = result.into_deserialized().ok_or_else(|| Error::Parse {
+            diagnostics: "No diagnostics found".to_string(),
+        })?;
 
         turbo_json.add_text(Arc::from(text));
 

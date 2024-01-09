@@ -113,8 +113,11 @@ impl<T> Spanned<T> {
         }
     }
 
-    pub fn add_path(&mut self, path: Arc<str>) {
-        self.path = Some(path);
+    pub fn with_path(self, path: Arc<str>) -> Self {
+        Self {
+            path: Some(path),
+            ..self
+        }
     }
 
     pub fn into_inner(self) -> T {
@@ -648,7 +651,7 @@ fn gather_env_vars(
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{fs, sync::Arc};
 
     use anyhow::Result;
     use biome_deserialize::json::deserialize_from_json_str;
@@ -722,7 +725,7 @@ mod tests {
     #[test_case(
         Some("{}"),
         PackageJson {
-            legacy_turbo_config: Some("build".to_string()),
+            legacy_turbo_config: Some(serde_json::Value::String("build".to_string())),
             ..PackageJson::default()
         },
         TurboJson::default()
@@ -922,8 +925,6 @@ mod tests {
             }
         }));
 
-        println!("{:?}", json);
-
         let actual = json
             .as_ref()
             .ok()
@@ -931,6 +932,17 @@ mod tests {
             .and_then(|pipeline| pipeline.0.get(&TaskName::from("build")))
             .and_then(|build| build.output_mode.clone())
             .map(|mode| mode.into_inner());
+        assert_eq!(actual, expected);
+    }
+
+    #[test_case(Spanned { value: 10, range: Some(0..2), path: None, text: None }, "10")]
+    #[test_case(Spanned { value: "hello world", range: None, path: None, text: Some(Arc::from("hello world")) }, "\"hello world\"")]
+    #[test_case(Spanned { value: json!({ "name": "George", "age": 100 }), range: None, path: None, text: Some(Arc::from("hello world")) }, "{\"age\":100,\"name\":\"George\"}")]
+    fn test_serialize_spanned<T>(spanned_value: Spanned<T>, expected: &str)
+    where
+        T: serde::Serialize,
+    {
+        let actual = serde_json::to_string(&spanned_value).unwrap();
         assert_eq!(actual, expected);
     }
 }
