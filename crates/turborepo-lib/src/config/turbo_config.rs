@@ -368,13 +368,14 @@ impl TurborepoConfigBuilder {
 
         let auth = read_or_create_auth_file(&global_auth_path, &global_config_path, &api)?;
         let auth_token = auth.get_token(&api).unwrap_or_default().token;
+        let token = if auth_token.is_empty() {
+            None
+        } else {
+            Some(auth_token)
+        };
 
         let global_auth: ConfigurationOptions = ConfigurationOptions {
-            token: if auth_token.is_empty() {
-                None
-            } else {
-                Some(auth_token)
-            },
+            token,
             ..Default::default()
         };
         Ok(global_auth)
