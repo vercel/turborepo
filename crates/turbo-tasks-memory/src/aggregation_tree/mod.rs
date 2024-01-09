@@ -44,7 +44,7 @@ pub use self::{
 };
 
 /// The maximum connectivity of one layer of bottom tree.
-const CONNECTIVITY_LIMIT: u8 = 7;
+const CONNECTIVITY_LIMIT: u8 = 15;
 
 /// The maximum of number of children muliplied by number of upper bottom trees.
 /// When reached the parent of the children will form a new bottom tree.
