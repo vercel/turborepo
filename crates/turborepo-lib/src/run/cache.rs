@@ -25,6 +25,8 @@ pub enum Error {
     Cache(#[from] turborepo_cache::CacheError),
     #[error("Error finding outputs to save: {0}")]
     Globwalk(#[from] globwalk::WalkError),
+    #[error("Invalid globwalk pattern: {0}")]
+    Glob(#[from] globwalk::GlobError),
     #[error("Error with daemon: {0}")]
     Daemon(#[from] crate::daemon::DaemonError),
     #[error("no connection to daemon")]
@@ -315,8 +317,8 @@ impl TaskCache {
 
         let files_to_be_cached = globwalk::globwalk(
             &self.run_cache.repo_root,
-            &self.repo_relative_globs.inclusions,
-            &self.repo_relative_globs.exclusions,
+            &self.repo_relative_globs.validated_inclusions()?,
+            &self.repo_relative_globs.validated_exclusions()?,
             globwalk::WalkType::All,
         )?;
 
