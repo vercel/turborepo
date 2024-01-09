@@ -21,7 +21,6 @@ Setup
 
 baseline to generate cache
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -34,7 +33,6 @@ baseline to generate cache
 
 # env var=true, missing flag: cache bypass
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -46,7 +44,6 @@ baseline to generate cache
   
 # env var=true, --flag=true: cache bypass
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app --force=true
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -58,7 +55,6 @@ baseline to generate cache
   
 # env var=true, --flag=false: cache hit
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -70,7 +66,6 @@ baseline to generate cache
   
 # env var=true, --flag (no value): cache bypass
   $ TURBO_FORCE=true ${TURBO} run build --output-logs=hash-only --filter=my-app --force
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -83,7 +78,6 @@ baseline to generate cache
 
 # env var=false, missing flag, cache hit
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -95,7 +89,6 @@ baseline to generate cache
   
 # env var=false, --flag=true: cache bypass
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force=true
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -107,7 +100,6 @@ baseline to generate cache
   
 # env var=false, --flag=false: cache hit
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -119,7 +111,6 @@ baseline to generate cache
   
 # env var=false, --flag (no value): cache bypass
   $ TURBO_FORCE=false ${TURBO} run build --output-logs=hash-only --filter=my-app --force
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -132,7 +123,6 @@ baseline to generate cache
 
 # missing env var, missing flag: cache hit
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -144,7 +134,6 @@ baseline to generate cache
   
 # missing env var, --flag=true: cache bypass
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force=true
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -156,7 +145,6 @@ baseline to generate cache
   
 # missing env var, --flag=false: cache hit
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force=false
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -168,7 +156,6 @@ baseline to generate cache
   
 # missing env var, --flag (no value): cache bypass
   $ ${TURBO} run build --output-logs=hash-only --filter=my-app --force
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

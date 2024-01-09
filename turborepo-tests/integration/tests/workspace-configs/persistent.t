@@ -10,7 +10,6 @@ This test covers:
 # persistent-task-1-parent dependsOn persistent-task-1
 # persistent-task-1 is persistent:true in the root workspace, and does NOT get overriden in the workspace
   $ ${TURBO} run persistent-task-1-parent --filter=persistent
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "persistent#persistent-task-1" is a persistent task, "persistent#persistent-task-1-parent" cannot depend on it
   [1]
@@ -18,7 +17,6 @@ This test covers:
 # persistent-task-2-parent dependsOn persistent-task-2
 # persistent-task-2 is persistent:true in the root workspace, and IS overriden to false in the workspace
   $ ${TURBO} run persistent-task-2-parent --filter=persistent
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: persistent (esc)
   \xe2\x80\xa2 Running persistent-task-2-parent in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -43,7 +41,6 @@ This test covers:
 # persistent-task-3 is persistent:true in the root workspace
 # persistent-task-3 is defined in workspace, but does NOT have the persistent flag
   $ ${TURBO} run persistent-task-3-parent --filter=persistent
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "persistent#persistent-task-3" is a persistent task, "persistent#persistent-task-3-parent" cannot depend on it
   [1]
@@ -51,7 +48,6 @@ This test covers:
 # persistent-task-4-parent dependsOn persistent-task-4
 # persistent-task-4 has no config in the root workspace, and is set to true in the workspace
   $ ${TURBO} run persistent-task-4-parent --filter=persistent
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "persistent#persistent-task-4" is a persistent task, "persistent#persistent-task-4-parent" cannot depend on it
   [1]

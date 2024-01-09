@@ -14,7 +14,6 @@
 # └── pkg-a#dev (but this isn't implemented)
 # 
   $ ${TURBO} run dev
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: app-a, pkg-a (esc)
   \xe2\x80\xa2 Running dev in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

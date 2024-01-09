@@ -3,7 +3,6 @@ Setup
 
 # Save JSON to tmp file so we don't need to keep re-running the build
   $ ${TURBO} run build --dry=json > tmpjson.log
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
 
 # test with a regex that captures what release we usually have (1.x.y or 1.a.b-canary.c)
   $ cat tmpjson.log | jq .turboVersion
@@ -164,7 +163,6 @@ Setup
 
 Run again with NODE_ENV set and see the value in the summary. --filter=util workspace so the output is smaller
   $ NODE_ENV=banana ${TURBO} run build --dry=json --filter=util | jq '.tasks | map(select(.taskId == "util#build")) | .[0].environmentVariables'
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   {
     "specified": {
       "env": [
@@ -181,6 +179,5 @@ Run again with NODE_ENV set and see the value in the summary. --filter=util work
 
 Tasks that don't exist throw an error
   $ ${TURBO} run doesnotexist --dry=json
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
    ERROR  run failed: Could not find the following tasks in project: doesnotexist
   [1]

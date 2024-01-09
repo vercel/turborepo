@@ -8,7 +8,6 @@ Make sure that the internal util package is part of the prune output
    - Added shared
    - Added util
   $ cd out && ${TURBO} run new-task
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: docs, shared, util (esc)
   \xe2\x80\xa2 Running new-task in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

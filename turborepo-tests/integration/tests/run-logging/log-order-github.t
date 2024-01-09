@@ -5,7 +5,6 @@
 Note that we need to use (re) for lines that start with '> '
 because otherwise prysk interprets them as multiline commands
   $ GITHUB_ACTIONS=1 ${TURBO} run build --force
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -34,7 +33,6 @@ because otherwise prysk interprets them as multiline commands
   
 # Build as if we are in Github Actions with a task log prefix.
   $ GITHUB_ACTIONS=1 ${TURBO} run build --force --log-prefix="task" --filter=util
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -55,7 +53,6 @@ because otherwise prysk interprets them as multiline commands
 
 Verify that errors are grouped properly
   $ GITHUB_ACTIONS=1 ${TURBO} run fail
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app, util (esc)
   \xe2\x80\xa2 Running fail in 2 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

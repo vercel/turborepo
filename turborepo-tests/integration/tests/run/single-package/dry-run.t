@@ -3,7 +3,6 @@ Setup
 
 Check
   $ ${TURBO} run build --dry
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   Global Hash Inputs
     Global Files                          = 3

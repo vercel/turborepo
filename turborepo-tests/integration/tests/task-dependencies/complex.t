@@ -16,7 +16,6 @@ Setup
 
 We can scope the run to specific packages
   $ ${TURBO} run build1 --filter=app-b --graph
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   digraph {
   \tcompound = "true" (esc)
@@ -46,7 +45,6 @@ Can't depend on tasks from unknown packages
 
 Complex dependency chain
   $ ${TURBO} run test --graph
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   digraph {
   \tcompound = "true" (esc)
@@ -83,7 +81,6 @@ Complex dependency chain
 
 Check that --only only runs leaf tasks
   $ ${TURBO} run test --only --graph
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   digraph {
   \tcompound = "true" (esc)

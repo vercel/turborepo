@@ -4,7 +4,6 @@ Setup
 
 Test
   $ ${TURBO} run build > tmp.log
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat tmp.log | grep "Packages in scope" -A2
   \xe2\x80\xa2 Packages in scope: workspace-a, workspace-b (esc)
   \xe2\x80\xa2 Running build in 2 packages (esc)

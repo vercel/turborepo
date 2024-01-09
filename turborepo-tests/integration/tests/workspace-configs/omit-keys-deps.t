@@ -8,7 +8,6 @@ Setup
 
 # 1. First run, assert for `dependsOn` and `outputs` keys
   $ ${TURBO} run omit-keys-task-with-deps --filter=omit-keys > tmp.log
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
 # Validate in pieces. `omit-key` task has two dependsOn values, and those tasks
 # can run in non-deterministic order. So we need to validatte the logs in pieces.
   $ cat tmp.log | grep "in scope" -A 1

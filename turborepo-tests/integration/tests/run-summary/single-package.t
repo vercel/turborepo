@@ -3,7 +3,6 @@ Setup
 
 Check
   $ ${TURBO} run build --summarize > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ test -d .turbo/runs
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)
@@ -114,7 +113,6 @@ Check
   $ rm -r .turbo/runs
 Check Rust implementation
   $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} run build --summarize --no-daemon > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ test -d .turbo/runs
   $ ls .turbo/runs/*.json | wc -l
   \s*1 (re)

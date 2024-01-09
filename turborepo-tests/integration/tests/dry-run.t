@@ -4,7 +4,6 @@ Setup
 # Run the build task with --dry flag and cut up the logs into separate files by empty lines
 # https://stackoverflow.com/a/33297878/986415
   $ ${TURBO} run build --dry |  awk -v RS= '{print > ("tmp-" NR ".txt")}'
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
 
 # The first part of the file is Packages in Scope
   $ cat tmp-1.txt
@@ -72,5 +71,4 @@ Setup
 
 # Run the task with NODE_ENV set and see it in summary. Use util package so it's just one package
   $ NODE_ENV=banana ${TURBO} run build --dry --filter=util | grep "Environment Variables"
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   [1]

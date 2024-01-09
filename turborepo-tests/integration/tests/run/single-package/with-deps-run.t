@@ -3,7 +3,6 @@ Setup
 
 Check
   $ ${TURBO} run test
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache miss, executing f09bf783beacf5c9
@@ -24,7 +23,6 @@ Check
   
 Run a second time, verify caching works because there is a config
   $ ${TURBO} run test
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, replaying logs f09bf783beacf5c9
@@ -45,7 +43,6 @@ Run a second time, verify caching works because there is a config
   
 Run with --output-logs=hash-only
   $ ${TURBO} run test --output-logs=hash-only
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache hit, suppressing logs f09bf783beacf5c9
@@ -57,7 +54,6 @@ Run with --output-logs=hash-only
   
 Run with --output-logs=errors-only
   $ ${TURBO} run test --output-logs=errors-only
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   
@@ -67,7 +63,6 @@ Run with --output-logs=errors-only
   
 Run with --output-logs=none
   $ ${TURBO} run test --output-logs=none
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Running test (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   

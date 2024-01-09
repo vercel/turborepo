@@ -26,74 +26,62 @@ Setup
 # env var=true, missing flag: yes
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=true ${TURBO} run build > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ /bin/ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 # env var=true, --flag=true: yes
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=true ${TURBO} run build --summarize=true > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ /bin/ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 # env var=true, --flag=false: no
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=true ${TURBO} run build --summarize=false > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ test -d .turbo/runs
   [1]
 # env var=true, --flag (no value): yes
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=true ${TURBO} run build --summarize > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ /bin/ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 
 # env var=false, missing flag, no
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=false ${TURBO} run build > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ test -d .turbo/runs
   [1]
 # env var=false, --flag=true: yes
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=false ${TURBO} run build --summarize=true > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ /bin/ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 # env var=false, --flag=false: no
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=false ${TURBO} run build --summarize=false > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ test -d .turbo/runs
   [1]
 # env var=false, --flag (no value): yes
   $ rm -rf .turbo/runs
   $ TURBO_RUN_SUMMARY=false ${TURBO} run build --summarize > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ /bin/ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 
 # missing env var, missing flag: no
   $ rm -rf .turbo/runs
   $ ${TURBO} run build > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ test -d .turbo/runs
   [1]
 # missing env var, --flag=true: yes
   $ rm -rf .turbo/runs
   $ ${TURBO} run build --summarize=true > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ /bin/ls .turbo/runs/*.json | wc -l
   \s*1 (re)
 # missing env var, --flag=false: no
   $ rm -rf .turbo/runs
   $ ${TURBO} run build --summarize=false > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ test -d .turbo/runs
   [1]
 # missing env var, --flag (no value): yes
   $ rm -rf .turbo/runs
   $ ${TURBO} run build --summarize > /dev/null
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ /bin/ls .turbo/runs/*.json | wc -l
   \s*1 (re)

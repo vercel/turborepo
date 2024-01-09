@@ -3,7 +3,6 @@ Setup
 
 Run a build to get a local cache.
   $ ${TURBO} run build --output-logs=none
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: another, my-app, util (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -15,7 +14,6 @@ Run a build to get a local cache.
 
 Do a dry run so we can see the state of the cache
   $ ${TURBO} run build --dry=json > dry.json
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
 
 Get the hash of the my-app#build task, so we can inspect the cache
   $ HASH=$(cat dry.json | jq -r '.tasks | map(select(.taskId == "my-app#build")) | .[0].hash')

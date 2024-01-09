@@ -151,31 +151,6 @@ impl CommandBase {
                 team_slug: team_slug.map(|s| s.to_string()),
             }))
         } else {
-            let base = client.base_url();
-            let login_command = if base.contains("vercel") {
-                "turbo login".to_string()
-            } else {
-                format!("turbo login --api {}", base)
-            };
-            let apis_with_tokens = auth.tokens().iter().map(|(api, _)| api.to_string());
-            // Don't show the message if there are no tokens to display.
-            let api_message = if apis_with_tokens.len() > 0 {
-                format!(
-                    "\nFound the following apis with tokens:\n  - {}",
-                    apis_with_tokens
-                        .clone()
-                        .collect::<Vec<String>>()
-                        .join("\n  - ")
-                )
-            } else {
-                "".to_string()
-            };
-
-            let message = format!(
-                "No token found for {base}. Run `turbo link` or `{login_command}` \
-                 first.{api_message}",
-            );
-            eprintln!("{}", self.ui.apply(turborepo_ui::YELLOW.apply_to(message)));
             Ok(None)
         }
     }

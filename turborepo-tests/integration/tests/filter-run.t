@@ -3,7 +3,6 @@ Setup
 
 # Running with --filter works and exits with success
   $ ${TURBO} run build --filter="[main]"
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope:  (esc)
   \xe2\x80\xa2 Running build in 0 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -18,7 +17,6 @@ Setup
 # with unstaged changes
   $ echo "new file contents" >> bar.txt
   $ ${TURBO} run build --filter="[main]"
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: // (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

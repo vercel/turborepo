@@ -4,7 +4,6 @@ Setup
 
 Populate cache
   $ ${TURBO} build --filter=a
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -20,7 +19,6 @@ Populate cache
     Time:\s*[\.0-9]+m?s  (re)
   
   $ ${TURBO} build --filter=b
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -41,7 +39,6 @@ Only b should have a cache miss
   $ patch package-lock.json package-lock.patch
   patching file package-lock.json
   $ ${TURBO} build  --filter=a
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -58,7 +55,6 @@ Only b should have a cache miss
   
 
   $ ${TURBO} build  --filter=b
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -77,7 +73,6 @@ Add lockfile changes to a commit
   $ git add . && git commit -m "bump lockfile" --quiet
 Only root and b should be rebuilt since only the deps for b had a version bump
   $ ${TURBO} build --filter="[HEAD^1]" --dry=json | jq ".packages"
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   [
     "//",
     "b"
@@ -87,7 +82,6 @@ Bump of root workspace invalidates all packages
   $ patch package-lock.json turbo-bump.patch
   patching file package-lock.json
   $ ${TURBO} build  --filter=a
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -103,7 +97,6 @@ Bump of root workspace invalidates all packages
     Time:\s*[\.0-9]+m?s  (re)
   
   $ ${TURBO} build  --filter=b
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: b (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -122,7 +115,6 @@ Add lockfile changes to a commit
   $ git add . && git commit -m "global lockfile change" --quiet
 Everything should be rebuilt as a dependency of the root package got bumped
   $ ${TURBO} build --filter="[HEAD^1]" --dry=json | jq ".packages | sort"
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   [
     "//",
     "a",

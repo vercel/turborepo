@@ -5,7 +5,6 @@ Setup
 # [ ] outputMode: errors-only
 # [x] --ouptut-logs=errors-only
   $ ${TURBO} run build --output-logs=errors-only
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -21,7 +20,6 @@ Setup
 # [x] outputMode: errors-only
 # [ ] --ouptut-logs=errors-only
   $ ${TURBO} run buildsuccess
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running buildsuccess in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -36,7 +34,6 @@ Setup
 # [ ] outputMode: errors-only
 # [x] --ouptut-logs=errors-only
   $ ${TURBO} run builderror --output-logs=errors-only
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running builderror in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -67,7 +64,6 @@ Setup
 # [x] outputMode: errors-only
 # [ ] --ouptut-logs=errors-only
   $ ${TURBO} run builderror2
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: app-a (esc)
   \xe2\x80\xa2 Running builderror2 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

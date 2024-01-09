@@ -5,7 +5,6 @@ Setup
 
 Check
   $ ${TURBO} run build --dry
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   Global Hash Inputs
     Global Files                          = 2\s* (re)
@@ -40,7 +39,6 @@ Check
     Framework                      =\s* (re)
 
   $ ${TURBO} run build --graph
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   digraph {
   \tcompound = "true" (esc)
@@ -52,7 +50,6 @@ Check
   
 Run real once
   $ ${TURBO} run build
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache bypass, force executing e46d6df5143cae99
@@ -67,7 +64,6 @@ Run real once
   
 Run a second time, verify no caching because there is no config
   $ ${TURBO} run build
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Running build (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   build: cache bypass, force executing e46d6df5143cae99

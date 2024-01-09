@@ -9,7 +9,6 @@ Setup
 # but in the workspace, we override to dependsOn: []. This test validates that only the
 # top level task "override-values-task-with-deps" should run. None of the dependencies should run.
   $ ${TURBO} run override-values-task-with-deps --filter=override-values
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task-with-deps in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -26,7 +25,6 @@ Setup
 
 # This is the same test as above, but with --dry and testing the resolvedTaskDefinition has the same value for dependsOn
   $ ${TURBO} run override-values-task-with-deps --filter=override-values --dry=json | jq '.tasks | map(select(.taskId == "override-values#override-values-task-with-deps")) | .[0].resolvedTaskDefinition'
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   {
     "outputs": [],
     "cache": true,
@@ -42,7 +40,6 @@ Setup
 # This task is similar, but `dependsOn` in the root turbo.json _only_ has a topological dependency
 # This test was written to validate a common case of `build: dependsOn: [^build]`
   $ ${TURBO} run override-values-task-with-deps-2 --filter=override-values --dry=json | jq '.tasks | map(select(.taskId == "override-values#override-values-task-with-deps-2")) | .[0].resolvedTaskDefinition'
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   {
     "outputs": [],
     "cache": true,

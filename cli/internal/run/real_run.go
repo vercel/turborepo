@@ -148,21 +148,6 @@ func RealRun(
 		base.UI.Output(fmt.Sprintf("%s %s %s", ui.Dim("• Running"), ui.Dim(ui.Bold(strings.Join(rs.Targets, ", "))), ui.Dim(fmt.Sprintf("in %v packages", rs.FilteredPkgs.Len()))))
 	}
 
-	if base.Config.Token == "" {
-		apiBase := base.APIClient.BaseURL()
-		// If it's a third party cache, tell the user to login with that API.
-		loginCommand := fmt.Sprintf("turbo login%s", func() string {
-			if strings.Contains(apiBase, "vercel") {
-				return ""
-			}
-			return fmt.Sprintf(" --api %s", apiBase)
-		}())
-
-		missingTokenMessage := fmt.Sprintf("No token found for %s. Run `turbo link` or %s first.", apiBase, loginCommand)
-
-		base.UI.Warn(missingTokenMessage)
-	}
-
 	// Log whether remote cache is enabled
 	useHTTPCache := !rs.Opts.cacheOpts.SkipRemote
 	if useHTTPCache {

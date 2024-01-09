@@ -4,7 +4,6 @@ Setup
 Check error is properly reported
 Note that npm reports any failed script as exit code 1, even though we "exit 2"
   $ ${TURBO} error
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -36,7 +35,6 @@ Note that npm reports any failed script as exit code 1, even though we "exit 2"
 
 Make sure error isn't cached
   $ ${TURBO} error
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running error in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -68,7 +66,6 @@ Make sure error isn't cached
 
 Make sure error code isn't swallowed with continue
   $ ${TURBO} okay2 --continue
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running okay2 in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

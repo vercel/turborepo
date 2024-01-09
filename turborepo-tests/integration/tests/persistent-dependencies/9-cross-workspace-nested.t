@@ -12,7 +12,6 @@
 // 		 		 └── workspace-z#dev // this one is persistent
 //
   $ ${TURBO} run build
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "app-z#dev" is a persistent task, "app-c#build" cannot depend on it
   [1]

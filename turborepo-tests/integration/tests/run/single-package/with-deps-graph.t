@@ -3,7 +3,6 @@ Setup
 
 Graph
   $ ${TURBO} run test --graph
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   
   digraph {
   \tcompound = "true" (esc)

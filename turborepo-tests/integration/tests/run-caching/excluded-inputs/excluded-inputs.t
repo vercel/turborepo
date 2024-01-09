@@ -6,7 +6,6 @@ Setup
 
 Running build for my-app succeeds
   $ ${TURBO} run build --filter=my-app
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -24,7 +23,6 @@ Running build for my-app succeeds
 Update exluded file and try again
   $ echo "new excluded value" > apps/my-app/excluded.txt
   $ ${TURBO} run build --filter=my-app
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

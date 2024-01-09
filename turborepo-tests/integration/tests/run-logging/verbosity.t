@@ -3,7 +3,6 @@ Setup
 
 Verbosity level 1
   $ ${TURBO} build -v --filter=util --force
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -19,7 +18,6 @@ Verbosity level 1
     Time:\s*[\.0-9]+m?s  (re)
   
   $ ${TURBO} build --verbosity=1 --filter=util --force
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: util (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)

@@ -16,7 +16,6 @@ Some helper functions to parse the summary file
 
 Just run the util package, it's simpler
   $ ${TURBO} run build --filter=util --output-logs=hash-only --summarize | grep "util:build: cache"
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   util:build: cache miss, executing 2f6ab59379ddcb93
 
   $ FIRST=$(/bin/ls .turbo/runs/*.json | head -n1)
@@ -31,7 +30,6 @@ Change the content of internal.txt
 
 Hash does not change, because it is gitignored
   $ ${TURBO} run build --filter=util --output-logs=hash-only --summarize | grep "util:build: cache"
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   util:build: cache miss, executing a26c95f27f26f89c
 
 The internal.txt hash should be different from the one before

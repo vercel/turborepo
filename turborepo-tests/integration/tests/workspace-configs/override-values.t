@@ -7,7 +7,6 @@ Setup
 
 # 1. First run, assert that the right `outputs` are cached.
   $ ${TURBO} run override-values-task --filter=override-values > tmp.log
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   $ cat tmp.log
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
@@ -31,7 +30,6 @@ Setup
 
 2. Run again and assert cache hit, and that full output is displayed
   $ ${TURBO} run override-values-task --filter=override-values
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -48,7 +46,6 @@ Setup
 3. Change input file and assert cache miss
   $ echo "more text" >> $TARGET_DIR/apps/override-values/src/bar.txt
   $ ${TURBO} run override-values-task --filter=override-values
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -65,7 +62,6 @@ Setup
 3a. Change a file that is declared as input in root config, and assert cache hit and FULL TURBO
   $ echo "more text" >> $TARGET_DIR/apps/override-values/src/foo.txt
   $ ${TURBO} run override-values-task --filter=override-values
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -81,7 +77,6 @@ Setup
   
 4. Set env var and assert cache miss, and that hash is different from above
   $ OTHER_VAR=somevalue ${TURBO} run override-values-task --filter=override-values
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -97,7 +92,6 @@ Setup
   
 4a. Set env var that is declared in root config, and assert cache hit and FULL TURBO
   $ OTHER_VAR=somevalue ${TURBO} run override-values-task --filter=override-values
-  No token found for https://vercel.com/api. Run `turbo link` or `turbo login` first.
   \xe2\x80\xa2 Packages in scope: override-values (esc)
   \xe2\x80\xa2 Running override-values-task in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
