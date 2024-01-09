@@ -56,14 +56,17 @@ impl ProcessManager {
     /// manager is open, but the child process failed to spawn.
     pub fn spawn(
         &self,
-        command: child::Command,
+        pty: portable_pty::PtyPair,
+        command: portable_pty::CommandBuilder,
         stop_timeout: Duration,
     ) -> Option<io::Result<child::Child>> {
         let mut lock = self.0.lock().unwrap();
         if lock.is_closing {
             return None;
         }
-        let child = child::Child::spawn(command, child::ShutdownStyle::Graceful(stop_timeout));
+
+        let std_cmd = command.as_command();
+        let child = child::Child::spawn(pty, command, child::ShutdownStyle::Graceful(stop_timeout));
         if let Ok(child) = &child {
             lock.children.push(child.clone());
         }

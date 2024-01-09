@@ -751,17 +751,9 @@ impl ExecContext {
         };
 
         let pty_system = NativePtySystem::default();
+        let pair = pty_system.openpty(PtySize::default()).unwrap();
 
-        let pair = pty_system
-            .openpty(PtySize {
-                rows: 24, // TODO: change this
-                cols: 80, // TODO: change this
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .unwrap();
-
-        let mut cmd = Command::new(package_manager_binary);
+        let mut cmd = CommandBuilder::new(package_manager_binary);
         let mut args = vec!["run".to_string(), self.task_id.task().to_string()];
         if let Some(pass_through_args) = &self.pass_through_args {
             args.extend(
@@ -772,13 +764,13 @@ impl ExecContext {
             args.extend(pass_through_args.iter().cloned());
         }
         cmd.args(args);
-        cmd.current_dir(self.workspace_directory.as_path());
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        cmd.cwd(self.workspace_directory.as_path());
 
         // We clear the env before populating it with variables we expect
         cmd.env_clear();
-        cmd.envs(self.execution_env.iter());
+        for (k, v) in self.execution_env.iter() {
+            cmd.env(k, v);
+        }
         // Always last to make sure it overwrites any user configured env var.
         cmd.env("TURBO_HASH", &self.task_hash);
 
@@ -793,7 +785,7 @@ impl ExecContext {
             }
         };
 
-        let mut process = match self.manager.spawn(cmd, Duration::from_millis(500)) {
+        let mut process = match self.manager.spawn(pair, cmd, Duration::from_millis(500)) {
             Some(Ok(child)) => child,
             // Turbo was unable to spawn a process
             Some(Err(e)) => {

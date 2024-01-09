@@ -180,7 +180,11 @@ pub enum ChildCommand {
 impl Child {
     /// Start a child process, returning a handle that can be used to interact
     /// with it. The command will be started immediately.
-    pub fn spawn(mut command: Command, shutdown_style: ShutdownStyle) -> io::Result<Self> {
+    pub fn spawn(
+        pty: portable_pty::PtyPair,
+        mut command: portable_pty::CommandBuilder,
+        shutdown_style: ShutdownStyle,
+    ) -> io::Result<Self> {
         let label = {
             let cmd = command.as_std();
             format!(
