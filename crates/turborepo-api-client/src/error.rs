@@ -15,8 +15,8 @@ pub enum Error {
     TlsError(#[source] reqwest::Error),
     #[error("Error parsing header: {0}")]
     InvalidHeader(#[from] ToStrError),
-    #[error("Error parsing URL: {0}")]
-    InvalidUrl(#[from] url::ParseError),
+    #[error("Error parsing '{url}' as URL: {err}")]
+    InvalidUrl { url: String, err: url::ParseError },
     #[error("unknown caching status: {0}")]
     UnknownCachingStatus(String, #[backtrace] Backtrace),
     #[error("unknown status {code}: {message}")]
