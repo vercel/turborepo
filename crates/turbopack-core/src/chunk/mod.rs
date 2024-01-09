@@ -322,7 +322,7 @@ async fn graph_node_to_referenced_nodes(
             };
 
             // Dedupe modules to avoid duplicate work in the following loop
-            let mut modules = HashSet::new();
+            let mut modules = IndexSet::new();
             for module in reference.resolve_reference().primary_modules().await? {
                 modules.insert(module.resolve().await?);
             }
