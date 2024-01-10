@@ -415,7 +415,7 @@ pub enum Command {
         scope_arg: Option<Vec<String>>,
         #[clap(long)]
         docker: bool,
-        #[clap(long = "out-dir", default_value_t = String::from("out"), value_parser)]
+        #[clap(long = "out-dir", default_value_t = String::from(prune::DEFAULT_OUTPUT_DIR), value_parser)]
         output_dir: String,
     },
 
