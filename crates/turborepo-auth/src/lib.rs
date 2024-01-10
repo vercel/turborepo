@@ -155,10 +155,10 @@ pub fn read_or_create_auth_file(
         let config_token: ConfigToken = serde_json::from_str(&content)
             .map_err(|e| Error::FailedToDeserializeConfigToken { source: e })?;
 
-        let auth_token = convert_to_auth_token(&config_token.token, client.base_url());
+        let auth_token = convert_to_auth_token(&config_token.token, api);
 
         let mut auth_file = AuthFile::new(auth_file_path.to_owned());
-        auth_file.insert(client.base_url().to_owned(), auth_token.token);
+        auth_file.insert(api.to_owned(), auth_token.token);
         auth_file.write_to_disk(auth_file_path)?;
         return Ok(auth_file);
     }
