@@ -98,13 +98,7 @@ impl AuthProvider {
     /// look up the token in the file, if it exists.
     pub fn get_token(&self, api: &str) -> Option<AuthToken> {
         match self {
-            Self::Token(t) => {
-                if t.api == api {
-                    Some(t.clone())
-                } else {
-                    None
-                }
-            }
+            Self::Token(t) => Some(t.clone()),
             Self::File(f) => f.get_token(api),
         }
     }
