@@ -18,6 +18,8 @@ impl<'a, C: Clone> DaemonPackageDiscovery<'a, C> {
 
 impl<'a, C: Clone + Send> PackageDiscovery for DaemonPackageDiscovery<'a, C> {
     async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using daemon");
+
         let response = self
             .daemon
             .discover_packages()
@@ -63,6 +65,8 @@ impl WatchingPackageDiscovery {
 
 impl PackageDiscovery for WatchingPackageDiscovery {
     async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using watcher implementation");
+
         // need to clone and drop the Ref before we can await
         let watcher = {
             let watcher = self

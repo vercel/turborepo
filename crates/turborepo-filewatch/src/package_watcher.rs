@@ -99,17 +99,23 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
         recv: broadcast::Receiver<Result<Event, NotifyError>>,
         mut discovery: T,
     ) -> Result<Self, Error> {
-        let manager = discovery.discover_packages().await?.package_manager;
+        let initial_discovery = discovery.discover_packages().await?;
 
         let (package_json_path, workspace_config_path, filter) =
-            Self::update_package_manager(&manager, &repo_root)?;
+            Self::update_package_manager(&initial_discovery.package_manager, &repo_root)?;
 
-        let (manager_tx, manager_rx) = watch::channel(manager);
+        let (manager_tx, manager_rx) = watch::channel(initial_discovery.package_manager);
 
         Ok(Self {
             exit_rx,
             filter,
-            package_data: Default::default(),
+            package_data: Arc::new(Mutex::new(
+                initial_discovery
+                    .workspaces
+                    .into_iter()
+                    .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
+                    .collect(),
+            )),
             recv,
             manager_rx,
             manager_tx,
