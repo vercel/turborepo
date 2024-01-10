@@ -89,7 +89,7 @@ pub async fn prune(
     output_dir: &str,
     telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
-    telemetry.track_prune_arg_method(docker);
+    telemetry.track_arg_usage("docker", docker);
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
 
     let prune = Prune::new(base, scope, docker, output_dir).await?;

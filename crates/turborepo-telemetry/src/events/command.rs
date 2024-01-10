@@ -136,16 +136,6 @@ impl CommandEventBuilder {
         self
     }
 
-    // prune
-    pub fn track_prune_arg_method(&self, is_docker: bool) -> &Self {
-        self.track(Event {
-            key: "arg:docker".to_string(),
-            value: if is_docker { "docker" } else { "default" }.to_string(),
-            is_sensitive: EventType::NonSensitive,
-        });
-        self
-    }
-
     // login
     pub fn track_login_method(&self, method: LoginMethod) -> &Self {
         self.track(Event {
