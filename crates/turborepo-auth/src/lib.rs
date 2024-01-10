@@ -16,7 +16,6 @@ mod sso_server;
 mod ui;
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_api_client::Client;
 
 pub use self::{
     auth_file::*, config_token::ConfigToken, error::Error, login::*, login_server::*, logout::*,
