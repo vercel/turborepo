@@ -65,11 +65,11 @@ impl AuthProvider {
     /// let vercel_file_path = AbsoluteSystemPath::new("/path/to/vercel/file").unwrap();
     ///
     /// // Create an Auth enum from a Vercel file.
-    /// let vercel_auth_file = AuthProvider::new(AuthSource::Turborepo(vercel_file_path));
+    /// let vercel_auth_file: AuthProvider = AuthProvider::new(AuthSource::Turborepo(vercel_file_path));
     /// // Create an Auth enum from a file.
-    /// let turbo_auth_file = AuthProvider::new(AuthSource::Turborepo(auth_file_path));
+    /// let turbo_auth_file: AuthProvider = AuthProvider::new(AuthSource::Turborepo(auth_file_path));
     /// // Create an Auth enum from a token.
-    /// let auth_token = AuthProvider::new(AuthSource::CLI("test-token".to_string()));
+    /// let auth_token: AuthProvider = AuthProvider::new(AuthSource::CLI("test-token".to_string()));
     ///
     /// assert!(turbo_auth_file.is_file());
     /// assert!(vercel_auth_file.is_file());
