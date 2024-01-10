@@ -33,8 +33,10 @@ use turborepo_repository::{
 };
 use turborepo_scm::SCM;
 use turborepo_telemetry::events::{
+    command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
     repo::{RepoEventBuilder, RepoType},
+    EventBuilder,
 };
 use turborepo_ui::{cprint, cprintln, ColorSelector, BOLD_GREY, GREY};
 
@@ -128,7 +130,11 @@ impl<'a> Run<'a> {
     }
 
     #[tracing::instrument(skip(self, signal_handler))]
-    pub async fn run(&mut self, signal_handler: &SignalHandler) -> Result<i32, Error> {
+    pub async fn run(
+        &mut self,
+        signal_handler: &SignalHandler,
+        telemetry: CommandEventBuilder,
+    ) -> Result<i32, Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
@@ -154,6 +160,7 @@ impl<'a> Run<'a> {
                 api_client,
                 analytics_sender,
                 signal_handler,
+                telemetry,
             )
             .await;
 
@@ -173,12 +180,14 @@ impl<'a> Run<'a> {
         api_client: APIClient,
         analytics_sender: Option<AnalyticsSender>,
         signal_handler: &SignalHandler,
+        telemetry: CommandEventBuilder,
     ) -> Result<i32, Error> {
         let package_json_path = self.base.repo_root.join_component("package.json");
         let root_package_json = PackageJson::load(&package_json_path)?;
         let mut opts = self.opts()?;
-        let run_telemetry = GenericEventBuilder::new();
-        let repo_telemetry = RepoEventBuilder::new(&self.base.repo_root.to_string());
+        let run_telemetry = GenericEventBuilder::new().with_parent(&telemetry);
+        let repo_telemetry =
+            RepoEventBuilder::new(&self.base.repo_root.to_string()).with_parent(&telemetry);
 
         let config = self.base.config()?;
         let auth_file_path = self.base.global_auth_path()?;

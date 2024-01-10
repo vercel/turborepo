@@ -16,7 +16,7 @@ use turborepo_telemetry::{
     events::{
         command::{CodePath, CommandEventBuilder},
         generic::GenericEventBuilder,
-        EventBuilder,
+        EventBuilder, EventType,
     },
     init_telemetry, TelemetryHandle,
 };
@@ -37,6 +37,9 @@ mod error;
 // Global turbo sets this environment variable to its cwd so that local
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
+
+// Default value for the --cache-workers argument
+const DEFAULT_NUM_WORKERS: u32 = 10;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, ValueEnum)]
 pub enum OutputLogsMode {
@@ -572,7 +575,7 @@ pub struct RunArgs {
     #[clap(long)]
     pub cache_dir: Option<Utf8PathBuf>,
     /// Set the number of concurrent cache operations (default 10)
-    #[clap(long, default_value_t = 10)]
+    #[clap(long, default_value_t = DEFAULT_NUM_WORKERS)]
     pub cache_workers: u32,
     /// Limit the concurrency of task execution. Use 1 for serial (i.e.
     /// one-at-a-time) execution.
@@ -756,6 +759,192 @@ impl RunArgs {
             (None, Some(file)) => Some((file, false)),
             (Some(_), Some(_)) => unreachable!(),
             (None, None) => None,
+        }
+    }
+
+    pub fn track(&self, telemetry: &CommandEventBuilder) {
+        // track usage
+        if self.cache_dir.is_some() {
+            telemetry.track_arg_usage("cache-dir", true);
+        }
+        if self.continue_execution {
+            telemetry.track_arg_usage("continue", true);
+        }
+        if self.go_fallback {
+            telemetry.track_arg_usage("go-fallback", true);
+        }
+        if self.single_package {
+            telemetry.track_arg_usage("single-package", true);
+        }
+        if self.force.is_some() {
+            telemetry.track_arg_usage("force", true);
+        }
+        // framework_inference defaults to true, so we only track it if it's false
+        if !self.framework_inference {
+            telemetry.track_arg_usage("framework-inference", true);
+        }
+        if self.include_dependencies {
+            telemetry.track_arg_usage("include-dependencies", true);
+        }
+        if self.no_deps {
+            telemetry.track_arg_usage("no-deps", true);
+        }
+        if self.no_cache {
+            telemetry.track_arg_usage("no-cache", true);
+        }
+        if self.daemon {
+            telemetry.track_arg_usage("daemon", true);
+        }
+
+        if self.since.is_some() {
+            telemetry.track_arg_usage("since", true);
+        }
+
+        if self.include_dependencies {
+            telemetry.track_arg_usage("include-dependencies", true);
+        }
+
+        if self.no_deps {
+            telemetry.track_arg_usage("no-deps", true);
+        }
+
+        if self.no_cache {
+            telemetry.track_arg_usage("no-cache", true);
+        }
+
+        if self.daemon {
+            telemetry.track_arg_usage("daemon", true);
+        }
+
+        if self.no_daemon {
+            telemetry.track_arg_usage("no_daemon", true);
+        }
+
+        if self.only {
+            telemetry.track_arg_usage("only", true);
+        }
+
+        if self.parallel {
+            telemetry.track_arg_usage("parallel", true);
+        }
+
+        if self.pkg_inference_root.is_some() {
+            telemetry.track_arg_usage("pkg-inference-root", true);
+        }
+
+        if self.profile.is_some() {
+            telemetry.track_arg_usage("profile", true);
+        }
+
+        if self.anon_profile.is_some() {
+            telemetry.track_arg_usage("anon-profile", true);
+        }
+
+        if self.remote_only {
+            telemetry.track_arg_usage("remote-only", true);
+        }
+
+        if self.remote_cache_read_only {
+            telemetry.track_arg_usage("remote-cache-read-only", true);
+        }
+
+        if self.summarize.is_some() {
+            telemetry.track_arg_usage("summarize", true);
+        }
+
+        if self.experimental_space_id.is_some() {
+            telemetry.track_arg_usage("experimental-space-id", true);
+        }
+
+        // track values
+        if let Some(dry_run) = &self.dry_run {
+            telemetry.track_arg_value(
+                "dry-run",
+                match dry_run {
+                    DryRunMode::Text => "text",
+                    DryRunMode::Json => "json",
+                },
+                EventType::NonSensitive,
+            );
+        }
+
+        if self.cache_workers != DEFAULT_NUM_WORKERS {
+            telemetry.track_arg_value("cache-workers", self.cache_workers, EventType::NonSensitive);
+        }
+
+        if let Some(concurrency) = &self.concurrency {
+            telemetry.track_arg_value("concurrency", concurrency, EventType::NonSensitive);
+        }
+
+        if !self.global_deps.is_empty() {
+            telemetry.track_arg_value("global-deps", self.cache_workers, EventType::NonSensitive);
+        }
+
+        if let Some(graph) = &self.graph {
+            telemetry.track_arg_value("graph", graph, EventType::NonSensitive);
+        }
+
+        if self.env_mode != EnvMode::default() {
+            telemetry.track_arg_value(
+                "env-mode",
+                match self.env_mode {
+                    EnvMode::Infer => "infer",
+                    EnvMode::Loose => "loose",
+                    EnvMode::Strict => "strict",
+                },
+                EventType::NonSensitive,
+            );
+        }
+
+        if let Some(output_logs) = &self.output_logs {
+            telemetry.track_arg_value(
+                "output-logs",
+                match output_logs {
+                    OutputLogsMode::Full => "full",
+                    OutputLogsMode::None => "none",
+                    OutputLogsMode::HashOnly => "hash-only",
+                    OutputLogsMode::NewOnly => "new-only",
+                    OutputLogsMode::ErrorsOnly => "errors-only",
+                },
+                EventType::NonSensitive,
+            );
+        }
+
+        if self.log_order != LogOrder::default() {
+            telemetry.track_arg_value(
+                "log-order",
+                match self.log_order {
+                    LogOrder::Auto => "auto",
+                    LogOrder::Stream => "stream",
+                    LogOrder::Grouped => "grouped",
+                },
+                EventType::NonSensitive,
+            );
+        }
+
+        if self.log_prefix != LogPrefix::default() {
+            telemetry.track_arg_value(
+                "log-prefix",
+                match self.log_prefix {
+                    LogPrefix::Auto => "auto",
+                    LogPrefix::None => "none",
+                    LogPrefix::Task => "task",
+                },
+                EventType::NonSensitive,
+            );
+        }
+
+        // track sizes
+        if !self.filter.is_empty() {
+            telemetry.track_arg_value("filter", self.filter.len(), EventType::NonSensitive);
+        }
+
+        if !self.scope.is_empty() {
+            telemetry.track_arg_value("scope", self.scope.len(), EventType::NonSensitive);
+        }
+
+        if !self.ignore.is_empty() {
+            telemetry.track_arg_value("ignore", self.ignore.len(), EventType::NonSensitive);
         }
     }
 }
@@ -1048,7 +1237,6 @@ pub async fn run(
             }
 
             if let Some((file_path, include_args)) = args.profile_file_and_include_args() {
-                event.track_run_chrome_tracing();
                 // TODO: Do we want to handle the result / error?
                 let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
@@ -1057,6 +1245,7 @@ pub async fn run(
             let should_use_go = args.go_fallback
                 || env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false");
 
+            args.track(&event);
             if should_use_go {
                 event.track_run_code_path(CodePath::Go);
                 // we have to clear the telemetry queue before we hand off to go
@@ -1068,7 +1257,7 @@ pub async fn run(
             } else {
                 use crate::commands::run;
                 event.track_run_code_path(CodePath::Rust);
-                let exit_code = run::run(base).await?;
+                let exit_code = run::run(base, event).await?;
                 Ok(Payload::Rust(Ok(exit_code)))
             }
         }
