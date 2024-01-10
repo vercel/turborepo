@@ -323,6 +323,72 @@ impl Args {
                 .unwrap_or(&[]),
         }
     }
+
+    pub fn track(&self, telemetry: &GenericEventBuilder) {
+        // track usage only
+        if self.skip_infer {
+            telemetry.track_arg_usage("skip-infer", true);
+        }
+        if self.no_update_notifier {
+            telemetry.track_arg_usage("no-update-notifier", true);
+        }
+        if self.api.is_some() {
+            telemetry.track_arg_usage("api", true);
+        }
+        if self.color {
+            telemetry.track_arg_usage("color", true);
+        }
+        if self.cpu_profile.is_some() {
+            telemetry.track_arg_usage("cpuprofile", true);
+        }
+        if self.cwd.is_some() {
+            telemetry.track_arg_usage("cwd", true);
+        }
+        if self.heap.is_some() {
+            telemetry.track_arg_usage("heap", true);
+        }
+        if self.login.is_some() {
+            telemetry.track_arg_usage("login", true);
+        }
+        if self.no_color {
+            telemetry.track_arg_usage("no-color", true);
+        }
+        if self.preflight {
+            telemetry.track_arg_usage("preflight", true);
+        }
+        if self.team.is_some() {
+            telemetry.track_arg_usage("team", true);
+        }
+        if self.token.is_some() {
+            telemetry.track_arg_usage("token", true);
+        }
+        if self.trace.is_some() {
+            telemetry.track_arg_usage("trace", true);
+        }
+
+        // track values
+        if let Some(remote_cache_timeout) = self.remote_cache_timeout {
+            telemetry.track_arg_value(
+                "remote-cache-timeout",
+                remote_cache_timeout,
+                turborepo_telemetry::events::EventType::NonSensitive,
+            );
+        }
+        if self.verbosity.v > 0 {
+            telemetry.track_arg_value(
+                "v",
+                self.verbosity.v,
+                turborepo_telemetry::events::EventType::NonSensitive,
+            );
+        }
+        if let Some(verbosity) = self.verbosity.verbosity {
+            telemetry.track_arg_value(
+                "verbosity",
+                verbosity,
+                turborepo_telemetry::events::EventType::NonSensitive,
+            );
+        }
+    }
 }
 
 /// Defines the subcommands for CLI. NOTE: If we change the commands in Go,
@@ -832,6 +898,8 @@ pub async fn run(
     root_telemetry.track_platform(TurboState::platform_name());
     root_telemetry.track_version(TurboState::version());
     root_telemetry.track_cpus(num_cpus::get());
+    // track args
+    cli_args.track(&root_telemetry);
 
     let cli_result = match cli_args.command.as_ref().unwrap() {
         Command::Bin { .. } => {

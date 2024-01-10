@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 use turborepo_vercel_api::{TelemetryEvent, TelemetryGenericEvent};
 use uuid::Uuid;
@@ -134,8 +136,26 @@ impl GenericEventBuilder {
         self
     }
 
-    // run data
+    // args
+    pub fn track_arg_usage(&self, arg: &str, is_set: bool) -> &Self {
+        self.track(Event {
+            key: format!("arg:{}", arg),
+            value: if is_set { "set" } else { "default" }.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
 
+    pub fn track_arg_value(&self, arg: &str, val: impl Display, is_sensitive: EventType) -> &Self {
+        self.track(Event {
+            key: format!("arg:{}", arg),
+            value: val.to_string(),
+            is_sensitive,
+        });
+        self
+    }
+
+    // run data
     pub fn track_is_linked(&self, is_linked: bool) -> &Self {
         self.track(Event {
             key: "is_linked".to_string(),
