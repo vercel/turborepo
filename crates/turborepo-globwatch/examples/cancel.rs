@@ -28,12 +28,12 @@ async fn main() {
         for x in 0..5 {
             info!(parent: &span, "iteration {}", x);
             config
-                .include(&PathBuf::try_from(".").unwrap(), "globwatch/src/**")
+                .include(&PathBuf::from("."), "globwatch/src/**")
                 .await
                 .unwrap();
             tokio::time::sleep(Duration::from_secs(1)).await;
             config
-                .exclude(&PathBuf::try_from(".").unwrap(), "globwatch/src/**")
+                .exclude(&PathBuf::from("."), "globwatch/src/**")
                 .await;
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
