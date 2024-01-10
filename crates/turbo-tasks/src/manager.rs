@@ -489,10 +489,9 @@ impl<B: Backend + 'static> TurboTasks<B> {
                                 });
                                 this.backend.task_execution_result(task_id, result, &*this);
                                 let stateful = this.finish_current_task_state();
-                                let reexecute = this.backend.task_execution_completed(
+                                this.backend.task_execution_completed(
                                     task_id, duration, instant, stateful, &*this,
-                                );
-                                reexecute
+                                )
                             }
                             .instrument(span)
                             .await
