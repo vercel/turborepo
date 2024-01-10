@@ -73,7 +73,10 @@ pub fn main() -> Payload {
             | Error::EmptyCwd { .. }
             | Error::Cli(cli::Error::Run(run::Error::Builder(engine::BuilderError::Config(
                 config::Error::InvalidEnvPrefix { .. },
-            ))))),
+            ))))
+            | Error::Cli(cli::Error::Run(run::Error::Config(
+                config::Error::TurboJsonParseError(_),
+            )))),
         ) => {
             println!("{:?}", Report::new(err));
 

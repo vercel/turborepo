@@ -95,11 +95,11 @@ turborepo-vercel-api = { path = "../turborepo-vercel-api" }
 uds_windows = "1.0.2"
 url = "2.3.1"
 
-biome_console = "0.3.1"
-biome_deserialize = "0.3.1"
-biome_diagnostics = "0.3.1"
-biome_json_parser = "0.3.1"
-biome_json_syntax = "0.3.1"
+biome_console = { workspace = true }
+biome_deserialize = { workspace = true }
+biome_diagnostics = { workspace = true }
+biome_json_parser = { workspace = true }
+biome_json_syntax = { workspace = true }
 
 camino = "1.1.4"
 capnp = "0.17.2"
@@ -130,6 +130,7 @@ turborepo-api-client = { workspace = true }
 turborepo-cache = { workspace = true }
 turborepo-ci = { workspace = true }
 turborepo-env = { workspace = true }
+turborepo-errors = { workspace = true }
 turborepo-filewatch = { path = "../turborepo-filewatch" }
 turborepo-lockfiles = { workspace = true }
 turborepo-scm = { workspace = true }

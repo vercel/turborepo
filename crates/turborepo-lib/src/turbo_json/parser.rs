@@ -1,18 +1,17 @@
-use std::{collections::BTreeMap, fmt::Write, sync::Arc};
-
-use biome_console::{
-    fmt::{Formatter, Termcolor},
-    markup,
+use std::{
+    collections::BTreeMap,
+    fmt::{Debug, Display},
+    sync::Arc,
 };
+
 use biome_deserialize::{
     json::deserialize_from_json_str, Deserializable, DeserializableValue,
     DeserializationDiagnostic, DeserializationVisitor, Text, VisitableType,
 };
-use biome_diagnostics::{termcolor, termcolor::ColorChoice, DiagnosticExt, PrintDiagnostic};
+use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;
 use biome_json_syntax::TextRange;
-use itertools::Itertools;
-use miette::Diagnostic;
+use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
 use crate::{
@@ -23,26 +22,50 @@ use crate::{
 };
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum Error {
-    #[error("failed to parse turbo.json:\n{diagnostics}")]
-    Parse { diagnostics: String },
+#[error("failed to parse turbo json")]
+#[diagnostic(code(turbo_json::parser::parse_error))]
+pub struct Error {
+    #[related]
+    diagnostics: Vec<ParseDiagnostic>,
 }
 
-impl<T: Deserializable> Deserializable for Spanned<T> {
-    fn deserialize(
-        value: &impl DeserializableValue,
-        name: &str,
-        diagnostics: &mut Vec<DeserializationDiagnostic>,
-    ) -> Option<Self> {
-        let range = value.range();
-        let value = T::deserialize(value, name, diagnostics)?;
-        Some(Spanned {
-            value,
-            range: Some(range.into()),
-            path: None,
-            text: None,
-        })
+struct BiomeMessage<'a>(&'a biome_diagnostics::Error);
+
+impl Display for BiomeMessage<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.description(f)
     }
+}
+
+impl From<biome_diagnostics::Error> for ParseDiagnostic {
+    fn from(diagnostic: biome_diagnostics::Error) -> Self {
+        let location = diagnostic.location();
+        let message = BiomeMessage(&diagnostic).to_string();
+        Self {
+            message,
+            source_code: location
+                .source_code
+                .map(|s| s.text.to_string())
+                .unwrap_or_default(),
+            label: location.span.map(|span| {
+                let start: usize = span.start().into();
+                let end: usize = span.end().into();
+                let len = end - start;
+                (start, len).into()
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("{message}")]
+#[diagnostic(code(turbo_json::parser::parse_error))]
+struct ParseDiagnostic {
+    message: String,
+    #[source_code]
+    source_code: String,
+    #[label]
+    label: Option<SourceSpan>,
 }
 
 impl Deserializable for OutputLogsMode {
@@ -530,20 +553,20 @@ impl RawTurboJson {
                 .into_diagnostics()
                 .into_iter()
                 .map(|d| {
-                    print_diagnostic_to_string(
-                        &d.with_file_source_code(text).with_file_path(file_path),
-                    )
+                    d.with_file_source_code(text)
+                        .with_file_path(file_path)
+                        .into()
                 })
-                .join("\n");
+                .collect();
 
-            return Err(Error::Parse { diagnostics });
+            return Err(Error { diagnostics });
         }
 
         // It's highly unlikely that biome would fail to produce a deserialized value
         // *and* not return any errors, but it's still possible. In that case, we
         // just print that there is an error and return.
-        let mut turbo_json = result.into_deserialized().ok_or_else(|| Error::Parse {
-            diagnostics: "No diagnostics found".to_string(),
+        let mut turbo_json = result.into_deserialized().ok_or_else(|| Error {
+            diagnostics: vec![],
         })?;
 
         turbo_json.add_text(Arc::from(text));

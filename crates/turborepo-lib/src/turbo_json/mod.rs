@@ -1,14 +1,14 @@
 use std::{
     collections::{BTreeMap, HashSet},
     io::Write,
-    ops::{Deref, DerefMut, Range},
+    ops::{Deref, DerefMut},
     path::Path,
-    sync::Arc,
 };
 
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+use turborepo_errors::Spanned;
 use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
 
 use crate::{
@@ -74,63 +74,6 @@ pub struct RawTurboJson {
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) remote_cache: Option<ConfigurationOptions>,
-}
-
-#[derive(Debug, Default, Clone, Serialize)]
-#[serde(transparent)]
-pub struct Spanned<T> {
-    value: T,
-    #[serde(skip)]
-    range: Option<Range<usize>>,
-    #[serde(skip)]
-    path: Option<Arc<str>>,
-    #[serde(skip)]
-    text: Option<Arc<str>>,
-}
-
-// We do *not* check for the range equality because that's too finicky
-// to get right in tests.
-impl<T: PartialEq> PartialEq for Spanned<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
-    }
-}
-
-impl<T> Spanned<T> {
-    pub fn new(t: T) -> Self {
-        Self {
-            value: t,
-            range: None,
-            path: None,
-            text: None,
-        }
-    }
-
-    pub fn with_range(self, range: impl Into<Range<usize>>) -> Self {
-        Self {
-            range: Some(range.into()),
-            ..self
-        }
-    }
-
-    pub fn with_path(self, path: Arc<str>) -> Self {
-        Self {
-            path: Some(path),
-            ..self
-        }
-    }
-
-    pub fn into_inner(self) -> T {
-        self.value
-    }
-}
-
-impl<T> Deref for Spanned<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
 }
 
 #[derive(Serialize, Default, Debug, PartialEq, Clone)]

@@ -11446,6 +11446,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-errors"
+version = "0.1.0"
+dependencies = [
+ "biome_deserialize",
+ "serde",
+]
+
+[[package]]
 name = "turborepo-ffi"
 version = "0.1.0"
 dependencies = [
@@ -11610,6 +11618,7 @@ dependencies = [
  "turborepo-ci",
  "turborepo-dirs",
  "turborepo-env",
+ "turborepo-errors",
  "turborepo-filewatch",
  "turborepo-fs",
  "turborepo-graph-utils",

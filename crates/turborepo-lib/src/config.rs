@@ -82,6 +82,7 @@ pub enum Error {
     #[error("TURBO_PREFLIGHT should be either 1 or 0.")]
     InvalidPreflight,
     #[error(transparent)]
+    #[diagnostic(transparent)]
     TurboJsonParseError(#[from] turbo_json::parser::Error),
 }
 

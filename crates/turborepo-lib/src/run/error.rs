@@ -29,6 +29,7 @@ pub enum Error {
     #[error(transparent)]
     PackageManager(#[from] turborepo_repository::package_manager::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Config(#[from] config::Error),
     #[error(transparent)]
     PackageGraphBuilder(#[from] package_graph::builder::Error),
