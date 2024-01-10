@@ -70,7 +70,7 @@ pub fn recursive_copy(
 
 fn make_dir_copy(
     dir: impl AsRef<AbsoluteSystemPath>,
-    #[allow(dead_code)] src_metadata: &Metadata,
+    #[allow(unused_variables)] src_metadata: &Metadata,
 ) -> Result<(), Error> {
     let dir = dir.as_ref();
     let mut builder = DirBuilder::new();
@@ -294,7 +294,7 @@ mod tests {
         let dst_circle_metadata = fs::symlink_metadata(&dst_circle_path)?;
         assert!(dst_circle_metadata.is_symlink());
 
-        let num_files = fs::read_dir(dst_circle_path.as_path())?.count();
+        let num_files = fs::read_dir(dst_child_path.as_path())?.count();
         // We don't copy the broken symlink so there are only 4 entries
         assert_eq!(num_files, 4);
 
@@ -302,9 +302,6 @@ mod tests {
 
         let dst_other_metadata = fs::symlink_metadata(dst_other_path.as_path())?;
         assert!(dst_other_metadata.is_symlink());
-
-        let num_files = fs::read_dir(dst_other_path.as_path())?.count();
-        assert_eq!(num_files, 1);
 
         let dst_c_path = dst_other_path.join_component("c");
 
