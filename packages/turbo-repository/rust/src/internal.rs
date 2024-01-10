@@ -79,7 +79,7 @@ impl PackageManagerRoot {
                     error: error.to_string(),
                     path: self.repo_state.root.clone(),
                 })?;
-        let package_manager = package_manager.clone();
+        let package_manager = *package_manager;
         let repo_root = self.repo_state.root.clone();
         let package_json_paths =
             tokio::task::spawn(async move { package_manager.get_package_jsons(&repo_root) })
