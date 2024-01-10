@@ -61,14 +61,19 @@ impl AuthProvider {
     /// ```
     /// use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
     /// use turborepo_auth::{AuthProvider, AuthSource};
-    /// let auth_file_path = AbsoluteSystemPath::new("/path/to/auth/file").unwrap();
     ///
+    /// let auth_file_path = AbsoluteSystemPath::new("/path/to/auth/file").unwrap();
+    /// let vercel_file_path = AbsoluteSystemPath::new("/path/to/vercel/file").unwrap();
+    ///
+    /// // Create an Auth enum from a Vercel file.
+    /// let vercel_auth_file = AuthProvider::new(AuthSource::Turborepo(vercel_file_path));
     /// // Create an Auth enum from a file.
-    /// let auth_file = AuthProvider::new(AuthSource::Turborepo(auth_file_path));
+    /// let turbo_auth_file = AuthProvider::new(AuthSource::Turborepo(auth_file_path));
     /// // Create an Auth enum from a token.
     /// let auth_token = AuthProvider::new(AuthSource::CLI("test-token".to_string()));
     ///
-    /// assert!(auth_file.is_file());
+    /// assert!(turbo_auth_file.is_file());
+    /// assert!(vercel_auth_file.is_file());
     /// assert!(!auth_token.is_file()
     /// ```
     pub fn new(source: AuthSource) -> Self {
@@ -94,7 +99,13 @@ impl AuthProvider {
     /// look up the token in the file, if it exists.
     pub fn get_token(&self, api: &str) -> Option<AuthToken> {
         match self {
-            Self::Token(t) => Some(t.clone()),
+            Self::Token(t) => {
+                if t.api == api {
+                    Some(t.clone())
+                } else {
+                    None
+                }
+            }
             Self::File(f) => f.get_token(api),
         }
     }
