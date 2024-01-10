@@ -1,21 +1,23 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use crate::Error;
 
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
 /// AuthFile contains a list of domains, each with a token.
 pub struct AuthFile {
+    source: AbsoluteSystemPathBuf,
     tokens: HashMap<String, String>,
 }
 
 impl AuthFile {
     /// Create an empty auth file. Caller must invoke `write_to_disk` to
     /// actually write it to disk.
-    pub fn new() -> Self {
+    pub fn new(source: AbsoluteSystemPathBuf) -> Self {
         AuthFile {
+            source,
             tokens: HashMap::new(),
         }
     }
@@ -76,6 +78,12 @@ pub struct AuthToken {
 }
 
 impl AuthToken {
+    pub fn new(token: &str, api: &str) -> Self {
+        AuthToken {
+            token: token.to_string(),
+            api: api.to_string(),
+        }
+    }
     pub fn friendly_api_display(&self) -> &str {
         if self.api.contains("vercel.com") {
             // We're Vercel, let's make it look nice ;)
