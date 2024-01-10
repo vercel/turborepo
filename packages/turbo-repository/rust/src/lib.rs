@@ -65,7 +65,7 @@ impl PackageManagerRoot {
         // match lets us handle each case independently, rather than forcing the whole
         // value to a reference or concrete value
         match self.repo_state.package_manager.as_ref() {
-            Ok(pm) => Ok(pm.clone().into()),
+            Ok(pm) => Ok((*pm).into()),
             Err(e) => Err(napi::Error::from_reason(format!("{}", e))),
         }
     }
