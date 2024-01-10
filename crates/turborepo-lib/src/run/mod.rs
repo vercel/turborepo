@@ -13,7 +13,7 @@ use std::{
     collections::HashSet,
     io::{IsTerminal, Write},
     sync::Arc,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
 pub use cache::{RunCache, TaskCache};
@@ -22,12 +22,12 @@ use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tracing::debug;
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
-use turborepo_api_client::{APIAuth, APIClient, Client};
+use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::{
-    discovery::{LocalPackageDiscoveryBuilder, PackageDiscoveryBuilder},
+    discovery::{FallbackPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscoveryBuilder},
     package_graph::{PackageGraph, WorkspaceName},
     package_json::PackageJson,
 };
@@ -48,7 +48,10 @@ use crate::{
     engine::{Engine, EngineBuilder},
     opts::Opts,
     process::ProcessManager,
-    run::{global_hash::get_global_hash_inputs, summary::RunTracker},
+    run::{
+        global_hash::get_global_hash_inputs, package_discovery::DaemonPackageDiscovery,
+        summary::RunTracker,
+    },
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
     task_graph::Visitor,
@@ -178,17 +181,53 @@ impl<'a> Run<'a> {
         let repo_telemetry = RepoEventBuilder::new(&self.base.repo_root.to_string());
 
         let config = self.base.config()?;
-
+        let auth_file_path = self.base.global_auth_path()?;
+        let config_file_path = self.base.global_config_path()?;
+        let auth = turborepo_auth::read_or_create_auth_file(
+            &auth_file_path,
+            &config_file_path,
+            api_client.base_url(),
+        )?;
         // Pulled from initAnalyticsClient in run.go
         let is_linked = api_auth
             .as_ref()
             .map_or(false, |api_auth| api_auth.is_linked());
+
         if !is_linked {
             opts.cache_opts.skip_remote = true;
         } else if let Some(enabled) = config.enabled {
             // We're linked, but if the user has explicitly enabled or disabled, use that
             // value
             opts.cache_opts.skip_remote = !enabled;
+            // If we're linked and enabled, add extra messaging if we don't have a good
+            // token.
+            if enabled {
+                let base = api_client.base_url();
+                let login_command = if base.contains("vercel") {
+                    "turbo login".to_string()
+                } else {
+                    format!("turbo login --api {}", base)
+                };
+                let apis_with_tokens = auth.tokens().iter().map(|(api, _)| api.to_string());
+                // Don't show the message if there are no tokens to display.
+                let api_message = if apis_with_tokens.len() > 0 {
+                    format!(
+                        "\nFound the following apis with tokens:\n  - {}",
+                        apis_with_tokens.collect::<Vec<String>>().join("\n  - ")
+                    )
+                } else {
+                    "".to_string()
+                };
+
+                let message = format!(
+                    "No token found for {base}. Run `turbo link` or `{login_command}` \
+                     first.{api_message}",
+                );
+                eprintln!(
+                    "{}",
+                    self.base.ui.apply(turborepo_ui::YELLOW.apply_to(message))
+                );
+            }
         }
         run_telemetry.track_is_linked(is_linked);
         // we only track the remote cache if we're linked because this defaults to
@@ -209,7 +248,7 @@ impl<'a> Run<'a> {
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
 
-        let daemon = match (is_ci_or_not_tty, opts.run_opts.daemon) {
+        let mut daemon = match (is_ci_or_not_tty, opts.run_opts.daemon) {
             (true, None) => {
                 run_telemetry.track_daemon_init(DaemonInitStatus::Skipped);
                 debug!("skipping turbod since we appear to be in a non-interactive context");
@@ -249,17 +288,31 @@ impl<'a> Run<'a> {
             }
         };
 
-        let mut pkg_dep_graph =
-            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-                .with_single_package_mode(opts.run_opts.single_package)
-                .with_package_discovery(
+        // if we are forcing the daemon, we don't want to fallback to local discovery
+        let (fallback, duration) = if let Some(true) = opts.run_opts.daemon {
+            (None, Duration::MAX)
+        } else {
+            (
+                Some(
                     LocalPackageDiscoveryBuilder::new(
                         self.base.repo_root.clone(),
                         None,
                         Some(root_package_json.clone()),
                     )
                     .build()?,
-                )
+                ),
+                Duration::from_millis(10),
+            )
+        };
+
+        let mut pkg_dep_graph =
+            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+                .with_single_package_mode(opts.run_opts.single_package)
+                .with_package_discovery(FallbackPackageDiscovery::new(
+                    daemon.as_mut().map(DaemonPackageDiscovery::new),
+                    fallback,
+                    duration,
+                ))
                 .build()
                 .await?;
 

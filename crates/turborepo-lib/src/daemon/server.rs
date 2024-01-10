@@ -202,7 +202,7 @@ where
         }
     }
 
-    pub async fn serve(self) -> CloseReason {
+    pub async fn serve(self) -> Result<CloseReason, PDB::Error> {
         let Self {
             watcher_tx,
             watcher_rx,
@@ -218,7 +218,7 @@ where
         let running = Arc::new(AtomicBool::new(true));
         let (_pid_lock, stream) = match listen_socket(&daemon_root, running.clone()).await {
             Ok((pid_lock, stream)) => (pid_lock, stream),
-            Err(e) => return CloseReason::SocketOpenError(e),
+            Err(e) => return Ok(CloseReason::SocketOpenError(e)),
         };
         trace!("acquired connection stream for socket");
 
@@ -228,9 +228,7 @@ where
         // well as available to the gRPC server itself to handle the shutdown RPC.
         let (trigger_shutdown, mut shutdown_signal) = mpsc::channel::<()>(1);
 
-        let backup_discovery = package_discovery_backup
-            .build()
-            .expect("the backup discovery builder cannot fail");
+        let backup_discovery = package_discovery_backup.build()?;
 
         // watch receivers as a group own the filewatcher, which will exit when
         // all references are dropped.
@@ -311,7 +309,7 @@ where
         // started with filewatching. Again, we don't care about the error here.
         let _ = fw_handle.await;
         trace!("filewatching handle joined");
-        close_reason
+        Ok(close_reason)
     }
 }
 
@@ -672,7 +670,7 @@ mod test {
         );
         // signal server exit
         tx.send(CloseReason::Interrupt).unwrap();
-        handle.await.unwrap();
+        handle.await.unwrap().unwrap();
 
         // The serve future should be dropped here, closing the server.
         tracing::info!("yay we are done");
@@ -726,7 +724,7 @@ mod test {
         );
         assert_matches::assert_matches!(
             close_reason,
-            super::CloseReason::Timeout,
+            Ok(CloseReason::Timeout),
             "must close due to timeout"
         );
         assert!(!pid_path.exists(), "pid file must be deleted");
@@ -769,6 +767,6 @@ mod test {
             .await
             .expect("no timeout")
             .expect("server exited");
-        assert_matches!(close_reason, CloseReason::Shutdown);
+        assert_matches!(close_reason, Ok(CloseReason::Shutdown));
     }
 }

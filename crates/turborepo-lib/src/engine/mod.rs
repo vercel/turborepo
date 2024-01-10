@@ -284,8 +284,7 @@ mod test {
     use tempdir::TempDir;
     use turbopath::AbsoluteSystemPath;
     use turborepo_repository::{
-        discovery::{DiscoveryResponse, PackageDiscovery, PackageDiscoveryBuilder, WorkspaceData},
-        package_graph::PackageGraphBuilder,
+        discovery::{DiscoveryResponse, PackageDiscovery, WorkspaceData},
         package_json::PackageJson,
     };
 
@@ -365,8 +364,8 @@ mod test {
 
         let engine = engine.seal();
 
-        let mut graph_builder = PackageGraph::builder(
-            AbsoluteSystemPath::from_std_path(&tmp.path()).unwrap(),
+        let graph_builder = PackageGraph::builder(
+            AbsoluteSystemPath::from_std_path(tmp.path()).unwrap(),
             PackageJson::default(),
         )
         .with_package_discovery(DummyDiscovery(&tmp));
