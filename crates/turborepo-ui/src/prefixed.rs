@@ -128,6 +128,7 @@ impl<W: Write> PrefixedWriter<W> {
 
 impl<W: Write> Write for PrefixedWriter<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let mut is_first = true;
         for chunk in buf.split_inclusive(|c| *c == b'\r') {
             // Before we write the chunk we write the prefix as either:
             // - this is the first iteration and we haven't written the prefix
@@ -135,10 +136,11 @@ impl<W: Write> Write for PrefixedWriter<W> {
             //   of the line so we want to rewrite the prefix over the existing prefix in
             //   the line
             // or if the last chunk is just a newline we can skip rewriting the prefix
-            if chunk != b"\n" {
+            if is_first || chunk != b"\n" {
                 self.writer.write_all(self.prefix.as_bytes())?;
             }
             self.writer.write_all(chunk)?;
+            is_first = false;
         }
         // We do end up writing more bytes than this to the underlying writer, but we
         // cannot report this to the callers as the amount of bytes we report
@@ -208,6 +210,7 @@ mod test {
     #[test_case("foo\rbar\rbaz", "turbo > foo\rturbo > bar\rturbo > baz" ; "multiple crs")]
     #[test_case("foo\r", "turbo > foo\r" ; "trailing cr")]
     #[test_case("foo\r\n", "turbo > foo\r\n" ; "no double write on crlf")]
+    #[test_case("\n", "turbo > \n" ; "leading new line")]
     fn test_prefixed_writer_cr(input: &str, expected: &str) {
         let mut buffer = Vec::new();
         let mut writer = PrefixedWriter::new(
