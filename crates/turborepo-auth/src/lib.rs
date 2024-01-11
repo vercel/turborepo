@@ -33,7 +33,7 @@ pub const DEFAULT_API_URL: &str = "https://vercel.com/api";
 
 /// AuthSource determines where the auth file should be read from. Each of the
 /// variants has different initialization and permissions.
-pub enum AuthSource {
+pub enum Source {
     /// A token passed in via the CLI. This is the most ephemeral of the auth
     /// sources. It will no-op on any and all fs write operations.
     CLI(String),
@@ -44,13 +44,13 @@ pub enum AuthSource {
     Vercel(AbsoluteSystemPathBuf),
 }
 
-/// AuthProvider is an enum that contains either a token or a file. This is used
+/// Provider is an enum that contains either a token or a file. This is used
 /// for holding a/many token(s), depending on the variant.
-pub enum AuthProvider {
+pub enum Provider {
     Token(AuthToken),
     File(AuthFile),
 }
-impl AuthProvider {
+impl Provider {
     /// Creates a new Auth enum from an AuthSource.
     /// ## Arguments
     /// * `source`: The AuthSource to create the Auth enum from.
@@ -59,34 +59,34 @@ impl AuthProvider {
     /// ## Examples
     /// ```
     /// use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-    /// use turborepo_auth::{AuthProvider, AuthSource};
+    /// use turborepo_auth::{Provider, Source};
     ///
     /// let auth_file_path = AbsoluteSystemPath::new("/path/to/auth/file").unwrap();
     /// let vercel_file_path = AbsoluteSystemPath::new("/path/to/vercel/file").unwrap();
     ///
     /// // Create an Auth enum from a Vercel file.
-    /// let vercel_auth_file: AuthProvider = AuthProvider::new(AuthSource::Turborepo(vercel_file_path));
+    /// let vercel_auth_file: Provider = Provider::new(Source::Turborepo(vercel_file_path));
     /// // Create an Auth enum from a file.
-    /// let turbo_auth_file: AuthProvider = AuthProvider::new(AuthSource::Turborepo(auth_file_path));
+    /// let turbo_auth_file: Provider = Provider::new(Source::Turborepo(auth_file_path));
     /// // Create an Auth enum from a token.
-    /// let auth_token: AuthProvider = AuthProvider::new(AuthSource::CLI("test-token".to_string()));
+    /// let auth_token: Provider = Provider::new(Source::CLI("test-token".to_string()));
     ///
     /// assert!(turbo_auth_file.is_file());
     /// assert!(vercel_auth_file.is_file());
     /// assert!(!auth_token.is_file()
     /// ```
-    pub fn new(source: AuthSource) -> Self {
+    pub fn new(source: Source) -> Self {
         match source {
             // Any token coming in from the CLI is a one-off, so we don't give it any file checks,
             // api keys, or permissions. If we add functionality, like refreshing tokens
             // or anything that might allow for a passed in token to be written to disk,
             // we'll update this arm.
-            AuthSource::CLI(t) => Self::Token(AuthToken {
+            Source::CLI(t) => Self::Token(AuthToken {
                 token: t,
                 api: "".to_string(),
             }),
-            AuthSource::Turborepo(source) => Self::File(AuthFile::new(source)),
-            AuthSource::Vercel(source) => Self::File(AuthFile::new(source)),
+            Source::Turborepo(source) => Self::File(AuthFile::new(source)),
+            Source::Vercel(source) => Self::File(AuthFile::new(source)),
         }
     }
     /// Determines if this enum is a file or a token.
