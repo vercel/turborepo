@@ -128,15 +128,18 @@ impl<W: Write> PrefixedWriter<W> {
 
 impl<W: Write> Write for PrefixedWriter<W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        // If we are about
         for chunk in buf.split_inclusive(|c| *c == b'\r') {
+            // Before we write the chunk we write the prefix as either:
+            // - this is the first iteration and we haven't written the prefix
+            // - the previous chunk ended with a \r and the cursor is currently as the start
+            //   of the line so we want to rewrite the prefix over the existing prefix in
+            //   the line
             self.writer.write_all(self.prefix.as_bytes())?;
             self.writer.write_all(chunk)?;
         }
         // We do end up writing more bytes than this to the underlying writer, but we
         // cannot report this to the callers as the amount of bytes we report
         // written must be less than or equal to the number of bytes in the buffer.
-        // if we encounter a \n
         Ok(buf.len())
     }
 
