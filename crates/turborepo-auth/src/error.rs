@@ -82,10 +82,4 @@ pub enum Error {
         #[source]
         source: serde_json::Error,
     },
-
-    #[error("failed to convert config to auth file: {source}")]
-    ConvertConfigToAuth {
-        #[source]
-        source: serde_json::Error,
-    },
 }
