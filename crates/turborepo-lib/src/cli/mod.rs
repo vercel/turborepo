@@ -1,4 +1,4 @@
-use std::{backtrace, backtrace::Backtrace, env, io, mem, process};
+use std::{backtrace, backtrace::Backtrace, env, fmt, fmt::Display, io, mem, process};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{
@@ -18,7 +18,7 @@ use turborepo_telemetry::{
         generic::GenericEventBuilder,
         EventBuilder, EventType,
     },
-    init_telemetry, TelemetryHandle,
+    init_telemetry, track_usage, TelemetryHandle,
 };
 use turborepo_ui::UI;
 
@@ -61,6 +61,22 @@ impl Default for OutputLogsMode {
     }
 }
 
+impl Display for OutputLogsMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                OutputLogsMode::Full => "full",
+                OutputLogsMode::None => "none",
+                OutputLogsMode::HashOnly => "hash-only",
+                OutputLogsMode::NewOnly => "new-only",
+                OutputLogsMode::ErrorsOnly => "errors-only",
+            }
+        )
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum LogOrder {
     #[serde(rename = "auto")]
@@ -77,6 +93,20 @@ impl Default for LogOrder {
     }
 }
 
+impl Display for LogOrder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                LogOrder::Auto => "auto",
+                LogOrder::Stream => "stream",
+                LogOrder::Grouped => "grouped",
+            }
+        )
+    }
+}
+
 // NOTE: These *must* be kept in sync with the `_dryRunJSONValue`
 // and `_dryRunTextValue` constants in run.go.
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
@@ -85,12 +115,39 @@ pub enum DryRunMode {
     Json,
 }
 
+impl Display for DryRunMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                DryRunMode::Text => "text",
+                DryRunMode::Json => "json",
+            }
+        )
+    }
+}
+
 #[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum)]
 pub enum EnvMode {
     #[default]
     Infer,
     Loose,
     Strict,
+}
+
+impl fmt::Display for EnvMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                EnvMode::Infer => "infer",
+                EnvMode::Loose => "loose",
+                EnvMode::Strict => "strict",
+            }
+        )
+    }
 }
 
 #[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
@@ -327,65 +384,39 @@ impl Args {
         }
     }
 
-    pub fn track(&self, telemetry: &GenericEventBuilder) {
+    pub fn track(&self, tel: &GenericEventBuilder) {
         // track usage only
-        if self.skip_infer {
-            telemetry.track_arg_usage("skip-infer", true);
-        }
-        if self.no_update_notifier {
-            telemetry.track_arg_usage("no-update-notifier", true);
-        }
-        if self.api.is_some() {
-            telemetry.track_arg_usage("api", true);
-        }
-        if self.color {
-            telemetry.track_arg_usage("color", true);
-        }
-        if self.cpu_profile.is_some() {
-            telemetry.track_arg_usage("cpuprofile", true);
-        }
-        if self.cwd.is_some() {
-            telemetry.track_arg_usage("cwd", true);
-        }
-        if self.heap.is_some() {
-            telemetry.track_arg_usage("heap", true);
-        }
-        if self.login.is_some() {
-            telemetry.track_arg_usage("login", true);
-        }
-        if self.no_color {
-            telemetry.track_arg_usage("no-color", true);
-        }
-        if self.preflight {
-            telemetry.track_arg_usage("preflight", true);
-        }
-        if self.team.is_some() {
-            telemetry.track_arg_usage("team", true);
-        }
-        if self.token.is_some() {
-            telemetry.track_arg_usage("token", true);
-        }
-        if self.trace.is_some() {
-            telemetry.track_arg_usage("trace", true);
-        }
+        track_usage!(tel, self.skip_infer, |val| val);
+        track_usage!(tel, self.no_update_notifier, |val| val);
+        track_usage!(tel, self.color, |val| val);
+        track_usage!(tel, self.no_color, |val| val);
+        track_usage!(tel, self.preflight, |val| val);
+        track_usage!(tel, &self.login, Option::is_some);
+        track_usage!(tel, &self.cwd, Option::is_some);
+        track_usage!(tel, &self.heap, Option::is_some);
+        track_usage!(tel, &self.cpu_profile, Option::is_some);
+        track_usage!(tel, &self.team, Option::is_some);
+        track_usage!(tel, &self.token, Option::is_some);
+        track_usage!(tel, &self.trace, Option::is_some);
+        track_usage!(tel, &self.api, Option::is_some);
 
         // track values
         if let Some(remote_cache_timeout) = self.remote_cache_timeout {
-            telemetry.track_arg_value(
+            tel.track_arg_value(
                 "remote-cache-timeout",
                 remote_cache_timeout,
                 turborepo_telemetry::events::EventType::NonSensitive,
             );
         }
         if self.verbosity.v > 0 {
-            telemetry.track_arg_value(
+            tel.track_arg_value(
                 "v",
                 self.verbosity.v,
                 turborepo_telemetry::events::EventType::NonSensitive,
             );
         }
         if let Some(verbosity) = self.verbosity.verbosity {
-            telemetry.track_arg_value(
+            tel.track_arg_value(
                 "verbosity",
                 verbosity,
                 turborepo_telemetry::events::EventType::NonSensitive,
@@ -763,109 +794,36 @@ impl RunArgs {
     }
 
     pub fn track(&self, telemetry: &CommandEventBuilder) {
-        // track usage
-        if self.cache_dir.is_some() {
-            telemetry.track_arg_usage("cache-dir", true);
-        }
-        if self.continue_execution {
-            telemetry.track_arg_usage("continue", true);
-        }
-        if self.go_fallback {
-            telemetry.track_arg_usage("go-fallback", true);
-        }
-        if self.single_package {
-            telemetry.track_arg_usage("single-package", true);
-        }
-        if self.force.is_some() {
-            telemetry.track_arg_usage("force", true);
-        }
-        // framework_inference defaults to true, so we only track it if it's false
-        if !self.framework_inference {
-            telemetry.track_arg_usage("framework-inference", true);
-        }
-        if self.include_dependencies {
-            telemetry.track_arg_usage("include-dependencies", true);
-        }
-        if self.no_deps {
-            telemetry.track_arg_usage("no-deps", true);
-        }
-        if self.no_cache {
-            telemetry.track_arg_usage("no-cache", true);
-        }
-        if self.daemon {
-            telemetry.track_arg_usage("daemon", true);
-        }
+        // default to false
+        track_usage!(telemetry, self.framework_inference, |val: bool| !val);
 
-        if self.since.is_some() {
-            telemetry.track_arg_usage("since", true);
-        }
+        // default to true
+        track_usage!(telemetry, self.continue_execution, |val| val);
+        track_usage!(telemetry, self.include_dependencies, |val| val);
+        track_usage!(telemetry, self.go_fallback, |val| val);
+        track_usage!(telemetry, self.single_package, |val| val);
+        track_usage!(telemetry, self.no_deps, |val| val);
+        track_usage!(telemetry, self.no_cache, |val| val);
+        track_usage!(telemetry, self.daemon, |val| val);
+        track_usage!(telemetry, self.no_daemon, |val| val);
+        track_usage!(telemetry, self.only, |val| val);
+        track_usage!(telemetry, self.parallel, |val| val);
+        track_usage!(telemetry, self.remote_only, |val| val);
+        track_usage!(telemetry, self.remote_cache_read_only, |val| val);
 
-        if self.include_dependencies {
-            telemetry.track_arg_usage("include-dependencies", true);
-        }
-
-        if self.no_deps {
-            telemetry.track_arg_usage("no-deps", true);
-        }
-
-        if self.no_cache {
-            telemetry.track_arg_usage("no-cache", true);
-        }
-
-        if self.daemon {
-            telemetry.track_arg_usage("daemon", true);
-        }
-
-        if self.no_daemon {
-            telemetry.track_arg_usage("no_daemon", true);
-        }
-
-        if self.only {
-            telemetry.track_arg_usage("only", true);
-        }
-
-        if self.parallel {
-            telemetry.track_arg_usage("parallel", true);
-        }
-
-        if self.pkg_inference_root.is_some() {
-            telemetry.track_arg_usage("pkg-inference-root", true);
-        }
-
-        if self.profile.is_some() {
-            telemetry.track_arg_usage("profile", true);
-        }
-
-        if self.anon_profile.is_some() {
-            telemetry.track_arg_usage("anon-profile", true);
-        }
-
-        if self.remote_only {
-            telemetry.track_arg_usage("remote-only", true);
-        }
-
-        if self.remote_cache_read_only {
-            telemetry.track_arg_usage("remote-cache-read-only", true);
-        }
-
-        if self.summarize.is_some() {
-            telemetry.track_arg_usage("summarize", true);
-        }
-
-        if self.experimental_space_id.is_some() {
-            telemetry.track_arg_usage("experimental-space-id", true);
-        }
+        // default to None
+        track_usage!(telemetry, &self.cache_dir, Option::is_some);
+        track_usage!(telemetry, &self.profile, Option::is_some);
+        track_usage!(telemetry, &self.force, Option::is_some);
+        track_usage!(telemetry, &self.since, Option::is_some);
+        track_usage!(telemetry, &self.pkg_inference_root, Option::is_some);
+        track_usage!(telemetry, &self.anon_profile, Option::is_some);
+        track_usage!(telemetry, &self.summarize, Option::is_some);
+        track_usage!(telemetry, &self.experimental_space_id, Option::is_some);
 
         // track values
         if let Some(dry_run) = &self.dry_run {
-            telemetry.track_arg_value(
-                "dry-run",
-                match dry_run {
-                    DryRunMode::Text => "text",
-                    DryRunMode::Json => "json",
-                },
-                EventType::NonSensitive,
-            );
+            telemetry.track_arg_value("dry-run", dry_run, EventType::NonSensitive);
         }
 
         if self.cache_workers != DEFAULT_NUM_WORKERS {
@@ -885,53 +843,19 @@ impl RunArgs {
         }
 
         if self.env_mode != EnvMode::default() {
-            telemetry.track_arg_value(
-                "env-mode",
-                match self.env_mode {
-                    EnvMode::Infer => "infer",
-                    EnvMode::Loose => "loose",
-                    EnvMode::Strict => "strict",
-                },
-                EventType::NonSensitive,
-            );
+            telemetry.track_arg_value("env-mode", self.env_mode, EventType::NonSensitive);
         }
 
         if let Some(output_logs) = &self.output_logs {
-            telemetry.track_arg_value(
-                "output-logs",
-                match output_logs {
-                    OutputLogsMode::Full => "full",
-                    OutputLogsMode::None => "none",
-                    OutputLogsMode::HashOnly => "hash-only",
-                    OutputLogsMode::NewOnly => "new-only",
-                    OutputLogsMode::ErrorsOnly => "errors-only",
-                },
-                EventType::NonSensitive,
-            );
+            telemetry.track_arg_value("output-logs", output_logs, EventType::NonSensitive);
         }
 
         if self.log_order != LogOrder::default() {
-            telemetry.track_arg_value(
-                "log-order",
-                match self.log_order {
-                    LogOrder::Auto => "auto",
-                    LogOrder::Stream => "stream",
-                    LogOrder::Grouped => "grouped",
-                },
-                EventType::NonSensitive,
-            );
+            telemetry.track_arg_value("log-order", self.log_order, EventType::NonSensitive);
         }
 
         if self.log_prefix != LogPrefix::default() {
-            telemetry.track_arg_value(
-                "log-prefix",
-                match self.log_prefix {
-                    LogPrefix::Auto => "auto",
-                    LogPrefix::None => "none",
-                    LogPrefix::Task => "task",
-                },
-                EventType::NonSensitive,
-            );
+            telemetry.track_arg_value("log-prefix", self.log_prefix, EventType::NonSensitive);
         }
 
         // track sizes
@@ -962,6 +886,16 @@ pub enum LogPrefix {
 impl Default for LogPrefix {
     fn default() -> Self {
         Self::Auto
+    }
+}
+
+impl Display for LogPrefix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LogPrefix::Auto => write!(f, "auto"),
+            LogPrefix::None => write!(f, "none"),
+            LogPrefix::Task => write!(f, "task"),
+        }
     }
 }
 
