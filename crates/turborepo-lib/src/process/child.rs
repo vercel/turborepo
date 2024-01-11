@@ -21,7 +21,6 @@ use std::{
     time::Duration,
 };
 
-use command_group::AsyncCommandGroup;
 use itertools::Itertools;
 pub use tokio::process::Command;
 use tokio::{
@@ -194,9 +193,19 @@ impl Child {
             )
         };
 
-        let group = command.group().spawn()?;
+        // Create a process group for the child on unix like systems
+        #[cfg(unix)]
+        {
+            use nix::unistd::setsid;
+            unsafe {
+                command.pre_exec(|| {
+                    setsid()?;
+                    Ok(())
+                });
+            }
+        }
 
-        let mut child = group.into_inner();
+        let mut child = command.spawn()?;
         let pid = child.id();
 
         let stdin = child.stdin.take();
