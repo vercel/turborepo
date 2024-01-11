@@ -134,7 +134,10 @@ impl<W: Write> Write for PrefixedWriter<W> {
             // - the previous chunk ended with a \r and the cursor is currently as the start
             //   of the line so we want to rewrite the prefix over the existing prefix in
             //   the line
-            self.writer.write_all(self.prefix.as_bytes())?;
+            // or if the last chunk is just a newline we can skip rewriting the prefix
+            if chunk != b"\n" {
+                self.writer.write_all(self.prefix.as_bytes())?;
+            }
             self.writer.write_all(chunk)?;
         }
         // We do end up writing more bytes than this to the underlying writer, but we
@@ -204,6 +207,7 @@ mod test {
     #[test_case("no return", "turbo > no return" ; "no return")]
     #[test_case("foo\rbar\rbaz", "turbo > foo\rturbo > bar\rturbo > baz" ; "multiple crs")]
     #[test_case("foo\r", "turbo > foo\r" ; "trailing cr")]
+    #[test_case("foo\r\n", "turbo > foo\r\n" ; "no double write on crlf")]
     fn test_prefixed_writer_cr(input: &str, expected: &str) {
         let mut buffer = Vec::new();
         let mut writer = PrefixedWriter::new(
