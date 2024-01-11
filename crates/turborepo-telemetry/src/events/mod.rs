@@ -41,3 +41,19 @@ pub trait EventBuilder {
     fn track(&self, event: Event);
     fn child(&self) -> Self;
 }
+
+#[macro_export]
+macro_rules! track_usage {
+    ($tel:expr, $field:expr, $is_used:expr) => {
+        if $is_used($field) {
+            $tel.track_arg_usage(
+                stringify!($field)
+                    .trim_start_matches("&")
+                    .trim_start_matches("self.")
+                    .replace("_", "-")
+                    .as_str(),
+                true,
+            );
+        }
+    };
+}
