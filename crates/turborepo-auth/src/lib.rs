@@ -31,7 +31,7 @@ pub const VERCEL_AUTH_FILE_NAME: &str = "auth.json";
 pub const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 pub const DEFAULT_API_URL: &str = "https://vercel.com/api";
 
-/// AuthSource determines where the auth file should be read from. Each of the
+/// Source determines where the auth file should be read from. Each of the
 /// variants has different initialization and permissions.
 pub enum Source {
     /// A token passed in via the CLI. This is the most ephemeral of the auth
@@ -51,9 +51,9 @@ pub enum Provider {
     File(AuthFile),
 }
 impl Provider {
-    /// Creates a new Auth enum from an AuthSource.
+    /// Creates a new Auth enum from an Source.
     /// ## Arguments
-    /// * `source`: The AuthSource to create the Auth enum from.
+    /// * `source`: The Source to create the Auth enum from.
     /// ## Returns
     /// * `Auth`: The Auth enum.
     /// ## Examples
