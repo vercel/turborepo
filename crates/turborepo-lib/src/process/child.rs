@@ -147,7 +147,6 @@ impl ShutdownStyle {
 #[derive(Clone, Debug)]
 pub struct Child {
     pid: Option<u32>,
-    gid: Option<u32>,
     state: Arc<RwLock<ChildState>>,
     exit_channel: watch::Receiver<Option<ChildExit>>,
     stdin: Arc<Mutex<Option<tokio::process::ChildStdin>>>,
@@ -197,7 +196,6 @@ impl Child {
 
         let group = command.group().spawn()?;
 
-        let gid = group.id();
         let mut child = group.into_inner();
         let pid = child.id();
 
@@ -278,7 +276,6 @@ impl Child {
 
         Ok(Self {
             pid,
-            gid,
             state,
             exit_channel: exit_rx,
             stdin: Arc::new(Mutex::new(stdin)),
