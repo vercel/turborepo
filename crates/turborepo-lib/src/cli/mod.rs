@@ -63,17 +63,13 @@ impl Default for OutputLogsMode {
 
 impl Display for OutputLogsMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                OutputLogsMode::Full => "full",
-                OutputLogsMode::None => "none",
-                OutputLogsMode::HashOnly => "hash-only",
-                OutputLogsMode::NewOnly => "new-only",
-                OutputLogsMode::ErrorsOnly => "errors-only",
-            }
-        )
+        f.write_str(match self {
+            OutputLogsMode::Full => "full",
+            OutputLogsMode::None => "none",
+            OutputLogsMode::HashOnly => "hash-only",
+            OutputLogsMode::NewOnly => "new-only",
+            OutputLogsMode::ErrorsOnly => "errors-only",
+        })
     }
 }
 
@@ -95,15 +91,11 @@ impl Default for LogOrder {
 
 impl Display for LogOrder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                LogOrder::Auto => "auto",
-                LogOrder::Stream => "stream",
-                LogOrder::Grouped => "grouped",
-            }
-        )
+        f.write_str(match self {
+            LogOrder::Auto => "auto",
+            LogOrder::Stream => "stream",
+            LogOrder::Grouped => "grouped",
+        })
     }
 }
 
@@ -117,14 +109,10 @@ pub enum DryRunMode {
 
 impl Display for DryRunMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                DryRunMode::Text => "text",
-                DryRunMode::Json => "json",
-            }
-        )
+        f.write_str(match self {
+            DryRunMode::Text => "text",
+            DryRunMode::Json => "json",
+        })
     }
 }
 
@@ -138,15 +126,11 @@ pub enum EnvMode {
 
 impl fmt::Display for EnvMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                EnvMode::Infer => "infer",
-                EnvMode::Loose => "loose",
-                EnvMode::Strict => "strict",
-            }
-        )
+        f.write_str(match self {
+            EnvMode::Infer => "infer",
+            EnvMode::Loose => "loose",
+            EnvMode::Strict => "strict",
+        })
     }
 }
 
@@ -860,15 +844,15 @@ impl RunArgs {
 
         // track sizes
         if !self.filter.is_empty() {
-            telemetry.track_arg_value("filter", self.filter.len(), EventType::NonSensitive);
+            telemetry.track_arg_value("filter:length", self.filter.len(), EventType::NonSensitive);
         }
 
         if !self.scope.is_empty() {
-            telemetry.track_arg_value("scope", self.scope.len(), EventType::NonSensitive);
+            telemetry.track_arg_value("scope:length", self.scope.len(), EventType::NonSensitive);
         }
 
         if !self.ignore.is_empty() {
-            telemetry.track_arg_value("ignore", self.ignore.len(), EventType::NonSensitive);
+            telemetry.track_arg_value("ignore:length", self.ignore.len(), EventType::NonSensitive);
         }
     }
 }
