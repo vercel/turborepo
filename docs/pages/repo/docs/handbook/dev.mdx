@@ -112,6 +112,36 @@ For example:
 turbo run dev --filter docs
 ```
 
+## Running setup tasks
+
+There may be some tasks that you need to run _before_ your persistent, long-running development tasks are running. Some examples of setup steps would be:
+
+- Pre-building a package
+- Setting up Docker containers
+- Checking Node or package manager versions
+
+If you name these setup tasks `dev`, you'll have a naming collision in `turbo.json` with your persistent tasks. Instead, you can rename those setup tasks to `pre-dev` and depend on those `pre-dev` tasks for your `dev` tasks:
+
+```json filename="turbo.json"
+{
+  "pipeline": {
+    "dev": {
+      "dependsOn": ["^pre-dev"],
+    },
+    "pre-dev": {},
+  }
+}
+```
+
+<Callout type="info">
+
+Good to know:
+
+- If your tasks produce cacheable artifacts, make sure to include those in [the `outputs` key](/repo/docs/reference/configuration#outputs) of `pre-dev`.
+- If your tasks _do not_ produce cacheable artifacts, you likely want to set [the `cache` key](/repo/docs/reference/configuration#cache) to `false` to make sure it always runs first.
+
+</Callout>
+
 ## Using environment variables
 
 While developing, you'll often need to use environment variables. These let you customize the behavior of your program - for instance, pointing to a different `DATABASE_URL` in development and production.
