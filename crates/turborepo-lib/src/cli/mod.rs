@@ -40,7 +40,8 @@ pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
 // Default value for the --cache-workers argument
 const DEFAULT_NUM_WORKERS: u32 = 10;
-const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 6] = ["svg", "png", "jpg", "pdf", "json", "html"];
+const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 7] =
+    ["svg", "png", "jpg", "pdf", "json", "html", "mermaid"];
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, ValueEnum)]
 pub enum OutputLogsMode {
