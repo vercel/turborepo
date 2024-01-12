@@ -753,7 +753,7 @@ impl ExecContext {
         let pty_system = NativePtySystem::default();
         let pair = pty_system.openpty(PtySize::default()).unwrap();
         let mut cmd_builder = CommandBuilder::new(package_manager_binary);
-        let mut cmd = Command::new(package_manager_binary);
+        // let mut cmd = Command::new(package_manager_binary);
         let mut args = vec!["run".to_string(), self.task_id.task().to_string()];
         if let Some(pass_through_args) = &self.pass_through_args {
             args.extend(
@@ -763,14 +763,14 @@ impl ExecContext {
             );
             args.extend(pass_through_args.iter().cloned());
         }
-        cmd.args(args.clone());
-        cmd.current_dir(self.workspace_directory.as_path());
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        // cmd.args(args.clone());
+        // cmd.current_dir(self.workspace_directory.as_path());
+        // cmd.stdout(Stdio::piped());
+        // cmd.stderr(Stdio::piped());
 
-        // We clear the env before populating it with variables we expect
-        cmd.env_clear();
-        cmd.envs(self.execution_env.iter());
+        // // We clear the env before populating it with variables we expect
+        // cmd.env_clear();
+        // cmd.envs(self.execution_env.iter());
 
         cmd_builder.args(args.clone());
         cmd_builder.cwd(self.workspace_directory.as_path());
@@ -779,7 +779,7 @@ impl ExecContext {
             cmd_builder.env(k, v);
         }
         // Always last to make sure it overwrites any user configured env var.
-        cmd.env("TURBO_HASH", &self.task_hash);
+        // cmd.env("TURBO_HASH", &self.task_hash);
         cmd_builder.env("TURBO_HASH", &self.task_hash);
 
         let mut stdout_writer = match self
@@ -795,7 +795,7 @@ impl ExecContext {
 
         let mut process = match self
             .manager
-            .spawn(pair, cmd, cmd, Duration::from_millis(500))
+            .spawn(pair, cmd_builder, Duration::from_millis(500))
         {
             Some(Ok(child)) => child,
             // Turbo was unable to spawn a process

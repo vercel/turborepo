@@ -16,7 +16,7 @@
 //! them when the manager is closed.
 
 use std::{
-    io::{self, Write},
+    io::{self, BufRead, Read, Write},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -24,7 +24,6 @@ use std::{
 use itertools::Itertools;
 pub use tokio::process::Command;
 use tokio::{
-    io::{AsyncBufRead, AsyncBufReadExt, BufReader},
     join,
     sync::{mpsc, watch, RwLock},
 };
@@ -81,14 +80,19 @@ impl ShutdownStyle {
     ///
     /// If an exit channel is provided, the exit code will be sent to the
     /// channel when the child process exits.
-    async fn process(&self, child: &mut tokio::process::Child) -> ChildState {
+    async fn process(
+        &self,
+        pid: Option<u32>,
+        child_exit: tokio::sync::oneshot::Receiver<()>,
+        mut child_killer: Box<dyn portable_pty::ChildKiller>,
+    ) -> ChildState {
         match self {
             ShutdownStyle::Graceful(timeout) => {
                 // try ro run the command for the given timeout
                 #[cfg(unix)]
                 {
                     let fut = async {
-                        if let Some(pid) = child.id() {
+                        if let Some(pid) = pid {
                             debug!("sending SIGINT to child {}", pid);
                             // kill takes negative pid to indicate that you want to use gpid
                             let pgid = -(pid as i32);
@@ -96,7 +100,7 @@ impl ShutdownStyle {
                                 libc::kill(pgid, libc::SIGINT);
                             }
                             debug!("waiting for child {}", pid);
-                            child.wait().await.map(|es| es.code())
+                            Some(child_exit.await).transpose()
                         } else {
                             // if there is no pid, then just report successful with no exit code
                             Ok(None)
@@ -114,7 +118,7 @@ impl ShutdownStyle {
                         Ok(Err(_)) => ChildState::Exited(ChildExit::Failed),
                         Err(_) => {
                             debug!("graceful shutdown timed out, killing child");
-                            match child.kill().await {
+                            match child_killer.kill() {
                                 Ok(_) => ChildState::Exited(ChildExit::Killed),
                                 Err(_) => ChildState::Exited(ChildExit::Failed),
                             }
@@ -131,7 +135,7 @@ impl ShutdownStyle {
                     }
                 }
             }
-            ShutdownStyle::Kill => match child.kill().await {
+            ShutdownStyle::Kill => match child_killer.kill() {
                 Ok(_) => ChildState::Exited(ChildExit::Killed),
                 Err(_) => ChildState::Exited(ChildExit::Failed),
             },
@@ -143,15 +147,26 @@ impl ShutdownStyle {
 ///
 /// This is a wrapper around the `tokio::process::Child` struct, which provides
 /// a cross platform interface for spawning and managing child processes.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Child {
     pid: Option<u32>,
     state: Arc<RwLock<ChildState>>,
     exit_channel: watch::Receiver<Option<ChildExit>>,
-    stdin: Arc<Mutex<Option<tokio::process::ChildStdin>>>,
-    stdout: Arc<Mutex<Option<tokio::process::ChildStdout>>>,
-    stderr: Arc<Mutex<Option<tokio::process::ChildStderr>>>,
+    stdin: Arc<Mutex<Option<Box<dyn Write + Send>>>>,
+    stdout: Arc<Mutex<Option<Box<dyn Read + Send>>>>,
+    // stderr: Arc<Mutex<Option<tokio::process::ChildStderr>>>,
     label: String,
+}
+
+impl std::fmt::Debug for Child {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Child")
+            .field("pid", &self.pid)
+            .field("state", &self.state)
+            .field("exit_channel", &self.exit_channel)
+            .field("label", &self.label)
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -183,41 +198,40 @@ impl Child {
     pub fn spawn(
         pty: portable_pty::PtyPair,
         mut cmd_builder: portable_pty::CommandBuilder,
-        mut command: Command,
+        // mut command: Command,
         shutdown_style: ShutdownStyle,
     ) -> io::Result<Self> {
-        let label = {
-            let cmd = command.as_std();
-            format!(
-                "({}) {} {}",
-                cmd.get_current_dir()
-                    .map(|dir| dir.to_string_lossy())
-                    .unwrap_or_default(),
-                cmd.get_program().to_string_lossy(),
-                cmd.get_args().map(|s| s.to_string_lossy()).join(" ")
-            )
-        };
+        let label = "asdalkjd";
+        // let label = {
+        //     let cmd = command.as_std();
+        //     format!(
+        //         "({}) {} {}",
+        //         cmd.get_current_dir()
+        //             .map(|dir| dir.to_string_lossy())
+        //             .unwrap_or_default(),
+        //         cmd.get_program().to_string_lossy(),
+        //         cmd.get_args().map(|s| s.to_string_lossy()).join(" ")
+        //     )
+        // };
 
-        pty.slave.spawn_command(cmd_builder);
+        let mut child = pty.slave.spawn_command(cmd_builder).unwrap();
 
-        // Create a process group for the child on unix like systems
-        #[cfg(unix)]
-        {
-            use nix::unistd::setsid;
-            unsafe {
-                command.pre_exec(|| {
-                    setsid()?;
-                    Ok(())
-                });
-            }
-        }
+        // // Create a process group for the child on unix like systems
+        // #[cfg(unix)]
+        // {
+        //     use nix::unistd::setsid;
+        //     unsafe {
+        //         command.pre_exec(|| {
+        //             setsid()?;
+        //             Ok(())
+        //         });
+        //     }
+        // }
 
-        let mut child = command.spawn()?;
-        let pid = child.id();
-
-        let stdin = child.stdin.take();
-        let stdout = child.stdout.take();
-        let stderr = child.stderr.take();
+        // let mut child = command.spawn()?;
+        let pid = child.process_id();
+        let stdin = pty.master.take_writer().unwrap();
+        let stdout = pty.master.try_clone_reader().unwrap();
 
         let (command_tx, mut command_rx) = ChildCommandChannel::new();
 
@@ -231,6 +245,15 @@ impl Child {
         let state = Arc::new(RwLock::new(ChildState::Running(command_tx)));
         let task_state = state.clone();
 
+        let (child_exit_tx, child_exit_rx) = tokio::sync::oneshot::channel();
+        let (child_pid_tx, child_pid_rx) = tokio::sync::oneshot::channel();
+        let child_killer = child.clone_killer();
+
+        tokio::spawn(async move {
+            child_exit_tx.send(child.wait()).ok();
+            child_pid_tx.send(()).ok();
+        });
+
         let _task = tokio::spawn(async move {
             debug!("waiting for task");
             tokio::select! {
@@ -242,12 +265,12 @@ impl Child {
                         // dropped, and the channel is not closed while there are still permits
                         Some(ChildCommand::Stop) | None => {
                             debug!("stopping child process");
-                            shutdown_style.process(&mut child).await
+                            shutdown_style.process(pid, child_pid_rx, child_killer).await
                         }
                         // we received a command to kill the child process
                         Some(ChildCommand::Kill) => {
                             debug!("killing child process");
-                            ShutdownStyle::Kill.process(&mut child).await
+                            ShutdownStyle::Kill.process(pid, child_pid_rx, child_killer).await
                         }
                     };
 
@@ -266,11 +289,12 @@ impl Child {
                         *task_state = state;
                     }
                 }
-                status = child.wait() => {
+                status = child_exit_rx => {
                     debug!("child process exited normally");
                     // the child process exited
-                    let child_exit = match status.map(|s| s.code()) {
-                        Ok(Some(c)) => ChildExit::Finished(Some(c)),
+                    let exit = status.unwrap(); // todo don't unwrap
+                    let child_exit = match exit.map(|s| Some(s.exit_code())) {
+                        Ok(Some(c)) => ChildExit::Finished(Some(c as i32)),
                         // if we hit this case, it means that the child process was killed
                         // by someone else, and we should report that it was killed
                         Ok(None) => ChildExit::KilledExternal,
@@ -294,10 +318,10 @@ impl Child {
             pid,
             state,
             exit_channel: exit_rx,
-            stdin: Arc::new(Mutex::new(stdin)),
-            stdout: Arc::new(Mutex::new(stdout)),
-            stderr: Arc::new(Mutex::new(stderr)),
-            label,
+            stdin: Arc::new(Mutex::new(Some(stdin))),
+            stdout: Arc::new(Mutex::new(Some(stdout))),
+            // stderr: Arc::new(Mutex::new(stderr)),
+            label: label.to_string(),
         })
     }
 
@@ -369,17 +393,17 @@ impl Child {
         self.pid
     }
 
-    pub fn stdin(&mut self) -> Option<tokio::process::ChildStdin> {
+    pub fn stdin(&mut self) -> Option<Box<dyn std::io::Write + std::marker::Send>> {
         self.stdin.lock().unwrap().take()
     }
 
-    pub fn stdout(&mut self) -> Option<tokio::process::ChildStdout> {
+    pub fn stdout(&mut self) -> Option<Box<dyn std::io::Read + std::marker::Send>> {
         self.stdout.lock().unwrap().take()
     }
 
-    pub fn stderr(&mut self) -> Option<tokio::process::ChildStderr> {
-        self.stderr.lock().unwrap().take()
-    }
+    // pub fn stderr(&mut self) -> Option<tokio::process::ChildStderr> {
+    //     self.stderr.lock().unwrap().take()
+    // }
 
     /// Wait for the `Child` to exit and pipe any stdout and stderr to the
     /// provided writers.
@@ -390,57 +414,66 @@ impl Child {
         mut stdout_pipe: W,
         mut stderr_pipe: Option<W>,
     ) -> Result<Option<ChildExit>, std::io::Error> {
-        async fn next_line<R: AsyncBufRead + Unpin>(
-            stream: &mut Option<R>,
-            buffer: &mut Vec<u8>,
-        ) -> Option<Result<(), io::Error>> {
-            match stream {
-                Some(stream) => match stream.read_until(b'\n', buffer).await {
-                    Ok(0) => None,
-                    Ok(_) => Some(Ok(())),
-                    Err(e) => Some(Err(e)),
-                },
-                None => None,
-            }
-        }
+        // async fn next_line<R: AsyncBufRead + Unpin>(
+        //     stream: &mut Option<R>,
+        //     buffer: &mut Vec<u8>,
+        // ) -> Option<Result<(), io::Error>> {
+        //     match stream {
+        //         Some(stream) => match stream.read_until(b'\n', buffer).await {
+        //             Ok(0) => None,
+        //             Ok(_) => Some(Ok(())),
+        //             Err(e) => Some(Err(e)),
+        //         },
+        //         None => None,
+        //     }
+        // }
 
-        let mut stdout_lines = self.stdout().map(BufReader::new);
-        let mut stderr_lines = self.stderr().map(BufReader::new);
-
+        let Some(mut stdout_lines) = self.stdout().map(std::io::BufReader::new) else {
+            return Ok(None);
+        };
         let mut stdout_buffer = Vec::new();
-        let mut stderr_buffer = Vec::new();
-
-        loop {
-            tokio::select! {
-                Some(result) = next_line(&mut stdout_lines, &mut stdout_buffer) => {
-                    result?;
-                    stdout_pipe.write_all(&stdout_buffer)?;
-                    stdout_buffer.clear();
-                }
-                Some(result) = next_line(&mut stderr_lines, &mut stderr_buffer) => {
-                    result?;
-                    stderr_pipe.as_mut().unwrap_or(&mut stdout_pipe).write_all(&stderr_buffer)?;
-                    stderr_buffer.clear();
-                }
-                else => {
-                    // In the case that both futures read a complete line
-                    // the future not chosen in the select will return None if it's at EOF
-                    // as the number of bytes read will be 0.
-                    // We check and flush the buffers to avoid missing the last line of output.
-                    if !stdout_buffer.is_empty() {
-                        stdout_pipe.write_all(&stdout_buffer)?;
-                        stdout_buffer.clear();
-                    }
-                    if !stderr_buffer.is_empty() {
-                        stderr_pipe.as_mut().unwrap_or(&mut stdout_pipe).write_all(&stderr_buffer)?;
-                        stderr_buffer.clear();
-                    }
-                    break;
-                }
+        while let Ok(n) = stdout_lines.read_until(b'\n', &mut stdout_buffer) {
+            if n == 0 {
+                break;
             }
+            stdout_pipe.write_all(&stdout_buffer[..n])?;
+            stdout_buffer.clear();
         }
+        // let mut stderr_lines = self.stderr().map(BufReader::new);
+
+        // let mut stderr_buffer = Vec::new();
+
+        // loop {
+        //     tokio::select! {
+        //         Some(result) = next_line(&mut stdout_lines, &mut stdout_buffer) => {
+        //             result?;
+        //             stdout_pipe.write_all(&stdout_buffer)?;
+        //             stdout_buffer.clear();
+        //         }
+        //         // Some(result) = next_line(&mut stderr_lines, &mut stderr_buffer) =>
+        // {         //     result?;
+        //         //     stderr_pipe.as_mut().unwrap_or(&mut
+        // stdout_pipe).write_all(&stderr_buffer)?;         //
+        // stderr_buffer.clear();         // }
+        //         else => {
+        //             // In the case that both futures read a complete line
+        //             // the future not chosen in the select will return None if it's
+        // at EOF             // as the number of bytes read will be 0.
+        //             // We check and flush the buffers to avoid missing the last line
+        // of output.             if !stdout_buffer.is_empty() {
+        //                 stdout_pipe.write_all(&stdout_buffer)?;
+        //                 stdout_buffer.clear();
+        //             }
+        //             // if !stderr_buffer.is_empty() {
+        //             //     stderr_pipe.as_mut().unwrap_or(&mut
+        // stdout_pipe).write_all(&stderr_buffer)?;             //
+        // stderr_buffer.clear();             // }
+        //             break;
+        //         }
+        //     }
+        // }
         debug_assert!(stdout_buffer.is_empty(), "buffer should be empty");
-        debug_assert!(stderr_buffer.is_empty(), "buffer should be empty");
+        // debug_assert!(stderr_buffer.is_empty(), "buffer should be empty");
 
         Ok(self.wait().await)
     }
