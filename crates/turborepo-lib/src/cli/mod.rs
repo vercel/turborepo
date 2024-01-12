@@ -40,8 +40,8 @@ pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
 // Default value for the --cache-workers argument
 const DEFAULT_NUM_WORKERS: u32 = 10;
-const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 7] =
-    ["svg", "png", "jpg", "pdf", "json", "html", "mermaid"];
+const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
+    ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, ValueEnum)]
 pub enum OutputLogsMode {
@@ -585,7 +585,7 @@ pub enum GenerateCommand {
 fn validate_graph_extension(s: &str) -> Result<String, String> {
     match s.is_empty() {
         true => Ok(s.to_string()),
-        _ => match std::path::Path::new(s).extension().and_then(|e| e.to_str()) {
+        _ => match Utf8Path::new(s).extension() {
             Some(ext) if SUPPORTED_GRAPH_FILE_EXTENSIONS.contains(&ext) => Ok(s.to_string()),
             Some(ext) => Err(format!(
                 "Invalid file extension: '{}'. Allowed extensions are: {:?}",
@@ -640,7 +640,8 @@ pub struct RunArgs {
     pub global_deps: Vec<String>,
     /// Generate a graph of the task execution and output to a file when a
     /// filename is specified (.svg, .png, .jpg, .pdf, .json,
-    /// .html). Outputs dot graph to stdout when if no filename is provided
+    /// .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename
+    /// is provided
     #[clap(long, num_args = 0..=1, default_missing_value = "", value_parser = validate_graph_extension)]
     pub graph: Option<String>,
     /// Environment variable mode.
