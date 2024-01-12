@@ -1,7 +1,7 @@
 import { Tabs, Tab } from '../../../../components/Tabs'
 import { Callout } from '../../../../components/Callout'
 
-# Development tasks in a Monorepo
+# Development tasks in a monorepo
 
 The vast majority of development workflows look like this:
 
@@ -120,15 +120,22 @@ There may be some tasks that you need to run _before_ your persistent, long-runn
 - Setting up Docker containers
 - Checking Node or package manager versions
 
-If you name these setup tasks `dev`, you'll have a naming collision in `turbo.json` with your persistent tasks. Instead, you can rename those setup tasks to `pre-dev` and depend on those `pre-dev` tasks for your `dev` tasks:
+If you name these setup tasks `dev`, you'll have a naming collision in `turbo.json` with your persistent tasks. Instead, you can rename those setup tasks to `setup-dev` and depend on those `setup-dev` tasks for your `dev` tasks:
 
 ```json filename="turbo.json"
 {
   "pipeline": {
     "dev": {
-      "dependsOn": ["^pre-dev"],
+      "dependsOn": [
+        // Wait for tasks in dependencies
+        "^setup-dev"
+        // Wait for tasks in same package
+        "setup-dev"
+        // Wait for `setup-dev` in a specific package
+        "my-package#setup-dev"
+        ],
     },
-    "pre-dev": {},
+    "setup-dev": {},
   }
 }
 ```
@@ -137,7 +144,7 @@ If you name these setup tasks `dev`, you'll have a naming collision in `turbo.js
 
 Good to know:
 
-- If your tasks produce cacheable artifacts, make sure to include those in [the `outputs` key](/repo/docs/reference/configuration#outputs) of `pre-dev`.
+- If your tasks produce cacheable artifacts, make sure to include those in [the `outputs` key](/repo/docs/reference/configuration#outputs) of `setup-dev`.
 - If your tasks _do not_ produce cacheable artifacts, you likely want to set [the `cache` key](/repo/docs/reference/configuration#cache) to `false` to make sure it always runs first.
 
 </Callout>
