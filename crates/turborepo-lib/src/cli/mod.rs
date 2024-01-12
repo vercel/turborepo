@@ -843,7 +843,9 @@ impl RunArgs {
         }
 
         if let Some(graph) = &self.graph {
-            telemetry.track_arg_value("graph", graph, EventType::NonSensitive);
+            // track the extension used only
+            let extension = Utf8Path::new(graph).extension().unwrap_or("stdout");
+            telemetry.track_arg_value("graph", extension, EventType::NonSensitive);
         }
 
         if self.env_mode != EnvMode::default() {
