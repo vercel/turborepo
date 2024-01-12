@@ -10,7 +10,6 @@
 //! we can track areas of run that are performing sub-optimally.
 
 use tokio_stream::{iter, StreamExt};
-use tracing::debug;
 use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
@@ -60,9 +59,14 @@ pub trait PackageDiscoveryBuilder {
 
 impl<T: PackageDiscovery + Send> PackageDiscovery for Option<T> {
     async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using optional strategy");
+
         match self {
             Some(d) => d.discover_packages().await,
-            None => Err(Error::Unavailable),
+            None => {
+                tracing::debug!("no strategy available");
+                Err(Error::Unavailable)
+            }
         }
     }
 }
@@ -122,6 +126,8 @@ impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
 
 impl PackageDiscovery for LocalPackageDiscovery {
     async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using local strategy");
+
         let package_paths = match self.package_manager.get_package_jsons(&self.repo_root) {
             Ok(packages) => packages,
             // if there is not a list of workspaces, it is not necessarily an error. just report no
@@ -190,13 +196,13 @@ impl<A: PackageDiscovery + Send, B: PackageDiscovery + Send> PackageDiscovery
     for FallbackPackageDiscovery<A, B>
 {
     async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using fallback strategy");
+
+        tracing::debug!("attempting primary strategy");
         match tokio::time::timeout(self.timeout, self.primary.discover_packages()).await {
-            Ok(Ok(packages)) => {
-                debug!("used primary strategy");
-                Ok(packages)
-            }
+            Ok(Ok(packages)) => Ok(packages),
             Ok(Err(err1)) => {
-                debug!("primary strategy failed. using fallback strategy");
+                tracing::debug!("primary strategy failed, attempting fallback strategy");
                 match self.fallback.discover_packages().await {
                     Ok(packages) => Ok(packages),
                     // if the backup is unavailable, return the original error
@@ -205,7 +211,7 @@ impl<A: PackageDiscovery + Send, B: PackageDiscovery + Send> PackageDiscovery
                 }
             }
             Err(_) => {
-                debug!("primary strategy timed out. using fallback strategy");
+                tracing::debug!("primary strategy timed out, attempting fallback strategy");
                 self.fallback.discover_packages().await
             }
         }
@@ -228,9 +234,11 @@ impl<P: PackageDiscovery> CachingPackageDiscovery<P> {
 
 impl<P: PackageDiscovery + Send> PackageDiscovery for CachingPackageDiscovery<P> {
     async fn discover_packages(&mut self) -> Result<DiscoveryResponse, Error> {
+        tracing::debug!("discovering packages using caching strategy");
         match self.data.clone() {
             Some(data) => Ok(data),
             None => {
+                tracing::debug!("no cached data, running primary strategy");
                 let data = self.primary.discover_packages().await?;
                 self.data = Some(data.clone());
                 Ok(data)

@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -432,6 +433,20 @@ func (r *run) initAnalyticsClient(ctx gocontext.Context) analytics.Client {
 
 	if apiClient.IsLinked() {
 		analyticsSink = apiClient
+		if r.base.Config.Token == "" {
+			apiBase := r.base.APIClient.BaseURL()
+			// If it's a third party cache, tell the user to login with that API.
+			loginCommand := fmt.Sprintf("turbo login%s", func() string {
+				if strings.Contains(apiBase, "vercel") {
+					return ""
+				}
+				return fmt.Sprintf(" --api %s", apiBase)
+			}())
+
+			missingTokenMessage := fmt.Sprintf("No token found for %s. Run `turbo link` or %s first.", apiBase, loginCommand)
+
+			r.base.UI.Warn(missingTokenMessage)
+		}
 	} else {
 		r.opts.cacheOpts.SkipRemote = true
 		analyticsSink = analytics.NullSink

@@ -81,14 +81,7 @@ pub trait Client {
         team_slug: Option<&str>,
         method: Method,
     ) -> Result<Option<Response>>;
-    async fn do_preflight(
-        &self,
-        token: &str,
-        request_url: &str,
-        request_method: &str,
-        request_headers: &str,
-    ) -> Result<PreflightResponse>;
-    fn make_url(&self, endpoint: &str) -> String;
+    fn make_url(&self, endpoint: &str) -> Result<Url>;
 }
 
 #[derive(Clone)]
@@ -112,7 +105,7 @@ impl Client for APIClient {
         &self.base_url
     }
     async fn get_token_metadata(&self, token: &str) -> Result<TokenMetadata> {
-        let url = self.make_url("/v5/user/tokens/current");
+        let url = self.make_url("/v5/user/tokens/current")?;
         let request_builder = self
             .client
             .get(url)
@@ -127,7 +120,7 @@ impl Client for APIClient {
         Ok(json.token)
     }
     async fn get_user(&self, token: &str) -> Result<UserResponse> {
-        let url = self.make_url("/v2/user");
+        let url = self.make_url("/v2/user")?;
         let request_builder = self
             .client
             .get(url)
@@ -144,7 +137,7 @@ impl Client for APIClient {
     async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
         let request_builder = self
             .client
-            .get(self.make_url("/v2/teams?limit=100"))
+            .get(self.make_url("/v2/teams?limit=100")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", token));
@@ -159,7 +152,7 @@ impl Client for APIClient {
     async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
         let response = self
             .client
-            .get(self.make_url("/v2/team"))
+            .get(self.make_url("/v2/team")?)
             .query(&[("teamId", team_id)])
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
@@ -188,7 +181,7 @@ impl Client for APIClient {
     ) -> Result<CachingStatusResponse> {
         let request_builder = self
             .client
-            .get(self.make_url("/v8/artifacts/status"))
+            .get(self.make_url("/v8/artifacts/status")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", token));
@@ -211,7 +204,7 @@ impl Client for APIClient {
 
         let request_builder = self
             .client
-            .get(self.make_url(endpoint.as_str()))
+            .get(self.make_url(endpoint.as_str())?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
             .header("Authorization", format!("Bearer {}", token));
@@ -226,7 +219,7 @@ impl Client for APIClient {
     async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
         let request_builder = self
             .client
-            .get(self.make_url("/registration/verify"))
+            .get(self.make_url("/registration/verify")?)
             .query(&[("token", token), ("tokenName", token_name)])
             .header("User-Agent", self.user_agent.clone());
 
@@ -253,26 +246,26 @@ impl Client for APIClient {
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<()> {
-        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
+        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash))?;
         let mut allow_auth = true;
 
         if self.use_preflight {
             let preflight_response = self
                 .do_preflight(
                     token,
-                    &request_url,
+                    request_url.clone(),
                     "PUT",
                     "Authorization, Content-Type, User-Agent, x-artifact-duration, x-artifact-tag",
                 )
                 .await?;
 
             allow_auth = preflight_response.allow_authorization_header;
-            request_url = preflight_response.location.to_string();
+            request_url = preflight_response.location.clone();
         }
 
         let mut request_builder = self
             .client
-            .put(&request_url)
+            .put(request_url)
             .header("Content-Type", "application/octet-stream")
             .header("x-artifact-duration", duration.to_string())
             .header("User-Agent", self.user_agent.clone())
@@ -379,16 +372,21 @@ impl Client for APIClient {
         team_slug: Option<&str>,
         method: Method,
     ) -> Result<Option<Response>> {
-        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash));
+        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash))?;
         let mut allow_auth = true;
 
         if self.use_preflight {
             let preflight_response = self
-                .do_preflight(token, &request_url, "GET", "Authorization, User-Agent")
+                .do_preflight(
+                    token,
+                    request_url.clone(),
+                    "GET",
+                    "Authorization, User-Agent",
+                )
                 .await?;
 
             allow_auth = preflight_response.allow_authorization_header;
-            request_url = preflight_response.location.to_string();
+            request_url = preflight_response.location;
         };
 
         let mut request_builder = self
@@ -411,52 +409,9 @@ impl Client for APIClient {
         }
     }
 
-    async fn do_preflight(
-        &self,
-        token: &str,
-        request_url: &str,
-        request_method: &str,
-        request_headers: &str,
-    ) -> Result<PreflightResponse> {
-        let request_builder = self
-            .client
-            .request(Method::OPTIONS, request_url)
-            .header("User-Agent", self.user_agent.clone())
-            .header("Access-Control-Request-Method", request_method)
-            .header("Access-Control-Request-Headers", request_headers)
-            .header("Authorization", format!("Bearer {}", token));
-
-        let response = retry::make_retryable_request(request_builder).await?;
-
-        let headers = response.headers();
-        let location = if let Some(location) = headers.get("Location") {
-            let location = location.to_str()?;
-
-            match Url::parse(location) {
-                Ok(location_url) => location_url,
-                Err(url::ParseError::RelativeUrlWithoutBase) => {
-                    Url::parse(&self.base_url)?.join(location)?
-                }
-                Err(e) => return Err(e.into()),
-            }
-        } else {
-            response.url().clone()
-        };
-
-        let allowed_headers = headers
-            .get("Access-Control-Allow-Headers")
-            .map_or("", |h| h.to_str().unwrap_or(""));
-
-        let allow_auth = AUTHORIZATION_REGEX.is_match(allowed_headers);
-
-        Ok(PreflightResponse {
-            location,
-            allow_authorization_header: allow_auth,
-        })
-    }
-
-    fn make_url(&self, endpoint: &str) -> String {
-        format!("{}{}", self.base_url, endpoint)
+    fn make_url(&self, endpoint: &str) -> Result<Url> {
+        let url = format!("{}{}", self.base_url, endpoint);
+        Url::parse(&url).map_err(|err| Error::InvalidUrl { url, err })
     }
 }
 
@@ -490,6 +445,61 @@ impl APIClient {
         self.base_url.as_str()
     }
 
+    async fn do_preflight(
+        &self,
+        token: &str,
+        request_url: Url,
+        request_method: &str,
+        request_headers: &str,
+    ) -> Result<PreflightResponse> {
+        let request_builder = self
+            .client
+            .request(Method::OPTIONS, request_url)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Access-Control-Request-Method", request_method)
+            .header("Access-Control-Request-Headers", request_headers)
+            .header("Authorization", format!("Bearer {}", token));
+
+        let response = retry::make_retryable_request(request_builder).await?;
+
+        let headers = response.headers();
+        let location = if let Some(location) = headers.get("Location") {
+            let location = location.to_str()?;
+
+            match Url::parse(location) {
+                Ok(location_url) => location_url,
+                Err(url::ParseError::RelativeUrlWithoutBase) => Url::parse(&self.base_url)
+                    .map_err(|err| Error::InvalidUrl {
+                        url: self.base_url.clone(),
+                        err,
+                    })?
+                    .join(location)
+                    .map_err(|err| Error::InvalidUrl {
+                        url: location.to_string(),
+                        err,
+                    })?,
+                Err(e) => {
+                    return Err(Error::InvalidUrl {
+                        url: location.to_string(),
+                        err: e,
+                    })
+                }
+            }
+        } else {
+            response.url().clone()
+        };
+
+        let allowed_headers = headers
+            .get("Access-Control-Allow-Headers")
+            .map_or("", |h| h.to_str().unwrap_or(""));
+
+        let allow_auth = AUTHORIZATION_REGEX.is_match(allowed_headers);
+
+        Ok(PreflightResponse {
+            location,
+            allow_authorization_header: allow_auth,
+        })
+    }
     /// Create a new request builder with the preflight check done,
     /// team parameters added, CI header, and a content type of json.
     pub(crate) async fn create_request_builder(
@@ -498,7 +508,7 @@ impl APIClient {
         api_auth: &APIAuth,
         method: Method,
     ) -> Result<RequestBuilder> {
-        let mut url = self.make_url(url);
+        let mut url = self.make_url(url)?;
         let mut allow_auth = true;
 
         let APIAuth {
@@ -509,16 +519,21 @@ impl APIClient {
 
         if self.use_preflight {
             let preflight_response = self
-                .do_preflight(token, &url, method.as_str(), "Authorization, User-Agent")
+                .do_preflight(
+                    token,
+                    url.clone(),
+                    method.as_str(),
+                    "Authorization, User-Agent",
+                )
                 .await?;
 
             allow_auth = preflight_response.allow_authorization_header;
-            url = preflight_response.location.to_string();
+            url = preflight_response.location;
         }
 
         let mut request_builder = self
             .client
-            .request(method, &url)
+            .request(method, url)
             .header("Content-Type", "application/json");
 
         if allow_auth {
@@ -606,6 +621,7 @@ fn build_user_agent(version: &str) -> String {
 mod test {
     use anyhow::Result;
     use turborepo_vercel_api_mock::start_test_server;
+    use url::Url;
 
     use crate::{APIClient, Client};
 
@@ -620,7 +636,7 @@ mod test {
         let response = client
             .do_preflight(
                 "",
-                &format!("{}/preflight/absolute-location", base_url),
+                Url::parse(&format!("{}/preflight/absolute-location", base_url)).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -631,7 +647,7 @@ mod test {
         let response = client
             .do_preflight(
                 "",
-                &format!("{}/preflight/relative-location", base_url),
+                Url::parse(&format!("{}/preflight/relative-location", base_url)).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -644,7 +660,7 @@ mod test {
         let response = client
             .do_preflight(
                 "",
-                &format!("{}/preflight/allow-auth", base_url),
+                Url::parse(&format!("{}/preflight/allow-auth", base_url)).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -655,7 +671,7 @@ mod test {
         let response = client
             .do_preflight(
                 "",
-                &format!("{}/preflight/no-allow-auth", base_url),
+                Url::parse(&format!("{}/preflight/no-allow-auth", base_url)).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
