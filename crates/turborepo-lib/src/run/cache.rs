@@ -204,8 +204,8 @@ impl TaskCache {
                 Ok(changed_output_globs) => changed_output_globs.len(),
                 Err(err) => {
                     warn!(
-                        "Failed to check if we can skip restoring outputs for {}: {:?}. \
-                         Proceeding to check cache",
+                        "Failed to check if we can skip restoring outputs for {}: {}. Proceeding \
+                         to check cache",
                         self.task_id, err
                     );
                     self.repo_relative_globs.inclusions.len()

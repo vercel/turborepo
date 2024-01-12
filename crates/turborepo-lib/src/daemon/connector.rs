@@ -116,7 +116,7 @@ impl DaemonConnector {
                 Err(DaemonError::VersionMismatch) if self.can_kill_server => {
                     self.kill_live_server(client, pid).await?
                 }
-                Err(DaemonError::Unavailable) => self.kill_dead_server(pid).await?,
+                Err(DaemonError::Unavailable(_)) => self.kill_dead_server(pid).await?,
                 Err(e) => return Err(DaemonConnectorError::Handshake(Box::new(e))),
             };
         }

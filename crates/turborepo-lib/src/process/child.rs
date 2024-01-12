@@ -21,7 +21,6 @@ use std::{
     time::Duration,
 };
 
-use command_group::AsyncCommandGroup;
 use itertools::Itertools;
 pub use tokio::process::Command;
 use tokio::{
@@ -147,7 +146,6 @@ impl ShutdownStyle {
 #[derive(Clone, Debug)]
 pub struct Child {
     pid: Option<u32>,
-    gid: Option<u32>,
     state: Arc<RwLock<ChildState>>,
     exit_channel: watch::Receiver<Option<ChildExit>>,
     stdin: Arc<Mutex<Option<tokio::process::ChildStdin>>>,
@@ -195,10 +193,19 @@ impl Child {
             )
         };
 
-        let group = command.group().spawn()?;
+        // Create a process group for the child on unix like systems
+        #[cfg(unix)]
+        {
+            use nix::unistd::setsid;
+            unsafe {
+                command.pre_exec(|| {
+                    setsid()?;
+                    Ok(())
+                });
+            }
+        }
 
-        let gid = group.id();
-        let mut child = group.into_inner();
+        let mut child = command.spawn()?;
         let pid = child.id();
 
         let stdin = child.stdin.take();
@@ -278,7 +285,6 @@ impl Child {
 
         Ok(Self {
             pid,
-            gid,
             state,
             exit_channel: exit_rx,
             stdin: Arc::new(Mutex::new(stdin)),
