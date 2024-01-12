@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_auth::{
-    TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR, TURBOREPO_LEGACY_AUTH_FILE_NAME,
+    Provider, TURBOREPO_AUTH_FILE_NAME, TURBOREPO_CONFIG_DIR, TURBOREPO_LEGACY_AUTH_FILE_NAME,
 };
 use turborepo_dirs::config_dir;
 use turborepo_ui::UI;
@@ -137,11 +137,11 @@ impl CommandBase {
         let auth_file_path = self.global_auth_path()?;
         let config_file_path = self.global_config_path()?;
         let client = self.api_client()?;
-        let auth = turborepo_auth::read_or_create_auth_file(
-            &auth_file_path,
-            &config_file_path,
-            client.base_url(),
-        )?;
+        let auth = Provider::new(turborepo_auth::Source::Turborepo(
+            auth_file_path.clone(),
+            config_file_path.clone(),
+            client.base_url().to_string(),
+        ))?;
 
         let auth_token = auth.get_token(client.base_url());
         if let Some(auth_token) = auth_token {

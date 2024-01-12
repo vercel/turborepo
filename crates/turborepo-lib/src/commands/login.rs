@@ -1,7 +1,7 @@
 use turborepo_api_client::{APIClient, Client};
 use turborepo_auth::{
-    login as auth_login, read_or_create_auth_file, sso_login as auth_sso_login, AuthFile,
-    DefaultLoginServer, DefaultSSOLoginServer, LoginServer, SSOLoginServer,
+    login as auth_login, sso_login as auth_sso_login, AuthFile, DefaultLoginServer,
+    DefaultSSOLoginServer, LoginServer, Provider, SSOLoginServer,
 };
 use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
 use turborepo_ui::{BOLD, CYAN, UI};
@@ -28,14 +28,14 @@ impl<T: LoginServer> Login<T> {
         let global_auth_path = base.global_auth_path()?;
         let global_config_path = base.global_config_path()?;
 
-        let mut auth_file = read_or_create_auth_file(
-            &global_auth_path,
-            &global_config_path,
-            api_client.base_url(),
-        )?;
+        let mut auth_provider = Provider::new(turborepo_auth::Source::Turborepo(
+            global_auth_path.clone(),
+            global_config_path.clone(),
+            api_client.base_url().to_owned(),
+        ))?;
 
         if self
-            .has_existing_token(&api_client, &mut auth_file, &ui)
+            .has_existing_token(&api_client, &auth_provider, &ui)
             .await?
         {
             return Ok(());
@@ -45,15 +45,15 @@ impl<T: LoginServer> Login<T> {
 
         let auth_token = auth_login(&api_client, &ui, &login_url_config, login_server).await?;
 
-        auth_file.insert(api_client.base_url().to_owned(), auth_token.token);
-        auth_file.write_to_disk(&global_auth_path)?;
+        auth_provider.insert(api_client.base_url().to_owned(), auth_token.token);
+        auth_provider.write_to_disk(&global_auth_path)?;
         Ok(())
     }
 
     async fn has_existing_token(
         &self,
         api_client: &APIClient,
-        auth_file: &mut AuthFile,
+        auth_file: &Provider,
         ui: &UI,
     ) -> Result<bool, Error> {
         if let Some(token) = auth_file.get_token(api_client.base_url()) {
@@ -84,14 +84,14 @@ impl<T: SSOLoginServer> Login<T> {
         let global_auth_path = base.global_auth_path()?;
         let global_config_path = base.global_config_path()?;
 
-        let mut auth_file = read_or_create_auth_file(
-            &global_auth_path,
-            &global_config_path,
-            api_client.base_url(),
-        )?;
+        let mut auth_provider = Provider::new(turborepo_auth::Source::Turborepo(
+            global_auth_path.clone(),
+            global_config_path.clone(),
+            api_client.base_url().to_owned(),
+        ))?;
 
         if self
-            .has_existing_sso_token(&api_client, &mut auth_file, &base.ui, sso_team)
+            .has_existing_sso_token(&api_client, &auth_provider, &base.ui, sso_team)
             .await?
         {
             return Ok(());
@@ -102,8 +102,8 @@ impl<T: SSOLoginServer> Login<T> {
         let auth_token =
             auth_sso_login(&api_client, &ui, &login_url_config, sso_team, login_server).await?;
 
-        auth_file.insert(api_client.base_url().to_owned(), auth_token.token);
-        auth_file.write_to_disk(&global_auth_path)?;
+        auth_provider.insert(api_client.base_url().to_owned(), auth_token.token);
+        auth_provider.write_to_disk(&global_auth_path)?;
 
         Ok(())
     }
@@ -111,7 +111,7 @@ impl<T: SSOLoginServer> Login<T> {
     async fn has_existing_sso_token(
         &self,
         api_client: &APIClient,
-        auth_file: &mut AuthFile,
+        auth_file: &Provider,
         ui: &UI,
         sso_team: &str,
     ) -> Result<bool, Error> {
@@ -244,9 +244,12 @@ mod tests {
         // get back should be the same as the mock auth file.
         // Pass in the auth file path for both possible paths becuase we
         // should never read the config from here.
-        let found_auth_file =
-            read_or_create_auth_file(&auth_file_path, &auth_file_path, mock_api_client.base_url())
-                .unwrap();
+        let found_auth_file = Provider::new(turborepo_auth::Source::Turborepo(
+            auth_file_path.clone(),
+            auth_file_path.clone(),
+            mock_api_client.base_url().to_owned(),
+        ))
+        .unwrap();
 
         api_server.abort();
         assert_eq!(
@@ -279,12 +282,15 @@ mod tests {
         let result = login_with_mock_server.login(&mut base, telemetry).await;
         assert!(result.is_ok());
 
-        let found_auth_file =
-            read_or_create_auth_file(&auth_file_path, &auth_file_path, mock_api_client.base_url())
-                .unwrap();
+        let found_auth_file = Provider::new(turborepo_auth::Source::Turborepo(
+            auth_file_path.clone(),
+            auth_file_path.clone(),
+            mock_api_client.base_url().to_owned(),
+        ))
+        .unwrap();
 
         api_server.abort();
 
-        assert_eq!(found_auth_file.tokens().len(), 1);
+        assert_eq!(found_auth_file.tokens().unwrap().len(), 1);
     }
 }

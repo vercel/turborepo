@@ -10,7 +10,7 @@ pub(crate) mod summary;
 pub mod task_id;
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::{IsTerminal, Write},
     sync::Arc,
     time::{Duration, SystemTime},
@@ -23,6 +23,7 @@ use rayon::iter::ParallelBridge;
 use tracing::debug;
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
+use turborepo_auth::Provider;
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
@@ -183,11 +184,11 @@ impl<'a> Run<'a> {
         let config = self.base.config()?;
         let auth_file_path = self.base.global_auth_path()?;
         let config_file_path = self.base.global_config_path()?;
-        let auth = turborepo_auth::read_or_create_auth_file(
-            &auth_file_path,
-            &config_file_path,
-            api_client.base_url(),
-        )?;
+        let auth = Provider::new(turborepo_auth::Source::Turborepo(
+            auth_file_path.clone(),
+            config_file_path.clone(),
+            api_client.base_url().to_string(),
+        ))?;
         // Pulled from initAnalyticsClient in run.go
         let is_linked = api_auth
             .as_ref()
@@ -208,7 +209,8 @@ impl<'a> Run<'a> {
                 } else {
                     format!("turbo login --api {}", base)
                 };
-                let apis_with_tokens = auth.tokens().iter().map(|(api, _)| api.to_string());
+                let tokens = auth.tokens().cloned().unwrap_or_default();
+                let apis_with_tokens = tokens.keys().map(|api| api.to_string());
                 // Don't show the message if there are no tokens to display.
                 let api_message = if apis_with_tokens.len() > 0 {
                     format!(

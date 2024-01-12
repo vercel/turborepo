@@ -1,5 +1,6 @@
 use serde::Serialize;
 use tracing::trace;
+use turborepo_auth::Provider;
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
 use crate::{cli::Args, commands::CommandBase, config::ConfigurationOptions, run};
@@ -53,14 +54,15 @@ impl<'a> TryFrom<&'a CommandBase> for ExecutionState<'a> {
         } else {
             let auth_file_path = base.global_auth_path()?;
             let config_file_path = base.global_config_path()?;
-            let auth = turborepo_auth::read_or_create_auth_file(
-                &auth_file_path,
-                &config_file_path,
-                config.api_url(),
-            )?;
+            let auth_provider = Provider::new(turborepo_auth::Source::Turborepo(
+                auth_file_path,
+                config_file_path,
+                config.api_url().to_string(),
+            ))?;
 
-            auth.get_token(config.login_url())
-                .map(|t| t.token().to_owned())
+            auth_provider
+                .get_token(config.api_url())
+                .map(|t| t.token.to_owned())
         };
 
         let api_client_config = APIClientConfig {

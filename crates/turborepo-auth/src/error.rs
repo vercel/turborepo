@@ -12,13 +12,15 @@ pub enum Error {
     #[error(transparent)]
     IOError(#[from] io::Error),
 
+    // HTTP errors
     #[error("failed to get token")]
     FailedToGetToken,
-
     #[error("failed to fetch user: {0}")]
     FailedToFetchUser(#[source] turborepo_api_client::Error),
     #[error("failed to fetch token metadata: {source}")]
     FailedToFetchTokenMetadata { source: turborepo_api_client::Error },
+
+    // Config errors
     #[error(
         "loginUrl is configured to \"{value}\", but cannot be a base URL. This happens in \
          situations like using a `data:` URL."
@@ -57,6 +59,11 @@ pub enum Error {
         #[source]
         source: std::io::Error,
         path: AbsoluteSystemPathBuf,
+    },
+    #[error("failed to find either an auth or config file at {auth_path} or {config_path}")]
+    FailedToFindAuthOrConfigFile {
+        auth_path: AbsoluteSystemPathBuf,
+        config_path: AbsoluteSystemPathBuf,
     },
 
     // File write errors.
