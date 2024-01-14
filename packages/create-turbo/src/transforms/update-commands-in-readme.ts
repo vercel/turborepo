@@ -10,16 +10,8 @@ const meta = {
 export async function transform(args: TransformInput): TransformResult {
   const { prompts, example } = args;
 
-  const isOfficialStarter =
-    !example.repo ||
-    (example.repo.username === "vercel" && example.repo.name === "turbo");
-
-  if (!isOfficialStarter) {
-    return { result: "not-applicable", ...meta };
-  }
-
   const selectedPackageManager = prompts.packageManager;
-  const readmeFilePath = path.join(prompts.root, "examples", "basic", "README.md");
+  const readmeFilePath = path.join(prompts.root, "README.md");
   try {
     // Read the content of the file
     let data = await fs.readFile(readmeFilePath, "utf8");
