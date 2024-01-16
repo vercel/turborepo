@@ -169,7 +169,7 @@ impl FSCache {
         };
 
         let mut metadata_options = OpenOptions::new();
-        metadata_options.create(true).write(true);
+        metadata_options.create(true).write(true).truncate(true);
 
         let metadata_file = metadata_path.open_with_options(metadata_options)?;
 
