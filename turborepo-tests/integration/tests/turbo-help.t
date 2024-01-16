@@ -60,7 +60,7 @@ Test help flag
         --global-deps <GLOBAL_DEPS>
             Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]
-            Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
+            Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
         --env-mode [<ENV_MODE>]
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json. Use "infer" to defer to existence of "passThroughEnv" or "globalPassThroughEnv" in turbo.json. (default infer) [default: infer] [possible values: infer, loose, strict]
     -F, --filter <FILTER>
@@ -163,7 +163,7 @@ Test help flag
         --global-deps <GLOBAL_DEPS>
             Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]
-            Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
+            Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
         --env-mode [<ENV_MODE>]
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json. Use "infer" to defer to existence of "passThroughEnv" or "globalPassThroughEnv" in turbo.json. (default infer) [default: infer] [possible values: infer, loose, strict]
     -F, --filter <FILTER>
