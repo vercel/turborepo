@@ -4,17 +4,12 @@ use turbo_tasks::{trace::TraceRawVcs, ValueDefault, Vc};
 use turbopack_core::{environment::Environment, resolve::options::ImportMapping};
 use turbopack_ecmascript::{references::esm::UrlRewriteBehavior, TransformPlugin, TreeShakingMode};
 use turbopack_node::{
-    execution_context::ExecutionContext, transforms::webpack::WebpackLoaderItems,
+    execution_context::ExecutionContext,
+    transforms::{postcss::PostCssTransformOptions, webpack::WebpackLoaderItems},
 };
 
 use super::ModuleRule;
 use crate::condition::ContextCondition;
-
-#[derive(Default, Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
-pub struct PostCssTransformOptions {
-    pub postcss_package: Option<Vc<ImportMapping>>,
-    pub placeholder_for_future_extensions: (),
-}
 
 #[derive(Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize)]
 pub struct LoaderRuleItem {

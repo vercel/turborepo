@@ -417,6 +417,7 @@ impl ModuleOptions {
                                 "postcss".to_string(),
                             ),
                             execution_context,
+                            &options,
                         )),
                     ]))],
                 ));
