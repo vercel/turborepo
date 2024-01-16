@@ -29,7 +29,7 @@ interface Frontmatter {
 
 const config: DocsThemeConfig = {
   sidebar: {
-    defaultMenuCollapseLevel: 1,
+    defaultMenuCollapseLevel: 2,
     toggleButton: true,
   },
   docsRepositoryBase: "https://github.com/vercel/turbo/blob/main/docs",
