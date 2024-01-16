@@ -347,7 +347,7 @@ struct SinglePackageRunSummary<'a> {
 
 impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
     fn from(run_summary: &'a RunSummary<'a>) -> Self {
-        let ks = run_summary
+        let tasks = run_summary
             .tasks
             .iter()
             .cloned()
