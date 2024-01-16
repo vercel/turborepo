@@ -210,6 +210,9 @@ importers:
       '@vercel/og':
         specifier: ^0.6.1
         version: 0.6.1
+      '@vercel/speed-insights':
+        specifier: ^1.0.4
+        version: 1.0.4
       '@vercel/toolbar':
         specifier: ^0.1.9
         version: 0.1.9(next@13.4.12)(react@18.2.0)
@@ -4228,6 +4231,11 @@ packages:
       '@resvg/resvg-wasm': 2.6.0
       satori: 0.10.9
       yoga-wasm-web: 0.3.3
+    dev: false
+
+  /@vercel/speed-insights@1.0.4:
+    resolution: {integrity: sha512-Q7O0bnV11KUqNKAKA984YWIGxCjqgOuJdwH1cdItqlkUVTLbIm8BhObro6hJobGMSUHm+z7xjQ0YbC8ps1ekDg==}
+    requiresBuild: true
     dev: false
 
   /@vercel/style-guide@5.1.0(eslint@8.55.0)(prettier@2.8.7)(typescript@5.3.3):
