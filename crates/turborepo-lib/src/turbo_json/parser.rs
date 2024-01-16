@@ -13,6 +13,7 @@ use biome_json_parser::JsonParserOptions;
 use biome_json_syntax::TextRange;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
+use turborepo_errors::WithText;
 
 use crate::{
     cli::OutputLogsMode,
@@ -465,32 +466,6 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
             }
         }
         Some(result)
-    }
-}
-
-pub trait WithText {
-    fn add_text(&mut self, text: Arc<str>);
-}
-
-impl<T> WithText for Spanned<T> {
-    fn add_text(&mut self, text: Arc<str>) {
-        self.text = Some(text);
-    }
-}
-
-impl<T: WithText> WithText for Option<T> {
-    fn add_text(&mut self, text: Arc<str>) {
-        if let Some(inner) = self {
-            inner.add_text(text);
-        }
-    }
-}
-
-impl<T: WithText> WithText for Vec<T> {
-    fn add_text(&mut self, text: Arc<str>) {
-        for item in self {
-            item.add_text(text.clone());
-        }
     }
 }
 

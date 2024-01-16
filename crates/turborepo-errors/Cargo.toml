@@ -1,3 +1,4 @@
+
 [package]
 name = "turborepo-errors"
 version = "0.1.0"
@@ -8,6 +9,10 @@ edition = "2021"
 [dependencies]
 biome_deserialize = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+test-case = { workspace = true }
 
 [lints]
 workspace = true

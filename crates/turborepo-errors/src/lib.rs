@@ -6,7 +6,7 @@ use std::{
 use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
 use serde::Serialize;
 
-#[derive(Debug, Default, Clone, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct Spanned<T> {
     pub value: T,
@@ -35,14 +35,6 @@ impl<T: Deserializable> Deserializable for Spanned<T> {
     }
 }
 
-// We do *not* check for the range equality because that's too finicky
-// to get right in tests.
-impl<T: PartialEq> PartialEq for Spanned<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
-    }
-}
-
 impl<T> Spanned<T> {
     pub fn new(t: T) -> Self {
         Self {
@@ -50,6 +42,13 @@ impl<T> Spanned<T> {
             range: None,
             path: None,
             text: None,
+        }
+    }
+
+    pub fn with_text(self, text: impl Into<Arc<str>>) -> Self {
+        Self {
+            text: Some(text.into()),
+            ..self
         }
     }
 
@@ -77,5 +76,57 @@ impl<T> Deref for Spanned<T> {
 
     fn deref(&self) -> &Self::Target {
         &self.value
+    }
+}
+
+pub trait WithRange {
+    fn add_range(&mut self, range: impl Into<Range<usize>>);
+    fn remove_range(&mut self);
+}
+
+pub trait WithText {
+    fn add_text(&mut self, text: Arc<str>);
+}
+
+impl<T> WithText for Spanned<T> {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.text = Some(text);
+    }
+}
+
+impl<T: WithText> WithText for Option<T> {
+    fn add_text(&mut self, text: Arc<str>) {
+        if let Some(inner) = self {
+            inner.add_text(text);
+        }
+    }
+}
+
+impl<T: WithText> WithText for Vec<T> {
+    fn add_text(&mut self, text: Arc<str>) {
+        for item in self {
+            item.add_text(text.clone());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use serde_json::json;
+    use test_case::test_case;
+
+    use crate::Spanned;
+
+    #[test_case(Spanned { value: 10, range: Some(0..2), path: None, text: None }, "10")]
+    #[test_case(Spanned { value: "hello world", range: None, path: None, text: Some(Arc::from("hello world")) }, "\"hello world\"")]
+    #[test_case(Spanned { value: json!({ "name": "George", "age": 100 }), range: None, path: None, text: Some(Arc::from("hello world")) }, "{\"age\":100,\"name\":\"George\"}")]
+    fn test_serialize_spanned<T>(spanned_value: Spanned<T>, expected: &str)
+    where
+        T: serde::Serialize,
+    {
+        let actual = serde_json::to_string(&spanned_value).unwrap();
+        assert_eq!(actual, expected);
     }
 }

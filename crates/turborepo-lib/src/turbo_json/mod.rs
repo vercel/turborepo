@@ -594,7 +594,7 @@ fn gather_env_vars(
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, sync::Arc};
+    use std::fs;
 
     use anyhow::Result;
     use biome_deserialize::json::deserialize_from_json_str;
@@ -606,18 +606,18 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
     use turborepo_repository::package_json::PackageJson;
 
-    use super::RawTurboJson;
+    use super::{Pipeline, RawTurboJson, Spanned};
     use crate::{
         cli::OutputLogsMode,
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
-        turbo_json::{Pipeline, RawTaskDefinition, Spanned, TurboJson},
+        turbo_json::{RawTaskDefinition, TurboJson},
     };
 
     #[test_case(r"{}", TurboJson::default() ; "empty")]
     #[test_case(r#"{ "globalDependencies": ["tsconfig.json", "jest.config.js"] }"#,
         TurboJson {
-            global_deps: Spanned::new(vec!["jest.config.js".to_string(), "tsconfig.json".to_string()]),
+            global_deps: Spanned::new(vec!["jest.config.js".to_string(), "tsconfig.json".to_string()]).with_range(24..59).with_text("{ \"globalDependencies\": [\"tsconfig.json\", \"jest.config.js\"] }"),
             ..TurboJson::default()
         }
     ; "global dependencies (sorted)")]
@@ -689,7 +689,7 @@ mod tests {
             pipeline: Pipeline([(
                 "//#build".into(),
                 RawTaskDefinition {
-                    cache: Some(Spanned::new(true)),
+                    cache: Some(Spanned::new(true).with_range(84..88)),
                     ..RawTaskDefinition::default()
                 }
             ),
@@ -729,10 +729,11 @@ mod tests {
     #[test_case(
         r#"{ "persistent": false }"#,
         RawTaskDefinition {
-            persistent: Some(Spanned::new(false)),
+            persistent: Some(Spanned::new(false).with_range(16..21)),
             ..RawTaskDefinition::default()
         },
         TaskDefinition::default()
+    ; "just persistent"
     )]
     #[test_case(
         r#"{ "dotEnv": [] }"#,
@@ -764,15 +765,15 @@ mod tests {
           "persistent": true
         }"#,
         RawTaskDefinition {
-            depends_on: Some(Spanned::new(vec!["cli#build".to_string()])),
-            dot_env: Some(Spanned::new(vec!["package/a/.env".to_string()])),
-            env: Some(vec![Spanned::new("OS".to_string())]),
-            pass_through_env: Some(vec![Spanned::new("AWS_SECRET_KEY".to_string())]),
-            outputs: Some(Spanned::new(vec!["package/a/dist".to_string()])),
-            cache: Some(Spanned::new(false)),
-            inputs: Some(Spanned::new(vec!["package/a/src/**".to_string()])),
-            output_mode: Some(Spanned::new(OutputLogsMode::Full)),
-            persistent: Some(Spanned::new(true).with_range(16..21)),
+            depends_on: Some(Spanned::new(vec!["cli#build".to_string()]).with_range(25..38)),
+            dot_env: Some(Spanned::new(vec!["package/a/.env".to_string()]).with_range(60..78)),
+            env: Some(vec![Spanned::new("OS".to_string()).with_range(98..102)]),
+            pass_through_env: Some(vec![Spanned::new("AWS_SECRET_KEY".to_string()).with_range(134..150)]),
+            outputs: Some(Spanned::new(vec!["package/a/dist".to_string()]).with_range(174..192)),
+            cache: Some(Spanned::new(false).with_range(213..218)),
+            inputs: Some(Spanned::new(vec!["package/a/src/**".to_string()]).with_range(240..260)),
+            output_mode: Some(Spanned::new(OutputLogsMode::Full).with_range(286..292)),
+            persistent: Some(Spanned::new(true).with_range(318..322)),
         },
         TaskDefinition {
           dot_env: Some(vec![RelativeUnixPathBuf::new("package/a/.env").unwrap()]),
@@ -789,6 +790,7 @@ mod tests {
           topological_dependencies: vec![],
           persistent: true,
         }
+      ; "full"
     )]
     fn test_deserialize_task_definition(
         task_definition_content: &str,
@@ -875,17 +877,6 @@ mod tests {
             .and_then(|pipeline| pipeline.0.get(&TaskName::from("build")))
             .and_then(|build| build.output_mode.clone())
             .map(|mode| mode.into_inner());
-        assert_eq!(actual, expected);
-    }
-
-    #[test_case(Spanned { value: 10, range: Some(0..2), path: None, text: None }, "10")]
-    #[test_case(Spanned { value: "hello world", range: None, path: None, text: Some(Arc::from("hello world")) }, "\"hello world\"")]
-    #[test_case(Spanned { value: json!({ "name": "George", "age": 100 }), range: None, path: None, text: Some(Arc::from("hello world")) }, "{\"age\":100,\"name\":\"George\"}")]
-    fn test_serialize_spanned<T>(spanned_value: Spanned<T>, expected: &str)
-    where
-        T: serde::Serialize,
-    {
-        let actual = serde_json::to_string(&spanned_value).unwrap();
         assert_eq!(actual, expected);
     }
 }
