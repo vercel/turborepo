@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -59,10 +59,6 @@ impl PackageJson {
         Self::from_str(&contents)
     }
 
-    pub fn from_str(contents: &str) -> Result<PackageJson, Error> {
-        Ok(serde_json::from_str(contents)?)
-    }
-
     // Utility method for easy construction of package.json during testing
     pub fn from_value(value: serde_json::Value) -> Result<PackageJson, Error> {
         let package_json: PackageJson = serde_json::from_value(value)?;
@@ -75,6 +71,14 @@ impl PackageJson {
             .flatten()
             .chain(self.optional_dependencies.iter().flatten())
             .chain(self.dependencies.iter().flatten())
+    }
+}
+
+impl FromStr for PackageJson {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(serde_json::from_str(s)?)
     }
 }
 
