@@ -76,18 +76,24 @@ pub fn main() -> Payload {
                 config::Error::InvalidEnvPrefix { .. },
             ))))
             | Error::Cli(cli::Error::Run(run::Error::Config(
+                config::Error::InvalidEnvPrefix { .. },
+            )))
+            | Error::Cli(cli::Error::Run(run::Error::Config(
                 config::Error::TurboJsonParseError(_),
             )))
             | Error::Cli(cli::Error::Run(run::Error::Builder(BuilderError::Config(
                 config::Error::TurboJsonParseError(_),
-            ))))),
+            ))))
+            | Error::Cli(cli::Error::Run(run::Error::Config(
+                config::Error::PackageTaskInSinglePackageMode { .. },
+            )))),
         ) => {
             println!("{:?}", Report::new(err));
 
             Payload::Rust(Ok(1))
         }
         // We don't need to print "Turbo error" for Run errors
-        Err(err @ shim::Error::Cli(cli::Error::Run(_))) => Payload::Rust(Err(err)),
+        Err(err @ Error::Cli(cli::Error::Run(_))) => Payload::Rust(Err(err)),
         Err(err) => {
             // This raw print matches the Go behavior, once we no longer care
             // about matching formatting we should remove this.

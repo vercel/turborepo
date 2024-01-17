@@ -10,6 +10,7 @@ use turborepo_repository::package_graph::{
 
 use super::Engine;
 use crate::{
+    config,
     run::task_id::{TaskId, TaskName},
     task_graph::TaskDefinition,
     turbo_json::{validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJson},
@@ -33,8 +34,11 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
-    #[error("Invalid turbo.json:\n{error_lines}")]
-    Validation { error_lines: String },
+    #[error("Invalid turbo.json")]
+    Validation {
+        #[related]
+        errors: Vec<config::Error>,
+    },
     #[error(transparent)]
     Graph(#[from] graph::Error),
     #[error("Invalid task name {task_name}: {reason}")]
@@ -330,15 +334,13 @@ impl<'a> EngineBuilder<'a> {
                     let validation_errors = workspace_json
                         .validate(&[validate_no_package_task_syntax, validate_extends]);
                     if !validation_errors.is_empty() {
-                        let error_lines = validation_errors
-                            .into_iter()
-                            .map(|err| format!(" - {err}"))
-                            .join("\n");
-                        return Err(Error::Validation { error_lines });
+                        return Err(Error::Validation {
+                            errors: validation_errors,
+                        });
                     }
 
                     if let Some(workspace_def) = workspace_json.pipeline.get(task_name) {
-                        task_definitions.push(workspace_def.clone());
+                        task_definitions.push(workspace_def.task_definition.clone());
                     }
                 }
                 Ok(None) => (),

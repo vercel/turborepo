@@ -1,11 +1,13 @@
 use std::{collections::HashMap, ffi::OsString, io};
 
+use convert_case::{Case, Casing};
 use miette::{Diagnostic, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_dirs::config_dir;
+use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
 pub use crate::turbo_json::RawTurboJson;
@@ -33,6 +35,8 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error(transparent)]
     Camino(#[from] camino::FromPathBufError),
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
     #[error("Encountered an IO error while attempting to read {config_path}: {error}")]
     FailedToReadConfig {
         config_path: AbsoluteSystemPathBuf,
@@ -47,11 +51,19 @@ pub enum Error {
         "Package tasks (<package>#<task>) are not allowed in single-package repositories: found \
          {task_id}"
     )]
-    PackageTaskInSinglePackageMode { task_id: String },
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    #[diagnostic(code(package_task_in_single_package_mode), url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)))]
+    PackageTaskInSinglePackageMode {
+        task_id: String,
+        #[source_code]
+        text: String,
+        #[label("package task found here")]
+        span: Option<SourceSpan>,
+    },
     #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
-    #[diagnostic(code(turbo::config::invalid_env_prefix))]
+    #[diagnostic(
+        code(invalid_env_prefix),
+        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+    )]
     InvalidEnvPrefix {
         value: String,
         key: String,
@@ -63,8 +75,19 @@ pub enum Error {
     },
     #[error(transparent)]
     PathError(#[from] turbopath::PathError),
+    #[diagnostic(
+        code(unnecessary_package_task_syntax),
+        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+    )]
     #[error("\"{actual}\". Use \"{wanted}\" instead")]
-    UnnecessaryPackageTaskSyntax { actual: String, wanted: String },
+    UnnecessaryPackageTaskSyntax {
+        actual: String,
+        wanted: String,
+        #[label("unnecessary syntax found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: String,
+    },
     #[error("You can only extend from the root workspace")]
     ExtendFromNonRoot,
     #[error("No \"extends\" key found")]

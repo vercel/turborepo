@@ -23,7 +23,7 @@ use crate::{
     cli::OutputLogsMode,
     config::ConfigurationOptions,
     run::task_id::TaskName,
-    turbo_json::{Pipeline, RawTaskDefinition, RawTurboJson, SpacesJson, Spanned},
+    turbo_json::{Pipeline, PipelineEntry, RawTaskDefinition, RawTurboJson, SpacesJson, Spanned},
     unescape::UnescapedString,
 };
 
@@ -57,8 +57,7 @@ impl From<biome_diagnostics::Error> for ParseDiagnostic {
                 .unwrap_or_default(),
             label: location.span.map(|span| {
                 let start: usize = span.start().into();
-                let end: usize = span.end().into();
-                let len = end - start;
+                let len: usize = span.len().into();
                 (start, len).into()
             }),
         }
@@ -130,6 +129,49 @@ impl Deserializable for TaskName<'static> {
         let task_id: String = UnescapedString::deserialize(value, name, diagnostics)?.into();
 
         Some(Self::from(task_id))
+    }
+}
+
+impl Deserializable for Pipeline {
+    fn deserialize(
+        value: &impl DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        value.deserialize(PipelineVisitor, name, diagnostics)
+    }
+}
+
+struct PipelineVisitor;
+
+impl DeserializationVisitor for PipelineVisitor {
+    type Output = Pipeline;
+
+    const EXPECTED_TYPE: VisitableType = VisitableType::MAP;
+
+    fn visit_map(
+        self,
+        members: impl Iterator<Item = Option<(impl DeserializableValue, impl DeserializableValue)>>,
+        _range: TextRange,
+        _name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        let mut result = BTreeMap::new();
+        for (key, value) in members.flatten() {
+            let task_name_range = value.range();
+            let task_name = TaskName::deserialize(&key, "", diagnostics)?;
+            let task_name_start: usize = task_name_range.start().into();
+            let task_name_end: usize = task_name_range.end().into();
+            result.insert(
+                task_name,
+                PipelineEntry {
+                    task_definition: RawTaskDefinition::deserialize(&value, "", diagnostics)?,
+                    span: Some(task_name_start..task_name_end),
+                },
+            );
+        }
+
+        Some(Pipeline(result))
     }
 }
 
@@ -449,8 +491,8 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
                     }
                 }
                 "pipeline" => {
-                    if let Some(pipeline) = BTreeMap::deserialize(&value, &key_text, diagnostics) {
-                        result.pipeline = Some(Pipeline(pipeline));
+                    if let Some(pipeline) = Pipeline::deserialize(&value, &key_text, diagnostics) {
+                        result.pipeline = Some(pipeline);
                     }
                 }
                 "remoteCache" => {
@@ -475,6 +517,7 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
 
 impl WithText for RawTurboJson {
     fn add_text(&mut self, text: Arc<str>) {
+        self.text = Some(text.clone());
         self.extends.add_text(text.clone());
         self.global_dependencies.add_text(text.clone());
         self.global_env.add_text(text.clone());
@@ -485,8 +528,8 @@ impl WithText for RawTurboJson {
 
 impl WithText for Pipeline {
     fn add_text(&mut self, text: Arc<str>) {
-        for (_, task) in self.0.iter_mut() {
-            task.add_text(text.clone());
+        for (_, entry) in self.0.iter_mut() {
+            entry.task_definition.add_text(text.clone());
         }
     }
 }
