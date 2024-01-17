@@ -771,8 +771,8 @@ impl<'a> RunSummary<'a> {
 
         // Sort dependencies
         for task in &mut self.tasks {
-            task.shared.dependencies.sort_by(|d1, d2| d1.cmp(&d2));
-            task.shared.dependents.sort_by(|d1, d2| d1.cmp(&d2));
+            task.shared.dependencies.sort();
+            task.shared.dependents.sort();
         }
     }
 
