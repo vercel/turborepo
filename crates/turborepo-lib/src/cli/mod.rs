@@ -1,4 +1,4 @@
-use std::{backtrace, backtrace::Backtrace, env, io, mem, process};
+use std::{backtrace, backtrace::Backtrace, env, fmt, fmt::Display, io, mem, process};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{
@@ -16,9 +16,9 @@ use turborepo_telemetry::{
     events::{
         command::{CodePath, CommandEventBuilder},
         generic::GenericEventBuilder,
-        EventBuilder,
+        EventBuilder, EventType,
     },
-    init_telemetry, TelemetryHandle,
+    init_telemetry, track_usage, TelemetryHandle,
 };
 use turborepo_ui::UI;
 
@@ -37,6 +37,11 @@ mod error;
 // Global turbo sets this environment variable to its cwd so that local
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
+
+// Default value for the --cache-workers argument
+const DEFAULT_NUM_WORKERS: u32 = 10;
+const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
+    ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize, ValueEnum)]
 pub enum OutputLogsMode {
@@ -58,6 +63,18 @@ impl Default for OutputLogsMode {
     }
 }
 
+impl Display for OutputLogsMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            OutputLogsMode::Full => "full",
+            OutputLogsMode::None => "none",
+            OutputLogsMode::HashOnly => "hash-only",
+            OutputLogsMode::NewOnly => "new-only",
+            OutputLogsMode::ErrorsOnly => "errors-only",
+        })
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum LogOrder {
     #[serde(rename = "auto")]
@@ -74,6 +91,16 @@ impl Default for LogOrder {
     }
 }
 
+impl Display for LogOrder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            LogOrder::Auto => "auto",
+            LogOrder::Stream => "stream",
+            LogOrder::Grouped => "grouped",
+        })
+    }
+}
+
 // NOTE: These *must* be kept in sync with the `_dryRunJSONValue`
 // and `_dryRunTextValue` constants in run.go.
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
@@ -82,12 +109,31 @@ pub enum DryRunMode {
     Json,
 }
 
+impl Display for DryRunMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            DryRunMode::Text => "text",
+            DryRunMode::Json => "json",
+        })
+    }
+}
+
 #[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum)]
 pub enum EnvMode {
     #[default]
     Infer,
     Loose,
     Strict,
+}
+
+impl fmt::Display for EnvMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            EnvMode::Infer => "infer",
+            EnvMode::Loose => "loose",
+            EnvMode::Strict => "strict",
+        })
+    }
 }
 
 #[derive(Parser, Clone, Default, Debug, PartialEq, Serialize)]
@@ -324,65 +370,39 @@ impl Args {
         }
     }
 
-    pub fn track(&self, telemetry: &GenericEventBuilder) {
+    pub fn track(&self, tel: &GenericEventBuilder) {
         // track usage only
-        if self.skip_infer {
-            telemetry.track_arg_usage("skip-infer", true);
-        }
-        if self.no_update_notifier {
-            telemetry.track_arg_usage("no-update-notifier", true);
-        }
-        if self.api.is_some() {
-            telemetry.track_arg_usage("api", true);
-        }
-        if self.color {
-            telemetry.track_arg_usage("color", true);
-        }
-        if self.cpu_profile.is_some() {
-            telemetry.track_arg_usage("cpuprofile", true);
-        }
-        if self.cwd.is_some() {
-            telemetry.track_arg_usage("cwd", true);
-        }
-        if self.heap.is_some() {
-            telemetry.track_arg_usage("heap", true);
-        }
-        if self.login.is_some() {
-            telemetry.track_arg_usage("login", true);
-        }
-        if self.no_color {
-            telemetry.track_arg_usage("no-color", true);
-        }
-        if self.preflight {
-            telemetry.track_arg_usage("preflight", true);
-        }
-        if self.team.is_some() {
-            telemetry.track_arg_usage("team", true);
-        }
-        if self.token.is_some() {
-            telemetry.track_arg_usage("token", true);
-        }
-        if self.trace.is_some() {
-            telemetry.track_arg_usage("trace", true);
-        }
+        track_usage!(tel, self.skip_infer, |val| val);
+        track_usage!(tel, self.no_update_notifier, |val| val);
+        track_usage!(tel, self.color, |val| val);
+        track_usage!(tel, self.no_color, |val| val);
+        track_usage!(tel, self.preflight, |val| val);
+        track_usage!(tel, &self.login, Option::is_some);
+        track_usage!(tel, &self.cwd, Option::is_some);
+        track_usage!(tel, &self.heap, Option::is_some);
+        track_usage!(tel, &self.cpu_profile, Option::is_some);
+        track_usage!(tel, &self.team, Option::is_some);
+        track_usage!(tel, &self.token, Option::is_some);
+        track_usage!(tel, &self.trace, Option::is_some);
+        track_usage!(tel, &self.api, Option::is_some);
 
         // track values
         if let Some(remote_cache_timeout) = self.remote_cache_timeout {
-            telemetry.track_arg_value(
+            tel.track_arg_value(
                 "remote-cache-timeout",
                 remote_cache_timeout,
                 turborepo_telemetry::events::EventType::NonSensitive,
             );
         }
         if self.verbosity.v > 0 {
-            telemetry.track_arg_value(
+            tel.track_arg_value(
                 "v",
                 self.verbosity.v,
                 turborepo_telemetry::events::EventType::NonSensitive,
             );
         }
         if let Some(verbosity) = self.verbosity.verbosity {
-            telemetry.track_arg_value(
+            tel.track_arg_value(
                 "verbosity",
                 verbosity,
                 turborepo_telemetry::events::EventType::NonSensitive,
@@ -562,6 +582,23 @@ pub enum GenerateCommand {
     Run(GeneratorCustomArgs),
 }
 
+fn validate_graph_extension(s: &str) -> Result<String, String> {
+    match s.is_empty() {
+        true => Ok(s.to_string()),
+        _ => match Utf8Path::new(s).extension() {
+            Some(ext) if SUPPORTED_GRAPH_FILE_EXTENSIONS.contains(&ext) => Ok(s.to_string()),
+            Some(ext) => Err(format!(
+                "Invalid file extension: '{}'. Allowed extensions are: {:?}",
+                ext, SUPPORTED_GRAPH_FILE_EXTENSIONS
+            )),
+            None => Err(format!(
+                "The provided filename is missing a file extension. Allowed extensions are: {:?}",
+                SUPPORTED_GRAPH_FILE_EXTENSIONS
+            )),
+        },
+    }
+}
+
 #[derive(Parser, Clone, Debug, Default, Serialize, PartialEq)]
 #[command(groups = [
     ArgGroup::new("daemon-group").multiple(false).required(false),
@@ -572,7 +609,7 @@ pub struct RunArgs {
     #[clap(long)]
     pub cache_dir: Option<Utf8PathBuf>,
     /// Set the number of concurrent cache operations (default 10)
-    #[clap(long, default_value_t = 10)]
+    #[clap(long, default_value_t = DEFAULT_NUM_WORKERS)]
     pub cache_workers: u32,
     /// Limit the concurrency of task execution. Use 1 for serial (i.e.
     /// one-at-a-time) execution.
@@ -603,8 +640,9 @@ pub struct RunArgs {
     pub global_deps: Vec<String>,
     /// Generate a graph of the task execution and output to a file when a
     /// filename is specified (.svg, .png, .jpg, .pdf, .json,
-    /// .html). Outputs dot graph to stdout when if no filename is provided
-    #[clap(long, num_args = 0..=1, default_missing_value = "")]
+    /// .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename
+    /// is provided
+    #[clap(long, num_args = 0..=1, default_missing_value = "", value_parser = validate_graph_extension)]
     pub graph: Option<String>,
     /// Environment variable mode.
     /// Use "loose" to pass the entire existing environment.
@@ -758,6 +796,87 @@ impl RunArgs {
             (None, None) => None,
         }
     }
+
+    pub fn track(&self, telemetry: &CommandEventBuilder) {
+        // default to false
+        track_usage!(telemetry, self.framework_inference, |val: bool| !val);
+
+        // default to true
+        track_usage!(telemetry, self.continue_execution, |val| val);
+        track_usage!(telemetry, self.include_dependencies, |val| val);
+        track_usage!(telemetry, self.go_fallback, |val| val);
+        track_usage!(telemetry, self.single_package, |val| val);
+        track_usage!(telemetry, self.no_deps, |val| val);
+        track_usage!(telemetry, self.no_cache, |val| val);
+        track_usage!(telemetry, self.daemon, |val| val);
+        track_usage!(telemetry, self.no_daemon, |val| val);
+        track_usage!(telemetry, self.only, |val| val);
+        track_usage!(telemetry, self.parallel, |val| val);
+        track_usage!(telemetry, self.remote_only, |val| val);
+        track_usage!(telemetry, self.remote_cache_read_only, |val| val);
+
+        // default to None
+        track_usage!(telemetry, &self.cache_dir, Option::is_some);
+        track_usage!(telemetry, &self.profile, Option::is_some);
+        track_usage!(telemetry, &self.force, Option::is_some);
+        track_usage!(telemetry, &self.since, Option::is_some);
+        track_usage!(telemetry, &self.pkg_inference_root, Option::is_some);
+        track_usage!(telemetry, &self.anon_profile, Option::is_some);
+        track_usage!(telemetry, &self.summarize, Option::is_some);
+        track_usage!(telemetry, &self.experimental_space_id, Option::is_some);
+
+        // track values
+        if let Some(dry_run) = &self.dry_run {
+            telemetry.track_arg_value("dry-run", dry_run, EventType::NonSensitive);
+        }
+
+        if self.cache_workers != DEFAULT_NUM_WORKERS {
+            telemetry.track_arg_value("cache-workers", self.cache_workers, EventType::NonSensitive);
+        }
+
+        if let Some(concurrency) = &self.concurrency {
+            telemetry.track_arg_value("concurrency", concurrency, EventType::NonSensitive);
+        }
+
+        if !self.global_deps.is_empty() {
+            telemetry.track_arg_value("global-deps", self.cache_workers, EventType::NonSensitive);
+        }
+
+        if let Some(graph) = &self.graph {
+            // track the extension used only
+            let extension = Utf8Path::new(graph).extension().unwrap_or("stdout");
+            telemetry.track_arg_value("graph", extension, EventType::NonSensitive);
+        }
+
+        if self.env_mode != EnvMode::default() {
+            telemetry.track_arg_value("env-mode", self.env_mode, EventType::NonSensitive);
+        }
+
+        if let Some(output_logs) = &self.output_logs {
+            telemetry.track_arg_value("output-logs", output_logs, EventType::NonSensitive);
+        }
+
+        if self.log_order != LogOrder::default() {
+            telemetry.track_arg_value("log-order", self.log_order, EventType::NonSensitive);
+        }
+
+        if self.log_prefix != LogPrefix::default() {
+            telemetry.track_arg_value("log-prefix", self.log_prefix, EventType::NonSensitive);
+        }
+
+        // track sizes
+        if !self.filter.is_empty() {
+            telemetry.track_arg_value("filter:length", self.filter.len(), EventType::NonSensitive);
+        }
+
+        if !self.scope.is_empty() {
+            telemetry.track_arg_value("scope:length", self.scope.len(), EventType::NonSensitive);
+        }
+
+        if !self.ignore.is_empty() {
+            telemetry.track_arg_value("ignore:length", self.ignore.len(), EventType::NonSensitive);
+        }
+    }
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
@@ -773,6 +892,16 @@ pub enum LogPrefix {
 impl Default for LogPrefix {
     fn default() -> Self {
         Self::Auto
+    }
+}
+
+impl Display for LogPrefix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LogPrefix::Auto => write!(f, "auto"),
+            LogPrefix::None => write!(f, "none"),
+            LogPrefix::Task => write!(f, "task"),
+        }
     }
 }
 
@@ -1048,7 +1177,6 @@ pub async fn run(
             }
 
             if let Some((file_path, include_args)) = args.profile_file_and_include_args() {
-                event.track_run_chrome_tracing();
                 // TODO: Do we want to handle the result / error?
                 let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
@@ -1057,6 +1185,7 @@ pub async fn run(
             let should_use_go = args.go_fallback
                 || env::var("EXPERIMENTAL_RUST_CODEPATH").as_deref() == Ok("false");
 
+            args.track(&event);
             if should_use_go {
                 event.track_run_code_path(CodePath::Go);
                 // we have to clear the telemetry queue before we hand off to go
@@ -1068,7 +1197,7 @@ pub async fn run(
             } else {
                 use crate::commands::run;
                 event.track_run_code_path(CodePath::Rust);
-                let exit_code = run::run(base).await?;
+                let exit_code = run::run(base, event).await?;
                 Ok(Payload::Rust(Ok(exit_code)))
             }
         }

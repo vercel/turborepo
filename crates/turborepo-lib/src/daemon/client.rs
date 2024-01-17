@@ -164,8 +164,8 @@ fn format_repo_relative_glob(glob: &str) -> String {
 #[derive(Error, Debug)]
 pub enum DaemonError {
     /// The server was connected but is now unavailable.
-    #[error("server is unavailable")]
-    Unavailable,
+    #[error("server is unavailable: {0}")]
+    Unavailable(String),
     #[error("error opening socket: {0}")]
     SocketOpen(#[from] SocketOpenError),
     /// The server is running a different version of turborepo.
@@ -211,7 +211,7 @@ impl From<Status> for DaemonError {
     fn from(status: Status) -> DaemonError {
         match status.code() {
             Code::FailedPrecondition | Code::Unimplemented => DaemonError::VersionMismatch,
-            Code::Unavailable => DaemonError::Unavailable,
+            Code::Unavailable => DaemonError::Unavailable(status.message().to_string()),
             c => DaemonError::GrpcFailure(c),
         }
     }
