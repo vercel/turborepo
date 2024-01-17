@@ -39,6 +39,8 @@ pub enum Error {
         descriptor: Descriptor<'static>,
         other: String,
     },
+    #[error("unable to parse as patch reference: {0}")]
+    InvalidPatchReference(String),
 }
 
 // We depend on BTree iteration being sorted for correct serialization
@@ -181,6 +183,14 @@ impl BerryLockfile {
                 }
                 possible_extensions.remove(&descriptor);
             }
+
+            // For Yarn 4, remove any patch sources that are accounted for by a patch
+            if let Some(Locator { ident, reference }) = locator.patched_locator() {
+                possible_extensions.remove(&Descriptor {
+                    ident,
+                    range: reference,
+                });
+            }
         }
 
         self.extensions.extend(
@@ -249,7 +259,7 @@ impl BerryLockfile {
 
     /// Produces a new lockfile containing only the given workspaces and
     /// packages
-    pub fn subgraph(
+    fn subgraph(
         &self,
         workspace_packages: &[String],
         packages: &[String],
@@ -305,6 +315,26 @@ impl BerryLockfile {
             // If the package has an associated patch we include it in the subgraph
             if let Some(patch_locator) = self.patches.get(&locator) {
                 patches.insert(locator.as_owned(), patch_locator.clone());
+            }
+
+            // Yarn 4 allows workspaces to depend directly on patched dependencies instead
+            // of using resolutions. This results in the patched dependency appearing in the
+            // closure instead of the original.
+            if locator.patch_file().is_some() {
+                if let Some((original, _)) =
+                    self.patches.iter().find(|(_, patch)| patch == &&locator)
+                {
+                    patches.insert(original.as_owned(), locator.as_owned());
+                    // We include the patched dependency resolution
+                    let Locator { ident, reference } = original.as_owned();
+                    resolutions.insert(
+                        Descriptor {
+                            ident,
+                            range: reference,
+                        },
+                        original.as_owned(),
+                    );
+                }
             }
         }
 
@@ -461,103 +491,8 @@ impl Lockfile for BerryLockfile {
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn Lockfile>, crate::Error> {
-        let reverse_lookup = self.locator_to_descriptors();
-
-        let mut resolutions = Map::new();
-        let mut patches = Map::new();
-
-        // Include all workspace packages and their references
-        for (locator, package) in &self.locator_package {
-            if workspace_packages
-                .iter()
-                .map(|s| s.as_str())
-                .chain(iter::once("."))
-                .any(|path| locator.is_workspace_path(path))
-            {
-                //  We need to track all of the descriptors coming out the workspace
-                for (name, range) in package.dependencies.iter().flatten() {
-                    let dependency = self.resolve_dependency(locator, name, range.as_ref())?;
-                    let dep_locator = self
-                        .resolutions
-                        .get(&dependency)
-                        .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
-                    resolutions.insert(dependency, dep_locator.clone());
-                }
-
-                // Included workspaces will always have their locator listed as a descriptor.
-                // All other descriptors should show up in the other workspace package
-                // dependencies.
-                resolutions.insert(Descriptor::from(locator.clone()), locator.clone());
-            }
-        }
-
-        for key in packages {
-            // The error mapping is required to help massage the error types
-            let locator = Locator::try_from(key.as_str()).map_err(Error::from)?;
-
-            let package = self
-                .locator_package
-                .get(&locator)
-                .cloned()
-                .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))?;
-
-            for (name, range) in package.dependencies.iter().flatten() {
-                let dependency = self.resolve_dependency(&locator, name, range.as_ref())?;
-                let dep_locator = self
-                    .resolutions
-                    .get(&dependency)
-                    .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
-                resolutions.insert(dependency, dep_locator.clone());
-            }
-
-            // If the package has an associated patch we include it in the subgraph
-            if let Some(patch_locator) = self.patches.get(&locator) {
-                patches.insert(locator.as_owned(), patch_locator.clone());
-            }
-        }
-
-        for patch in patches.values() {
-            let patch_descriptors = reverse_lookup
-                .get(patch)
-                .unwrap_or_else(|| panic!("Unable to find {patch} in reverse lookup"));
-
-            // For each patch descriptor we extract the primary descriptor that each patch
-            // descriptor targets and check if that descriptor is present in the
-            // pruned map and add it if it is present
-            for patch_descriptor in patch_descriptors {
-                let version = patch_descriptor.primary_version().unwrap();
-                let primary_descriptor = Descriptor {
-                    ident: patch_descriptor.ident.clone(),
-                    range: version.into(),
-                };
-
-                if resolutions.contains_key(&primary_descriptor) {
-                    resolutions.insert((*patch_descriptor).clone(), patch.clone());
-                }
-            }
-        }
-
-        // Add any descriptors used by package extensions
-        for descriptor in &self.extensions {
-            let locator = self
-                .resolutions
-                .get(descriptor)
-                .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
-            resolutions.insert(descriptor.clone(), locator.clone());
-        }
-
-        Ok(Box::new(Self {
-            data: self.data.clone(),
-            resolutions,
-            patches,
-            // We clone the following structures without any alterations and
-            // rely on resolutions being correctly pruned.
-            locator_package: self.locator_package.clone(),
-            resolver: self.resolver.clone(),
-            extensions: self.extensions.clone(),
-            overrides: self.overrides.clone(),
-            workspace_path_to_locator: self.workspace_path_to_locator.clone(),
-        }))
+        let subgraph = self.subgraph(workspace_packages, packages)?;
+        Ok(Box::new(subgraph))
     }
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
@@ -756,7 +691,7 @@ mod test {
 
         assert_eq!(
             &lockfile.extensions,
-            &(["@babel/types@npm:^7.8.3", "lodash@npm:4.17.21"]
+            &(["@babel/types@npm:^7.8.3"]
                 .iter()
                 .map(|s| Descriptor::try_from(*s).unwrap())
                 .collect::<HashSet<_>>())
@@ -1047,5 +982,125 @@ mod test {
             .unwrap()
             .unwrap();
         assert_eq!(c_pkg.key, "c@workspace:pkgs/c");
+    }
+
+    #[test]
+    fn test_yarn4_patches_direct_dependency() {
+        let data =
+            LockfileData::from_bytes(include_bytes!("../../fixtures/yarn4-patch.lock")).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+
+        let is_odd_locator = lockfile
+            .resolve_package(
+                "packages/b",
+                "is-odd",
+                "patch:is-odd@npm%3A3.0.1#~/.yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch",
+            )
+            .unwrap()
+            .unwrap();
+
+        let expected_key = "is-odd@patch:is-odd@npm%3A3.0.1#~/.yarn/patches/is-odd-npm-3.0.\
+                            1-93c3c3f41b.patch::version=3.0.1&hash=9b90ad";
+
+        assert_eq!(
+            is_odd_locator,
+            crate::Package {
+                key: expected_key.into(),
+                version: "3.0.1".into(),
+            }
+        );
+
+        let deps = crate::transitive_closure(
+            &lockfile,
+            "packages/b",
+            vec![(
+                "is-odd".to_string(),
+                "patch:is-odd@npm%3A3.0.1#~/.yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch"
+                    .to_string(),
+            )]
+            .into_iter()
+            .collect(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            deps,
+            vec![
+                crate::Package {
+                    key: expected_key.into(),
+                    version: "3.0.1".into()
+                },
+                crate::Package {
+                    key: "is-number@npm:6.0.0".into(),
+                    version: "6.0.0".into()
+                }
+            ]
+            .into_iter()
+            .collect()
+        );
+
+        let subgraph = lockfile
+            .subgraph(
+                &["packages/b".into(), "packages/c".into()],
+                &[expected_key.into(), "is-number@npm:6.0.0".into()],
+            )
+            .unwrap();
+
+        let sublockfile = subgraph.lockfile().unwrap();
+
+        // Should contain both patched dependency and original
+        assert!(sublockfile.packages.contains_key("is-odd@npm:3.0.1"));
+        assert!(sublockfile.packages.contains_key(
+            "is-odd@patch:is-odd@npm%3A3.0.1#~/.yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch"
+        ));
+
+        let patches =
+            vec![
+                RelativeUnixPathBuf::new(".yarn/patches/is-odd-npm-3.0.1-93c3c3f41b.patch")
+                    .unwrap(),
+            ];
+        assert_eq!(lockfile.patches().unwrap(), patches);
+        assert_eq!(subgraph.patches().unwrap(), patches);
+    }
+
+    #[test]
+    fn test_yarn4_patches_direct_and_indirect_dependency() {
+        let data = LockfileData::from_bytes(include_bytes!(
+            "../../fixtures/yarn4-direct-and-indirect.lock"
+        ))
+        .unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+
+        let b_closure = lockfile
+            .subgraph(
+                &["packages/b".into()],
+                &[
+                    "is-even@npm:1.0.0".into(),
+                    "is-odd@npm:0.1.2".into(),
+                    "is-number@npm:3.0.0".into(),
+                ],
+            )
+            .unwrap();
+
+        assert_eq!(b_closure.patches().unwrap(), vec![]);
+
+        let mut locators = b_closure
+            .lockfile()
+            .unwrap()
+            .packages
+            .values()
+            .map(|package| package.resolution.clone())
+            .collect::<Vec<_>>();
+        locators.sort();
+        assert_eq!(
+            locators,
+            vec![
+                "b@workspace:packages/b".to_string(),
+                "is-even@npm:1.0.0".to_string(),
+                "is-number@npm:3.0.0".to_string(),
+                "is-odd@npm:0.1.2".to_string(),
+                "small-yarn4@workspace:.".to_string(),
+            ]
+        );
     }
 }

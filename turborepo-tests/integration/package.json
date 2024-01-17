@@ -1,5 +1,5 @@
 {
-  "name": "turborepo-tests-integration",
+  "name": "turborepo-tests-integration-common",
   "scripts": {
     "test": "cross-env ./node_modules/.bin/prysk tests",
     "test:interactive": "cross-env PRYSK_INTERACTIVE=true ./node_modules/.bin/prysk tests",
@@ -8,11 +8,12 @@
     "pretest:parallel": ".cram_env/bin/pip3 install --quiet pytest \"prysk[pytest-plugin]\" pytest-xdist"
   },
   "dependencies": {
-    "turborepo-tests-helpers": "workspace:*",
     "@turbo/exe-stub": "workspace:*",
-    "prysk": "workspace:*"
+    "prysk": "workspace:*",
+    "turborepo-tests-helpers": "workspace:*"
   },
   "devDependencies": {
     "cross-env": "^7.0.3"
-  }
+  },
+  "version": "0.0.0"
 }

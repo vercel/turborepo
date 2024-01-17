@@ -1,3 +1,11 @@
+# This file will create many PRs, one for each example.
+# From what I can tell, we are forced into approaching it this way
+# because of the many workspace roots.
+
+# The GHA at .github/workflows/examples-autoaprove-and-automerge.yml
+# is responsible for merging them all to one umbrella PR
+# on the branch #dependabot-updates.
+
 version: 2
 updates:
   - package-ecosystem: "npm"
@@ -12,8 +20,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      basic-example-dependencies:
         patterns:
           - "*"
 
@@ -29,8 +38,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      design-system-example-dependencies:
         patterns:
           - "*"
 
@@ -46,8 +56,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      kitchen-sink-example-dependencies:
         patterns:
           - "*"
 
@@ -63,8 +74,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      non-monorepo-example-dependencies:
         patterns:
           - "*"
 
@@ -80,8 +92,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-berry-example-dependencies:
         patterns:
           - "*"
 
@@ -97,8 +110,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-changesets-example-dependencies:
         patterns:
           - "*"
 
@@ -114,8 +128,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-docker-example-dependencies:
         patterns:
           - "*"
 
@@ -131,8 +146,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-gatsby-example-dependencies:
         patterns:
           - "*"
 
@@ -148,8 +164,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-npm-example-dependencies:
         patterns:
           - "*"
 
@@ -165,8 +182,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-prisma-example-dependencies:
         patterns:
           - "*"
 
@@ -182,8 +200,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      react-native-example-dependencies:
         patterns:
           - "*"
 
@@ -199,8 +218,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-rollup-example-dependencies:
         patterns:
           - "*"
 
@@ -216,8 +236,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-shell-commands-example-dependencies:
         patterns:
           - "*"
 
@@ -233,8 +254,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-svelte-example-dependencies:
         patterns:
           - "*"
 
@@ -250,8 +272,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-tailwind-example-dependencies:
         patterns:
           - "*"
 
@@ -267,8 +290,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-vite-example-dependencies:
         patterns:
           - "*"
 
@@ -284,8 +308,9 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-vue-nuxt-example-dependencies:
         patterns:
           - "*"
 
@@ -301,7 +326,8 @@ updates:
       - dependency-type: "direct"
     assignees:
       - "anthonyshew"
+    target-branch: dependabot-updates
     groups:
-      example-dependencies:
+      with-yarn-example-dependencies:
         patterns:
           - "*"

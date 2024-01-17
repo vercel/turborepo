@@ -66,7 +66,7 @@ impl AuthFile {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 /// Contains the token itself and a list of teams the token is valid for.
 pub struct AuthToken {
     /// The token itself.
@@ -83,6 +83,12 @@ impl AuthToken {
         } else {
             &self.api
         }
+    }
+    pub fn api(&self) -> &str {
+        &self.api
+    }
+    pub fn token(&self) -> &str {
+        &self.token
     }
 }
 

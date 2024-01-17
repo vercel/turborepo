@@ -806,9 +806,9 @@ dependencies = [
 
 [[package]]
 name = "binding_macros"
-version = "0.61.17"
+version = "0.61.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2420ea55f20de7a525e6f037b17e823aae35b201f46f63b9fda0bfed2760eaa9"
+checksum = "6f223044d1a486a04e27ae0012400169aeb9f6fba2e86f72537c1e827a2f8c1c"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -2017,7 +2017,7 @@ dependencies = [
  "cssparser-macros",
  "dtoa-short",
  "itoa",
- "phf 0.11.2",
+ "phf 0.10.1",
  "serde",
  "smallvec 1.11.1",
 ]
@@ -3125,7 +3125,9 @@ dependencies = [
 name = "globwalk"
 version = "0.1.0"
 dependencies = [
+ "camino",
  "itertools",
+ "path-clean 1.0.1",
  "path-slash",
  "regex",
  "tempdir",
@@ -3845,7 +3847,7 @@ checksum = "334e04b4d781f436dc315cb1e7515bd96826426345d498149e4bde36b67f8ee9"
 dependencies = [
  "async-channel",
  "castaway",
- "crossbeam-utils 0.8.16",
+ "crossbeam-utils 0.7.2",
  "curl",
  "curl-sys",
  "encoding_rs",
@@ -5517,7 +5519,9 @@ version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fabbf1ead8a5bcbc20f5f8b939ee3f5b0f6f281b6ad3468b84656b658b455259"
 dependencies = [
+ "phf_macros 0.10.0",
  "phf_shared 0.10.0",
+ "proc-macro-hack",
 ]
 
 [[package]]
@@ -5526,7 +5530,7 @@ version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ade2d8b8f33c7333b51bcf0428d37e217e9f32192ae4772156f65063b8ce03dc"
 dependencies = [
- "phf_macros",
+ "phf_macros 0.11.2",
  "phf_shared 0.11.2",
 ]
 
@@ -5558,6 +5562,20 @@ checksum = "48e4cc64c2ad9ebe670cb8fd69dd50ae301650392e81c05f9bfcb2d5bdbc24b0"
 dependencies = [
  "phf_shared 0.11.2",
  "rand 0.8.5",
+]
+
+[[package]]
+name = "phf_macros"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58fdf3184dd560f160dd73922bea2d5cd6e8f064bf4b13110abd81b03697b4e0"
+dependencies = [
+ "phf_generator 0.10.0",
+ "phf_shared 0.10.0",
+ "proc-macro-hack",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -7879,9 +7897,9 @@ dependencies = [
 
 [[package]]
 name = "swc_core"
-version = "0.87.18"
+version = "0.87.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4f09ab383cddb911bf838e8d192e4cfd4c016bfa5168a7896ab28cbd0e6e7e4"
+checksum = "455c32b15bcdf8cddd87ce4c5d51f89bc16dfb3e6e58959e1cead7634ab2e828"
 dependencies = [
  "binding_macros",
  "swc",
@@ -10895,6 +10913,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "turbo-tasks-malloc",
 ]
 
 [[package]]
@@ -11173,6 +11192,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "miette 5.10.0",
+ "nix",
  "node-semver",
  "notify 5.1.0",
  "num_cpus",
@@ -11313,7 +11333,6 @@ dependencies = [
  "globwalk",
  "hex",
  "ignore",
- "itertools",
  "nom",
  "sha1 0.10.5",
  "tempfile",
@@ -11405,8 +11424,8 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
- "rand 0.8.5",
+ "cfg-if 0.1.10",
+ "rand 0.4.6",
  "static_assertions",
 ]
 

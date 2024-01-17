@@ -10,6 +10,7 @@ import { ExtraContent } from "./components/ExtraContent";
 import { Discord, Github } from "./components/Social";
 import { Main } from "./components/Main";
 import { Search } from "./components/Search";
+import { pathHasToolbar } from "./lib/comments";
 
 const NoSSRCommentsButton = dynamic(
   () => import("./components/CommentsButton").then((mod) => mod.CommentsButton),
@@ -191,15 +192,22 @@ const config: DocsThemeConfig = {
   },
   navbar: {
     component: Navigation,
-    extraContent: (
-      <>
-        <div className="w-6 h-6 ml-2 rounded-tl-none rounded-full border-2 border-white">
-          <NoSSRCommentsButton />
-        </div>
-        <Github />
-        <Discord />
-      </>
-    ),
+    extraContent: (): JSX.Element => {
+      // eslint-disable-next-line react-hooks/rules-of-hooks -- Nextra does not infer the type of extraContent correctly.
+      const router = useRouter();
+
+      return (
+        <>
+          {pathHasToolbar(router) ? (
+            <div className="w-6 h-6 ml-2 rounded-tl-none rounded-full border-2 border-white">
+              <NoSSRCommentsButton />
+            </div>
+          ) : null}
+          <Github />
+          <Discord />
+        </>
+      );
+    },
   },
   components: {
     pre: (props: ReactElement) => {
@@ -226,7 +234,7 @@ const config: DocsThemeConfig = {
       // Taken from original Nextra docs theme.
       // Only functional change is adding `data-pagefind-weight`.
       return (
-        <div className="relative">
+        <div className="relative mt-6" id="custom-code-block">
           <pre
             className="nx-bg-primary-700/5 nx-mb-4 nx-overflow-x-auto nx-rounded-xl nx-subpixel-antialiased dark:nx-bg-primary-300/10 nx-text-[.9em] contrast-more:nx-border contrast-more:nx-border-primary-900/20 contrast-more:nx-contrast-150 contrast-more:dark:nx-border-primary-100/40 nx-py-4"
             {...props}

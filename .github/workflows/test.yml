@@ -360,7 +360,7 @@ jobs:
           key: prysk-venv-${{ matrix.os.runner }}
 
       - name: Integration Tests
-        run: turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        run: turbo run test --filter=turborepo-tests-integration-rust --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
@@ -409,7 +409,7 @@ jobs:
           key: prysk-venv-${{ matrix.os.runner }}
 
       - name: Integration Tests
-        run: turbo run test:go-fallback --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+        run: turbo run test --filter=turborepo-tests-integration-go --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
 
   turborepo_examples:
     name: Turborepo Examples
@@ -417,15 +417,7 @@ jobs:
     if: needs.determine_jobs.outputs.examples == 'true'
     timeout-minutes: 40
 
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - runner: ubuntu-latest
-          - runner: macos-latest
-          # TODO: enable this
-          # - runner: windows-latest
-    runs-on: ${{ matrix.os.runner }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
