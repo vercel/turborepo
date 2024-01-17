@@ -40,14 +40,17 @@ struct PostCssProcessingResult {
     assets: Option<Vec<EmittedAsset>>,
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize, TaskInput)]
+#[derive(
+    Default, Copy, Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize, TaskInput,
+)]
 pub enum PostCssConfigLocation {
     #[default]
     ProjectPath,
     ProjectPathOrLocalPath,
 }
 
-#[derive(Default, Clone, PartialEq, Eq, Debug, TraceRawVcs, Serialize, Deserialize, TaskInput)]
+#[turbo_tasks::value(shared)]
+#[derive(Clone, Default)]
 pub struct PostCssTransformOptions {
     pub postcss_package: Option<Vc<ImportMapping>>,
     pub config_location: PostCssConfigLocation,
@@ -86,7 +89,7 @@ fn postcss_configs() -> Vc<Vec<String>> {
 pub struct PostCssTransform {
     evaluate_context: Vc<Box<dyn AssetContext>>,
     execution_context: Vc<ExecutionContext>,
-    postcss_transform_options: PostCssTransformOptions,
+    config_location: PostCssConfigLocation,
 }
 
 #[turbo_tasks::value_impl]
@@ -95,12 +98,12 @@ impl PostCssTransform {
     pub fn new(
         evaluate_context: Vc<Box<dyn AssetContext>>,
         execution_context: Vc<ExecutionContext>,
-        postcss_transform_options: PostCssTransformOptions,
+        config_location: PostCssConfigLocation,
     ) -> Vc<Self> {
         PostCssTransform {
             evaluate_context,
             execution_context,
-            postcss_transform_options: postcss_transform_options,
+            config_location,
         }
         .cell()
     }
@@ -114,7 +117,7 @@ impl SourceTransform for PostCssTransform {
             PostCssTransformedAsset {
                 evaluate_context: self.evaluate_context,
                 execution_context: self.execution_context,
-                postcss_transform_options: self.postcss_transform_options,
+                config_location: self.config_location,
                 source,
             }
             .cell(),
@@ -126,7 +129,7 @@ impl SourceTransform for PostCssTransform {
 struct PostCssTransformedAsset {
     evaluate_context: Vc<Box<dyn AssetContext>>,
     execution_context: Vc<ExecutionContext>,
-    postcss_transform_options: PostCssTransformOptions,
+    config_location: PostCssConfigLocation,
     source: Vc<Box<dyn Source>>,
 }
 
@@ -219,7 +222,7 @@ async fn postcss_executor(
 
 async fn find_config_in_location(
     project_path: Vc<FileSystemPath>,
-    location: &PostCssConfigLocation,
+    location: PostCssConfigLocation,
     source: Vc<Box<dyn Source>>,
 ) -> Result<Option<Vc<FileSystemPath>>> {
     if let FindContextFileResult::Found(config_path, _) =
@@ -261,12 +264,8 @@ impl PostCssTransformedAsset {
         //     - pkg1/(postcss.config.js) // The actual config we're looking for
         //
         // We look for the config in the project path first, then the source path
-        let Some(config_path) = find_config_in_location(
-            project_path,
-            &this.postcss_transform_options.config_location,
-            this.source,
-        )
-        .await?
+        let Some(config_path) =
+            find_config_in_location(project_path, this.config_location, this.source).await?
         else {
             PostCssTransformIssue {
                 source: this.source.ident().path(),

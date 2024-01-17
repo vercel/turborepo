@@ -134,7 +134,7 @@ impl MdxTransformModuleOptions {
 #[serde(default)]
 pub struct ModuleOptionsContext {
     pub enable_jsx: Option<Vc<JsxTransformOptions>>,
-    pub enable_postcss_transform: Option<PostCssTransformOptions>,
+    pub enable_postcss_transform: Option<Vc<PostCssTransformOptions>>,
     pub enable_webpack_loaders: Option<Vc<WebpackLoadersOptions>>,
     pub enable_types: bool,
     pub enable_typescript_transform: Option<Vc<TypescriptTransformOptions>>,
