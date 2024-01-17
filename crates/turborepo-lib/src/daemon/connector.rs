@@ -714,7 +714,7 @@ mod test {
             .await
             .unwrap_err()
             .into();
-        assert_matches!(hello_resp, DaemonError::VersionMismatch);
+        assert_matches!(hello_resp, DaemonError::VersionMismatch(_));
         let client = DaemonClient::new(client);
 
         let shutdown_fut = conn.kill_live_server(client, Pid::from(1000));
