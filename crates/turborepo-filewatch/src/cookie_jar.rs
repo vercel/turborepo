@@ -106,7 +106,8 @@ impl CookieJar {
             // dropping the resulting file closes the handle
             trace!("writing cookie {}", cookie_path);
             _ = cookie_path
-                .open_with_options(opts)
+                .ensure_dir()
+                .and_then(|_| cookie_path.open_with_options(opts))
                 .map_err(|io_err| CookieError::IO {
                     io_err,
                     path: cookie_path.clone(),
