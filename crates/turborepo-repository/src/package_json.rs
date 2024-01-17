@@ -56,8 +56,11 @@ pub enum Error {
 impl PackageJson {
     pub fn load(path: &AbsoluteSystemPath) -> Result<PackageJson, Error> {
         let contents = path.read_to_string()?;
-        let package_json: PackageJson = serde_json::from_str(&contents)?;
-        Ok(package_json)
+        Self::from_str(&contents)
+    }
+
+    pub fn from_str(contents: &str) -> Result<PackageJson, Error> {
+        Ok(serde_json::from_str(contents)?)
     }
 
     // Utility method for easy construction of package.json during testing

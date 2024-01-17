@@ -50,6 +50,16 @@
         "group": "commands",
         "order": 1
       }
+    },
+    {
+      "type": "extensionHost",
+      "request": "launch",
+      "name": "Turbo VSC",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceRoot}/packages/turbo-vsc"
+      ],
+      "outFiles": ["${workspaceRoot}/packages/turbo-vsc/out/**/*.js"]
     }
   ],
   "inputs": [
