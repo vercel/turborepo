@@ -1,0 +1,27 @@
+---
+title: Invalid Environment Variable Prefix
+description: "invalid-env-prefix error page"
+---
+
+# Invalid Environment Variable Prefix
+
+When declaring environment variables in your `turbo.json`, you cannot prefix them with `$`. This
+was an old syntax for declaring a dependency on an environment variable that is no longer used.
+
+## Example
+
+```json
+{
+  "globalEnv": ["$MY_ENV_VAR"]
+}
+```
+
+## Solution
+
+Remove the `$` prefix from your environment variable declaration.
+
+```json
+{
+  "globalEnv": ["MY_ENV_VAR"]
+}
+```
