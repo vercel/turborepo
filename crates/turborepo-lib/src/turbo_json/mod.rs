@@ -7,6 +7,7 @@ use std::{
 
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
+use struct_iterable::Iterable;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
@@ -46,7 +47,7 @@ pub struct TurboJson {
     pub(crate) space_id: Option<String>,
 }
 
-#[derive(Serialize, Default, Debug, PartialEq, Clone)]
+#[derive(Serialize, Default, Debug, PartialEq, Clone, Iterable)]
 #[serde(rename_all = "camelCase")]
 // The raw deserialized turbo.json file.
 pub struct RawTurboJson {
@@ -103,11 +104,11 @@ impl DerefMut for Pipeline {
     }
 }
 
-#[derive(Serialize, Default, Debug, PartialEq, Clone)]
+#[derive(Serialize, Default, Debug, PartialEq, Clone, Iterable)]
 #[serde(rename_all = "camelCase")]
 pub struct RawTaskDefinition {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    cache: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Spanned::is_none")]
+    cache: Spanned<Option<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     depends_on: Option<Spanned<Vec<String>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -136,12 +137,13 @@ macro_rules! set_field {
 
 impl RawTaskDefinition {
     // merge accepts a RawTaskDefinition and
-    // merges it into RawTaskDefinition. It uses the bookkeeping
-    // defined_fields to determine which fields should be overwritten and when
-    // 0-values should be respected.
+    // merges it into RawTaskDefinition.
     pub fn merge(&mut self, other: RawTaskDefinition) {
         set_field!(self, other, outputs);
-        set_field!(self, other, cache);
+
+        if other.cache.value.is_some() {
+            self.cache = other.cache;
+        }
         set_field!(self, other, depends_on);
         set_field!(self, other, inputs);
         set_field!(self, other, output_mode);
@@ -295,7 +297,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
 
         Ok(TaskDefinition {
             outputs,
-            cache: cache.map(|c| c.into_inner()).unwrap_or(true),
+            cache: cache.into_inner().unwrap_or(true),
             topological_dependencies,
             task_dependencies,
             env,
@@ -424,9 +426,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
             pipeline: raw_turbo.pipeline.unwrap_or_default(),
             // copy these over, we don't need any changes here.
             remote_cache: raw_turbo.remote_cache,
-            extends: raw_turbo
-                .extends
-                .unwrap_or_else(|| Spanned::new(Vec::new())),
+            extends: raw_turbo.extends.unwrap_or_default(),
             // Directly to space_id, we don't need to keep the struct
             space_id: raw_turbo.experimental_spaces.and_then(|s| s.id),
         })
@@ -496,7 +496,7 @@ impl TurboJson {
                 turbo_json.pipeline.insert(
                     task_name,
                     RawTaskDefinition {
-                        cache: Some(Spanned::new(false)),
+                        cache: Spanned::new(Some(false)),
                         ..RawTaskDefinition::default()
                     },
                 );
@@ -658,7 +658,7 @@ mod tests {
             pipeline: Pipeline([(
                 "//#build".into(),
                 RawTaskDefinition {
-                  cache: Some(Spanned::new(false)),
+                  cache: Spanned::new(Some(false)),
                   ..RawTaskDefinition::default()
                 }
             )].into_iter().collect()),
@@ -689,14 +689,14 @@ mod tests {
             pipeline: Pipeline([(
                 "//#build".into(),
                 RawTaskDefinition {
-                    cache: Some(Spanned::new(true).with_range(84..88)),
+                    cache: Spanned::new(Some(true)).with_range(84..88),
                     ..RawTaskDefinition::default()
                 }
             ),
             (
                 "//#test".into(),
                 RawTaskDefinition {
-                  cache: Some(Spanned::new(false)),
+                  cache: Spanned::new(Some(false)),
                   ..RawTaskDefinition::default()
                 }
             )].into_iter().collect()),
@@ -770,7 +770,7 @@ mod tests {
             env: Some(vec![Spanned::new("OS".to_string()).with_range(98..102)]),
             pass_through_env: Some(vec![Spanned::new("AWS_SECRET_KEY".to_string()).with_range(134..150)]),
             outputs: Some(Spanned::new(vec!["package/a/dist".to_string()]).with_range(174..192)),
-            cache: Some(Spanned::new(false).with_range(213..218)),
+            cache: Spanned::new(Some(false)).with_range(213..218),
             inputs: Some(Spanned::new(vec!["package/a/src/**".to_string()]).with_range(240..260)),
             output_mode: Some(Spanned::new(OutputLogsMode::Full).with_range(286..292)),
             persistent: Some(Spanned::new(true).with_range(318..322)),
@@ -798,7 +798,7 @@ mod tests {
         expected_task_definition: TaskDefinition,
     ) -> Result<()> {
         let deserialized_result = deserialize_from_json_str(
-            &task_definition_content,
+            task_definition_content,
             JsonParserOptions::default().with_allow_comments(),
         );
         let raw_task_definition: RawTaskDefinition =

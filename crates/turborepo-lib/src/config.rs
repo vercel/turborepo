@@ -2,6 +2,7 @@ use std::{collections::HashMap, ffi::OsString, io};
 
 use miette::{Diagnostic, SourceSpan};
 use serde::{Deserialize, Serialize};
+use struct_iterable::Iterable;
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_auth::read_or_create_auth_file;
@@ -99,7 +100,7 @@ const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 20;
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigurationOptions {
     #[serde(alias = "apiurl")]

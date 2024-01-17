@@ -11,7 +11,10 @@ use biome_deserialize::{
 use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;
 use biome_json_syntax::TextRange;
+use clap::ValueEnum;
+use convert_case::{Case, Casing};
 use miette::{Diagnostic, SourceSpan};
+use struct_iterable::Iterable;
 use thiserror::Error;
 use turborepo_errors::WithText;
 
@@ -69,25 +72,44 @@ struct ParseDiagnostic {
     label: Option<SourceSpan>,
 }
 
+fn create_unknown_key_diagnostic_from_struct<T: Iterable>(
+    struct_iterable: &T,
+    unknown_key: &str,
+    range: TextRange,
+) -> DeserializationDiagnostic {
+    let allowed_keys = struct_iterable
+        .iter()
+        .map(|(k, _)| k.to_case(Case::Camel))
+        .collect::<Vec<_>>();
+    let allowed_keys_borrowed = allowed_keys.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+
+    DeserializationDiagnostic::new_unknown_key(unknown_key, range, &allowed_keys_borrowed)
+}
+
 impl Deserializable for OutputLogsMode {
     fn deserialize(
         value: &impl DeserializableValue,
         name: &str,
         diagnostics: &mut Vec<DeserializationDiagnostic>,
     ) -> Option<Self> {
-        match String::deserialize(value, name, diagnostics)?.as_str() {
-            "full" => Some(OutputLogsMode::Full),
-            "none" => Some(OutputLogsMode::None),
-            "hash-only" => Some(OutputLogsMode::HashOnly),
-            "new-only" => Some(OutputLogsMode::NewOnly),
-            "errors-only" => Some(OutputLogsMode::ErrorsOnly),
-            unknown_variant => {
-                const ALLOWED_VARIANTS: &[&str] =
-                    &["full", "none", "hash-only", "new-only", "errors-only"];
+        let output_logs_str = String::deserialize(value, name, diagnostics)?;
+        match OutputLogsMode::from_str(&output_logs_str, false) {
+            Ok(result) => Some(result),
+            Err(_) => {
+                let allowed_variants: Vec<_> = OutputLogsMode::value_variants()
+                    .iter()
+                    .map(|s| serde_json::to_string(s).unwrap())
+                    .collect();
+
+                let allowed_variants_borrowed = allowed_variants
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>();
+
                 diagnostics.push(DeserializationDiagnostic::new_unknown_value(
-                    unknown_variant,
+                    &output_logs_str,
                     value.range(),
-                    ALLOWED_VARIANTS,
+                    &allowed_variants_borrowed,
                 ));
                 None
             }
@@ -142,7 +164,7 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
             match key_text.text() {
                 "cache" => {
                     if let Some(cache) = bool::deserialize(&value, &key_text, diagnostics) {
-                        result.cache = Some(Spanned::new(cache).with_range(range));
+                        result.cache = Spanned::new(Some(cache)).with_range(range);
                     }
                 }
                 "dependsOn" => {
@@ -188,22 +210,11 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
                         result.output_mode = Some(Spanned::new(output_mode).with_range(range));
                     }
                 }
-                _ => {
-                    const ALLOWED_KEYS: &[&str] = &[
-                        "cache",
-                        "dependsOn",
-                        "dotEnv",
-                        "env",
-                        "inputs",
-                        "passThroughEnv",
-                        "persistent",
-                        "outputs",
-                        "outputMode",
-                    ];
-                    diagnostics.push(DeserializationDiagnostic::new_unknown_key(
-                        key_text.text(),
+                unknown_key => {
+                    diagnostics.push(create_unknown_key_diagnostic_from_struct(
+                        &result,
+                        unknown_key,
                         key.range(),
-                        ALLOWED_KEYS,
                     ));
                 }
             }
@@ -242,6 +253,8 @@ impl DeserializationVisitor for SpacesJsonVisitor {
             let Some(key_text) = Text::deserialize(&key, "", diagnostics) else {
                 continue;
             };
+            // We explicitly do not error on unknown keys here,
+            // because this is the existing serde behavior
             if key_text.text() == "id" {
                 if let Some(id) = String::deserialize(&value, &key_text, diagnostics) {
                     result.id = Some(id);
@@ -332,24 +345,11 @@ impl DeserializationVisitor for ConfigurationOptionsVisitor {
                         result.enabled = Some(enabled);
                     }
                 }
-                unknown_key => {
-                    const ALLOWED_KEYS: &[&str] = &[
-                        "apiUrl",
-                        "loginUrl",
-                        "teamSlug",
-                        "teamId",
-                        "token",
-                        "signature",
-                        "preflight",
-                        "timeout",
-                        "enabled",
-                    ];
-                    diagnostics.push(DeserializationDiagnostic::new_unknown_key(
-                        unknown_key,
-                        key.range(),
-                        ALLOWED_KEYS,
-                    ))
-                }
+                unknown_key => diagnostics.push(create_unknown_key_diagnostic_from_struct(
+                    &result,
+                    unknown_key,
+                    key.range(),
+                )),
             }
         }
 
@@ -446,21 +446,10 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
                     }
                 }
                 unknown_key => {
-                    const ALLOWED_KEYS: &[&str] = &[
-                        "schema",
-                        "extends",
-                        "globalDependencies",
-                        "globalEnv",
-                        "globalPassThroughEnv",
-                        "globalDotEnv",
-                        "experimentalSpaces",
-                        "pipeline",
-                        "remoteCache",
-                    ];
-                    diagnostics.push(DeserializationDiagnostic::new_unknown_key(
+                    diagnostics.push(create_unknown_key_diagnostic_from_struct(
+                        &result,
                         unknown_key,
                         key.range(),
-                        ALLOWED_KEYS,
                     ));
                 }
             }
@@ -475,7 +464,7 @@ impl WithText for RawTurboJson {
         self.global_dependencies.add_text(text.clone());
         self.global_env.add_text(text.clone());
         self.global_pass_through_env.add_text(text.clone());
-        self.pipeline.add_text(text.clone());
+        self.pipeline.add_text(text);
     }
 }
 
@@ -496,7 +485,7 @@ impl WithText for RawTaskDefinition {
         self.pass_through_env.add_text(text.clone());
         self.persistent.add_text(text.clone());
         self.outputs.add_text(text.clone());
-        self.output_mode.add_text(text.clone());
+        self.output_mode.add_text(text);
     }
 }
 

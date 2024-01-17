@@ -2239,7 +2239,7 @@ dependencies = [
  "cssparser-macros",
  "dtoa-short",
  "itoa",
- "phf 0.10.1",
+ "phf 0.11.2",
  "serde",
  "smallvec 1.11.1",
 ]
@@ -4075,7 +4075,7 @@ checksum = "334e04b4d781f436dc315cb1e7515bd96826426345d498149e4bde36b67f8ee9"
 dependencies = [
  "async-channel",
  "castaway",
- "crossbeam-utils 0.7.2",
+ "crossbeam-utils 0.8.16",
  "curl",
  "curl-sys",
  "encoding_rs",
@@ -5766,9 +5766,7 @@ version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fabbf1ead8a5bcbc20f5f8b939ee3f5b0f6f281b6ad3468b84656b658b455259"
 dependencies = [
- "phf_macros 0.10.0",
  "phf_shared 0.10.0",
- "proc-macro-hack",
 ]
 
 [[package]]
@@ -5777,7 +5775,7 @@ version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ade2d8b8f33c7333b51bcf0428d37e217e9f32192ae4772156f65063b8ce03dc"
 dependencies = [
- "phf_macros 0.11.2",
+ "phf_macros",
  "phf_shared 0.11.2",
 ]
 
@@ -5809,20 +5807,6 @@ checksum = "48e4cc64c2ad9ebe670cb8fd69dd50ae301650392e81c05f9bfcb2d5bdbc24b0"
 dependencies = [
  "phf_shared 0.11.2",
  "rand 0.8.5",
-]
-
-[[package]]
-name = "phf_macros"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58fdf3184dd560f160dd73922bea2d5cd6e8f064bf4b13110abd81b03697b4e0"
-dependencies = [
- "phf_generator 0.10.0",
- "phf_shared 0.10.0",
- "proc-macro-hack",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -7873,6 +7857,35 @@ name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
+
+[[package]]
+name = "struct_iterable"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "849a064c6470a650b72e41fa6c057879b68f804d113af92900f27574828e7712"
+dependencies = [
+ "struct_iterable_derive",
+ "struct_iterable_internal",
+]
+
+[[package]]
+name = "struct_iterable_derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8bb939ce88a43ea4e9d012f2f6b4cc789deb2db9d47bad697952a85d6978662c"
+dependencies = [
+ "erased-serde",
+ "proc-macro2",
+ "quote",
+ "struct_iterable_internal",
+ "syn 2.0.32",
+]
+
+[[package]]
+name = "struct_iterable_internal"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9426b2a0c03e6cc2ea8dbc0168dbbf943f88755e409fb91bcb8f6a268305f4a"
 
 [[package]]
 name = "styled_components"
@@ -11546,6 +11559,7 @@ dependencies = [
  "command-group",
  "console",
  "const_format",
+ "convert_case 0.6.0",
  "ctrlc",
  "dialoguer",
  "directories 4.0.1",
@@ -11590,6 +11604,7 @@ dependencies = [
  "serde_yaml 0.9.27",
  "sha2",
  "shared_child",
+ "struct_iterable",
  "svix-ksuid",
  "sysinfo",
  "tabwriter",
@@ -11824,8 +11839,8 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
- "rand 0.4.6",
+ "cfg-if 1.0.0",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
