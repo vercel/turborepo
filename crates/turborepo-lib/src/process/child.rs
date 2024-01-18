@@ -84,7 +84,7 @@ impl ShutdownStyle {
         &self,
         pid: Option<u32>,
         child_exit: tokio::sync::oneshot::Receiver<()>,
-        mut child_killer: Box<dyn portable_pty::ChildKiller>,
+        child_killer: tokio::sync::oneshot::Sender<()>,
     ) -> ChildState {
         match self {
             ShutdownStyle::Graceful(timeout) => {
@@ -118,7 +118,7 @@ impl ShutdownStyle {
                         Ok(Err(_)) => ChildState::Exited(ChildExit::Failed),
                         Err(_) => {
                             debug!("graceful shutdown timed out, killing child");
-                            match child_killer.kill() {
+                            match child_killer.send(()) {
                                 Ok(_) => ChildState::Exited(ChildExit::Killed),
                                 Err(_) => ChildState::Exited(ChildExit::Failed),
                             }
@@ -135,7 +135,7 @@ impl ShutdownStyle {
                     }
                 }
             }
-            ShutdownStyle::Kill => match child_killer.kill() {
+            ShutdownStyle::Kill => match child_killer.send(()) {
                 Ok(_) => ChildState::Exited(ChildExit::Killed),
                 Err(_) => ChildState::Exited(ChildExit::Failed),
             },
@@ -247,7 +247,14 @@ impl Child {
 
         let (child_exit_tx, child_exit_rx) = tokio::sync::oneshot::channel();
         let (child_pid_tx, child_pid_rx) = tokio::sync::oneshot::channel();
-        let child_killer = child.clone_killer();
+
+        let (child_kill_tx, child_kill_rx) = tokio::sync::oneshot::channel();
+        let mut child_killer = child.clone_killer();
+        tokio::spawn(async move {
+            if let Ok(()) = child_kill_rx.await {
+                child_killer.kill().unwrap();
+            }
+        });
 
         tokio::spawn(async move {
             child_exit_tx.send(child.wait()).ok();
@@ -265,12 +272,12 @@ impl Child {
                         // dropped, and the channel is not closed while there are still permits
                         Some(ChildCommand::Stop) | None => {
                             debug!("stopping child process");
-                            shutdown_style.process(pid, child_pid_rx, child_killer).await
+                            shutdown_style.process(pid, child_pid_rx, child_kill_tx).await
                         }
                         // we received a command to kill the child process
                         Some(ChildCommand::Kill) => {
                             debug!("killing child process");
-                            ShutdownStyle::Kill.process(pid, child_pid_rx, child_killer).await
+                            ShutdownStyle::Kill.process(pid, child_pid_rx, child_kill_tx).await
                         }
                     };
 
