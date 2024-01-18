@@ -11,8 +11,6 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error(transparent)]
-    Auth(#[from] turborepo_auth::Error),
     #[error("error preparing engine: Invalid persistent task configuration:\n{0}")]
     EngineValidation(String),
     #[error(transparent)]

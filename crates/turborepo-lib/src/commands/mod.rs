@@ -74,7 +74,7 @@ impl CommandBase {
     }
 
     // Getting all of the paths.
-    pub fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
+    fn global_config_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
         #[cfg(test)]
         if let Some(global_config_path) = self.global_config_path.clone() {
             return Ok(global_config_path);
