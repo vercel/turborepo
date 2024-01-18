@@ -1124,9 +1124,8 @@ pub async fn run(
             let event = CommandEventBuilder::new("logout").with_parent(&root_telemetry);
             event.track_call();
             let mut base = CommandBase::new(cli_args, repo_root, version, ui);
-
             let event_child = event.child();
-            logout::logout(&mut base, event_child).await?;
+            logout::logout(&mut base, event_child)?;
 
             Ok(Payload::Rust(Ok(0)))
         }
