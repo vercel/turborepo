@@ -8,7 +8,7 @@ Run test run
     "loginUrl": null,
     "teamSlug": null,
     "teamId": null,
-    "token": "null",
+    "token": null,
     "signature": null,
     "preflight": null,
     "timeout": null,
