@@ -264,17 +264,9 @@ mod tests {
         ) -> turborepo_api_client::Result<Option<Response>> {
             unimplemented!("get_artifact")
         }
-        async fn do_preflight(
-            &self,
-            _token: &str,
-            _request_url: &str,
-            _request_method: &str,
-            _request_headers: &str,
-        ) -> turborepo_api_client::Result<PreflightResponse> {
-            unimplemented!("do_preflight")
-        }
-        fn make_url(&self, endpoint: &str) -> String {
-            format!("{}{}", self.base_url, endpoint)
+        fn make_url(&self, endpoint: &str) -> turborepo_api_client::Result<Url> {
+            let url = format!("{}{}", self.base_url, endpoint);
+            Url::parse(&url).map_err(|err| turborepo_api_client::Error::InvalidUrl { url, err })
         }
     }
 
