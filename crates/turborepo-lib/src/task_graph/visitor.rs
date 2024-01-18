@@ -105,7 +105,7 @@ impl<'a> Visitor<'a> {
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,
-            opts,
+            &opts.run_opts,
             env_at_execution_start,
             global_hash,
         );
