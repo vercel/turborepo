@@ -720,7 +720,7 @@ jobs:
           cargo check \
             --config $BINDING --config $TASKS --config $TASKS_FS \
             --all -p next-swc-api \
-            --no-default-features --features custom_allocator,rustls-tls \
+            --no-default-features --features rustls-tls \
             --message-format short --quiet \
           2>&1 | tee cargo_output.log)
 
