@@ -1,0 +1,53 @@
+---
+title: `turbo.json` Parse Error
+description: "`turbo_json_parse_error` page"
+---
+
+# `turbo.json` Parse Error
+
+`turbo.json` files should be valid JSONC, i.e. JSON with additional support
+for single line comments prefixed by `//`.
+
+```
+{
+  // This is a comment
+  "globalEnv": ["MY_VAR"]
+  "pipeline": {
+    "build": {
+      "dependsOn": ["lint"],
+    }
+  }
+}
+```
+
+## Example
+
+```
+{
+  // This is a comment
+  "globalEnv": ["MY_VAR"]
+  "pipeline": {
+    "build": {
+      "dependsOn": ["lint"]5,
+    }
+  }
+}
+```
+
+There is a 5 after the `["lint"]` array that is invalid JSONC syntax.
+
+## Solution
+
+Remove the `5` from the `turbo.json` file.
+
+```
+{
+  // This is a comment
+  "globalEnv": ["MY_VAR"]
+  "pipeline": {
+    "build": {
+      "dependsOn": ["lint"],
+    }
+  }
+}
+```

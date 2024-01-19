@@ -1,0 +1,26 @@
+---
+title: Empty `--cwd` flag
+description: "empty-cwd error page"
+---
+
+# Empty `--cwd` flag
+
+When writing a command, if you pass a `--cwd` flag, it must be followed by a path.
+
+```
+turbo run build -- --cwd ./packages/app
+```
+
+## Example
+
+```
+turbo run build --cwd
+```
+
+## Solution
+
+Add the path after the `--cwd` flag.
+
+```
+turbo run build --cwd ./packages/app
+```

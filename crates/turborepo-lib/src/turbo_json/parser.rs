@@ -30,7 +30,7 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("failed to parse turbo json")]
-#[diagnostic(code(turbo_json::parser::parse_error))]
+#[diagnostic(code(turbo_json_parse_error))]
 pub struct Error {
     #[related]
     diagnostics: Vec<ParseDiagnostic>,

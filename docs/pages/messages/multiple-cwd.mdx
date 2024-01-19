@@ -1,0 +1,30 @@
+---
+title: Multiple `--cwd` flags
+description: "multiple-cwd error page"
+---
+
+# Multiple `--cwd` flags
+
+When writing a command, you cannot pass multiple `--cwd` flags, since it will be unclear
+which flag should be used.
+
+If you wish to pass a `--cwd` flag to the actual package scripts, you can forward arguments by adding a `--`
+and then the arguments you wish to forward:
+
+```
+turbo run build -- --cwd ./packages/app
+```
+
+## Example
+
+```
+turbo run build --cwd ./packages/app --cwd ./packages/app2
+```
+
+## Solution
+
+Remove the extra `--cwd` flags from your command.
+
+```
+turbo run build --cwd ./packages/app
+```
