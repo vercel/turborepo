@@ -106,8 +106,8 @@ mod tests {
     use reqwest::{Method, RequestBuilder, Response};
     use turborepo_api_client::Client;
     use turborepo_vercel_api::{
-        CachingStatusResponse, Membership, PreflightResponse, Role, SpacesResponse, Team,
-        TeamsResponse, User, UserResponse, VerifiedSsoUser,
+        CachingStatusResponse, Membership, Role, SpacesResponse, Team, TeamsResponse, User,
+        UserResponse, VerifiedSsoUser,
     };
     use turborepo_vercel_api_mock::start_test_server;
 
