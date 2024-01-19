@@ -416,7 +416,7 @@ impl TurborepoConfigBuilder {
         get_lowercased_env_vars()
     }
 
-    fn get_global_config(&self) -> Result<ConfigurationOptions, ConfigError> {
+    fn get_global_config(&self) -> Result<ConfigurationOptions, Error> {
         let global_config_path = self.global_config_path()?;
         let mut contents = global_config_path
             .read_existing_to_string_or(Ok("{}"))
