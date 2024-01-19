@@ -604,7 +604,8 @@ mod test {
     use crate::{
         cli::LinkTarget,
         commands::{link, CommandBase},
-        config::{RawTurboJson, TurborepoConfigBuilder},
+        config::TurborepoConfigBuilder,
+        turbo_json::RawTurboJson,
         Args,
     };
 
@@ -769,10 +770,11 @@ mod test {
 
         // verify space id is added to turbo.json
         let turbo_json_contents = fs::read_to_string(&turbo_json_file).unwrap();
-        let turbo_json: RawTurboJson = serde_json::from_str(&turbo_json_contents).unwrap();
+        let turbo_json =
+            RawTurboJson::parse(&turbo_json_contents, turbo_json_file.as_str()).unwrap();
         assert_eq!(
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
-            turborepo_vercel_api_mock::EXPECTED_SPACE_ID
+            turborepo_vercel_api_mock::EXPECTED_SPACE_ID.into()
         );
     }
 }
