@@ -6,8 +6,7 @@ use std::{
 use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
 use serde::Serialize;
 
-//pub const TURBO_SITE: &str = "https://turbo.build";
-pub const TURBO_SITE: &str = "http://localhost:3000";
+pub const TURBO_SITE: &str = "https://turbo.build";
 
 #[derive(Debug, Default, Clone, PartialEq, Serialize)]
 #[serde(transparent)]

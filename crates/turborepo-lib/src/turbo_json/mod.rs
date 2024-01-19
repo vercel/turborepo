@@ -720,12 +720,14 @@ mod tests {
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
         fs::write(repo_root.join_component("turbo.json"), turbo_json_content)?;
 
-        let turbo_json = TurboJson::load(
+        let mut turbo_json = TurboJson::load(
             repo_root,
             AnchoredSystemPath::empty(),
             &root_package_json,
             false,
         )?;
+        turbo_json.text = None;
+        turbo_json.path = None;
         assert_eq!(turbo_json, expected_turbo_json);
 
         Ok(())
@@ -745,7 +747,7 @@ mod tests {
                     cache: Spanned::new(Some(false)),
                     ..RawTaskDefinition::default()
                   },
-                  task_name_range: None
+                  span: None
                 }
             )].into_iter().collect()),
             ..TurboJson::default()
@@ -779,7 +781,7 @@ mod tests {
                         cache: Spanned::new(Some(true)).with_range(84..88),
                         ..RawTaskDefinition::default()
                     },
-                    task_name_range: Some(53..106)
+                    span: Some(53..106)
                 }
             ),
             (
@@ -789,7 +791,7 @@ mod tests {
                          cache: Spanned::new(Some(false)),
                          ..RawTaskDefinition::default()
                     },
-                    task_name_range: None
+                    span: None
                 }
             )].into_iter().collect()),
             ..TurboJson::default()
@@ -807,12 +809,14 @@ mod tests {
             fs::write(repo_root.join_component("turbo.json"), content)?;
         }
 
-        let turbo_json = TurboJson::load(
+        let mut turbo_json = TurboJson::load(
             repo_root,
             AnchoredSystemPath::empty(),
             &root_package_json,
             true,
         )?;
+        turbo_json.text = None;
+        turbo_json.path = None;
         assert_eq!(turbo_json, expected_turbo_json);
 
         Ok(())
@@ -1009,7 +1013,10 @@ mod tests {
             .zip(expected_pipeline.into_iter())
         {
             assert_eq!(pruned_task_name, expected_task_name);
-            assert_eq!(expected_pipeline_entry, expected_pipeline_entry);
+            assert_eq!(
+                pruned_pipeline_entry.task_definition,
+                expected_pipeline_entry.task_definition
+            );
         }
     }
 
