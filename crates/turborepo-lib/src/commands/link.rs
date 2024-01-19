@@ -774,7 +774,7 @@ mod test {
             RawTurboJson::parse(&turbo_json_contents, turbo_json_file.as_str()).unwrap();
         assert_eq!(
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
-            turborepo_vercel_api_mock::EXPECTED_SPACE_ID
+            turborepo_vercel_api_mock::EXPECTED_SPACE_ID.into()
         );
     }
 }

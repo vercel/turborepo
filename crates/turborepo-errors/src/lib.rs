@@ -69,6 +69,15 @@ impl<T> Spanned<T> {
     pub fn into_inner(self) -> T {
         self.value
     }
+
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Spanned<U> {
+        Spanned {
+            value: f(self.value),
+            range: self.range,
+            path: self.path,
+            text: self.text,
+        }
+    }
 }
 
 impl<T> Spanned<Option<T>> {

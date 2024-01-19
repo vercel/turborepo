@@ -17,6 +17,7 @@ use crate::{
     config::{ConfigurationOptions, Error},
     run::task_id::{TaskId, TaskName},
     task_graph::{TaskDefinition, TaskOutputs},
+    unescape::UnescapedString,
 };
 
 pub mod parser;
@@ -24,7 +25,7 @@ pub mod parser;
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesJson {
-    pub id: Option<String>,
+    pub id: Option<UnescapedString>,
     #[serde(flatten)]
     pub other: Option<serde_json::Value>,
 }
@@ -52,22 +53,22 @@ pub struct TurboJson {
 // The raw deserialized turbo.json file.
 pub struct RawTurboJson {
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
-    schema: Option<String>,
+    schema: Option<UnescapedString>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub experimental_spaces: Option<SpacesJson>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    extends: Option<Spanned<Vec<String>>>,
+    extends: Option<Spanned<Vec<UnescapedString>>>,
     // Global root filesystem dependencies
     #[serde(skip_serializing_if = "Option::is_none")]
-    global_dependencies: Option<Spanned<Vec<String>>>,
+    global_dependencies: Option<Spanned<Vec<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    global_env: Option<Vec<Spanned<String>>>,
+    global_env: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    global_pass_through_env: Option<Vec<Spanned<String>>>,
+    global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
     // .env files to consider, in order.
     #[serde(skip_serializing_if = "Option::is_none")]
-    global_dot_env: Option<Vec<String>>,
+    global_dot_env: Option<Vec<UnescapedString>>,
     // Pipeline is a map of Turbo pipeline entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -110,19 +111,19 @@ pub struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Spanned::is_none")]
     cache: Spanned<Option<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    depends_on: Option<Spanned<Vec<String>>>,
+    depends_on: Option<Spanned<Vec<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    dot_env: Option<Spanned<Vec<String>>>,
+    dot_env: Option<Spanned<Vec<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    env: Option<Vec<Spanned<String>>>,
+    env: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    inputs: Option<Spanned<Vec<String>>>,
+    inputs: Option<Spanned<Vec<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pass_through_env: Option<Vec<Spanned<String>>>,
+    pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     persistent: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    outputs: Option<Spanned<Vec<String>>>,
+    outputs: Option<Spanned<Vec<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     output_mode: Option<Spanned<OutputLogsMode>>,
 }
@@ -207,7 +208,14 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
     fn try_from(raw_task: RawTaskDefinition) -> Result<Self, Error> {
         let outputs = raw_task
             .outputs
-            .map(|outputs| outputs.into_inner().into())
+            .map(|outputs| {
+                outputs
+                    .into_inner()
+                    .into_iter()
+                    .map(|output| output.into())
+                    .collect::<Vec<String>>()
+                    .into()
+            })
             .unwrap_or_default();
 
         let cache = raw_task.cache;
@@ -217,6 +225,7 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
         let mut task_dependencies = Vec::new();
         if let Some(depends_on) = raw_task.depends_on {
             for dependency in depends_on.into_inner() {
+                let dependency: String = dependency.into();
                 if let Some(dependency) = dependency.strip_prefix(ENV_PIPELINE_DELIMITER) {
                     println!(
                         "[DEPRECATED] Declaring an environment variable in \"dependsOn\" is \
@@ -254,7 +263,8 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             .inputs
             .map(|inputs| {
                 for input in &*inputs {
-                    if Path::new(&input).is_absolute() {
+                    let input: &str = input.deref();
+                    if Path::new(input).is_absolute() {
                         writeln!(
                             std::io::stderr(),
                             "[WARNING] Using an absolute path in \"inputs\" ({}) will not work \
@@ -301,7 +311,11 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
             topological_dependencies,
             task_dependencies,
             env,
-            inputs: inputs.into_inner(),
+            inputs: inputs
+                .into_inner()
+                .into_iter()
+                .map(|input| input.into())
+                .collect(),
             pass_through_env,
             dot_env,
             output_mode: *raw_task.output_mode.unwrap_or_default(),
@@ -359,6 +373,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
             .into_iter()
             .flat_map(|deps| deps.value)
         {
+            let value: String = value.into();
             if let Some(env_var) = value.strip_prefix(ENV_PIPELINE_DELIMITER) {
                 println!(
                     "[DEPRECATED] Declaring an environment variable in \"dependsOn\" is \
@@ -426,9 +441,15 @@ impl TryFrom<RawTurboJson> for TurboJson {
             pipeline: raw_turbo.pipeline.unwrap_or_default(),
             // copy these over, we don't need any changes here.
             remote_cache: raw_turbo.remote_cache,
-            extends: raw_turbo.extends.unwrap_or_default(),
+            extends: raw_turbo
+                .extends
+                .unwrap_or_default()
+                .map(|s| s.into_iter().map(|s| s.into()).collect()),
             // Directly to space_id, we don't need to keep the struct
-            space_id: raw_turbo.experimental_spaces.and_then(|s| s.id),
+            space_id: raw_turbo
+                .experimental_spaces
+                .and_then(|s| s.id)
+                .map(|s| s.into()),
         })
     }
 }
@@ -564,11 +585,12 @@ pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
 }
 
 fn gather_env_vars(
-    vars: Vec<Spanned<String>>,
+    vars: Vec<Spanned<impl Into<String>>>,
     key: &str,
     into: &mut HashSet<String>,
 ) -> Result<(), Error> {
     for value in vars {
+        let value: Spanned<String> = value.map(|v| v.into());
         if value.starts_with(ENV_PIPELINE_DELIMITER) {
             let span = value.range.clone();
             let (span, text) = match (span, &value.text) {
@@ -612,6 +634,7 @@ mod tests {
         run::task_id::TaskName,
         task_graph::{TaskDefinition, TaskOutputs},
         turbo_json::{RawTaskDefinition, TurboJson},
+        unescape::UnescapedString,
     };
 
     #[test_case(r"{}", TurboJson::default() ; "empty")]
@@ -765,13 +788,13 @@ mod tests {
           "persistent": true
         }"#,
         RawTaskDefinition {
-            depends_on: Some(Spanned::new(vec!["cli#build".to_string()]).with_range(25..38)),
-            dot_env: Some(Spanned::new(vec!["package/a/.env".to_string()]).with_range(60..78)),
-            env: Some(vec![Spanned::new("OS".to_string()).with_range(98..102)]),
-            pass_through_env: Some(vec![Spanned::new("AWS_SECRET_KEY".to_string()).with_range(134..150)]),
-            outputs: Some(Spanned::new(vec!["package/a/dist".to_string()]).with_range(174..192)),
+            depends_on: Some(Spanned::new(vec!["cli#build".into()]).with_range(25..38)),
+            dot_env: Some(Spanned::new(vec!["package/a/.env".into()]).with_range(60..78)),
+            env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(98..102)]),
+            pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(134..150)]),
+            outputs: Some(Spanned::new(vec!["package/a/dist".into()]).with_range(174..192)),
             cache: Spanned::new(Some(false)).with_range(213..218),
-            inputs: Some(Spanned::new(vec!["package/a/src/**".to_string()]).with_range(240..260)),
+            inputs: Some(Spanned::new(vec!["package/a/src/**".into()]).with_range(240..260)),
             output_mode: Some(Spanned::new(OutputLogsMode::Full).with_range(286..292)),
             persistent: Some(Spanned::new(true).with_range(318..322)),
         },
@@ -878,5 +901,15 @@ mod tests {
             .and_then(|build| build.output_mode.clone())
             .map(|mode| mode.into_inner());
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_biome() {
+        let result = deserialize_from_json_str::<String>(
+            r#""\\""#,
+            JsonParserOptions::default().with_allow_comments(),
+        );
+
+        println!("{}", result.into_deserialized().unwrap());
     }
 }

@@ -23,6 +23,7 @@ use crate::{
     config::ConfigurationOptions,
     run::task_id::TaskName,
     turbo_json::{Pipeline, RawTaskDefinition, RawTurboJson, SpacesJson, Spanned},
+    unescape::UnescapedString,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -123,7 +124,7 @@ impl Deserializable for TaskName<'static> {
         name: &str,
         diagnostics: &mut Vec<DeserializationDiagnostic>,
     ) -> Option<Self> {
-        let task_id = String::deserialize(value, name, diagnostics)?;
+        let task_id: String = UnescapedString::deserialize(value, name, diagnostics)?.into();
 
         Some(Self::from(task_id))
     }
@@ -256,7 +257,7 @@ impl DeserializationVisitor for SpacesJsonVisitor {
             // We explicitly do not error on unknown keys here,
             // because this is the existing serde behavior
             if key_text.text() == "id" {
-                if let Some(id) = String::deserialize(&value, &key_text, diagnostics) {
+                if let Some(id) = UnescapedString::deserialize(&value, &key_text, diagnostics) {
                     result.id = Some(id);
                 }
             }
@@ -301,28 +302,38 @@ impl DeserializationVisitor for ConfigurationOptionsVisitor {
             };
             match key_text.text() {
                 "apiUrl" | "apiurl" | "ApiUrl" | "APIURL" => {
-                    if let Some(api_url) = String::deserialize(&value, &key_text, diagnostics) {
-                        result.api_url = Some(api_url);
+                    if let Some(api_url) =
+                        UnescapedString::deserialize(&value, &key_text, diagnostics)
+                    {
+                        result.api_url = Some(api_url.into());
                     }
                 }
                 "loginUrl" | "loginurl" | "LoginUrl" | "LOGINURL" => {
-                    if let Some(login_url) = String::deserialize(&value, &key_text, diagnostics) {
-                        result.login_url = Some(login_url);
+                    if let Some(login_url) =
+                        UnescapedString::deserialize(&value, &key_text, diagnostics)
+                    {
+                        result.login_url = Some(login_url.into());
                     }
                 }
                 "teamSlug" | "teamslug" | "TeamSlug" | "TEAMSLUG" => {
-                    if let Some(team_slug) = String::deserialize(&value, &key_text, diagnostics) {
-                        result.team_slug = Some(team_slug);
+                    if let Some(team_slug) =
+                        UnescapedString::deserialize(&value, &key_text, diagnostics)
+                    {
+                        result.team_slug = Some(team_slug.into());
                     }
                 }
                 "teamId" | "teamid" | "TeamId" | "TEAMID" => {
-                    if let Some(team_id) = String::deserialize(&value, &key_text, diagnostics) {
-                        result.team_id = Some(team_id);
+                    if let Some(team_id) =
+                        UnescapedString::deserialize(&value, &key_text, diagnostics)
+                    {
+                        result.team_id = Some(team_id.into());
                     }
                 }
                 "token" => {
-                    if let Some(token) = String::deserialize(&value, &key_text, diagnostics) {
-                        result.token = Some(token);
+                    if let Some(token) =
+                        UnescapedString::deserialize(&value, &key_text, diagnostics)
+                    {
+                        result.token = Some(token.into());
                     }
                 }
                 "signature" => {
@@ -394,7 +405,8 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
             let range = value.range();
             match key_text.text() {
                 "$schema" => {
-                    if let Some(name) = String::deserialize(&value, &key_text, diagnostics) {
+                    if let Some(name) = UnescapedString::deserialize(&value, &key_text, diagnostics)
+                    {
                         result.schema = Some(name);
                     }
                 }
