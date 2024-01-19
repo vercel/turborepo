@@ -97,28 +97,45 @@ impl<T> Deref for Spanned<T> {
     }
 }
 
-pub trait WithText {
+pub trait WithMetadata {
     fn add_text(&mut self, text: Arc<str>);
+    fn add_path(&mut self, path: Arc<str>);
 }
 
-impl<T> WithText for Spanned<T> {
+impl<T> WithMetadata for Spanned<T> {
     fn add_text(&mut self, text: Arc<str>) {
         self.text = Some(text);
     }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.path = Some(path);
+    }
 }
 
-impl<T: WithText> WithText for Option<T> {
+impl<T: WithMetadata> WithMetadata for Option<T> {
     fn add_text(&mut self, text: Arc<str>) {
         if let Some(inner) = self {
             inner.add_text(text);
         }
     }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        if let Some(inner) = self {
+            inner.add_path(path);
+        }
+    }
 }
 
-impl<T: WithText> WithText for Vec<T> {
+impl<T: WithMetadata> WithMetadata for Vec<T> {
     fn add_text(&mut self, text: Arc<str>) {
         for item in self {
             item.add_text(text.clone());
+        }
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        for item in self {
+            item.add_path(path.clone());
         }
     }
 }

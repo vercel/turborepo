@@ -46,18 +46,12 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
         result = run_fut => {
             // Run finished so close the signal handler
             handler.close().await;
-            match result {
-                Ok(code) => {
+            result.map(|code| {
                     if code != 0 {
                         error!("run failed: command  exited ({code})")
                     }
-                    Ok(code)
-                },
-                Err(err) => {
-                    error!("run failed: {}", err);
-                    Err(err)
-                }
-            }
+                code
+            })
         },
     }
 }

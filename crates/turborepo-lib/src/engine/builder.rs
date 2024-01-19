@@ -34,7 +34,7 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
-    #[error("Invalid turbo.json")]
+    #[error("invalid turbo json")]
     Validation {
         #[related]
         errors: Vec<config::Error>,
@@ -380,14 +380,13 @@ impl<'a> EngineBuilder<'a> {
                 workspace: workspace.clone(),
             }
         })?;
-        let workspace_dir =
-            self.repo_root
-                .resolve(self.package_graph.workspace_dir(workspace).ok_or_else(|| {
-                    Error::MissingPackageJson {
-                        workspace: workspace.clone(),
-                    }
-                })?);
+        let workspace_dir = self.package_graph.workspace_dir(workspace).ok_or_else(|| {
+            Error::MissingPackageJson {
+                workspace: workspace.clone(),
+            }
+        })?;
         Ok(TurboJson::load(
+            &self.repo_root,
             &workspace_dir,
             package_json,
             self.is_single,
@@ -426,7 +425,7 @@ mod test {
     use serde_json::json;
     use tempdir::TempDir;
     use test_case::test_case;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
     use turborepo_lockfiles::Lockfile;
     use turborepo_repository::{
         discovery::PackageDiscovery, package_json::PackageJson, package_manager::PackageManager,
@@ -559,7 +558,7 @@ mod test {
 
     fn turbo_json(value: serde_json::Value) -> TurboJson {
         let json_text = serde_json::to_string(&value).unwrap();
-        let raw = RawTurboJson::parse(&json_text, "").unwrap();
+        let raw = RawTurboJson::parse(&json_text, AnchoredSystemPath::new("").unwrap()).unwrap();
         TurboJson::try_from(raw).unwrap()
     }
 

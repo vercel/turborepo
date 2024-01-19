@@ -5,7 +5,7 @@ use miette::{Diagnostic, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use thiserror::Error;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_dirs::config_dir;
 use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
@@ -89,9 +89,14 @@ pub enum Error {
         text: String,
     },
     #[error("You can only extend from the root workspace")]
-    ExtendFromNonRoot,
-    #[error("No \"extends\" key found")]
-    NoExtends,
+    ExtendFromNonRoot {
+        #[label("non-root workspace found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: String,
+    },
+    #[error("No \"extends\" key found in {path}")]
+    NoExtends { path: String },
     #[error("Failed to create APIClient: {0}")]
     ApiClient(#[source] turborepo_api_client::Error),
     #[error("{0} is not UTF8.")]
@@ -213,8 +218,10 @@ impl ResolvedConfigurationOptions for PackageJson {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
         match &self.legacy_turbo_config {
             Some(legacy_turbo_config) => {
-                let synthetic_raw_turbo_json: RawTurboJson =
-                    RawTurboJson::parse(&legacy_turbo_config.to_string(), "package.json")?;
+                let synthetic_raw_turbo_json: RawTurboJson = RawTurboJson::parse(
+                    &legacy_turbo_config.to_string(),
+                    &AnchoredSystemPath::new("package.json").unwrap(),
+                )?;
                 synthetic_raw_turbo_json.get_configuration_options()
             }
             None => Ok(ConfigurationOptions::default()),
@@ -499,16 +506,19 @@ impl TurborepoConfigBuilder {
 
             Err(e)
         })?;
-        let turbo_json =
-            RawTurboJson::read(&self.repo_root.join_component("turbo.json")).or_else(|e| {
-                if let Error::Io(e) = &e {
-                    if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                        return Ok(Default::default());
-                    }
+        let turbo_json = RawTurboJson::read(
+            &self.repo_root,
+            AnchoredSystemPath::new("turbo.json").unwrap(),
+        )
+        .or_else(|e| {
+            if let Error::Io(e) = &e {
+                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                    return Ok(Default::default());
                 }
+            }
 
-                Err(e)
-            })?;
+            Err(e)
+        })?;
         let global_config = self.get_global_config()?;
         let local_config = self.get_local_config()?;
         let env_vars = self.get_environment();

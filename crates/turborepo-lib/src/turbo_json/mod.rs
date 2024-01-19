@@ -9,7 +9,7 @@ use std::{
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
-use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
 
@@ -40,6 +40,7 @@ pub struct SpacesJson {
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct TurboJson {
     text: Option<Arc<str>>,
+    path: Option<Arc<str>>,
     pub(crate) extends: Spanned<Vec<String>>,
     pub(crate) global_deps: Spanned<Vec<String>>,
     pub(crate) global_dot_env: Option<Vec<RelativeUnixPathBuf>>,
@@ -57,6 +58,9 @@ pub struct RawTurboJson {
     #[serde(skip)]
     // The raw text of the turbo.json file.
     text: Option<Arc<str>>,
+    #[serde(skip)]
+    path: Option<Arc<str>>,
+
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
     schema: Option<UnescapedString>,
 
@@ -338,9 +342,13 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
 }
 
 impl RawTurboJson {
-    pub(crate) fn read(path: &AbsoluteSystemPath) -> Result<RawTurboJson, Error> {
-        let contents = path.read_to_string()?;
-        let raw_turbo_json = RawTurboJson::parse(&contents, path.as_str())?;
+    pub(crate) fn read(
+        repo_root: &AbsoluteSystemPath,
+        path: &AnchoredSystemPath,
+    ) -> Result<RawTurboJson, Error> {
+        let absolute_path = repo_root.resolve(path);
+        let contents = absolute_path.read_to_string()?;
+        let raw_turbo_json = RawTurboJson::parse(&contents, path)?;
 
         Ok(raw_turbo_json)
     }
@@ -413,6 +421,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
 
         Ok(TurboJson {
             text: raw_turbo.text,
+            path: raw_turbo.path,
             global_env: {
                 let mut global_env: Vec<_> = global_env.into_iter().collect();
                 global_env.sort();
@@ -472,7 +481,8 @@ impl TurboJson {
     /// Loads turbo.json by reading the file at `dir` and optionally combining
     /// with synthesized information from the provided package.json
     pub fn load(
-        dir: &AbsoluteSystemPath,
+        repo_root: &AbsoluteSystemPath,
+        dir: &AnchoredSystemPath,
         root_package_json: &PackageJson,
         include_synthesized_from_root_package_json: bool,
     ) -> Result<TurboJson, Error> {
@@ -484,7 +494,7 @@ impl TurboJson {
             );
         }
 
-        let turbo_from_files = Self::read(&dir.join_component(CONFIG_FILE));
+        let turbo_from_files = Self::read(repo_root, &dir.join_component(CONFIG_FILE));
 
         let mut turbo_json = match (include_synthesized_from_root_package_json, turbo_from_files) {
             // If the file didn't exist, throw a custom error here instead of propagating
@@ -563,8 +573,11 @@ impl TurboJson {
 
     /// Reads a `RawTurboJson` from the given path
     /// and then converts it into `TurboJson`
-    pub(crate) fn read(path: &AbsoluteSystemPath) -> Result<TurboJson, Error> {
-        let raw_turbo_json = RawTurboJson::read(path)?;
+    pub(crate) fn read(
+        repo_root: &AbsoluteSystemPath,
+        path: &AnchoredSystemPath,
+    ) -> Result<TurboJson, Error> {
+        let raw_turbo_json = RawTurboJson::read(repo_root, path)?;
         raw_turbo_json.try_into()
     }
 
@@ -611,9 +624,18 @@ pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
 pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
     match turbo_json.extends.first() {
         Some(package_name) if package_name != ROOT_PKG_NAME || turbo_json.extends.len() > 1 => {
-            vec![Error::ExtendFromNonRoot]
+            let (span, text) = match (turbo_json.extends.range.clone(), &turbo_json.text) {
+                (Some(range), Some(text)) => (Some(range.into()), text.to_string()),
+                (_, _) => (None, String::new()),
+            };
+            vec![Error::ExtendFromNonRoot { span, text }]
         }
-        None => vec![Error::NoExtends],
+        None => vec![Error::NoExtends {
+            path: turbo_json
+                .path
+                .as_ref()
+                .map_or_else(|| "turbo.json".to_string(), |p| p.to_string()),
+        }],
         _ => vec![],
     }
 }
@@ -658,7 +680,7 @@ mod tests {
     use serde_json::json;
     use tempfile::tempdir;
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+    use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPathBuf};
     use turborepo_repository::package_json::PackageJson;
 
     use super::{Pipeline, PipelineEntry, RawTurboJson, Spanned};
@@ -698,7 +720,12 @@ mod tests {
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
         fs::write(repo_root.join_component("turbo.json"), turbo_json_content)?;
 
-        let turbo_json = TurboJson::load(repo_root, &root_package_json, false)?;
+        let turbo_json = TurboJson::load(
+            repo_root,
+            AnchoredSystemPath::empty(),
+            &root_package_json,
+            false,
+        )?;
         assert_eq!(turbo_json, expected_turbo_json);
 
         Ok(())
@@ -780,7 +807,12 @@ mod tests {
             fs::write(repo_root.join_component("turbo.json"), content)?;
         }
 
-        let turbo_json = TurboJson::load(repo_root, &root_package_json, true)?;
+        let turbo_json = TurboJson::load(
+            repo_root,
+            AnchoredSystemPath::empty(),
+            &root_package_json,
+            true,
+        )?;
         assert_eq!(turbo_json, expected_turbo_json);
 
         Ok(())
