@@ -347,13 +347,13 @@ struct SinglePackageRunSummary<'a> {
 
 impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
     fn from(run_summary: &'a RunSummary<'a>) -> Self {
-        let tasks = run_summary
+        let mut tasks = run_summary
             .tasks
             .iter()
             .cloned()
             .map(SinglePackageTaskSummary::from)
             .collect::<Vec<_>>();
-
+        tasks.sort_by(|t1, t2| t1.task_id.cmp(&t2.task_id));
         SinglePackageRunSummary {
             id: run_summary.id,
             version: &run_summary.version,
