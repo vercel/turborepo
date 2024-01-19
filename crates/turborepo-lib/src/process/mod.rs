@@ -154,7 +154,7 @@ mod test {
             .unwrap()
             .unwrap();
         let mut out = Vec::new();
-        let exit = child.wait_with_piped_outputs(&mut out, None).await.unwrap();
+        let exit = child.wait_with_piped_outputs(&mut out).await.unwrap();
         assert_eq!(exit, Some(ChildExit::Finished(Some(0))));
         assert_eq!(out, b"hello world\n");
     }
@@ -191,7 +191,7 @@ mod test {
             .unwrap();
         let mut out = Vec::new();
         let (exit, _) = join! {
-            child.wait_with_piped_outputs(&mut out, None),
+            child.wait_with_piped_outputs(&mut out),
             manager.stop(),
         };
         let exit = exit.unwrap();
@@ -324,7 +324,7 @@ mod test {
         // we support 'close escalation'; someone can call
         // stop even if others are waiting
         let (exit, _, _) = join! {
-            child.wait_with_piped_outputs(&mut out, None),
+            child.wait_with_piped_outputs(&mut out),
             manager.wait(),
             manager.stop(),
         };

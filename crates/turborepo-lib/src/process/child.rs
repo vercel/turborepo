@@ -367,13 +367,10 @@ impl Child {
     }
 
     /// Wait for the `Child` to exit and pipe any stdout and stderr to the
-    /// provided writers.
-    /// If `None` is passed for stderr then all output produced will be piped
-    /// to stdout
+    /// provided writer.
     pub async fn wait_with_piped_outputs<W: Write>(
         &mut self,
         mut stdout_pipe: W,
-        mut stderr_pipe: Option<W>,
     ) -> Result<Option<ChildExit>, std::io::Error> {
         async fn next_line<R: AsyncBufRead + Unpin>(
             stream: &mut Option<R>,
@@ -404,7 +401,7 @@ impl Child {
                 }
                 Some(result) = next_line(&mut stderr_lines, &mut stderr_buffer) => {
                     result?;
-                    stderr_pipe.as_mut().unwrap_or(&mut stdout_pipe).write_all(&stderr_buffer)?;
+                    stdout_pipe.write_all(&stderr_buffer)?;
                     stderr_buffer.clear();
                 }
                 else => {
@@ -417,7 +414,7 @@ impl Child {
                         stdout_buffer.clear();
                     }
                     if !stderr_buffer.is_empty() {
-                        stderr_pipe.as_mut().unwrap_or(&mut stdout_pipe).write_all(&stderr_buffer)?;
+                        stdout_pipe.write_all(&stderr_buffer)?;
                         stderr_buffer.clear();
                     }
                     break;
@@ -668,15 +665,10 @@ mod test {
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut out = Vec::new();
-        let mut err = Vec::new();
 
-        let exit = child
-            .wait_with_piped_outputs(&mut out, Some(&mut err))
-            .await
-            .unwrap();
+        let exit = child.wait_with_piped_outputs(&mut out).await.unwrap();
 
         assert_eq!(out, b"hello world\n");
-        assert!(err.is_empty());
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
@@ -689,10 +681,7 @@ mod test {
 
         let mut buffer = Vec::new();
 
-        let exit = child
-            .wait_with_piped_outputs(&mut buffer, None)
-            .await
-            .unwrap();
+        let exit = child.wait_with_piped_outputs(&mut buffer).await.unwrap();
 
         // There are no ordering guarantees so we accept either order of the logs
         assert!(buffer == b"hello world\nhello moon\n" || buffer == b"hello moon\nhello world\n");
@@ -707,15 +696,10 @@ mod test {
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut out = Vec::new();
-        let mut err = Vec::new();
 
-        let exit = child
-            .wait_with_piped_outputs(&mut out, Some(&mut err))
-            .await
-            .unwrap();
+        let exit = child.wait_with_piped_outputs(&mut out).await.unwrap();
 
         assert_eq!(out, &[0, 159, 146, 150, b'\n']);
-        assert!(err.is_empty());
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
@@ -728,10 +712,7 @@ mod test {
 
         let mut buffer = Vec::new();
 
-        let exit = child
-            .wait_with_piped_outputs(&mut buffer, None)
-            .await
-            .unwrap();
+        let exit = child.wait_with_piped_outputs(&mut buffer).await.unwrap();
 
         assert_eq!(buffer, &[0, 159, 146, 150, b'\n']);
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));

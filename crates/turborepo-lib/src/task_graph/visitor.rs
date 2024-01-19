@@ -817,10 +817,7 @@ impl ExecContext {
             }
         };
 
-        let exit_status = match process
-            .wait_with_piped_outputs(&mut stdout_writer, None)
-            .await
-        {
+        let exit_status = match process.wait_with_piped_outputs(&mut stdout_writer).await {
             Ok(Some(exit_status)) => exit_status,
             Err(e) => {
                 telemetry.track_error(TrackedErrors::FailedToPipeOutputs);
