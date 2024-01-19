@@ -78,7 +78,13 @@ pub fn main() -> Result<i32, shim::Error> {
             ))))
             | Error::Cli(cli::Error::Run(run::Error::Config(
                 config::Error::PackageTaskInSinglePackageMode { .. },
-            )))),
+            )))
+            | Error::Cli(cli::Error::Run(run::Error::Builder(
+                engine::BuilderError::Validation { .. },
+            )))
+            | Error::Cli(cli::Error::Run(run::Error::Builder(engine::BuilderError::Config(
+                ..,
+            ))))),
         ) => {
             println!("{:?}", Report::new(err));
 

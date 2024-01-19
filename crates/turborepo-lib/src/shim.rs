@@ -10,6 +10,7 @@ use std::{
 
 use camino::Utf8PathBuf;
 use const_format::formatcp;
+use convert_case::{Case, Casing};
 use dunce::canonicalize as fs_canonicalize;
 use itertools::Itertools;
 use miette::{Diagnostic, SourceSpan};
@@ -20,6 +21,7 @@ use tiny_gradient::{GradientStr, RGB};
 use tracing::debug;
 use turbo_updater::check_for_updates;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_errors::TURBO_SITE;
 use turborepo_repository::{
     inference::{RepoMode, RepoState},
     package_json::PackageJson,
@@ -30,7 +32,10 @@ use crate::{cli, get_version, spawn_child, tracing::TurboSubscriber};
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("cannot have multiple `--cwd` flags in command")]
-#[diagnostic(code(turbo::shim::empty_cwd))]
+#[diagnostic(
+    code(turbo::shim::multiple_cwd),
+    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+)]
 pub struct MultipleCwd {
     #[backtrace]
     backtrace: Backtrace,
@@ -53,7 +58,10 @@ pub enum Error {
     #[diagnostic(transparent)]
     MultipleCwd(Box<MultipleCwd>),
     #[error("No value assigned to `--cwd` flag")]
-    #[diagnostic(code(turbo::shim::empty_cwd))]
+    #[diagnostic(
+        code(turbo::shim::empty_cwd),
+        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+    )]
     EmptyCwd {
         #[backtrace]
         backtrace: Backtrace,
