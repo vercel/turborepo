@@ -354,15 +354,15 @@ impl Child {
         self.pid
     }
 
-    pub fn stdin(&mut self) -> Option<tokio::process::ChildStdin> {
+    fn stdin(&mut self) -> Option<tokio::process::ChildStdin> {
         self.stdin.lock().unwrap().take()
     }
 
-    pub fn stdout(&mut self) -> Option<tokio::process::ChildStdout> {
+    fn stdout(&mut self) -> Option<tokio::process::ChildStdout> {
         self.stdout.lock().unwrap().take()
     }
 
-    pub fn stderr(&mut self) -> Option<tokio::process::ChildStderr> {
+    fn stderr(&mut self) -> Option<tokio::process::ChildStderr> {
         self.stderr.lock().unwrap().take()
     }
 
