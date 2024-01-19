@@ -10,6 +10,7 @@
 //! must be either `wait`ed on or `stop`ped to drive state.
 
 mod child;
+mod command;
 
 use std::{
     io,
@@ -17,6 +18,7 @@ use std::{
     time::Duration,
 };
 
+pub use command::Command;
 use futures::Future;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
