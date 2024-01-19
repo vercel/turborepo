@@ -815,6 +815,46 @@ mod tests {
         }
       ; "full"
     )]
+    #[test_case(
+        r#"{
+              "dependsOn": ["cli#build"],
+              "dotEnv": ["package\\a\\.env"],
+              "env": ["OS"],
+              "passThroughEnv": ["AWS_SECRET_KEY"],
+              "outputs": ["package\\a\\dist"],
+              "cache": false,
+              "inputs": ["package\\a\\src\\**"],
+              "outputMode": "full",
+              "persistent": true
+            }"#,
+        RawTaskDefinition {
+            depends_on: Some(Spanned::new(vec!["cli#build".into()]).with_range(29..42)),
+            dot_env: Some(Spanned::new(vec!["package\\a\\.env".into()]).with_range(68..88)),
+            env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(112..116)]),
+            pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(152..168)]),
+            outputs: Some(Spanned::new(vec!["package\\a\\dist".into()]).with_range(196..216)),
+            cache: Spanned::new(Some(false)).with_range(241..246),
+            inputs: Some(Spanned::new(vec!["package\\a\\src\\**".into()]).with_range(272..295)),
+            output_mode: Some(Spanned::new(OutputLogsMode::Full).with_range(325..331)),
+            persistent: Some(Spanned::new(true).with_range(361..365)),
+        },
+        TaskDefinition {
+            dot_env: Some(vec![RelativeUnixPathBuf::new("package\\a\\.env").unwrap()]),
+            env: vec!["OS".to_string()],
+            outputs: TaskOutputs {
+                inclusions: vec!["package\\a\\dist".to_string()],
+                exclusions: vec![],
+            },
+            cache: false,
+            inputs: vec!["package\\a\\src\\**".to_string()],
+            output_mode: OutputLogsMode::Full,
+            pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
+            task_dependencies: vec!["cli#build".into()],
+            topological_dependencies: vec![],
+            persistent: true,
+        }
+      ; "full (windows)"
+    )]
     fn test_deserialize_task_definition(
         task_definition_content: &str,
         expected_raw_task_definition: RawTaskDefinition,
@@ -834,7 +874,7 @@ mod tests {
         Ok(())
     }
 
-    #[test_case("[]", TaskOutputs::default())]
+    #[test_case("[]", TaskOutputs::default() ; "empty")]
     #[test_case(r#"["target/**"]"#, TaskOutputs { inclusions: vec!["target/**".to_string()], exclusions: vec![] })]
     #[test_case(
         r#"[".next/**", "!.next/cache/**"]"#,
@@ -842,6 +882,15 @@ mod tests {
              inclusions: vec![".next/**".to_string()],
              exclusions: vec![".next/cache/**".to_string()]
         }
+        ; "with .next"
+    )]
+    #[test_case(
+        r#"[".next\\**", "!.next\\cache\\**"]"#,
+        TaskOutputs {
+            inclusions: vec![".next\\**".to_string()],
+            exclusions: vec![".next\\cache\\**".to_string()]
+        }
+        ; "with .next (windows)"
     )]
     fn test_deserialize_task_outputs(
         task_outputs_str: &str,
@@ -901,15 +950,5 @@ mod tests {
             .and_then(|build| build.output_mode.clone())
             .map(|mode| mode.into_inner());
         assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_biome() {
-        let result = deserialize_from_json_str::<String>(
-            r#""\\""#,
-            JsonParserOptions::default().with_allow_comments(),
-        );
-
-        println!("{}", result.into_deserialized().unwrap());
     }
 }
