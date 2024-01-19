@@ -22,8 +22,8 @@ pub struct PackageJson {
     pub optional_dependencies: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_dependencies: Option<BTreeMap<String, String>>,
-    #[serde(rename = "turbo", skip_serializing_if = "Option::is_none")]
-    pub legacy_turbo_config: Option<serde_json::Value>,
+    #[serde(rename = "turbo", default, skip_serializing_if = "Option::is_none")]
+    pub legacy_turbo_config: Option<Value>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub scripts: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
