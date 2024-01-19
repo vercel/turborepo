@@ -61,13 +61,13 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct Run<'a> {
-    base: &'a CommandBase,
+pub struct Run {
+    base: CommandBase,
     processes: ProcessManager,
 }
 
-impl<'a> Run<'a> {
-    pub fn new(base: &'a CommandBase) -> Self {
+impl Run {
+    pub fn new(base: CommandBase) -> Self {
         let processes = ProcessManager::new();
         Self { base, processes }
     }
