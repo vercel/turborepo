@@ -21,7 +21,6 @@ use std::{
     time::Duration,
 };
 
-use itertools::Itertools;
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, BufReader},
     join,
@@ -183,18 +182,8 @@ impl Child {
     /// Start a child process, returning a handle that can be used to interact
     /// with it. The command will be started immediately.
     pub fn spawn(command: Command, shutdown_style: ShutdownStyle) -> io::Result<Self> {
+        let label = command.label();
         let mut command = TokioCommand::from(command);
-        let label = {
-            let cmd = command.as_std();
-            format!(
-                "({}) {} {}",
-                cmd.get_current_dir()
-                    .map(|dir| dir.to_string_lossy())
-                    .unwrap_or_default(),
-                cmd.get_program().to_string_lossy(),
-                cmd.get_args().map(|s| s.to_string_lossy()).join(" ")
-            )
-        };
 
         // Create a process group for the child on unix like systems
         #[cfg(unix)]

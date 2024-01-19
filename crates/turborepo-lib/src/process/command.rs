@@ -4,6 +4,7 @@ use std::{
     process::Stdio,
 };
 
+use itertools::Itertools;
 use turbopath::AbsoluteSystemPathBuf;
 
 /// A command builder that can be used to build both regular
@@ -80,6 +81,18 @@ impl Command {
     pub fn env_clear(&mut self) -> &mut Self {
         self.env_clear = true;
         self
+    }
+
+    pub fn label(&self) -> String {
+        format!(
+            "({}) {} {}",
+            self.cwd
+                .as_deref()
+                .map(|dir| dir.as_str())
+                .unwrap_or_default(),
+            self.program.to_string_lossy(),
+            self.args.iter().map(|s| s.to_string_lossy()).join(" ")
+        )
     }
 }
 
