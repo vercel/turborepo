@@ -230,8 +230,9 @@ impl Child {
 
         // let mut child = command.spawn()?;
         let pid = child.process_id();
-        let stdin = pty.master.take_writer().unwrap();
-        let stdout = pty.master.try_clone_reader().unwrap();
+        let primary = pty.master;
+        let stdin = primary.take_writer().unwrap();
+        let stdout = primary.try_clone_reader().unwrap();
 
         let (command_tx, mut command_rx) = ChildCommandChannel::new();
 
@@ -259,6 +260,7 @@ impl Child {
         tokio::spawn(async move {
             child_exit_tx.send(child.wait()).ok();
             child_pid_tx.send(()).ok();
+            drop(primary);
         });
 
         let _task = tokio::spawn(async move {
