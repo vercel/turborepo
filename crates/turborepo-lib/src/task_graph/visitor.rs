@@ -22,7 +22,9 @@ use turborepo_repository::{
     package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
     package_manager::PackageManager,
 };
-use turborepo_telemetry::events::{task::PackageTaskEventBuilder, EventBuilder};
+use turborepo_telemetry::events::{
+    generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
+};
 use turborepo_ui::{ColorSelector, OutputClient, OutputSink, OutputWriter, PrefixedUI, UI};
 use which::which;
 
@@ -128,7 +130,11 @@ impl<'a> Visitor<'a> {
     }
 
     #[tracing::instrument(skip_all)]
-    pub async fn visit(&self, engine: Arc<Engine>) -> Result<Vec<TaskError>, Error> {
+    pub async fn visit(
+        &self,
+        engine: Arc<Engine>,
+        telemetry: &GenericEventBuilder,
+    ) -> Result<Vec<TaskError>, Error> {
         let concurrency = self.opts.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
         let engine_handle = {
@@ -156,7 +162,8 @@ impl<'a> Visitor<'a> {
                     task_id: info.clone(),
                 })?;
 
-            let package_task_event = PackageTaskEventBuilder::new(info.package(), info.task());
+            let package_task_event =
+                PackageTaskEventBuilder::new(info.package(), info.task()).with_parent(telemetry);
             let command = workspace_info
                 .package_json
                 .scripts
@@ -165,7 +172,7 @@ impl<'a> Visitor<'a> {
 
             match command {
                 Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(&cmd) => {
-                    package_task_event.track_recursive_error();
+                    package_task_event.track_error(TrackedErrors::RecursiveError);
                     return Err(Error::RecursiveTurbo {
                         task_name: info.to_string(),
                         command: cmd.to_string(),
@@ -194,14 +201,14 @@ impl<'a> Visitor<'a> {
 
             let dependency_set = engine.dependencies(&info).ok_or(Error::MissingDefinition)?;
 
-            let package_task_event_child = package_task_event.child();
+            let task_hash_telemetry = package_task_event.child();
             let task_hash = self.task_hasher.calculate_task_hash(
                 &info,
                 task_definition,
                 task_env_mode,
                 workspace_info,
                 dependency_set,
-                package_task_event_child,
+                task_hash_telemetry,
             )?;
 
             debug!("task {} hash is {}", info, task_hash);
@@ -256,6 +263,7 @@ impl<'a> Visitor<'a> {
                     let tracker = self.run_tracker.track_task(info.clone().into_owned());
                     let spaces_client = self.run_tracker.spaces_task_client();
                     let parent_span = Span::current();
+                    let execution_telemetry = package_task_event.child();
 
                     tasks.push(tokio::spawn(async move {
                         exec_context
@@ -265,6 +273,7 @@ impl<'a> Visitor<'a> {
                                 output_client,
                                 callback,
                                 spaces_client,
+                                &execution_telemetry,
                             )
                             .await;
                     }));
@@ -648,15 +657,20 @@ impl ExecContext {
         output_client: OutputClient<impl std::io::Write>,
         callback: oneshot::Sender<Result<(), StopExecution>>,
         spaces_client: Option<SpacesTaskClient>,
+        telemetry: &PackageTaskEventBuilder,
     ) {
         let tracker = tracker.start().await;
         let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
         span.follows_from(parent_span_id);
-        let mut result = self.execute_inner(&output_client).instrument(span).await;
+        let mut result = self
+            .execute_inner(&output_client, telemetry)
+            .instrument(span)
+            .await;
 
         let logs = match output_client.finish() {
             Ok(logs) => logs,
             Err(e) => {
+                telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
                 error!("unable to flush output client: {e}");
                 result = ExecOutcome::Internal;
                 None
@@ -718,9 +732,9 @@ impl ExecContext {
     async fn execute_inner(
         &mut self,
         output_client: &OutputClient<impl std::io::Write>,
+        telemetry: &PackageTaskEventBuilder,
     ) -> ExecOutcome {
         let task_start = Instant::now();
-
         let mut prefixed_ui = Visitor::prefixed_ui(
             self.ui,
             self.is_github_actions,
@@ -728,7 +742,11 @@ impl ExecContext {
             self.pretty_prefix.clone(),
         );
 
-        match self.task_cache.restore_outputs(&mut prefixed_ui).await {
+        match self
+            .task_cache
+            .restore_outputs(&mut prefixed_ui, telemetry)
+            .await
+        {
             Ok(Some(status)) => {
                 // we need to set expanded outputs
                 self.hash_tracker.insert_expanded_outputs(
@@ -741,6 +759,7 @@ impl ExecContext {
             }
             Ok(None) => (),
             Err(e) => {
+                telemetry.track_error(TrackedErrors::ErrorFetchingFromCache);
                 prefixed_ui.error(format!("error fetching from cache: {e}"));
             }
         }
@@ -776,6 +795,7 @@ impl ExecContext {
         {
             Ok(w) => w,
             Err(e) => {
+                telemetry.track_error(TrackedErrors::FailedToCaptureOutputs);
                 error!("failed to capture outputs for \"{}\": {e}", self.task_id);
                 return ExecOutcome::Internal;
             }
@@ -809,6 +829,7 @@ impl ExecContext {
         {
             Ok(Some(exit_status)) => exit_status,
             Err(e) => {
+                telemetry.track_error(TrackedErrors::FailedToPipeOutputs);
                 error!("unable to pipe outputs from command: {e}");
                 return ExecOutcome::Internal;
             }
@@ -816,6 +837,7 @@ impl ExecContext {
                 // TODO: how can this happen? we only update the
                 // exit status with Some and it is only initialized with
                 // None. Is it still running?
+                telemetry.track_error(TrackedErrors::UnknownChildExit);
                 error!("unable to determine why child exited");
                 return ExecOutcome::Internal;
             }
@@ -828,7 +850,7 @@ impl ExecContext {
                     error!("{e}");
                 } else if let Err(e) = self
                     .task_cache
-                    .save_outputs(&mut prefixed_ui, task_duration)
+                    .save_outputs(&mut prefixed_ui, task_duration, telemetry)
                     .await
                 {
                     error!("error caching output: {e}");
