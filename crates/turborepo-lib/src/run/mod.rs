@@ -45,7 +45,6 @@ pub use crate::run::error::Error;
 use crate::{
     cli::{DryRunMode, EnvMode},
     commands::CommandBase,
-    config::TurboJson,
     daemon::DaemonConnector,
     engine::{Engine, EngineBuilder},
     opts::Opts,
@@ -58,6 +57,7 @@ use crate::{
     signal::{SignalHandler, SignalSubscriber},
     task_graph::Visitor,
     task_hash::{get_external_deps_hash, PackageInputsHashes},
+    turbo_json::TurboJson,
 };
 
 #[derive(Debug)]
@@ -492,7 +492,7 @@ impl<'a> Run<'a> {
         // in benchmarks, so please don't remove it
         debug!("running visitor");
 
-        let errors = visitor.visit(engine.clone()).await?;
+        let errors = visitor.visit(engine.clone(), &run_telemetry).await?;
 
         let exit_code = errors
             .iter()

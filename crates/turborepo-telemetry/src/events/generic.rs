@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use turborepo_vercel_api::{TelemetryEvent, TelemetryGenericEvent};
 use uuid::Uuid;
 
-use super::{Event, EventBuilder, EventType, Identifiable};
+use super::{Event, EventBuilder, EventType, Identifiable, TrackedErrors};
 use crate::{config::TelemetryConfig, telem};
 
 // Remote cache URL's that will be passed through to the API without obfuscation
@@ -207,6 +207,16 @@ impl GenericEventBuilder {
                 DaemonInitStatus::Failed => "failed".to_string(),
                 DaemonInitStatus::Disabled => "disabled".to_string(),
             },
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    // errors
+    pub fn track_error(&self, error: TrackedErrors) -> &Self {
+        self.track(Event {
+            key: "error".to_string(),
+            value: error.to_string(),
             is_sensitive: EventType::NonSensitive,
         });
         self

@@ -94,9 +94,16 @@ turborepo-vercel-api = { path = "../turborepo-vercel-api" }
 uds_windows = "1.0.2"
 url = "2.3.1"
 
+biome_console = { workspace = true }
+biome_deserialize = { workspace = true }
+biome_diagnostics = { workspace = true }
+biome_json_parser = { workspace = true }
+biome_json_syntax = { workspace = true }
+
 camino = "1.1.4"
 capnp = "0.17.2"
 const_format = "0.2.30"
+convert_case = "0.6.0"
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 go-parse-duration = "0.1.1"
 is-terminal = "0.4.7"
@@ -111,6 +118,7 @@ pprof = { version = "0.12.1", features = [
 ], optional = true }
 rayon = "1.7.0"
 regex.workspace = true
+struct_iterable = "0.1.1"
 svix-ksuid = { version = "0.7.0", features = ["serde"] }
 tabwriter = "1.3.0"
 tracing-appender = "0.2.2"
@@ -123,6 +131,7 @@ turborepo-api-client = { workspace = true }
 turborepo-cache = { workspace = true }
 turborepo-ci = { workspace = true }
 turborepo-env = { workspace = true }
+turborepo-errors = { workspace = true }
 turborepo-filewatch = { path = "../turborepo-filewatch" }
 turborepo-lockfiles = { workspace = true }
 turborepo-scm = { workspace = true }

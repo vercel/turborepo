@@ -22,6 +22,7 @@ pub enum Error {
     #[error("at least one task must be specified")]
     NoTasks(#[backtrace] backtrace::Backtrace),
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
     #[error(transparent)]
     ChromeTracing(#[from] crate::tracing::Error),
