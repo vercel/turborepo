@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_auth::read_or_create_auth_file;
 use turborepo_dirs::config_dir;
 use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
@@ -133,8 +132,6 @@ pub struct TurborepoConfigBuilder {
 
     #[cfg(test)]
     global_config_path: Option<AbsoluteSystemPathBuf>,
-    #[cfg(test)]
-    global_auth_path: Option<AbsoluteSystemPathBuf>,
     #[cfg(test)]
     environment: HashMap<OsString, OsString>,
 }
@@ -382,8 +379,6 @@ impl TurborepoConfigBuilder {
             #[cfg(test)]
             global_config_path: base.global_config_path.clone(),
             #[cfg(test)]
-            global_auth_path: base.global_auth_path.clone(),
-            #[cfg(test)]
             environment: Default::default(),
         }
     }
@@ -398,17 +393,6 @@ impl TurborepoConfigBuilder {
         let config_dir = config_dir().ok_or(Error::NoGlobalConfigPath)?;
         let global_config_path = config_dir.join("turborepo").join("config.json");
         AbsoluteSystemPathBuf::try_from(global_config_path).map_err(Error::PathError)
-    }
-    // Location of the auth file for Turborepo.
-    fn global_auth_path(&self) -> Result<AbsoluteSystemPathBuf, Error> {
-        #[cfg(test)]
-        if let Some(global_auth_path) = self.global_auth_path.clone() {
-            return Ok(global_auth_path);
-        }
-
-        let config_dir = config_dir().ok_or(Error::NoGlobalConfigPath)?;
-        let global_auth_path = config_dir.join("turborepo").join("auth.json");
-        AbsoluteSystemPathBuf::try_from(global_auth_path).map_err(Error::PathError)
     }
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
@@ -430,30 +414,6 @@ impl TurborepoConfigBuilder {
     #[cfg(not(test))]
     fn get_environment(&self) -> HashMap<OsString, OsString> {
         get_lowercased_env_vars()
-    }
-
-    fn get_global_auth(&self) -> Result<ConfigurationOptions, Error> {
-        let global_auth_path = self.global_auth_path()?;
-        let global_config_path = self.global_config_path()?;
-        let api = self
-            .override_config
-            .api_url
-            .clone()
-            .unwrap_or(DEFAULT_API_URL.to_string());
-
-        let auth = read_or_create_auth_file(&global_auth_path, &global_config_path, &api)?;
-        let auth_token = auth.get_token(&api).unwrap_or_default().token;
-        let token = if auth_token.is_empty() {
-            None
-        } else {
-            Some(auth_token)
-        };
-
-        let global_auth: ConfigurationOptions = ConfigurationOptions {
-            token,
-            ..Default::default()
-        };
-        Ok(global_auth)
     }
 
     fn get_global_config(&self) -> Result<ConfigurationOptions, Error> {
@@ -527,7 +487,6 @@ impl TurborepoConfigBuilder {
                 Err(e)
             })?;
         let global_config = self.get_global_config()?;
-        let global_auth = self.get_global_auth()?;
         let local_config = self.get_local_config()?;
         let env_vars = self.get_environment();
         let env_var_config = get_env_var_config(&env_vars)?;
@@ -537,7 +496,6 @@ impl TurborepoConfigBuilder {
             root_package_json.get_configuration_options(),
             turbo_json.get_configuration_options(),
             global_config.get_configuration_options(),
-            global_auth.get_configuration_options(),
             local_config.get_configuration_options(),
             env_var_config.get_configuration_options(),
             Ok(self.override_config.clone()),
@@ -686,11 +644,6 @@ mod test {
         )
         .unwrap();
 
-        let global_auth_path = AbsoluteSystemPathBuf::try_from(
-            TempDir::new().unwrap().path().join("nonexistent-auth.json"),
-        )
-        .unwrap();
-
         let turbo_teamid = "team_nLlpyC6REAqxydlFKbrMDlud";
         let turbo_token = "abcdef1234567890abcdef";
         let vercel_artifacts_owner = "team_SOMEHASH";
@@ -718,7 +671,6 @@ mod test {
             repo_root,
             override_config,
             global_config_path: Some(global_config_path),
-            global_auth_path: Some(global_auth_path),
             environment: env,
         };
 
