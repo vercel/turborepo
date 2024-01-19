@@ -528,7 +528,7 @@ impl<'a> Run<'a> {
         // in benchmarks, so please don't remove it
         debug!("running visitor");
 
-        let errors = visitor.visit(engine.clone()).await?;
+        let errors = visitor.visit(engine.clone(), &run_telemetry).await?;
 
         let exit_code = errors
             .iter()
