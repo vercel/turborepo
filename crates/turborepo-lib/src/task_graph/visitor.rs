@@ -795,7 +795,7 @@ impl ExecContext {
             }
         };
 
-        let mut process = match self.manager.spawn(cmd.into(), Duration::from_millis(500)) {
+        let mut process = match self.manager.spawn(cmd, Duration::from_millis(500)) {
             Some(Ok(child)) => child,
             // Turbo was unable to spawn a process
             Some(Err(e)) => {

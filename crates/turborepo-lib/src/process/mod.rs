@@ -58,7 +58,7 @@ impl ProcessManager {
     /// manager is open, but the child process failed to spawn.
     pub fn spawn(
         &self,
-        command: child::Command,
+        command: Command,
         stop_timeout: Duration,
     ) -> Option<io::Result<child::Child>> {
         let mut lock = self.0.lock().unwrap();
@@ -126,12 +126,10 @@ impl ProcessManager {
 
 #[cfg(test)]
 mod test {
-    use std::process::Stdio;
-
     use futures::{stream::FuturesUnordered, StreamExt};
     use test_case::test_case;
     use time::Instant;
-    use tokio::{join, process::Command, time::sleep};
+    use tokio::{join, time::sleep};
     use tracing_test::traced_test;
 
     use super::*;
@@ -142,9 +140,7 @@ mod test {
 
     fn get_script_command(script_name: &str) -> Command {
         let mut cmd = Command::new("node");
-        cmd.arg(format!("./test/scripts/{script_name}"));
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        cmd.args([format!("./test/scripts/{script_name}")]);
         cmd
     }
 

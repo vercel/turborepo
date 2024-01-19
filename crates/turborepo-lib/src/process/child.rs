@@ -22,13 +22,15 @@ use std::{
 };
 
 use itertools::Itertools;
-pub use tokio::process::Command;
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, BufReader},
     join,
+    process::Command as TokioCommand,
     sync::{mpsc, watch, RwLock},
 };
 use tracing::debug;
+
+use super::Command;
 
 #[derive(Debug)]
 pub enum ChildState {
@@ -180,7 +182,8 @@ pub enum ChildCommand {
 impl Child {
     /// Start a child process, returning a handle that can be used to interact
     /// with it. The command will be started immediately.
-    pub fn spawn(mut command: Command, shutdown_style: ShutdownStyle) -> io::Result<Self> {
+    pub fn spawn(command: Command, shutdown_style: ShutdownStyle) -> io::Result<Self> {
+        let mut command = TokioCommand::from(command);
         let label = {
             let cmd = command.as_std();
             format!(
@@ -445,17 +448,14 @@ impl Child {
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches::assert_matches, process::Stdio, time::Duration};
+    use std::{assert_matches::assert_matches, time::Duration};
 
     use futures::{stream::FuturesUnordered, StreamExt};
-    use tokio::{
-        io::{AsyncReadExt, AsyncWriteExt},
-        process::Command,
-    };
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tracing_test::traced_test;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use super::{Child, ChildState};
+    use super::{Child, ChildState, Command};
     use crate::process::child::{ChildExit, ShutdownStyle};
 
     const STARTUP_DELAY: Duration = Duration::from_millis(500);
@@ -490,7 +490,6 @@ mod test {
             let script = find_script_dir().join_component("hello_world.js");
             let mut cmd = Command::new("node");
             cmd.args([script.as_std_path()]);
-            cmd.stdout(Stdio::piped());
             cmd
         };
 
@@ -516,7 +515,6 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        cmd.stdout(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
@@ -547,8 +545,7 @@ mod test {
         let script = find_script_dir().join_component("stdin_stdout.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        cmd.stdout(Stdio::piped());
-        cmd.stdin(Stdio::piped());
+        cmd.open_stdin(true);
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut stdout = child.stdout().unwrap();
@@ -582,7 +579,6 @@ mod test {
             let script = find_script_dir().join_component("sleep_5_ignore.js");
             let mut cmd = Command::new("node");
             cmd.args([script.as_std_path()]);
-            cmd.stdout(Stdio::piped());
             cmd
         };
 
@@ -680,8 +676,6 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut out = Vec::new();
@@ -702,8 +696,6 @@ mod test {
         let script = find_script_dir().join_component("hello_world_hello_moon.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut buffer = Vec::new();
@@ -723,8 +715,6 @@ mod test {
         let script = find_script_dir().join_component("hello_non_utf8.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut out = Vec::new();
@@ -745,8 +735,6 @@ mod test {
         let script = find_script_dir().join_component("hello_non_utf8.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut buffer = Vec::new();
