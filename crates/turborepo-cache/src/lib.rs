@@ -23,7 +23,7 @@ mod test_cases;
 use std::{backtrace, backtrace::Backtrace};
 
 pub use async_cache::AsyncCache;
-use camino::Utf8Path;
+use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -95,8 +95,8 @@ pub struct CacheHitMetadata {
 }
 
 #[derive(Debug, Default)]
-pub struct CacheOpts<'a> {
-    pub override_dir: Option<&'a Utf8Path>,
+pub struct CacheOpts {
+    pub override_dir: Option<Utf8PathBuf>,
     pub remote_cache_read_only: bool,
     pub skip_remote: bool,
     pub skip_filesystem: bool,

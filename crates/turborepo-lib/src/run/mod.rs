@@ -99,7 +99,7 @@ impl Run {
             .then(|| start_analytics(api_auth, api_client))
     }
 
-    fn print_run_prelude(&self, opts: &Opts<'_>, filtered_pkgs: &HashSet<WorkspaceName>) {
+    fn print_run_prelude(&self, opts: &Opts, filtered_pkgs: &HashSet<WorkspaceName>) {
         let targets_list = opts.run_opts.tasks.join(", ");
         if opts.run_opts.single_package {
             cprint!(self.base.ui, GREY, "{}", "• Running");
