@@ -531,7 +531,7 @@ mod test {
         let script = find_script_dir().join_component("stdin_stdout.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        cmd.open_stdin(true);
+        cmd.open_stdin();
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut stdout = child.stdout().unwrap();

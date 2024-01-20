@@ -54,10 +54,10 @@ impl Command {
         K: AsRef<OsStr>,
         V: AsRef<OsStr>,
     {
-        self.env = vars
-            .into_iter()
-            .map(|(k, v)| (k.as_ref().to_os_string(), v.as_ref().to_os_string()))
-            .collect();
+        for (ref key, ref val) in vars {
+            self.env
+                .insert(key.as_ref().to_os_string(), val.as_ref().to_os_string());
+        }
         self
     }
 
@@ -71,15 +71,16 @@ impl Command {
         self
     }
 
-    /// Configure if the child process should spawn with stdin or not
-    pub fn open_stdin(&mut self, open_stdin: bool) -> &mut Self {
-        self.open_stdin = open_stdin;
+    /// Configure the child process to spawn with a piped stdin
+    pub fn open_stdin(&mut self) -> &mut Self {
+        self.open_stdin = true;
         self
     }
 
     /// Clears the environment variables for the child process
     pub fn env_clear(&mut self) -> &mut Self {
         self.env_clear = true;
+        self.env.clear();
         self
     }
 
