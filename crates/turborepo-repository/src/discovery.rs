@@ -23,7 +23,7 @@ pub struct WorkspaceData {
     pub turbo_json: Option<AbsoluteSystemPathBuf>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct DiscoveryResponse {
     pub workspaces: Vec<WorkspaceData>,
     pub package_manager: PackageManager,

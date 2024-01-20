@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use turborepo_vercel_api::{TelemetryEvent, TelemetryTaskEvent};
 use uuid::Uuid;
 
-use super::{Event, EventBuilder, EventType, Identifiable};
+use super::{Event, EventBuilder, EventType, Identifiable, TrackedErrors};
 use crate::{config::TelemetryConfig, telem};
 
 // task names that will be passed through to the API without obfuscation
@@ -88,15 +88,6 @@ impl PackageTaskEventBuilder {
     }
 
     // event methods
-    pub fn track_recursive_error(&self) -> &Self {
-        self.track(Event {
-            key: "error".to_string(),
-            value: "recursive".to_string(),
-            is_sensitive: EventType::NonSensitive,
-        });
-        self
-    }
-
     pub fn track_framework(&self, framework: &str) -> &Self {
         self.track(Event {
             key: "framework".to_string(),
@@ -131,6 +122,16 @@ impl PackageTaskEventBuilder {
         self.track(Event {
             key: "scm_mode".to_string(),
             value: method.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    // errors
+    pub fn track_error(&self, error: TrackedErrors) -> &Self {
+        self.track(Event {
+            key: "error".to_string(),
+            value: error.to_string(),
             is_sensitive: EventType::NonSensitive,
         });
         self

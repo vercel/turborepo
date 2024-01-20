@@ -18,7 +18,6 @@ use dirs_next::home_dir;
 use rand::Rng;
 use thiserror::Error;
 use turborepo_api_client::Client;
-use turborepo_auth::read_or_create_auth_file;
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
 use turborepo_ui::{BOLD, GREY, UNDERLINE};
@@ -172,18 +171,9 @@ pub async fn link(
     let homedir = homedir_path.to_string_lossy();
     let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
     let api_client = base.api_client()?;
-    let auth_file_path = base.global_auth_path()?;
-    let config_file_path = base.global_config_path()?;
-    let auth = read_or_create_auth_file(&auth_file_path, &config_file_path, api_client.base_url())
-        .map_err(|_| Error::TokenNotFound {
-            command: base.ui.apply(BOLD.apply_to("npx turbo login")),
-        })?;
-    let token = &auth
-        .get_token(api_client.base_url())
-        .ok_or_else(|| Error::TokenNotFound {
-            command: base.ui.apply(BOLD.apply_to("npx turbo login")),
-        })?
-        .token;
+    let token = base.config()?.token().ok_or_else(|| Error::TokenNotFound {
+        command: base.ui.apply(BOLD.apply_to("`npx turbo login`")),
+    })?;
 
     match target {
         LinkTarget::RemoteCache => {
@@ -595,7 +585,6 @@ mod test {
     use std::{cell::OnceCell, fs};
 
     use anyhow::Result;
-    use serde_json::json;
     use tempfile::{NamedTempFile, TempDir};
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_ui::UI;
@@ -604,28 +593,16 @@ mod test {
     use crate::{
         cli::LinkTarget,
         commands::{link, CommandBase},
-        config::{RawTurboJson, TurborepoConfigBuilder},
+        config::TurborepoConfigBuilder,
+        turbo_json::RawTurboJson,
         Args,
     };
 
     #[tokio::test]
     async fn test_link_remote_cache() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
-
         // user config
         let user_config_file = NamedTempFile::new().unwrap();
-
-        // auth file
-        let auth_file = NamedTempFile::new().unwrap();
-        let host_with_port = format!("http://localhost:{}", port);
-        let raw_token_json = json!({
-            "tokens": {
-                host_with_port.clone(): "token"
-            }
-        });
-        let raw_json = serde_json::to_string_pretty(&raw_token_json).unwrap();
-
-        fs::write(auth_file.path(), raw_json).unwrap();
+        fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
 
         // repo
         let repo_root_tmp_dir = TempDir::new().unwrap();
@@ -646,13 +623,11 @@ mod test {
             .create_with_contents(r#"{ "apiurl": "http://localhost:3000" }"#)
             .unwrap();
 
+        let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
             global_config_path: Some(
                 AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
-            ),
-            global_auth_path: Some(
-                AbsoluteSystemPathBuf::try_from(auth_file.path().to_path_buf()).unwrap(),
             ),
             repo_root: repo_root.clone(),
             ui: UI::new(false),
@@ -663,8 +638,8 @@ mod test {
         base.config
             .set(
                 TurborepoConfigBuilder::new(&base)
-                    .with_api_url(Some(host_with_port.clone()))
-                    .with_login_url(Some(host_with_port.clone()))
+                    .with_api_url(Some(format!("http://localhost:{}", port)))
+                    .with_login_url(Some(format!("http://localhost:{}", port)))
                     .with_token(Some("token".to_string()))
                     .build()
                     .unwrap(),
@@ -691,22 +666,9 @@ mod test {
 
     #[tokio::test]
     async fn test_link_spaces() {
-        let port = port_scanner::request_open_port().unwrap();
-
         // user config
         let user_config_file = NamedTempFile::new().unwrap();
-
-        // auth file
-        let auth_file = NamedTempFile::new().unwrap();
-        let host_with_port = format!("http://localhost:{}", port);
-        let raw_token_json = json!({
-            "tokens": {
-                host_with_port: "hello"
-            }
-        });
-        let raw_json = serde_json::to_string_pretty(&raw_token_json).unwrap();
-
-        fs::write(auth_file.path(), raw_json).unwrap();
+        fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
 
         // repo
         let repo_root_tmp_dir = TempDir::new().unwrap();
@@ -727,13 +689,11 @@ mod test {
             .create_with_contents(r#"{ "apiurl": "http://localhost:3000" }"#)
             .unwrap();
 
+        let port = port_scanner::request_open_port().unwrap();
         let handle = tokio::spawn(start_test_server(port));
         let mut base = CommandBase {
             global_config_path: Some(
                 AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
-            ),
-            global_auth_path: Some(
-                AbsoluteSystemPathBuf::try_from(auth_file.path().to_path_buf()).unwrap(),
             ),
             repo_root: repo_root.clone(),
             ui: UI::new(false),
@@ -769,10 +729,11 @@ mod test {
 
         // verify space id is added to turbo.json
         let turbo_json_contents = fs::read_to_string(&turbo_json_file).unwrap();
-        let turbo_json: RawTurboJson = serde_json::from_str(&turbo_json_contents).unwrap();
+        let turbo_json =
+            RawTurboJson::parse(&turbo_json_contents, turbo_json_file.as_str()).unwrap();
         assert_eq!(
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
-            turborepo_vercel_api_mock::EXPECTED_SPACE_ID
+            turborepo_vercel_api_mock::EXPECTED_SPACE_ID.into()
         );
     }
 }
