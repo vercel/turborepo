@@ -9,8 +9,8 @@ pub use visitor::{Error as VisitorError, Visitor};
 
 use crate::{
     cli::OutputLogsMode,
-    config::RawTaskDefinition,
     run::task_id::{TaskId, TaskName},
+    turbo_json::RawTaskDefinition,
 };
 
 // TaskOutputs represents the patterns for including and excluding files from
