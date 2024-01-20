@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
   "crates/node-file-trace",
+  "crates/tower-uds",
   "crates/turbo-tasks*",
   "crates/turbopack*",
   "crates/turborepo*",
@@ -147,6 +148,7 @@ turborepo-api-client = { path = "crates/turborepo-api-client" }
 turborepo-cache = { path = "crates/turborepo-cache" }
 turborepo-ci = { path = "crates/turborepo-ci" }
 turborepo-env = { path = "crates/turborepo-env" }
+turborepo-errors = { path = "crates/turborepo-errors" }
 turborepo-ffi = { path = "crates/turborepo-ffi" }
 turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
@@ -181,6 +183,11 @@ async-trait = "0.1.64"
 atty = "0.2.14"
 axum = "0.6.2"
 axum-server = "0.4.4"
+biome_console = "0.3.1"
+biome_deserialize = "0.3.1"
+biome_diagnostics = "0.3.1"
+biome_json_parser = "0.3.1"
+biome_json_syntax = "0.3.1"
 bytes = "1.1.0"
 camino = { version = "1.1.4", features = ["serde1"] }
 chrono = "0.4.23"

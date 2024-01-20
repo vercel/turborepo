@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 
 // all event builders and their event methods
@@ -40,6 +42,38 @@ pub trait EventBuilder {
     fn with_parent<U: Identifiable>(self, parent_event: &U) -> Self;
     fn track(&self, event: Event);
     fn child(&self) -> Self;
+}
+
+pub enum TrackedErrors {
+    // daemon errors
+    DaemonFailedToMarkOutputsAsCached,
+    DaemonSkipOutputRestoreCheckFailed,
+    // other
+    RecursiveError,
+    UnableToFlushOutputClient,
+    FailedToCaptureOutputs,
+    ErrorFetchingFromCache,
+    FailedToPipeOutputs,
+    UnknownChildExit,
+}
+
+impl Display for TrackedErrors {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TrackedErrors::DaemonFailedToMarkOutputsAsCached => {
+                write!(f, "daemon:failed_to_mark_outputs_as_cached")
+            }
+            TrackedErrors::DaemonSkipOutputRestoreCheckFailed => {
+                write!(f, "daemon:skip_output_restore_check_failed")
+            }
+            TrackedErrors::RecursiveError => write!(f, "recursive_error"),
+            TrackedErrors::UnableToFlushOutputClient => write!(f, "unable_to_flush_output_client"),
+            TrackedErrors::FailedToCaptureOutputs => write!(f, "failed_to_capture_outputs"),
+            TrackedErrors::ErrorFetchingFromCache => write!(f, "error_fetching_from_cache"),
+            TrackedErrors::FailedToPipeOutputs => write!(f, "failed_to_pipe_outputs"),
+            TrackedErrors::UnknownChildExit => write!(f, "unknown_child_exit"),
+        }
+    }
 }
 
 #[macro_export]

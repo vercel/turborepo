@@ -4,6 +4,7 @@ import "../custom.css";
 import type { AppProps } from "next/app";
 import { type ReactNode } from "react";
 import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { VercelToolbar } from "@vercel/toolbar/next";
 import { useRouter } from "next/router";
 import { getCommentsState, pathHasToolbar } from "../lib/comments";
@@ -50,6 +51,7 @@ export default function Nextra({ Component, pageProps }: NextraAppProps) {
       </svg>
       <Component {...pageProps} />
       <Analytics />
+      <SpeedInsights />
       {getCommentsState() && pathHasToolbar(router) ? <VercelToolbar /> : null}
     </>
   );
