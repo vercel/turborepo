@@ -1,9 +1,14 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use lightningcss::{
+    stylesheet::{MinifyOptions, PrinterOptions, StyleSheet},
+    targets::{Browsers, Targets},
+};
 use swc_core::{
     common::{util::take::Take, FileName},
     ecma::{
         ast::{Module, Program},
+        preset_env::{self, Version, Versions},
         visit::FoldWith,
     },
 };
@@ -12,11 +17,15 @@ use turbopack_ecmascript::{CustomTransformer, TransformContext};
 #[derive(Debug)]
 pub struct StyledJsxTransformer {
     use_lightningcss: bool,
+    target_browsers: Option<preset_env::Versions>,
 }
 
 impl StyledJsxTransformer {
-    pub fn new(use_lightningcss: bool) -> Self {
-        Self { use_lightningcss }
+    pub fn new(use_lightningcss: bool, target_browsers: Option<preset_env::Versions>) -> Self {
+        Self {
+            use_lightningcss,
+            target_browsers,
+        }
     }
 }
 
@@ -30,10 +39,56 @@ impl CustomTransformer for StyledJsxTransformer {
             FileName::Anon,
             styled_jsx::visitor::Config {
                 use_lightningcss: self.use_lightningcss,
-                ..Default::default()
+                browsers: self.target_browsers.clone().unwrap_or_default(),
+            },
+            styled_jsx::visitor::NativeConfig {
+                process_css: if self.use_lightningcss || self.target_browsers.is_none() {
+                    None
+                } else {
+                    let targets = Targets {
+                        browsers: Some(convert_browsers(self.target_browsers.as_ref().unwrap())),
+                        ..Default::default()
+                    };
+
+                    Some(Box::new(move |css| {
+                        let ss = StyleSheet::parse(css, Default::default())?;
+                        ss.minify(MinifyOptions {
+                            targets,
+                            ..Default::default()
+                        })?;
+
+                        let output = ss.to_css(PrinterOptions {
+                            minify: true,
+                            source_map: None,
+                            project_root: None,
+                            targets,
+                            analyze_dependencies: None,
+                            pseudo_classes: None,
+                        })?;
+                        Ok(output.code)
+                    }))
+                },
             },
         ));
 
         Ok(())
+    }
+}
+
+fn convert_browsers(browsers: &Versions) -> Browsers {
+    fn convert(v: Option<Version>) -> Option<u32> {
+        v.map(|v| v.major << 16 | v.minor << 8 | v.patch)
+    }
+
+    Browsers {
+        android: convert(browsers.android),
+        chrome: convert(browsers.chrome),
+        edge: convert(browsers.edge),
+        firefox: convert(browsers.firefox),
+        ie: convert(browsers.ie),
+        ios_saf: convert(browsers.ios),
+        opera: convert(browsers.opera),
+        safari: convert(browsers.safari),
+        samsung: convert(browsers.samsung),
     }
 }
