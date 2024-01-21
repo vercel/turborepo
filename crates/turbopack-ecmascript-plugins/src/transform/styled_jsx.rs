@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use lightningcss::{
     stylesheet::{MinifyOptions, PrinterOptions, StyleSheet},
@@ -51,7 +51,14 @@ impl CustomTransformer for StyledJsxTransformer {
                     };
 
                     Some(Box::new(move |css| {
-                        let ss = StyleSheet::parse(css, Default::default())?;
+                        let ss = StyleSheet::parse(css, Default::default());
+
+                        let mut ss = match ss {
+                            Ok(v) => v,
+                            Err(err) => {
+                                bail!("failed to parse css: {}", err)
+                            }
+                        };
                         ss.minify(MinifyOptions {
                             targets,
                             ..Default::default()
