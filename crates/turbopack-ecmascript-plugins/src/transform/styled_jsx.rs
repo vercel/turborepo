@@ -39,7 +39,7 @@ impl CustomTransformer for StyledJsxTransformer {
             FileName::Anon,
             styled_jsx::visitor::Config {
                 use_lightningcss: self.use_lightningcss,
-                browsers: self.target_browsers.clone().unwrap_or_default(),
+                browsers: self.target_browsers.unwrap_or_default(),
             },
             styled_jsx::visitor::NativeConfig {
                 process_css: if self.use_lightningcss || self.target_browsers.is_none() {
