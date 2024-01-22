@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use lightningcss::{
-    stylesheet::{MinifyOptions, PrinterOptions, StyleSheet},
+    stylesheet::{PrinterOptions, StyleSheet},
     targets::{Browsers, Targets},
 };
 use swc_core::{
@@ -53,16 +53,12 @@ impl CustomTransformer for StyledJsxTransformer {
                     Some(Box::new(move |css| {
                         let ss = StyleSheet::parse(css, Default::default());
 
-                        let mut ss = match ss {
+                        let ss = match ss {
                             Ok(v) => v,
                             Err(err) => {
                                 bail!("failed to parse css: {}", err)
                             }
                         };
-                        ss.minify(MinifyOptions {
-                            targets,
-                            ..Default::default()
-                        })?;
 
                         let output = ss.to_css(PrinterOptions {
                             minify: true,
