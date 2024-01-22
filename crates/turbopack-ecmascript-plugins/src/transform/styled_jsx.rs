@@ -8,7 +8,7 @@ use swc_core::{
     common::{util::take::Take, FileName},
     ecma::{
         ast::{Module, Program},
-        preset_env::{self, Version, Versions},
+        preset_env::{Version, Versions},
         visit::FoldWith,
     },
 };
@@ -17,11 +17,11 @@ use turbopack_ecmascript::{CustomTransformer, TransformContext};
 #[derive(Debug)]
 pub struct StyledJsxTransformer {
     use_lightningcss: bool,
-    target_browsers: Option<preset_env::Versions>,
+    target_browsers: Option<Versions>,
 }
 
 impl StyledJsxTransformer {
-    pub fn new(use_lightningcss: bool, target_browsers: Option<preset_env::Versions>) -> Self {
+    pub fn new(use_lightningcss: bool, target_browsers: Option<Versions>) -> Self {
         Self {
             use_lightningcss,
             target_browsers,
