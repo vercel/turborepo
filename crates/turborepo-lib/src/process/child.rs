@@ -21,14 +21,15 @@ use std::{
     time::Duration,
 };
 
-use itertools::Itertools;
-pub use tokio::process::Command;
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, BufReader},
     join,
+    process::Command as TokioCommand,
     sync::{mpsc, watch, RwLock},
 };
 use tracing::debug;
+
+use super::Command;
 
 #[derive(Debug)]
 pub enum ChildState {
@@ -180,18 +181,9 @@ pub enum ChildCommand {
 impl Child {
     /// Start a child process, returning a handle that can be used to interact
     /// with it. The command will be started immediately.
-    pub fn spawn(mut command: Command, shutdown_style: ShutdownStyle) -> io::Result<Self> {
-        let label = {
-            let cmd = command.as_std();
-            format!(
-                "({}) {} {}",
-                cmd.get_current_dir()
-                    .map(|dir| dir.to_string_lossy())
-                    .unwrap_or_default(),
-                cmd.get_program().to_string_lossy(),
-                cmd.get_args().map(|s| s.to_string_lossy()).join(" ")
-            )
-        };
+    pub fn spawn(command: Command, shutdown_style: ShutdownStyle) -> io::Result<Self> {
+        let label = command.label();
+        let mut command = TokioCommand::from(command);
 
         // Create a process group for the child on unix like systems
         #[cfg(unix)]
@@ -362,26 +354,23 @@ impl Child {
         self.pid
     }
 
-    pub fn stdin(&mut self) -> Option<tokio::process::ChildStdin> {
+    fn stdin(&mut self) -> Option<tokio::process::ChildStdin> {
         self.stdin.lock().unwrap().take()
     }
 
-    pub fn stdout(&mut self) -> Option<tokio::process::ChildStdout> {
+    fn stdout(&mut self) -> Option<tokio::process::ChildStdout> {
         self.stdout.lock().unwrap().take()
     }
 
-    pub fn stderr(&mut self) -> Option<tokio::process::ChildStderr> {
+    fn stderr(&mut self) -> Option<tokio::process::ChildStderr> {
         self.stderr.lock().unwrap().take()
     }
 
     /// Wait for the `Child` to exit and pipe any stdout and stderr to the
-    /// provided writers.
-    /// If `None` is passed for stderr then all output produced will be piped
-    /// to stdout
+    /// provided writer.
     pub async fn wait_with_piped_outputs<W: Write>(
         &mut self,
         mut stdout_pipe: W,
-        mut stderr_pipe: Option<W>,
     ) -> Result<Option<ChildExit>, std::io::Error> {
         async fn next_line<R: AsyncBufRead + Unpin>(
             stream: &mut Option<R>,
@@ -412,7 +401,7 @@ impl Child {
                 }
                 Some(result) = next_line(&mut stderr_lines, &mut stderr_buffer) => {
                     result?;
-                    stderr_pipe.as_mut().unwrap_or(&mut stdout_pipe).write_all(&stderr_buffer)?;
+                    stdout_pipe.write_all(&stderr_buffer)?;
                     stderr_buffer.clear();
                 }
                 else => {
@@ -425,7 +414,7 @@ impl Child {
                         stdout_buffer.clear();
                     }
                     if !stderr_buffer.is_empty() {
-                        stderr_pipe.as_mut().unwrap_or(&mut stdout_pipe).write_all(&stderr_buffer)?;
+                        stdout_pipe.write_all(&stderr_buffer)?;
                         stderr_buffer.clear();
                     }
                     break;
@@ -445,17 +434,14 @@ impl Child {
 
 #[cfg(test)]
 mod test {
-    use std::{assert_matches::assert_matches, process::Stdio, time::Duration};
+    use std::{assert_matches::assert_matches, time::Duration};
 
     use futures::{stream::FuturesUnordered, StreamExt};
-    use tokio::{
-        io::{AsyncReadExt, AsyncWriteExt},
-        process::Command,
-    };
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tracing_test::traced_test;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use super::{Child, ChildState};
+    use super::{Child, ChildState, Command};
     use crate::process::child::{ChildExit, ShutdownStyle};
 
     const STARTUP_DELAY: Duration = Duration::from_millis(500);
@@ -490,7 +476,6 @@ mod test {
             let script = find_script_dir().join_component("hello_world.js");
             let mut cmd = Command::new("node");
             cmd.args([script.as_std_path()]);
-            cmd.stdout(Stdio::piped());
             cmd
         };
 
@@ -516,7 +501,6 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        cmd.stdout(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
@@ -547,8 +531,7 @@ mod test {
         let script = find_script_dir().join_component("stdin_stdout.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        cmd.stdout(Stdio::piped());
-        cmd.stdin(Stdio::piped());
+        cmd.open_stdin();
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut stdout = child.stdout().unwrap();
@@ -582,7 +565,6 @@ mod test {
             let script = find_script_dir().join_component("sleep_5_ignore.js");
             let mut cmd = Command::new("node");
             cmd.args([script.as_std_path()]);
-            cmd.stdout(Stdio::piped());
             cmd
         };
 
@@ -680,20 +662,13 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut out = Vec::new();
-        let mut err = Vec::new();
 
-        let exit = child
-            .wait_with_piped_outputs(&mut out, Some(&mut err))
-            .await
-            .unwrap();
+        let exit = child.wait_with_piped_outputs(&mut out).await.unwrap();
 
         assert_eq!(out, b"hello world\n");
-        assert!(err.is_empty());
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
@@ -702,16 +677,11 @@ mod test {
         let script = find_script_dir().join_component("hello_world_hello_moon.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut buffer = Vec::new();
 
-        let exit = child
-            .wait_with_piped_outputs(&mut buffer, None)
-            .await
-            .unwrap();
+        let exit = child.wait_with_piped_outputs(&mut buffer).await.unwrap();
 
         // There are no ordering guarantees so we accept either order of the logs
         assert!(buffer == b"hello world\nhello moon\n" || buffer == b"hello moon\nhello world\n");
@@ -723,20 +693,13 @@ mod test {
         let script = find_script_dir().join_component("hello_non_utf8.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut out = Vec::new();
-        let mut err = Vec::new();
 
-        let exit = child
-            .wait_with_piped_outputs(&mut out, Some(&mut err))
-            .await
-            .unwrap();
+        let exit = child.wait_with_piped_outputs(&mut out).await.unwrap();
 
         assert_eq!(out, &[0, 159, 146, 150, b'\n']);
-        assert!(err.is_empty());
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
@@ -745,16 +708,11 @@ mod test {
         let script = find_script_dir().join_component("hello_non_utf8.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
 
         let mut buffer = Vec::new();
 
-        let exit = child
-            .wait_with_piped_outputs(&mut buffer, None)
-            .await
-            .unwrap();
+        let exit = child.wait_with_piped_outputs(&mut buffer).await.unwrap();
 
         assert_eq!(buffer, &[0, 159, 146, 150, b'\n']);
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));

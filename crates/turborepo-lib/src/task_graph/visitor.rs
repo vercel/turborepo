@@ -2,7 +2,6 @@ use std::{
     borrow::Cow,
     collections::HashSet,
     io::Write,
-    process::Stdio,
     sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
@@ -10,10 +9,7 @@ use std::{
 use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
-use tokio::{
-    process::Command,
-    sync::{mpsc, oneshot},
-};
+use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_ci::github_header_footer;
@@ -32,7 +28,7 @@ use crate::{
     cli::EnvMode,
     engine::{Engine, ExecutionOptions, StopExecution},
     opts::Opts,
-    process::{ChildExit, ProcessManager},
+    process::{ChildExit, Command, ProcessManager},
     run::{
         global_hash::GlobalHashableInputs,
         summary::{
@@ -779,9 +775,7 @@ impl ExecContext {
             args.extend(pass_through_args.iter().cloned());
         }
         cmd.args(args);
-        cmd.current_dir(self.workspace_directory.as_path());
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        cmd.current_dir(self.workspace_directory.clone());
 
         // We clear the env before populating it with variables we expect
         cmd.env_clear();
@@ -823,10 +817,7 @@ impl ExecContext {
             }
         };
 
-        let exit_status = match process
-            .wait_with_piped_outputs(&mut stdout_writer, None)
-            .await
-        {
+        let exit_status = match process.wait_with_piped_outputs(&mut stdout_writer).await {
             Ok(Some(exit_status)) => exit_status,
             Err(e) => {
                 telemetry.track_error(TrackedErrors::FailedToPipeOutputs);
