@@ -26,7 +26,7 @@ pub enum Error {
 
 pub(crate) fn write_graph(
     ui: UI,
-    graph_opts: GraphOpts,
+    graph_opts: &GraphOpts,
     engine: &Engine,
     single_package: bool,
     cwd: &AbsoluteSystemPath,
