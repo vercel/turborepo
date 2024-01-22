@@ -35,7 +35,7 @@ use turbo_tasks::{
 };
 
 use crate::{
-    aggregation_tree::{aggregation_info, ensure_thresholds},
+    aggregation_tree::{aggregation_info, ensure_thresholds, AggregationInfoGuard},
     cell::Cell,
     gc::{to_exp_u8, GcPriority, GcStats, GcTaskState},
     output::{Output, OutputContent},
@@ -404,6 +404,7 @@ enum TaskStateType {
         event: Event,
         count_as_finished: bool,
         /// Children that need to be disconnected once leaving this state
+        #[cfg(feature = "lazy_remove_children")]
         outdated_children: TaskIdSet,
         outdated_collectibles: MaybeCollectibles,
     },
@@ -417,7 +418,7 @@ enum TaskStateType {
 use TaskStateType::*;
 
 use self::{
-    aggregation::{RootInfoType, RootType, TaskAggregationTreeLeaf, TaskGuard},
+    aggregation::{Aggregated, RootInfoType, RootType, TaskAggregationTreeLeaf, TaskGuard},
     meta_state::{
         FullTaskWriteGuard, TaskMetaState, TaskMetaStateReadGuard, TaskMetaStateWriteGuard,
     },
@@ -490,7 +491,11 @@ impl Task {
     ) {
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         {
-            aggregation_context.aggregation_info(id).lock().root_type = Some(RootType::Root);
+            Self::set_root_type(
+                &aggregation_context,
+                &mut aggregation_context.aggregation_info(id).lock(),
+                RootType::Root,
+            );
         }
         aggregation_context.apply_queued_updates();
     }
@@ -502,9 +507,30 @@ impl Task {
     ) {
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         {
-            aggregation_context.aggregation_info(id).lock().root_type = Some(RootType::Once);
+            let aggregation_info = &aggregation_context.aggregation_info(id);
+            Self::set_root_type(
+                &aggregation_context,
+                &mut aggregation_info.lock(),
+                RootType::Once,
+            );
         }
         aggregation_context.apply_queued_updates();
+    }
+
+    fn set_root_type(
+        aggregation_context: &TaskAggregationContext,
+        aggregation: &mut AggregationInfoGuard<Aggregated>,
+        root_type: RootType,
+    ) {
+        aggregation.root_type = Some(root_type);
+        let dirty_tasks = aggregation
+            .dirty_tasks
+            .iter()
+            .filter_map(|(&id, &count)| (count > 0).then_some(id));
+        let mut tasks_to_schedule = aggregation_context.dirty_tasks_to_schedule.lock();
+        tasks_to_schedule
+            .get_or_insert_default()
+            .extend(dirty_tasks);
     }
 
     pub(crate) fn unset_root(
@@ -601,7 +627,7 @@ impl Task {
                 });
             }
             TaskDependency::Collectibles(task, trait_type) => {
-                let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
+                let aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
                 let aggregation = aggregation_context.aggregation_info(task);
                 aggregation
                     .lock()
@@ -680,6 +706,8 @@ impl Task {
         let dependencies;
         let (future, span) = {
             let mut state = self.full_state_mut();
+            #[cfg(not(feature = "lazy_remove_children"))]
+            let remove_job;
             match state.state_type {
                 Done { .. } | InProgress { .. } | InProgressDirty { .. } => {
                     // should not start in this state
@@ -693,9 +721,16 @@ impl Task {
                     dependencies = take(outdated_dependencies);
                     let outdated_children = take(&mut state.children);
                     let outdated_collectibles = take(&mut state.collectibles);
+                    #[cfg(not(feature = "lazy_remove_children"))]
+                    {
+                        remove_job = state
+                            .aggregation_leaf
+                            .remove_children_job(&aggregation_context, outdated_children);
+                    }
                     state.state_type = InProgress {
                         event,
                         count_as_finished: false,
+                        #[cfg(feature = "lazy_remove_children")]
                         outdated_children,
                         outdated_collectibles,
                     };
@@ -709,7 +744,13 @@ impl Task {
                     )
                 }
             };
-            self.make_execution_future(state, backend, turbo_tasks)
+            let result = self.make_execution_future(state, backend, turbo_tasks);
+            #[cfg(not(feature = "lazy_remove_children"))]
+            {
+                remove_job();
+            }
+            #[allow(clippy::let_and_return)]
+            result
         };
         aggregation_context.apply_queued_updates();
         self.clear_dependencies(dependencies, backend, turbo_tasks);
@@ -816,6 +857,7 @@ impl Task {
         };
         let TaskStateType::InProgress {
             ref mut count_as_finished,
+            #[cfg(feature = "lazy_remove_children")]
             ref mut outdated_children,
             ref mut outdated_collectibles,
             ..
@@ -829,6 +871,7 @@ impl Task {
         *count_as_finished = true;
         let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         {
+            #[cfg(feature = "lazy_remove_children")]
             let outdated_children = take(outdated_children);
             let outdated_collectibles = outdated_collectibles.take_collectibles();
 
@@ -846,6 +889,7 @@ impl Task {
             let change_job = state
                 .aggregation_leaf
                 .change_job(&aggregation_context, change);
+            #[cfg(feature = "lazy_remove_children")]
             let remove_job = if outdated_children.is_empty() {
                 None
             } else {
@@ -857,6 +901,7 @@ impl Task {
             };
             drop(state);
             change_job();
+            #[cfg(feature = "lazy_remove_children")]
             if let Some(job) = remove_job {
                 job();
             }
@@ -926,6 +971,7 @@ impl Task {
         let mut schedule_task = false;
         {
             let mut change_job = None;
+            #[cfg(feature = "lazy_remove_children")]
             let mut remove_job = None;
             let mut dependencies = DEPENDENCIES_TO_TRACK.with(|deps| deps.take());
             {
@@ -938,10 +984,12 @@ impl Task {
                     InProgress {
                         ref mut event,
                         count_as_finished,
+                        #[cfg(feature = "lazy_remove_children")]
                         ref mut outdated_children,
                         ref mut outdated_collectibles,
                     } => {
                         let event = event.take();
+                        #[cfg(feature = "lazy_remove_children")]
                         let outdated_children = take(outdated_children);
                         let outdated_collectibles = outdated_collectibles.take_collectibles();
                         let mut dependencies = take(&mut dependencies);
@@ -972,6 +1020,7 @@ impl Task {
                                     .change_job(&aggregation_context, change),
                             );
                         }
+                        #[cfg(feature = "lazy_remove_children")]
                         if !outdated_children.is_empty() {
                             remove_job = Some(
                                 state
@@ -1003,6 +1052,7 @@ impl Task {
             if let Some(job) = change_job {
                 job();
             }
+            #[cfg(feature = "lazy_remove_children")]
             if let Some(job) = remove_job {
                 job();
             }
@@ -1149,10 +1199,12 @@ impl Task {
                 InProgress {
                     ref mut event,
                     count_as_finished,
+                    #[cfg(feature = "lazy_remove_children")]
                     ref mut outdated_children,
                     ref mut outdated_collectibles,
                 } => {
                     let event = event.take();
+                    #[cfg(feature = "lazy_remove_children")]
                     let outdated_children = take(outdated_children);
                     let outdated_collectibles = outdated_collectibles.take_collectibles();
                     let change = if count_as_finished {
@@ -1182,6 +1234,7 @@ impl Task {
                             .aggregation_leaf
                             .change_job(&aggregation_context, change)
                     });
+                    #[cfg(feature = "lazy_remove_children")]
                     let remove_job = state
                         .aggregation_leaf
                         .remove_children_job(&aggregation_context, outdated_children);
@@ -1190,6 +1243,7 @@ impl Task {
                     if let Some(job) = change_job {
                         job();
                     }
+                    #[cfg(feature = "lazy_remove_children")]
                     remove_job();
                 }
             }
@@ -1461,6 +1515,7 @@ impl Task {
                 let TaskGuard { guard, .. } = guard;
                 let mut state = TaskMetaStateWriteGuard::full_from(guard.into_inner(), self);
                 if state.children.insert(child_id) {
+                    #[cfg(feature = "lazy_remove_children")]
                     if let TaskStateType::InProgress {
                         outdated_children, ..
                     } = &mut state.state_type
@@ -1518,14 +1573,26 @@ impl Task {
         let mut state = self.full_state_mut();
         if let Some(aggregation) = aggregation_when_strongly_consistent {
             {
-                let aggregation = aggregation.lock();
+                let mut aggregation = aggregation.lock();
                 if aggregation.unfinished > 0 {
+                    if aggregation.root_type.is_none() {
+                        Self::set_root_type(
+                            &aggregation_context,
+                            &mut aggregation,
+                            RootType::ReadingStronglyConsistent,
+                        );
+                    }
                     let listener = aggregation.unfinished_event.listen_with_note(note);
                     drop(aggregation);
                     drop(state);
                     aggregation_context.apply_queued_updates();
 
                     return Ok(Err(listener));
+                } else if matches!(
+                    aggregation.root_type,
+                    Some(RootType::ReadingStronglyConsistent)
+                ) {
+                    aggregation.root_type = None;
                 }
             }
         }
@@ -1576,7 +1643,7 @@ impl Task {
         backend: &MemoryBackend,
         turbo_tasks: &dyn TurboTasksBackendApi<MemoryBackend>,
     ) -> AutoMap<RawVc, i32> {
-        let mut aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
+        let aggregation_context = TaskAggregationContext::new(turbo_tasks, backend);
         aggregation_context
             .aggregation_info(id)
             .lock()
