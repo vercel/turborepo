@@ -6,8 +6,6 @@ import type {
   PagefindSearchResults,
 } from "./search-types";
 
-export const ignoredRoutes = ["/blog", "/terms", "/privacy", "/confirm"];
-
 // Default weight is 1.
 // Recommended values (Acceptable to use different values as needed):
 // Uprank: 1.2
@@ -24,10 +22,12 @@ export const weightedRoutes: [string, number][] = [
   ["/repo/docs/core-concepts/caching/to-cache-or-not-to-cache", 0.2],
   // Deprecations
   ["/repo/docs/core-concepts/scopes", 0.2],
+  // Ignored pages
   ["/blog", 0],
   ["/terms", 0],
   ["/privacy", 0],
   ["/confirm", 0],
+  ["/governance", 0],
 ];
 
 declare global {
