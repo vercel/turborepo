@@ -58,7 +58,7 @@ pub enum ChildExit {
     Failed,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum ShutdownStyle {
     /// On windows this will immediately kill, and on posix systems it
     /// will send a SIGINT. If `Duration` elapses, we then follow up with a
@@ -196,6 +196,15 @@ impl ShutdownStyle {
     }
 }
 
+/// The structure that holds logic regarding interacting with the underlying
+/// child process
+#[derive(Debug)]
+struct ChildStateManager {
+    shutdown_style: ShutdownStyle,
+    task_state: Arc<RwLock<ChildState>>,
+    exit_tx: watch::Sender<Option<ChildExit>>,
+}
+
 /// A child process that can be interacted with asynchronously.
 ///
 /// This is a wrapper around the `tokio::process::Child` struct, which provides
@@ -275,57 +284,17 @@ impl Child {
         let _task = tokio::spawn(async move {
             debug!("waiting for task");
             let mut child = ChildHandle::from_tokio(pid, child);
+            let manager = ChildStateManager {
+                shutdown_style,
+                task_state,
+                exit_tx,
+            };
             tokio::select! {
                 command = command_rx.recv() => {
-                    let state = match command {
-                        // we received a command to stop the child process, or the channel was closed.
-                        // in theory this happens when the last child is dropped, however in practice
-                        // we will always get a `Permit` from the recv call before the channel can be
-                        // dropped, and the channel is not closed while there are still permits
-                        Some(ChildCommand::Stop) | None => {
-                            debug!("stopping child process");
-                            shutdown_style.process(&mut child).await
-                        }
-                        // we received a command to kill the child process
-                        Some(ChildCommand::Kill) => {
-                            debug!("killing child process");
-                            ShutdownStyle::Kill.process(&mut child).await
-                        }
-                    };
-
-                    match state {
-                        ChildState::Exited(exit) => {
-                            // ignore the send error, failure means the channel is dropped
-                            exit_tx.send(Some(exit)).ok();
-                        }
-                        ChildState::Running(_) => {
-                            debug_assert!(false, "child state should not be running after shutdown");
-                        }
-                    }
-
-                    {
-                        let mut task_state = task_state.write().await;
-                        *task_state = state;
-                    }
+                    manager.handle_child_command(command, &mut child).await;
                 }
                 status = child.wait() => {
-                    debug!("child process exited normally");
-                    // the child process exited
-                    let child_exit = match status.map(|s| s.code()) {
-                        Ok(Some(c)) => ChildExit::Finished(Some(c)),
-                        // if we hit this case, it means that the child process was killed
-                        // by someone else, and we should report that it was killed
-                        Ok(None) => ChildExit::KilledExternal,
-                        Err(_e) => ChildExit::Failed,
-                    };
-                    {
-                        let mut task_state = task_state.write().await;
-                        *task_state = ChildState::Exited(child_exit);
-                    }
-
-                    // ignore the send error, the channel is dropped anyways
-                    exit_tx.send(Some(child_exit)).ok();
-
+                    manager.handle_child_exit(status).await;
                 }
             }
 
@@ -516,6 +485,59 @@ impl Child {
 
     pub fn label(&self) -> &str {
         &self.label
+    }
+}
+
+impl ChildStateManager {
+    async fn handle_child_command(&self, command: Option<ChildCommand>, child: &mut ChildHandle) {
+        let state = match command {
+            // we received a command to stop the child process, or the channel was closed.
+            // in theory this happens when the last child is dropped, however in practice
+            // we will always get a `Permit` from the recv call before the channel can be
+            // dropped, and the channel is not closed while there are still permits
+            Some(ChildCommand::Stop) | None => {
+                debug!("stopping child process");
+                self.shutdown_style.process(child).await
+            }
+            // we received a command to kill the child process
+            Some(ChildCommand::Kill) => {
+                debug!("killing child process");
+                ShutdownStyle::Kill.process(child).await
+            }
+        };
+        match state {
+            ChildState::Exited(exit) => {
+                // ignore the send error, failure means the channel is dropped
+                self.exit_tx.send(Some(exit)).ok();
+            }
+            ChildState::Running(_) => {
+                debug_assert!(false, "child state should not be running after shutdown");
+            }
+        }
+
+        {
+            let mut task_state = self.task_state.write().await;
+            *task_state = state;
+        }
+    }
+
+    async fn handle_child_exit(&self, status: io::Result<ExitStatus>) {
+        debug!("child process exited normally");
+        // the child process exited
+        let child_exit = match status.map(|s| s.code()) {
+            Ok(Some(c)) => ChildExit::Finished(Some(c)),
+            // if we hit this case, it means that the child process was killed
+            // by someone else, and we should report that it was killed
+            Ok(None) => ChildExit::KilledExternal,
+            Err(_e) => ChildExit::Failed,
+        };
+        {
+            let mut task_state = self.task_state.write().await;
+            *task_state = ChildState::Exited(child_exit);
+        }
+
+        // ignore the send error, the channel is dropped anyways
+        self.exit_tx.send(Some(child_exit)).ok();
     }
 }
 
