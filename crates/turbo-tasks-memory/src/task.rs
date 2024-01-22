@@ -1547,7 +1547,7 @@ impl Task {
                 if aggregation.unfinished > 0 {
                     if aggregation.root_type.is_none() {
                         Self::set_root_type(
-                            &mut aggregation_context,
+                            &aggregation_context,
                             &mut aggregation,
                             RootType::ReadingStronglyConsistent,
                         );

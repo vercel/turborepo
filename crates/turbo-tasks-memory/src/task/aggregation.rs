@@ -252,7 +252,7 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         for &(task, count) in change.unfinished_tasks_update.iter() {
             update_count_entry(info.unfinished_tasks.entry(task), count);
         }
-        let is_root = matches!(info.root_type, Some(_));
+        let is_root = info.root_type.is_some();
         for &(task, count) in change.dirty_tasks_update.iter() {
             let value = update_count_entry(info.dirty_tasks.entry(task), count);
             if is_root && value > 0 && value <= count {
