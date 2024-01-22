@@ -724,6 +724,7 @@ impl Task {
             {
                 remove_job();
             }
+            #[allow(clippy::let_and_return)]
             result
         };
         aggregation_context.apply_queued_updates();
