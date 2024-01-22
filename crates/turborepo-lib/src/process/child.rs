@@ -17,6 +17,7 @@
 
 use std::{
     io::{self, Write},
+    process::ExitStatus,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -77,19 +78,42 @@ impl From<std::io::Error> for ShutdownFailed {
     }
 }
 
+struct ChildHandle {
+    pid: Option<u32>,
+    imp: tokio::process::Child,
+}
+
+impl ChildHandle {
+    pub fn from_tokio(pid: Option<u32>, child: tokio::process::Child) -> Self {
+        Self { pid, imp: child }
+    }
+
+    pub fn pid(&self) -> Option<u32> {
+        self.pid
+    }
+
+    pub async fn wait(&mut self) -> io::Result<ExitStatus> {
+        self.imp.wait().await
+    }
+
+    pub async fn kill(&mut self) -> io::Result<()> {
+        self.imp.kill().await
+    }
+}
+
 impl ShutdownStyle {
     /// Process the shutdown style for the given child process.
     ///
     /// If an exit channel is provided, the exit code will be sent to the
     /// channel when the child process exits.
-    async fn process(&self, child: &mut tokio::process::Child) -> ChildState {
+    async fn process(&self, child: &mut ChildHandle) -> ChildState {
         match self {
             ShutdownStyle::Graceful(timeout) => {
                 // try ro run the command for the given timeout
                 #[cfg(unix)]
                 {
                     let fut = async {
-                        if let Some(pid) = child.id() {
+                        if let Some(pid) = child.pid() {
                             debug!("sending SIGINT to child {}", pid);
                             // kill takes negative pid to indicate that you want to use gpid
                             let pgid = -(pid as i32);
@@ -218,6 +242,7 @@ impl Child {
 
         let _task = tokio::spawn(async move {
             debug!("waiting for task");
+            let mut child = ChildHandle::from_tokio(pid, child);
             tokio::select! {
                 command = command_rx.recv() => {
                     let state = match command {
