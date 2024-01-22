@@ -17,11 +17,11 @@ use turbopack_ecmascript::{CustomTransformer, TransformContext};
 #[derive(Debug)]
 pub struct StyledJsxTransformer {
     use_lightningcss: bool,
-    target_browsers: Option<Versions>,
+    target_browsers: Versions,
 }
 
 impl StyledJsxTransformer {
-    pub fn new(use_lightningcss: bool, target_browsers: Option<Versions>) -> Self {
+    pub fn new(use_lightningcss: bool, target_browsers: Versions) -> Self {
         Self {
             use_lightningcss,
             target_browsers,
@@ -39,14 +39,14 @@ impl CustomTransformer for StyledJsxTransformer {
             FileName::Anon,
             styled_jsx::visitor::Config {
                 use_lightningcss: self.use_lightningcss,
-                browsers: self.target_browsers.unwrap_or_default(),
+                browsers: self.target_browsers,
             },
             styled_jsx::visitor::NativeConfig {
-                process_css: if self.use_lightningcss || self.target_browsers.is_none() {
+                process_css: if self.use_lightningcss {
                     None
                 } else {
                     let targets = Targets {
-                        browsers: Some(convert_browsers(self.target_browsers.as_ref().unwrap())),
+                        browsers: Some(convert_browsers(&self.target_browsers)),
                         ..Default::default()
                     };
 

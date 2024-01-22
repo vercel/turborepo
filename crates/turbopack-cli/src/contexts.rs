@@ -135,7 +135,7 @@ async fn get_client_module_options_context(
                 )) as _),
                 Vc::cell(Box::new(StyledJsxTransformer::new(
                     module_options_context.use_lightningcss,
-                    Some(versions),
+                    versions,
                 )) as _),
             ],
             output_transforms: vec![],
