@@ -30,10 +30,12 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
 
     let handler = SignalHandler::new(signal);
 
+    let api_auth = base.api_auth()?;
+    let api_client = base.api_client()?;
     let mut run = Run::new(base);
     debug!("using the experimental rust codepath");
     debug!("configured run struct: {:?}", run);
-    let run_fut = run.run(&handler, telemetry);
+    let run_fut = run.run(&handler, telemetry, api_auth, api_client);
     let handler_fut = handler.done();
     tokio::select! {
         biased;

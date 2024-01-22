@@ -129,11 +129,13 @@ impl Run {
         }
     }
 
-    #[tracing::instrument(skip(self, signal_handler))]
+    #[tracing::instrument(skip(self, signal_handler, api_auth, api_client))]
     pub async fn run(
         &mut self,
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
+        api_auth: Option<APIAuth>,
+        api_client: APIClient,
     ) -> Result<i32, Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
@@ -148,8 +150,6 @@ impl Run {
             self.connect_process_manager(subscriber);
         }
 
-        let api_auth = self.base.api_auth()?;
-        let api_client = self.base.api_client()?;
         let (analytics_sender, analytics_handle) =
             Self::initialize_analytics(api_auth.clone(), api_client.clone()).unzip();
 
