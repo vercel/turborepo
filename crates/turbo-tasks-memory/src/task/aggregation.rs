@@ -238,7 +238,7 @@ impl<'a> AggregationContext for TaskAggregationContext<'a> {
         let mut unfinished = 0;
         if info.unfinished > 0 {
             info.unfinished += change.unfinished;
-            if info.unfinished == 0 {
+            if info.unfinished <= 0 {
                 info.unfinished_event.notify(usize::MAX);
                 unfinished = -1;
             }
