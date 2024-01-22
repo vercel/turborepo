@@ -9,12 +9,11 @@ license = "MPL-2.0"
 # This is for the convenience of running daily dev workflows, i.e running
 # `cargo xxx` without explicitly specifying features, not that we want to
 # promote this as default backend.
-default = ["rustls-tls", "go-binary"]
+default = ["rustls-tls"]
 native-tls = ["turborepo-lib/native-tls"]
 rustls-tls = ["turborepo-lib/rustls-tls"]
 http = ["turborepo-lib/http"]
 go-daemon = ["turborepo-lib/go-daemon"]
-go-binary = []
 pprof = ["turborepo-lib/pprof"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

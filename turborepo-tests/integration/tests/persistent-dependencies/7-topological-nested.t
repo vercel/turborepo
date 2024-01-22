@@ -22,7 +22,4 @@
   $ ${TURBO} run dev
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "pkg-b#dev" is a persistent task, "pkg-a#dev" cannot depend on it
-    x error preparing engine: Invalid persistent task configuration:
-    | "pkg-b#dev" is a persistent task, "pkg-a#dev" cannot depend on it
-  
   [1]

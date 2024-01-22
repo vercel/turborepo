@@ -9,6 +9,10 @@
     "test": {
       "dependsOn": ["cli#build", "topo", "^build"],
       "passThroughEnv": ["CI"]
+    },
+    "test:go-fallback": {
+      "dependsOn": ["cli#build", "topo", "^build"],
+      "passThroughEnv": ["CI"]
     }
   }
 }

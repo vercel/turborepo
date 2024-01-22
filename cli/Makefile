@@ -81,7 +81,7 @@ build-lib-turbo-cross:
 	goreleaser release --rm-dist -f cross-lib.yml
 
 .PHONY: stage-release
-stage-release: cmd/turbo/version.go
+stage-release:
 	echo "Version: $(TURBO_VERSION)"
 	echo "Tag: $(TURBO_TAG)"
 	cat $(CLI_DIR)/../version.txt
@@ -91,7 +91,6 @@ stage-release: cmd/turbo/version.go
 
 	# Stop if versions are not updated.
 	@test "" != "`git diff -- $(CLI_DIR)/../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
-	@test "" != "`git diff -- $(CLI_DIR)/cmd/turbo/version.go`" || (echo "Refusing to publish with unupdated version.go" && false)
 
 	# Prepare the packages.
 	cd $(CLI_DIR)/../packages/turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
