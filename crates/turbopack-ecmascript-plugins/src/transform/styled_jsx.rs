@@ -42,7 +42,7 @@ impl CustomTransformer for StyledJsxTransformer {
                 browsers: self.target_browsers,
             },
             styled_jsx::visitor::NativeConfig {
-                process_css: if self.use_lightningcss {
+                process_css: if self.use_lightningcss || self.target_browsers.is_any_target() {
                     None
                 } else {
                     let targets = Targets {
