@@ -84,8 +84,36 @@ struct ChildHandle {
 }
 
 impl ChildHandle {
-    pub fn from_tokio(pid: Option<u32>, child: tokio::process::Child) -> Self {
-        Self { pid, imp: child }
+    pub fn spawn_normal(command: Command) -> io::Result<(Self, ChildIO)> {
+        let mut command = TokioCommand::from(command);
+
+        // Create a process group for the child on unix like systems
+        #[cfg(unix)]
+        {
+            use nix::unistd::setsid;
+            unsafe {
+                command.pre_exec(|| {
+                    setsid()?;
+                    Ok(())
+                });
+            }
+        }
+
+        let mut child = command.spawn()?;
+        let pid = child.id();
+
+        let stdin = child.stdin.take().map(ChildInput::from);
+        let stdout = child.stdout.take().map(ChildOutput::Concrete);
+        let stderr = child.stderr.take().map(ChildOutput::Concrete);
+
+        Ok((
+            Self { pid, imp: child },
+            ChildIO {
+                stdin,
+                stdout,
+                stderr,
+            },
+        ))
     }
 
     pub fn pid(&self) -> Option<u32> {
@@ -101,6 +129,12 @@ impl ChildHandle {
     }
 }
 
+struct ChildIO {
+    stdin: Option<ChildInput>,
+    stdout: Option<ChildStdout>,
+    stderr: Option<ChildStderr>,
+}
+
 #[derive(Debug)]
 enum ChildInput {
     Concrete(tokio::process::ChildStdin),
@@ -110,6 +144,9 @@ enum ChildInput {
 enum ChildOutput<T> {
     Concrete(T),
 }
+
+type ChildStdout = ChildOutput<tokio::process::ChildStdout>;
+type ChildStderr = ChildOutput<tokio::process::ChildStderr>;
 
 impl From<tokio::process::ChildStdin> for ChildInput {
     fn from(value: tokio::process::ChildStdin) -> Self {
@@ -248,26 +285,15 @@ impl Child {
     /// with it. The command will be started immediately.
     pub fn spawn(command: Command, shutdown_style: ShutdownStyle) -> io::Result<Self> {
         let label = command.label();
-        let mut command = TokioCommand::from(command);
-
-        // Create a process group for the child on unix like systems
-        #[cfg(unix)]
-        {
-            use nix::unistd::setsid;
-            unsafe {
-                command.pre_exec(|| {
-                    setsid()?;
-                    Ok(())
-                });
-            }
-        }
-
-        let mut child = command.spawn()?;
-        let pid = child.id();
-
-        let stdin = child.stdin.take().map(ChildInput::from);
-        let stdout = child.stdout.take().map(ChildOutput::Concrete);
-        let stderr = child.stderr.take().map(ChildOutput::Concrete);
+        let (
+            mut child,
+            ChildIO {
+                stdin,
+                stdout,
+                stderr,
+            },
+        ) = ChildHandle::spawn_normal(command)?;
+        let pid = child.pid();
 
         let (command_tx, mut command_rx) = ChildCommandChannel::new();
 
@@ -283,7 +309,6 @@ impl Child {
 
         let _task = tokio::spawn(async move {
             debug!("waiting for task");
-            let mut child = ChildHandle::from_tokio(pid, child);
             let manager = ChildStateManager {
                 shutdown_style,
                 task_state,
