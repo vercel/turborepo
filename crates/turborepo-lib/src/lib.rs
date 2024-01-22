@@ -33,6 +33,8 @@ mod tracing;
 mod turbo_json;
 mod unescape;
 
+use miette::Report;
+
 pub use crate::{
     child::spawn_child,
     cli::Args,
@@ -41,7 +43,7 @@ pub use crate::{
     execution_state::ExecutionState,
     run::package_discovery::DaemonPackageDiscovery,
 };
-use crate::{commands::CommandBase, engine::BuilderError};
+use crate::{engine::BuilderError, shim::Error};
 
 pub fn get_version() -> &'static str {
     include_str!("../../../version.txt")
@@ -53,5 +55,37 @@ pub fn get_version() -> &'static str {
 }
 
 pub fn main() -> Result<i32, shim::Error> {
-    shim::run()
+    match shim::run() {
+        Ok(code) => Ok(code),
+        // We only print using miette for some errors because we want to keep
+        // compatibility with Go. When we've deleted the Go code we can
+        // move all errors to miette since it provides slightly nicer
+        // printing out of the box.
+        Err(
+            err @ (Error::MultipleCwd(..)
+            | Error::EmptyCwd { .. }
+            | Error::Cli(cli::Error::Run(run::Error::Builder(engine::BuilderError::Config(
+                config::Error::InvalidEnvPrefix { .. },
+            ))))
+            | Error::Cli(cli::Error::Run(run::Error::Config(
+                config::Error::TurboJsonParseError(_),
+            )))
+            | Error::Cli(cli::Error::Run(run::Error::Builder(BuilderError::Config(
+                config::Error::TurboJsonParseError(_),
+            ))))),
+        ) => {
+            println!("{:?}", Report::new(err));
+
+            Ok(1)
+        }
+        // We don't need to print "Turbo error" for Run errors
+        Err(err @ shim::Error::Cli(cli::Error::Run(_))) => Err(err),
+        Err(err) => {
+            // This raw print matches the Go behavior, once we no longer care
+            // about matching formatting we should remove this.
+            println!("Turbo error: {err}");
+
+            Err(err)
+        }
+    }
 }
