@@ -20,7 +20,7 @@ use crate::{
     engine::TaskNode,
     framework::infer_framework,
     hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
-    opts::Opts,
+    opts::RunOpts,
     run::task_id::TaskId,
     task_graph::TaskDefinition,
 };
@@ -181,7 +181,7 @@ pub struct TaskHashTrackerState {
 /// Caches package-inputs hashes, and package-task hashes.
 pub struct TaskHasher<'a> {
     hashes: HashMap<TaskId<'static>, String>,
-    opts: &'a Opts<'a>,
+    run_opts: &'a RunOpts<'a>,
     env_at_execution_start: &'a EnvironmentVariableMap,
     global_hash: &'a str,
     task_hash_tracker: TaskHashTracker,
@@ -190,7 +190,7 @@ pub struct TaskHasher<'a> {
 impl<'a> TaskHasher<'a> {
     pub fn new(
         package_inputs_hashes: PackageInputsHashes,
-        opts: &'a Opts,
+        run_opts: &'a RunOpts,
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
     ) -> Self {
@@ -200,7 +200,7 @@ impl<'a> TaskHasher<'a> {
         } = package_inputs_hashes;
         Self {
             hashes,
-            opts,
+            run_opts,
             env_at_execution_start,
             global_hash,
             task_hash_tracker: TaskHashTracker::new(expanded_hashes),
@@ -217,8 +217,8 @@ impl<'a> TaskHasher<'a> {
         dependency_set: HashSet<&TaskNode>,
         telemetry: PackageTaskEventBuilder,
     ) -> Result<String, Error> {
-        let do_framework_inference = self.opts.run_opts.framework_inference;
-        let is_monorepo = !self.opts.run_opts.single_package;
+        let do_framework_inference = self.run_opts.framework_inference;
+        let is_monorepo = !self.run_opts.single_package;
 
         let hash_of_files = self
             .hashes
@@ -327,7 +327,7 @@ impl<'a> TaskHasher<'a> {
             task: task_id.task(),
             outputs,
 
-            pass_through_args: self.opts.run_opts.pass_through_args,
+            pass_through_args: self.run_opts.pass_through_args,
             env: &task_definition.env,
             resolved_env_vars: hashable_env_pairs,
             pass_through_env: task_definition

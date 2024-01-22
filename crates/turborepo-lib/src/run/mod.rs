@@ -61,13 +61,13 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct Run<'a> {
-    base: &'a CommandBase,
+pub struct Run {
+    base: CommandBase,
     processes: ProcessManager,
 }
 
-impl<'a> Run<'a> {
-    pub fn new(base: &'a CommandBase) -> Self {
+impl Run {
+    pub fn new(base: CommandBase) -> Self {
         let processes = ProcessManager::new();
         Self { base, processes }
     }
@@ -472,7 +472,7 @@ impl<'a> Run<'a> {
             pkg_dep_graph.clone(),
             runcache,
             run_tracker,
-            &opts,
+            &opts.run_opts,
             package_inputs_hashes,
             &env_at_execution_start,
             &global_hash,
@@ -517,6 +517,7 @@ impl<'a> Run<'a> {
                 global_hash_inputs,
                 &engine,
                 &env_at_execution_start,
+                opts.scope_opts.pkg_inference_root.as_deref(),
             )
             .await?;
 
