@@ -61,7 +61,7 @@ impl CustomTransformer for StyledJsxTransformer {
                         };
 
                         let output = ss.to_css(PrinterOptions {
-                            minify: true,
+                            minify: false,
                             source_map: None,
                             project_root: None,
                             targets,
