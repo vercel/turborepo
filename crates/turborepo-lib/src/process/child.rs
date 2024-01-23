@@ -92,7 +92,7 @@ enum ChildHandleImpl {
 }
 
 impl ChildHandle {
-    pub fn spawn_normal(command: Command) -> io::Result<(Self, ChildIO)> {
+    pub fn spawn_normal(command: Command) -> io::Result<SpawnResult> {
         let mut command = TokioCommand::from(command);
 
         // Create a process group for the child on unix like systems
@@ -110,25 +110,30 @@ impl ChildHandle {
         let mut child = command.spawn()?;
         let pid = child.id();
 
-        let stdin = child.stdin.take().map(ChildInput::from);
-        let stdout = child.stdout.take().map(ChildOutput::Concrete);
-        let stderr = child.stderr.take().map(ChildOutput::Concrete);
+        let stdin = child.stdin.take().map(ChildInput::Std);
+        let stdout = child
+            .stdout
+            .take()
+            .expect("child process must be started with piped stdout");
+        let stderr = child
+            .stderr
+            .take()
+            .expect("child process must be started with piped stderr");
 
-        Ok((
-            Self {
+        Ok(SpawnResult {
+            handle: Self {
                 pid,
                 imp: ChildHandleImpl::Tokio(child),
             },
-            ChildIO {
-                controller: None,
+            io: ChildIO {
                 stdin,
-                stdout,
-                stderr,
+                output: Some(ChildOutput::Std { stdout, stderr }),
             },
-        ))
+            controller: None,
+        })
     }
 
-    pub fn spawn_pty(command: Command) -> io::Result<(Self, ChildIO)> {
+    pub fn spawn_pty(command: Command) -> io::Result<SpawnResult> {
         use portable_pty::PtySize;
 
         let keep_stdin_open = command.will_open_stdin();
@@ -155,8 +160,8 @@ impl ChildHandle {
 
         let pid = child.process_id();
 
-        let mut stdin = controller.take_writer().ok().map(ChildInput::from);
-        let stdout = controller.try_clone_reader().ok().map(ChildStdout::from);
+        let mut stdin = controller.take_writer().ok().map(ChildInput::Pty);
+        let output = controller.try_clone_reader().ok().map(ChildOutput::Pty);
 
         // If we don't want to keep stdin open we take it here and it is immediately
         // dropped resulting in a EOF being sent to the child process.
@@ -164,18 +169,14 @@ impl ChildHandle {
             stdin.take();
         }
 
-        Ok((
-            Self {
+        Ok(SpawnResult {
+            handle: Self {
                 pid,
                 imp: ChildHandleImpl::Pty(child),
             },
-            ChildIO {
-                controller: Some(controller),
-                stdin,
-                stdout,
-                stderr: None,
-            },
-        ))
+            io: ChildIO { stdin, output },
+            controller: Some(controller),
+        })
     }
 
     pub fn pid(&self) -> Option<u32> {
@@ -217,76 +218,56 @@ impl ChildHandle {
     }
 }
 
-struct ChildIO {
+struct SpawnResult {
+    handle: ChildHandle,
+    io: ChildIO,
     controller: Option<Box<dyn PtyController + Send>>,
+}
+
+struct ChildIO {
     stdin: Option<ChildInput>,
-    stdout: Option<ChildStdout>,
-    stderr: Option<ChildStderr>,
+    output: Option<ChildOutput>,
 }
 
 enum ChildInput {
-    Concrete(tokio::process::ChildStdin),
-    Boxed(Box<dyn Write + Send>),
+    Std(tokio::process::ChildStdin),
+    Pty(Box<dyn Write + Send>),
 }
-
-enum ChildOutput<T> {
-    Concrete(T),
-    Boxed(Box<dyn Read + Send>),
-}
-
-type ChildStdout = ChildOutput<tokio::process::ChildStdout>;
-type ChildStderr = ChildOutput<tokio::process::ChildStderr>;
-
-impl From<tokio::process::ChildStdin> for ChildInput {
-    fn from(value: tokio::process::ChildStdin) -> Self {
-        Self::Concrete(value)
-    }
-}
-
-impl From<Box<dyn Write + Send>> for ChildInput {
-    fn from(value: Box<dyn Write + Send>) -> Self {
-        Self::Boxed(value)
-    }
+enum ChildOutput {
+    Std {
+        stdout: tokio::process::ChildStdout,
+        stderr: tokio::process::ChildStderr,
+    },
+    Pty(Box<dyn Read + Send>),
 }
 
 impl ChildInput {
     fn concrete(self) -> Option<tokio::process::ChildStdin> {
         match self {
-            ChildInput::Concrete(stdin) => Some(stdin),
-            ChildInput::Boxed(_) => None,
+            ChildInput::Std(stdin) => Some(stdin),
+            ChildInput::Pty(_) => None,
         }
-    }
-}
-
-impl<T> ChildOutput<T> {
-    fn concrete(self) -> Option<T> {
-        match self {
-            ChildOutput::Concrete(output) => Some(output),
-            ChildOutput::Boxed(_) => None,
-        }
-    }
-}
-
-impl From<Box<dyn Read + Send>> for ChildOutput<tokio::process::ChildStdout> {
-    fn from(value: Box<dyn Read + Send>) -> Self {
-        Self::Boxed(value)
     }
 }
 
 impl fmt::Debug for ChildInput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Concrete(arg0) => f.debug_tuple("Concrete").field(arg0).finish(),
-            Self::Boxed(_) => f.debug_tuple("Boxed").finish(),
+            Self::Std(arg0) => f.debug_tuple("Std").field(arg0).finish(),
+            Self::Pty(_) => f.debug_tuple("Pty").finish(),
         }
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for ChildOutput<T> {
+impl fmt::Debug for ChildOutput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Concrete(arg0) => f.debug_tuple("Concrete").field(arg0).finish(),
-            Self::Boxed(_) => f.debug_tuple("Boxed").finish(),
+            Self::Std { stdout, stderr } => f
+                .debug_struct("Std")
+                .field("stdout", stdout)
+                .field("stderr", stderr)
+                .finish(),
+            Self::Pty(_) => f.debug_tuple("Pty").finish(),
         }
     }
 }
@@ -373,8 +354,7 @@ pub struct Child {
     state: Arc<RwLock<ChildState>>,
     exit_channel: watch::Receiver<Option<ChildExit>>,
     stdin: Arc<Mutex<Option<ChildInput>>>,
-    stdout: Arc<Mutex<Option<ChildOutput<tokio::process::ChildStdout>>>>,
-    stderr: Arc<Mutex<Option<ChildOutput<tokio::process::ChildStderr>>>>,
+    output: Arc<Mutex<Option<ChildOutput>>>,
     label: String,
 }
 
@@ -410,15 +390,11 @@ impl Child {
         use_pty: bool,
     ) -> io::Result<Self> {
         let label = command.label();
-        let (
-            mut child,
-            ChildIO {
-                controller,
-                stdin,
-                stdout,
-                stderr,
-            },
-        ) = if use_pty {
+        let SpawnResult {
+            handle: mut child,
+            io: ChildIO { stdin, output },
+            controller,
+        } = if use_pty {
             ChildHandle::spawn_pty(command)
         } else {
             ChildHandle::spawn_normal(command)
@@ -466,8 +442,7 @@ impl Child {
             state,
             exit_channel: exit_rx,
             stdin: Arc::new(Mutex::new(stdin)),
-            stdout: Arc::new(Mutex::new(stdout)),
-            stderr: Arc::new(Mutex::new(stderr)),
+            output: Arc::new(Mutex::new(output)),
             label,
         })
     }
@@ -544,12 +519,8 @@ impl Child {
         self.stdin.lock().unwrap().take()
     }
 
-    fn stdout(&mut self) -> Option<ChildOutput<tokio::process::ChildStdout>> {
-        self.stdout.lock().unwrap().take()
-    }
-
-    fn stderr(&mut self) -> Option<ChildOutput<tokio::process::ChildStderr>> {
-        self.stderr.lock().unwrap().take()
+    fn outputs(&mut self) -> Option<ChildOutput> {
+        self.output.lock().unwrap().take()
     }
 
     /// Wait for the `Child` to exit and pipe any stdout and stderr to the
@@ -558,36 +529,20 @@ impl Child {
         &mut self,
         stdout_pipe: W,
     ) -> Result<Option<ChildExit>, std::io::Error> {
-        let stdout_lines = self.stdout();
-        let stderr_lines = self.stderr();
-
-        match (stdout_lines, stderr_lines) {
-            (
-                Some(ChildOutput::Concrete(stdout_lines)),
-                Some(ChildOutput::Concrete(stderr_lines)),
-            ) => {
+        match self.outputs() {
+            Some(ChildOutput::Std { stdout, stderr }) => {
                 self.wait_with_piped_async_outputs(
                     stdout_pipe,
-                    Some(BufReader::new(stdout_lines)),
-                    Some(BufReader::new(stderr_lines)),
+                    Some(BufReader::new(stdout)),
+                    Some(BufReader::new(stderr)),
                 )
                 .await
             }
-            // If using tokio to spawn tasks we should always be spawning with both stdout and
-            // stderr piped Being in this state indicates programmer error
-            (Some(ChildOutput::Concrete(_)), None) | (None, Some(ChildOutput::Concrete(_))) => {
-                unreachable!(
-                    "one of stdout/stderr was piped and the other was not which is unsupported"
-                )
-            }
-            (Some(ChildOutput::Boxed(stdout)), None) => {
-                self.wait_with_piped_sync_output(stdout_pipe, std::io::BufReader::new(stdout))
+            Some(ChildOutput::Pty(output)) => {
+                self.wait_with_piped_sync_output(stdout_pipe, std::io::BufReader::new(output))
                     .await
             }
-            // If we have no child outputs to forward, we simply wait
-            (None, None) => Ok(self.wait().await),
-            // In the future list out all of the possible combos or simplify this match expr
-            _ => unreachable!(),
+            None => Ok(self.wait().await),
         }
     }
 
@@ -770,7 +725,7 @@ mod test {
     use tracing_test::traced_test;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use super::{Child, ChildState, Command};
+    use super::{Child, ChildOutput, ChildState, Command};
     use crate::process::child::{ChildExit, ShutdownStyle};
 
     const STARTUP_DELAY: Duration = Duration::from_millis(500);
@@ -842,11 +797,10 @@ mod test {
 
         {
             let mut output = Vec::new();
-            let mut stdout = child
-                .stdout()
-                .unwrap()
-                .concrete()
-                .expect("expected concrete stdout");
+            let mut stdout = match child.outputs().unwrap() {
+                ChildOutput::Std { stdout, .. } => stdout,
+                ChildOutput::Pty(_) => panic!("expected std process"),
+            };
 
             stdout
                 .read_to_end(&mut output)
@@ -871,11 +825,10 @@ mod test {
         cmd.open_stdin();
         let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
 
-        let mut stdout = child
-            .stdout()
-            .unwrap()
-            .concrete()
-            .expect("expected concrete input");
+        let mut stdout = match child.outputs().unwrap() {
+            ChildOutput::Std { stdout, .. } => stdout,
+            ChildOutput::Pty(_) => panic!("expected std process"),
+        };
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -920,7 +873,10 @@ mod test {
         )
         .unwrap();
 
-        let mut stdout = child.stdout().unwrap().concrete().unwrap();
+        let mut stdout = match child.outputs().unwrap() {
+            ChildOutput::Std { stdout, .. } => stdout,
+            ChildOutput::Pty(_) => panic!("expected std process"),
+        };
         let mut buf = vec![0; 4];
         // wait for the process to print "here"
         stdout.read_exact(&mut buf).await.unwrap();
