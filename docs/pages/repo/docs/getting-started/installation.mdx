@@ -1,0 +1,132 @@
+---
+title: Installing Turborepo
+description: Learn how to install Turborepo for use with your repository
+---
+
+import { Callout } from '#components/Callout'
+import { Tabs, Tab } from '../../../../components/Tabs'
+
+# Installation
+
+`turbo` can be installed both globally and in your repository. We highly recommend installing both ways so you can take advantage of fast, convenient workflows with a stable version of `turbo` for all developers working in your repository.
+
+## Installing globally
+
+A global install of `turbo` can be used in any [workspace](https://vercel.com/docs/vercel-platform/glossary#workspace) that follows the conventions of the Node.js ecosystem, [single-package](https://vercel.com/docs/vercel-platform/glossary#single-package-workspace) or [multi-package](https://vercel.com/docs/vercel-platform/glossary#multi-package-workspace).
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npm install turbo --global
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn global add turbo
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm install turbo --global
+    ```
+  </Tab>
+</Tabs>
+
+Once installed globally, you can run your scripts through `turbo` from your terminal, quickly running ad-hoc commands to use within your repository. For example:
+
+- `turbo build`: Run `build` scripts following your repository's dependency graph
+- `turbo build --filter=docs --dry`: Quickly print an outline of the `build` task for your `docs` package without running it
+- `turbo generate`: Run [Generators](/TODO-LINK) to quickly add new code to your repository
+- `cd apps/docs && turbo build`: Run the `build` scripts in the `docs` package and its dependency graph
+
+The last command is an example of Automatic Package Scoping. `turbo` will detect that you're in a package's directory and automatically scope your commands to that package and its dependency graph.
+
+<Callout type="error">
+If you've installed global `turbo` before, make sure you use the same package manager as your existing installation to avoid unexpected behaviors. You can quickly check which package manager you previously used with:
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npm install turbo --global
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn global add turbo
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm install turbo --global
+    ```
+  </Tab>
+</Tabs>
+</Callout>
+
+## Installing per repository
+
+When collaborating with other developers in a repository, it's a good idea to pin versions of dependencies. You can do this with `turbo` by adding it as a `devDependency` in the root of your repository:
+
+<Tabs items={['npm', 'yarn', 'pnpm']} storageKey="selected-pkg-manager">
+  <Tab>
+    ```bash
+    npm install turbo --save-dev
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    yarn add turbo --dev --ignore-workspace-root-check
+    ```
+  </Tab>
+  <Tab>
+    ```bash
+    pnpm add turbo --save-dev --ignore-workspace-root-check
+    ```
+  </Tab>
+</Tabs>
+
+You can continue to use your global installation of `turbo` to run commands. Global `turbo` will defer to the local version of your repsitory if it exists. This allows you to get the best of both worlds: easy scoping to the directory you're working in while maintaining a pinned version for consistent usage amongst your entire team.
+
+## System requirements
+
+### Package managers
+
+Core `turbo` functionality depends on the package managers in the JavaScript ecosystem and their implementations of workspace configuration and
+lockfiles formats. We currently support:
+
+- pnpm 6+
+- npm 6+
+- bun 1+ (Experimental, partial support)
+- yarn 1+ (Yarn 4, partial support)
+
+It should be noted that package managers themselves have their own release
+schedules, bugs, and features. While we intend to keep up with new major
+versions, we likely will not be able to release support immediately.
+
+### Platforms
+
+`turbo` is generally supported on Debian-based Linux distributions, macOS, and
+Windows on both x86_64 and ARM 64 architectures. Specifically, we build and ship
+the following binaries via npm:
+
+- `turbo-darwin-64` (macOS with Intel chips)
+- `turbo-darwin-arm64` (macOS with Apple Silicon)
+- `turbo-linux-64`
+- `turbo-linux-arm64`
+- `turbo-windows-64`
+- `turbo-windows-arm64`
+
+### Node.js
+
+Most core `turbo` functionality (especially `turbo run`) does not depend on the
+active Node.js version on your system, but some features of Turborepo and its ecosystem
+such as `create-turbo`, `turbo-ignore`, and `eslint-plugin-turbo` do. For these features,
+we intend to support the [Active and Maintenance LTS versions of Node.js](https://nodejs.org/en/about/previous-releases).
+
+All of our [examples](/repo/docs/getting-started/from-example) are also expected to
+work with these versions.
+
+### Version control
+
+We support repositories that are version controlled with `.git` and repositories that don't have
+version control at all. Any other version control system will be ignored. Note that we use `git`
+to hash files, so repositories without git may perform and behave differently.

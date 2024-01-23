@@ -42,7 +42,7 @@ export type Features = Feature[];
 const REPO_FEATURES: Features = [
   {
     name: "Incremental builds",
-    description: `Building once is painful enough, Turborepo will remember what you've built and skip the stuff that's already been computed.`,
+    description: `Building once is painful enough. Turborepo will remember what you've built and skip the stuff that's already been computed.`,
     iconDark: RefreshIconDark,
     iconLight: RefreshIconLight,
     page: "all",
