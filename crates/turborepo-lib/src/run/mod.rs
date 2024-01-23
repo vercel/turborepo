@@ -80,6 +80,15 @@ impl Run {
             // value
             opts.cache_opts.skip_remote = !enabled;
         }
+        // Note that we don't currently use the team_id value here. In the future, we
+        // should probably verify that we only use the signature value when the
+        // configured team_id matches the final resolved team_id.
+        let unused_remote_cache_opts_team_id = config.team_id().unwrap_or_default();
+        let signature = config.signature();
+        opts.cache_opts.remote_cache_opts = Some(RemoteCacheOpts::new(
+            unused_remote_cache_opts_team_id.to_string(),
+            signature,
+        ));
         Ok(Self {
             base,
             processes,
@@ -292,20 +301,6 @@ impl Run {
 
         let root_turbo_json =
             TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
-
-        let team_id = root_turbo_json
-            .remote_cache
-            .as_ref()
-            .and_then(|configuration_options| configuration_options.team_id.clone())
-            .unwrap_or_default();
-
-        let signature = root_turbo_json
-            .remote_cache
-            .as_ref()
-            .and_then(|configuration_options| configuration_options.signature)
-            .unwrap_or_default();
-
-        self.opts.cache_opts.remote_cache_opts = Some(RemoteCacheOpts::new(team_id, signature));
 
         if self.opts.run_opts.experimental_space_id.is_none() {
             self.opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
