@@ -292,8 +292,8 @@ async fn run_test(prepared_test: Vc<PreparedTest>) -> Result<Vc<RunTestResult>> 
 
     let chunking_context = DevChunkingContext::builder(
         project_root,
-        path,
-        path,
+        chunk_root_path,
+        static_root_path,
         chunk_root_path,
         static_root_path,
         env,
