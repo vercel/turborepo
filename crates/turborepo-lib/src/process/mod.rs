@@ -10,6 +10,7 @@
 //! must be either `wait`ed on or `stop`ped to drive state.
 
 mod child;
+mod command;
 
 use std::{
     io,
@@ -17,6 +18,7 @@ use std::{
     time::Duration,
 };
 
+pub use command::Command;
 use futures::Future;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
@@ -56,7 +58,7 @@ impl ProcessManager {
     /// manager is open, but the child process failed to spawn.
     pub fn spawn(
         &self,
-        command: child::Command,
+        command: Command,
         stop_timeout: Duration,
     ) -> Option<io::Result<child::Child>> {
         let mut lock = self.0.lock().unwrap();
@@ -124,12 +126,10 @@ impl ProcessManager {
 
 #[cfg(test)]
 mod test {
-    use std::process::Stdio;
-
     use futures::{stream::FuturesUnordered, StreamExt};
     use test_case::test_case;
     use time::Instant;
-    use tokio::{join, process::Command, time::sleep};
+    use tokio::{join, time::sleep};
     use tracing_test::traced_test;
 
     use super::*;
@@ -140,9 +140,7 @@ mod test {
 
     fn get_script_command(script_name: &str) -> Command {
         let mut cmd = Command::new("node");
-        cmd.arg(format!("./test/scripts/{script_name}"));
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        cmd.args([format!("./test/scripts/{script_name}")]);
         cmd
     }
 
@@ -156,7 +154,7 @@ mod test {
             .unwrap()
             .unwrap();
         let mut out = Vec::new();
-        let exit = child.wait_with_piped_outputs(&mut out, None).await.unwrap();
+        let exit = child.wait_with_piped_outputs(&mut out).await.unwrap();
         assert_eq!(exit, Some(ChildExit::Finished(Some(0))));
         assert_eq!(out, b"hello world\n");
     }
@@ -193,7 +191,7 @@ mod test {
             .unwrap();
         let mut out = Vec::new();
         let (exit, _) = join! {
-            child.wait_with_piped_outputs(&mut out, None),
+            child.wait_with_piped_outputs(&mut out),
             manager.stop(),
         };
         let exit = exit.unwrap();
@@ -326,7 +324,7 @@ mod test {
         // we support 'close escalation'; someone can call
         // stop even if others are waiting
         let (exit, _, _) = join! {
-            child.wait_with_piped_outputs(&mut out, None),
+            child.wait_with_piped_outputs(&mut out),
             manager.wait(),
             manager.stop(),
         };

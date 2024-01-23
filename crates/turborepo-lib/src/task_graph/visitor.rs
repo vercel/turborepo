@@ -2,7 +2,6 @@ use std::{
     borrow::Cow,
     collections::HashSet,
     io::Write,
-    process::Stdio,
     sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
@@ -10,12 +9,9 @@ use std::{
 use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
-use tokio::{
-    process::Command,
-    sync::{mpsc, oneshot},
-};
+use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, Instrument, Span};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_ci::github_header_footer;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
 use turborepo_repository::{
@@ -31,8 +27,8 @@ use which::which;
 use crate::{
     cli::EnvMode,
     engine::{Engine, ExecutionOptions, StopExecution},
-    opts::Opts,
-    process::{ChildExit, ProcessManager},
+    opts::RunOpts,
+    process::{ChildExit, Command, ProcessManager},
     run::{
         global_hash::GlobalHashableInputs,
         summary::{
@@ -52,7 +48,7 @@ pub struct Visitor<'a> {
     global_env: EnvironmentVariableMap,
     global_env_mode: EnvMode,
     manager: ProcessManager,
-    opts: &'a Opts<'a>,
+    run_opts: &'a RunOpts<'a>,
     package_graph: Arc<PackageGraph>,
     repo_root: &'a AbsoluteSystemPath,
     run_cache: Arc<RunCache>,
@@ -92,7 +88,7 @@ impl<'a> Visitor<'a> {
         package_graph: Arc<PackageGraph>,
         run_cache: Arc<RunCache>,
         run_tracker: RunTracker,
-        opts: &'a Opts,
+        run_opts: &'a RunOpts,
         package_inputs_hashes: PackageInputsHashes,
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
@@ -105,11 +101,11 @@ impl<'a> Visitor<'a> {
     ) -> Self {
         let task_hasher = TaskHasher::new(
             package_inputs_hashes,
-            opts,
+            run_opts,
             env_at_execution_start,
             global_hash,
         );
-        let sink = Self::sink(opts, silent);
+        let sink = Self::sink(run_opts, silent);
         let color_cache = ColorSelector::default();
 
         Self {
@@ -117,7 +113,7 @@ impl<'a> Visitor<'a> {
             dry: false,
             global_env_mode,
             manager,
-            opts,
+            run_opts,
             package_graph,
             repo_root,
             run_cache,
@@ -135,7 +131,7 @@ impl<'a> Visitor<'a> {
         engine: Arc<Engine>,
         telemetry: &GenericEventBuilder,
     ) -> Result<Vec<TaskError>, Error> {
-        let concurrency = self.opts.run_opts.concurrency as usize;
+        let concurrency = self.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
         let engine_handle = {
             let engine = engine.clone();
@@ -313,11 +309,12 @@ impl<'a> Visitor<'a> {
         global_hash_inputs: GlobalHashableInputs<'_>,
         engine: &Engine,
         env_at_execution_start: &EnvironmentVariableMap,
+        pkg_inference_root: Option<&AnchoredSystemPath>,
     ) -> Result<(), Error> {
         let Self {
             package_graph,
             ui,
-            opts,
+            run_opts,
             repo_root,
             global_env_mode,
             task_hasher,
@@ -333,8 +330,8 @@ impl<'a> Visitor<'a> {
                 &package_graph,
                 ui,
                 repo_root,
-                opts.scope_opts.pkg_inference_root.as_deref(),
-                &opts.run_opts,
+                pkg_inference_root,
+                run_opts,
                 packages,
                 global_hash_summary,
                 global_env_mode,
@@ -345,10 +342,10 @@ impl<'a> Visitor<'a> {
             .await?)
     }
 
-    fn sink(opts: &Opts, silent: bool) -> OutputSink<StdWriter> {
+    fn sink(run_opts: &RunOpts, silent: bool) -> OutputSink<StdWriter> {
         let (out, err) = if silent {
             (std::io::sink().into(), std::io::sink().into())
-        } else if opts.run_opts.should_redirect_stderr_to_stdout() {
+        } else if run_opts.should_redirect_stderr_to_stdout() {
             (std::io::stdout().into(), std::io::stdout().into())
         } else {
             (std::io::stdout().into(), std::io::stderr().into())
@@ -357,7 +354,7 @@ impl<'a> Visitor<'a> {
     }
 
     fn output_client(&self, task_id: &TaskId) -> OutputClient<impl std::io::Write> {
-        let behavior = match self.opts.run_opts.log_order {
+        let behavior = match self.run_opts.log_order {
             crate::opts::ResolvedLogOrder::Stream if self.run_tracker.spaces_enabled() => {
                 turborepo_ui::OutputClientBehavior::InMemoryBuffer
             }
@@ -368,8 +365,8 @@ impl<'a> Visitor<'a> {
         };
 
         let mut logger = self.sink.logger(behavior);
-        if self.opts.run_opts.is_github_actions {
-            let package = if self.opts.run_opts.single_package {
+        if self.run_opts.is_github_actions {
+            let package = if self.run_opts.single_package {
                 None
             } else {
                 Some(task_id.package())
@@ -381,8 +378,8 @@ impl<'a> Visitor<'a> {
     }
 
     fn prefix<'b>(&self, task_id: &'b TaskId) -> Cow<'b, str> {
-        match self.opts.run_opts.log_prefix {
-            crate::opts::ResolvedLogPrefix::Task if self.opts.run_opts.single_package => {
+        match self.run_opts.log_prefix {
+            crate::opts::ResolvedLogPrefix::Task if self.run_opts.single_package => {
                 task_id.task().into()
             }
             crate::opts::ResolvedLogPrefix::Task => {
@@ -394,7 +391,7 @@ impl<'a> Visitor<'a> {
 
     // Task ID as displayed in error messages
     fn display_task_id(&self, task_id: &TaskId) -> String {
-        match self.opts.run_opts.single_package {
+        match self.run_opts.single_package {
             true => task_id.task().to_string(),
             false => task_id.to_string(),
         }
@@ -568,11 +565,11 @@ impl<'a> ExecContextFactory<'a> {
         execution_env: EnvironmentVariableMap,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
-        let pass_through_args = self.visitor.opts.run_opts.args_for_task(&task_id);
+        let pass_through_args = self.visitor.run_opts.args_for_task(&task_id);
         ExecContext {
             engine: self.engine.clone(),
             ui: self.visitor.ui,
-            is_github_actions: self.visitor.opts.run_opts.is_github_actions,
+            is_github_actions: self.visitor.run_opts.is_github_actions,
             pretty_prefix: self
                 .visitor
                 .color_cache
@@ -586,7 +583,7 @@ impl<'a> ExecContextFactory<'a> {
             manager: self.manager.clone(),
             task_hash,
             execution_env,
-            continue_on_error: self.visitor.opts.run_opts.continue_on_error,
+            continue_on_error: self.visitor.run_opts.continue_on_error,
             pass_through_args,
             errors: self.errors.clone(),
         }
@@ -779,9 +776,7 @@ impl ExecContext {
             args.extend(pass_through_args.iter().cloned());
         }
         cmd.args(args);
-        cmd.current_dir(self.workspace_directory.as_path());
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        cmd.current_dir(self.workspace_directory.clone());
 
         // We clear the env before populating it with variables we expect
         cmd.env_clear();
@@ -823,10 +818,7 @@ impl ExecContext {
             }
         };
 
-        let exit_status = match process
-            .wait_with_piped_outputs(&mut stdout_writer, None)
-            .await
-        {
+        let exit_status = match process.wait_with_piped_outputs(&mut stdout_writer).await {
             Ok(Some(exit_status)) => exit_status,
             Err(e) => {
                 telemetry.track_error(TrackedErrors::FailedToPipeOutputs);
