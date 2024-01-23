@@ -15,13 +15,18 @@
 //! running these processes to completion, forwarding signals, and closing
 //! them when the manager is closed.
 
+const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
+
 use std::{
-    io::{self, Write},
-    process::ExitStatus,
+    fmt,
+    io::{self, BufRead, Read, Write},
     sync::{Arc, Mutex},
     time::Duration,
 };
 
+use portable_pty::{
+    native_pty_system, Child as PtyChild, MasterPty as PtyController, SlavePty as PtyReceiver,
+};
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, BufReader},
     join,
@@ -80,7 +85,17 @@ impl From<std::io::Error> for ShutdownFailed {
 
 struct ChildHandle {
     pid: Option<u32>,
-    imp: tokio::process::Child,
+    imp: ChildHandleImpl,
+}
+
+enum ChildHandleImpl {
+    Tokio(tokio::process::Child),
+    Pty {
+        // Dropping this will close the receiver file descriptor
+        // of the pty pair
+        receiver: Box<dyn PtyReceiver + Send>,
+        child: Box<dyn PtyChild + Send + Sync>,
+    },
 }
 
 impl ChildHandle {
@@ -107,11 +122,65 @@ impl ChildHandle {
         let stderr = child.stderr.take().map(ChildOutput::Concrete);
 
         Ok((
-            Self { pid, imp: child },
+            Self {
+                pid,
+                imp: ChildHandleImpl::Tokio(child),
+            },
             ChildIO {
+                controller: None,
                 stdin,
                 stdout,
                 stderr,
+            },
+        ))
+    }
+
+    pub fn spawn_pty(command: Command) -> io::Result<(Self, ChildIO)> {
+        use portable_pty::PtySize;
+
+        let keep_stdin_open = command.will_open_stdin();
+
+        let command = portable_pty::CommandBuilder::from(command);
+        let pty_system = native_pty_system();
+        // TODO we should forward the correct size
+        let pair = pty_system
+            .openpty(PtySize::default())
+            .map_err(|err| match err.downcast() {
+                Ok(err) => err,
+                Err(err) => io::Error::new(io::ErrorKind::Other, err),
+            })?;
+
+        let controller = pair.master;
+        let receiver = pair.slave;
+
+        let child = receiver
+            .spawn_command(command)
+            .map_err(|err| match err.downcast() {
+                Ok(err) => err,
+                Err(err) => io::Error::new(io::ErrorKind::Other, err),
+            })?;
+
+        let pid = child.process_id();
+
+        let mut stdin = controller.take_writer().ok().map(ChildInput::from);
+        let stdout = controller.try_clone_reader().ok().map(ChildStdout::from);
+
+        // If we don't want to keep stdin open we take it here and it is immediately
+        // dropped resulting in a EOF being sent to the child process.
+        if !keep_stdin_open {
+            stdin.take();
+        }
+
+        Ok((
+            Self {
+                pid,
+                imp: ChildHandleImpl::Pty { receiver, child },
+            },
+            ChildIO {
+                controller: Some(controller),
+                stdin,
+                stdout,
+                stderr: None,
             },
         ))
     }
@@ -120,29 +189,56 @@ impl ChildHandle {
         self.pid
     }
 
-    pub async fn wait(&mut self) -> io::Result<ExitStatus> {
-        self.imp.wait().await
+    pub async fn wait(&mut self) -> io::Result<Option<i32>> {
+        match &mut self.imp {
+            ChildHandleImpl::Tokio(child) => child.wait().await.map(|status| status.code()),
+            ChildHandleImpl::Pty { child, .. } => {
+                // TODO: we currently poll the child to see if it has finished yet which is less
+                // than ideal
+                loop {
+                    match child.try_wait() {
+                        // This is safe as the portable_pty::ExitStatus's exit code is just
+                        // converted from a i32 to an u32 before we get it
+                        Ok(Some(status)) => return Ok(Some(status.exit_code() as i32)),
+                        Ok(None) => {
+                            // child hasn't finished, we sleep for a short time
+                            tokio::time::sleep(CHILD_POLL_INTERVAL).await;
+                        }
+                        Err(err) => return Err(err),
+                    }
+                }
+            }
+        }
     }
 
     pub async fn kill(&mut self) -> io::Result<()> {
-        self.imp.kill().await
+        match &mut self.imp {
+            ChildHandleImpl::Tokio(child) => child.kill().await,
+            ChildHandleImpl::Pty { child, .. } => {
+                let mut killer = child.clone_killer();
+                tokio::task::spawn_blocking(move || killer.kill())
+                    .await
+                    .unwrap()
+            }
+        }
     }
 }
 
 struct ChildIO {
+    controller: Option<Box<dyn PtyController + Send>>,
     stdin: Option<ChildInput>,
     stdout: Option<ChildStdout>,
     stderr: Option<ChildStderr>,
 }
 
-#[derive(Debug)]
 enum ChildInput {
     Concrete(tokio::process::ChildStdin),
+    Boxed(Box<dyn Write + Send>),
 }
 
-#[derive(Debug)]
 enum ChildOutput<T> {
     Concrete(T),
+    Boxed(Box<dyn Read + Send>),
 }
 
 type ChildStdout = ChildOutput<tokio::process::ChildStdout>;
@@ -154,10 +250,17 @@ impl From<tokio::process::ChildStdin> for ChildInput {
     }
 }
 
+impl From<Box<dyn Write + Send>> for ChildInput {
+    fn from(value: Box<dyn Write + Send>) -> Self {
+        Self::Boxed(value)
+    }
+}
+
 impl ChildInput {
     fn concrete(self) -> Option<tokio::process::ChildStdin> {
         match self {
             ChildInput::Concrete(stdin) => Some(stdin),
+            ChildInput::Boxed(_) => None,
         }
     }
 }
@@ -166,6 +269,31 @@ impl<T> ChildOutput<T> {
     fn concrete(self) -> Option<T> {
         match self {
             ChildOutput::Concrete(output) => Some(output),
+            ChildOutput::Boxed(_) => None,
+        }
+    }
+}
+
+impl From<Box<dyn Read + Send>> for ChildOutput<tokio::process::ChildStdout> {
+    fn from(value: Box<dyn Read + Send>) -> Self {
+        Self::Boxed(value)
+    }
+}
+
+impl fmt::Debug for ChildInput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Concrete(arg0) => f.debug_tuple("Concrete").field(arg0).finish(),
+            Self::Boxed(_) => f.debug_tuple("Boxed").finish(),
+        }
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for ChildOutput<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Concrete(arg0) => f.debug_tuple("Concrete").field(arg0).finish(),
+            Self::Boxed(_) => f.debug_tuple("Boxed").finish(),
         }
     }
 }
@@ -190,7 +318,7 @@ impl ShutdownStyle {
                                 libc::kill(pgid, libc::SIGINT);
                             }
                             debug!("waiting for child {}", pid);
-                            child.wait().await.map(|es| es.code())
+                            child.wait().await
                         } else {
                             // if there is no pid, then just report successful with no exit code
                             Ok(None)
@@ -283,16 +411,26 @@ pub enum ChildCommand {
 impl Child {
     /// Start a child process, returning a handle that can be used to interact
     /// with it. The command will be started immediately.
-    pub fn spawn(command: Command, shutdown_style: ShutdownStyle) -> io::Result<Self> {
+    pub fn spawn(
+        command: Command,
+        shutdown_style: ShutdownStyle,
+        use_pty: bool,
+    ) -> io::Result<Self> {
         let label = command.label();
         let (
             mut child,
             ChildIO {
+                controller,
                 stdin,
                 stdout,
                 stderr,
             },
-        ) = ChildHandle::spawn_normal(command)?;
+        ) = if use_pty {
+            ChildHandle::spawn_pty(command)
+        } else {
+            ChildHandle::spawn_normal(command)
+        }?;
+
         let pid = child.pid();
 
         let (command_tx, mut command_rx) = ChildCommandChannel::new();
@@ -308,6 +446,8 @@ impl Child {
         let task_state = state.clone();
 
         let _task = tokio::spawn(async move {
+            // TODO: Not sure when this FD should be closed
+            let _controller = controller;
             debug!("waiting for task");
             let manager = ChildStateManager {
                 shutdown_style,
@@ -445,9 +585,62 @@ impl Child {
                     "one of stdout/stderr was piped and the other was not which is unsupported"
                 )
             }
+            (Some(ChildOutput::Boxed(stdout)), None) => {
+                self.wait_with_piped_sync_output(stdout_pipe, std::io::BufReader::new(stdout))
+                    .await
+            }
             // If we have no child outputs to forward, we simply wait
             (None, None) => Ok(self.wait().await),
+            // In the future list out all of the possible combos or simplify this match expr
+            _ => unreachable!(),
         }
+    }
+
+    async fn wait_with_piped_sync_output<R: BufRead + Send + 'static>(
+        &mut self,
+        mut stdout_pipe: impl Write,
+        mut stdout_lines: R,
+    ) -> Result<Option<ChildExit>, std::io::Error> {
+        // TODO: in order to not impose that a stdout_pipe is Send we send the bytes
+        // across a channel
+        let (byte_tx, mut byte_rx) = mpsc::channel(48);
+        tokio::task::spawn_blocking(move || {
+            let mut buffer = Vec::new();
+            loop {
+                match stdout_lines.read_until(b'\n', &mut buffer) {
+                    Ok(0) => break,
+                    Ok(_) => {
+                        if byte_tx.blocking_send(buffer.clone()).is_err() {
+                            // A dropped receiver indicates that there was an issue writing to the
+                            // pipe. We can stop reading output.
+                            break;
+                        }
+                        buffer.clear();
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            if !buffer.is_empty() {
+                byte_tx.blocking_send(buffer).ok();
+            }
+            Ok(())
+        });
+
+        let writer_fut = async {
+            let mut result = Ok(());
+            while let Some(bytes) = byte_rx.recv().await {
+                if let Err(err) = stdout_pipe.write_all(&bytes) {
+                    result = Err(err);
+                    break;
+                }
+            }
+            result
+        };
+
+        let (status, write_result) = tokio::join!(self.wait(), writer_fut);
+        write_result?;
+
+        Ok(status)
     }
 
     async fn wait_with_piped_async_outputs<R1: AsyncBufRead + Unpin, R2: AsyncBufRead + Unpin>(
@@ -546,10 +739,10 @@ impl ChildStateManager {
         }
     }
 
-    async fn handle_child_exit(&self, status: io::Result<ExitStatus>) {
+    async fn handle_child_exit(&self, status: io::Result<Option<i32>>) {
         debug!("child process exited normally");
         // the child process exited
-        let child_exit = match status.map(|s| s.code()) {
+        let child_exit = match status {
             Ok(Some(c)) => ChildExit::Finished(Some(c)),
             // if we hit this case, it means that the child process was killed
             // by someone else, and we should report that it was killed
@@ -571,6 +764,7 @@ mod test {
     use std::{assert_matches::assert_matches, time::Duration};
 
     use futures::{stream::FuturesUnordered, StreamExt};
+    use test_case::test_case;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tracing_test::traced_test;
     use turbopath::AbsoluteSystemPathBuf;
@@ -589,12 +783,14 @@ mod test {
         root.join_components(&["crates", "turborepo-lib", "test", "scripts"])
     }
 
+    #[test_case(false)]
+    #[test_case(true)]
     #[tokio::test]
-    async fn test_pid() {
+    async fn test_pid(use_pty: bool) {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         assert_matches!(child.pid(), Some(_));
         child.stop().await;
@@ -603,9 +799,11 @@ mod test {
         assert_matches!(&*state, ChildState::Exited(ChildExit::Killed));
     }
 
+    #[test_case(false)]
+    #[test_case(true)]
     #[tokio::test]
     #[traced_test]
-    async fn test_spawn() {
+    async fn test_spawn(use_pty: bool) {
         let cmd = {
             let script = find_script_dir().join_component("hello_world.js");
             let mut cmd = Command::new("node");
@@ -613,7 +811,7 @@ mod test {
             cmd
         };
 
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         {
             let state = child.state.read().await;
@@ -635,7 +833,7 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -670,7 +868,7 @@ mod test {
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
         cmd.open_stdin();
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
 
         let mut stdout = child
             .stdout()
@@ -714,8 +912,12 @@ mod test {
             cmd
         };
 
-        let mut child =
-            Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500))).unwrap();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            false,
+        )
+        .unwrap();
 
         let mut stdout = child.stdout().unwrap().concrete().unwrap();
         let mut buf = vec![0; 4];
@@ -739,8 +941,12 @@ mod test {
             cmd
         };
 
-        let mut child =
-            Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500))).unwrap();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            false,
+        )
+        .unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -763,8 +969,12 @@ mod test {
             cmd
         };
 
-        let mut child =
-            Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(500))).unwrap();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            false,
+        )
+        .unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -808,7 +1018,7 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
 
         let mut out = Vec::new();
 
@@ -823,7 +1033,7 @@ mod test {
         let script = find_script_dir().join_component("hello_world_hello_moon.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
 
         let mut buffer = Vec::new();
 
@@ -839,7 +1049,7 @@ mod test {
         let script = find_script_dir().join_component("hello_non_utf8.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
 
         let mut out = Vec::new();
 
@@ -854,7 +1064,7 @@ mod test {
         let script = find_script_dir().join_component("hello_non_utf8.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
 
         let mut buffer = Vec::new();
 
@@ -869,8 +1079,12 @@ mod test {
     async fn test_kill_process_group() {
         let mut cmd = Command::new("sh");
         cmd.args(["-c", "while true; do sleep 0.2; done"]);
-        let mut child =
-            Child::spawn(cmd, ShutdownStyle::Graceful(Duration::from_millis(100))).unwrap();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(100)),
+            false,
+        )
+        .unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
@@ -884,7 +1098,7 @@ mod test {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let child = Child::spawn(cmd, ShutdownStyle::Kill).unwrap();
+        let child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
 
         let mut stops = FuturesUnordered::new();
         for _ in 1..10 {
