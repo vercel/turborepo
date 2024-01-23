@@ -1,4 +1,4 @@
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh "with_pkg_deps"
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh "with-pkg-deps"
   $ source "$TESTDIR/../_helpers/run-summary-utils.sh"
 
   $ rm -rf .turbo/runs
