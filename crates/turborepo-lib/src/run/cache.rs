@@ -400,33 +400,36 @@ impl ConfigCache {
         }
     }
 
+    pub fn hash(&self) -> &str {
+        &self.hash
+    }
+
     pub fn exists(&self) -> bool {
-        return self.config_file.try_exists().unwrap_or(false);
+        self.config_file.try_exists().unwrap_or(false)
     }
 
     pub async fn restore(
         &self,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
-        return self.cache.fetch(&self.repo_root, &self.hash).await;
+        self.cache.fetch(&self.repo_root, &self.hash).await
     }
 
     pub async fn save(&self) -> Result<(), CacheError> {
         match self.exists() {
             true => {
                 debug!("config file exists, caching");
-                return self
-                    .cache
+                self.cache
                     .put(
                         self.repo_root.clone(),
                         self.hash.clone(),
                         vec![self.anchored_path.clone()],
                         0,
                     )
-                    .await;
+                    .await
             }
             false => {
                 debug!("config file does not exist, skipping cache save");
-                return Ok(());
+                Ok(())
             }
         }
     }
@@ -445,11 +448,11 @@ impl ConfigCache {
 
         // empty inputs to get all files
         let inputs: Vec<String> = vec![];
-        let hash_object =
-            match scm.get_package_file_hashes(&repo_root, &anchored_root, &inputs, None) {
-                Ok(hash_object) => hash_object,
-                Err(_) => return Err(CacheError::ConfigCacheError),
-            };
+        let hash_object = match scm.get_package_file_hashes(repo_root, anchored_root, &inputs, None)
+        {
+            Ok(hash_object) => hash_object,
+            Err(_) => return Err(CacheError::ConfigCacheError),
+        };
 
         // return the hash
         Ok(FileHashes(hash_object).hash())

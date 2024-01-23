@@ -355,16 +355,19 @@ impl RawTurboJson {
         let mut pipeline = Pipeline::default();
 
         for (task_name, trace_file) in trace {
-            let mut task_definition = RawTaskDefinition::default();
-            task_definition.outputs = Some(Spanned::new(trace_file.outputs.clone()));
-            task_definition.env = Some(
-                trace_file
-                    .accessed
-                    .env_var_keys
-                    .iter()
-                    .map(|unescaped_string| Spanned::new(unescaped_string.clone()))
-                    .collect(),
-            );
+            let task_definition = RawTaskDefinition {
+                outputs: Some(Spanned::new(trace_file.outputs.clone())),
+                env: Some(
+                    trace_file
+                        .accessed
+                        .env_var_keys
+                        .iter()
+                        .map(|unescaped_string| Spanned::new(unescaped_string.clone()))
+                        .collect(),
+                ),
+                ..Default::default()
+            };
+
             let name = TaskName::from(task_name.as_str());
             let root_task = name.into_root_task();
             pipeline.insert(root_task, task_definition);

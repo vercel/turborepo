@@ -8,14 +8,18 @@ use std::{
 use serde::Deserialize;
 use tracing::{debug, error, warn};
 use turbopath::{AbsoluteSystemPathBuf, PathRelation};
+use turborepo_cache::AsyncCache;
+use turborepo_scm::SCM;
 
 // Environment variable key that will be used to enable, and set the expected
 // trace location
-pub const TASK_ACCESS_ENV_KEY: &str = "TURBOREPO_TRACE_FILE";
+const TASK_ACCESS_ENV_KEY: &str = "TURBOREPO_TRACE_FILE";
 /// File name where the task is expected to leave a trace result
-pub const TASK_ACCESS_TRACE_NAME: &str = "trace.json";
+const TASK_ACCESS_TRACE_NAME: &str = "trace.json";
 // Path to the config file that will be used to store the trace results
 pub const TASK_ACCESS_CONFIG_PATH: [&str; 2] = [".turbo", "traced-config.json"];
+/// File name where the task is expected to leave a trace result
+const TURBO_CONFIG_FILE: &str = "turbo.json";
 
 use super::ConfigCache;
 use crate::{config::RawTurboJson, unescape::UnescapedString};
@@ -44,13 +48,18 @@ pub fn trace_file_path(
     repo_root: &AbsoluteSystemPathBuf,
     task_hash: &str,
 ) -> AbsoluteSystemPathBuf {
-    return repo_root.join_components(&[".turbo", task_hash, TASK_ACCESS_TRACE_NAME]);
+    repo_root.join_components(&[".turbo", task_hash, TASK_ACCESS_TRACE_NAME])
 }
 
-pub fn task_access_trace_enabled(repo_root: &AbsoluteSystemPathBuf) -> Result<bool, Error> {
+fn task_access_trace_enabled(repo_root: &AbsoluteSystemPathBuf) -> Result<bool, Error> {
+    // TODO: use the existing config methods here
+    let root_turbo_json_path = &repo_root.join_component(TURBO_CONFIG_FILE);
+    if root_turbo_json_path.exists() {
+        return Ok(false);
+    }
+
     // read package.json at root
     let package_json_path = repo_root.join_components(&["package.json"]);
-    // parse Json
     let package_json_content = fs::read_to_string(package_json_path)?;
     let package: PackageJson = serde_json::from_str(&package_json_content)?;
 
@@ -72,13 +81,13 @@ impl TaskAccessTraceFile {
             return None;
         };
 
-        return match serde_json::from_reader(f) {
-            Ok(trace) => Some(Self::from(trace)),
+        match serde_json::from_reader(f) {
+            Ok(trace) => Some(trace),
             Err(e) => {
                 warn!("failed to parse trace file {trace_file}: {e}");
-                return None;
+                None
             }
-        };
+        }
     }
 
     pub fn can_cache(&self, repo_root: &AbsoluteSystemPathBuf) -> bool {
@@ -121,14 +130,58 @@ pub struct TaskAccess {
     pub repo_root: AbsoluteSystemPathBuf,
     trace_by_task: Arc<Mutex<HashMap<String, TaskAccessTraceFile>>>,
     config_cache: Option<ConfigCache>,
+    enabled: bool,
 }
 
 impl TaskAccess {
-    pub fn new(repo_root: AbsoluteSystemPathBuf, config_cache: Option<ConfigCache>) -> Self {
+    pub fn new(repo_root: AbsoluteSystemPathBuf, cache: Arc<AsyncCache>, scm: &SCM) -> Self {
+        let root = repo_root.clone();
+        let enabled = task_access_trace_enabled(&root).unwrap_or(false);
+        let trace_by_task = Arc::new(Mutex::new(HashMap::<String, TaskAccessTraceFile>::new()));
+        let mut config_cache = Option::<ConfigCache>::None;
+
+        // we only want to setup the config cacher if task access tracing is enabled
+        if enabled {
+            let config_hash_result = ConfigCache::calculate_config_hash(scm, &root);
+            if let Ok(c_hash) = config_hash_result {
+                let c_cache = ConfigCache::new(
+                    c_hash.to_string(),
+                    root.clone(),
+                    &TASK_ACCESS_CONFIG_PATH,
+                    cache.clone(),
+                );
+
+                config_cache = Some(c_cache);
+            }
+        }
+
         Self {
             repo_root,
+            trace_by_task,
+            enabled,
             config_cache,
-            trace_by_task: Arc::new(Mutex::new(HashMap::<String, TaskAccessTraceFile>::new())),
+        }
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub async fn restore_config(&self) {
+        match (self.enabled, &self.config_cache) {
+            (true, Some(config_cache)) => match config_cache.restore().await {
+                Ok(_) => debug!(
+                    "TASK ACCESS TRACE: config restored for {}",
+                    config_cache.hash()
+                ),
+                Err(_) => debug!(
+                    "TASK ACCESS TRACE: no config found for {}",
+                    config_cache.hash()
+                ),
+            },
+            _ => {
+                debug!("TASK ACCESS TRACE: unable to restore config from cache");
+            }
         }
     }
 
@@ -146,41 +199,44 @@ impl TaskAccess {
 
     pub fn get_env_var(&self, task_hash: &str) -> (String, AbsoluteSystemPathBuf) {
         let trace_file_path = trace_file_path(&self.repo_root, task_hash);
-        return (TASK_ACCESS_ENV_KEY.to_string(), trace_file_path);
+        (TASK_ACCESS_ENV_KEY.to_string(), trace_file_path)
     }
 
     pub async fn to_turbo_json(&self) -> Result<(), std::io::Error> {
-        if let Some(config_cache) = &self.config_cache {
-            let traced_config =
-                RawTurboJson::from_task_access_trace(&self.trace_by_task.lock().unwrap());
-            if traced_config.is_some() {
-                // convert the traced_config to json and write the file to disk
-                let traced_config_json = serde_json::to_string_pretty(&traced_config);
-                match traced_config_json {
-                    Ok(json) => {
-                        let file_path = self.repo_root.join_components(&TASK_ACCESS_CONFIG_PATH);
-                        let file = File::create(file_path);
-                        match file {
-                            Ok(mut file) => {
-                                write!(file, "{}", json)?;
-                                file.flush()?;
-                                let result = config_cache.save().await;
-                                if result.is_err() {
-                                    debug!("error saving config cache: {:#?}", result);
+        if self.is_enabled() {
+            if let Some(config_cache) = &self.config_cache {
+                let traced_config =
+                    RawTurboJson::from_task_access_trace(&self.trace_by_task.lock().unwrap());
+                if traced_config.is_some() {
+                    // convert the traced_config to json and write the file to disk
+                    let traced_config_json = serde_json::to_string_pretty(&traced_config);
+                    match traced_config_json {
+                        Ok(json) => {
+                            let file_path =
+                                self.repo_root.join_components(&TASK_ACCESS_CONFIG_PATH);
+                            let file = File::create(file_path);
+                            match file {
+                                Ok(mut file) => {
+                                    write!(file, "{}", json)?;
+                                    file.flush()?;
+                                    let result = config_cache.save().await;
+                                    if result.is_err() {
+                                        debug!("error saving config cache: {:#?}", result);
+                                    }
+                                }
+                                Err(e) => {
+                                    debug!("error creating traced_config file: {:#?}", e);
                                 }
                             }
-                            Err(e) => {
-                                debug!("error creating traced_config file: {:#?}", e);
-                            }
+                        }
+                        Err(e) => {
+                            debug!("error converting traced_config to json: {:#?}", e);
                         }
                     }
-                    Err(e) => {
-                        debug!("error converting traced_config to json: {:#?}", e);
-                    }
                 }
+            } else {
+                debug!("unable to cache config");
             }
-        } else {
-            debug!("unable to cache config");
         }
 
         Ok(())

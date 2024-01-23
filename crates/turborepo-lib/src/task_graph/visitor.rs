@@ -804,10 +804,13 @@ impl ExecContext {
         // Always last to make sure it overwrites any user configured env var.
         cmd.env("TURBO_HASH", &self.task_hash);
         // enable task access tracing
-        let (task_access_trace_key, trace_file) = self.task_access.get_env_var(&self.task_hash);
+
         // set the trace file env var - frameworks that support this can use it to
         // write out a trace file that we will use to automatically cache the task
-        cmd.env(task_access_trace_key, trace_file.to_string());
+        if self.task_access.is_enabled() {
+            let (task_access_trace_key, trace_file) = self.task_access.get_env_var(&self.task_hash);
+            cmd.env(task_access_trace_key, trace_file.to_string());
+        }
 
 		// Many persistent tasks if started hooked up to a pseudoterminal
         // will shut down if stdin is closed, so we open it even if we don't pass
@@ -870,38 +873,49 @@ impl ExecContext {
 
         match exit_status {
             ChildExit::Finished(Some(0)) => {
+                // Attempt to flush stdout_writer and log any errors encountered
                 if let Err(e) = stdout_writer.flush() {
                     error!("{e}");
-                } else if let Err(e) = {
-                    let mut is_cacheable = false;
-                    // check if the framework left us a trace file
-                    let trace_result =
-                        TaskAccessTraceFile::read(&self.task_access.repo_root, &self.task_hash);
-                    match trace_result {
-                        Some(trace) => {
-                            is_cacheable = trace.can_cache(&self.task_access.repo_root);
-                            self.task_access
-                                .save_trace(trace, self.task_id_for_display.to_string());
+                } else {
+                    let mut cacheable = true;
+                    // If stdout_writer flush is successful, proceed with task processing
+                    if self.task_access.is_enabled() {
+                        // Task access enabled: Handle trace file processing
+                        if let Some(trace) =
+                            TaskAccessTraceFile::read(&self.task_access.repo_root, &self.task_hash)
+                        {
+                            // Trace file found
+                            if trace.can_cache(&self.task_access.repo_root) {
+                                // Cache trace and save task outputs if trace is cacheable
+                                self.task_access
+                                    .save_trace(trace, self.task_id_for_display.to_string());
+                            } else {
+                                cacheable = false;
+                            }
                         }
-                        None => (),
-                    };
+                    } else {
+                        // Task access not enabled: Directly save task outputs
+                    }
 
-                    if is_cacheable {
-                        self.task_cache
+                    if cacheable {
+                        // Attempt to save task outputs and log any errors encountered
+                        if let Err(e) = self
+                            .task_cache
                             .save_outputs(&mut prefixed_ui, task_duration, telemetry)
                             .await
-                    } else {
-                        Ok(())
+                        {
+                            error!("error caching output: {e}");
+                        } else {
+                            // If no errors, update hash tracker with expanded outputs
+                            self.hash_tracker.insert_expanded_outputs(
+                                self.task_id.clone(),
+                                self.task_cache.expanded_outputs().to_vec(),
+                            );
+                        }
                     }
-                } {
-                    error!("error caching output: {e}");
-                } else {
-                    self.hash_tracker.insert_expanded_outputs(
-                        self.task_id.clone(),
-                        self.task_cache.expanded_outputs().to_vec(),
-                    );
                 }
 
+                // Return success outcome
                 ExecOutcome::Success(SuccessOutcome::Run)
             }
             ChildExit::Finished(Some(code)) => {
