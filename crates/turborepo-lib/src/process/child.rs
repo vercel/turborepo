@@ -24,9 +24,7 @@ use std::{
     time::Duration,
 };
 
-use portable_pty::{
-    native_pty_system, Child as PtyChild, MasterPty as PtyController, SlavePty as PtyReceiver,
-};
+use portable_pty::{native_pty_system, Child as PtyChild, MasterPty as PtyController};
 use tokio::{
     io::{AsyncBufRead, AsyncBufReadExt, BufReader},
     join,
@@ -90,12 +88,7 @@ struct ChildHandle {
 
 enum ChildHandleImpl {
     Tokio(tokio::process::Child),
-    Pty {
-        // Dropping this will close the receiver file descriptor
-        // of the pty pair
-        receiver: Box<dyn PtyReceiver + Send>,
-        child: Box<dyn PtyChild + Send + Sync>,
-    },
+    Pty(Box<dyn PtyChild + Send + Sync>),
 }
 
 impl ChildHandle {
@@ -174,7 +167,7 @@ impl ChildHandle {
         Ok((
             Self {
                 pid,
-                imp: ChildHandleImpl::Pty { receiver, child },
+                imp: ChildHandleImpl::Pty(child),
             },
             ChildIO {
                 controller: Some(controller),
@@ -192,7 +185,7 @@ impl ChildHandle {
     pub async fn wait(&mut self) -> io::Result<Option<i32>> {
         match &mut self.imp {
             ChildHandleImpl::Tokio(child) => child.wait().await.map(|status| status.code()),
-            ChildHandleImpl::Pty { child, .. } => {
+            ChildHandleImpl::Pty(child) => {
                 // TODO: we currently poll the child to see if it has finished yet which is less
                 // than ideal
                 loop {
@@ -214,7 +207,7 @@ impl ChildHandle {
     pub async fn kill(&mut self) -> io::Result<()> {
         match &mut self.imp {
             ChildHandleImpl::Tokio(child) => child.kill().await,
-            ChildHandleImpl::Pty { child, .. } => {
+            ChildHandleImpl::Pty(child) => {
                 let mut killer = child.clone_killer();
                 tokio::task::spawn_blocking(move || killer.kill())
                     .await
@@ -446,8 +439,9 @@ impl Child {
         let task_state = state.clone();
 
         let _task = tokio::spawn(async move {
-            // TODO: Not sure when this FD should be closed
-            let _controller = controller;
+            // On Windows it is important that this gets dropped once the child process
+            // exits
+            let controller = controller;
             debug!("waiting for task");
             let manager = ChildStateManager {
                 shutdown_style,
@@ -456,9 +450,10 @@ impl Child {
             };
             tokio::select! {
                 command = command_rx.recv() => {
-                    manager.handle_child_command(command, &mut child).await;
+                    manager.handle_child_command(command, &mut child, controller).await;
                 }
                 status = child.wait() => {
+                    drop(controller);
                     manager.handle_child_exit(status).await;
                 }
             }
@@ -707,7 +702,12 @@ impl Child {
 }
 
 impl ChildStateManager {
-    async fn handle_child_command(&self, command: Option<ChildCommand>, child: &mut ChildHandle) {
+    async fn handle_child_command(
+        &self,
+        command: Option<ChildCommand>,
+        child: &mut ChildHandle,
+        controller: Option<Box<dyn PtyController + Send>>,
+    ) {
         let state = match command {
             // we received a command to stop the child process, or the channel was closed.
             // in theory this happens when the last child is dropped, however in practice
@@ -732,6 +732,7 @@ impl ChildStateManager {
                 debug_assert!(false, "child state should not be running after shutdown");
             }
         }
+        drop(controller);
 
         {
             let mut task_state = self.task_state.write().await;
