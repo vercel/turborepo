@@ -67,7 +67,7 @@ impl From<biome_diagnostics::Error> for ParseDiagnostic {
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("{message}")]
-#[diagnostic(code(turbo_json::parser::parse_error))]
+#[diagnostic(code(turbo_json_parse_error))]
 struct ParseDiagnostic {
     message: String,
     #[source_code]

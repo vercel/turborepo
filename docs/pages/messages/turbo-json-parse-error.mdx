@@ -1,6 +1,6 @@
 ---
 title: `turbo.json` Parse Error
-description: "`turbo_json_parse_error` page"
+description: "turbo-json-parse-error page"
 ---
 
 # `turbo.json` Parse Error
@@ -8,13 +8,13 @@ description: "`turbo_json_parse_error` page"
 `turbo.json` files should be valid JSONC, i.e. JSON with additional support
 for single line comments prefixed by `//`.
 
-```
+```jsonc
 {
   // This is a comment
-  "globalEnv": ["MY_VAR"]
+  "globalEnv": ["MY_VAR"],
   "pipeline": {
     "build": {
-      "dependsOn": ["lint"],
+      "dependsOn": ["lint"]
     }
   }
 }
@@ -22,13 +22,13 @@ for single line comments prefixed by `//`.
 
 ## Example
 
-```
+```jsonc
 {
   // This is a comment
-  "globalEnv": ["MY_VAR"]
+  "globalEnv": ["MY_VAR"],
   "pipeline": {
     "build": {
-      "dependsOn": ["lint"]5,
+      "dependsOn": ["lint"]5
     }
   }
 }
@@ -40,13 +40,13 @@ There is a 5 after the `["lint"]` array that is invalid JSONC syntax.
 
 Remove the `5` from the `turbo.json` file.
 
-```
+```jsonc
 {
   // This is a comment
-  "globalEnv": ["MY_VAR"]
+  "globalEnv": ["MY_VAR"],
   "pipeline": {
     "build": {
-      "dependsOn": ["lint"],
+      "dependsOn": ["lint"]
     }
   }
 }
