@@ -60,21 +60,31 @@ use crate::{
     turbo_json::TurboJson,
 };
 
-#[derive(Debug)]
 pub struct Run {
     base: CommandBase,
     processes: ProcessManager,
     opts: Opts,
+    api_auth: Option<APIAuth>,
 }
 
 impl Run {
-    pub fn new(base: CommandBase) -> Result<Self, Error> {
+    pub fn new(base: CommandBase, api_auth: Option<APIAuth>) -> Result<Self, Error> {
         let processes = ProcessManager::new();
-        let opts = base.args().try_into()?;
+        let mut opts: Opts = base.args().try_into()?;
+        let config = base.config()?;
+        let is_linked = turborepo_api_client::is_linked(&api_auth);
+        if !is_linked {
+            opts.cache_opts.skip_remote = true;
+        } else if let Some(enabled) = config.enabled {
+            // We're linked, but if the user has explicitly enabled or disabled, use that
+            // value
+            opts.cache_opts.skip_remote = !enabled;
+        }
         Ok(Self {
             base,
             processes,
             opts,
+            api_auth,
         })
     }
 
@@ -88,10 +98,6 @@ impl Run {
 
     fn targets(&self) -> &[String] {
         self.base.args().get_tasks()
-    }
-
-    fn opts(&self) -> Result<Opts, Error> {
-        Ok(self.base.args().try_into()?)
     }
 
     fn initialize_analytics(
@@ -135,12 +141,11 @@ impl Run {
         }
     }
 
-    #[tracing::instrument(skip(self, signal_handler, api_auth, api_client))]
+    #[tracing::instrument(skip(self, signal_handler, api_client))]
     pub async fn run(
         &mut self,
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
-        api_auth: Option<APIAuth>,
         api_client: APIClient,
     ) -> Result<i32, Error> {
         tracing::trace!(
@@ -157,12 +162,11 @@ impl Run {
         }
 
         let (analytics_sender, analytics_handle) =
-            Self::initialize_analytics(api_auth.clone(), api_client.clone()).unzip();
+            Self::initialize_analytics(self.api_auth.clone(), api_client.clone()).unzip();
 
         let result = self
             .run_with_analytics(
                 start_at,
-                api_auth,
                 api_client,
                 analytics_sender,
                 signal_handler,
@@ -182,7 +186,6 @@ impl Run {
     async fn run_with_analytics(
         &mut self,
         start_at: DateTime<Local>,
-        api_auth: Option<APIAuth>,
         api_client: APIClient,
         analytics_sender: Option<AnalyticsSender>,
         signal_handler: &SignalHandler,
@@ -194,19 +197,8 @@ impl Run {
         let repo_telemetry =
             RepoEventBuilder::new(&self.base.repo_root.to_string()).with_parent(&telemetry);
 
-        let config = self.base.config()?;
-
         // Pulled from initAnalyticsClient in run.go
-        let is_linked = api_auth
-            .as_ref()
-            .map_or(false, |api_auth| api_auth.is_linked());
-        if !is_linked {
-            self.opts.cache_opts.skip_remote = true;
-        } else if let Some(enabled) = config.enabled {
-            // We're linked, but if the user has explicitly enabled or disabled, use that
-            // value
-            self.opts.cache_opts.skip_remote = !enabled;
-        }
+        let is_linked = turborepo_api_client::is_linked(&self.api_auth);
         run_telemetry.track_is_linked(is_linked);
         // we only track the remote cache if we're linked because this defaults to
         // Vercel
@@ -355,12 +347,11 @@ impl Run {
             &self.opts.cache_opts,
             &self.base.repo_root,
             api_client.clone(),
-            api_auth.clone(),
+            self.api_auth.clone(),
             analytics_sender,
         )?;
 
-        let mut engine =
-            self.build_engine(&pkg_dep_graph, &self.opts, &root_turbo_json, &filtered_pkgs)?;
+        let mut engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
 
         if self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none() {
             self.print_run_prelude(&self.opts, &filtered_pkgs);
@@ -433,8 +424,7 @@ impl Run {
 
         if self.opts.run_opts.parallel {
             pkg_dep_graph.remove_workspace_dependencies();
-            engine =
-                self.build_engine(&pkg_dep_graph, &self.opts, &root_turbo_json, &filtered_pkgs)?;
+            engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
         }
 
         if let Some(graph_opts) = &self.opts.run_opts.graph {
@@ -470,7 +460,7 @@ impl Run {
             self.base.version(),
             self.opts.run_opts.experimental_space_id.clone(),
             api_client,
-            api_auth,
+            self.api_auth.clone(),
             Vendor::get_user(),
         );
 
@@ -533,7 +523,6 @@ impl Run {
     fn build_engine(
         &self,
         pkg_dep_graph: &PackageGraph,
-        opts: &Opts,
         root_turbo_json: &TurboJson,
         filtered_pkgs: &HashSet<WorkspaceName>,
     ) -> Result<Engine, Error> {
