@@ -339,10 +339,6 @@ impl Run {
             is_single_package,
         )?;
 
-        // if self.opts.run_opts.experimental_space_id.is_none() {
-        //     self.opts.run_opts.experimental_space_id =
-        // root_turbo_json.space_id.clone(); }
-
         pkg_dep_graph.validate()?;
 
         let filtered_pkgs = {

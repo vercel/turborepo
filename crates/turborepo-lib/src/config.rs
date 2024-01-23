@@ -585,6 +585,9 @@ impl TurborepoConfigBuilder {
                     if let Some(timeout) = current_source_config.timeout {
                         acc.timeout = Some(timeout);
                     }
+                    if let Some(spaces_id) = current_source_config.spaces_id {
+                        acc.spaces_id = Some(spaces_id);
+                    }
 
                     acc
                 })
@@ -691,11 +694,17 @@ mod test {
 
     #[test]
     fn test_env_layering() {
-        let repo_root = AbsoluteSystemPathBuf::try_from(TempDir::new().unwrap().path()).unwrap();
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
         let global_config_path = AbsoluteSystemPathBuf::try_from(
             TempDir::new().unwrap().path().join("nonexistent.json"),
         )
         .unwrap();
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(r#"{"experimentalSpaces": {"id": "my-spaces-id"}}"#)
+            .unwrap();
 
         let turbo_teamid = "team_nLlpyC6REAqxydlFKbrMDlud";
         let turbo_token = "abcdef1234567890abcdef";
@@ -730,6 +739,7 @@ mod test {
         let config = builder.build().unwrap();
         assert_eq!(config.team_id().unwrap(), vercel_artifacts_owner);
         assert_eq!(config.token().unwrap(), vercel_artifacts_token);
+        assert_eq!(config.spaces_id().unwrap(), "my-spaces-id");
     }
 
     #[test]
