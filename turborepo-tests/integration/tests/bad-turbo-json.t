@@ -6,12 +6,11 @@ Use our custom turbo config with syntax errors
 
 Run build with invalid turbo.json
   $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build
-   ERROR  run failed: failed to parse turbo json
-  turbo_json::parser::parse_error
+  turbo_json_parse_error
   
     x failed to parse turbo json
   
-  Error: turbo_json::parser::parse_error
+  Error: turbo_json_parse_error
   
     x Expected a property but instead found ','.
      ,-[1:1]
@@ -20,7 +19,7 @@ Run build with invalid turbo.json
      :                                                ^
    3 |   "globalDependencies": ["foo.txt"],
      `----
-  Error: turbo_json::parser::parse_error
+  Error: turbo_json_parse_error
   
     x expected `,` but instead found `42`
       ,-[11:1]
@@ -29,7 +28,7 @@ Run build with invalid turbo.json
       :                                              ^^
    13 |       "dotEnv": [".env.local"
       `----
-  Error: turbo_json::parser::parse_error
+  Error: turbo_json_parse_error
   
     x expected `,` but instead found `}`
       ,-[13:1]

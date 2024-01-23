@@ -3,7 +3,7 @@ Setup
 
 Should error if `--cwd` flag doesn't have path passed along with it
   $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} foo bar --cwd
-  turbo::shim::empty_cwd
+  turbo::shim::empty_cwd (https://turbo.build/messages/turbo::shim::empty-cwd)
   
     \xc3\x97 No value assigned to `--cwd` flag (esc)
      \xe2\x95\xad\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80 (esc)
@@ -16,7 +16,7 @@ Should error if `--cwd` flag doesn't have path passed along with it
 
 Should error if multiple `--cwd` flags are passed
   $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} --cwd foo --cwd --bar --cwd baz --cwd qux
-  turbo::shim::empty_cwd
+  turbo::shim::multiple_cwd (https://turbo.build/messages/turbo::shim::multiple-cwd)
   
     \xc3\x97 cannot have multiple `--cwd` flags in command (esc)
      \xe2\x95\xad\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80 (esc)
