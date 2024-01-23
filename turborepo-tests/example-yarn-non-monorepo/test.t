@@ -1,4 +1,5 @@
   $ . ${TESTDIR}/../helpers/setup_example_test.sh non-monorepo yarn@1.22.19
+  warning: re-init: ignored --initial-branch=main
 
 # run twice and make sure it works
   $ yarn turbo build lint --output-logs=errors-only

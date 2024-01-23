@@ -1,4 +1,5 @@
   $ . ${TESTDIR}/../helpers/setup_example_test.sh kitchen-sink pnpm@8.9.0
+  warning: re-init: ignored --initial-branch=main
 
 # run twice and make sure it works
   $ pnpm run build lint --output-logs=errors-only
