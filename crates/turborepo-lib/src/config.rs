@@ -159,6 +159,7 @@ pub struct ConfigurationOptions {
     pub(crate) preflight: Option<bool>,
     pub(crate) timeout: Option<u64>,
     pub(crate) enabled: Option<bool>,
+    pub(crate) spaces_id: Option<String>,
 }
 
 #[derive(Default)]
@@ -211,11 +212,15 @@ impl ConfigurationOptions {
     pub fn timeout(&self) -> u64 {
         self.timeout.unwrap_or(DEFAULT_TIMEOUT)
     }
+
+    pub fn spaces_id(&self) -> Option<&str> {
+        self.spaces_id.as_deref()
+    }
 }
 
 // Maps Some("") to None to emulate how Go handles empty strings
 fn non_empty_str(s: Option<&str>) -> Option<&str> {
-    s.and_then(|s| (!s.is_empty()).then_some(s))
+    s.filter(|s| !s.is_empty())
 }
 
 trait ResolvedConfigurationOptions {
@@ -239,19 +244,18 @@ impl ResolvedConfigurationOptions for PackageJson {
 
 impl ResolvedConfigurationOptions for RawTurboJson {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
-        match &self.remote_cache {
-            Some(configuration_options) => {
-                configuration_options
-                    .clone()
-                    .get_configuration_options()
-                    // Don't allow token to be set for shared config.
-                    .map(|mut configuration_options| {
-                        configuration_options.token = None;
-                        configuration_options
-                    })
-            }
-            None => Ok(ConfigurationOptions::default()),
-        }
+        let mut opts = if let Some(configuration_options) = &self.remote_cache {
+            configuration_options.clone()
+        } else {
+            ConfigurationOptions::default()
+        };
+        // Don't allow token to be set for shared config.
+        opts.token = None;
+        opts.spaces_id = self
+            .experimental_spaces
+            .and_then(|spaces| spaces.id)
+            .map(|spaces_id| spaces_id.into());
+        Ok(opts)
     }
 }
 
@@ -347,6 +351,11 @@ fn get_env_var_config(
         None
     };
 
+    // We currently don't pick up a Spaces ID via env var, we likely won't
+    // continue using the Spaces name, we can add an env var when we have the
+    // name we want to stick with.
+    let spaces_id = None;
+
     let output = ConfigurationOptions {
         api_url: output_map.get("api_url").cloned(),
         login_url: output_map.get("login_url").cloned(),
@@ -361,6 +370,7 @@ fn get_env_var_config(
 
         // Processed numbers
         timeout,
+        spaces_id,
     };
 
     Ok(output)
@@ -404,6 +414,7 @@ fn get_override_env_var_config(
         preflight: None,
         enabled: None,
         timeout: None,
+        spaces_id: None,
     };
 
     Ok(output)
@@ -607,6 +618,7 @@ mod test {
         assert!(defaults.enabled());
         assert!(!defaults.preflight());
         assert_eq!(defaults.timeout(), DEFAULT_TIMEOUT);
+        assert_eq!(defaults.spaces_id(), None);
     }
 
     #[test]

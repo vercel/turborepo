@@ -95,6 +95,9 @@ impl Run {
             unused_remote_cache_opts_team_id,
             signature,
         ));
+        if opts.run_opts.experimental_space_id.is_none() {
+            opts.run_opts.experimental_space_id = config.spaces_id().map(|s| s.to_owned());
+        }
         Ok(Self {
             base,
             processes,
@@ -336,9 +339,9 @@ impl Run {
             is_single_package,
         )?;
 
-        if self.opts.run_opts.experimental_space_id.is_none() {
-            self.opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();
-        }
+        // if self.opts.run_opts.experimental_space_id.is_none() {
+        //     self.opts.run_opts.experimental_space_id =
+        // root_turbo_json.space_id.clone(); }
 
         pkg_dep_graph.validate()?;
 

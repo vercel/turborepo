@@ -39,7 +39,11 @@ pub struct SpacesJson {
 // turbo.json files into a single definition. Therefore we keep the
 // `RawTaskDefinition` type so we can determine which fields are actually
 // set when we resolve the configuration.
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+//
+// Note that the values here are limited to pipeline configuration.
+// Configuration that needs to account for flags, env vars, etc. is
+// handled via layered config.
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct TurboJson {
     text: Option<Arc<str>>,
     path: Option<Arc<str>>,
@@ -49,8 +53,6 @@ pub struct TurboJson {
     pub(crate) global_env: Vec<String>,
     pub(crate) global_pass_through_env: Option<Vec<String>>,
     pub(crate) pipeline: Pipeline,
-    pub(crate) remote_cache: Option<ConfigurationOptions>,
-    pub(crate) space_id: Option<String>,
 }
 
 #[derive(Serialize, Default, Debug, PartialEq, Clone, Iterable)]
@@ -460,16 +462,11 @@ impl TryFrom<RawTurboJson> for TurboJson {
                 .transpose()?,
             pipeline: raw_turbo.pipeline.unwrap_or_default(),
             // copy these over, we don't need any changes here.
-            remote_cache: raw_turbo.remote_cache,
             extends: raw_turbo
                 .extends
                 .unwrap_or_default()
                 .map(|s| s.into_iter().map(|s| s.into()).collect()),
-            // Directly to space_id, we don't need to keep the struct
-            space_id: raw_turbo
-                .experimental_spaces
-                .and_then(|s| s.id)
-                .map(|s| s.into()),
+            // Spaces and Remote Cache config is handled through layered config
         })
     }
 }
