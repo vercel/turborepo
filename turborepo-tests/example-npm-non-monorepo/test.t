@@ -1,5 +1,4 @@
   $ . ${TESTDIR}/../helpers/setup_example_test.sh non-monorepo npm@8.19.4
-  warning: re-init: ignored --initial-branch=main
 
 # run twice and make sure it works
   $ npx turbo build lint --output-logs=errors-only
