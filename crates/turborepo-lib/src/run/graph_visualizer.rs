@@ -34,7 +34,7 @@ pub(crate) fn write_graph(
     match graph_opts {
         GraphOpts::Stdout => render_dot_graph(std::io::stdout(), engine, single_package)?,
         GraphOpts::File(raw_filename) => {
-            let (filename, extension) = filename_and_extension(cwd, &raw_filename)?;
+            let (filename, extension) = filename_and_extension(cwd, raw_filename)?;
             if extension == "mermaid" {
                 render_mermaid_graph(&filename, engine, single_package)?;
             } else if extension == "html" {
