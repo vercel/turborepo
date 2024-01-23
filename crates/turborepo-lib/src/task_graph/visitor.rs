@@ -10,7 +10,7 @@ use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, Instrument, Span};
+use tracing::{debug, error, warn, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_ci::github_header_footer;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
@@ -35,6 +35,7 @@ use crate::{
             self, GlobalHashSummary, RunTracker, SpacesTaskClient, SpacesTaskInformation,
             TaskExecutionSummary, TaskTracker,
         },
+        task_access::{TaskAccess, TaskAccessTraceFile},
         task_id::TaskId,
         RunCache, TaskCache,
     },
@@ -53,6 +54,7 @@ pub struct Visitor<'a> {
     repo_root: &'a AbsoluteSystemPath,
     run_cache: Arc<RunCache>,
     run_tracker: RunTracker,
+    task_access: TaskAccess,
     sink: OutputSink<StdWriter>,
     task_hasher: TaskHasher<'a>,
     ui: UI,
@@ -88,6 +90,7 @@ impl<'a> Visitor<'a> {
         package_graph: Arc<PackageGraph>,
         run_cache: Arc<RunCache>,
         run_tracker: RunTracker,
+        task_access: TaskAccess,
         run_opts: &'a RunOpts,
         package_inputs_hashes: PackageInputsHashes,
         env_at_execution_start: &'a EnvironmentVariableMap,
@@ -118,6 +121,7 @@ impl<'a> Visitor<'a> {
             repo_root,
             run_cache,
             run_tracker,
+            task_access,
             sink,
             task_hasher,
             ui,
@@ -139,7 +143,6 @@ impl<'a> Visitor<'a> {
         };
         let mut tasks = FuturesUnordered::new();
         let errors = Arc::new(Mutex::new(Vec::new()));
-
         let span = Span::current();
 
         let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine);
@@ -255,6 +258,7 @@ impl<'a> Visitor<'a> {
                         workspace_directory,
                         execution_env,
                         persistent,
+                        self.task_access.clone(),
                     );
 
                     let output_client = self.output_client(&info);
@@ -286,6 +290,14 @@ impl<'a> Visitor<'a> {
             result.expect("task executor panicked");
         }
         drop(factory);
+
+        // Write out the traced-config.json file if we have one
+        match self.task_access.to_turbo_json().await {
+            Ok(_) => (),
+            Err(e) => {
+                warn!("failed to write traced-config.json: {e}");
+            }
+        }
 
         let errors = Arc::into_inner(errors)
             .expect("only one strong reference to errors should remain")
@@ -566,6 +578,7 @@ impl<'a> ExecContextFactory<'a> {
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
         persistent: bool,
+        task_access: TaskAccess,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.run_opts.args_for_task(&task_id);
@@ -590,6 +603,7 @@ impl<'a> ExecContextFactory<'a> {
             pass_through_args,
             errors: self.errors.clone(),
             persistent,
+            task_access,
         }
     }
 
@@ -624,6 +638,7 @@ struct ExecContext {
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
     persistent: bool,
+    task_access: TaskAccess,
 }
 
 enum ExecOutcome {
@@ -788,8 +803,13 @@ impl ExecContext {
         cmd.envs(self.execution_env.iter());
         // Always last to make sure it overwrites any user configured env var.
         cmd.env("TURBO_HASH", &self.task_hash);
+        // enable task access tracing
+        let (task_access_trace_key, trace_file) = self.task_access.get_env_var(&self.task_hash);
+        // set the trace file env var - frameworks that support this can use it to
+        // write out a trace file that we will use to automatically cache the task
+        cmd.env(task_access_trace_key, trace_file.to_string());
 
-        // Many persistent tasks if started hooked up to a pseudoterminal
+		// Many persistent tasks if started hooked up to a pseudoterminal
         // will shut down if stdin is closed, so we open it even if we don't pass
         // anything to it.
         if self.persistent {
@@ -852,8 +872,28 @@ impl ExecContext {
             ChildExit::Finished(Some(0)) => {
                 if let Err(e) = stdout_writer.flush() {
                     error!("{e}");
-                } else if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await
-                {
+                } else if let Err(e) = {
+                    let mut is_cacheable = false;
+                    // check if the framework left us a trace file
+                    let trace_result =
+                        TaskAccessTraceFile::read(&self.task_access.repo_root, &self.task_hash);
+                    match trace_result {
+                        Some(trace) => {
+                            is_cacheable = trace.can_cache(&self.task_access.repo_root);
+                            self.task_access
+                                .save_trace(trace, self.task_id_for_display.to_string());
+                        }
+                        None => (),
+                    };
+
+                    if is_cacheable {
+                        self.task_cache
+                            .save_outputs(&mut prefixed_ui, task_duration, telemetry)
+                            .await
+                    } else {
+                        Ok(())
+                    }
+                } {
                     error!("error caching output: {e}");
                 } else {
                     self.hash_tracker.insert_expanded_outputs(
