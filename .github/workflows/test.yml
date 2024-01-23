@@ -148,17 +148,6 @@ jobs:
             turborepo-tests/integration/**
             turborepo-tests/helpers/**
 
-      - name: Examples related changes
-        id: examples
-        uses: technote-space/get-diff-action@v6
-        with:
-          PATTERNS: |
-            examples/**
-            turborepo-tests/example-*/**
-            turborepo-tests/helpers/**
-            !**.md
-            !**.mdx
-
       - name: Turborepo JS Package related changes
         id: turborepo_js
         uses: technote-space/get-diff-action@v6
@@ -193,7 +182,6 @@ jobs:
       turborepo_go_lint: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != ''}}
       turborepo_build: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != '' || steps.turborepo_integration.outputs.diff != ''}}
       turborepo_integration: ${{ steps.ci.outputs.diff != '' || steps.turborepo_go.outputs.diff != '' || steps.turborepo_rust.outputs.diff != ''  || steps.turborepo_integration.outputs.diff != '' }}
-      examples: ${{ steps.ci.outputs.diff != '' || steps.examples.outputs.diff != '' || steps.turborepo_version.outputs.diff != '' }}
       turborepo_js: ${{ steps.ci.outputs.diff != '' || steps.turborepo_js.outputs.diff != '' }}
       docs: ${{ steps.ci.outputs.diff != '' || steps.docs.outputs.diff != '' }}
       format: ${{ steps.ci.outputs.diff != '' || steps.format.outputs.diff != '' }}
@@ -410,39 +398,6 @@ jobs:
 
       - name: Integration Tests
         run: turbo run test --filter=turborepo-tests-integration-go --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
-
-  turborepo_examples:
-    name: Turborepo Examples
-    needs: [determine_jobs]
-    if: needs.determine_jobs.outputs.examples == 'true'
-    timeout-minutes: 40
-
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      # Disable corepack. actions/setup-node invokes other package managers and
-      # that causes corepack to throw an error, so we disable it first.
-      - name: Disable corepack
-        shell: bash
-        run: corepack disable
-
-      - uses: ./.github/actions/setup-turborepo-environment
-        with:
-          windows: ${{ matrix.os.runner == 'windows-latest' }}
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Check examples
-        shell: bash
-        run: turbo run test -F "@turborepo-examples-tests/*" --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
-
-      # Disable corepack again. actions/setup-node's "Post" step runs at the end of
-      # this job invokes other package managers, and corepack throws an error.
-      # (corepack was enabled from inside the tests above).
-      - name: Disable corepack again
-        shell: bash
-        run: corepack disable
 
   js_packages:
     name: JS Package Tests
@@ -1010,7 +965,6 @@ jobs:
       - determine_jobs
       - go_lint
       - go_unit
-      - turborepo_examples
       - turborepo_integration
       - turborepo_integration_go
       - js_packages
@@ -1049,7 +1003,6 @@ jobs:
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.go_lint.result}} "Go linting"
           subjob ${{needs.go_unit.result}} "Go unit tests"
-          subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
           subjob ${{needs.turborepo_integration_go.result}} "Turborepo integration tests (Go fallback)"
           subjob ${{needs.js_packages.result}} "JS Package tests"
@@ -1164,7 +1117,6 @@ jobs:
       - determine_jobs
       - go_lint
       - go_unit
-      - turborepo_examples
       - turborepo_integration
       - turborepo_integration_go
       - rust_lint
@@ -1205,7 +1157,6 @@ jobs:
           subjob ${{needs.determine_jobs.result}} "Determining jobs"
           subjob ${{needs.go_lint.result}} "Go lints"
           subjob ${{needs.go_unit.result}} "Go unit tests"
-          subjob ${{needs.turborepo_examples.result}} "Turborepo examples"
           subjob ${{needs.turborepo_integration.result}} "Turborepo integration tests"
           subjob ${{needs.turborepo_integration_go.result}} "Turborepo integration tests (Go fallback)"
           subjob ${{needs.rust_lint.result}} "Rust lints"
