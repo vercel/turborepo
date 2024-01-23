@@ -37,7 +37,7 @@ Once installed globally, you can run your scripts through `turbo` from your term
 - `turbo build`: Run `build` scripts following your repository's dependency graph
 - `turbo build --filter=docs --dry`: Quickly print an outline of the `build` task for your `docs` package without running it
 - `turbo generate`: Run [Generators](/TODO-LINK) to quickly add new code to your repository
-- `cd apps/docs && turbo build`: Run the `build` scripts in the `docs` package and its dependency graph
+- `cd apps/docs && turbo build`: Run the `build` script in the `docs` package and its dependencies
 
 The last command is an example of Automatic Package Scoping. `turbo` will detect that you're in a package's directory and automatically scope your commands to that package and its dependency graph.
 
@@ -96,7 +96,7 @@ lockfiles formats. We currently support:
 - pnpm 6+
 - npm 6+
 - bun 1+ (Experimental, partial support)
-- yarn 1+ (Yarn 4, partial support)
+- yarn 1+
 
 It should be noted that package managers themselves have their own release
 schedules, bugs, and features. While we intend to keep up with new major
