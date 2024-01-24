@@ -220,7 +220,7 @@ impl ResolvedConfigurationOptions for PackageJson {
             Some(legacy_turbo_config) => {
                 let synthetic_raw_turbo_json: RawTurboJson = RawTurboJson::parse(
                     &legacy_turbo_config.to_string(),
-                    &AnchoredSystemPath::new("package.json").unwrap(),
+                    AnchoredSystemPath::new("package.json").unwrap(),
                 )?;
                 synthetic_raw_turbo_json.get_configuration_options()
             }

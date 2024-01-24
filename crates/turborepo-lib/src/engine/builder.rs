@@ -386,8 +386,8 @@ impl<'a> EngineBuilder<'a> {
             }
         })?;
         Ok(TurboJson::load(
-            &self.repo_root,
-            &workspace_dir,
+            self.repo_root,
+            workspace_dir,
             package_json,
             self.is_single,
         )?)
