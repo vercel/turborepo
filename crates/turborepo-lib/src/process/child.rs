@@ -140,9 +140,17 @@ impl ChildHandle {
 
         let command = portable_pty::CommandBuilder::from(command);
         let pty_system = native_pty_system();
-        // TODO we should forward the correct size
+        let size =
+            console::Term::stdout()
+                .size_checked()
+                .map_or_else(PtySize::default, |(rows, cols)| PtySize {
+                    rows,
+                    cols,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                });
         let pair = pty_system
-            .openpty(PtySize::default())
+            .openpty(size)
             .map_err(|err| match err.downcast() {
                 Ok(err) => err,
                 Err(err) => io::Error::new(io::ErrorKind::Other, err),
