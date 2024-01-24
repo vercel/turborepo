@@ -84,7 +84,7 @@ See more details below.
 
 Globs are encoded as UTF-8 strings called glob expressions that resemble Unix
 paths consisting of nominal components delimited by separators. The most
-fundamental type in the Wax API is [`Glob`], which is constructed from a glob
+fundamental type in the Wax API is `Glob`, which is constructed from a glob
 expression via inherent functions or standard conversion traits. Data is
 borrowed where possible in most APIs, but can be copied into owned instances
 using an `into_owned` method with most types.
@@ -271,10 +271,10 @@ the expression to match or walk overlapping trees.
 
 ## Combinators
 
-Glob patterns can be combined and matched together using the [`any`] combinator.
-[`any`] accepts an [`IntoIterator`] with items that are compiled [`Pattern`]s or
-`str` slices. The output is an [`Any`], which implements [`Pattern`] and
-efficiently matches any of its input patterns.
+Glob patterns can be combined and matched together using the `any` combinator.
+`any` accepts an `IntoIterator` with items that are compiled `Pattern`s or `str`
+slices. The output is an `Any`, which implements `Pattern` and efficiently
+matches any of its input patterns.
 
 ```rust
 use wax::{Glob, Pattern};
@@ -283,9 +283,9 @@ let any = wax::any(["**/*.txt", "src/**/*.rs"]).unwrap();
 assert!(any.is_match("src/lib.rs"));
 ```
 
-Unlike [alternatives](#alternatives), [`Any`] supports patterns with overlapping
+Unlike [alternatives](#alternatives), `Any` supports patterns with overlapping
 trees (rooted and unrooted expressions). However, combinators can only perform
-logical matches and it is not possible to match an [`Any`] against a directory
+logical matches and it is not possible to match an `Any` against a directory
 tree (as with `Glob::walk`).
 
 ## Flags and Case Sensitivity
@@ -309,15 +309,14 @@ directory with a case-**sensitive** base and a case-**insensitive** extension
 
 Wax considers literals, their configured case sensitivity, and the case
 sensitivity of the target platform's file system APIs [when partitioning glob
-expressions](#partitioning-and-semantic-literals) with [`Glob::partition`].
+expressions](#partitioning-and-semantic-literals) with `Glob::partition`.
 Partitioning is unaffected in glob expressions with no flags.
 
 ## Errors and Diagnostics
 
-The [`GlobError`] type represents error conditions that can occur when building
-a pattern or walking a directory tree. [`GlobError`] and its sub-errors
-implement the standard [`Error`] and [`Display`] traits via
-[`thiserror`][thiserror].
+The `GlobError` type represents error conditions that can occur when building a
+pattern or walking a directory tree. `GlobError` and its sub-errors implement
+the standard `Error` and `Display` traits via [`thiserror`][thiserror].
 
 Wax optionally integrates with the [`miette`][miette] crate, which can be used
 to capture and display diagnostics. This can be useful for reporting errors to
@@ -392,10 +391,10 @@ intended meaning than the glob `src/**/../*.rs`. As seen above though, the first
 glob would only match the literal path component `..` and not paths that replace
 this with a parent directory.
 
-[`Glob::partition`] can be used to isolate semantic components that precede
+`Glob::partition` can be used to isolate semantic components that precede
 patterns and apply semantic path operations to them (namely `..`).
-[`Glob::partition`] partitions a glob into an invariant [`PathBuf`] prefix and a
-variant [`Glob`] postfix. Here, invariant means that the partition contains no
+`Glob::partition` partitions a glob into an invariant `PathBuf` prefix and a
+variant `Glob` postfix. Here, invariant means that the partition contains no
 glob patterns that resolve differently than an equivalent native path using the
 target platform's file system APIs. The prefix can be used as needed in
 combination with the glob.
@@ -420,7 +419,7 @@ if dunce::canonicalize(path)
 }
 ```
 
-Additionally, [`Glob::has_semantic_literals`] can be used to detect literal
+Additionally, `Glob::has_semantic_literals` can be used to detect literal
 components in a glob that have special semantics on the target platform. When
 the `miette` feature is enabled, such literals are reported as warnings.
 
@@ -450,7 +449,7 @@ not possible to directly filter or otherwise select paths or files based on
 additional metadata (such as a modification timestamp) in a glob expression.
 However, it is possible for user code to query any such metadata for a matching
 path or effeciently apply such filtering when matching directory trees using
-[`FileIterator::filter_tree`].
+`FileIterator::filter_tree`.
 
 For such additional features, including metadata filters and transformations
 using matched text, see [Nym][nym].
@@ -458,11 +457,11 @@ using matched text, see [Nym][nym].
 ### Encoding
 
 Globs operate exclusively on UTF-8 encoded text. However, this encoding is not
-used for paths on all platforms. Wax uses the [`CandidatePath`] type to
-re-encode native paths via lossy conversions that use Unicode replacement
-codepoints whenever a part of a path cannot be represented as valid UTF-8. In
-practice, most paths can be losslessly encoded in UTF-8, but this means that Wax
-cannot match nor capture some literal byte strings.
+used for paths on all platforms. Wax uses the `CandidatePath` type to re-encode
+native paths via lossy conversions that use Unicode replacement codepoints
+whenever a part of a path cannot be represented as valid UTF-8. In practice,
+most paths can be losslessly encoded in UTF-8, but this means that Wax cannot
+match nor capture some literal byte strings.
 
 ## Stability
 
@@ -473,16 +472,3 @@ series without warning nor deprecation.
 [miette]: https://github.com/zkat/miette
 [nym]: https://github.com/olson-sean-k/nym
 [thiserror]: https://github.com/dtolnay/thiserror
-[`any`]: https://docs.rs/wax/*/wax/fn.any.html
-[`Any`]: https://docs.rs/wax/*/wax/struct.Any.html
-[`CandidatePath`]: https://docs.rs/wax/*/wax/struct.CandidatePath.html
-[`Display`]: https://doc.rust-lang.org/std/fmt/trait.Display.html
-[`Error`]: https://doc.rust-lang.org/std/error/trait.Error.html
-[`FileIterator::filter_tree`]: https://docs.rs/wax/*/wax/trait.FileIterator.html#tymethod.filter_tree
-[`Glob`]: https://docs.rs/wax/*/wax/struct.Glob.html
-[`Glob::has_semantic_literals`]: https://docs.rs/wax/*/wax/struct.Glob.html#method.has_semantic_literals
-[`Glob::partition`]: https://docs.rs/wax/*/wax/struct.Glob.html#method.partition
-[`GlobError`]: https://docs.rs/wax/*/wax/enum.GlobError.html
-[`IntoIterator`]: https://doc.rust-lang.org/std/iter/trait.IntoIterator.html
-[`PathBuf`]: https://doc.rust-lang.org/std/path/struct.PathBuf.html
-[`Pattern`]: https://docs.rs/wax/*/wax/trait.Pattern.html
