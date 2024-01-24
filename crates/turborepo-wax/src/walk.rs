@@ -346,13 +346,13 @@ impl TreeIterator for walkdir::IntoIter {
 /// [`WalkEntry`]: crate::WalkEntry
 #[cfg_attr(docsrs, doc(cfg(feature = "walk")))]
 #[derive(Clone, Debug)]
-pub struct Negation {
+pub struct WalkNegation {
     exhaustive: Regex,
     nonexhaustive: Regex,
 }
 
-impl Negation {
-    /// Combines glob expressions into a `Negation`.
+impl WalkNegation {
+    /// Combines glob expressions into a `WalkNegation`.
     ///
     /// This function accepts an [`IntoIterator`] with items that implement
     /// [`Combine`], such as [`Glob`] and `&str`.
@@ -379,7 +379,7 @@ impl Negation {
             .map_err(Into::into)?
             .into_iter()
             .partition::<Vec<_>, _>(|tree| token::is_exhaustive(tree.as_ref().tokens()));
-        let negation = Negation {
+        let negation = WalkNegation {
             exhaustive: crate::any(exhaustive)?.pattern,
             nonexhaustive: crate::any(nonexhaustive)?.pattern,
         };
@@ -649,7 +649,7 @@ impl<'g> Walk<'g> {
     /// matching a [`Glob`] against a directory tree that cannot be achieved
     /// using a single glob expression alone.
     ///
-    /// The adaptor is constructed via [`FilterTree`] and [`Negation`] and
+    /// The adaptor is constructed via [`FilterTree`] and [`WalkNegation`] and
     /// therefore does not read directory trees from the file system when a
     /// directory matches an [exhaustive glob
     /// expression][`Pattern::is_exhaustive`] such as `**/private/**` or
@@ -684,16 +684,16 @@ impl<'g> Walk<'g> {
     /// [`FileIterator::filter_tree`]: crate::FileIterator::filter_tree
     /// [`Glob`]: crate::Glob
     /// [`Iterator::filter`]: std::iter::Iterator::filter
-    /// [`Negation`]: crate::Negation
     /// [`Pattern`]: crate::Pattern
     /// [`Pattern::is_exhaustive`]: crate::Pattern::is_exhaustive
     /// [`WalkEntry`]: crate::WalkEntry
+    /// [`WalkNegation`]: crate::WalkNegation
     pub fn not<'t, I>(self, patterns: I) -> Result<impl 'g + FileIterator, BuildError>
     where
         I: IntoIterator,
         I::Item: Combine<'t>,
     {
-        Negation::any(patterns)
+        WalkNegation::any(patterns)
             .map(|negation| self.filter_tree(move |entry| negation.target(entry)))
     }
 

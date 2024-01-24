@@ -57,8 +57,7 @@ use thiserror::Error;
 
 #[cfg(feature = "walk")]
 pub use crate::walk::{
-    FileIterator, FilterTarget, FilterTree, LinkBehavior, Negation, Walk, WalkBehavior, WalkEntry,
-    WalkError,
+    FileIterator, FilterTarget, FilterTree, LinkBehavior, Walk, WalkBehavior, WalkEntry, WalkError,
 };
 pub use crate::{
     capture::MatchedText,
