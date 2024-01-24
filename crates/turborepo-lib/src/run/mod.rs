@@ -120,7 +120,7 @@ impl Run {
             .then(|| start_analytics(api_auth, api_client))
     }
 
-    fn print_run_prelude(&self, opts: &Opts, filtered_pkgs: &HashSet<WorkspaceName>) {
+    fn print_run_prelude(&self, filtered_pkgs: &HashSet<WorkspaceName>) {
         let targets_list = self.opts.run_opts.tasks.join(", ");
         if self.opts.run_opts.single_package {
             cprint!(self.base.ui, GREY, "{}", "• Running");
@@ -142,7 +142,7 @@ impl Run {
             cprint!(self.base.ui, GREY, " in {} packages\n", filtered_pkgs.len());
         }
 
-        let use_http_cache = !opts.cache_opts.skip_remote;
+        let use_http_cache = !self.opts.cache_opts.skip_remote;
         if use_http_cache {
             cprintln!(self.base.ui, GREY, "• Remote caching enabled");
         } else {
@@ -349,7 +349,7 @@ impl Run {
         let mut engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
 
         if self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none() {
-            self.print_run_prelude(&self.opts, &filtered_pkgs);
+            self.print_run_prelude(&filtered_pkgs);
         }
 
         let root_workspace = pkg_dep_graph
