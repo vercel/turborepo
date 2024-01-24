@@ -160,7 +160,7 @@ impl ChildHandle {
 
         let pid = child.process_id();
 
-        let mut stdin = controller.take_writer().ok().map(ChildInput::Pty);
+        let mut stdin = controller.take_writer().ok();
         let output = controller.try_clone_reader().ok().map(ChildOutput::Pty);
 
         // If we don't want to keep stdin open we take it here and it is immediately
@@ -174,7 +174,10 @@ impl ChildHandle {
                 pid,
                 imp: ChildHandleImpl::Pty(child),
             },
-            io: ChildIO { stdin, output },
+            io: ChildIO {
+                stdin: stdin.map(ChildInput::Pty),
+                output,
+            },
             controller: Some(controller),
         })
     }
@@ -191,9 +194,23 @@ impl ChildHandle {
                 // than ideal
                 loop {
                     match child.try_wait() {
-                        // This is safe as the portable_pty::ExitStatus's exit code is just
-                        // converted from a i32 to an u32 before we get it
-                        Ok(Some(status)) => return Ok(Some(status.exit_code() as i32)),
+                        Ok(Some(status)) => {
+                            // portable_pty maps the status of being killed by a signal to a 1 exit
+                            // code. The only way to tell if the task
+                            // exited normally with exit code 1 or got killed by a signal is to
+                            // display it as the signal will be included
+                            // in the message.
+                            let exit_code = if status.exit_code() == 1
+                                && status.to_string().contains("Terminated by")
+                            {
+                                None
+                            } else {
+                                // This is safe as the portable_pty::ExitStatus's exit code is just
+                                // converted from a i32 to an u32 before we get it
+                                Some(status.exit_code() as i32)
+                            };
+                            return Ok(exit_code);
+                        }
                         Ok(None) => {
                             // child hasn't finished, we sleep for a short time
                             tokio::time::sleep(CHILD_POLL_INTERVAL).await;
@@ -725,7 +742,7 @@ mod test {
     use tracing_test::traced_test;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use super::{Child, ChildOutput, ChildState, Command};
+    use super::{Child, ChildInput, ChildOutput, ChildState, Command};
     use crate::process::child::{ChildExit, ShutdownStyle};
 
     const STARTUP_DELAY: Duration = Duration::from_millis(500);
@@ -783,67 +800,71 @@ mod test {
         }
     }
 
+    #[test_case(false)]
+    #[test_case(true)]
     #[tokio::test]
     #[traced_test]
-    async fn test_stdout() {
+    async fn test_stdout(use_pty: bool) {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
-        child.wait().await;
-
         {
             let mut output = Vec::new();
-            let mut stdout = match child.outputs().unwrap() {
-                ChildOutput::Std { stdout, .. } => stdout,
-                ChildOutput::Pty(_) => panic!("expected std process"),
+            match child.outputs().unwrap() {
+                ChildOutput::Std { mut stdout, .. } => {
+                    stdout
+                        .read_to_end(&mut output)
+                        .await
+                        .expect("Failed to read stdout");
+                }
+                ChildOutput::Pty(mut outputs) => {
+                    outputs
+                        .read_to_end(&mut output)
+                        .expect("failed to read stdout");
+                }
             };
-
-            stdout
-                .read_to_end(&mut output)
-                .await
-                .expect("Failed to read stdout");
 
             let output_str = String::from_utf8(output).expect("Failed to parse stdout");
 
-            assert!(output_str.contains("hello world"));
+            assert_eq!(output_str, "hello world\n");
         }
+
+        child.wait().await;
 
         let state = child.state.read().await;
 
         assert_matches!(&*state, ChildState::Exited(ChildExit::Finished(Some(0))));
     }
 
+    #[test_case(false)]
+    #[test_case(true)]
     #[tokio::test]
-    async fn test_stdio() {
+    async fn test_stdio(use_pty: bool) {
         let script = find_script_dir().join_component("stdin_stdout.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
         cmd.open_stdin();
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
-
-        let mut stdout = match child.outputs().unwrap() {
-            ChildOutput::Std { stdout, .. } => stdout,
-            ChildOutput::Pty(_) => panic!("expected std process"),
-        };
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
         // drop stdin to close the pipe
         {
-            let mut stdin = child
-                .stdin()
-                .unwrap()
-                .concrete()
-                .expect("expected concrete input");
-            stdin.write_all(b"hello world").await.unwrap();
+            match child.stdin().unwrap() {
+                ChildInput::Std(mut stdin) => stdin.write_all(b"hello world").await.unwrap(),
+                ChildInput::Pty(mut stdin) => stdin.write_all(b"hello world").unwrap(),
+            }
         }
 
         let mut output = Vec::new();
-        stdout.read_to_end(&mut output).await.unwrap();
+        match child.outputs().unwrap() {
+            ChildOutput::Std { mut stdout, .. } => stdout.read_to_end(&mut output).await.unwrap(),
+            ChildOutput::Pty(mut stdout) => stdout.read_to_end(&mut output).unwrap(),
+        };
 
         let output_str = String::from_utf8(output).expect("Failed to parse stdout");
 
@@ -856,9 +877,11 @@ mod test {
         assert_matches!(&*state, ChildState::Exited(ChildExit::Finished(Some(0))));
     }
 
+    #[test_case(false)]
+    #[test_case(true)]
     #[tokio::test]
     #[traced_test]
-    async fn test_graceful_shutdown_timeout() {
+    async fn test_graceful_shutdown_timeout(use_pty: bool) {
         let cmd = {
             let script = find_script_dir().join_component("sleep_5_ignore.js");
             let mut cmd = Command::new("node");
@@ -869,17 +892,20 @@ mod test {
         let mut child = Child::spawn(
             cmd,
             ShutdownStyle::Graceful(Duration::from_millis(500)),
-            false,
+            use_pty,
         )
         .unwrap();
 
-        let mut stdout = match child.outputs().unwrap() {
-            ChildOutput::Std { stdout, .. } => stdout,
-            ChildOutput::Pty(_) => panic!("expected std process"),
-        };
         let mut buf = vec![0; 4];
         // wait for the process to print "here"
-        stdout.read_exact(&mut buf).await.unwrap();
+        match child.outputs().unwrap() {
+            ChildOutput::Std { mut stdout, .. } => {
+                stdout.read_exact(&mut buf).await.unwrap();
+            }
+            ChildOutput::Pty(mut stdout) => {
+                stdout.read_exact(&mut buf).unwrap();
+            }
+        };
         child.stop().await;
 
         let state = child.state.read().await;
@@ -888,9 +914,11 @@ mod test {
         assert_matches!(&*state, ChildState::Exited(ChildExit::Killed));
     }
 
+    #[test_case(false)]
+    #[test_case(true)]
     #[tokio::test]
     #[traced_test]
-    async fn test_graceful_shutdown() {
+    async fn test_graceful_shutdown(use_pty: bool) {
         let cmd = {
             let script = find_script_dir().join_component("sleep_5_interruptable.js");
             let mut cmd = Command::new("node");
@@ -901,7 +929,7 @@ mod test {
         let mut child = Child::spawn(
             cmd,
             ShutdownStyle::Graceful(Duration::from_millis(500)),
-            false,
+            use_pty,
         )
         .unwrap();
 
@@ -916,9 +944,11 @@ mod test {
         assert_matches!(&*state, &ChildState::Exited(ChildExit::Killed));
     }
 
+    #[test_case(false)]
+    #[test_case(true)]
     #[tokio::test]
     #[traced_test]
-    async fn test_detect_killed_someone_else() {
+    async fn test_detect_killed_someone_else(use_pty: bool) {
         let cmd = {
             let script = find_script_dir().join_component("sleep_5_interruptable.js");
             let mut cmd = Command::new("node");
@@ -929,7 +959,7 @@ mod test {
         let mut child = Child::spawn(
             cmd,
             ShutdownStyle::Graceful(Duration::from_millis(500)),
-            false,
+            use_pty,
         )
         .unwrap();
 
@@ -970,12 +1000,14 @@ mod test {
         assert_matches!(state, ChildExit::Finished(Some(3)));
     }
 
+    #[test_case(false)]
+    #[test_case(true)]
     #[tokio::test]
-    async fn test_wait_with_output() {
+    async fn test_wait_with_output(use_pty: bool) {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         let mut out = Vec::new();
 
@@ -985,28 +1017,36 @@ mod test {
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
+    #[test_case(false)]
+    #[test_case(true)]
     #[tokio::test]
-    async fn test_wait_with_single_output() {
+    async fn test_wait_with_single_output(use_pty: bool) {
         let script = find_script_dir().join_component("hello_world_hello_moon.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         let mut buffer = Vec::new();
 
         let exit = child.wait_with_piped_outputs(&mut buffer).await.unwrap();
 
         // There are no ordering guarantees so we accept either order of the logs
-        assert!(buffer == b"hello world\nhello moon\n" || buffer == b"hello moon\nhello world\n");
+        assert!(
+            buffer == b"hello world\nhello moon\n" || buffer == b"hello moon\nhello world\n",
+            "got {}",
+            String::from_utf8(buffer).unwrap()
+        );
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
+    #[test_case(false)]
+    #[test_case(true)]
     #[tokio::test]
-    async fn test_wait_with_with_non_utf8_output() {
+    async fn test_wait_with_with_non_utf8_output(use_pty: bool) {
         let script = find_script_dir().join_component("hello_non_utf8.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         let mut out = Vec::new();
 
@@ -1016,30 +1056,17 @@ mod test {
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
-    #[tokio::test]
-    async fn test_wait_with_non_utf8_single_output() {
-        let script = find_script_dir().join_component("hello_non_utf8.js");
-        let mut cmd = Command::new("node");
-        cmd.args([script.as_std_path()]);
-        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
-
-        let mut buffer = Vec::new();
-
-        let exit = child.wait_with_piped_outputs(&mut buffer).await.unwrap();
-
-        assert_eq!(buffer, &[0, 159, 146, 150, b'\n']);
-        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
-    }
-
     #[cfg(unix)]
+    #[test_case(false)]
+    #[test_case(true)]
     #[tokio::test]
-    async fn test_kill_process_group() {
+    async fn test_kill_process_group(use_pty: bool) {
         let mut cmd = Command::new("sh");
         cmd.args(["-c", "while true; do sleep 0.2; done"]);
         let mut child = Child::spawn(
             cmd,
             ShutdownStyle::Graceful(Duration::from_millis(100)),
-            false,
+            use_pty,
         )
         .unwrap();
 
@@ -1050,12 +1077,14 @@ mod test {
         assert_matches!(exit, Some(ChildExit::Killed));
     }
 
+    #[test_case(false)]
+    #[test_case(true)]
     #[tokio::test]
-    async fn test_multistop() {
+    async fn test_multistop(use_pty: bool) {
         let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
-        let child = Child::spawn(cmd, ShutdownStyle::Kill, false).unwrap();
+        let child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
 
         let mut stops = FuturesUnordered::new();
         for _ in 1..10 {
