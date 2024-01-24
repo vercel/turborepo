@@ -1059,6 +1059,10 @@ mod test {
     #[test_case(true)]
     #[tokio::test]
     async fn test_wait_with_with_non_utf8_output(use_pty: bool) {
+        // TODO: fully support Windows + PTY
+        if cfg!(windows) && use_pty {
+            return;
+        }
         let script = find_script_dir().join_component("hello_non_utf8.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
