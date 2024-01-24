@@ -1953,38 +1953,6 @@ async fn resolve_package_internal_with_imports_field(
     .await
 }
 
-#[turbo_tasks::value]
-pub struct AffectingResolvingAssetReference {
-    source: Vc<Box<dyn Source>>,
-}
-
-#[turbo_tasks::value_impl]
-impl AffectingResolvingAssetReference {
-    #[turbo_tasks::function]
-    pub fn new(source: Vc<Box<dyn Source>>) -> Vc<Self> {
-        Self::cell(AffectingResolvingAssetReference { source })
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ModuleReference for AffectingResolvingAssetReference {
-    #[turbo_tasks::function]
-    fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::module(Vc::upcast(RawModule::new(self.source))).into()
-    }
-}
-
-#[turbo_tasks::value_impl]
-impl ValueToString for AffectingResolvingAssetReference {
-    #[turbo_tasks::function]
-    async fn to_string(&self) -> Result<Vc<String>> {
-        Ok(Vc::cell(format!(
-            "resolving is affected by {}",
-            self.source.ident().to_string().await?
-        )))
-    }
-}
-
 pub async fn handle_resolve_error(
     result: Vc<ModuleResolveResult>,
     reference_type: Value<ReferenceType>,
