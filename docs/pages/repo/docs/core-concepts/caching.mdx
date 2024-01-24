@@ -118,9 +118,25 @@ You won't want to commit this file to source control since it's dependent on env
 + turbo-cache-key.json
 ```
 
-### 3. Add the file to `globalDependencies`
+### 3. Add the file to the hash
 
-Now, we'll make sure that `turbo` is aware of the file by adding it to [`globalDependencies`](/repo/docs/reference/configuration#globaldependencies).
+Now, make sure that `turbo` is aware of the file by adding it to task inputs. You can do this two ways:
+
+- **For specific tasks**: Include the file in [the `inputs` array](/repo/docs/reference/configuration#inputs) of the task(s)
+
+```json
+{
+  "$schema": "https://turbo.build/schema.json",
+  "pipelines": {
+    "build-for-platforms": {
+      "dependsOn": ["^build"],
+      "inputs": ["**/**", "turbo-cache-key.json"]
+    }
+  }
+}
+```
+
+- **For all tasks**: Add the file to [`globalDependencies`](/repo/docs/reference/configuration#globaldependencies)
 
 ```json
 {
