@@ -852,6 +852,10 @@ mod test {
     #[test_case(true)]
     #[tokio::test]
     async fn test_stdio(use_pty: bool) {
+        // TODO: we currently don't support Windows + PTY
+        if use_pty && cfg!(windows) {
+            return;
+        }
         let script = find_script_dir().join_component("stdin_stdout.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
