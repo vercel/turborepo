@@ -161,7 +161,7 @@ impl Run {
 
     #[tracing::instrument(skip(self, signal_handler, api_client))]
     pub async fn run(
-        &mut self,
+        &self,
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
         api_client: APIClient,
@@ -202,7 +202,7 @@ impl Run {
     // We split this into a separate function because we need
     // to close the AnalyticsHandle regardless of whether the run succeeds or not
     async fn run_with_analytics(
-        &mut self,
+        &self,
         start_at: DateTime<Local>,
         api_client: APIClient,
         analytics_sender: Option<AnalyticsSender>,
