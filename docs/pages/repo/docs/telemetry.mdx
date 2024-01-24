@@ -27,7 +27,7 @@ We track general usage information, Specifically, we track the following anonymo
 - General machine information (e.g. number of CPUs, macOS/Windows/Linux, whether or not the command was run within CI)
 - Size of application (total number of workspaces)
 
-- We **DO NOT** track task names, arguments, or flag values.
+- We **DO NOT** track task names, package names, arguments, or flag values.
 
 **Note**: This list is regularly audited to ensure its accuracy.
 
@@ -35,7 +35,7 @@ You can view exactly what is being collected by setting the following environmen
 
 Additionally, all possible events can be viewed by browsing the [events](https://github.com/vercel/turbo/blob/main/crates/turborepo-telemetry/src/events.rs) file directly.
 
-## How Do I Opt-Out?
+## How do I opt out?
 
 ### Disable
 
@@ -45,9 +45,10 @@ You may opt out-by running:
 turbo telemetry disable
 ```
 
-You may also opt-out by setting the `TURBO_TELEMETRY_DISABLED=1` environment variable. Turbrepo also
-respects [Console Do Not Track (DNT)](https://consoledonottrack.com/) and can be disabled by setting the
-`DO_NOT_TRACK=1` environment variable.
+You can also opt out by setting any of the following environment variables:
+
+- `TURBO_TELEMETRY_DISABLED=1`
+- `DO_NOT_TRACK=1` (Learn more about [Console Do Not Track (DNT)](https://consoledonottrack.com/))
 
 ### Status
 
