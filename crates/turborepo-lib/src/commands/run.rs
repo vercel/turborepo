@@ -47,12 +47,11 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
         result = run_fut => {
             // Run finished so close the signal handler
             handler.close().await;
-            let result = result.inspect(|code| {
+            result.inspect(|code| {
                 if *code != 0 {
                     error!("run failed: command  exited ({code})");
                 }
-            });
-            result
+            })
         },
     }
 }
