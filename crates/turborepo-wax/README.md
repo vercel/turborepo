@@ -51,7 +51,8 @@ for entry in glob.walk("doc") {
 Match a directory tree against a glob with negations:
 
 ```rust
-use wax::{Glob, LinkBehavior};
+use wax::walk::{FileIterator, LinkBehavior};
+use wax::Glob;
 
 let glob = Glob::new("**/*.{md,txt}").unwrap();
 for entry in glob

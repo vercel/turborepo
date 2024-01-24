@@ -36,7 +36,7 @@ mod diagnostics;
 mod encode;
 mod rule;
 mod token;
-mod walk;
+pub mod walk;
 
 use std::{
     borrow::{Borrow, Cow},
@@ -55,9 +55,7 @@ use tardar::{DiagnosticResult, DiagnosticResultExt as _, IteratorExt as _, Resul
 use thiserror::Error;
 
 #[cfg(feature = "walk")]
-pub use crate::walk::{
-    FileIterator, FilterTarget, FilterTree, LinkBehavior, Walk, WalkBehavior, WalkEntry, WalkError,
-};
+use crate::walk::WalkError;
 pub use crate::{
     capture::MatchedText,
     diagnostics::{LocatedError, Span},
@@ -565,6 +563,7 @@ impl<'b> From<&'b str> for CandidatePath<'b> {
 /// used to get an iterator over matching paths.
 ///
 /// ```rust,no_run,ignore
+/// use wax::walk::Entry;
 /// use wax::Glob;
 ///
 /// let glob = Glob::new("**/*.(?i){jpg,jpeg}").unwrap();
@@ -609,39 +608,6 @@ impl<'t> Glob<'t> {
         let tree = parse_and_check(expression)?;
         let pattern = Glob::compile(tree.as_ref().tokens())?;
         Ok(Glob { tree, pattern })
-    }
-
-    /// Constructs a [`Glob`] from a glob expression with diagnostics.
-    ///
-    /// This function is the same as [`Glob::new`], but additionally returns
-    /// detailed diagnostics on both success and failure.
-    ///
-    /// See [`Glob::diagnose`].
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use tardar::DiagnosticResultExt as _;
-    /// use wax::Glob;
-    ///
-    /// let result = Glob::diagnosed("(?i)readme.{md,mkd,markdown}");
-    /// for diagnostic in result.diagnostics() {
-    ///     eprintln!("{}", diagnostic);
-    /// }
-    /// if let Some(glob) = result.ok_output() { /* ... */ }
-    /// ```
-    ///
-    /// [`Glob`]: crate::Glob
-    /// [`Glob::diagnose`]: crate::Glob::diagnose
-    /// [`Glob::new`]: crate::Glob::new
-    #[cfg(feature = "miette")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "miette")))]
-    pub fn diagnosed(expression: &'t str) -> DiagnosticResult<'t, Self> {
-        parse_and_diagnose(expression).and_then_diagnose(|tree| {
-            Glob::compile(tree.as_ref().tokens())
-                .into_error_diagnostic()
-                .map_output(|pattern| Glob { tree, pattern })
-        })
     }
 
     /// Partitions a [`Glob`] into an invariant [`PathBuf`] prefix and variant
@@ -736,159 +702,6 @@ impl<'t> Glob<'t> {
         }
     }
 
-    /// Gets an iterator over matching files in a directory tree.
-    ///
-    /// This function matches a [`Glob`] against a directory tree, returning
-    /// each matching file as a [`WalkEntry`]. [`Glob`]s are the only
-    /// patterns that support this semantic operation; it is not possible to
-    /// match combinators over directory trees.
-    ///
-    /// As with [`Path::join`] and [`PathBuf::push`], the base directory can be
-    /// escaped or overridden by rooted [`Glob`]s. In many cases, the
-    /// current working directory `.` is an appropriate base directory and
-    /// will be intuitively ignored if the [`Glob`] is rooted, such
-    /// as in `/mnt/media/**/*.mp4`. The [`has_root`] function can be used to
-    /// check if a [`Glob`] is rooted and the [`Walk::root`] function can be
-    /// used to get the resulting root directory of the traversal.
-    ///
-    /// The [root directory][`Walk::root`] is established via the [invariant
-    /// prefix][`Glob::partition`] of the [`Glob`]. **The prefix and any
-    /// [semantic literals][`Glob::has_semantic_literals`] in this prefix
-    /// are interpreted semantically as a path**, so components like `.` and
-    /// `..` that precede variant patterns interact with the base directory
-    /// semantically. This means that expressions like `../**` escape the base
-    /// directory as expected on Unix and Windows, for example.
-    ///
-    /// This function uses the default [`WalkBehavior`]. To configure the
-    /// behavior of the traversal, see [`Glob::walk_with_behavior`].
-    ///
-    /// Unlike functions in [`Pattern`], **this operation is semantic and
-    /// interacts with the file system**.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use wax::Glob;
-    ///
-    /// let glob = Glob::new("**/*.(?i){jpg,jpeg}").unwrap();
-    /// for entry in glob.walk("./Pictures") {
-    ///     let entry = entry.unwrap();
-    ///     println!("JPEG: {:?}", entry.path());
-    /// }
-    /// ```
-    ///
-    /// Glob expressions do not support general negations, but the [`not`]
-    /// iterator adaptor can be used when walking a directory tree to filter
-    /// [`WalkEntry`]s using arbitary patterns. **This should generally be
-    /// preferred over functions like [`Iterator::filter`], because it avoids
-    /// unnecessary reads of directory trees when matching [exhaustive
-    /// negations][`Pattern::is_exhaustive`].**
-    ///
-    /// ```rust,no_run
-    /// use wax::Glob;
-    ///
-    /// let glob = Glob::new("**/*.(?i){jpg,jpeg,png}").unwrap();
-    /// for entry in glob
-    ///     .walk("./Pictures")
-    ///     .not(["**/(i?){background<s:0,1>,wallpaper<s:0,1>}/**"])
-    ///     .unwrap()
-    /// {
-    ///     let entry = entry.unwrap();
-    ///     println!("{:?}", entry.path());
-    /// }
-    /// ```
-    ///
-    /// [`Glob`]: crate::Glob
-    /// [`Glob::walk_with_behavior`]: crate::Glob::walk_with_behavior
-    /// [`has_root`]: crate::Glob::has_root
-    /// [`Iterator::filter`]: std::iter::Iterator::filter
-    /// [`not`]: crate::Walk::not
-    /// [`Path::join`]: std::path::Path::join
-    /// [`PathBuf::push`]: std::path::PathBuf::push
-    /// [`Pattern`]: crate::Pattern
-    /// [`Pattern::is_exhaustive`]: crate::Pattern::is_exhaustive
-    /// [`Walk::root`]: crate::Walk::root
-    /// [`WalkBehavior`]: crate::WalkBehavior
-    /// [`WalkEntry`]: crate::WalkEntry
-    #[cfg(feature = "walk")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "walk")))]
-    pub fn walk(&self, directory: impl AsRef<Path>) -> Walk {
-        self.walk_with_behavior(directory, WalkBehavior::default())
-    }
-
-    /// Gets an iterator over matching files in a directory tree.
-    ///
-    /// This function is the same as [`Glob::walk`], but it additionally accepts
-    /// a [`WalkBehavior`]. This can be used to configure how the traversal
-    /// interacts with symbolic links, the maximum depth from the root, etc.
-    ///
-    /// Depth is relative to the [root directory][`Walk::root`] of the
-    /// traversal, which is determined by joining the given path and any
-    /// [invariant prefix][`Glob::partition`] of the [`Glob`].
-    ///
-    /// See [`Glob::walk`] for more information.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use wax::{Glob, WalkBehavior};
-    ///
-    /// let glob = Glob::new("**/*.(?i){jpg,jpeg}").unwrap();
-    /// for entry in glob.walk_with_behavior("./Pictures", WalkBehavior::default()) {
-    ///     let entry = entry.unwrap();
-    ///     println!("JPEG: {:?}", entry.path());
-    /// }
-    /// ```
-    ///
-    /// By default, symbolic links are read as normal files and their targets
-    /// are ignored. To follow symbolic links and traverse any directories
-    /// that they reference, specify a [`LinkBehavior`].
-    ///
-    /// ```rust,no_run
-    /// use wax::{Glob, LinkBehavior};
-    ///
-    /// let glob = Glob::new("**/*.txt").unwrap();
-    /// for entry in glob.walk_with_behavior("/var/log", LinkBehavior::ReadTarget) {
-    ///     let entry = entry.unwrap();
-    ///     println!("Log: {:?}", entry.path());
-    /// }
-    /// ```
-    ///
-    /// [`Glob`]: crate::Glob
-    /// [`Glob::partition`]: crate::Glob::partition
-    /// [`Glob::walk`]: crate::Glob::walk
-    /// [`LinkBehavior`]: crate::LinkBehavior
-    /// [`Walk::root`]: crate::Walk::root
-    /// [`WalkBehavior`]: crate::WalkBehavior
-    #[cfg(feature = "walk")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "walk")))]
-    pub fn walk_with_behavior(
-        &self,
-        directory: impl AsRef<Path>,
-        behavior: impl Into<WalkBehavior>,
-    ) -> Walk {
-        walk::walk(self, directory, behavior)
-    }
-
-    /// Gets **non-error** [`Diagnostic`]s.
-    ///
-    /// This function requires a receiving [`Glob`] and so does not report
-    /// error-level [`Diagnostic`]s. It can be used to get non-error
-    /// diagnostics after constructing or [partitioning][`Glob::partition`]
-    /// a [`Glob`].
-    ///
-    /// See [`Glob::diagnosed`].
-    ///
-    /// [`Diagnostic`]: miette::Diagnostic
-    /// [`Glob`]: crate::Glob
-    /// [`Glob::diagnosed`]: crate::Glob::diagnosed
-    /// [`Glob::partition`]: crate::Glob::partition
-    #[cfg(feature = "miette")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "miette")))]
-    pub fn diagnose(&self) -> impl Iterator<Item = Box<dyn Diagnostic + '_>> {
-        diagnostics::diagnose(self.tree.as_ref())
-    }
-
     /// Gets metadata for capturing sub-expressions.
     ///
     /// This function returns an iterator over capturing tokens, which describe
@@ -938,6 +751,61 @@ impl<'t> Glob<'t> {
     pub fn has_semantic_literals(&self) -> bool {
         token::literals(self.tree.as_ref().tokens())
             .any(|(_, literal)| literal.is_semantic_literal())
+    }
+}
+
+/// APIs for diagnosing globs.
+#[cfg(feature = "miette")]
+#[cfg_attr(docsrs, doc(cfg(feature = "miette")))]
+impl<'t> Glob<'t> {
+    /// Constructs a [`Glob`] from a glob expression with diagnostics.
+    ///
+    /// This function is the same as [`Glob::new`], but additionally returns
+    /// detailed diagnostics on both success and failure.
+    ///
+    /// See [`Glob::diagnose`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use tardar::DiagnosticResultExt as _;
+    /// use wax::Glob;
+    ///
+    /// let result = Glob::diagnosed("(?i)readme.{md,mkd,markdown}");
+    /// for diagnostic in result.diagnostics() {
+    ///     eprintln!("{}", diagnostic);
+    /// }
+    /// if let Some(glob) = result.ok_output() { /* ... */ }
+    /// ```
+    ///
+    /// [`Glob`]: crate::Glob
+    /// [`Glob::diagnose`]: crate::Glob::diagnose
+    /// [`Glob::new`]: crate::Glob::new
+    #[cfg(feature = "miette")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "miette")))]
+    pub fn diagnosed(expression: &'t str) -> DiagnosticResult<'t, Self> {
+        parse_and_diagnose(expression).and_then_diagnose(|tree| {
+            Glob::compile(tree.as_ref().tokens())
+                .into_error_diagnostic()
+                .map_output(|pattern| Glob { tree, pattern })
+        })
+    }
+
+    /// Gets **non-error** [`Diagnostic`]s.
+    ///
+    /// This function requires a receiving [`Glob`] and so does not report
+    /// error-level [`Diagnostic`]s. It can be used to get non-error
+    /// diagnostics after constructing or [partitioning][`Glob::partition`]
+    /// a [`Glob`].
+    ///
+    /// See [`Glob::diagnosed`].
+    ///
+    /// [`Diagnostic`]: miette::Diagnostic
+    /// [`Glob`]: crate::Glob
+    /// [`Glob::diagnosed`]: crate::Glob::diagnosed
+    /// [`Glob::partition`]: crate::Glob::partition
+    pub fn diagnose(&self) -> impl Iterator<Item = Box<dyn Diagnostic + '_>> {
+        diagnostics::diagnose(self.tree.as_ref())
     }
 }
 
