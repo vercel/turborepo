@@ -5,12 +5,12 @@ description: Anonomous telemetry for Turborepo
 
 # Telemetry
 
-Vercel Inc. (Vercel) may collect anonymous telemetry data about your use of Turborepo as explained below.
-Telemetry data allows us to monitor and improve Truborepo and the Vercel platform by collecting data about its
-usage and host information. The data may be used to identify, troubleshoot, or respond to issues
-that impact users.
+Vercel Inc. (Vercel) may collect telemetry data about your use of Turborepo as explained below.
+Telemetry data allows us to monitor and improve Turborepo and the Vercel platform by
+collecting anonymous data about its usage and host information. The data may be used to broadly identify,
+troubleshoot, or respond to issues that impact users.
 
-Participation in this anonymous program is optional, if you do not want telemetry data collected, you may opt-out (see below).
+Collection of telemetry data is optional. If you do not want telemetry data collected, you may [opt-out](#how-do-i-opt-out).
 
 ## Why
 
@@ -20,14 +20,13 @@ Furthermore, this data allows us to verify if improvements are improving the bas
 
 ## What is collected
 
-We track general usage information, Specifically, we track the following anonymously:
+We track general usage information, specifically, we track the following with anonymized telemetry data using random identifiers:
 
 - Command invoked ([turbo run](/repo/docs/reference/command-line-reference/run), [turbo prune](/repo/docs/reference/command-line-reference/prune), [turbo gen](/repo/docs/reference/command-line-reference/gen), etc.)
 - Version of `turbo`
 - General machine information (e.g. number of CPUs, macOS/Windows/Linux, whether or not the command was run within CI)
 - Size of application (total number of workspaces)
-
-- We **DO NOT** track task names, package names, arguments, or flag values.
+- We **DO NOT** collect any metrics which may contain sensitive data. This includes, but is not limited to: task names, package names, sensitive argument or flag values, environment variables, file paths, or contents of files.
 
 **Note**: This list is regularly audited to ensure its accuracy.
 
