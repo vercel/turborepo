@@ -376,11 +376,11 @@ impl GlobWalker {
                 let depth = entry.depth().saturating_sub(1);
                 for (position, candidate) in path
                     .components()
-                    .skip(depth)
                     .filter_map(|component| match component {
                         Component::Normal(component) => Some(CandidatePath::from(component)),
                         _ => None,
                     })
+                    .skip(depth)
                     .zip_longest(self.program.components.iter().skip(depth))
                     .with_position()
                 {
