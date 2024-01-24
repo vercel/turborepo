@@ -70,10 +70,11 @@ where
         let first = variances
             .next()
             .unwrap_or_else(|| Variance::Invariant(T::empty()));
-        variances
-            .all(|variance| first == variance)
-            .then(|| first)
-            .unwrap_or(Variance::Variant(Boundedness::Closed))
+        if variances.all(|variance| first == variance) {
+            first
+        } else {
+            Variance::Variant(Boundedness::Closed)
+        }
     }
 }
 
