@@ -20,6 +20,7 @@ use thiserror::Error;
 use turbopath::AnchoredSystemPath;
 use turborepo_errors::WithMetadata;
 
+use super::RawRemoteCacheOptions;
 use crate::{
     cli::OutputLogsMode,
     config::ConfigurationOptions,
@@ -320,6 +321,36 @@ impl Deserializable for ConfigurationOptions {
     }
 }
 
+impl Deserializable for RawRemoteCacheOptions {
+    fn deserialize(
+        value: &impl DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        value.deserialize(RawRemoteCacheOptionsVisitor, name, diagnostics)
+    }
+}
+
+struct RawRemoteCacheOptionsVisitor;
+
+impl DeserializationVisitor for RawRemoteCacheOptionsVisitor {
+    type Output = RawRemoteCacheOptions;
+
+    const EXPECTED_TYPE: VisitableType = VisitableType::MAP;
+
+    fn visit_map(
+        self,
+        // Iterator of key-value pairs.
+        members: impl Iterator<Item = Option<(impl DeserializableValue, impl DeserializableValue)>>,
+        // range of the map in the source text.
+        _: TextRange,
+        _name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        todo!()
+    }
+}
+
 struct ConfigurationOptionsVisitor;
 
 impl DeserializationVisitor for ConfigurationOptionsVisitor {
@@ -495,7 +526,7 @@ impl DeserializationVisitor for RawTurboJsonVisitor {
                 }
                 "remoteCache" => {
                     if let Some(remote_cache) =
-                        ConfigurationOptions::deserialize(&value, &key_text, diagnostics)
+                        RawRemoteCacheOptions::deserialize(&value, &key_text, diagnostics)
                     {
                         result.remote_cache = Some(remote_cache);
                     }

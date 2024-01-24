@@ -55,7 +55,35 @@ pub struct TurboJson {
     pub(crate) pipeline: Pipeline,
 }
 
-#[derive(Serialize, Default, Debug, PartialEq, Clone, Iterable)]
+#[derive(Clone, Debug, Serialize)]
+struct RawRemoteCacheOptions {
+    api_url: Option<String>,
+    login_url: Option<String>,
+    team_slug: Option<String>,
+    team_id: Option<String>,
+    signature: Option<bool>,
+    preflight: Option<bool>,
+    timeout: Option<u64>,
+    enabled: Option<bool>,
+}
+
+impl From<&RawRemoteCacheOptions> for ConfigurationOptions {
+    fn from(remote_cache_opts: &RawRemoteCacheOptions) -> Self {
+        Self {
+            api_url: remote_cache_opts.api_url.clone(),
+            login_url: remote_cache_opts.login_url.clone(),
+            team_slug: remote_cache_opts.team_slug.clone(),
+            team_id: remote_cache_opts.team_id.clone(),
+            signature: remote_cache_opts.signature.clone(),
+            preflight: remote_cache_opts.preflight.clone(),
+            timeout: remote_cache_opts.timeout.clone(),
+            enabled: remote_cache_opts.enabled.clone(),
+            ..Self::default()
+        }
+    }
+}
+
+#[derive(Serialize, Default, Debug, Clone, Iterable)]
 #[serde(rename_all = "camelCase")]
 // The raw deserialized turbo.json file.
 pub struct RawTurboJson {
@@ -88,7 +116,7 @@ pub struct RawTurboJson {
     pub pipeline: Option<Pipeline>,
     // Configuration options when interfacing with the remote cache
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) remote_cache: Option<ConfigurationOptions>,
+    pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
 }
 
 #[derive(Serialize, Default, Debug, PartialEq, Clone)]

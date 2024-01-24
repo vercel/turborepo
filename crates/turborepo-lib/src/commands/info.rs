@@ -14,8 +14,8 @@ use turborepo_ui::GREY;
 
 use crate::{cli, commands::CommandBase, config::ConfigurationOptions};
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+//#[derive(Serialize)]
+//#[serde(rename_all = "camelCase")]
 struct RepositoryDetails<'a> {
     config: &'a ConfigurationOptions,
     package_manager: &'a PackageManager,
@@ -57,7 +57,7 @@ pub async fn run(
     } else {
         let repo_details = RepositoryDetails::new(&package_graph, config);
         if json {
-            println!("{}", serde_json::to_string_pretty(&repo_details)?);
+            //println!("{}", serde_json::to_string_pretty(&repo_details)?);
         } else {
             repo_details.print()?;
         }

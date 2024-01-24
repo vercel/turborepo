@@ -135,7 +135,7 @@ const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 30;
 
-#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable)]
+#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigurationOptions {
     #[serde(alias = "apiurl")]
@@ -244,8 +244,8 @@ impl ResolvedConfigurationOptions for PackageJson {
 
 impl ResolvedConfigurationOptions for RawTurboJson {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
-        let mut opts = if let Some(configuration_options) = &self.remote_cache {
-            configuration_options.clone()
+        let mut opts = if let Some(remote_cache_options) = &self.remote_cache {
+            remote_cache_options.into()
         } else {
             ConfigurationOptions::default()
         };
