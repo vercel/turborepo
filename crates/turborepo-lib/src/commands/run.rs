@@ -51,6 +51,8 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
                 if *code != 0 {
                     error!("run failed: command  exited ({code})");
                 }
+            }).inspect_err(|err| {
+                error!("run failed: {err}");
             })
         },
     }
