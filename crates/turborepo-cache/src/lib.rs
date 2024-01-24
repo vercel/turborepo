@@ -106,12 +106,15 @@ pub struct CacheOpts {
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RemoteCacheOpts {
-    team_id: String,
+    unused_team_id: Option<String>,
     signature: bool,
 }
 
 impl RemoteCacheOpts {
-    pub fn new(team_id: String, signature: bool) -> Self {
-        Self { team_id, signature }
+    pub fn new(unused_team_id: Option<String>, signature: bool) -> Self {
+        Self {
+            unused_team_id,
+            signature,
+        }
     }
 }

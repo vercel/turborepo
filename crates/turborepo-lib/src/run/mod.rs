@@ -83,10 +83,10 @@ impl Run {
         // Note that we don't currently use the team_id value here. In the future, we
         // should probably verify that we only use the signature value when the
         // configured team_id matches the final resolved team_id.
-        let unused_remote_cache_opts_team_id = config.team_id().unwrap_or_default();
+        let unused_remote_cache_opts_team_id = config.team_id().map(|team_id| team_id.to_string());
         let signature = config.signature();
         opts.cache_opts.remote_cache_opts = Some(RemoteCacheOpts::new(
-            unused_remote_cache_opts_team_id.to_string(),
+            unused_remote_cache_opts_team_id,
             signature,
         ));
         Ok(Self {
