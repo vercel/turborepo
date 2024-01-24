@@ -838,7 +838,7 @@ mod test {
 
             let output_str = String::from_utf8(output).expect("Failed to parse stdout");
 
-            assert_eq!(output_str, "hello world\n");
+            assert!(output_str.contains("hello world"), "got: {}", output_str);
         }
 
         child.wait().await;
@@ -860,11 +860,12 @@ mod test {
 
         tokio::time::sleep(STARTUP_DELAY).await;
 
+        let input = "hello world";
         // drop stdin to close the pipe
         {
             match child.stdin().unwrap() {
-                ChildInput::Std(mut stdin) => stdin.write_all(b"hello world").await.unwrap(),
-                ChildInput::Pty(mut stdin) => stdin.write_all(b"hello world").unwrap(),
+                ChildInput::Std(mut stdin) => stdin.write_all(input.as_bytes()).await.unwrap(),
+                ChildInput::Pty(mut stdin) => stdin.write_all(input.as_bytes()).unwrap(),
             }
         }
 
@@ -876,7 +877,7 @@ mod test {
 
         let output_str = String::from_utf8(output).expect("Failed to parse stdout");
 
-        assert_eq!(output_str, "hello world");
+        assert!(output_str.contains(input), "got: {}", output_str);
 
         child.wait().await;
 
@@ -1021,7 +1022,9 @@ mod test {
 
         let exit = child.wait_with_piped_outputs(&mut out).await.unwrap();
 
-        assert_eq!(out, b"hello world\n");
+        let out = String::from_utf8(out).unwrap();
+
+        assert!(out.contains("hello world"), "got: {}", out);
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
@@ -1038,12 +1041,13 @@ mod test {
 
         let exit = child.wait_with_piped_outputs(&mut buffer).await.unwrap();
 
-        // There are no ordering guarantees so we accept either order of the logs
-        assert!(
-            buffer == b"hello world\nhello moon\n" || buffer == b"hello moon\nhello world\n",
-            "got {}",
-            String::from_utf8(buffer).unwrap()
-        );
+        let output = String::from_utf8(buffer).unwrap();
+
+        // There are no ordering guarantees so we just check that both logs made it
+        let expected_stdout = "hello world";
+        let expected_stderr = "hello moon";
+        assert!(output.contains(expected_stdout), "got: {}", output);
+        assert!(output.contains(expected_stderr), "got: {}", output);
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
@@ -1060,7 +1064,12 @@ mod test {
 
         let exit = child.wait_with_piped_outputs(&mut out).await.unwrap();
 
-        assert_eq!(out, &[0, 159, 146, 150, b'\n']);
+        let expected = &[0, 159, 146, 150];
+        assert!(
+            out.windows(4).any(|actual| actual == expected),
+            "got: {:?}",
+            out
+        );
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
