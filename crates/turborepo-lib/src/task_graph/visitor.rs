@@ -48,7 +48,7 @@ pub struct Visitor<'a> {
     global_env: EnvironmentVariableMap,
     global_env_mode: EnvMode,
     manager: ProcessManager,
-    run_opts: &'a RunOpts<'a>,
+    run_opts: &'a RunOpts,
     package_graph: Arc<PackageGraph>,
     repo_root: &'a AbsoluteSystemPath,
     run_cache: Arc<RunCache>,

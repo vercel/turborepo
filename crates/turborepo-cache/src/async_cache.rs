@@ -216,7 +216,7 @@ mod tests {
             skip_filesystem: true,
             workers: 10,
             remote_cache_opts: Some(RemoteCacheOpts {
-                team_id: "my-team".to_string(),
+                unused_team_id: Some("my-team".to_string()),
                 signature: false,
             }),
         };
@@ -290,7 +290,7 @@ mod tests {
             skip_filesystem: false,
             workers: 10,
             remote_cache_opts: Some(RemoteCacheOpts {
-                team_id: "my-team".to_string(),
+                unused_team_id: Some("my-team".to_string()),
                 signature: false,
             }),
         };
@@ -374,7 +374,7 @@ mod tests {
             skip_filesystem: false,
             workers: 10,
             remote_cache_opts: Some(RemoteCacheOpts {
-                team_id: "my-team".to_string(),
+                unused_team_id: Some("my-team".to_string()),
                 signature: false,
             }),
         };
