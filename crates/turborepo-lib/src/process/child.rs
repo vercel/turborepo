@@ -159,6 +159,26 @@ impl ChildHandle {
         let controller = pair.master;
         let receiver = pair.slave;
 
+        #[cfg(unix)]
+        {
+            use nix::sys::termios;
+            if let Some((file_desc, mut termios)) = controller
+                .as_raw_fd()
+                .and_then(|fd| Some(fd).zip(termios::tcgetattr(fd).ok()))
+            {
+                // We unset ECHOCTL to disable rendering of the closing of stdin
+                // as ^D
+                termios.local_flags &= !nix::sys::termios::LocalFlags::ECHOCTL;
+                if let Err(e) = nix::sys::termios::tcsetattr(
+                    file_desc,
+                    nix::sys::termios::SetArg::TCSANOW,
+                    &termios,
+                ) {
+                    debug!("unable to unset ECHOCTL: {e}");
+                }
+            }
+        }
+
         let child = receiver
             .spawn_command(command)
             .map_err(|err| match err.downcast() {
@@ -839,8 +859,12 @@ mod test {
             };
 
             let output_str = String::from_utf8(output).expect("Failed to parse stdout");
+            let trimmed_output = output_str.trim();
+            let trimmed_output = trimmed_output
+                .strip_prefix('\u{4}')
+                .unwrap_or(trimmed_output);
 
-            assert_eq!(output_str.trim(), "hello world");
+            assert_eq!(trimmed_output, "hello world");
         }
 
         child.wait().await;
@@ -878,8 +902,10 @@ mod test {
         };
 
         let output_str = String::from_utf8(output).expect("Failed to parse stdout");
+        let trimmed_out = output_str.trim();
+        let trimmed_out = trimmed_out.strip_prefix('\u{4}').unwrap_or(trimmed_out);
 
-        assert_eq!(output_str.trim(), input);
+        assert_eq!(trimmed_out, input);
 
         child.wait().await;
 
@@ -1025,8 +1051,10 @@ mod test {
         let exit = child.wait_with_piped_outputs(&mut out).await.unwrap();
 
         let out = String::from_utf8(out).unwrap();
+        let trimmed_out = out.trim();
+        let trimmed_out = trimmed_out.strip_prefix('\u{4}').unwrap_or(trimmed_out);
 
-        assert_eq!(out.trim(), "hello world");
+        assert_eq!(trimmed_out, "hello world");
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
@@ -1067,7 +1095,9 @@ mod test {
         let exit = child.wait_with_piped_outputs(&mut out).await.unwrap();
 
         let expected = &[0, 159, 146, 150];
-        assert_eq!(out.trim_ascii(), expected);
+        let trimmed_out = out.trim_ascii();
+        let trimmed_out = trimmed_out.strip_prefix(&[4]).unwrap_or(trimmed_out);
+        assert_eq!(trimmed_out, expected);
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
