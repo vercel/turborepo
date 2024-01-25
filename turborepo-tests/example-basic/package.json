@@ -1,0 +1,10 @@
+{
+  "name": "turborepo-examples-test-basic",
+  "scripts": {
+    "test": "bash ../helpers/test_example.sh ../../examples/basic pnpm"
+  },
+  "dependencies": {
+    "turborepo-tests-helpers": "workspace:*",
+    "turborepo-examples": "workspace:*"
+  }
+}

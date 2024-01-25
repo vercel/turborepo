@@ -1,0 +1,10 @@
+{
+  "name": "turborepo-examples-test-non-monorepo",
+  "scripts": {
+    "test": "bash ../helpers/test_example.sh ../../examples/non-monorepo npm"
+  },
+  "dependencies": {
+    "turborepo-tests-helpers": "workspace:*",
+    "turborepo-examples": "workspace:*"
+  }
+}

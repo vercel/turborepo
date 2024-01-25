@@ -1,0 +1,10 @@
+{
+  "name": "turborepo-examples-test-with-berry",
+  "scripts": {
+    "test": "bash ../helpers/test_example.sh ../../examples/with-berry yarn"
+  },
+  "dependencies": {
+    "turborepo-tests-helpers": "workspace:*",
+    "turborepo-examples": "workspace:*"
+  }
+}
