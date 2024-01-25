@@ -435,7 +435,7 @@ jobs:
 
       - name: Check examples
         shell: bash
-        run: turbo run test -F "@turborepo-examples-tests/*" --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
+        run: turbo run test --filter="turborepo-examples-test-*" --continue
 
       # Disable corepack again. actions/setup-node's "Post" step runs at the end of
       # this job invokes other package managers, and corepack throws an error.
