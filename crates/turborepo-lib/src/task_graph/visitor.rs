@@ -840,10 +840,7 @@ impl ExecContext {
             ChildExit::Finished(Some(0)) => {
                 if let Err(e) = stdout_writer.flush() {
                     error!("{e}");
-                } else if let Err(e) = self
-                    .task_cache
-                    .save_outputs(&mut prefixed_ui, task_duration, telemetry)
-                    .await
+                } else if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await
                 {
                     error!("error caching output: {e}");
                 } else {
