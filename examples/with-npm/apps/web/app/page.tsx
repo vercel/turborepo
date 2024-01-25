@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Card } from "@repo/ui/card";
+import { Card } from "@repo/ui/cardddd";
 import { Code } from "@repo/ui/code";
 import styles from "./page.module.css";
 
