@@ -166,6 +166,30 @@ impl Engine<Built> {
                     return Ok(false);
                 };
 
+                let task_definition = self.task_definitions.get(task_id).ok_or_else(|| {
+                    ValidateError::MissingTask {
+                        task_id: task_id.to_string(),
+                        package_name: task_id.package().to_string(),
+                    }
+                })?;
+
+                // Don't allow more than one persistent interactive task
+                if task_definition.persistent && task_definition.interactive {
+                    let current = task_id.to_string();
+                    match existing_interactive_persistent_task.as_ref() {
+                        Some(task) => {
+                            return Err(ValidateError::TooManyPersistentInteractiveTasks {
+                                existing: task.clone(),
+                                current,
+                            })
+                        }
+                        None => {
+                            existing_interactive_persistent_task = Some(current);
+                        }
+                    }
+                }
+
+                // Check dependencies, make sure they are not persistent tasks
                 for dep_index in self
                     .task_graph
                     .neighbors_directed(node_index, petgraph::Direction::Outgoing)
@@ -179,12 +203,13 @@ impl Engine<Built> {
                         continue;
                     };
 
-                    let task_definition = self.task_definitions.get(dep_id).ok_or_else(|| {
-                        ValidateError::MissingTask {
-                            task_id: dep_id.to_string(),
-                            package_name: dep_id.package().to_string(),
-                        }
-                    })?;
+                    let dep_task_definition =
+                        self.task_definitions.get(dep_id).ok_or_else(|| {
+                            ValidateError::MissingTask {
+                                task_id: dep_id.to_string(),
+                                package_name: dep_id.package().to_string(),
+                            }
+                        })?;
 
                     let package_json = package_graph
                         .package_json(&WorkspaceName::from(dep_id.package()))
@@ -192,29 +217,13 @@ impl Engine<Built> {
                             package: dep_id.package().to_string(),
                         })?;
 
-                    if task_definition.persistent
+                    if dep_task_definition.persistent
                         && package_json.scripts.contains_key(dep_id.task())
                     {
                         return Err(ValidateError::DependencyOnPersistentTask {
                             persistent_task: dep_id.to_string(),
                             dependant: task_id.to_string(),
                         });
-                    }
-
-                    // Don't allow more than one persistent interactive task
-                    if task_definition.persistent && task_definition.interactive {
-                        let current = task_id.to_string();
-                        match existing_interactive_persistent_task.as_ref() {
-                            Some(task) => {
-                                return Err(ValidateError::TooManyPersistentInteractiveTasks {
-                                    existing: task.clone(),
-                                    current,
-                                })
-                            }
-                            None => {
-                                existing_interactive_persistent_task = Some(current);
-                            }
-                        }
                     }
                 }
 
