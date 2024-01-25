@@ -241,7 +241,6 @@ pub(super) async fn update_ecmascript_merged_chunk(
 
             for (id, entry) in &content_ref.entries.await? {
                 let hash = *entry.hash.await?;
-                // let code = entry.code.await?;
                 added.modules.insert(id.clone());
 
                 if merged_module_map.get(id) != Some(hash) {
