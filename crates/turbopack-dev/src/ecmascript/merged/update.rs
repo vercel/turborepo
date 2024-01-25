@@ -88,23 +88,23 @@ impl EcmascriptModuleEntry {
             id: &'a ModuleId,
         }
         let id = serde_qs::to_string(&Id { id }).unwrap();
-        let mut map_str = vec![];
-        let m = ((&*code).clone().cell().generate_source_map().await?)
-            .unwrap()
-            .await?
-            .to_source_map()
-            .await?;
-        let m = (*m).to_writer(&mut map_str)?;
+
+        let map = (*code).clone().cell().generate_source_map().await?;
+        let map = match &*map {
+            Some(map) => {
+                let map = map.await?.to_source_map().await?;
+                let mut map_str = vec![];
+                (*map).to_writer(&mut map_str)?;
+                Some(String::from_utf8(map_str)?)
+            }
+            None => None,
+        };
+
         Ok(EcmascriptModuleEntry {
             // Cloning a rope is cheap.
             code: code.source_code().clone(),
             url: format!("{}?{}", chunk_path, &id),
-            map: Some(String::from_utf8(map_str)?), /* map: (*code).generate_source_map(),
-                                                     * map: code
-                                                     *     .has_source_map()
-                                                     *     .then(|| format!("{}.map?{}",
-                                                     * chunk_path,
-                                                     * &id)), */
+            map,
         })
     }
 }
