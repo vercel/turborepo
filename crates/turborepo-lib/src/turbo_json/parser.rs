@@ -202,6 +202,11 @@ impl DeserializationVisitor for RawTaskDefinitionVisitor {
                         result.persistent = Some(Spanned::new(persistent).with_range(range));
                     }
                 }
+                "interactive" => {
+                    if let Some(interactive) = bool::deserialize(&value, &key_text, diagnostics) {
+                        result.interactive = Some(Spanned::new(interactive).with_range(range));
+                    }
+                }
                 "outputs" => {
                     if let Some(outputs) = Vec::deserialize(&value, &key_text, diagnostics) {
                         result.outputs = Some(Spanned::new(outputs).with_range(range));
@@ -499,6 +504,7 @@ impl WithText for RawTaskDefinition {
         self.inputs.add_text(text.clone());
         self.pass_through_env.add_text(text.clone());
         self.persistent.add_text(text.clone());
+        self.interactive.add_text(text.clone());
         self.outputs.add_text(text.clone());
         self.output_mode.add_text(text);
     }
