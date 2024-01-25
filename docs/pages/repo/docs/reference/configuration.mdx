@@ -439,7 +439,7 @@ option, `turbo` can warn you about an invalid configuration.
 
 ## Glob specification for paths
 
-Turborepo's glob implementation is based on [wax](https://glob.guide/user-guide/syntax/). A few of the most common patterns you will need are in the table below:
+Turborepo's glob implementation allows you to specfically define the files you want `turbo` to interact with. The most useful patterns you'll need are in the table below:
 
 | Pattern             | Description                                                                        |
 | ------------------- | ---------------------------------------------------------------------------------- |
@@ -460,12 +460,11 @@ Here are a few examples of how to use these patterns:
 | `dist/some-dir/**` | Match all files in the `dist/some-dir` directory and all sub-directories in the current directory |
 | `dist/`            | Match the `dist` directory **but not its contents**                                               |
 | `dist`             | Match the `dist` directory **but not its contents**                                               |
+| `!dist`            | Ignore the `dist` directory **and all of its contents**                                           |
 | `dist*`            | Match files and directories that start with `dist`                                                |
 | `dist/*.js`        | Match all `.js` files in the `dist` directory                                                     |
 | `!dist/*.js`       | Ignore all `.js` files in the `dist` directory                                                    |
 | `dist/**/*.js`     | Recursively match all `.js` files in the `dist` directory and its sub-directories                 |
 | `../scripts/**`    | Up one directory, match all files and sub-directories in the `scripts` directory                  |
-
-For more advanced globbing patterns, see the [wax glob guide](https://glob.guide/user-guide/syntax/).
 
 [1]: /repo/docs/core-concepts/monorepos/configuring-workspaces
