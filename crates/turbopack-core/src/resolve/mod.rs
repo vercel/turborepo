@@ -33,7 +33,6 @@ use crate::{
     output::{OutputAsset, OutputAssets},
     package_json::{read_package_json, PackageJsonIssue},
     raw_module::RawModule,
-    reference::ModuleReference,
     reference_type::ReferenceType,
     resolve::{
         pattern::{read_matches, PatternMatch},
