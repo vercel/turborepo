@@ -251,12 +251,10 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
             dependencies: dependencies
                 .into_iter()
                 .map(|task_id| task_id.task().to_string())
-                .sorted()
                 .collect(),
             dependents: dependents
                 .into_iter()
                 .map(|task_id| task_id.task().to_string())
-                .sorted()
                 .collect(),
             resolved_task_definition,
             framework,

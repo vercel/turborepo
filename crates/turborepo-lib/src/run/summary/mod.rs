@@ -199,7 +199,7 @@ impl RunTracker {
         package_inference_root: Option<&'a AnchoredSystemPath>,
         exit_code: i32,
         end_time: DateTime<Local>,
-        run_opts: &RunOpts<'a>,
+        run_opts: &'a RunOpts,
         packages: HashSet<WorkspaceName>,
         global_hash_summary: GlobalHashSummary<'a>,
         global_env_mode: EnvMode,
@@ -269,7 +269,7 @@ impl RunTracker {
         ui: UI,
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&AnchoredSystemPath>,
-        run_opts: &RunOpts<'a>,
+        run_opts: &'a RunOpts,
         packages: HashSet<WorkspaceName>,
         global_hash_summary: GlobalHashSummary<'a>,
         global_env_mode: cli::EnvMode,
@@ -768,6 +768,12 @@ impl<'a> RunSummary<'a> {
         }
 
         self.tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
+
+        // Sort dependencies
+        for task in &mut self.tasks {
+            task.shared.dependencies.sort();
+            task.shared.dependents.sort();
+        }
     }
 
     fn get_path(&self) -> AbsoluteSystemPathBuf {

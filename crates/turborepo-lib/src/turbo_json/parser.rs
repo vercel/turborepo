@@ -1,4 +1,5 @@
 use std::{
+    backtrace,
     collections::BTreeMap,
     fmt::{Debug, Display},
     sync::Arc,
@@ -32,6 +33,8 @@ use crate::{
 pub struct Error {
     #[related]
     diagnostics: Vec<ParseDiagnostic>,
+    #[backtrace]
+    backtrace: backtrace::Backtrace,
 }
 
 struct BiomeMessage<'a>(&'a biome_diagnostics::Error);
@@ -535,14 +538,17 @@ impl RawTurboJson {
                 })
                 .collect();
 
-            return Err(Error { diagnostics });
+            return Err(Error {
+                diagnostics,
+                backtrace: backtrace::Backtrace::capture(),
+            });
         }
-
         // It's highly unlikely that biome would fail to produce a deserialized value
         // *and* not return any errors, but it's still possible. In that case, we
         // just print that there is an error and return.
         let mut turbo_json = result.into_deserialized().ok_or_else(|| Error {
             diagnostics: vec![],
+            backtrace: backtrace::Backtrace::capture(),
         })?;
 
         turbo_json.add_text(Arc::from(text));
