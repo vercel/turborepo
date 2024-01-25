@@ -74,8 +74,6 @@ use std::{
 #[cfg(feature = "miette")]
 use miette::Diagnostic;
 use regex::Regex;
-#[cfg(feature = "miette")]
-use tardar::{DiagnosticResult, DiagnosticResultExt as _, IteratorExt as _, ResultExt as _};
 use thiserror::Error;
 
 #[cfg(feature = "walk")]
@@ -778,61 +776,6 @@ impl<'t> Glob<'t> {
     }
 }
 
-/// APIs for diagnosing globs.
-#[cfg(feature = "miette")]
-#[cfg_attr(docsrs, doc(cfg(feature = "miette")))]
-impl<'t> Glob<'t> {
-    /// Constructs a [`Glob`] from a glob expression with diagnostics.
-    ///
-    /// This function is the same as [`Glob::new`], but additionally returns
-    /// detailed diagnostics on both success and failure.
-    ///
-    /// See [`Glob::diagnose`].
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use tardar::DiagnosticResultExt as _;
-    /// use wax::Glob;
-    ///
-    /// let result = Glob::diagnosed("(?i)readme.{md,mkd,markdown}");
-    /// for diagnostic in result.diagnostics() {
-    ///     eprintln!("{}", diagnostic);
-    /// }
-    /// if let Some(glob) = result.ok_output() { /* ... */ }
-    /// ```
-    ///
-    /// [`Glob`]: crate::Glob
-    /// [`Glob::diagnose`]: crate::Glob::diagnose
-    /// [`Glob::new`]: crate::Glob::new
-    #[cfg(feature = "miette")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "miette")))]
-    pub fn diagnosed(expression: &'t str) -> DiagnosticResult<'t, Self> {
-        parse_and_diagnose(expression).and_then_diagnose(|tree| {
-            Glob::compile(tree.as_ref().tokens())
-                .into_error_diagnostic()
-                .map_output(|program| Glob { tree, program })
-        })
-    }
-
-    /// Gets **non-error** [`Diagnostic`]s.
-    ///
-    /// This function requires a receiving [`Glob`] and so does not report
-    /// error-level [`Diagnostic`]s. It can be used to get non-error
-    /// diagnostics after constructing or [partitioning][`Glob::partition`]
-    /// a [`Glob`].
-    ///
-    /// See [`Glob::diagnosed`].
-    ///
-    /// [`Diagnostic`]: miette::Diagnostic
-    /// [`Glob`]: crate::Glob
-    /// [`Glob::diagnosed`]: crate::Glob::diagnosed
-    /// [`Glob::partition`]: crate::Glob::partition
-    pub fn diagnose(&self) -> impl Iterator<Item = Box<dyn Diagnostic + '_>> {
-        diagnostics::diagnose(self.tree.as_ref())
-    }
-}
-
 impl Display for Glob<'_> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", self.tree.as_ref().expression())
@@ -1106,19 +1049,6 @@ fn parse_and_check(expression: &str) -> Result<Checked<Tokenized>, BuildError> {
     let tokenized = token::parse(expression)?;
     let checked = rule::check(tokenized)?;
     Ok(checked)
-}
-
-#[cfg(feature = "miette")]
-fn parse_and_diagnose(expression: &str) -> DiagnosticResult<Checked<Tokenized>> {
-    token::parse(expression)
-        .into_error_diagnostic()
-        .and_then_diagnose(|tokenized| rule::check(tokenized).into_error_diagnostic())
-        .and_then_diagnose(|checked| {
-            // TODO: This should accept `&Checked`.
-            diagnostics::diagnose(checked.as_ref())
-                .into_non_error_diagnostic()
-                .map_output(|_| checked)
-        })
 }
 
 // TODO: Construct paths from components in tests. In practice, using string
