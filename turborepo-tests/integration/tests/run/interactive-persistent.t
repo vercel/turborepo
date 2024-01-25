@@ -4,7 +4,7 @@ Setup
 
 Only one persistent interactive task is allowed
   $ ${TURBO} run build
-   ERROR  run failed: error preparing engine: Invalid persistent task configuration:
+   ERROR  run failed: error preparing engine: Invalid task configuration:
   Tried to set persistent task .*#build as interactive, but .*#build is already set\. Only one persistent interactive task is allowed\. (re)
   Tried to set persistent task .*#build as interactive, but .*#build is already set\. Only one persistent interactive task is allowed\. (re)
   [1]

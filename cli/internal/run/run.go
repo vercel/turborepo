@@ -492,7 +492,7 @@ func buildTaskGraphEngine(
 	// we don't need to validate.
 	if !rs.Opts.runOpts.Parallel {
 		if err := engine.ValidatePersistentDependencies(g, rs.Opts.runOpts.Concurrency); err != nil {
-			return nil, fmt.Errorf("Invalid persistent task configuration:\n%v", err)
+			return nil, fmt.Errorf("Invalid task configuration:\n%v", err)
 		}
 	}
 
