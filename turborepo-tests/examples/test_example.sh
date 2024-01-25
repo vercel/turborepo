@@ -46,6 +46,8 @@ $turbo_command > ./tmp/grep-me.txt
 
 # Make sure the task hit a FULL TURBO
 if ! grep -q ">>> FULL TURBO" ./tmp/grep-me.txt; then
-  echo "No FULL TURBO was found. For debugging instructions, please visit the turborepo-tests/README." >&2
+  echo "No FULL TURBO was found."
+  echo "Dumping logs:"
+  cat ./tmp/grep-me.txt >&2
   exit 1
 fi
