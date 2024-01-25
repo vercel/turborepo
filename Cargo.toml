@@ -82,18 +82,18 @@ lto = "off"
 [workspace.dependencies]
 async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
-browserslist-rs = { version = "0.13.0" }
+browserslist-rs = { version = "0.14.0" }
 miette = { version = "5.10.0", features = ["fancy"] }
 mdxjs = "0.1.21"
-modularize_imports = { version = "0.63.0" }
-styled_components = { version = "0.91.0" }
-styled_jsx = { version = "0.68.0" }
-swc_core = { version = "0.87.16", features = [
+modularize_imports = { version = "0.66.0" }
+styled_components = { version = "0.94.0" }
+styled_jsx = { version = "0.68.1" }
+swc_core = { version = "0.87.28", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
-swc_emotion = { version = "0.67.0" }
-swc_relay = { version = "0.39.0" }
+swc_emotion = { version = "0.70.1" }
+swc_relay = { version = "0.42.0" }
 testing = { version = "0.35.14" }
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
@@ -164,7 +164,7 @@ turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 # If you changed, must verify with ALL build targets with next-swc to ensure
 # it works. next-swc have various platforms, some doesn't support native (using openssl-sys)
 # and some aren't buildable with rustls.
-reqwest = { version = "0.11.14", default-features = false }
+reqwest = { version = "=0.11.17", default-features = false }
 
 chromiumoxide = { version = "0.5.0", features = [
   "tokio-runtime",
@@ -211,10 +211,16 @@ indicatif = "0.17.3"
 indoc = "2.0.0"
 itertools = "0.10.5"
 lazy_static = "1.4.0"
+lightningcss = { version = "1.0.0-alpha.50", features = [
+  "serde",
+  "visitor",
+  "into_owned",
+] }
 mime = "0.3.16"
 nohash-hasher = "0.2.0"
 once_cell = "1.17.1"
 owo-colors = "3.5.0"
+parcel_selectors = "0.26.0"
 parking_lot = "0.12.1"
 path-clean = "1.0.1"
 pathdiff = "0.2.1"
