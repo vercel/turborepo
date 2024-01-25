@@ -33,6 +33,7 @@ const navigation = {
   general: [
     { name: "Blog", href: "/blog" },
     { name: "Releases", href: "https://github.com/vercel/turbo/releases" },
+    { name: "Governance", href: "/governance" },
   ],
   repo: [
     { name: "Documentation", href: "/repo/docs" },

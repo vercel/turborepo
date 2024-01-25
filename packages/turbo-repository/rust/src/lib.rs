@@ -1,18 +1,18 @@
 use napi_derive::napi;
 use turbopath::AbsoluteSystemPath;
 use turborepo_repository::{
-    inference::RepoState, package_manager::PackageManager as RustPackageManager,
+    inference::RepoState as WorkspaceState, package_manager::PackageManager as RustPackageManager,
 };
 
 mod internal;
 
 #[napi]
-pub struct PackageManagerRoot {
-    repo_state: RepoState,
+pub struct Workspace {
+    workspace_state: WorkspaceState,
     #[napi(readonly)]
-    pub root: String,
+    pub absolute_path: String,
     #[napi(readonly)]
-    pub is_single_package: bool,
+    pub is_multi_package: bool,
 }
 
 #[napi]
@@ -27,18 +27,15 @@ pub struct PackageManager {
 pub struct Package {
     #[napi(readonly)]
     pub absolute_path: String,
-    #[napi(readonly)]
-    pub repo_path: String,
 }
 
 impl Package {
-    fn new(repo_root: &AbsoluteSystemPath, workspace_path: &AbsoluteSystemPath) -> Self {
-        let repo_path = repo_root
-            .anchor(workspace_path)
+    fn new(workspace_path: &AbsoluteSystemPath, package_path: &AbsoluteSystemPath) -> Self {
+        workspace_path
+            .anchor(package_path)
             .expect("workspace is in the repo root");
         Self {
-            absolute_path: workspace_path.to_string(),
-            repo_path: repo_path.to_string(),
+            absolute_path: package_path.to_string(),
         }
     }
 }
@@ -53,9 +50,9 @@ impl From<RustPackageManager> for PackageManager {
 }
 
 #[napi]
-impl PackageManagerRoot {
+impl Workspace {
     #[napi(factory)]
-    pub async fn find(path: Option<String>) -> Result<PackageManagerRoot, napi::Error> {
+    pub async fn find(path: Option<String>) -> Result<Workspace, napi::Error> {
         Self::find_internal(path).await.map_err(|e| e.into())
     }
 
@@ -64,14 +61,14 @@ impl PackageManagerRoot {
         // match rather than map/map_err due to only the Ok variant implementing "Copy"
         // match lets us handle each case independently, rather than forcing the whole
         // value to a reference or concrete value
-        match self.repo_state.package_manager.as_ref() {
+        match self.workspace_state.package_manager.as_ref() {
             Ok(pm) => Ok((*pm).into()),
             Err(e) => Err(napi::Error::from_reason(format!("{}", e))),
         }
     }
 
     #[napi]
-    pub async fn packages(&self) -> std::result::Result<Vec<Package>, napi::Error> {
+    pub async fn find_packages(&self) -> std::result::Result<Vec<Package>, napi::Error> {
         self.packages_internal().await.map_err(|e| e.into())
     }
 }

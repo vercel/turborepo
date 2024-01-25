@@ -28,16 +28,26 @@ mod signal;
 mod task_graph;
 mod task_hash;
 mod tracing;
+mod turbo_json;
+mod unescape;
 
 pub use child::spawn_child;
 use miette::Report;
+use shim::Error;
 
-pub use crate::{cli::Args, execution_state::ExecutionState};
-use crate::{commands::CommandBase, shim::Error};
+pub use crate::{
+    cli::Args,
+    commands::DaemonRootHasher,
+    daemon::{DaemonClient, DaemonConnector},
+    execution_state::ExecutionState,
+    run::package_discovery::DaemonPackageDiscovery,
+};
+use crate::{commands::CommandBase, engine::BuilderError};
 
 /// The payload from running main, if the program can complete without using Go
 /// the Rust variant will be returned. If Go is needed then the execution state
 /// that should be passed to Go will be returned.
+#[derive(Debug)]
 pub enum Payload {
     Rust(Result<i32, shim::Error>),
     Go(Box<CommandBase>),
@@ -59,7 +69,19 @@ pub fn main() -> Payload {
         // compatibility with Go. When we've deleted the Go code we can
         // move all errors to miette since it provides slightly nicer
         // printing out of the box.
-        Err(err @ (Error::MultipleCwd(..) | Error::EmptyCwd { .. })) => {
+        Err(
+            err @ (Error::MultipleCwd(..)
+            | Error::EmptyCwd { .. }
+            | Error::Cli(cli::Error::Run(run::Error::Builder(engine::BuilderError::Config(
+                config::Error::InvalidEnvPrefix { .. },
+            ))))
+            | Error::Cli(cli::Error::Run(run::Error::Config(
+                config::Error::TurboJsonParseError(_),
+            )))
+            | Error::Cli(cli::Error::Run(run::Error::Builder(BuilderError::Config(
+                config::Error::TurboJsonParseError(_),
+            ))))),
+        ) => {
             println!("{:?}", Report::new(err));
 
             Payload::Rust(Ok(1))

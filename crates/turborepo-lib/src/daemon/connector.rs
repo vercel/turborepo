@@ -113,10 +113,10 @@ impl DaemonConnector {
                         Ok(client.with_connect_settings(self))
                     }
                 }
-                Err(DaemonError::VersionMismatch) if self.can_kill_server => {
+                Err(DaemonError::VersionMismatch(_)) if self.can_kill_server => {
                     self.kill_live_server(client, pid).await?
                 }
-                Err(DaemonError::Unavailable) => self.kill_dead_server(pid).await?,
+                Err(DaemonError::Unavailable(_)) => self.kill_dead_server(pid).await?,
                 Err(e) => return Err(DaemonConnectorError::Handshake(Box::new(e))),
             };
         }
@@ -714,7 +714,7 @@ mod test {
             .await
             .unwrap_err()
             .into();
-        assert_matches!(hello_resp, DaemonError::VersionMismatch);
+        assert_matches!(hello_resp, DaemonError::VersionMismatch(_));
         let client = DaemonClient::new(client);
 
         let shutdown_fut = conn.kill_live_server(client, Pid::from(1000));

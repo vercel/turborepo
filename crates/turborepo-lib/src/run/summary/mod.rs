@@ -768,6 +768,12 @@ impl<'a> RunSummary<'a> {
         }
 
         self.tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
+
+        // Sort dependencies
+        for task in &mut self.tasks {
+            task.shared.dependencies.sort();
+            task.shared.dependents.sort();
+        }
     }
 
     fn get_path(&self) -> AbsoluteSystemPathBuf {

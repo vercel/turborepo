@@ -42,7 +42,7 @@ pub enum CacheError {
     InvalidTag(#[backtrace] Backtrace),
     #[error("cannot untar file to {0}")]
     InvalidFilePath(String, #[backtrace] Backtrace),
-    #[error("artifact verification failed: {0}")]
+    #[error("failed to contact remote cache: {0}")]
     ApiClientError(Box<turborepo_api_client::Error>, #[backtrace] Backtrace),
     #[error("signing artifact failed: {0}")]
     SignatureError(#[from] SignatureError, #[backtrace] Backtrace),

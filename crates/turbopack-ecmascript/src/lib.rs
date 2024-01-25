@@ -424,7 +424,12 @@ impl EcmascriptModuleAsset {
         }
 
         let find_package_json = find_context_file(
-            self.origin_path().resolve().await?,
+            self.origin_path()
+                .resolve()
+                .await?
+                .parent()
+                .resolve()
+                .await?,
             package_json().resolve().await?,
         )
         .await?;
@@ -509,6 +514,7 @@ impl Module for EcmascriptModuleAsset {
                 ident.add_asset(Vc::cell(name.clone()), asset.ident());
             }
             ident.add_modifier(modifier());
+            ident.layer = Some(self.asset_context.layer());
             Ok(AssetIdent::new(Value::new(ident)))
         } else {
             Ok(self
