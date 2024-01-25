@@ -181,7 +181,7 @@ pub struct TaskHashTrackerState {
 /// Caches package-inputs hashes, and package-task hashes.
 pub struct TaskHasher<'a> {
     hashes: HashMap<TaskId<'static>, String>,
-    run_opts: &'a RunOpts<'a>,
+    run_opts: &'a RunOpts,
     env_at_execution_start: &'a EnvironmentVariableMap,
     global_hash: &'a str,
     task_hash_tracker: TaskHashTracker,
@@ -327,7 +327,7 @@ impl<'a> TaskHasher<'a> {
             task: task_id.task(),
             outputs,
 
-            pass_through_args: self.run_opts.pass_through_args,
+            pass_through_args: &self.run_opts.pass_through_args,
             env: &task_definition.env,
             resolved_env_vars: hashable_env_pairs,
             pass_through_env: task_definition
