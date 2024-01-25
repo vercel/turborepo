@@ -9,7 +9,7 @@ use turbopack_core::{
     chunk::{ChunkingContext, ModuleId},
     code_builder::Code,
     output::OutputAsset,
-    source_map::{GenerateSourceMap, OptionSourceMap},
+    source_map::GenerateSourceMap,
     version::{PartialUpdate, TotalUpdate, Update, Version},
 };
 
