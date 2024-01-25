@@ -840,7 +840,7 @@ mod test {
 
             let output_str = String::from_utf8(output).expect("Failed to parse stdout");
 
-            assert!(output_str.contains("hello world"), "got: {}", output_str);
+            assert_eq!(output_str.trim(), "hello world");
         }
 
         child.wait().await;
@@ -879,7 +879,7 @@ mod test {
 
         let output_str = String::from_utf8(output).expect("Failed to parse stdout");
 
-        assert!(output_str.contains(input), "got: {}", output_str);
+        assert_eq!(output_str.trim(), input);
 
         child.wait().await;
 
@@ -1026,7 +1026,7 @@ mod test {
 
         let out = String::from_utf8(out).unwrap();
 
-        assert!(out.contains("hello world"), "got: {}", out);
+        assert_eq!(out.trim(), "hello world");
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
@@ -1067,11 +1067,7 @@ mod test {
         let exit = child.wait_with_piped_outputs(&mut out).await.unwrap();
 
         let expected = &[0, 159, 146, 150];
-        assert!(
-            out.windows(4).any(|actual| actual == expected),
-            "got: {:?}",
-            out
-        );
+        assert_eq!(out.trim_ascii(), expected);
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
