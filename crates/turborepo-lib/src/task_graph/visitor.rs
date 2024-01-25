@@ -48,7 +48,7 @@ pub struct Visitor<'a> {
     global_env: EnvironmentVariableMap,
     global_env_mode: EnvMode,
     manager: ProcessManager,
-    run_opts: &'a RunOpts<'a>,
+    run_opts: &'a RunOpts,
     package_graph: Arc<PackageGraph>,
     repo_root: &'a AbsoluteSystemPath,
     run_cache: Arc<RunCache>,
@@ -840,10 +840,7 @@ impl ExecContext {
             ChildExit::Finished(Some(0)) => {
                 if let Err(e) = stdout_writer.flush() {
                     error!("{e}");
-                } else if let Err(e) = self
-                    .task_cache
-                    .save_outputs(&mut prefixed_ui, task_duration, telemetry)
-                    .await
+                } else if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await
                 {
                     error!("error caching output: {e}");
                 } else {
