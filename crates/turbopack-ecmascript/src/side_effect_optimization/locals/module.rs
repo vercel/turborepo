@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use anyhow::{bail, Context, Result};
 use turbo_tasks::Vc;
+use turbo_tasks_fs::{File, FileContent};
 use turbopack_core::{
     asset::{Asset, AssetContent},
     chunk::{ChunkableModule, ChunkingContext},
@@ -54,9 +55,9 @@ impl Module for EcmascriptModuleLocalsModule {
 impl Asset for EcmascriptModuleLocalsModule {
     #[turbo_tasks::function]
     fn content(&self) -> Vc<AssetContent> {
-        // This is not reachable because EcmascriptModuleLocalsModule implements
-        // ChunkableModule and ChunkableModule::as_chunk_item is called instead.
-        todo!("EcmascriptModuleLocalsModule::content is not implemented")
+        let f = File::from("");
+
+        AssetContent::file(FileContent::Content(f).cell())
     }
 }
 
