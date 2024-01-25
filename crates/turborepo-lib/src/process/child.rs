@@ -33,7 +33,7 @@ use tokio::{
 };
 use tracing::debug;
 
-use super::Command;
+use super::{pty::EotStripper, Command};
 
 #[derive(Debug)]
 pub enum ChildState {
@@ -574,15 +574,16 @@ impl Child {
     async fn wait_with_piped_sync_output<R: BufRead + Send + 'static>(
         &mut self,
         mut stdout_pipe: impl Write,
-        mut stdout_lines: R,
+        stdout_lines: R,
     ) -> Result<Option<ChildExit>, std::io::Error> {
         // TODO: in order to not impose that a stdout_pipe is Send we send the bytes
         // across a channel
         let (byte_tx, mut byte_rx) = mpsc::channel(48);
         tokio::task::spawn_blocking(move || {
+            let mut stdout_lines = EotStripper::new(stdout_lines);
             let mut buffer = Vec::new();
             loop {
-                match stdout_lines.read_until(b'\n', &mut buffer) {
+                match stdout_lines.read_line(&mut buffer) {
                     Ok(0) => break,
                     Ok(_) => {
                         if byte_tx.blocking_send(buffer.clone()).is_err() {
@@ -1026,7 +1027,7 @@ mod test {
 
         let out = String::from_utf8(out).unwrap();
 
-        assert!(out.contains("hello world"), "got: {}", out);
+        assert_eq!(out.trim(), "hello world");
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
@@ -1050,6 +1051,11 @@ mod test {
         let expected_stderr = "hello moon";
         assert!(output.contains(expected_stdout), "got: {}", output);
         assert!(output.contains(expected_stderr), "got: {}", output);
+        assert!(
+            !output.contains(std::str::from_utf8(crate::process::pty::EOT_SEQUENCE).unwrap()),
+            "found EOT in output: {}",
+            output
+        );
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 

@@ -11,6 +11,7 @@
 
 mod child;
 mod command;
+mod pty;
 
 use std::{
     io,
