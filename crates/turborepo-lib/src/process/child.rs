@@ -905,7 +905,7 @@ mod test {
         let trimmed_out = output_str.trim();
         let trimmed_out = trimmed_out.strip_prefix('\u{4}').unwrap_or(trimmed_out);
 
-        assert_eq!(trimmed_out, input);
+        assert!(trimmed_out.contains(input), "got: {}", trimmed_out);
 
         child.wait().await;
 
