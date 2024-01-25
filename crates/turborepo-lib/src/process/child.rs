@@ -754,6 +754,8 @@ mod test {
     use crate::process::child::{ChildExit, ShutdownStyle};
 
     const STARTUP_DELAY: Duration = Duration::from_millis(500);
+    // We skip testing PTY usage on Windows
+    const TEST_PTY: bool = !cfg!(windows);
 
     fn find_script_dir() -> AbsoluteSystemPathBuf {
         let cwd = AbsoluteSystemPathBuf::cwd().unwrap();
@@ -765,7 +767,7 @@ mod test {
     }
 
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     async fn test_pid(use_pty: bool) {
         let script = find_script_dir().join_component("hello_world.js");
@@ -781,7 +783,7 @@ mod test {
     }
 
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     #[traced_test]
     async fn test_spawn(use_pty: bool) {
@@ -809,7 +811,7 @@ mod test {
     }
 
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     #[traced_test]
     async fn test_stdout(use_pty: bool) {
@@ -849,13 +851,9 @@ mod test {
     }
 
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     async fn test_stdio(use_pty: bool) {
-        // TODO: we currently don't support Windows + PTY
-        if use_pty && cfg!(windows) {
-            return;
-        }
         let script = find_script_dir().join_component("stdin_stdout.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
@@ -891,7 +889,7 @@ mod test {
     }
 
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     #[traced_test]
     async fn test_graceful_shutdown_timeout(use_pty: bool) {
@@ -928,7 +926,7 @@ mod test {
     }
 
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     #[traced_test]
     async fn test_graceful_shutdown(use_pty: bool) {
@@ -958,7 +956,7 @@ mod test {
     }
 
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     #[traced_test]
     async fn test_detect_killed_someone_else(use_pty: bool) {
@@ -1014,7 +1012,7 @@ mod test {
     }
 
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     async fn test_wait_with_output(use_pty: bool) {
         let script = find_script_dir().join_component("hello_world.js");
@@ -1056,13 +1054,9 @@ mod test {
     }
 
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     async fn test_wait_with_with_non_utf8_output(use_pty: bool) {
-        // TODO: fully support Windows + PTY
-        if cfg!(windows) && use_pty {
-            return;
-        }
         let script = find_script_dir().join_component("hello_non_utf8.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
@@ -1083,7 +1077,7 @@ mod test {
 
     #[cfg(unix)]
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     async fn test_kill_process_group(use_pty: bool) {
         let mut cmd = Command::new("sh");
@@ -1103,7 +1097,7 @@ mod test {
     }
 
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     async fn test_multistop(use_pty: bool) {
         let script = find_script_dir().join_component("hello_world.js");
