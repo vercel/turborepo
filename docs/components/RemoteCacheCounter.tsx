@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useTurborepoMinutesSaved } from "../lib/useTurborepoMinutesSaved";
 
 const counterFormatter = Intl.NumberFormat(undefined, {
-  minimumIntegerDigits: 3,
+  minimumIntegerDigits: 7,
   maximumFractionDigits: 0,
 });
 
