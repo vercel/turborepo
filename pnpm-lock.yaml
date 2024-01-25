@@ -1109,140 +1109,131 @@ importers:
         specifier: ^5.75.0
         version: 5.75.0
 
-  turborepo-tests/example-basic:
+  turborepo-tests/examples/basic:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
-  turborepo-tests/example-design-system:
+  turborepo-tests/examples/design-system:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
-  turborepo-tests/example-kitchen-sink:
+  turborepo-tests/examples/kitchen-sink:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
-  turborepo-tests/example-non-monorepo:
+  turborepo-tests/examples/non-monorepo:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
-  turborepo-tests/example-with-berry:
+  turborepo-tests/examples/with-berry:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
-  turborepo-tests/example-with-changesets:
+  turborepo-tests/examples/with-changesets:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
-  turborepo-tests/example-with-gatsby:
+  turborepo-tests/examples/with-gatsby:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
-  turborepo-tests/example-with-npm:
+  turborepo-tests/examples/with-npm:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
-  turborepo-tests/example-with-react-native-web:
+  turborepo-tests/examples/with-react-native-web:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
-  turborepo-tests/example-with-rollup:
+  turborepo-tests/examples/with-rollup:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
-  turborepo-tests/example-with-svelte:
+  turborepo-tests/examples/with-svelte:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
-  turborepo-tests/example-with-tailwind:
+  turborepo-tests/examples/with-tailwind:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
-  turborepo-tests/example-with-vite:
+  turborepo-tests/examples/with-vite:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
-  turborepo-tests/example-with-vue-nuxt:
+  turborepo-tests/examples/with-yarn:
     dependencies:
       turborepo-examples:
         specifier: workspace:*
-        version: link:../../examples
+        version: link:../../../examples
       turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../helpers
-
-  turborepo-tests/example-with-yarn:
-    dependencies:
-      turborepo-examples:
-        specifier: workspace:*
-        version: link:../../examples
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../helpers
+        version: link:../../helpers
 
   turborepo-tests/helpers: {}
 
@@ -1257,44 +1248,6 @@ importers:
       turborepo-tests-helpers:
         specifier: workspace:*
         version: link:../helpers
-    devDependencies:
-      cross-env:
-        specifier: ^7.0.3
-        version: 7.0.3
-
-  turborepo-tests/integration-go:
-    dependencies:
-      '@turbo/exe-stub':
-        specifier: workspace:*
-        version: link:../../packages/turbo-exe-stub
-      prysk:
-        specifier: workspace:*
-        version: link:../../packages/prysk
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-tests-integration-common:
-        specifier: workspace:*
-        version: link:../integration
-    devDependencies:
-      cross-env:
-        specifier: ^7.0.3
-        version: 7.0.3
-
-  turborepo-tests/integration-rust:
-    dependencies:
-      '@turbo/exe-stub':
-        specifier: workspace:*
-        version: link:../../packages/turbo-exe-stub
-      prysk:
-        specifier: workspace:*
-        version: link:../../packages/prysk
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-tests-integration-common:
-        specifier: workspace:*
-        version: link:../integration
     devDependencies:
       cross-env:
         specifier: ^7.0.3
