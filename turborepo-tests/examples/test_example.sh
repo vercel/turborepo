@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Start by figuring out which example we're testing and its package manager
 example_path=$1
 package_manager=$2
