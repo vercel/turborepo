@@ -153,6 +153,8 @@ impl Engine<Built> {
 
         // TODO(olszewski) once this is hooked up to a real run, we should
         // see if using rayon to parallelize would provide a speedup
+        // TODO(mehulkar) There are multiple validations here mixed up, we should
+        // refactor to separate them into their own validation functions.
         let (persistent_count, mut validation_errors) = self
             .task_graph
             .node_indices()
