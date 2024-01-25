@@ -16,15 +16,11 @@ export async function transform(args: TransformInput): TransformResult {
     // Read the content of the file
     let data = await fs.readFile(readmeFilePath, "utf8");
 
-    // an array of all the possible replacement strings.
-    const replacements = ['pnpm run', 'npm run', 'yarn run', 'bun run', 'pnpm', 'npm', 'yarn', 'bun'];
-    const replacementRegex = new RegExp(`\\b(?:${replacements.join('|')})\\b`, 'g');
-
-    // Replace all occurrences of regex with selectedPackageManager
-    data = data.replace(replacementRegex, `${selectedPackageManager} run`);
+    // replace package manager
+    const updatedReadmeData = replacePackageManager(selectedPackageManager, data);    
 
     // Write the updated content back to the file
-    await fs.writeFile(readmeFilePath, data, "utf8");
+    await fs.writeFile(readmeFilePath, updatedReadmeData, "utf8");
 
   } catch (err) {
     throw new TransformError("Unable to update README.md", {
@@ -33,4 +29,22 @@ export async function transform(args: TransformInput): TransformResult {
     });
   }
   return { result: "success", ...meta };
+}
+
+function replacePackageManager(packageManager, text) {
+  // an array of all the possible replacement strings.
+  const replacements = ['pnpm run', 'npm run', 'yarn run', 'bun run', 'pnpm', 'npm', 'yarn', 'bun'];
+  
+  // regex to search for a pattern enclosed in single backticks (` `), double backticks (`` ``) or
+  // triple backticks (``` ```) considering there might be newlines in between backticks and commands.
+  const searchRegex = new RegExp(`\`\`\`[\\s\\S]*?\\b(?:${replacements.join('|')})\\b[\\s\\S]*?\`\`\`|\`\`[\\s\\S]*?\\b(?:${replacements.join('|')})\\b[\\s\\S]*?\`\`|\`[\\s\\S]*?\\b(?:${replacements.join('|')})\\b[\\s\\S]*?\``, 'g');
+
+  // Replace all occurrences of regex with selectedPackageManager
+  text = text.replace(searchRegex, (match) => {
+      // replacement regex => the regex required to replace the package manager.
+      const replacementRegex = new RegExp(`\\b(?:${replacements.join('|')})\\b`, 'g');
+      const updatedText = match.replace(replacementRegex, `${packageManager} run`);
+      return updatedText;
+  });
+  return text;
 }
