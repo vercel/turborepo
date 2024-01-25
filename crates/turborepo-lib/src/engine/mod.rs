@@ -149,7 +149,7 @@ impl Engine<Built> {
         package_graph: &PackageGraph,
         concurrency: u32,
     ) -> Result<(), Vec<ValidateError>> {
-        let mut existing_interactive_persistent_task = false;
+        let mut existing_interactive_persistent_task: Option<String> = None;
 
         // TODO(olszewski) once this is hooked up to a real run, we should
         // see if using rayon to parallelize would provide a speedup
@@ -203,10 +203,17 @@ impl Engine<Built> {
 
                     // Don't allow more than one persistent interactive task
                     if task_definition.persistent && task_definition.interactive {
-                        if existing_interactive_persistent_task {
-                            return Err(ValidateError::TooManyPersistentInteractiveTasks {});
-                        } else {
-                            existing_interactive_persistent_task = true;
+                        let current = task_id.to_string();
+                        match existing_interactive_persistent_task.as_ref() {
+                            Some(task) => {
+                                return Err(ValidateError::TooManyPersistentInteractiveTasks {
+                                    existing: task.clone(),
+                                    current,
+                                })
+                            }
+                            None => {
+                                existing_interactive_persistent_task = Some(current);
+                            }
                         }
                     }
                 }
@@ -277,8 +284,11 @@ pub enum ValidateError {
         persistent_count: u32,
         concurrency: u32,
     },
-    #[error("Too many tasks are interactive and persistent, only one is allowed")]
-    TooManyPersistentInteractiveTasks {},
+    #[error(
+        "Tried to set persistent task {current} as interactive, but {existing} is already set. \
+         Only one persistent interactive task is allowed."
+    )]
+    TooManyPersistentInteractiveTasks { existing: String, current: String },
 }
 
 impl fmt::Display for TaskNode {
