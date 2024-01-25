@@ -9,7 +9,7 @@ use turbopack_core::{
     chunk::{ChunkingContext, ModuleId},
     code_builder::Code,
     output::OutputAsset,
-    source_map::GenerateSourceMap,
+    source_map::{GenerateSourceMap, OptionSourceMap},
     version::{PartialUpdate, TotalUpdate, Update, Version},
 };
 
@@ -81,16 +81,8 @@ struct EcmascriptModuleEntry {
 }
 
 impl EcmascriptModuleEntry {
-    async fn new(id: &ModuleId, code: ReadRef<Code>, chunk_path: &str) -> Result<Self> {
-        /// serde_qs can't serialize a lone enum when it's [serde::untagged].
-        #[derive(Serialize)]
-        struct Id<'a> {
-            id: &'a ModuleId,
-        }
-        let id = serde_qs::to_string(&Id { id }).unwrap();
-
-        let map = (*code).clone().cell().generate_source_map().await?;
-        let map = match &*map {
+    async fn from_code(id: &ModuleId, code: Vc<Code>, chunk_path: &str) -> Result<Self> {
+        let map = match &*code.generate_source_map().await? {
             Some(map) => {
                 let map = map.await?.to_source_map().await?;
                 let mut map_str = vec![];
@@ -100,12 +92,23 @@ impl EcmascriptModuleEntry {
             None => None,
         };
 
-        Ok(EcmascriptModuleEntry {
+        Ok(Self::new(id, code.await?, map, chunk_path))
+    }
+
+    fn new(id: &ModuleId, code: ReadRef<Code>, map: Option<String>, chunk_path: &str) -> Self {
+        /// serde_qs can't serialize a lone enum when it's [serde::untagged].
+        #[derive(Serialize)]
+        struct Id<'a> {
+            id: &'a ModuleId,
+        }
+        let id = serde_qs::to_string(&Id { id }).unwrap();
+
+        EcmascriptModuleEntry {
             // Cloning a rope is cheap.
             code: code.source_code().clone(),
             url: format!("{}?{}", chunk_path, &id),
             map,
-        })
+        }
     }
 }
 
@@ -210,9 +213,9 @@ pub(super) async fn update_ecmascript_merged_chunk(
                         partial.added.insert(module_id.clone());
 
                         if merged_module_map.get(&module_id) != Some(module_hash) {
-                            let entry = EcmascriptModuleEntry::new(
+                            let entry = EcmascriptModuleEntry::from_code(
                                 &module_id,
-                                module_code.clone(),
+                                module_code,
                                 chunk_path,
                             )
                             .await?;
@@ -224,7 +227,8 @@ pub(super) async fn update_ecmascript_merged_chunk(
 
                     for (module_id, module_code) in chunk_partial.modified {
                         let entry =
-                            EcmascriptModuleEntry::new(&module_id, module_code, chunk_path).await?;
+                            EcmascriptModuleEntry::from_code(&module_id, module_code, chunk_path)
+                                .await?;
                         merged_update.entries.insert(module_id, entry);
                     }
 
@@ -237,11 +241,12 @@ pub(super) async fn update_ecmascript_merged_chunk(
 
             for (id, entry) in &content_ref.entries.await? {
                 let hash = *entry.hash.await?;
-                let code = entry.code.await?;
+                // let code = entry.code.await?;
                 added.modules.insert(id.clone());
 
                 if merged_module_map.get(id) != Some(hash) {
-                    let entry = EcmascriptModuleEntry::new(id, code, chunk_path).await?;
+                    let entry =
+                        EcmascriptModuleEntry::from_code(id, entry.code, chunk_path).await?;
                     merged_update.entries.insert(id.clone(), entry);
                 }
             }
