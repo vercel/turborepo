@@ -1,5 +1,7 @@
 # Turborepo Examples tests
 
+This README describes the strategy for the tests in the `examples-*` for folders.
+
 These tests are for ensuring that the examples we are providing to users work right out of the box.
 
 ## Test structure
