@@ -294,7 +294,6 @@ async function loadWebAssemblyModule(
 })();
 
 function _eval({ code, url, map }: EcmascriptModuleEntry): ModuleFactory {
-  console.log("HMR", { url, map });
   code += `\n\n//# sourceURL=${location.origin}/${CHUNK_BASE_PATH}${url}`;
   if (map)
     code += `\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${btoa(
