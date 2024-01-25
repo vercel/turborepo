@@ -149,6 +149,8 @@ impl Engine<Built> {
         package_graph: &PackageGraph,
         concurrency: u32,
     ) -> Result<(), Vec<ValidateError>> {
+        let mut existing_interactive_persistent_task = false;
+
         // TODO(olszewski) once this is hooked up to a real run, we should
         // see if using rayon to parallelize would provide a speedup
         let (persistent_count, mut validation_errors) = self
@@ -189,6 +191,7 @@ impl Engine<Built> {
                         .ok_or_else(|| ValidateError::MissingPackageJson {
                             package: dep_id.package().to_string(),
                         })?;
+
                     if task_definition.persistent
                         && package_json.scripts.contains_key(dep_id.task())
                     {
@@ -196,6 +199,15 @@ impl Engine<Built> {
                             persistent_task: dep_id.to_string(),
                             dependant: task_id.to_string(),
                         });
+                    }
+
+                    // Don't allow more than one persistent interactive task
+                    if task_definition.persistent && task_definition.interactive {
+                        if existing_interactive_persistent_task {
+                            return Err(ValidateError::TooManyPersistentInteractiveTasks {});
+                        } else {
+                            existing_interactive_persistent_task = true;
+                        }
                     }
                 }
 
@@ -265,6 +277,8 @@ pub enum ValidateError {
         persistent_count: u32,
         concurrency: u32,
     },
+    #[error("Too many tasks are interactive and persistent, only one is allowed")]
+    TooManyPersistentInteractiveTasks {},
 }
 
 impl fmt::Display for TaskNode {
