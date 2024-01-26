@@ -175,18 +175,18 @@ async fn base_resolve_options(
         environment.resolve_extensions().await?.clone_value()
     } else {
         let mut ext = Vec::new();
-        if opt.enable_typescript && opt.enable_react {
-            ext.push(".tsx".to_string());
-        }
-        if opt.enable_typescript {
-            ext.push(".ts".to_string());
-        }
         if opt.enable_react {
             ext.push(".jsx".to_string());
         }
         ext.push(".js".to_string());
         if opt.enable_mjs_extension {
             ext.push(".mjs".to_string());
+        }
+        if opt.enable_typescript && opt.enable_react {
+            ext.push(".tsx".to_string());
+        }
+        if opt.enable_typescript {
+            ext.push(".ts".to_string());
         }
         if opt.enable_node_native_modules {
             ext.push(".node".to_string());
