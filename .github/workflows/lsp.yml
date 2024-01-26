@@ -78,4 +78,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: turborepo-lsp-${{ matrix.settings.target }}
-          path: target/${{ matrix.settings.target }}/release/turborepo-lsp*
+          path: target/${{ matrix.settings.target }}/release-turborepo-lsp/turborepo-lsp*
