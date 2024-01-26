@@ -23,10 +23,10 @@ turbo_command="turbo build lint --output-logs=errors-only"
 cd $example_path
 
 # Isolate the example from the rest of the repo from Git's perspective
-./helpers/setup_git.sh .
+# ./helpers/setup_git.sh .
 
 # Let's also isolate from turbo's perspective
-rm -rf .turbo/ node_modules/ || true
+# rm -rf .turbo/ node_modules/ || true
 
 # Simulating the user's first run and dumping logs to a file
 $turbo_command > ./tmp/grep-me-for-miss.txt
