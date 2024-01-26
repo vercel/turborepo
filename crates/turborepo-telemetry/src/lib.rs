@@ -67,8 +67,7 @@ pub fn telem(event: events::TelemetryEvent) {
         }
         None => {
             // If we're in debug mode - log a warning
-            // TODO:[telemetry] Remove the internal test check in `1.12`
-            if cfg!(debug_assertions) && !cfg!(test) && config::is_telemetry_internal_test() {
+            if cfg!(debug_assertions) && !cfg!(test) {
                 println!("\n[DEVELOPMENT ERROR] telemetry sender not initialized\n");
             }
             debug!("telemetry sender not initialized");
