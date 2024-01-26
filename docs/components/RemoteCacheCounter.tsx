@@ -8,7 +8,9 @@ const counterFormatter = Intl.NumberFormat(undefined, {
   maximumFractionDigits: 0,
 });
 
-const START_NUM = 2080300;
+// Arbitrary number based on the value on January 25th, 2024.
+// If the number takes too long to update on page load, you can bump this number up.
+const START_NUM = 2080300; 
 
 export function RemoteCacheCounter() {
   const [targetHours, setTargetHours] = useState(START_NUM);
