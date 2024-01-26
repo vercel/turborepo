@@ -28,6 +28,13 @@ fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
     Ok(result.encode_hex::<String>())
 }
 
+fn to_glob(input: &str) -> Result<Glob, Error> {
+    let glob = fix_glob_pattern(input).into_unix();
+    let g = Glob::new(glob.as_str()).map(|g| g.into_owned())?;
+
+    Ok(g)
+}
+
 pub(crate) fn hash_files(
     root_path: &AbsoluteSystemPath,
     files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
@@ -63,18 +70,31 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
     for pattern in inputs {
         let pattern = pattern.as_ref();
         if let Some(exclusion) = pattern.strip_prefix('!') {
-            let glob = fix_glob_pattern(exclusion).into_unix();
-            let g = Glob::new(glob.as_str()).map(|g| g.into_owned())?;
+            let g = to_glob(exclusion)?;
             excludes.push(g);
         } else {
-            let glob = fix_glob_pattern(pattern).into_unix();
-            let g = Glob::new(glob.as_str()).map(|g| g.into_owned())?;
+            let g = to_glob(pattern)?;
             includes.push(g);
         }
     }
     let include_pattern = if includes.is_empty() {
         None
     } else {
+        // Add in package.json and turbo.json to input patterns. Both file paths are
+        // relative to pkgPath
+        //
+        // - package.json is an input because if the `scripts` in the package.json
+        //   change (i.e. the tasks that turbo executes), we want a cache miss, since
+        //   any existing cache could be invalid.
+        // - turbo.json because it's the definition of the tasks themselves. The root
+        //   turbo.json is similarly included in the global hash. This file may not
+        //   exist in the workspace, but that is ok, because it will get ignored
+        //   downstream.
+        let turbo_g = to_glob("package.json")?;
+        let package_g = to_glob("turbo.json")?;
+        includes.push(turbo_g);
+        includes.push(package_g);
+
         Some(any(includes)?)
     };
     let exclude_pattern = if excludes.is_empty() {
@@ -262,9 +282,21 @@ mod tests {
         let pkg_path = AnchoredSystemPathBuf::from_raw("child-dir/libA").unwrap();
         let unix_pkg_path = pkg_path.to_unix();
         let mut file_hash: Vec<(&str, &str, Option<&str>)> = vec![
+            ("turbo.json", "turbo.json-file-contents", None),
+            ("package.json", "root-package.json-file-contents", None),
             ("top-level-file", "top-level-file-contents", None),
             ("other-dir/other-dir-file", "other-dir-file-contents", None),
             ("ignoreme", "anything", None),
+            (
+                "child-dir/libA/turbo.json",
+                "lib-turbo.json-content",
+                Some("ca4dbb95c0829676756c6decae728252d4aa4911"),
+            ),
+            (
+                "child-dir/libA/package.json",
+                "lib-package.json-content",
+                Some("55d57df9acc1b37d0cfc2c1c70379dab48f3f7e1"),
+            ),
             (
                 "child-dir/libA/some-file",
                 "some-file-contents",
@@ -342,9 +374,12 @@ mod tests {
             if let Some(hash) = expected_hash {
                 let unix_pkg_file_path = unix_path.strip_prefix(&unix_pkg_path).unwrap();
                 if unix_pkg_file_path.ends_with("file")
-                    && !unix_pkg_file_path.ends_with("excluded-file")
+                    || unix_pkg_file_path.ends_with("package.json")
+                    || unix_pkg_file_path.ends_with("turbo.json")
                 {
-                    expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
+                    if !unix_pkg_file_path.ends_with("excluded-file") {
+                        expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
+                    }
                 }
             }
         }
