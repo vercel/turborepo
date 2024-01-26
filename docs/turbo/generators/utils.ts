@@ -1,5 +1,3 @@
-import fetch from "node-fetch";
-
 interface Answers {
   turboStars: string;
   turboDownloads: string;

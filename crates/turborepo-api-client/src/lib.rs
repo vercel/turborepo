@@ -96,6 +96,12 @@ pub struct APIAuth {
     pub team_slug: Option<String>,
 }
 
+pub fn is_linked(api_auth: &Option<APIAuth>) -> bool {
+    api_auth
+        .as_ref()
+        .map_or(false, |api_auth| api_auth.is_linked())
+}
+
 #[async_trait]
 impl Client for APIClient {
     async fn get_user(&self, token: &str) -> Result<UserResponse> {
