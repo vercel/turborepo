@@ -10,7 +10,7 @@ use turbo_tasks_fs::{
     DirectoryContent, DirectoryEntry, FileSystemEntryType, FileSystemPath, LinkContent, LinkType,
 };
 
-#[turbo_tasks::value(shared, serialization = "auto_for_input")]
+#[turbo_tasks::value(serialization = "auto_for_input")]
 #[derive(PartialOrd, Ord, Hash, Clone, Debug, Default)]
 pub enum Pattern {
     Constant(String),
@@ -317,6 +317,40 @@ impl Pattern {
         }
     }
 
+    pub fn split_could_match(&self, value: &str) -> (Option<Pattern>, Option<Pattern>) {
+        if let Pattern::Alternatives(list) = self {
+            let mut could_match_list = Vec::new();
+            let mut could_not_match_list = Vec::new();
+            for alt in list.iter() {
+                if alt.could_match(value) {
+                    could_match_list.push(alt.clone());
+                } else {
+                    could_not_match_list.push(alt.clone());
+                }
+            }
+            (
+                if could_match_list.is_empty() {
+                    None
+                } else if could_match_list.len() == 1 {
+                    Some(could_match_list.into_iter().next().unwrap())
+                } else {
+                    Some(Pattern::Alternatives(could_match_list))
+                },
+                if could_not_match_list.is_empty() {
+                    None
+                } else if could_not_match_list.len() == 1 {
+                    Some(could_not_match_list.into_iter().next().unwrap())
+                } else {
+                    Some(Pattern::Alternatives(could_not_match_list))
+                },
+            )
+        } else if self.could_match(value) {
+            (Some(self.clone()), None)
+        } else {
+            (None, Some(self.clone()))
+        }
+    }
+
     pub fn is_match(&self, value: &str) -> bool {
         if let Pattern::Alternatives(list) = self {
             list.iter()
@@ -357,6 +391,7 @@ impl Pattern {
         }
     }
 
+    /// Returns true the pattern could match something that starts with `value`.
     pub fn could_match(&self, value: &str) -> bool {
         if let Pattern::Alternatives(list) = self {
             list.iter()
@@ -434,7 +469,7 @@ impl Pattern {
                 }
             }
             Pattern::Alternatives(_) => {
-                panic!("for matching a Pattern must be normalized")
+                panic!("for matching a Pattern must be normalized {:?}", self)
             }
             Pattern::Concatenation(list) => {
                 for part in list {
@@ -565,6 +600,14 @@ impl Pattern {
             }
         }
     }
+
+    pub fn or_any_nested_file(&self) -> Self {
+        let mut new = self.clone();
+        new.push(Pattern::Constant("/".to_string()));
+        new.push(Pattern::Dynamic);
+        new.normalize();
+        Pattern::alternatives([self.clone(), new])
+    }
 }
 
 impl Pattern {
@@ -579,29 +622,26 @@ impl Pattern {
     fn new_internal(pattern: Value<Pattern>) -> Vc<Self> {
         Self::cell(pattern.into_value())
     }
-
-    #[turbo_tasks::function]
-    pub async fn or_any_nested_file(self: Vc<Self>) -> Result<Vc<Self>> {
-        let mut new = self.await?.clone_value();
-        new.push(Pattern::alternatives([
-            Pattern::Constant("".to_string()),
-            Pattern::concat([Pattern::Constant("/".to_string()), Pattern::Dynamic]),
-        ]));
-        Ok(Pattern::new_internal(Value::new(new)))
-    }
 }
 
 #[derive(PartialEq)]
 enum MatchResult<'a> {
+    /// No match
     None,
+    /// Matches only a part of the pattern before reaching the end of the string
     Partial,
+    /// Matches the whole pattern (but maybe not the whole string)
     Consumed {
+        /// Part of the string remaining after matching the whole pattern
         remaining: &'a str,
+        /// Set when the pattern ends with a dynamic part. The dynamic part
+        /// could match n bytes more of the string.
         any_offset: Option<usize>,
     },
 }
 
 impl<'a> MatchResult<'a> {
+    /// Returns true if the whole pattern matches the whole string
     fn is_match(&self) -> bool {
         match self {
             MatchResult::None => false,
@@ -618,6 +658,9 @@ impl<'a> MatchResult<'a> {
             }
         }
     }
+
+    /// Returns true if (at least a part of) the pattern matches the whole
+    /// string and can also match more bytes in the string
     fn could_match_others(&self) -> bool {
         match self {
             MatchResult::None => false,
@@ -634,6 +677,9 @@ impl<'a> MatchResult<'a> {
             }
         }
     }
+
+    /// Returns true if (at least a part of) the pattern matches the whole
+    /// string
     fn could_match(&self) -> bool {
         match self {
             MatchResult::None => false,
@@ -712,7 +758,7 @@ pub struct PatternMatches(Vec<PatternMatch>);
 
 /// Find all files or directories that match the provided `pattern` with the
 /// specified `lookup_dir` directory. `prefix` is the already matched part of
-/// the pattern that leads to the `lookup_dircontext_dir` directory. When
+/// the pattern that leads to the `lookup_dir` directory. When
 /// `force_in_lookup_dir` is set, leaving the `lookup_dir` directory by
 /// matching `..` is not allowed.
 ///

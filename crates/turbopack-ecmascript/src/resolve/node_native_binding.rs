@@ -304,12 +304,11 @@ pub async fn resolve_node_gyp_build_files(
     let prebuilt_dir = format!("{}-{}", platform, arch);
     Ok(resolve_raw(
         context_dir,
-        Pattern::Concatenation(vec![
+        Pattern::new(Pattern::Concatenation(vec![
             Pattern::Constant(format!("prebuilds/{}/", prebuilt_dir)),
             Pattern::Dynamic,
             Pattern::Constant(".node".to_owned()),
-        ])
-        .into(),
+        ])),
         true,
     )
     .as_raw_module_result())
@@ -370,7 +369,7 @@ pub async fn resolve_node_bindings_files(
     loop {
         let resolved = resolve_raw(
             root_context_dir,
-            Pattern::Constant("package.json".to_owned()).into(),
+            Pattern::new(Pattern::Constant("package.json".to_owned())),
             true,
         )
         .first_source()

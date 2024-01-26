@@ -1,4 +1,5 @@
 use anyhow::Result;
+use either::Either;
 use turbo_tasks::{ValueToString, Vc};
 use turbo_tasks_fs::FileSystemPath;
 use turbopack_core::{
@@ -66,31 +67,81 @@ impl DirAssetReference {
     }
 }
 
+#[turbo_tasks::function]
+async fn resolve_reference_from_dir(
+    parent_path: Vc<FileSystemPath>,
+    path: Vc<Pattern>,
+) -> Result<Vc<ModuleResolveResult>> {
+    let path_ref = path.await?;
+    let (abs_path, rel_path) = path_ref.split_could_match("/ROOT/");
+    let matches = match (abs_path, rel_path) {
+        (Some(abs_path), Some(rel_path)) => Either::Right(
+            read_matches(
+                parent_path.root().resolve().await?,
+                "/ROOT/".to_string(),
+                true,
+                Pattern::new(abs_path.or_any_nested_file()),
+            )
+            .await?
+            .into_iter()
+            .chain(
+                read_matches(
+                    parent_path,
+                    "".to_string(),
+                    true,
+                    Pattern::new(rel_path.or_any_nested_file()),
+                )
+                .await?
+                .into_iter(),
+            ),
+        ),
+        (Some(abs_path), None) => Either::Left(
+            // absolute path only
+            read_matches(
+                parent_path.root().resolve().await?,
+                "/ROOT/".to_string(),
+                true,
+                Pattern::new(abs_path.or_any_nested_file()),
+            )
+            .await?
+            .into_iter(),
+        ),
+        (None, Some(rel_path)) => Either::Left(
+            // relative path only
+            read_matches(
+                parent_path,
+                "".to_string(),
+                true,
+                Pattern::new(rel_path.or_any_nested_file()),
+            )
+            .await?
+            .into_iter(),
+        ),
+        (None, None) => return Ok(ModuleResolveResult::unresolveable().cell()),
+    };
+    Ok(ModuleResolveResult::modules(
+        matches
+            .map(|pat_match| match pat_match {
+                PatternMatch::File(matched_path, file) => Some((
+                    RequestKey::new(matched_path.clone()),
+                    Vc::upcast(RawModule::new(Vc::upcast(FileSource::new(*file)))),
+                )),
+                PatternMatch::Directory(..) => None,
+            })
+            .flatten(),
+    )
+    .cell())
+}
+
 #[turbo_tasks::value_impl]
 impl ModuleReference for DirAssetReference {
     #[turbo_tasks::function]
     async fn resolve_reference(&self) -> Result<Vc<ModuleResolveResult>> {
         let parent_path = self.source.ident().path().parent();
-        let matches = read_matches(
-            parent_path,
-            "".to_string(),
-            true,
-            self.path.or_any_nested_file(),
-        )
-        .await?;
-        Ok(ModuleResolveResult::modules(
-            matches
-                .iter()
-                .map(|pat_match| match pat_match {
-                    PatternMatch::File(matched_path, file) => Some((
-                        RequestKey::new(matched_path.clone()),
-                        Vc::upcast(RawModule::new(Vc::upcast(FileSource::new(*file)))),
-                    )),
-                    PatternMatch::Directory(..) => None,
-                })
-                .flatten(),
-        )
-        .cell())
+        Ok(resolve_reference_from_dir(
+            parent_path.resolve().await?,
+            self.path,
+        ))
     }
 }
 

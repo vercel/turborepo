@@ -1329,7 +1329,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                         ),
                     )
                 }
-                analysis.add_reference(FileSourceReference::new(source, pat.into()));
+                analysis.add_reference(FileSourceReference::new(source, Pattern::new(pat)));
                 return Ok(());
             }
             let (args, hints) = explain_args(&args);
@@ -1369,7 +1369,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                     ),
                 )
             }
-            analysis.add_reference(FileSourceReference::new(source, pat.into()));
+            analysis.add_reference(FileSourceReference::new(source, Pattern::new(pat)));
             return Ok(());
         }
 
@@ -1400,7 +1400,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                     ),
                 )
             }
-            analysis.add_reference(DirAssetReference::new(source, pat.into()));
+            analysis.add_reference(DirAssetReference::new(source, Pattern::new(pat)));
             return Ok(());
         }
         JsValue::WellKnownFunction(WellKnownFunctionKind::ChildProcessSpawnMethod(name)) => {
@@ -1439,7 +1439,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                         ),
                     );
                 }
-                analysis.add_reference(FileSourceReference::new(source, pat.into()));
+                analysis.add_reference(FileSourceReference::new(source, Pattern::new(pat)));
                 return Ok(());
             }
             let (args, hints) = explain_args(&args);
@@ -1503,7 +1503,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                 }
                 analysis.add_reference(NodePreGypConfigReference::new(
                     origin.origin_path().parent(),
-                    pat.into(),
+                    Pattern::new(pat),
                     compile_time_info.environment().compile_target(),
                 ));
                 return Ok(());
@@ -1614,7 +1614,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                                 };
                                 analysis.add_reference(DirAssetReference::new(
                                     source,
-                                    abs_pattern.into(),
+                                    Pattern::new(abs_pattern),
                                 ));
                                 return Ok(());
                             }
@@ -1669,7 +1669,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                         .await?;
                     js_value_to_pattern(&linked_func_call)
                 };
-                analysis.add_reference(DirAssetReference::new(source, abs_pattern.into()));
+                analysis.add_reference(DirAssetReference::new(source, Pattern::new(abs_pattern)));
                 return Ok(());
             }
             let (args, hints) = explain_args(&args);
@@ -1729,7 +1729,7 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
                     {
                         analysis.add_reference(DirAssetReference::new(
                             source,
-                            Pattern::Constant(dir).into(),
+                            Pattern::new(Pattern::Constant(dir)),
                         ));
                     }
                     return Ok(());
