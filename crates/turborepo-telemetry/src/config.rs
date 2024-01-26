@@ -10,11 +10,6 @@ use tracing::{debug, error};
 use turborepo_ui::{color, BOLD, GREY, UI, UNDERLINE};
 use uuid::Uuid;
 
-// Telemetry ships disabled by default until we can announce it publicly, this
-// allows us to test it internally, and will be removed in 1.12
-// TODO:[telemetry] Remove this in `1.12`
-static ENABLED_ENV_VAR: &str = "TURBO_TELEMETRY_ENABLED";
-
 static DEBUG_ENV_VAR: &str = "TURBO_TELEMETRY_DEBUG";
 static DISABLED_ENV_VAR: &str = "TURBO_TELEMETRY_DISABLED";
 static DISABLED_MESSAGE_ENV_VAR: &str = "TURBO_TELEMETRY_MESSAGE_DISABLED";
@@ -188,7 +183,10 @@ impl TelemetryConfig {
     pub fn is_telemetry_warning_enabled() -> bool {
         let turbo_telemetry_msg_disabled =
             env::var(DISABLED_MESSAGE_ENV_VAR).unwrap_or("0".to_string());
-        turbo_telemetry_msg_disabled != "1" && turbo_telemetry_msg_disabled != "true"
+        let is_disabled =
+            turbo_telemetry_msg_disabled == "1" || turbo_telemetry_msg_disabled == "true";
+
+        !is_disabled
     }
 
     pub fn get_id(&self) -> &str {
@@ -272,9 +270,4 @@ fn one_way_hash_with_salt(salt: &str, input: &str) -> String {
     hasher.update(salted.as_bytes());
     let generic = hasher.finalize();
     hex::encode(generic)
-}
-
-// TODO:[telemetry] Remove this in `1.12`
-pub fn is_telemetry_internal_test() -> bool {
-    env::var(ENABLED_ENV_VAR).unwrap_or("0".to_string()) == "1"
 }
