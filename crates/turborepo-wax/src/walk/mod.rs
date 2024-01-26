@@ -71,13 +71,16 @@ mod filter;
 mod glob;
 
 use std::{
+    fs,
     fs::{FileType, Metadata},
     io,
+    io::ErrorKind,
     path::{Path, PathBuf},
+    rc::Rc,
 };
 
 use thiserror::Error;
-use walkdir::{self, DirEntry, WalkDir};
+use walkdir::{self, DirEntry, Error, WalkDir};
 
 pub use crate::walk::glob::{GlobEntry, GlobWalker};
 use crate::{
@@ -506,8 +509,101 @@ pub trait Entry {
 /// [`WalkTree`]: crate::walk::WalkTree
 #[derive(Clone, Debug)]
 pub struct TreeEntry {
-    entry: DirEntry,
+    entry: WaxDirEntry,
     prefix: usize,
+}
+
+/// A light wrapper around DirEntry that allows
+/// us to reconstruct virtual ones if needed
+#[derive(Clone, Debug)]
+pub enum WaxDirEntry {
+    DirEntry(DirEntry),
+    /// Dead symlinks will yield errors from walkdir, but we may want them
+    DeadSymlink {
+        path: PathBuf,
+        file_type: FileType,
+        depth: usize,
+        error: Rc<Error>,
+    },
+}
+
+impl From<DirEntry> for WaxDirEntry {
+    fn from(inner: DirEntry) -> Self {
+        WaxDirEntry::DirEntry(inner)
+    }
+}
+
+impl TryFrom<walkdir::Error> for WaxDirEntry {
+    type Error = walkdir::Error;
+
+    fn try_from(error: Error) -> Result<Self, walkdir::Error> {
+        if error
+            .io_error()
+            .filter(|e| e.kind() == ErrorKind::NotFound)
+            .is_some()
+        {
+            let path = error.path().expect("not found errors always have paths");
+
+            if let Some(symlink_meta) = std::fs::symlink_metadata(path)
+                .ok()
+                .filter(Metadata::is_symlink)
+            {
+                return Ok(WaxDirEntry::DeadSymlink {
+                    path: path.to_path_buf(),
+                    file_type: symlink_meta.file_type(),
+                    depth: error.depth(),
+                    error: Rc::new(error),
+                });
+            }
+        }
+
+        Err(error)
+    }
+}
+
+impl WaxDirEntry {
+    pub fn path(&self) -> &Path {
+        match self {
+            WaxDirEntry::DirEntry(inner) => inner.path(),
+            WaxDirEntry::DeadSymlink { path, .. } => path.as_path(),
+        }
+    }
+
+    pub fn into_path(self) -> PathBuf {
+        match self {
+            WaxDirEntry::DirEntry(inner) => inner.into_path(),
+            WaxDirEntry::DeadSymlink { path, .. } => path,
+        }
+    }
+
+    pub fn file_type(&self) -> FileType {
+        match self {
+            WaxDirEntry::DirEntry(inner) => inner.file_type(),
+            WaxDirEntry::DeadSymlink { file_type, .. } => *file_type,
+        }
+    }
+
+    pub fn depth(&self) -> usize {
+        match self {
+            WaxDirEntry::DirEntry(inner) => inner.depth(),
+            WaxDirEntry::DeadSymlink { depth, .. } => *depth,
+        }
+    }
+
+    pub fn metadata(&self) -> Result<Metadata, WalkError> {
+        match self {
+            WaxDirEntry::DirEntry(inner) => inner.metadata().map_err(From::from),
+            WaxDirEntry::DeadSymlink { path, error, .. } => {
+                fs::symlink_metadata(path).map_err(|e| WalkError {
+                    depth: error.depth(),
+                    kind: WalkErrorKind::Io {
+                        path: Some(path.to_path_buf()),
+                        error: e,
+                    },
+                })
+            }
+        }
+    }
 }
 
 impl Entry for TreeEntry {
@@ -615,11 +711,20 @@ impl Iterator for WalkTree {
                 Ok(entry) => (
                     entry.file_type().is_dir(),
                     Some(Ok(TreeEntry {
-                        entry,
+                        entry: entry.into(),
                         prefix: self.prefix,
                     })),
                 ),
-                Err(error) => (false, Some(Err(error.into()))),
+                Err(error) => match WaxDirEntry::try_from(error) {
+                    Ok(entry) => (
+                        false,
+                        Some(Ok(TreeEntry {
+                            entry,
+                            prefix: self.prefix,
+                        })),
+                    ),
+                    Err(error) => (false, Some(Err(error.into()))),
+                },
             },
             _ => (false, None),
         };
