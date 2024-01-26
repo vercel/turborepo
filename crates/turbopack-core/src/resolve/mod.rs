@@ -432,7 +432,7 @@ impl ValueToString for ResolveResult {
             write!(result, "{} -> ", request).unwrap();
             match item {
                 ResolveResultItem::Source(a) => {
-                    result.push_str(&*a.ident().to_string().await?);
+                    result.push_str(&a.ident().to_string().await?);
                 }
                 ResolveResultItem::OriginalReferenceTypeExternal(s) => {
                     result.push_str("external ");
@@ -459,7 +459,7 @@ impl ValueToString for ResolveResult {
                 if i > 0 {
                     result.push_str(", ");
                 }
-                result.push_str(&*source.ident().to_string().await?);
+                result.push_str(&source.ident().to_string().await?);
             }
             result.push(')');
         }
@@ -801,7 +801,7 @@ impl ResolveResult {
         let new_primary = this
             .primary
             .iter()
-            .map(|(k, v)| {
+            .filter_map(|(k, v)| {
                 if let Some(k) = &k.request {
                     if let Some(remaining) = k.strip_prefix(&old_request_key) {
                         Some((
@@ -821,7 +821,6 @@ impl ResolveResult {
                     Some((request_key.clone(), v.clone()))
                 }
             })
-            .flatten()
             .collect();
         Ok(ResolveResult {
             primary: new_primary,
