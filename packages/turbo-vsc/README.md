@@ -41,3 +41,8 @@ Pipeline entries that do not refer to a valid package or task will be highlighte
 #### Contextual codemods
 
 Got deprecated syntax? Know about immediately and automatically fix them with codemods.
+
+## Settings
+
+There is a single setting so far, which can be used to override the auto-detected path to your turbo binary,
+if it fails or if you use a different one. You can access it in the vscode settings.
