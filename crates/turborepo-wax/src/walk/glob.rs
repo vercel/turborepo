@@ -378,6 +378,7 @@ impl GlobWalker {
                     .components()
                     .filter_map(|component| match component {
                         Component::Normal(component) => Some(CandidatePath::from(component)),
+                        Component::Prefix(prefix) => Some(CandidatePath::from(prefix.as_os_str())),
                         _ => None,
                     })
                     .skip(depth)

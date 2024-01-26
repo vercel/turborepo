@@ -148,6 +148,8 @@ impl JoinAndGetDepth for Path {
             depth
                 .checked_add(1)
                 .expect("overflow determining join depth")
+        } else if path.has_root() {
+            depth
         } else {
             depth.saturating_sub(self.components().count())
         };
@@ -976,6 +978,8 @@ mod tests {
     use std::{collections::HashSet, path::PathBuf};
 
     use build_fs_tree::{dir, file, Build, FileSystemTree};
+    use path_slash::PathBufExt;
+    use regex::Regex;
     use tempfile::{self, TempDir};
 
     use crate::{
@@ -1191,6 +1195,37 @@ mod tests {
             [path.join("src/glob.rs"), path.join("src/lib.rs"),]
                 .into_iter()
                 .collect(),
+        );
+    }
+
+    #[test]
+    fn walk_with_anchored_glob() {
+        let (_root, path) = temptree();
+        let slash_path = path.to_slash().unwrap();
+
+        // on windows the slash path doesn't escape the colon. to make
+        // it a valid glob, we must
+        #[cfg(windows)]
+        let slash_path = {
+            let regex = Regex::new("([A-Z]):").unwrap();
+            regex.replace(&slash_path, "$1\\:")
+        };
+
+        let glob_exp = format!("{}/{}", slash_path, "**/*.rs");
+
+        let glob = Glob::new(&glob_exp).unwrap();
+        let paths: HashSet<_> = glob.walk(&path).flatten().map(Entry::into_path).collect();
+        assert_set_eq!(
+            paths,
+            [
+                "src/glob.rs",
+                "src/lib.rs",
+                "tests/harness/mod.rs",
+                "tests/walk.rs"
+            ]
+            .into_iter()
+            .map(|c| path.join(c))
+            .collect(),
         );
     }
 
