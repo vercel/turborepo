@@ -183,7 +183,10 @@ impl TelemetryConfig {
     pub fn is_telemetry_warning_enabled() -> bool {
         let turbo_telemetry_msg_disabled =
             env::var(DISABLED_MESSAGE_ENV_VAR).unwrap_or("0".to_string());
-        turbo_telemetry_msg_disabled != "1" && turbo_telemetry_msg_disabled != "true"
+        let is_disabled =
+            turbo_telemetry_msg_disabled == "1" || turbo_telemetry_msg_disabled == "true";
+
+        !is_disabled
     }
 
     pub fn get_id(&self) -> &str {
