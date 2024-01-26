@@ -65,8 +65,14 @@ impl ProcessManager {
         if lock.is_closing {
             return None;
         }
-        let child =
-            child::Child::spawn(command, child::ShutdownStyle::Graceful(stop_timeout), false);
+        // Only use PTY if we're not on windows and we're currently hooked up to a
+        // in a TTY
+        let use_pty = !cfg!(windows) && atty::is(atty::Stream::Stdout);
+        let child = child::Child::spawn(
+            command,
+            child::ShutdownStyle::Graceful(stop_timeout),
+            use_pty,
+        );
         if let Ok(child) = &child {
             lock.children.push(child.clone());
         }
