@@ -11,7 +11,7 @@ use crate::{
     module::{Module, Modules},
     output::{OutputAsset, OutputAssets},
     raw_module::RawModule,
-    resolve::ModuleResolveResult,
+    resolve::{ModuleResolveResult, RequestKey},
 };
 pub mod source_map;
 
@@ -62,7 +62,7 @@ impl SingleModuleReference {
 impl ModuleReference for SingleModuleReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::module(self.asset).cell()
+        ModuleResolveResult::module(RequestKey::default(), self.asset).cell()
     }
 }
 
@@ -108,7 +108,7 @@ impl SingleOutputAssetReference {
 impl ModuleReference for SingleOutputAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::output_asset(self.asset).cell()
+        ModuleResolveResult::output_asset(RequestKey::default(), self.asset).cell()
     }
 }
 

@@ -415,7 +415,8 @@ pub async fn type_resolve(
     };
     let result = origin
         .asset_context()
-        .process_resolve_result(result, ty.clone());
+        .process_resolve_result(result, ty.clone())
+        .as_typings_result();
     handle_resolve_error(
         result,
         ty,

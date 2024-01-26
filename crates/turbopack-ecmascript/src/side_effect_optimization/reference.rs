@@ -8,7 +8,7 @@ use turbo_tasks::{ValueToString, Vc};
 use turbopack_core::{
     chunk::{ChunkItemExt, ChunkableModule, ChunkableModuleReference, ModuleId},
     reference::ModuleReference,
-    resolve::{ModulePart, ModuleResolveResult},
+    resolve::{ModulePart, ModuleResolveResult, RequestKey},
 };
 
 use super::{
@@ -90,7 +90,7 @@ impl ModuleReference for EcmascriptModulePartReference {
         } else {
             Vc::upcast(self.module)
         };
-        Ok(ModuleResolveResult::module(module).cell())
+        Ok(ModuleResolveResult::module(RequestKey::default(), module).cell())
     }
 }
 

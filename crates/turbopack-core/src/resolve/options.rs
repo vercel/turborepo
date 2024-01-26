@@ -9,7 +9,7 @@ use turbo_tasks_fs::{glob::Glob, FileSystemPath};
 
 use super::{
     alias_map::{AliasMap, AliasTemplate},
-    AliasPattern, ResolveResult, ResolveResultItem,
+    AliasPattern, RequestKey, ResolveResult, ResolveResultItem,
 };
 use crate::resolve::{parse::Request, plugin::ResolvePlugin};
 
@@ -272,21 +272,24 @@ async fn import_mapping_to_result(
     Ok(match &*mapping.await? {
         ImportMapping::Direct(result) => ImportMapResult::Result(*result),
         ImportMapping::External(name) => ImportMapResult::Result(
-            ResolveResult::primary(if let Some(name) = name {
-                ResolveResultItem::OriginalReferenceTypeExternal(name.to_string())
-            } else if let Some(request) = request.await?.request() {
-                ResolveResultItem::OriginalReferenceTypeExternal(request)
-            } else {
-                bail!("Cannot resolve external reference without request")
-            })
+            ResolveResult::primary(
+                RequestKey::default(),
+                if let Some(name) = name {
+                    ResolveResultItem::OriginalReferenceTypeExternal(name.to_string())
+                } else if let Some(request) = request.await?.request() {
+                    ResolveResultItem::OriginalReferenceTypeExternal(request)
+                } else {
+                    bail!("Cannot resolve external reference without request")
+                },
+            )
             .cell(),
         ),
-        ImportMapping::Ignore => {
-            ImportMapResult::Result(ResolveResult::primary(ResolveResultItem::Ignore).into())
-        }
-        ImportMapping::Empty => {
-            ImportMapResult::Result(ResolveResult::primary(ResolveResultItem::Empty).into())
-        }
+        ImportMapping::Ignore => ImportMapResult::Result(
+            ResolveResult::primary(RequestKey::default(), ResolveResultItem::Ignore).into(),
+        ),
+        ImportMapping::Empty => ImportMapResult::Result(
+            ResolveResult::primary(RequestKey::default(), ResolveResultItem::Empty).into(),
+        ),
         ImportMapping::PrimaryAlternative(name, context) => {
             let request = Request::parse(Value::new(name.to_string().into()));
 

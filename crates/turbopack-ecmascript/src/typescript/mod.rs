@@ -15,7 +15,7 @@ use turbopack_core::{
     resolve::{
         origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
-        ModuleResolveResult,
+        ModuleResolveResult, RequestKey,
     },
     source::Source,
 };
@@ -213,7 +213,11 @@ impl TsExtendsReference {
 impl ModuleReference for TsExtendsReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::module(Vc::upcast(RawModule::new(Vc::upcast(self.config)))).cell()
+        ModuleResolveResult::module(
+            RequestKey::default(),
+            Vc::upcast(RawModule::new(Vc::upcast(self.config))),
+        )
+        .cell()
     }
 }
 

@@ -11,7 +11,7 @@ use turbopack_core::{
     resolve::{
         origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
-        resolve, ModuleResolveResult, ModuleResolveResultItem,
+        resolve, ModuleResolveResult, ModuleResolveResultItem, RequestKey,
     },
     source::Source,
 };
@@ -99,11 +99,14 @@ impl ModuleReference for WebpackChunkAssetReference {
                 let filename = format!("./chunks/{}.js", chunk_id);
                 let source = Vc::upcast(FileSource::new(context_path.join(filename)));
 
-                ModuleResolveResult::module(Vc::upcast(WebpackModuleAsset::new(
-                    source,
-                    self.runtime,
-                    self.transforms,
-                )))
+                ModuleResolveResult::module(
+                    RequestKey::default(),
+                    Vc::upcast(WebpackModuleAsset::new(
+                        source,
+                        self.runtime,
+                        self.transforms,
+                    )),
+                )
                 .into()
             }
             WebpackRuntime::None => ModuleResolveResult::unresolveable().into(),
@@ -135,11 +138,14 @@ pub struct WebpackEntryAssetReference {
 impl ModuleReference for WebpackEntryAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::module(Vc::upcast(WebpackModuleAsset::new(
-            self.source,
-            self.runtime,
-            self.transforms,
-        )))
+        ModuleResolveResult::module(
+            RequestKey::default(),
+            Vc::upcast(WebpackModuleAsset::new(
+                self.source,
+                self.runtime,
+                self.transforms,
+            )),
+        )
         .into()
     }
 }

@@ -1374,6 +1374,11 @@ async fn handle_call<G: Fn(Vec<Effect>) + Send + Sync>(
         }
 
         JsValue::WellKnownFunction(WellKnownFunctionKind::PathJoin) => {
+            let context_path = source.ident().path().await?;
+            // ignore path.join in `node-gyp`, it will includes too many files
+            if context_path.path.contains("node_modules/node-gyp") {
+                return Ok(());
+            }
             let args = linked_args(args).await?;
             let linked_func_call = state
                 .link_value(

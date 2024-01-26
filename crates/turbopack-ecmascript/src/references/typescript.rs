@@ -6,7 +6,7 @@ use turbopack_core::{
     file_source::FileSource,
     reference::ModuleReference,
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
-    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
+    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult, RequestKey},
 };
 
 use crate::typescript::{resolve::type_resolve, TsConfigModuleAsset};
@@ -30,10 +30,13 @@ impl TsConfigReference {
 impl ModuleReference for TsConfigReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::module(Vc::upcast(TsConfigModuleAsset::new(
-            self.origin,
-            Vc::upcast(FileSource::new(self.tsconfig)),
-        )))
+        ModuleResolveResult::module(
+            RequestKey::default(),
+            Vc::upcast(TsConfigModuleAsset::new(
+                self.origin,
+                Vc::upcast(FileSource::new(self.tsconfig)),
+            )),
+        )
         .into()
     }
 }
@@ -86,7 +89,7 @@ impl ModuleReference for TsReferencePathAssetReference {
                         )),
                     )
                     .module();
-                ModuleResolveResult::module(module).cell()
+                ModuleResolveResult::module(RequestKey::default(), module).cell()
             } else {
                 ModuleResolveResult::unresolveable().cell()
             },

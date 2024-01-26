@@ -579,6 +579,16 @@ impl Pattern {
     fn new_internal(pattern: Value<Pattern>) -> Vc<Self> {
         Self::cell(pattern.into_value())
     }
+
+    #[turbo_tasks::function]
+    pub async fn or_any_nested_file(self: Vc<Self>) -> Result<Vc<Self>> {
+        let mut new = self.await?.clone_value();
+        new.push(Pattern::alternatives([
+            Pattern::Constant("".to_string()),
+            Pattern::concat([Pattern::Constant("/".to_string()), Pattern::Dynamic]),
+        ]));
+        Ok(Pattern::new_internal(Value::new(new)))
+    }
 }
 
 #[derive(PartialEq)]

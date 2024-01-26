@@ -25,7 +25,7 @@ use turbopack_core::{
     issue::{IssueSeverity, IssueSource},
     module::Module,
     reference::{ModuleReference, ModuleReferences},
-    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
+    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult, RequestKey},
     source::Source,
 };
 
@@ -256,7 +256,7 @@ impl RequireContextAssetReference {
 impl ModuleReference for RequireContextAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::module(Vc::upcast(self.inner)).cell()
+        ModuleResolveResult::module(RequestKey::default(), Vc::upcast(self.inner)).cell()
     }
 }
 
