@@ -635,7 +635,7 @@ impl Backend {
                 .into_iter()
                 .filter_map(|wd| {
                     let package_json = PackageJson::load(&wd.package_json).ok()?; // if we can't load a package.json, then we can't infer its tasks
-                    let package_json_name = if repo_root.contains(&wd.package_json) {
+                    let package_json_name = if repo_root == wd.package_json {
                         Some("//".to_string())
                     } else {
                         package_json.name
