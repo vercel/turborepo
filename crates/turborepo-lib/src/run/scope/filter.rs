@@ -8,7 +8,7 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::package_graph::{self, PackageGraph, WorkspaceName};
 use turborepo_scm::SCM;
-use wax::Pattern;
+use wax::Program;
 
 use super::{
     change_detector::{ChangeDetectError, PackageChangeDetector, SCMChangeDetector},
