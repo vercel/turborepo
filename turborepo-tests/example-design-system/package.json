@@ -1,7 +1,7 @@
 {
   "name": "turborepo-examples-test-design-system",
   "scripts": {
-    "test": "bash ../helpers/test_example.sh ../../examples/design-system pnpm"
+    "test": "bash ./node_modules/turborepo-tests-helpers/setup_test_example.sh ../../examples/design-system pnpm"
   },
   "dependencies": {
     "turborepo-tests-helpers": "workspace:*",
