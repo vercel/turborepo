@@ -9,7 +9,7 @@ use crate::{hash_object::hash_objects, Error, Git, SCM};
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
 
-const INPUT_INCLUDE_DEFAULT_FILES: &str = "$TURBO_DEFAULT";
+const INPUT_INCLUDE_DEFAULT_FILES: &str = "$TURBO_DEFAULT$";
 
 impl SCM {
     pub fn get_hashes_for_files(
@@ -33,10 +33,11 @@ impl SCM {
         inputs: &[S],
         telemetry: Option<PackageTaskEventBuilder>,
     ) -> Result<GitHashes, Error> {
-        // If the inputs contain "$TURBO_DEFAULT", we need to include the "default" file
-        // hashes as well. NOTE: we intentionally don't remove "$TURBO_DEFAULT"
-        // from the inputs if it exists in the off chance that the user has a
-        // file named "$TURBO_DEFAULT" in their package (pls no).
+        // If the inputs contain "$TURBO_DEFAULT$", we need to include the "default"
+        // file hashes as well. NOTE: we intentionally don't remove
+        // "$TURBO_DEFAULT$" from the inputs if it exists in the off chance that
+        // the user has a file named "$TURBO_DEFAULT$" in their package (pls
+        // no).
         let include_default_files = inputs
             .iter()
             .any(|input| input.as_ref() == INPUT_INCLUDE_DEFAULT_FILES);
@@ -118,51 +119,23 @@ impl Git {
         inputs: &[S],
         include_default_files: bool,
     ) -> Result<GitHashes, Error> {
-        if include_default_files && !inputs.is_empty() {
-            // collect the default files and the inputs
-            let default_file_hashes =
-                self.get_package_file_hashes_from_index(turbo_root, package_path)?;
-
-            // we need to get hashes for excludes separately so we can remove them from the
-            // defaults later on
-            let mut includes = Vec::new();
-            let mut excludes = Vec::new();
-            for input in inputs {
-                let input_str = input.as_ref();
-                if let Some(exclude) = input_str.strip_prefix('!') {
-                    excludes.push(exclude);
-                } else {
-                    includes.push(input_str);
-                }
-            }
-            let manual_includes_hashes = self.get_package_file_hashes_from_inputs(
-                turbo_root,
-                package_path,
-                &includes,
-                true,
-            )?;
-            let manual_excludes_hashes = self.get_package_file_hashes_from_inputs(
-                turbo_root,
-                package_path,
-                &excludes,
-                false,
-            )?;
-
-            // merge the two includes
-            let mut hashes = default_file_hashes;
-            hashes.extend(manual_includes_hashes);
-
-            // remove the excludes
-            hashes.retain(|key, _| !manual_excludes_hashes.contains_key(key));
-
-            return Ok(hashes);
-        }
-
+        // no inputs, and no $TURBO_DEFAULT$
         if inputs.is_empty() {
-            self.get_package_file_hashes_from_index(turbo_root, package_path)
-        } else {
-            self.get_package_file_hashes_from_inputs(turbo_root, package_path, inputs, true)
+            return self.get_package_file_hashes_from_index(turbo_root, package_path);
         }
+
+        // we have inputs, but no $TURBO_DEFAULT$
+        if !include_default_files {
+            return self.get_package_file_hashes_from_inputs(
+                turbo_root,
+                package_path,
+                inputs,
+                true,
+            );
+        }
+
+        // we have inputs, and $TURBO_DEFAULT$
+        self.get_package_file_hashes_from_inputs_and_index(turbo_root, package_path, inputs, true)
     }
 
     #[tracing::instrument(skip(self, turbo_root))]
@@ -268,6 +241,45 @@ impl Git {
         let mut hashes = GitHashes::new();
         hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
         Ok(hashes)
+    }
+
+    #[tracing::instrument(skip(self, turbo_root, inputs))]
+    fn get_package_file_hashes_from_inputs_and_index<S: AsRef<str>>(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPath,
+        inputs: &[S],
+        include_configs: bool,
+    ) -> Result<GitHashes, Error> {
+        // collect the default files and the inputs
+        let default_file_hashes =
+            self.get_package_file_hashes_from_index(turbo_root, package_path)?;
+
+        // we need to get hashes for excludes separately so we can remove them from the
+        // defaults later on
+        let mut includes = Vec::new();
+        let mut excludes = Vec::new();
+        for input in inputs {
+            let input_str = input.as_ref();
+            if let Some(exclude) = input_str.strip_prefix('!') {
+                excludes.push(exclude);
+            } else {
+                includes.push(input_str);
+            }
+        }
+        let manual_includes_hashes =
+            self.get_package_file_hashes_from_inputs(turbo_root, package_path, &includes, true)?;
+        let manual_excludes_hashes =
+            self.get_package_file_hashes_from_inputs(turbo_root, package_path, &excludes, false)?;
+
+        // merge the two includes
+        let mut hashes = default_file_hashes;
+        hashes.extend(manual_includes_hashes);
+
+        // remove the excludes
+        hashes.retain(|key, _| !manual_excludes_hashes.contains_key(key));
+
+        return Ok(hashes);
     }
 }
 
@@ -381,12 +393,13 @@ mod tests {
         //   my-pkg/
         //     package.json
         //     turbo.json
+        //     $TURBO_DEFAULT$ <- ignored by git
         //     committed-file
         //     deleted-file
         //     uncommitted-file <- new file not added to git
         //     dir/
         //       nested-file
-        //       ignored-file <- ignored by git
+        //       ignored-file    <- ignored by git
         let (_repo_root_tmp, repo_root) = tmp_dir();
 
         // create a root package.json
@@ -403,7 +416,7 @@ mod tests {
 
         // create a gitignore file
         let gitignore_path = repo_root.join_component(".gitignore");
-        gitignore_path.create_with_contents("my-pkg/dir/ignored-file")?;
+        gitignore_path.create_with_contents("my-pkg/dir/ignored-file\nmy-pkg/$TURBO_DEFAULT$")?;
 
         // create file 1
         let committed_file_path = my_pkg_dir.join_component("committed-file");
@@ -449,6 +462,11 @@ mod tests {
         ignored_file_path.ensure_dir()?;
         ignored_file_path.create_with_contents("ignored")?;
 
+        // create a file that matches the $TURBO_DEFAULT$ token to test the edge case
+        let token_file_path = my_pkg_dir.join_components(&["$TURBO_DEFAULT$"]);
+        token_file_path.ensure_dir()?;
+        token_file_path.create_with_contents("maybe-rename?")?;
+
         let package_path = AnchoredSystemPathBuf::from_raw("my-pkg")?;
 
         let all_expected = to_hash_map(&[
@@ -476,6 +494,10 @@ mod tests {
         all_expected.insert(
             RelativeUnixPathBuf::new("dir/ignored-file").unwrap(),
             "5537770d04ec8aaf7bae2d9ff78866de86df415c".to_string(),
+        );
+        all_expected.insert(
+            RelativeUnixPathBuf::new("$TURBO_DEFAULT$").unwrap(),
+            "2f26c7b914476b3c519e4f0fbc0d16c52a60d178".to_string(),
         );
 
         let input_tests: &[(&[&str], &[&str])] = &[
@@ -526,32 +548,46 @@ mod tests {
                 ],
             ),
             (
-                &["$TURBO_DEFAULT"],
+                &["$TURBO_DEFAULT$"],
                 &[
                     "committed-file",
                     "uncommitted-file",
                     "package.json",
                     "turbo.json",
+                    "$TURBO_DEFAULT$",
                     "dir/nested-file",
                 ],
             ),
             (
-                &["$TURBO_DEFAULT", "!dir/*"],
+                &["$TURBO_DEFAULT$", "!dir/*"],
                 &[
                     "committed-file",
                     "uncommitted-file",
                     "package.json",
                     "turbo.json",
+                    "$TURBO_DEFAULT$",
                 ],
             ),
             (
-                &["$TURBO_DEFAULT", "!committed-file", "dir/ignored-file"],
+                &["$TURBO_DEFAULT$", "!committed-file", "dir/ignored-file"],
                 &[
                     "uncommitted-file",
                     "package.json",
                     "turbo.json",
                     "dir/ignored-file",
                     "dir/nested-file",
+                    "$TURBO_DEFAULT$",
+                ],
+            ),
+            (
+                &["!committed-file", "$TURBO_DEFAULT$", "dir/ignored-file"],
+                &[
+                    "uncommitted-file",
+                    "package.json",
+                    "turbo.json",
+                    "dir/ignored-file",
+                    "dir/nested-file",
+                    "$TURBO_DEFAULT$",
                 ],
             ),
         ];
