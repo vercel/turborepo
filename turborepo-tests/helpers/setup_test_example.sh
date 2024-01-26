@@ -23,12 +23,13 @@ turbo_command="turbo build lint --output-logs=errors-only"
 cd $example_path
 
 # Isolate the example from the rest of the repo from Git's perspective
-# ./helpers/setup_git.sh .
+../../turborepo-tests/helpers/setup_git.sh . > /dev/null 2>&1
 
 # Let's also isolate from turbo's perspective
-# rm -rf .turbo/ node_modules/ || true
+rm -rf .turbo/ node_modules/ || true
 
 # Simulating the user's first run and dumping logs to a file
+$package_manager_command > ./tmp/first-install.txt 2>&1
 $turbo_command > ./tmp/grep-me-for-miss.txt
 
 # We do not want to hit cache on first run because we're acting like a user.
@@ -44,6 +45,7 @@ fi
 mkdir -p ./tmp
 
 # Simulating the user's second run
+$package_manager_command > ./tmp/second-install.txt 2>&1
 $turbo_command > ./tmp/grep-me-for-hit.txt
 
 # Make sure the task hit a FULL TURBO

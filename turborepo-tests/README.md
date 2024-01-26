@@ -27,3 +27,11 @@ We want to create a test for every example that we can. To create a test:
 ## Limitations
 
 We currently do not test the examples that use Docker. We may choose to do this in the future.
+
+## Debugging and more notes
+
+- Each test will create four .txt files in a `/tmp` directory in the file for the example. You can check these files for a readout of any unexpected behaviors.
+  - One for the first install.
+  - One for the first set of runs. We assert that this file does not have a ">>> FULL TURBO" in it.
+  - One for the second install.
+  - One for the second set of runs. We assert this this file has a ">>> FULL TURBO" in it.
