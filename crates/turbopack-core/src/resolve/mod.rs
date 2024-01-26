@@ -168,7 +168,7 @@ impl ModuleResolveResult {
     ) -> ModuleResolveResult {
         ModuleResolveResult {
             primary: self.primary.clone(),
-            affecting_sources: affecting_sources,
+            affecting_sources,
         }
     }
 
