@@ -68,10 +68,10 @@ jobs:
         run: ${{ matrix.settings.setup }}
 
       - name: Build
-        run: ${{ matrix.settings.rust-build-env }} cargo build --release -p turborepo-lsp --target ${{ matrix.settings.target }}
+        run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo-lsp -p turborepo-lsp --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: turbo-${{ matrix.settings.target }}
+          name: turborepo-lsp-${{ matrix.settings.target }}
           path: target/${{ matrix.settings.target }}/release/turborepo-lsp*
