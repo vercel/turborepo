@@ -326,9 +326,9 @@ mod tests {
         assert_eq!(hashes, expected);
 
         // set a hash for an ignored file
-        for tuple in file_hash.iter_mut() {
-            if tuple.0 == "child-dir/libA/pkgignorethisdir/file" {
-                tuple.2 = Some("67aed78ea231bdee3de45b6d47d8f32a0a792f6d");
+        for (raw_unix_path, _, expected_hash) in file_hash.iter_mut() {
+            if *raw_unix_path == "child-dir/libA/pkgignorethisdir/file" {
+                *expected_hash = Some("67aed78ea231bdee3de45b6d47d8f32a0a792f6d");
                 break;
             }
         }
