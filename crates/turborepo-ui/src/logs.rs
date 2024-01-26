@@ -70,8 +70,11 @@ impl<W: Write> Write for LogWriter<W> {
             log_file.flush()?;
         }
         if let Some(prefixed_writer) = &mut self.prefixed_writer {
+            println!("flushing prefixed writer");
             prefixed_writer.flush()?;
         }
+
+        println!("returning from flush");
 
         Ok(())
     }

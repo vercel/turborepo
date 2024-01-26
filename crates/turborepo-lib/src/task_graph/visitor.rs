@@ -739,6 +739,8 @@ impl ExecContext {
             self.pretty_prefix.clone(),
         );
 
+        println!("execute inner");
+
         match self
             .task_cache
             .restore_outputs(&mut prefixed_ui, telemetry)
@@ -784,6 +786,7 @@ impl ExecContext {
         // Always last to make sure it overwrites any user configured env var.
         cmd.env("TURBO_HASH", &self.task_hash);
 
+        println!("creatint stdout_writer");
         let mut stdout_writer = match self
             .task_cache
             .output_writer(self.pretty_prefix.clone(), output_client.stdout())
@@ -836,8 +839,11 @@ impl ExecContext {
         };
         let task_duration = task_start.elapsed();
 
+        println!("exit_status: {:?}", exit_status);
+
         match exit_status {
             ChildExit::Finished(Some(0)) => {
+                println!("flushing stdout writer because exit 0");
                 if let Err(e) = stdout_writer.flush() {
                     error!("{e}");
                 } else if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await

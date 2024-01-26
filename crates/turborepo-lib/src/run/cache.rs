@@ -156,6 +156,10 @@ impl TaskCache {
         let prefixed_writer = PrefixedWriter::new(self.run_cache.ui, prefix, writer);
 
         if self.caching_disabled || self.run_cache.writes_disabled {
+            if self.task_output_mode == OutputLogsMode::ErrorsOnly {
+                return Ok(log_writer);
+            }
+
             log_writer.with_prefixed_writer(prefixed_writer);
             return Ok(log_writer);
         }
