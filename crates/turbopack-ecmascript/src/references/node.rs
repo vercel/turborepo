@@ -119,18 +119,24 @@ async fn resolve_reference_from_dir(
         ),
         (None, None) => return Ok(ModuleResolveResult::unresolveable().cell()),
     };
-    Ok(ModuleResolveResult::modules(
-        matches
-            .map(|pat_match| match pat_match {
-                PatternMatch::File(matched_path, file) => Some((
+    let mut affecting_sources = Vec::new();
+    let mut results = Vec::new();
+    for pat_match in matches {
+        match pat_match {
+            PatternMatch::File(matched_path, file) => {
+                let realpath = file.realpath_with_links().await?;
+                for &symlink in &realpath.symlinks {
+                    affecting_sources.push(Vc::upcast(FileSource::new(symlink)));
+                }
+                results.push((
                     RequestKey::new(matched_path.clone()),
-                    Vc::upcast(RawModule::new(Vc::upcast(FileSource::new(*file)))),
-                )),
-                PatternMatch::Directory(..) => None,
-            })
-            .flatten(),
-    )
-    .cell())
+                    Vc::upcast(RawModule::new(Vc::upcast(FileSource::new(realpath.path)))),
+                ));
+            }
+            PatternMatch::Directory(..) => {}
+        }
+    }
+    Ok(ModuleResolveResult::modules_with_affecting_sources(results, affecting_sources).cell())
 }
 
 #[turbo_tasks::value_impl]
