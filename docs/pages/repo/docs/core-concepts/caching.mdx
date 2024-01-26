@@ -122,7 +122,7 @@ You won't want to commit this file to source control since it's dependent on env
 
 Now, make sure that `turbo` is aware of the file by adding it to task inputs. You can do this two ways:
 
-- **For specific tasks**: Include the file in [the `inputs` array](/repo/docs/reference/configuration#inputs) of the task(s)
+- **For specific tasks**: Include the file in [the `inputs` array](/repo/docs/reference/configuration#inputs) of the task(s):
 
 ```json
 {
@@ -130,7 +130,7 @@ Now, make sure that `turbo` is aware of the file by adding it to task inputs. Yo
   "pipelines": {
     "build-for-platforms": {
       "dependsOn": ["^build"],
-      "inputs": ["**/**", "turbo-cache-key.json"]
+      "inputs": ["turbo-cache-key.json", ...]
     }
   }
 }
