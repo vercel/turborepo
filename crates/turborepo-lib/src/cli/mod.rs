@@ -1196,7 +1196,16 @@ pub async fn run(
             } else {
                 use crate::commands::run;
                 event.track_run_code_path(CodePath::Rust);
-                let exit_code = run::run(base, event).await?;
+                let exit_code = run::run(base, event)
+                    .await
+                    .inspect(|code| {
+                        if *code != 0 {
+                            error!("run failed: command  exited ({code})");
+                        }
+                    })
+                    .inspect_err(|err| {
+                        error!("run failed: {err}");
+                    })?;
                 Ok(Payload::Rust(Ok(exit_code)))
             }
         }
