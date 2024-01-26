@@ -23,7 +23,7 @@ turbo_command="turbo build lint --output-logs=errors-only"
 cd $example_path
 
 # Isolate the example from the rest of the repo from Git's perspective
-../../turborepo-tests/helpers/setup_git.sh . > /dev/null 2>&1
+"../../turborepo-tests/helpers/setup_git.sh . -n"  > /dev/null 2>&1
 
 # Let's also isolate from turbo's perspective
 rm -rf .turbo/ node_modules/ || true
@@ -50,8 +50,7 @@ $turbo_command > ./tmp/grep-me-for-hit.txt
 
 # Make sure the task hit a FULL TURBO
 if ! grep -q ">>> FULL TURBO" ./tmp/grep-me-for-hit.txt; then
-  echo "No FULL TURBO was found."
-  echo "Dumping logs:"
+  echo "No FULL TURBO was found. Dumping logs:"
   cat ./tmp/grep-me-for-hit.txt >&2
   exit 1
 fi
