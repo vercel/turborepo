@@ -776,6 +776,7 @@ mod test {
     const STARTUP_DELAY: Duration = Duration::from_millis(500);
     // We skip testing PTY usage on Windows
     const TEST_PTY: bool = !cfg!(windows);
+    const EOT: char = '\u{4}';
 
     fn find_script_dir() -> AbsoluteSystemPathBuf {
         let cwd = AbsoluteSystemPathBuf::cwd().unwrap();
@@ -860,9 +861,7 @@ mod test {
 
             let output_str = String::from_utf8(output).expect("Failed to parse stdout");
             let trimmed_output = output_str.trim();
-            let trimmed_output = trimmed_output
-                .strip_prefix('\u{4}')
-                .unwrap_or(trimmed_output);
+            let trimmed_output = trimmed_output.strip_prefix(EOT).unwrap_or(trimmed_output);
 
             assert_eq!(trimmed_output, "hello world");
         }
@@ -903,7 +902,7 @@ mod test {
 
         let output_str = String::from_utf8(output).expect("Failed to parse stdout");
         let trimmed_out = output_str.trim();
-        let trimmed_out = trimmed_out.strip_prefix('\u{4}').unwrap_or(trimmed_out);
+        let trimmed_out = trimmed_out.strip_prefix(EOT).unwrap_or(trimmed_out);
 
         assert!(trimmed_out.contains(input), "got: {}", trimmed_out);
 
@@ -1052,7 +1051,7 @@ mod test {
 
         let out = String::from_utf8(out).unwrap();
         let trimmed_out = out.trim();
-        let trimmed_out = trimmed_out.strip_prefix('\u{4}').unwrap_or(trimmed_out);
+        let trimmed_out = trimmed_out.strip_prefix(EOT).unwrap_or(trimmed_out);
 
         assert_eq!(trimmed_out, "hello world");
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
