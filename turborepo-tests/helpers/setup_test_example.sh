@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+export TURBO_TELEMETRY_MESSAGE_DISABLED=1
+
 # Start by figuring out which example we're testing and its package manager
 example_path=$1
 package_manager=$2
