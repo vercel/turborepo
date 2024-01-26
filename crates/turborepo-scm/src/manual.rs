@@ -56,13 +56,16 @@ pub(crate) fn hash_files(
     Ok(hashes)
 }
 
-pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
+pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     turbo_root: &AbsoluteSystemPath,
     package_path: &AnchoredSystemPath,
     inputs: &[S],
+    include_default_files: bool,
 ) -> Result<GitHashes, Error> {
     let full_package_path = turbo_root.resolve(package_path);
     let mut hashes = GitHashes::new();
+    let mut default_file_hashes = GitHashes::new();
+    let mut excluded_file_hashes = GitHashes::new();
 
     let mut walker_builder = WalkBuilder::new(&full_package_path);
     let mut includes = Vec::new();
@@ -102,6 +105,7 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
     } else {
         Some(any(excludes)?)
     };
+
     let walker = walker_builder
         .follow_links(false)
         // if inputs have been provided manually, we shouldn't skip ignored files to mimic the
@@ -110,6 +114,7 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
         .require_git(false)
         .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
         .build();
+
     for dirent in walker {
         let dirent = dirent?;
         let metadata = dirent.metadata()?;
@@ -118,19 +123,25 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
         if metadata.is_dir() {
             continue;
         }
+
         let path = AbsoluteSystemPath::from_std_path(dirent.path())?;
         let relative_path = full_package_path.anchor(path)?;
         let relative_path = relative_path.to_unix();
+
+        // if we have includes and this path doesn't match any of them, skip it
         if let Some(include_pattern) = include_pattern.as_ref() {
             if !include_pattern.is_match(relative_path.as_str()) {
                 continue;
             }
         }
+
+        // if we have excludes and this path matches any of them, skip it
         if let Some(exclude_pattern) = exclude_pattern.as_ref() {
             if exclude_pattern.is_match(relative_path.as_str()) {
                 continue;
             }
         }
+
         // FIXME: we don't hash symlinks...
         if metadata.is_symlink() {
             continue;
@@ -138,6 +149,54 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
         let hash = git_like_hash_file(path)?;
         hashes.insert(relative_path, hash);
     }
+
+    // If we're including default files, we need to walk again, but this time with
+    // git_ignore enabled
+    if include_default_files {
+        let walker = walker_builder
+            .follow_links(false)
+            .git_ignore(true)
+            .require_git(false)
+            .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
+            .build();
+
+        for dirent in walker {
+            let dirent = dirent?;
+            let metadata = dirent.metadata()?;
+            // We need to do this here, rather than as a filter, because the root
+            // directory is always yielded and not subject to the supplied filter.
+            if metadata.is_dir() {
+                continue;
+            }
+
+            let path = AbsoluteSystemPath::from_std_path(dirent.path())?;
+            let relative_path = full_package_path.anchor(path)?;
+            let relative_path = relative_path.to_unix();
+
+            if let Some(exclude_pattern) = exclude_pattern.as_ref() {
+                if exclude_pattern.is_match(relative_path.as_str()) {
+                    // track excludes so we can exclude them to the hash map later
+                    if !metadata.is_symlink() {
+                        let hash = git_like_hash_file(path)?;
+                        excluded_file_hashes.insert(relative_path.clone(), hash);
+                    }
+                }
+            }
+
+            // FIXME: we don't hash symlinks...
+            if metadata.is_symlink() {
+                continue;
+            }
+            let hash = git_like_hash_file(path)?;
+            default_file_hashes.insert(relative_path, hash);
+        }
+    }
+
+    // merge default with all hashes
+    hashes.extend(default_file_hashes);
+    // remove excluded files
+    hashes.retain(|key, _| !excluded_file_hashes.contains_key(key));
+
     Ok(hashes)
 }
 
@@ -353,7 +412,7 @@ mod tests {
         );
 
         let hashes =
-            get_package_file_hashes_from_processing_gitignore::<&str>(&turbo_root, &pkg_path, &[])
+            get_package_file_hashes_without_git::<&str>(&turbo_root, &pkg_path, &[], false)
                 .unwrap();
         assert_eq!(hashes, expected);
 
@@ -384,10 +443,11 @@ mod tests {
             }
         }
 
-        let hashes = get_package_file_hashes_from_processing_gitignore(
+        let hashes = get_package_file_hashes_without_git(
             &turbo_root,
             &pkg_path,
             &["**/*file", "!some-dir/excluded-file"],
+            false,
         )
         .unwrap();
 
