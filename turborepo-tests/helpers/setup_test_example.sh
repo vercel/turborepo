@@ -28,29 +28,31 @@ cd $example_path
 # Let's also isolate from turbo's perspective
 rm -rf .turbo/ node_modules/ || true
 
+# Make sure there is a coverage file to write into
+# This is a minor abuse of the coverage directory
+# but we need something that is gitignored so this works
+mkdir -p ./coverage
+
 # Simulating the user's first run and dumping logs to a file
-$package_manager_command > ./tmp/first-install.txt 2>&1
-$turbo_command > ./tmp/grep-me-for-miss.txt
+$package_manager_command > ./coverage/first-install.txt 2>&1
+$turbo_command > ./coverage/grep-me-for-miss.txt
 
 # We do not want to hit cache on first run because we're acting like a user.
-# A user will never hit cache on first run. Why should we?
-if grep -q ">>> FULL TURBO" ./tmp/grep-me-for-miss.txt; then
+# A user would never hit cache on first run. Why should we?
+if grep -q ">>> FULL TURBO" ./coverage/grep-me-for-miss.txt; then
   echo "A FULL TURBO was found. This test is misconfigured (since it can hit a cache)."
   echo "Dumping logs:"
-  cat ./tmp/grep-me-for-miss.txt >&2
+  cat ./coverage/grep-me-for-miss.txt >&2
   exit 1
 fi
 
-# Make sure the tmp directory exists
-mkdir -p ./tmp
-
 # Simulating the user's second run
-$package_manager_command > ./tmp/second-install.txt 2>&1
-$turbo_command > ./tmp/grep-me-for-hit.txt
+$package_manager_command > ./coverage/second-install.txt 2>&1
+$turbo_command > ./coverage/grep-me-for-hit.txt
 
-# Make sure the task hit a FULL TURBO
-if ! grep -q ">>> FULL TURBO" ./tmp/grep-me-for-hit.txt; then
+# Make sure the runs hit FULL TURBO on the second go
+if ! grep -q ">>> FULL TURBO" ./coverage/grep-me-for-hit.txt; then
   echo "No FULL TURBO was found. Dumping logs:"
-  cat ./tmp/grep-me-for-hit.txt >&2
+  cat ./coverage/grep-me-for-hit.txt >&2
   exit 1
 fi
