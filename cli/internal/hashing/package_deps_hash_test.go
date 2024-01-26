@@ -473,6 +473,9 @@ func Test_getPackageFileHashesFromProcessingGitIgnore(t *testing.T) {
 		t.Errorf("found extra hashes in %v", hashes)
 	}
 
+	// expect the ignored file for manual hashing
+	files[turbopath.AnchoredUnixPath("child-dir/libA/pkgignorethisdir/file")] = fileHash{contents: "anything", hash: "67aed78ea231bdee3de45b6d47d8f32a0a792f6d"}
+
 	count = 0
 	justFileHashes, err := GetPackageFileHashes(repoRoot, pkg.Dir, []string{filepath.FromSlash("**/*file"), "!" + filepath.FromSlash("some-dir/excluded-file")})
 	if err != nil {
