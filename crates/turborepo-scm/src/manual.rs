@@ -84,7 +84,9 @@ pub(crate) fn get_package_file_hashes_from_processing_gitignore<S: AsRef<str>>(
     };
     let walker = walker_builder
         .follow_links(false)
-        .git_ignore(true)
+        // if inputs have been provided manually, we shouldn't skip ignored files to mimic the
+        // regular behavior
+        .git_ignore(inputs.is_empty())
         .require_git(false)
         .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
         .build();
@@ -259,7 +261,7 @@ mod tests {
 
         let pkg_path = AnchoredSystemPathBuf::from_raw("child-dir/libA").unwrap();
         let unix_pkg_path = pkg_path.to_unix();
-        let file_hash: Vec<(&str, &str, Option<&str>)> = vec![
+        let mut file_hash: Vec<(&str, &str, Option<&str>)> = vec![
             ("top-level-file", "top-level-file-contents", None),
             ("other-dir/other-dir-file", "other-dir-file-contents", None),
             ("ignoreme", "anything", None),
@@ -323,6 +325,14 @@ mod tests {
                 .unwrap();
         assert_eq!(hashes, expected);
 
+        // set a hash for an ignored file
+        for (raw_unix_path, _, expected_hash) in file_hash.iter_mut() {
+            if *raw_unix_path == "child-dir/libA/pkgignorethisdir/file" {
+                *expected_hash = Some("67aed78ea231bdee3de45b6d47d8f32a0a792f6d");
+                break;
+            }
+        }
+
         expected = GitHashes::new();
         for (raw_unix_path, contents, expected_hash) in file_hash.iter() {
             let unix_path = RelativeUnixPath::new(raw_unix_path).unwrap();
@@ -345,6 +355,7 @@ mod tests {
             &["**/*file", "!some-dir/excluded-file"],
         )
         .unwrap();
+
         assert_eq!(hashes, expected);
     }
 }
