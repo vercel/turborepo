@@ -26,6 +26,9 @@ turbo_command="turbo build lint --output-logs=errors-only"
 # Head into the example directory
 cd $example_path
 
+# Isolate the example from the rest of the repo from Git's perspective
+./helpers/setup_git.sh .
+
 if [ $force == true ]; then
   echo "Forcing execution of tasks on first run..."
 fi
