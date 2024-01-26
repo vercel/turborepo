@@ -255,7 +255,7 @@ The following steps exemplify how you could use [actions/cache](https://github.c
 
 2. Configure your github pipeline with a step which utilizes the `actions/cache@v3` action before the build steps of your ci file.
 
-- Ensure sure the `path` attribute set within the `actions/cache` action matches the output location above.
+- Make sure that the `path` attribute set within the `actions/cache` action matches the output location above.
   - In the example below, `path` was set to `.turbo`.
 - State the cache key for the current run under the `key` attribute.
   - In the example below, we used a combination of the runner os and github sha as the cache key.

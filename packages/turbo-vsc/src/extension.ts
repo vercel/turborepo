@@ -220,7 +220,9 @@ export function activate(context: ExtensionContext) {
   let lspPath = Uri.joinPath(
     context.extensionUri,
     "out",
-    `turborepo-lsp-${process.platform}-${process.arch}`
+    `turborepo-lsp-${process.platform}-${process.arch}${
+      process.platform === "win32" ? ".exe" : ""
+    }`
   ).fsPath;
 
   if (!fs.existsSync(lspPath)) {

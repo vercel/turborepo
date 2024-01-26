@@ -92,6 +92,7 @@ enum ChildHandleImpl {
 }
 
 impl ChildHandle {
+    #[tracing::instrument(skip(command))]
     pub fn spawn_normal(command: Command) -> io::Result<SpawnResult> {
         let mut command = TokioCommand::from(command);
 
@@ -133,6 +134,7 @@ impl ChildHandle {
         })
     }
 
+    #[tracing::instrument(skip(command))]
     pub fn spawn_pty(command: Command) -> io::Result<SpawnResult> {
         use portable_pty::PtySize;
 
@@ -429,6 +431,7 @@ pub enum ChildCommand {
 impl Child {
     /// Start a child process, returning a handle that can be used to interact
     /// with it. The command will be started immediately.
+    #[tracing::instrument(skip(command), fields(command = command.label()))]
     pub fn spawn(
         command: Command,
         shutdown_style: ShutdownStyle,
@@ -570,6 +573,7 @@ impl Child {
 
     /// Wait for the `Child` to exit and pipe any stdout and stderr to the
     /// provided writer.
+    #[tracing::instrument(skip_all)]
     pub async fn wait_with_piped_outputs<W: Write>(
         &mut self,
         stdout_pipe: W,
@@ -591,6 +595,7 @@ impl Child {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     async fn wait_with_piped_sync_output<R: BufRead + Send + 'static>(
         &mut self,
         mut stdout_pipe: impl Write,
@@ -638,6 +643,7 @@ impl Child {
         Ok(status)
     }
 
+    #[tracing::instrument(skip_all)]
     async fn wait_with_piped_async_outputs<R1: AsyncBufRead + Unpin, R2: AsyncBufRead + Unpin>(
         &mut self,
         mut stdout_pipe: impl Write,
