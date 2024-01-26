@@ -34,7 +34,8 @@ Setup
     "persistent": false,
     "env": [],
     "passThroughEnv": null,
-    "dotEnv": null
+    "dotEnv": null,
+    "interactive": false
   }
 
 # This task is similar, but `dependsOn` in the root turbo.json _only_ has a topological dependency
@@ -49,5 +50,6 @@ Setup
     "persistent": false,
     "env": [],
     "passThroughEnv": null,
-    "dotEnv": null
+    "dotEnv": null,
+    "interactive": false
   }

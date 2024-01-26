@@ -61,7 +61,8 @@ Validate that we got a full task summary for the failed task with an error in .e
       "persistent": false,
       "env": [],
       "passThroughEnv": null,
-      "dotEnv": null
+      "dotEnv": null,
+      "interactive": false
     },
     "expandedOutputs": [],
     "framework": "",
