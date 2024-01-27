@@ -435,7 +435,7 @@ jobs:
 
       - name: Check examples
         shell: bash
-        run: turbo run test -F "@turborepo-examples-tests/*" --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict
+        run: turbo run test -F "@turborepo-examples-tests/*" --continue --color --remote-only --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
 
       # Disable corepack again. actions/setup-node's "Post" step runs at the end of
       # this job invokes other package managers, and corepack throws an error.
@@ -720,7 +720,7 @@ jobs:
           cargo check \
             --config $BINDING --config $TASKS --config $TASKS_FS \
             --all -p next-swc-api \
-            --no-default-features --features custom_allocator,rustls-tls \
+            --no-default-features --features rustls-tls \
             --message-format short --quiet \
           2>&1 | tee cargo_output.log)
 

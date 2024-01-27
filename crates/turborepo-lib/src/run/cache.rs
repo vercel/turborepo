@@ -1,10 +1,11 @@
 use std::{io::Write, sync::Arc, time::Duration};
 
 use console::StyledObject;
-use tracing::{debug, log::warn};
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_cache::{AsyncCache, CacheError, CacheHitMetadata, CacheSource};
 use turborepo_repository::package_graph::WorkspaceInfo;
+use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{
     color, replay_logs, ColorSelector, LogWriter, PrefixedUI, PrefixedWriter, GREY, UI,
 };
@@ -178,6 +179,7 @@ impl TaskCache {
     pub async fn restore_outputs(
         &mut self,
         prefixed_ui: &mut PrefixedUI<impl Write>,
+        telemetry: &PackageTaskEventBuilder,
     ) -> Result<Option<CacheHitMetadata>, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
             if !matches!(
@@ -203,7 +205,8 @@ impl TaskCache {
             {
                 Ok(changed_output_globs) => changed_output_globs.len(),
                 Err(err) => {
-                    warn!(
+                    telemetry.track_error(TrackedErrors::DaemonSkipOutputRestoreCheckFailed);
+                    debug!(
                         "Failed to check if we can skip restoring outputs for {}: {}. Proceeding \
                          to check cache",
                         self.task_id, err
@@ -255,13 +258,9 @@ impl TaskCache {
                 {
                     // Don't fail the whole operation just because we failed to
                     // watch the outputs
-                    prefixed_ui.warn(color!(
-                        self.ui,
-                        GREY,
-                        "Failed to mark outputs as cached for {}: {:?}",
-                        self.task_id,
-                        err
-                    ))
+                    telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
+                    let task_id = &self.task_id;
+                    debug!("Failed to mark outputs as cached for {task_id}: {err}");
                 }
             }
 
@@ -306,8 +305,8 @@ impl TaskCache {
 
     pub async fn save_outputs(
         &mut self,
-        prefixed_ui: &mut PrefixedUI<impl Write>,
         duration: Duration,
+        telemetry: &PackageTaskEventBuilder,
     ) -> Result<(), Error> {
         if self.caching_disabled || self.run_cache.writes_disabled {
             return Ok(());
@@ -351,11 +350,9 @@ impl TaskCache {
                 .map_err(Error::from);
 
             if let Err(err) = notify_result {
+                telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
                 let task_id = &self.task_id;
-                warn!("Failed to mark outputs as cached for {task_id}: {err}");
-                prefixed_ui.warn(format!(
-                    "Failed to mark outputs as cached for {task_id}: {err}",
-                ));
+                debug!("Failed to mark outputs as cached for {task_id}: {err}");
             }
         }
 

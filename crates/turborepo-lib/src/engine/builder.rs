@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use itertools::Itertools;
+use miette::Diagnostic;
 use turbopath::AbsoluteSystemPath;
 use turborepo_graph_utils as graph;
 use turborepo_repository::package_graph::{
@@ -9,12 +10,12 @@ use turborepo_repository::package_graph::{
 
 use super::Engine;
 use crate::{
-    config::{validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJson},
     run::task_id::{TaskId, TaskName},
     task_graph::TaskDefinition,
+    turbo_json::{validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJson},
 };
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("Could not find the following tasks in project: {0}")]
     MissingTasks(String),
@@ -30,6 +31,7 @@ pub enum Error {
     #[error("Could not find \"{task_id}\" in root turbo.json or \"{task_name}\" in workspace")]
     MissingWorkspaceTask { task_id: String, task_name: String },
     #[error(transparent)]
+    #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
     #[error("Invalid turbo.json:\n{error_lines}")]
     Validation { error_lines: String },
@@ -429,7 +431,7 @@ mod test {
     };
 
     use super::*;
-    use crate::{config::RawTurboJson, engine::TaskNode};
+    use crate::{engine::TaskNode, turbo_json::RawTurboJson};
 
     // Only used to prevent package graph construction from attempting to read
     // lockfile from disk
@@ -554,7 +556,8 @@ mod test {
     }
 
     fn turbo_json(value: serde_json::Value) -> TurboJson {
-        let raw: RawTurboJson = serde_json::from_value(value).unwrap();
+        let json_text = serde_json::to_string(&value).unwrap();
+        let raw = RawTurboJson::parse(&json_text, "").unwrap();
         TurboJson::try_from(raw).unwrap()
     }
 

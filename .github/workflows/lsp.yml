@@ -1,0 +1,81 @@
+# Turborepo LSP Pipeline
+#
+# Currently this just dumps the LSP binaries into the artifacts, but in the future
+# we will want to do the entire packaging process here.
+
+name: Turborepo LSP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-rust:
+    name: "Build Rust"
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: macos-latest
+            target: "x86_64-apple-darwin"
+            container-options: "--rm"
+          - host: macos-latest
+            target: "aarch64-apple-darwin"
+            container-options: "--rm"
+          - host: ubuntu-latest
+            container: ubuntu:xenial
+            container-options: "--platform=linux/amd64 --rm"
+            container-setup: "apt-get update && apt-get install -y curl musl-tools sudo"
+            target: "x86_64-unknown-linux-musl"
+            setup: "apt-get install -y build-essential clang-5.0 lldb-5.0 llvm-5.0-dev libclang-5.0-dev"
+          - host: ubuntu-latest
+            container-options: "--rm"
+            target: "aarch64-unknown-linux-musl"
+            rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
+            setup: "sudo apt-get update && sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+            setup: "rustup set default-host x86_64-pc-windows-msvc"
+            container-options: "--rm"
+          - host: windows-latest
+            target: aarch64-pc-windows-msvc
+            setup: "rustup set default-host aarch64-pc-windows-msvc"
+            container-options: "--rm"
+    runs-on: ${{ matrix.settings.host }}
+    container:
+      image: ${{ matrix.settings.container }}
+      options: ${{ matrix.settings.container-options }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Setup Container
+        if: ${{ matrix.settings.container-setup }}
+        run: ${{ matrix.settings.container-setup }}
+
+      - name: Setup Protoc
+        uses: arduino/setup-protoc@v1.2.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup capnproto
+        uses: ./.github/actions/setup-capnproto
+
+      - name: Rust Setup
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          override: true
+          target: ${{ matrix.settings.target }}
+
+      - name: Build Setup
+        shell: bash
+        if: ${{ matrix.settings.setup }}
+        run: ${{ matrix.settings.setup }}
+
+      - name: Build
+        run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo-lsp -p turborepo-lsp --target ${{ matrix.settings.target }}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: turborepo-lsp-${{ matrix.settings.target }}
+          path: target/${{ matrix.settings.target }}/release-turborepo-lsp/turborepo-lsp*
