@@ -1,0 +1,119 @@
+---
+title: Turborepo 1.12
+date: 2024/01/27
+description: Turborepo 1.12 adds popular community-requested features and feedback improvements.
+tag: "web development"
+ogImage: /images/blog/turbo-1-12-0/x-card.png
+---
+
+# Turborepo 1.12
+
+import { Authors } from '../../components/Authors'
+import { Date } from "../../components/blog/Date";
+
+<Date>
+  Tuesday, January 30th, 2024
+</Date>
+
+<Authors authors={[
+  "mehulkar",
+  "tomknickman",
+  "gregsoltis",
+]} />
+
+Turborepo 1.12 adds popular community-requested features and feedback improvements, including:
+
+- [**Colors in task logs**](#colors-in-task-logs): Colors from original shell logs used locally
+- [**Interactive Tasks**](#interact-with-your-task): `stdin` support for typing inputs into running tasks
+- [**Turbo LSP**](#turbo-lsp): Instant feedback about your configuration
+- [**Errors overhaul**](#errors-overhaul): Improved error messages for misconfigurations
+- [**Telemetry**](#telemetry): Help us focus on what matters most to Turborepo users
+
+We're also cleaning up our migration to Rust in this release by removing the `--go-fallback` flag and shrinking the `turbo` binary. 1.12 is:
+
+- TODO% smaller compared to 1.6 (Golang)
+- TODO% smaller compared to 1.11 (Rust)
+
+Update today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
+
+## Colors in task logs
+
+Color is a great way to quickly surface important information in user interfaces. It's common for developer tooling to highlight success in green, warnings in yellow, or errors in red.
+
+<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Vercel_logo_black.svg/2560px-Vercel_logo_black.svg.png" />
+
+In this release, we're now showing the colors from your underlying tasks in your local environment by default. This has been a popular request from the community and we're excited to ship it today.
+
+## Interact with your task while it's running through `turbo`
+
+Many CLI tools allow you to input further information to the task after it has started using `stdin` (typing into the terminal). This can be used for actions like restarting a server, re-running tests, and more.
+
+Until now, `turbo` blocked your ability to give inputs to your underlying task. But, as of 1.12, you can now type into `stdin` and we will pass your inputs along to the underlying task when you add the `--interactive` flag to your `turbo run` command.
+
+<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Vercel_logo_black.svg/2560px-Vercel_logo_black.svg.png" />
+
+Check out the documentation for more.
+
+## Turbo LSP
+
+The best feedback is instant. Language Server Protocols (LSPs) provide instantaneous guidance directly in your editor so you learn about errors the moment you write them.
+
+Today, we're introducing Turbo LSP, built for the needs of Turborepo users.
+
+<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Vercel_logo_black.svg/2560px-Vercel_logo_black.svg.png" />
+
+This initial release includes editor feedback like [configuration help](TODO), [one-click task execution](TODO), [repository discovery tools](TODO), and [contextual codemods](TODO). To get started:
+
+- VSCode: Visit [Turbo LSP](https://marketplace.visualstudio.com/items?itemName=Vercel.turbo-vsc) in the Extensions Marketplace or search “Turborepo” in your Extensions tab.
+- Vim: [Visit the documentation for installation instructions](TODO).
+
+[Check out the documentation](TODO) for more.
+
+## Errors overhaul
+
+An important part of developer experience is ensuring that, when things go wrong, it's clear how to get back to the happy path. In this release, we've improved the error messages that come from Turborepo misconfigurations.
+
+<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Vercel_logo_black.svg/2560px-Vercel_logo_black.svg.png" />
+
+In this enhanced UI, we are:
+
+- Showing you the errorful code
+- Improving the help text in your terminal for each type of error
+- Providing a link to documentation when it can provide you with useful context
+
+## Telemetry
+
+Turborepo was released almost two years ago, and `turbo` has developed considerably over the past two years. As the community has grown, the value of your feedback is immeasurable in helping us stay focused on what matters most to Turborepo users.
+
+Until now, our feedback gathering process has been manual, slow, and error prone. While we will always highly appreciate users who file [GitHub Issues](https://github.com/vercel/turbo/issues), speak to us in [GitHub Discussions](https://github.com/vercel/turbo/discussions), and chat with the community in [Discord](https://turbo.build/discord), this feedback only captures the sentiment of a small corner of the Turboverse.
+
+Today, we're introducing a **completely anonymous**, automated approach to feedback to learn more about the ways that the community is using Turborepo. As we continue to iterate on `turbo`, this information will help us ensure performance, confirm stability, design new features, and drive the project's direction.
+
+We're creating the build system of the future and this information will be highly valuable in that effort. For more information, visit [turbo.build/repo/docs/telemetry](https://turbo.build/repo/docs/telemetry).
+
+If you'd like to opt out of telemetry, run:
+
+```
+turbo telemetry disable
+```
+
+You may also opt-out by setting an environment variable:
+
+- `TURBO_TELEMETRY_DISABLED=1`
+- `DO_NOT_TRACK=1` (per the [Console Do Not Track (DNT)](https://consoledonottrack.com/) specification)
+
+## Other improvements
+
+Take a look at https://nextjs.org/blog/next-14-1#other-improvements. Can we do this? Would be so awesome.
+
+## Community
+
+Since releasing [Turborepo 1.11](/blog/turbo-1-11-0) we've seen incredible adoption and community growth:
+
+- [24.0k+ GitHub Stars](https://github.com/vercel/turbo)
+- [1.9M+ weekly NPM downloads](https://www.npmjs.com/package/turbo)
+- 238 years of compute time saved using [Vercel Remote Cache](https://vercel.com/docs/concepts/monorepos/remote-caching)
+
+Turborepo is the result of the combined work of all of its contributors, including our core team.
+
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice.
