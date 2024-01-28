@@ -194,7 +194,7 @@ impl<'t> Glob<'t> {
     }
 
     fn anchor(&self, directory: impl Into<PathBuf>) -> Anchor {
-        fn invariant_path_prefix<'t, A, I>(tokens: I) -> Option<PathBuf>
+        fn invariant_path_prefix<'t, A, I>(tokens: I, root: &Path) -> Option<PathBuf>
         where
             A: 't,
             I: IntoIterator<Item = &'t Token<'t, A>>,
@@ -203,7 +203,32 @@ impl<'t> Glob<'t> {
             if prefix.is_empty() {
                 None
             } else {
-                Some(prefix.into())
+                // here, we don't know if the glob will be walked with or without symlinks,
+                // so we need to ensure that the invariant prefix optimisation doesn't cross a
+                // symlink todo: `anchor` knows nothing about the walk behaviour. if it did, we
+                // could probably skip this conditionally for a small perf bonus
+                let prefix: PathBuf = prefix.into();
+                let mut curr_prefix = prefix.as_path();
+                let mut last_symlink = None;
+                while let Some(parent) = curr_prefix.parent() {
+                    // make sure we don't traverse out of the root
+                    if curr_prefix == root {
+                        break;
+                    }
+
+                    if parent.is_symlink() {
+                        last_symlink = Some(parent);
+                    }
+                    curr_prefix = parent;
+                }
+                // we found the last symlink, but we need the chance to
+                // filter it, so take the parent one more time
+                Some(
+                    last_symlink
+                        .and_then(Path::parent)
+                        .map(Into::into)
+                        .unwrap_or(prefix),
+                )
             }
         }
 
@@ -219,7 +244,7 @@ impl<'t> Glob<'t> {
         // Note that a rooted glob, like in `Path::join`, replaces `directory` when
         // establishing the root path. In this case, there is no prefix, as the
         // entire root path is present in the glob expression.
-        let (root, prefix) = match invariant_path_prefix(self.tree.as_ref().tokens()) {
+        let (root, prefix) = match invariant_path_prefix(self.tree.as_ref().tokens(), &directory) {
             Some(prefix) => directory.join_and_get_depth(prefix),
             _ => (directory, 0),
         };
