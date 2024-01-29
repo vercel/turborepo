@@ -38,6 +38,11 @@ rm -rf "../examples-tests-tmp/$example_path"
 # Remove node_modules so the copy is faster when working locally
 find "../examples/$example_path" -name "node_modules" -type d -prune | xargs rm -rf
 cp -r "../examples/$example_path" $example_path
+
+# Isolate from git's perspective
+rm -rf $example_path/.git
+../turborepo-tests/helpers/setup_git.sh $example_path
+
 cd $example_path
 
 # Let's also isolate from turbo's perspective
