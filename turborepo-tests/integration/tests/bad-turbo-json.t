@@ -25,8 +25,6 @@ Run build with package task in non-root turbo.json
   [1]
 
 
-
-
 Remove unnecessary package task syntax
   $ rm $(pwd)/apps/my-app/turbo.json
 

@@ -88,15 +88,34 @@ pub enum Error {
         #[source_code]
         text: String,
     },
-    #[error("You can only extend from the root workspace")]
-    ExtendFromNonRoot {
+    #[diagnostic(
+        code(extends_from_non_root),
+        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)),
+        help("only the root workspace (`//`) can be extended")
+    )]
+    #[error("non-root workspace found in `extends` key")]
+    ExtendsFromNonRoot {
         #[label("non-root workspace found here")]
         span: Option<SourceSpan>,
         #[source_code]
         text: String,
     },
+    #[diagnostic(
+        code(no_extends),
+        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)),
+        help("add an `extends` key to your turbo.json file")
+    )]
     #[error("No \"extends\" key found in {path}")]
-    NoExtends { path: String },
+    NoExtends {
+        #[source_code]
+        text: String,
+        #[label]
+        span: Option<SourceSpan>,
+        path: String,
+    },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TurboJsonParseError(#[from] turbo_json::parser::Error),
     #[error("Failed to create APIClient: {0}")]
     ApiClient(#[source] turborepo_api_client::Error),
     #[error("{0} is not UTF8.")]
@@ -109,9 +128,6 @@ pub enum Error {
     InvalidRemoteCacheTimeout(#[source] std::num::ParseIntError),
     #[error("TURBO_PREFLIGHT should be either 1 or 0.")]
     InvalidPreflight,
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    TurboJsonParseError(#[from] turbo_json::parser::Error),
 }
 
 macro_rules! create_builder {

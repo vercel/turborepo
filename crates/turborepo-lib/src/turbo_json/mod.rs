@@ -628,9 +628,14 @@ pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
                 (Some(range), Some(text)) => (Some(range.into()), text.to_string()),
                 (_, _) => (None, String::new()),
             };
-            vec![Error::ExtendFromNonRoot { span, text }]
+            vec![Error::ExtendsFromNonRoot { span, text }]
         }
         None => vec![Error::NoExtends {
+            text: turbo_json
+                .text
+                .as_ref()
+                .map_or_else(String::new, |s| s.to_string()),
+            span: turbo_json.text.as_ref().map(|text| (0, text.len()).into()),
             path: turbo_json
                 .path
                 .as_ref()

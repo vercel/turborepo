@@ -1,0 +1,46 @@
+---
+title: No `extends` key in workspace `turbo.json`
+description: "no-extends error page"
+---
+
+# No `extends` key in workspace `turbo.json`
+
+Turborepo supports [adding a `turbo.json` config file inside a workspace](/repo/docs/core-concepts/monorepos/configuring-workspaces)
+to customize the configuration for that specific workspace. When adding this additional `turbo.json` file, you must
+annotate that it extends the root configuration by adding an `extends` key to the file:
+
+```json
+{
+    "extends": ["//"]
+}
+```
+
+Recall that `//` is Turbo's special syntax for the root of your repository. Currently, we only support extending from the root
+`turbo.json` file.
+
+## Example
+
+```json
+{
+  "pipeline": {
+    "build": {
+      "env": ["NODE_ENV"]
+    }
+  }
+}
+```
+
+## Solution
+
+Add an `extends` key to the `turbo.json` file:
+
+```json
+{
+  "extends": ["//"],
+  "pipeline": {
+    "build": {
+      "env": ["NODE_ENV"]
+    }
+  }
+}
+```
