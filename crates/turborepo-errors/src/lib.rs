@@ -4,6 +4,7 @@ use std::{
 };
 
 use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
+use miette::SourceSpan;
 use serde::Serialize;
 
 pub const TURBO_SITE: &str = "https://turbo.build";
@@ -70,6 +71,16 @@ impl<T> Spanned<T> {
 
     pub fn into_inner(self) -> T {
         self.value
+    }
+
+    /// Gets the span and the text if both exist. If either doesn't exist, we
+    /// return `None` for the span and an empty string for the text, since
+    /// miette doesn't accept an `Option<String>` for `#[source_code]`
+    pub fn span_and_text(&self) -> (Option<SourceSpan>, String) {
+        match self.range.clone().zip(self.text.as_ref()) {
+            Some((range, text)) => (Some(range.into()), text.to_string()),
+            None => (None, String::new()),
+        }
     }
 
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Spanned<U> {

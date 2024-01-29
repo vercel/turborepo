@@ -509,10 +509,7 @@ impl TurboJson {
                 let mut pipeline = Pipeline::default();
                 for (task_name, task_definition) in turbo_from_files.pipeline {
                     if task_name.is_package_task() {
-                        let (span, text) = match task_definition.range.zip(turbo_from_files.text) {
-                            Some((range, text)) => (Some(range.into()), text.to_string()),
-                            None => (None, String::new()),
-                        };
+                        let (span, text) = task_definition.span_and_text();
 
                         return Err(Error::PackageTaskInSinglePackageMode {
                             task_id: task_name.to_string(),
@@ -598,10 +595,7 @@ pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
         .iter()
         .filter(|(task_name, _)| task_name.is_package_task())
         .map(|(task_name, entry)| {
-            let (span, text) = match (entry.range.clone(), &turbo_json.text) {
-                (Some(range), Some(text)) => (Some(range.into()), text.to_string()),
-                (_, _) => (None, String::new()),
-            };
+            let (span, text) = entry.span_and_text();
             Error::UnnecessaryPackageTaskSyntax {
                 actual: task_name.to_string(),
                 wanted: task_name.task().to_string(),
@@ -615,10 +609,7 @@ pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
 pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
     match turbo_json.extends.first() {
         Some(package_name) if package_name != ROOT_PKG_NAME || turbo_json.extends.len() > 1 => {
-            let (span, text) = match (turbo_json.extends.range.clone(), &turbo_json.text) {
-                (Some(range), Some(text)) => (Some(range.into()), text.to_string()),
-                (_, _) => (None, String::new()),
-            };
+            let (span, text) = turbo_json.extends.span_and_text();
             vec![Error::ExtendFromNonRoot { span, text }]
         }
         None => vec![Error::NoExtends {
@@ -639,10 +630,7 @@ fn gather_env_vars(
     for value in vars {
         let value: Spanned<String> = value.map(|v| v.into());
         if value.starts_with(ENV_PIPELINE_DELIMITER) {
-            let (span, text) = match (value.range.clone(), &value.text) {
-                (Some(span), Some(text)) => (Some(span.into()), text.to_string()),
-                (_, _) => (None, String::new()),
-            };
+            let (span, text) = value.span_and_text();
             // Hard error to help people specify this correctly during migration.
             // TODO: Remove this error after we have run summary.
             return Err(Error::InvalidEnvPrefix {

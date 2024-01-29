@@ -1,14 +1,14 @@
 ---
-title: Package Task In Single Package Mode
-description: "package-task-in-single-package-mode error page"
+title: Package task in single package mode
+description: Package task in single package mode error
 ---
 
-# Package Task In Single Package Mode
+# Package task in single package mode
+
+## Why This Error Occurred
 
 In single package mode, there cannot be multiple packages in your repository. Therefore, declaring a task in the
 `turbo.json` with a specified package name is not permitted.
-
-## Example
 
 ```json
 {
@@ -34,4 +34,4 @@ Remove the package name from the task declaration.
 }
 ```
 
-Alternatively, you can disable single package mode by [specifying the workspaces in the repository](/repo/docs/getting-started/existing-monorepo#configure-workspaces).
+Alternatively, if you would like to have multiple packages, you can [specify the workspaces in your repository](/repo/docs/getting-started/existing-monorepo#configure-workspaces).

@@ -32,10 +32,7 @@ use crate::{cli, get_version, spawn_child, tracing::TurboSubscriber};
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("cannot have multiple `--cwd` flags in command")]
-#[diagnostic(
-    code(turbo::shim::multiple_cwd),
-    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
-)]
+#[diagnostic(code(turbo::shim::multiple_cwd))]
 pub struct MultipleCwd {
     #[backtrace]
     backtrace: Backtrace,
@@ -58,10 +55,7 @@ pub enum Error {
     #[diagnostic(transparent)]
     MultipleCwd(Box<MultipleCwd>),
     #[error("No value assigned to `--cwd` flag")]
-    #[diagnostic(
-        code(turbo::shim::empty_cwd),
-        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
-    )]
+    #[diagnostic(code(turbo::shim::empty_cwd))]
     EmptyCwd {
         #[backtrace]
         backtrace: Backtrace,
