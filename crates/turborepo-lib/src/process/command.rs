@@ -152,6 +152,11 @@ impl From<Command> for portable_pty::CommandBuilder {
         cmd.args(args);
         if let Some(cwd) = cwd {
             cmd.cwd(cwd.as_std_path());
+        } else if let Ok(cwd) = std::env::current_dir() {
+            // portably_pty defaults to a users home directory instead of cwd if one isn't
+            // configured on the command builder.
+            // We explicitly set the cwd if one exists to avoid this behavior
+            cmd.cwd(&cwd);
         }
         for (key, value) in env {
             cmd.env(key, value);
