@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 use swc_core::{
     common::DUMMY_SP,
     ecma::ast::{
-        CallExpr, Callee, ComputedPropName, Expr, ExprOrSpread, KeyValueProp, Lit, MemberExpr,
-        MemberProp, ObjectLit, Prop, PropName, PropOrSpread,
+        CallExpr, Callee, Expr, ExprOrSpread, KeyValueProp, Lit, ObjectLit, Prop, PropName,
+        PropOrSpread,
     },
     quote, quote_expr,
 };
@@ -211,52 +211,48 @@ impl PatternMapping {
     pub fn create_require(&self, key_expr: Expr) -> Expr {
         match self {
             PatternMapping::Single(pm) => pm.create_require(Cow::Owned(key_expr)),
-            PatternMapping::Map(map) => Expr::Member(MemberExpr {
-                obj: Box::new(Expr::Object(ObjectLit {
+            PatternMapping::Map(map) => {
+                let map = Expr::Object(ObjectLit {
                     span: DUMMY_SP,
                     props: map
                         .iter()
                         .map(|(k, v)| {
                             PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
                                 key: PropName::Str(k.as_str().into()),
-                                value: Box::new(v.create_require(Cow::Borrowed(&key_expr))),
+                                value: quote_expr!("() => $expr", expr: Expr = v.create_require(Cow::Borrowed(&key_expr))),
                             })))
                         })
                         .collect(),
-                })),
-                prop: MemberProp::Computed(ComputedPropName {
-                    span: DUMMY_SP,
-                    expr: Box::new(key_expr),
-                }),
-                span: DUMMY_SP,
-            }),
+                });
+                quote!("__turbopack_lookup__($map, $key)" as Expr,
+                    map: Expr = map,
+                    key: Expr = key_expr
+                )
+            }
         }
     }
 
     pub fn create_import(&self, key_expr: Expr, import_externals: bool) -> Expr {
         match self {
             PatternMapping::Single(pm) => pm.create_import(Cow::Owned(key_expr), import_externals),
-            PatternMapping::Map(map) => Expr::Member(MemberExpr {
-                obj: Box::new(Expr::Object(ObjectLit {
+            PatternMapping::Map(map) => {
+                let map = Expr::Object(ObjectLit {
                     span: DUMMY_SP,
                     props: map
                         .iter()
                         .map(|(k, v)| {
                             PropOrSpread::Prop(Box::new(Prop::KeyValue(KeyValueProp {
                                 key: PropName::Str(k.as_str().into()),
-                                value: Box::new(
-                                    v.create_import(Cow::Borrowed(&key_expr), import_externals),
-                                ),
+                                value: quote_expr!("() => $expr", expr: Expr = v.create_import(Cow::Borrowed(&key_expr), import_externals)),
                             })))
                         })
                         .collect(),
-                })),
-                prop: MemberProp::Computed(ComputedPropName {
-                    span: DUMMY_SP,
-                    expr: Box::new(key_expr),
-                }),
-                span: DUMMY_SP,
-            }),
+                });
+                quote!("__turbopack_lookup__($map, $key, 1)" as Expr,
+                    map: Expr = map,
+                    key: Expr = key_expr
+                )
+            }
         }
     }
 }

@@ -91,6 +91,7 @@ impl EcmascriptChunkItemContent {
             "M: __turbopack_modules__",
             "l: __turbopack_load__",
             "j: __turbopack_dynamic__",
+            "p: __turbopack_lookup__",
             "p: __turbopack_resolve_absolute_path__",
             "U: __turbopack_relative_url__",
             "R: __turbopack_resolve_module_id_path__",

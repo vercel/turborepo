@@ -48,3 +48,10 @@ it("should support dynamic requests in import with concatenation and suffix", as
   await expect(importConcatSuffix("a")).resolves.toBe(a);
   await expect(importConcatSuffix("d")).resolves.toHaveProperty("default", "d");
 });
+
+it("should throw an error when requesting a non-existent file", async () => {
+  expect(() => requireTemplate("e.js")).toThrowError();
+  expect(() => requireConcat("e.js")).toThrowError();
+  await expect(importTemplate("e.js")).rejects.toThrowError();
+  await expect(importConcat("e.js")).rejects.toThrowError();
+});
