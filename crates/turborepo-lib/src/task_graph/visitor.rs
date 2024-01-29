@@ -899,10 +899,7 @@ impl ExecContext {
 
                     if cacheable {
                         // Attempt to save task outputs and log any errors encountered
-                        if let Err(e) = self
-                            .task_cache
-                            .save_outputs(&mut prefixed_ui, task_duration, telemetry)
-                            .await
+                        if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await
                         {
                             error!("error caching output: {e}");
                         } else {

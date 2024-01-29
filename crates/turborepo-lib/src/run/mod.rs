@@ -7,6 +7,7 @@ mod graph_visualizer;
 pub(crate) mod package_discovery;
 mod scope;
 pub(crate) mod summary;
+pub mod task_access;
 pub mod task_id;
 
 use std::{
@@ -16,7 +17,7 @@ use std::{
     time::SystemTime,
 };
 
-pub use cache::{RunCache, TaskCache};
+pub use cache::{ConfigCache, RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
@@ -57,7 +58,7 @@ use crate::{
     engine::{Engine, EngineBuilder},
     opts::Opts,
     process::ProcessManager,
-    run::{global_hash::get_global_hash_inputs, summary::RunTracker},
+    run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
     shim::TurboState,
     signal::{SignalHandler, SignalSubscriber},
     task_graph::Visitor,
@@ -315,6 +316,19 @@ impl Run {
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
 
+        let scm = scm.await.expect("detecting scm panicked");
+        let async_cache = Arc::new(AsyncCache::new(
+            &self.opts.cache_opts,
+            &self.base.repo_root,
+            api_client.clone(),
+            self.api_auth.clone(),
+            analytics_sender,
+        )?);
+
+        // restore config from task access trace if it's enabled
+        let task_access = TaskAccess::new(self.base.repo_root.clone(), async_cache.clone(), &scm);
+        task_access.restore_config().await;
+
         let root_turbo_json = TurboJson::load(
             &self.base.repo_root,
             AnchoredSystemPath::empty(),
@@ -327,8 +341,6 @@ impl Run {
         }
 
         pkg_dep_graph.validate()?;
-
-        let scm = scm.await.expect("detecting scm panicked");
 
         let filtered_pkgs = {
             let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
@@ -357,15 +369,6 @@ impl Run {
         };
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
-
-        let async_cache = AsyncCache::new(
-            &self.opts.cache_opts,
-            &self.base.repo_root,
-            api_client.clone(),
-            self.api_auth.clone(),
-            analytics_sender,
-        )?;
-
         let mut engine = self.build_engine(&pkg_dep_graph, &root_turbo_json, &filtered_pkgs)?;
 
         if self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none() {
@@ -485,6 +488,7 @@ impl Run {
             pkg_dep_graph.clone(),
             runcache,
             run_tracker,
+            task_access,
             &self.opts.run_opts,
             package_inputs_hashes,
             &env_at_execution_start,

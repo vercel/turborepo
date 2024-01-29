@@ -370,7 +370,7 @@ impl RawTurboJson {
 
             let name = TaskName::from(task_name.as_str());
             let root_task = name.into_root_task();
-            pipeline.insert(root_task, task_definition);
+            pipeline.insert(root_task, Spanned::new(task_definition.clone()));
         }
 
         Some(RawTurboJson {
@@ -487,7 +487,8 @@ impl TurboJson {
         }
 
         let turbo_from_files = Self::read(repo_root, &dir.join_component(CONFIG_FILE));
-        let turbo_from_trace = Self::read(&dir.join_components(&TASK_ACCESS_CONFIG_PATH));
+        let turbo_from_trace =
+            Self::read(repo_root, &dir.join_components(&TASK_ACCESS_CONFIG_PATH));
 
         // check the zero config case (turbo trace file, but no turbo.json file)
         if let Ok(turbo_from_trace) = turbo_from_trace {
