@@ -69,7 +69,7 @@ pub struct Run {
 
 impl Run {
     pub fn new(base: CommandBase, api_auth: Option<APIAuth>) -> Result<Self, Error> {
-        let processes = ProcessManager::new();
+        let processes = ProcessManager::infer();
         let mut opts: Opts = base.args().try_into()?;
         let config = base.config()?;
         let is_linked = turborepo_api_client::is_linked(&api_auth);
