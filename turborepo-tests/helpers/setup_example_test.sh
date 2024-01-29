@@ -33,7 +33,7 @@ turbo_command="turbo build lint"
 mkdir -p ../../examples-tests-tmp
 cd ../../examples-tests-tmp
 
-# Head into the example directory
+# Head into the examples tests directory
 rm -rf "../examples-tests-tmp/$example_path"
 # Remove node_modules so the copy is faster when working locally
 find "../examples/$example_path" -name "node_modules" -type d -prune | xargs rm -rf
