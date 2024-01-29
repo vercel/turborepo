@@ -436,7 +436,7 @@ jobs:
       - name: Check examples
         shell: bash
         # Concurrency is so we don't hit npm registry rate limits
-        run: turbo run test --filter="@turborepo-examples-tests/*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=5
+        run: turbo run test --filter="@turborepo-examples-tests/*" --continue --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} --env-mode=strict --concurrency=1
 
       # Disable corepack again. actions/setup-node's "Post" step runs at the end of
       # this job invokes other package managers, and corepack throws an error.
