@@ -1660,11 +1660,11 @@ async fn resolve_relative_request(
     request: Vc<Request>,
     options: Vc<ResolveOptions>,
     options_value: &ResolveOptions,
-    path: &Pattern,
+    path_pattern: &Pattern,
     query: Vc<String>,
     force_in_lookup_dir: bool,
 ) -> Result<Vc<ResolveResult>> {
-    let mut new_path = path.clone();
+    let mut new_path = path_pattern.clone();
     // Add the extensions as alternatives to the path
     // read_matches keeps the order of alternatives intact
     new_path.push(Pattern::Alternatives(
@@ -1691,18 +1691,41 @@ async fn resolve_relative_request(
     for m in matches.iter() {
         match m {
             PatternMatch::File(matched_pattern, path) => {
-                results.push(
-                    resolved(
-                        Value::new(RequestKey::new(matched_pattern.clone())),
-                        *path,
-                        lookup_path,
-                        request,
-                        options_value,
-                        options,
-                        query,
-                    )
-                    .await?,
-                );
+                let mut matches_without_extension = false;
+                for ext in options_value.extensions.iter() {
+                    let Some(matched_pattern) = matched_pattern.strip_suffix(ext) else {
+                        continue;
+                    };
+                    if path_pattern.is_match(matched_pattern) {
+                        results.push(
+                            resolved(
+                                Value::new(RequestKey::new(matched_pattern.to_string())),
+                                *path,
+                                lookup_path,
+                                request,
+                                options_value,
+                                options,
+                                query,
+                            )
+                            .await?,
+                        );
+                        matches_without_extension = true;
+                    }
+                }
+                if !matches_without_extension || path_pattern.is_match(matched_pattern) {
+                    results.push(
+                        resolved(
+                            Value::new(RequestKey::new(matched_pattern.clone())),
+                            *path,
+                            lookup_path,
+                            request,
+                            options_value,
+                            options,
+                            query,
+                        )
+                        .await?,
+                    );
+                }
             }
             PatternMatch::Directory(_, path) => {
                 results.push(resolve_into_folder(*path, options, query));
