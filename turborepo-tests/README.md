@@ -6,7 +6,7 @@ These tests are for ensuring that the examples we are providing to users work ri
 
 ## Test structure
 
-We guarantee that the examples work by running the `lint` and `build` tasks in each example and checking for a `>>> FULL TURBO` on the second run. This requires that the tasks pass and are cacheable. The logic for the tests is in `test_example.sh` and takes a few steps:
+We guarantee that the examples work by running the `lint` and `build` tasks in each example and checking for a `>>> FULL TURBO` on the second run. This requires that the tasks pass and are cacheable. The logic for the tests is in `setup_example_test.sh` and takes a few steps:
 
 1. `cd` to the example directory.
 2. Install packages.
