@@ -32,40 +32,43 @@ fi
 # and it's reasonable to assume that they will continue to do so
 turbo_command="turbo build lint --output-logs=errors-only"
 
+# Head into a temporary directory
+mkdir -p ../../examples-tests-tmp
+cd ../../examples-tests-tmp
+
 # Head into the example directory
+rm -rf "../examples-tests-tmp/$example_path"
+git clone "../examples/$example_path" -q
 cd $example_path
 
-# Isolate the example from the rest of the repo from Git's perspective
-"../../turborepo-tests/helpers/setup_git.sh . -n" >/dev/null 2>&1
-
 # Let's also isolate from turbo's perspective
+# in case you've ran the tests before
 rm -rf .turbo/ node_modules/ || true
 
-# Make sure there is a coverage file to write into
-# This is a minor abuse of the coverage directory
-# but we need something that is gitignored so this works
-mkdir -p ./coverage
+# Make /tmp dir for writing dump logs
+mkdir -p ./tmp
+echo -e "$(cat .gitignore)" "\n/tmp/" >.gitignore
 
 # Simulating the user's first run and dumping logs to a file
-$package_manager_command >./coverage/first-install.txt 2>&1
-$turbo_command >./coverage/grep-me-for-miss.txt
+$package_manager_command >./tmp/first-install.txt 2>&1
+$turbo_command >./tmp/grep-me-for-miss.txt
 
 # We do not want to hit cache on first run because we're acting like a user.
 # A user would never hit cache on first run. Why should we?
-if grep -q ">>> FULL TURBO" ./coverage/grep-me-for-miss.txt; then
+if grep -q ">>> FULL TURBO" ./tmp/grep-me-for-miss.txt; then
   echo "A FULL TURBO was found. This test is misconfigured (since it can hit a cache)."
   echo "Dumping logs:"
-  cat ./coverage/grep-me-for-miss.txt >&2
+  cat ./tmp/grep-me-for-miss.txt >&2
   exit 1
 fi
 
 # Simulating the user's second run
-$package_manager_command >./coverage/second-install.txt 2>&1
-$turbo_command >./coverage/grep-me-for-hit.txt
+$package_manager_command >./tmp/second-install.txt 2>&1
+$turbo_command >./tmp/grep-me-for-hit.txt
 
 # Make sure the runs hit FULL TURBO on the second go
-if ! grep -q ">>> FULL TURBO" ./coverage/grep-me-for-hit.txt; then
+if ! grep -q ">>> FULL TURBO" ./tmp/grep-me-for-hit.txt; then
   echo "No FULL TURBO was found. Dumping logs:"
-  cat ./coverage/grep-me-for-hit.txt >&2
+  cat ./tmp/grep-me-for-hit.txt >&2
   exit 1
 fi
