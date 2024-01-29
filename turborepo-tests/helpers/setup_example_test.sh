@@ -6,6 +6,16 @@ export TURBO_TELEMETRY_MESSAGE_DISABLED=1
 example_path=$1
 package_manager=$2
 
+if [ -z "$example_path" ]; then
+  echo "No example path was provided"
+  exit 1
+fi
+
+if [ -z "$package_manager" ]; then
+  echo "No package manager was provided"
+  exit 1
+fi
+
 # Use the right command for each package manager
 if [ "$package_manager" == "npm" ]; then
   package_manager_command="npm install"
@@ -26,7 +36,7 @@ turbo_command="turbo build lint --output-logs=errors-only"
 cd $example_path
 
 # Isolate the example from the rest of the repo from Git's perspective
-"../../turborepo-tests/helpers/setup_git.sh . -n"  > /dev/null 2>&1
+"../../turborepo-tests/helpers/setup_git.sh . -n" >/dev/null 2>&1
 
 # Let's also isolate from turbo's perspective
 rm -rf .turbo/ node_modules/ || true
@@ -37,8 +47,8 @@ rm -rf .turbo/ node_modules/ || true
 mkdir -p ./coverage
 
 # Simulating the user's first run and dumping logs to a file
-$package_manager_command > ./coverage/first-install.txt 2>&1
-$turbo_command > ./coverage/grep-me-for-miss.txt
+$package_manager_command >./coverage/first-install.txt 2>&1
+$turbo_command >./coverage/grep-me-for-miss.txt
 
 # We do not want to hit cache on first run because we're acting like a user.
 # A user would never hit cache on first run. Why should we?
@@ -50,8 +60,8 @@ if grep -q ">>> FULL TURBO" ./coverage/grep-me-for-miss.txt; then
 fi
 
 # Simulating the user's second run
-$package_manager_command > ./coverage/second-install.txt 2>&1
-$turbo_command > ./coverage/grep-me-for-hit.txt
+$package_manager_command >./coverage/second-install.txt 2>&1
+$turbo_command >./coverage/grep-me-for-hit.txt
 
 # Make sure the runs hit FULL TURBO on the second go
 if ! grep -q ">>> FULL TURBO" ./coverage/grep-me-for-hit.txt; then
