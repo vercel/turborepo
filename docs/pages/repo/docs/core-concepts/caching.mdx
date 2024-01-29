@@ -130,7 +130,7 @@ Now, make sure that `turbo` is aware of the file by adding it to task inputs. Yo
   "pipelines": {
     "build-for-platforms": {
       "dependsOn": ["^build"],
-      "inputs": ["turbo-cache-key.json", ...]
+      "inputs": ["$TURBO_DEFAULT$", "turbo-cache-key.json"]
     }
   }
 }
