@@ -19,4 +19,14 @@ pub enum Error {
     FailedToValidateSSOToken(#[source] turborepo_api_client::Error),
     #[error("failed to make sso token name")]
     FailedToMakeSSOTokenName(#[source] io::Error),
+
+    #[error("encountered io error: {0}")]
+    IoError(#[from] io::Error),
+
+    #[error("SSO error: {0}")]
+    SsoError(String),
+    #[error("API error: {0}")]
+    ApiError(String),
+    #[error("Unknown error: {0}")]
+    Other(String),
 }
