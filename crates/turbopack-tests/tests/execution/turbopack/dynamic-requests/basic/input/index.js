@@ -55,3 +55,21 @@ it("should throw an error when requesting a non-existent file", async () => {
   await expect(importTemplate("e.js")).rejects.toThrowError();
   await expect(importConcat("e.js")).rejects.toThrowError();
 });
+
+it("should support dynamic requests without the extension", async () => {
+  expect(requireTemplate("a")).toBe(a);
+  expect(requireConcat("a")).toBe(a);
+  expect(requireTemplate("d")).toBe("d");
+  expect(requireConcat("d")).toBe("d");
+  await expect(importTemplate("a")).resolves.toBe(a);
+  await expect(importTemplate("d")).resolves.toHaveProperty("default", "d");
+  await expect(importConcat("a")).resolves.toBe(a);
+  await expect(importConcat("d")).resolves.toHaveProperty("default", "d");
+});
+
+it("should not support dynamic requests with double extension", async () => {
+  await expect(importTemplateSuffix("a.js")).rejects.toThrowError();
+  await expect(importTemplateSuffix("d.js")).rejects.toThrowError();
+  await expect(importConcatSuffix("a.js")).rejects.toThrowError();
+  await expect(importConcatSuffix("d.js")).rejects.toThrowError();
+});
