@@ -16,7 +16,7 @@ We guarantee that the examples work by running the `lint` and `build` tasks in e
 
 ## Creating a test
 
-We want to create a test for every example that we can. To create a test:
+To create a test for a new example:
 
 1. Copy the `basic` directory into a new folder.
 2. Edit the `name` field in `package.json`.
