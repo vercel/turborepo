@@ -38,7 +38,9 @@ cd ../../examples-tests-tmp
 
 # Head into the example directory
 rm -rf "../examples-tests-tmp/$example_path"
-git clone "../examples/$example_path" -q
+# Remove node_modules so the copy is faster when working locally
+find "../examples/$example_path" -name "node_modules" -type d -prune | xargs rm -rf
+cp -r "../examples/$example_path" $example_path
 cd $example_path
 
 # Let's also isolate from turbo's perspective
