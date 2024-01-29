@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, hash::Hash, str::FromStr};
 
 use globwalk::ValidatedGlob;
 use tracing::debug;
@@ -135,7 +135,7 @@ impl Git {
         }
 
         // we have inputs, and $TURBO_DEFAULT$
-        self.get_package_file_hashes_from_inputs_and_index(turbo_root, package_path, inputs, true)
+        self.get_package_file_hashes_from_inputs_and_index(turbo_root, package_path, inputs)
     }
 
     #[tracing::instrument(skip(self, turbo_root))]
@@ -249,7 +249,6 @@ impl Git {
         turbo_root: &AbsoluteSystemPath,
         package_path: &AnchoredSystemPath,
         inputs: &[S],
-        include_configs: bool,
     ) -> Result<GitHashes, Error> {
         // collect the default files and the inputs
         let default_file_hashes =
@@ -267,10 +266,17 @@ impl Git {
                 includes.push(input_str);
             }
         }
+        // we have to always run the includes search because we add default files to the
+        // includes
         let manual_includes_hashes =
             self.get_package_file_hashes_from_inputs(turbo_root, package_path, &includes, true)?;
-        let manual_excludes_hashes =
-            self.get_package_file_hashes_from_inputs(turbo_root, package_path, &excludes, false)?;
+
+        // only run the excludes search if there are excludes
+        let manual_excludes_hashes = if !excludes.is_empty() {
+            self.get_package_file_hashes_from_inputs(turbo_root, package_path, &excludes, false)?
+        } else {
+            GitHashes::new()
+        };
 
         // merge the two includes
         let mut hashes = default_file_hashes;

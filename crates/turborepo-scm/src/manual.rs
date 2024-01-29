@@ -128,14 +128,14 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         let relative_path = full_package_path.anchor(path)?;
         let relative_path = relative_path.to_unix();
 
-        // if we have includes and this path doesn't match any of them, skip it
+        // if we have includes, and this path doesn't match any of them, skip it
         if let Some(include_pattern) = include_pattern.as_ref() {
             if !include_pattern.is_match(relative_path.as_str()) {
                 continue;
             }
         }
 
-        // if we have excludes and this path matches any of them, skip it
+        // if we have excludes, and this path matches one of them, skip it
         if let Some(exclude_pattern) = exclude_pattern.as_ref() {
             if exclude_pattern.is_match(relative_path.as_str()) {
                 continue;
