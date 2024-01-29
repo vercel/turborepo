@@ -65,7 +65,8 @@ impl ProcessManager {
         if lock.is_closing {
             return None;
         }
-        let child = child::Child::spawn(command, child::ShutdownStyle::Graceful(stop_timeout));
+        let child =
+            child::Child::spawn(command, child::ShutdownStyle::Graceful(stop_timeout), false);
         if let Ok(child) = &child {
             lock.children.push(child.clone());
         }

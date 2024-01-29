@@ -87,7 +87,6 @@ export function activate(context: ExtensionContext) {
 
   context.subscriptions.push(
     commands.registerCommand("turbo.daemon.start", () => {
-      const turboPath = workspace.getConfiguration("turbo").get("path");
       cp.exec(`${turboPath} daemon start`, options, (err) => {
         if (err) {
           if (err.message.includes("command not found")) {
@@ -220,7 +219,9 @@ export function activate(context: ExtensionContext) {
   let lspPath = Uri.joinPath(
     context.extensionUri,
     "out",
-    `turborepo-lsp-${process.platform}-${process.arch}`
+    `turborepo-lsp-${process.platform}-${process.arch}${
+      process.platform === "win32" ? ".exe" : ""
+    }`
   ).fsPath;
 
   if (!fs.existsSync(lspPath)) {

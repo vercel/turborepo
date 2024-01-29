@@ -1,5 +1,6 @@
 #![feature(assert_matches)]
 #![feature(box_patterns)]
+#![feature(byte_slice_trim_ascii)]
 #![feature(error_generic_member_access)]
 #![feature(hash_extract_if)]
 #![feature(option_get_or_insert_default)]

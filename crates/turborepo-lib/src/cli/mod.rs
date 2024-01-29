@@ -455,9 +455,7 @@ pub enum Command {
         #[serde(skip)]
         command: Option<Box<GenerateCommand>>,
     },
-    // TODO:[telemetry] Unhide this in `1.12`
     /// Enable or disable anonymous telemetry
-    #[clap(hide = true)]
     Telemetry {
         #[clap(subcommand)]
         #[serde(flatten)]
@@ -934,22 +932,20 @@ pub async fn run(
 
     // track telemetry handle to close at the end of the run
     let mut telemetry_handle: Option<TelemetryHandle> = None;
-    // TODO:[telemetry] Remove this check in `1.12`
-    if turborepo_telemetry::config::is_telemetry_internal_test() {
-        // initialize telemetry
-        match AnonAPIClient::new("https://telemetry.vercel.com", 250, version) {
-            Ok(anonymous_api_client) => {
-                let handle = init_telemetry(anonymous_api_client, ui);
-                match handle {
-                    Ok(h) => telemetry_handle = Some(h),
-                    Err(error) => {
-                        debug!("failed to start telemetry: {:?}", error)
-                    }
+
+    // initialize telemetry
+    match AnonAPIClient::new("https://telemetry.vercel.com", 250, version) {
+        Ok(anonymous_api_client) => {
+            let handle = init_telemetry(anonymous_api_client, ui);
+            match handle {
+                Ok(h) => telemetry_handle = Some(h),
+                Err(error) => {
+                    debug!("failed to start telemetry: {:?}", error)
                 }
             }
-            Err(error) => {
-                debug!("Failed to create AnonAPIClient: {:?}", error);
-            }
+        }
+        Err(error) => {
+            debug!("Failed to create AnonAPIClient: {:?}", error);
         }
     }
 
@@ -1196,7 +1192,16 @@ pub async fn run(
             } else {
                 use crate::commands::run;
                 event.track_run_code_path(CodePath::Rust);
-                let exit_code = run::run(base, event).await?;
+                let exit_code = run::run(base, event)
+                    .await
+                    .inspect(|code| {
+                        if *code != 0 {
+                            error!("run failed: command  exited ({code})");
+                        }
+                    })
+                    .inspect_err(|err| {
+                        error!("run failed: {err}");
+                    })?;
                 Ok(Payload::Rust(Ok(exit_code)))
             }
         }
