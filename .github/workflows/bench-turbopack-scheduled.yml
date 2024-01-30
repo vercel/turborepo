@@ -93,6 +93,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           shared-cache-key: benchmark-bundlers
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Clear potentially cached benchmarks
         run: rm -rf target/criterion

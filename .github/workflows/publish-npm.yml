@@ -14,6 +14,8 @@ jobs:
 
       - uses: ./.github/actions/setup-node
       - uses: ./.github/actions/setup-rust
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build packages
         run: pnpx turbo@canary run build:ts

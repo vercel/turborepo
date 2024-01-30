@@ -50,8 +50,6 @@ Make sure exit code is 2 when no args are passed
             Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]
             [possible values: text, json]
-        --go-fallback
-            Fallback to use Go for task execution
         --single-package
             Run turbo in single-package mode
         --force [<FORCE>]

@@ -1343,25 +1343,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2698f953def977c68f935bb0dfa959375ad4638570e969e2f1e9f433cbf1af6"
 
 [[package]]
-name = "cbindgen"
-version = "0.24.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6358dedf60f4d9b8db43ad187391afe959746101346fe51bb978126bec61dfb"
-dependencies = [
- "clap 3.2.23",
- "heck 0.4.1",
- "indexmap 1.9.3",
- "log 0.4.20",
- "proc-macro2",
- "quote",
- "serde",
- "serde_json",
- "syn 1.0.109",
- "tempfile",
- "toml 0.5.11",
-]
-
-[[package]]
 name = "cc"
 version = "1.0.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1547,12 +1528,9 @@ version = "3.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71655c45cb9845d3270c9d6df84ebe72b4dad3c2ba3f7023ad47c144e4e473a5"
 dependencies = [
- "atty",
  "bitflags 1.3.2",
  "clap_lex 0.2.4",
  "indexmap 1.9.3",
- "strsim 0.10.0",
- "termcolor",
  "textwrap 0.16.0",
 ]
 
@@ -10580,6 +10558,7 @@ dependencies = [
  "dunce",
  "human-panic",
  "itertools 0.10.5",
+ "miette 5.10.0",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -11638,24 +11617,6 @@ dependencies = [
  "serde",
  "serde_json",
  "test-case",
-]
-
-[[package]]
-name = "turborepo-ffi"
-version = "0.1.0"
-dependencies = [
- "cbindgen",
- "directories 4.0.1",
- "globwalk",
- "prost",
- "prost-build",
- "thiserror",
- "turbopath",
- "turborepo-cache",
- "turborepo-env",
- "turborepo-fs",
- "turborepo-lockfiles",
- "turborepo-scm",
 ]
 
 [[package]]
