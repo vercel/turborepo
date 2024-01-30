@@ -418,6 +418,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           components: rustfmt
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo fmt check
         run: |
@@ -528,6 +529,7 @@ jobs:
         with:
           components: clippy
           targets: wasm32-unknown-unknown
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo clippy
         run: |
@@ -556,6 +558,8 @@ jobs:
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Build next-swc
         run: |
@@ -669,6 +673,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           save-cache: true
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
@@ -737,6 +742,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           save-cache: true
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node

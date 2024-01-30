@@ -138,6 +138,7 @@ jobs:
         with:
           components: clippy
           targets: wasm32-unknown-unknown
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run cargo check release
         run: |
@@ -202,6 +203,7 @@ jobs:
         with:
           shared-cache-key: benchmark-${{ matrix.bench.cache_key }}
           save-cache: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Clear benchmarks
         run: rm -rf target/criterion
@@ -349,6 +351,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           shared-cache-key: benchmark-${{ matrix.os.name }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Benchmark and compare with base branch
         uses: sokra/criterion-compare-action@main

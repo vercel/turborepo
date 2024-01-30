@@ -31,6 +31,8 @@ jobs:
           package-install: false
 
       - uses: ./.github/actions/setup-rust
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install hoisted npm dependencies
         working-directory: crates/turbopack/tests/node-file-trace
