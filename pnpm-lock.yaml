@@ -1241,25 +1241,6 @@ importers:
         specifier: ^7.0.3
         version: 7.0.3
 
-  turborepo-tests/integration-go:
-    dependencies:
-      '@turbo/exe-stub':
-        specifier: workspace:*
-        version: link:../../packages/turbo-exe-stub
-      prysk:
-        specifier: workspace:*
-        version: link:../../packages/prysk
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../helpers
-      turborepo-tests-integration-common:
-        specifier: workspace:*
-        version: link:../integration
-    devDependencies:
-      cross-env:
-        specifier: ^7.0.3
-        version: 7.0.3
-
   turborepo-tests/integration-rust:
     dependencies:
       '@turbo/exe-stub':
