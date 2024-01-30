@@ -628,7 +628,8 @@ impl Child {
 
         let writer_fut = async {
             let mut result = Ok(());
-            while let Some(bytes) = byte_rx.recv().await {
+            while let Some(mut bytes) = byte_rx.recv().await {
+                add_trailing_newline(&mut bytes);
                 if let Err(err) = stdout_pipe.write_all(&bytes) {
                     result = Err(err);
                     break;
@@ -671,11 +672,13 @@ impl Child {
             tokio::select! {
                 Some(result) = next_line(&mut stdout_lines, &mut stdout_buffer) => {
                     result?;
+                    add_trailing_newline(&mut stdout_buffer);
                     stdout_pipe.write_all(&stdout_buffer)?;
                     stdout_buffer.clear();
                 }
                 Some(result) = next_line(&mut stderr_lines, &mut stderr_buffer) => {
                     result?;
+                    add_trailing_newline(&mut stderr_buffer);
                     stdout_pipe.write_all(&stderr_buffer)?;
                     stderr_buffer.clear();
                 }
@@ -685,10 +688,12 @@ impl Child {
                     // as the number of bytes read will be 0.
                     // We check and flush the buffers to avoid missing the last line of output.
                     if !stdout_buffer.is_empty() {
+                        add_trailing_newline(&mut stdout_buffer);
                         stdout_pipe.write_all(&stdout_buffer)?;
                         stdout_buffer.clear();
                     }
                     if !stderr_buffer.is_empty() {
+                        add_trailing_newline(&mut stderr_buffer);
                         stdout_pipe.write_all(&stderr_buffer)?;
                         stderr_buffer.clear();
                     }
@@ -704,6 +709,16 @@ impl Child {
 
     pub fn label(&self) -> &str {
         &self.label
+    }
+}
+
+// Adds a trailing newline if necessary to the buffer
+fn add_trailing_newline(buffer: &mut Vec<u8>) {
+    // If the line doesn't end with a newline, that indicates we hit a EOF.
+    // We add a newline so output from other tasks doesn't get written to the same
+    // line.
+    if buffer.last() != Some(&b'\n') {
+        buffer.push(b'\n');
     }
 }
 
