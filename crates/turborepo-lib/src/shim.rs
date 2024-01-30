@@ -10,7 +10,6 @@ use std::{
 
 use camino::Utf8PathBuf;
 use const_format::formatcp;
-use convert_case::{Case, Casing};
 use dunce::canonicalize as fs_canonicalize;
 use itertools::Itertools;
 use miette::{Diagnostic, SourceSpan};
@@ -21,7 +20,6 @@ use tiny_gradient::{GradientStr, RGB};
 use tracing::debug;
 use turbo_updater::check_for_updates;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_errors::TURBO_SITE;
 use turborepo_repository::{
     inference::{RepoMode, RepoState},
     package_json::PackageJson,
