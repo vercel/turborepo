@@ -1,5 +1,5 @@
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh "with-pkg-deps"
-  $ source "$TESTDIR/../../../helpers/utils_run_summary.sh"
+  $ source "$TESTDIR/../../../helpers/run_summary.sh"
 
   $ rm -rf .turbo/runs
   $ git commit --quiet -am "new sha" --allow-empty && ${TURBO} run build --summarize > /dev/null 2>&1

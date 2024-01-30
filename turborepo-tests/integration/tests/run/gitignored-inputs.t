@@ -12,7 +12,7 @@ This field is already part of our turbo config.
   $ git add . && git commit --quiet -m  "add internal.txt"
 
 Some helper functions to parse the summary file
-  $ source "$TESTDIR/../../../helpers/utils_run_summary.sh"
+  $ source "$TESTDIR/../../../helpers/run_summary.sh"
 
 Just run the util package, it's simpler
   $ ${TURBO} run build --filter=util --output-logs=hash-only --summarize | grep "util:build: cache"
