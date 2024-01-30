@@ -17,6 +17,11 @@ runs:
       with:
         extra-flags: --no-optional
 
+    - name: "Setup Go"
+      uses: ./.github/actions/setup-go
+      with:
+        github-token: ${{ inputs.github-token }}
+
     - name: "Setup Rust"
       uses: ./.github/actions/setup-rust
       with:
@@ -24,21 +29,6 @@ runs:
         shared-cache-key: turborepo-debug-build
         cache-key: ${{ inputs.target }}
         save-cache: true
-
-    - name: Set Up Protoc
-      id: set-up-protoc
-      continue-on-error: true
-      uses: arduino/setup-protoc@v1.2.0
-      with:
-        version: "3.x"
-        repo-token: ${{ inputs.github-token }}
-
-    - name: Set Up Protoc (second try)
-      if: steps.set-up-protoc.outcome == 'failure'
-      uses: arduino/setup-protoc@v1.2.0
-      with:
-        version: "3.x"
-        repo-token: ${{ inputs.github-token }}
 
     - name: "Setup capnproto"
       uses: ./.github/actions/setup-capnproto

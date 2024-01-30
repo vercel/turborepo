@@ -26,7 +26,7 @@ use turborepo_repository::{
 };
 use turborepo_ui::UI;
 
-use crate::{cli, get_version, spawn_child, tracing::TurboSubscriber};
+use crate::{cli, get_version, spawn_child, tracing::TurboSubscriber, Payload};
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("cannot have multiple `--cwd` flags in command")]
@@ -561,7 +561,7 @@ fn run_correct_turbo(
     shim_args: ShimArgs,
     subscriber: &TurboSubscriber,
     ui: UI,
-) -> Result<i32, Error> {
+) -> Result<Payload, Error> {
     if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
         try_check_for_updates(&shim_args, &turbo_state.version);
 
@@ -573,7 +573,11 @@ fn run_correct_turbo(
             debug!("Currently running turbo is local turbo.");
             Ok(cli::run(Some(repo_state), subscriber, ui)?)
         } else {
-            spawn_local_turbo(&repo_state, turbo_state, shim_args)
+            Ok(Payload::Rust(spawn_local_turbo(
+                &repo_state,
+                turbo_state,
+                shim_args,
+            )))
         }
     } else {
         try_check_for_updates(&shim_args, get_version());
@@ -709,7 +713,7 @@ fn try_check_for_updates(args: &ShimArgs, current_version: &str) {
     }
 }
 
-pub fn run() -> Result<i32, Error> {
+pub fn run() -> Result<Payload, Error> {
     let args = ShimArgs::parse()?;
     let ui = args.ui();
     if ui.should_strip_ansi {

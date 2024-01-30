@@ -50,6 +50,8 @@ Make sure exit code is 2 when no args are passed
             Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]
             [possible values: text, json]
+        --go-fallback
+            Fallback to use Go for task execution
         --single-package
             Run turbo in single-package mode
         --force [<FORCE>]
@@ -101,8 +103,7 @@ Make sure exit code is 2 when no args are passed
   [1]
 
   $ ${TURBO} run
-    x at least one task must be specified
-  
+  Turbo error: at least one task must be specified
   [1]
 
 Run again with an environment variable that corresponds to a run argument and assert that
