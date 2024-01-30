@@ -15,4 +15,7 @@
   $ ${TURBO} run build
    ERROR  run failed: error preparing engine: Invalid persistent task configuration:
   "app-a#dev" is a persistent task, "app-a#build" cannot depend on it
+    x error preparing engine: Invalid persistent task configuration:
+    | "app-a#dev" is a persistent task, "app-a#build" cannot depend on it
+  
   [1]

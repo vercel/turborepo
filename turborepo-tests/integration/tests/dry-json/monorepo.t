@@ -180,4 +180,6 @@ Run again with NODE_ENV set and see the value in the summary. --filter=util work
 Tasks that don't exist throw an error
   $ ${TURBO} run doesnotexist --dry=json
    ERROR  run failed:( error preparing engine:)? Could not find the following tasks in project: doesnotexist (re)
+    x Could not find the following tasks in project: doesnotexist
+  
   [1]
