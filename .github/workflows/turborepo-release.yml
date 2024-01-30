@@ -188,8 +188,10 @@ jobs:
           git config --global user.name 'Turbobot'
           git config --global user.email 'turbobot@vercel.com'
 
-      - name: Setup capnproto
-        uses: ./.github/actions/setup-capnproto
+      - name: Setup turborepo environment
+        uses: ./.github/actions/setup-turborepo-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v3
