@@ -68,10 +68,22 @@ pub fn main() -> Result<i32, shim::Error> {
                 config::Error::InvalidEnvPrefix { .. },
             ))))
             | Error::Cli(cli::Error::Run(run::Error::Config(
+                config::Error::InvalidEnvPrefix { .. },
+            )))
+            | Error::Cli(cli::Error::Run(run::Error::Config(
                 config::Error::TurboJsonParseError(_),
             )))
             | Error::Cli(cli::Error::Run(run::Error::Builder(BuilderError::Config(
                 config::Error::TurboJsonParseError(_),
+            ))))
+            | Error::Cli(cli::Error::Run(run::Error::Config(
+                config::Error::PackageTaskInSinglePackageMode { .. },
+            )))
+            | Error::Cli(cli::Error::Run(run::Error::Builder(
+                engine::BuilderError::Validation { .. },
+            )))
+            | Error::Cli(cli::Error::Run(run::Error::Builder(engine::BuilderError::Config(
+                ..,
             ))))),
         ) => {
             println!("{:?}", Report::new(err));

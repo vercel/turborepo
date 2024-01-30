@@ -30,7 +30,7 @@ use crate::{cli, get_version, spawn_child, tracing::TurboSubscriber};
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("cannot have multiple `--cwd` flags in command")]
-#[diagnostic(code(turbo::shim::empty_cwd))]
+#[diagnostic(code(turbo::shim::multiple_cwd))]
 pub struct MultipleCwd {
     #[backtrace]
     backtrace: Backtrace,
