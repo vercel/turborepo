@@ -24,9 +24,8 @@ import { Date } from "../../components/blog/Date";
 Turborepo 1.12 adds popular community-requested features and feedback improvements, including:
 
 - [**Colors in task logs**](#colors-in-task-logs): Colors from original shell logs used locally
-- [**Interactive Tasks**](#interact-with-your-task): `stdin` support for typing inputs into running tasks
-- [**Turbo LSP**](#turbo-lsp): Instant feedback about your configuration
 - [**Errors overhaul**](#errors-overhaul): Improved error messages for misconfigurations
+- [**Improved `inputs` ergonomics**](#improved---inputs-ergonomics): Use Turborepo's defaults with your input customizations
 - [**Telemetry**](#telemetry): Help us focus on what matters most to Turborepo users
 
 We're also cleaning up our migration to Rust in this release by removing the `--go-fallback` flag and shrinking the `turbo` binary. 1.12 is:
@@ -44,31 +43,6 @@ Color is a great way to quickly surface important information in user interfaces
 
 In this release, we're now showing the colors from your underlying tasks in your local environment by default. This has been a popular request from the community and we're excited to ship it today.
 
-## Interact with your task while it's running through `turbo`
-
-Many CLI tools allow you to input further information to the task after it has started using `stdin` (typing into the terminal). This can be used for actions like restarting a server, re-running tests, and more.
-
-Until now, `turbo` blocked your ability to give inputs to your underlying task. But, as of 1.12, you can now type into `stdin` and we will pass your inputs along to the underlying task when you add the `--interactive` flag to your `turbo run` command.
-
-<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Vercel_logo_black.svg/2560px-Vercel_logo_black.svg.png" />
-
-Check out the documentation for more.
-
-## Turbo LSP
-
-The best feedback is instant. Language Server Protocols (LSPs) provide instantaneous guidance directly in your editor so you learn about errors the moment you write them.
-
-Today, we're introducing Turbo LSP, built for the needs of Turborepo users.
-
-<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Vercel_logo_black.svg/2560px-Vercel_logo_black.svg.png" />
-
-This initial release includes editor feedback like [configuration help](TODO), [one-click task execution](TODO), [repository discovery tools](TODO), and [contextual codemods](TODO). To get started:
-
-- VSCode: Visit [Turbo LSP](https://marketplace.visualstudio.com/items?itemName=Vercel.turbo-vsc) in the Extensions Marketplace or search “Turborepo” in your Extensions tab.
-- Vim: [Visit the documentation for installation instructions](TODO).
-
-[Check out the documentation](TODO) for more.
-
 ## Errors overhaul
 
 An important part of developer experience is ensuring that, when things go wrong, it's clear how to get back to the happy path. In this release, we've improved the error messages that come from Turborepo misconfigurations.
@@ -81,6 +55,28 @@ In this enhanced UI, we are:
 - Improving the help text in your terminal for each type of error
 - Providing a link to documentation when it can provide you with useful context
 
+## Improved `inputs` ergonomics
+
+Turborepo intelligently understands the inputs to your tasks by default. But there are also situations where you may want to include or exclude specific files or directories from your task inputs.
+
+Importantly, using the `inputs` key on a task opts you out of all of the default inputs for a task, like omitting gitignored files from your inputs. Until today, you had to manually bring back these defaults by creating glob patterns for them yourself.
+
+Today, we're adding `$TURBO_DEFAULT$` as a special value when used in the `inputs` array.
+
+```json
+{
+  "pipeline": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", "!README.md", "!**.test.**"]
+    }
+  }
+}
+```
+
+This microsyntax allows you to use the Turborepo defaults you're used to while adding in your own custom globs to fine tune the default input behavior.
+
+[Check out the `inputs` documentation](/repo/docs/reference/configuration#inputs) for more information.
+
 ## Telemetry
 
 Turborepo was released almost two years ago, and `turbo` has developed considerably over the past two years. As the community has grown, the value of your feedback is immeasurable in helping us stay focused on what matters most to Turborepo users.
@@ -89,7 +85,7 @@ Until now, our feedback gathering process has been manual, slow, and error prone
 
 Today, we're introducing a **completely anonymous**, automated approach to feedback to learn more about the ways that the community is using Turborepo. As we continue to iterate on `turbo`, this information will help us ensure performance, confirm stability, design new features, and drive the project's direction.
 
-We're creating the build system of the future and this information will be highly valuable in that effort. For more information, visit [turbo.build/repo/docs/telemetry](https://turbo.build/repo/docs/telemetry).
+We're creating the build system of the future and this information will be highly valuable to guide us in that effort. For more information, visit [turbo.build/repo/docs/telemetry](https://turbo.build/repo/docs/telemetry).
 
 If you'd like to opt out of telemetry, run:
 
@@ -104,7 +100,7 @@ You may also opt-out by setting an environment variable:
 
 ## Other improvements
 
-Take a look at https://nextjs.org/blog/next-14-1#other-improvements. Can we do this? Would be so awesome.
+Take a look at https://nextjs.org/blog/next-14-1#other-improvements. Can we do this? Would be awesome. 🙏
 
 ## Community
 
