@@ -8,7 +8,7 @@ description: Unnecessary package task syntax error
 ## Why This Error Occurred
 
 Turborepo supports adding additional `turbo.json` files in a package directory
-to override the `turbo.json` file declared at the repository root, a feature called Workspace Configurations.
+to override the `turbo.json` file declared at the repository root, a feature called [Workspace Configurations](/repo/docs/core-concepts/monorepos/configuring-workspaces).
 In those additional `turbo.json` files, you can only configure tasks for that specific
 package. Therefore, only the task name should be included in the pipeline,
 not the package and task name (`package#task`).
