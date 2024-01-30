@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use sha2::{Digest, Sha256};
 use tracing::{debug, error};
+use turborepo_dirs::config_dir;
 use turborepo_ui::{color, BOLD, GREY, UI, UNDERLINE};
 use uuid::Uuid;
 
@@ -224,8 +225,8 @@ fn get_config_path() -> Result<String, ConfigError> {
         let config_path = tmp_dir.join("test-telemetry.json");
         Ok(config_path.to_str().unwrap().to_string())
     } else {
-        let config_dir = dirs_next::config_dir().ok_or(ConfigError::Message(
-            "Could find telemetry config directory".to_string(),
+        let config_dir = config_dir().ok_or(ConfigError::Message(
+            "Unable to find telemetry config directory".to_string(),
         ))?;
         // stored as a sibling to the turbo global config
         let config_path = config_dir.join("turborepo").join("telemetry.json");
