@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -eo pipefail
+
 export TURBO_TELEMETRY_MESSAGE_DISABLED=1
 
 # Start by figuring out which example we're testing and its package manager
@@ -33,25 +35,23 @@ turbo_command="turbo build lint"
 mkdir -p ../../examples-tests-tmp
 cd ../../examples-tests-tmp
 
-# Head into the examples tests directory
-rm -rf "../examples-tests-tmp/$example_path"
-# Remove node_modules so the copy is faster when working locally
-find "../examples/$example_path" -name "node_modules" -type d -prune | xargs rm -rf
-cp -r "../examples/$example_path" $example_path
+# Start up a fresh directory for the test
+rm -rf "$example_path" || true
+rsync -avq \
+--exclude='node_modules' \
+--exclude="dist" \
+--exclude=".turbo" \
+--exclude=".expo" \
+--exclude=".cache" \
+--exclude=".next" \
+"../examples/$example_path" "."
 
-# Isolate from git's perspective
-rm -rf $example_path/.git
-../turborepo-tests/helpers/setup_git.sh $example_path
-
-cd $example_path
-
-# Let's also isolate from turbo's perspective
-# in case you've ran the tests before
-rm -rf .turbo/ node_modules/ || true
+cd "$example_path"
+"../../turborepo-tests/helpers/setup_git.sh" .
 
 # Make /tmp dir for writing dump logs
 mkdir -p ./tmp
-echo -e "$(cat .gitignore)" "\n/tmp/" >.gitignore
+echo "/tmp/" >> ".gitignore"
 
 # Simulating the user's first run and dumping logs to a file
 $package_manager_command >./tmp/install.txt 2>&1
