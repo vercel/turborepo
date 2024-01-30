@@ -166,7 +166,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: turbo-${{ matrix.settings.target }}
-          path: target/${{ matrix.settings.target }}/release/turbo*
+          path: target/${{ matrix.settings.target }}/release-turborepo/turbo*
 
   npm-publish:
     name: "Publish To NPM"
