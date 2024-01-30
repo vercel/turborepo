@@ -1,11 +1,13 @@
 use std::{collections::HashMap, ffi::OsString, io};
 
+use convert_case::{Case, Casing};
 use miette::{Diagnostic, SourceSpan};
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use thiserror::Error;
-use turbopath::AbsoluteSystemPathBuf;
+use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_dirs::config_dir;
+use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_json::{Error as PackageJsonError, PackageJson};
 
 pub use crate::turbo_json::RawTurboJson;
@@ -33,6 +35,8 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error(transparent)]
     Camino(#[from] camino::FromPathBufError),
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
     #[error("Encountered an IO error while attempting to read {config_path}: {error}")]
     FailedToReadConfig {
         config_path: AbsoluteSystemPathBuf,
@@ -47,11 +51,19 @@ pub enum Error {
         "Package tasks (<package>#<task>) are not allowed in single-package repositories: found \
          {task_id}"
     )]
-    PackageTaskInSinglePackageMode { task_id: String },
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
+    #[diagnostic(code(package_task_in_single_package_mode), url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)))]
+    PackageTaskInSinglePackageMode {
+        task_id: String,
+        #[source_code]
+        text: String,
+        #[label("package task found here")]
+        span: Option<SourceSpan>,
+    },
     #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
-    #[diagnostic(code(turbo::config::invalid_env_prefix))]
+    #[diagnostic(
+        code(invalid_env_prefix),
+        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+    )]
     InvalidEnvPrefix {
         value: String,
         key: String,
@@ -63,12 +75,28 @@ pub enum Error {
     },
     #[error(transparent)]
     PathError(#[from] turbopath::PathError),
+    #[diagnostic(
+        code(unnecessary_package_task_syntax),
+        url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
+    )]
     #[error("\"{actual}\". Use \"{wanted}\" instead")]
-    UnnecessaryPackageTaskSyntax { actual: String, wanted: String },
+    UnnecessaryPackageTaskSyntax {
+        actual: String,
+        wanted: String,
+        #[label("unnecessary package syntax found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: String,
+    },
     #[error("You can only extend from the root workspace")]
-    ExtendFromNonRoot,
-    #[error("No \"extends\" key found")]
-    NoExtends,
+    ExtendFromNonRoot {
+        #[label("non-root workspace found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: String,
+    },
+    #[error("No \"extends\" key found in {path}")]
+    NoExtends { path: String },
     #[error("Failed to create APIClient: {0}")]
     ApiClient(#[source] turborepo_api_client::Error),
     #[error("{0} is not UTF8.")]
@@ -190,8 +218,10 @@ impl ResolvedConfigurationOptions for PackageJson {
     fn get_configuration_options(self) -> Result<ConfigurationOptions, Error> {
         match &self.legacy_turbo_config {
             Some(legacy_turbo_config) => {
-                let synthetic_raw_turbo_json: RawTurboJson =
-                    RawTurboJson::parse(&legacy_turbo_config.to_string(), "package.json")?;
+                let synthetic_raw_turbo_json: RawTurboJson = RawTurboJson::parse(
+                    &legacy_turbo_config.to_string(),
+                    AnchoredSystemPath::new("package.json").unwrap(),
+                )?;
                 synthetic_raw_turbo_json.get_configuration_options()
             }
             None => Ok(ConfigurationOptions::default()),
@@ -476,16 +506,19 @@ impl TurborepoConfigBuilder {
 
             Err(e)
         })?;
-        let turbo_json =
-            RawTurboJson::read(&self.repo_root.join_component("turbo.json")).or_else(|e| {
-                if let Error::Io(e) = &e {
-                    if matches!(e.kind(), std::io::ErrorKind::NotFound) {
-                        return Ok(Default::default());
-                    }
+        let turbo_json = RawTurboJson::read(
+            &self.repo_root,
+            AnchoredSystemPath::new("turbo.json").unwrap(),
+        )
+        .or_else(|e| {
+            if let Error::Io(e) = &e {
+                if matches!(e.kind(), std::io::ErrorKind::NotFound) {
+                    return Ok(Default::default());
                 }
+            }
 
-                Err(e)
-            })?;
+            Err(e)
+        })?;
         let global_config = self.get_global_config()?;
         let local_config = self.get_local_config()?;
         let env_vars = self.get_environment();

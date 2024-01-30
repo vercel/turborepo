@@ -3,12 +3,13 @@ use std::{
     io::Write,
     ops::{Deref, DerefMut},
     path::Path,
+    sync::Arc,
 };
 
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
-use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_repository::{package_graph::ROOT_PKG_NAME, package_json::PackageJson};
 
@@ -38,6 +39,8 @@ pub struct SpacesJson {
 // set when we resolve the configuration.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct TurboJson {
+    text: Option<Arc<str>>,
+    path: Option<Arc<str>>,
     pub(crate) extends: Spanned<Vec<String>>,
     pub(crate) global_deps: Spanned<Vec<String>>,
     pub(crate) global_dot_env: Option<Vec<RelativeUnixPathBuf>>,
@@ -52,6 +55,12 @@ pub struct TurboJson {
 #[serde(rename_all = "camelCase")]
 // The raw deserialized turbo.json file.
 pub struct RawTurboJson {
+    #[serde(skip)]
+    // The raw text of the turbo.json file.
+    text: Option<Arc<str>>,
+    #[serde(skip)]
+    path: Option<Arc<str>>,
+
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
     schema: Option<UnescapedString>,
 
@@ -80,11 +89,12 @@ pub struct RawTurboJson {
 
 #[derive(Serialize, Default, Debug, PartialEq, Clone)]
 #[serde(transparent)]
-pub struct Pipeline(BTreeMap<TaskName<'static>, RawTaskDefinition>);
+pub struct Pipeline(BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>>);
 
 impl IntoIterator for Pipeline {
-    type Item = (TaskName<'static>, RawTaskDefinition);
-    type IntoIter = <BTreeMap<TaskName<'static>, RawTaskDefinition> as IntoIterator>::IntoIter;
+    type Item = (TaskName<'static>, Spanned<RawTaskDefinition>);
+    type IntoIter =
+        <BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
@@ -92,7 +102,7 @@ impl IntoIterator for Pipeline {
 }
 
 impl Deref for Pipeline {
-    type Target = BTreeMap<TaskName<'static>, RawTaskDefinition>;
+    type Target = BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -325,9 +335,13 @@ impl TryFrom<RawTaskDefinition> for TaskDefinition {
 }
 
 impl RawTurboJson {
-    pub(crate) fn read(path: &AbsoluteSystemPath) -> Result<RawTurboJson, Error> {
-        let contents = path.read_to_string()?;
-        let raw_turbo_json = RawTurboJson::parse(&contents, path.as_str())?;
+    pub(crate) fn read(
+        repo_root: &AbsoluteSystemPath,
+        path: &AnchoredSystemPath,
+    ) -> Result<RawTurboJson, Error> {
+        let absolute_path = repo_root.resolve(path);
+        let contents = absolute_path.read_to_string()?;
+        let raw_turbo_json = RawTurboJson::parse(&contents, path)?;
 
         Ok(raw_turbo_json)
     }
@@ -399,6 +413,8 @@ impl TryFrom<RawTurboJson> for TurboJson {
         }
 
         Ok(TurboJson {
+            text: raw_turbo.text,
+            path: raw_turbo.path,
             global_env: {
                 let mut global_env: Vec<_> = global_env.into_iter().collect();
                 global_env.sort();
@@ -458,7 +474,8 @@ impl TurboJson {
     /// Loads turbo.json by reading the file at `dir` and optionally combining
     /// with synthesized information from the provided package.json
     pub fn load(
-        dir: &AbsoluteSystemPath,
+        repo_root: &AbsoluteSystemPath,
+        dir: &AnchoredSystemPath,
         root_package_json: &PackageJson,
         include_synthesized_from_root_package_json: bool,
     ) -> Result<TurboJson, Error> {
@@ -470,7 +487,7 @@ impl TurboJson {
             );
         }
 
-        let turbo_from_files = Self::read(&dir.join_component(CONFIG_FILE));
+        let turbo_from_files = Self::read(repo_root, &dir.join_component(CONFIG_FILE));
 
         let mut turbo_json = match (include_synthesized_from_root_package_json, turbo_from_files) {
             // If the file didn't exist, throw a custom error here instead of propagating
@@ -492,8 +509,12 @@ impl TurboJson {
                 let mut pipeline = Pipeline::default();
                 for (task_name, task_definition) in turbo_from_files.pipeline {
                     if task_name.is_package_task() {
+                        let (span, text) = task_definition.span_and_text();
+
                         return Err(Error::PackageTaskInSinglePackageMode {
                             task_id: task_name.to_string(),
+                            span,
+                            text,
                         });
                     }
 
@@ -516,10 +537,10 @@ impl TurboJson {
                 // won't get clobbered by the merge function.
                 turbo_json.pipeline.insert(
                     task_name,
-                    RawTaskDefinition {
+                    Spanned::new(RawTaskDefinition {
                         cache: Spanned::new(Some(false)),
                         ..RawTaskDefinition::default()
-                    },
+                    }),
                 );
             }
         }
@@ -540,15 +561,21 @@ impl TurboJson {
 
     /// Reads a `RawTurboJson` from the given path
     /// and then converts it into `TurboJson`
-    pub(crate) fn read(path: &AbsoluteSystemPath) -> Result<TurboJson, Error> {
-        let raw_turbo_json = RawTurboJson::read(path)?;
+    pub(crate) fn read(
+        repo_root: &AbsoluteSystemPath,
+        path: &AnchoredSystemPath,
+    ) -> Result<TurboJson, Error> {
+        let raw_turbo_json = RawTurboJson::read(repo_root, path)?;
         raw_turbo_json.try_into()
     }
 
     pub fn task(&self, task_id: &TaskId, task_name: &TaskName) -> Option<RawTaskDefinition> {
         match self.pipeline.get(&task_id.as_task_name()) {
-            Some(task) => Some(task.clone()),
-            None => self.pipeline.get(task_name).cloned(),
+            Some(entry) => Some(entry.value.clone()),
+            None => self
+                .pipeline
+                .get(task_name)
+                .map(|entry| entry.value.clone()),
         }
     }
 
@@ -565,11 +592,16 @@ type TurboJSONValidation = fn(&TurboJson) -> Vec<Error>;
 pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
     turbo_json
         .pipeline
-        .keys()
-        .filter(|task_name| task_name.is_package_task())
-        .map(|task_name| Error::UnnecessaryPackageTaskSyntax {
-            actual: task_name.to_string(),
-            wanted: task_name.task().to_string(),
+        .iter()
+        .filter(|(task_name, _)| task_name.is_package_task())
+        .map(|(task_name, entry)| {
+            let (span, text) = entry.span_and_text();
+            Error::UnnecessaryPackageTaskSyntax {
+                actual: task_name.to_string(),
+                wanted: task_name.task().to_string(),
+                span,
+                text,
+            }
         })
         .collect()
 }
@@ -577,9 +609,15 @@ pub fn validate_no_package_task_syntax(turbo_json: &TurboJson) -> Vec<Error> {
 pub fn validate_extends(turbo_json: &TurboJson) -> Vec<Error> {
     match turbo_json.extends.first() {
         Some(package_name) if package_name != ROOT_PKG_NAME || turbo_json.extends.len() > 1 => {
-            vec![Error::ExtendFromNonRoot]
+            let (span, text) = turbo_json.extends.span_and_text();
+            vec![Error::ExtendFromNonRoot { span, text }]
         }
-        None => vec![Error::NoExtends],
+        None => vec![Error::NoExtends {
+            path: turbo_json
+                .path
+                .as_ref()
+                .map_or_else(|| "turbo.json".to_string(), |p| p.to_string()),
+        }],
         _ => vec![],
     }
 }
@@ -592,11 +630,7 @@ fn gather_env_vars(
     for value in vars {
         let value: Spanned<String> = value.map(|v| v.into());
         if value.starts_with(ENV_PIPELINE_DELIMITER) {
-            let span = value.range.clone();
-            let (span, text) = match (span, &value.text) {
-                (Some(span), Some(text)) => (Some(span.into()), text.to_string()),
-                (_, _) => (None, String::new()),
-            };
+            let (span, text) = value.span_and_text();
             // Hard error to help people specify this correctly during migration.
             // TODO: Remove this error after we have run summary.
             return Err(Error::InvalidEnvPrefix {
@@ -625,7 +659,7 @@ mod tests {
     use serde_json::json;
     use tempfile::tempdir;
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+    use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, RelativeUnixPathBuf};
     use turborepo_repository::package_json::PackageJson;
 
     use super::{Pipeline, RawTurboJson, Spanned};
@@ -665,7 +699,14 @@ mod tests {
         let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path())?;
         fs::write(repo_root.join_component("turbo.json"), turbo_json_content)?;
 
-        let turbo_json = TurboJson::load(repo_root, &root_package_json, false)?;
+        let mut turbo_json = TurboJson::load(
+            repo_root,
+            AnchoredSystemPath::empty(),
+            &root_package_json,
+            false,
+        )?;
+        turbo_json.text = None;
+        turbo_json.path = None;
         assert_eq!(turbo_json, expected_turbo_json);
 
         Ok(())
@@ -680,11 +721,12 @@ mod tests {
         TurboJson {
             pipeline: Pipeline([(
                 "//#build".into(),
-                RawTaskDefinition {
-                  cache: Spanned::new(Some(false)),
-                  ..RawTaskDefinition::default()
-                }
-            )].into_iter().collect()),
+                Spanned::new(RawTaskDefinition {
+                    cache: Spanned::new(Some(false)),
+                    ..RawTaskDefinition::default()
+                })
+              )].into_iter().collect()
+            ),
             ..TurboJson::default()
         }
     )]
@@ -711,17 +753,17 @@ mod tests {
         TurboJson {
             pipeline: Pipeline([(
                 "//#build".into(),
-                RawTaskDefinition {
+                Spanned::new(RawTaskDefinition {
                     cache: Spanned::new(Some(true)).with_range(84..88),
                     ..RawTaskDefinition::default()
-                }
+                }).with_range(53..106)
             ),
             (
                 "//#test".into(),
-                RawTaskDefinition {
-                  cache: Spanned::new(Some(false)),
-                  ..RawTaskDefinition::default()
-                }
+                Spanned::new(RawTaskDefinition {
+                     cache: Spanned::new(Some(false)),
+                    ..RawTaskDefinition::default()
+                })
             )].into_iter().collect()),
             ..TurboJson::default()
         }
@@ -738,7 +780,18 @@ mod tests {
             fs::write(repo_root.join_component("turbo.json"), content)?;
         }
 
-        let turbo_json = TurboJson::load(repo_root, &root_package_json, true)?;
+        let mut turbo_json = TurboJson::load(
+            repo_root,
+            AnchoredSystemPath::empty(),
+            &root_package_json,
+            true,
+        )?;
+        turbo_json.text = None;
+        turbo_json.path = None;
+        for (_, task_definition) in turbo_json.pipeline.iter_mut() {
+            task_definition.path = None;
+            task_definition.text = None;
+        }
         assert_eq!(turbo_json, expected_turbo_json);
 
         Ok(())
@@ -923,8 +976,20 @@ mod tests {
             }
         }))
         .unwrap();
-
-        assert_eq!(pruned_json, expected);
+        // We do this comparison manually so we don't compare the `task_name_range`
+        // fields, which are expected to be different
+        let pruned_pipeline = pruned_json.pipeline.unwrap();
+        let expected_pipeline = expected.pipeline.unwrap();
+        for (
+            (pruned_task_name, pruned_pipeline_entry),
+            (expected_task_name, expected_pipeline_entry),
+        ) in pruned_pipeline
+            .into_iter()
+            .zip(expected_pipeline.into_iter())
+        {
+            assert_eq!(pruned_task_name, expected_task_name);
+            assert_eq!(pruned_pipeline_entry.value, expected_pipeline_entry.value);
+        }
     }
 
     #[test_case("full", Some(OutputLogsMode::Full) ; "full")]
@@ -947,7 +1012,7 @@ mod tests {
             .ok()
             .and_then(|j| j.pipeline.as_ref())
             .and_then(|pipeline| pipeline.0.get(&TaskName::from("build")))
-            .and_then(|build| build.output_mode.clone())
+            .and_then(|build| build.value.output_mode.clone())
             .map(|mode| mode.into_inner());
         assert_eq!(actual, expected);
     }

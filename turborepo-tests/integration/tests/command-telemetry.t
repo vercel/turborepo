@@ -1,5 +1,6 @@
 Setup
   $ . ${TESTDIR}/../../helpers/setup.sh
+  $ . ${TESTDIR}/_helpers/telemetry.sh
 
 Run status (with first run message)
   $ TURBO_TELEMETRY_MESSAGE_DISABLED=0 ${TURBO} telemetry status

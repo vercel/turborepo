@@ -1,48 +1,37 @@
-# Turborepo VSC Extension
+![](resources/readme-hero.png)
 
-This extension provides a handy interface into your turbo-enhanced monorepo.
+Enhance the experience in your Turborepo with faster feedback, repository discovery tooling, one-click task running, and more.
 
 ## Features
 
-### Global turbo installer
+#### Understand and use your tasks faster
 
-We recommend you use turbo globally to simplify running commands. The extension will prompt you to install it if you don't already have it available.
+Find references for `turbo` tasks to quickly discover which `package.json` scripts will run. Then, run your pipeline with one click.
 
-### Automatic start / stop for the turbo daemon
-
-Turborepo uses a background task to make your builds lightning fast. Rather than start it when you invoke turbo, we can instead start it when you launch your editor, keeping things snappy.
-
-### Simple daemon status controls
-
-In the bottom left toolbar, you will find the current status of the daemon. Clicking on the button will toggle it on and off.
-
-### Repository discovery tools
-
-#### Find references for turbo tasks
-
-![references](resources/references.png)
+![A screenshot of a VSCode editor showing the references for a `build` pipeline.](resources/references.png)
 
 Every task in your pipeline can be followed to find its references.
 
-#### One-click task execution
+#### Configuration help
 
-Every entry in your pipeline can be executed with a single click for quick debugging.
+Get instant feedback if you write incorrect globs, refer to non-existent packages or tasks, and more.
 
-#### Glob validation
-
-![globs](resources/globs.png)
-
-Detect bad globs live while you write, and even get github copilot involved in resolving them.
-
-#### Detect missing tasks and packages
-
-Pipeline entries that do not refer to a valid package or task will be highlighted for you.
+![A screnshot of a VSCode editor notifying of an invalid glob syntax.](resources/globs.png)
 
 #### Contextual codemods
 
-Got deprecated syntax? Know about immediately and automatically fix them with codemods.
+Get warned of deprecated syntax and run codemods to fix them with a click.
+
+![A screenshot of a VSCode editor showing the ability to Quick Fix a codemod for deprecated syntax.](resources/contextual-codemod.png)
+
+### Global `turbo` installer
+
+We recommend you use turbo globally to simplify running commands. The extension will prompt you to install it if you don't already have it available.
+
+### Daemon controls
+
+Turborepo uses a background task to make your builds lightning fast. Rather than start it when you invoke turbo, we can instead start it when you launch your editor, keeping things snappy.
 
 ## Settings
 
-There is a single setting so far, which can be used to override the auto-detected path to your turbo binary,
-if it fails or if you use a different one. You can access it in the vscode settings.
+- Override the auto-detection for your `turbo` binary if it fails or to use a different one.
