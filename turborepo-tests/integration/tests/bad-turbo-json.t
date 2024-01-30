@@ -71,7 +71,7 @@ Run in single package mode even though we have a task with package syntax
 
 
 Use our custom turbo config with syntax errors
-  $ . ${TESTDIR}/../../helpers/replace_turbo_config.sh $(pwd) "syntax-error.json"
+  $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd) "syntax-error.json"
 
 Run build with syntax errors in turbo.json
   $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build

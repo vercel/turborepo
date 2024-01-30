@@ -42,3 +42,23 @@ Run test run with remote cache timeout env variable set
 Run test run with remote cache timeout from both env and flag (flag should take precedence)
   $ TURBO_REMOTE_CACHE_TIMEOUT=123 ${TURBO} info --json --remote-cache-timeout 456 | jq .config.timeout
   456
+
+Use our custom turbo config with an invalid env var
+  $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd) "invalid-env-var.json"
+
+Run build with invalid env var
+  $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build
+   ERROR  run failed: Environment variables should not be prefixed with "$"
+  turbo::config::invalid_env_prefix
+  
+    x Environment variables should not be prefixed with "$"
+     ,-[6:1]
+   6 |     "build": {
+   7 |       "env": ["NODE_ENV", "$FOOBAR"],
+     :                           ^^^^|^^^^
+     :                               `-- variable with invalid prefix declared here
+   8 |       "outputs": []
+     `----
+  
+  [1]
+
