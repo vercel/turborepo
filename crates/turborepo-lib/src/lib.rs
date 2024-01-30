@@ -41,7 +41,6 @@ pub use crate::{
     execution_state::ExecutionState,
     run::package_discovery::DaemonPackageDiscovery,
 };
-use crate::{engine::BuilderError, shim::Error};
 
 pub fn get_version() -> &'static str {
     include_str!("../../../version.txt")
