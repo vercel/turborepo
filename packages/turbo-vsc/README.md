@@ -32,4 +32,6 @@ We recommend you use turbo globally to simplify running commands. The extension 
 
 Turborepo uses a background task to make your builds lightning fast. Rather than start it when you invoke turbo, we can instead start it when you launch your editor, keeping things snappy.
 
-In the bottom left toolbar, you will find the current status of the daemon. Clicking on the button will toggle it on and off.
+## Settings
+
+- Override the auto-detection for your `turbo` binary if it fails or to use a different one.
