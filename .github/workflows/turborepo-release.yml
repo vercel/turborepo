@@ -263,7 +263,7 @@ jobs:
         run: ${{ matrix.settings.setup }}
 
       - name: Build
-        run: ${{ matrix.settings.rust-build-env }} cargo build --release -p turbo --target ${{ matrix.settings.target }}
+        run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo -p turbo --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
