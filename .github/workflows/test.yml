@@ -245,6 +245,7 @@ jobs:
     needs: [determine_jobs, build_turborepo]
     if: needs.determine_jobs.outputs.turborepo_integration == 'true'
     runs-on: ${{ matrix.os.runner }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
