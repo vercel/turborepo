@@ -350,21 +350,6 @@ jobs:
         with:
           shared-cache-key: benchmark-${{ matrix.os.name }}
 
-      - name: Set Up Protoc
-        id: set-up-protoc
-        continue-on-error: true
-        uses: arduino/setup-protoc@v1.2.0
-        with:
-          version: "3.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set Up Protoc (second try)
-        if: steps.set-up-protoc.outcome == 'failure'
-        uses: arduino/setup-protoc@v1.2.0
-        with:
-          version: "3.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Benchmark and compare with base branch
         uses: sokra/criterion-compare-action@main
         timeout-minutes: 30

@@ -53,6 +53,21 @@ runs:
       shell: bash
       run: rustup set default-host x86_64-pc-windows-gnu && rustup show
 
+    - name: Set Up Protoc
+      id: set-up-protoc
+      continue-on-error: true
+      uses: arduino/setup-protoc@v1.2.0
+      with:
+        version: "3.x"
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set Up Protoc (second try)
+      if: steps.set-up-protoc.outcome == 'failure'
+      uses: arduino/setup-protoc@v1.2.0
+      with:
+        version: "3.x"
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
     - name: "Add cargo problem matchers"
       shell: bash
       run: echo "::add-matcher::${{ github.action_path }}/matchers.json"
