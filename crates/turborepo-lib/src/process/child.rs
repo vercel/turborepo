@@ -1106,6 +1106,31 @@ mod test {
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_no_newline(use_pty: bool) {
+        let script = find_script_dir().join_component("hello_no_line.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, use_pty).unwrap();
+
+        let mut out = Vec::new();
+
+        let exit = child.wait_with_piped_outputs(&mut out).await.unwrap();
+
+        let output = String::from_utf8(out).unwrap();
+        let trimmed_out = output.trim();
+        let trimmed_out = trimmed_out.strip_prefix(EOT).unwrap_or(trimmed_out);
+        assert!(
+            output.ends_with('\n'),
+            "expected newline to be added: {}",
+            output
+        );
+        assert_eq!(trimmed_out, "look ma, no newline!");
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
     #[cfg(unix)]
     #[test_case(false)]
     #[test_case(TEST_PTY)]
