@@ -12,6 +12,7 @@ TMP_DIR=$(mktemp -d -t turbo-XXXXXXXXXX)
 export XDG_CONFIG_HOME=$TMP_DIR
 export HOME=$TMP_DIR
 export TURBO_TELEMETRY_MESSAGE_DISABLED=1
+export TURBO_CONFIG_DIR_PATH=$TMP_DIR
 
 # For Linux
 mkdir -p "$TMP_DIR/turborepo"
