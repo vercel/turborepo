@@ -2,7 +2,7 @@ Setup
   $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
 
 Add turbo.json with unnecessary package task syntax to a package
-  $ . ${TESTDIR}/../../helpers/replace_turbo_config.sh $(pwd)/apps/my-app "package-task.json"
+  $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd)/apps/my-app "package-task.json"
 
 Run build with package task in non-root turbo.json
   $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build
@@ -31,7 +31,7 @@ Remove unnecessary package task syntax
   $ rm $(pwd)/apps/my-app/turbo.json
 
 Use our custom turbo config with an invalid env var
-  $ . ${TESTDIR}/../../helpers/replace_turbo_config.sh $(pwd) "invalid-env-var.json"
+  $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd) "invalid-env-var.json"
 
 Run build with invalid env var
   $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build
@@ -71,7 +71,7 @@ Run in single package mode even though we have a task with package syntax
 
 
 Use our custom turbo config with syntax errors
-  $ . ${TESTDIR}/../../helpers/replace_turbo_config.sh $(pwd) "syntax-error.json"
+  $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd) "syntax-error.json"
 
 Run build with syntax errors in turbo.json
   $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build
