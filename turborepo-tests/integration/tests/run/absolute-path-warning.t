@@ -5,7 +5,7 @@ Choose our custom config based on OS, since the input/output configs will be dif
   $ [[ "$OSTYPE" == "msys" ]] && CONFIG="abs-path-globs-win.json" || CONFIG="abs-path-globs.json"
 
 Copy config into the root of our monrepo
-  $ ${TESTDIR}/../../../helpers/replace_turbo_config.sh $PWD $CONFIG
+  $ ${TESTDIR}/../../../helpers/replace_turbo_json.sh $PWD $CONFIG
 
 Only check contents that comes after the warning prefix
 We omit duplicates as Go with debug assertions enabled parses turbo.json twice

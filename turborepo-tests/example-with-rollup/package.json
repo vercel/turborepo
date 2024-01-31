@@ -1,0 +1,10 @@
+{
+  "name": "@turborepo-examples-tests/with-rollup",
+  "scripts": {
+    "test": "bash ./node_modules/turborepo-tests-helpers/setup_example_test.sh with-rollup pnpm"
+  },
+  "dependencies": {
+    "turborepo-tests-helpers": "workspace:*",
+    "turborepo-examples": "workspace:*"
+  }
+}

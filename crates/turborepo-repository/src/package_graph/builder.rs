@@ -5,7 +5,7 @@ use std::{
 };
 
 use petgraph::graph::{Graph, NodeIndex};
-use tracing::warn;
+use tracing::{warn, Instrument};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
     RelativeUnixPathBuf,
@@ -470,6 +470,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
             .collect()
     }
 
+    #[tracing::instrument(skip_all)]
     fn populate_transitive_dependencies(&mut self) -> Result<(), Error> {
         let Some(lockfile) = self.lockfile.as_deref() else {
             return Ok(());
@@ -493,6 +494,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedLockfile, T> {
         let package_manager = self
             .package_discovery
             .discover_packages()
+            .instrument(tracing::debug_span!("package discovery"))
             .await?
             .package_manager;
         let Self {

@@ -579,10 +579,7 @@ impl RawTurboJson {
     #[cfg(test)]
     pub fn parse_from_serde(value: serde_json::Value) -> Result<RawTurboJson, Error> {
         let json_string = serde_json::to_string(&value).expect("should be able to serialize");
-        Self::parse(
-            &json_string,
-            &AnchoredSystemPath::new("turbo.json").unwrap(),
-        )
+        Self::parse(&json_string, AnchoredSystemPath::new("turbo.json").unwrap())
     }
     /// Parses a turbo.json file into the raw representation with span info
     /// attached.

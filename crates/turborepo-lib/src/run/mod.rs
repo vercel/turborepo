@@ -201,6 +201,10 @@ impl Run {
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
     ) -> Result<i32, Error> {
+        let scm = {
+            let repo_root = self.base.repo_root.clone();
+            tokio::task::spawn_blocking(move || SCM::new(&repo_root))
+        };
         let package_json_path = self.base.repo_root.join_component("package.json");
         let root_package_json = PackageJson::load(&package_json_path)?;
         let run_telemetry = GenericEventBuilder::new().with_parent(&telemetry);
@@ -313,7 +317,7 @@ impl Run {
 
         pkg_dep_graph.validate()?;
 
-        let scm = SCM::new(&self.base.repo_root);
+        let scm = scm.await.expect("detecting scm panicked");
 
         let filtered_pkgs = {
             let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
@@ -378,6 +382,7 @@ impl Run {
             self.opts.run_opts.env_mode,
             self.opts.run_opts.framework_inference,
             root_turbo_json.global_dot_env.as_deref(),
+            &scm,
         )?;
 
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();
@@ -462,6 +467,7 @@ impl Run {
             api_client,
             self.api_auth.clone(),
             Vendor::get_user(),
+            &scm,
         );
 
         let mut visitor = Visitor::new(
