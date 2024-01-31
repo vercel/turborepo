@@ -1103,14 +1103,8 @@ importers:
         specifier: ^5.75.0
         version: 5.75.0
 
-  turborepo-tests/example-npm-non-monorepo:
+  turborepo-tests/example-basic:
     dependencies:
-      cli:
-        specifier: workspace:*
-        version: link:../../cli
-      prysk:
-        specifier: workspace:*
-        version: link:../../packages/prysk
       turborepo-examples:
         specifier: workspace:*
         version: link:../../examples
@@ -1118,14 +1112,8 @@ importers:
         specifier: workspace:*
         version: link:../helpers
 
-  turborepo-tests/example-npm-with-npm:
+  turborepo-tests/example-design-system:
     dependencies:
-      cli:
-        specifier: workspace:*
-        version: link:../../cli
-      prysk:
-        specifier: workspace:*
-        version: link:../../packages/prysk
       turborepo-examples:
         specifier: workspace:*
         version: link:../../examples
@@ -1133,14 +1121,8 @@ importers:
         specifier: workspace:*
         version: link:../helpers
 
-  turborepo-tests/example-pnpm-basic:
+  turborepo-tests/example-kitchen-sink:
     dependencies:
-      cli:
-        specifier: workspace:*
-        version: link:../../cli
-      prysk:
-        specifier: workspace:*
-        version: link:../../packages/prysk
       turborepo-examples:
         specifier: workspace:*
         version: link:../../examples
@@ -1148,14 +1130,8 @@ importers:
         specifier: workspace:*
         version: link:../helpers
 
-  turborepo-tests/example-pnpm-gatsby:
+  turborepo-tests/example-non-monorepo:
     dependencies:
-      cli:
-        specifier: workspace:*
-        version: link:../../cli
-      prysk:
-        specifier: workspace:*
-        version: link:../../packages/prysk
       turborepo-examples:
         specifier: workspace:*
         version: link:../../examples
@@ -1163,14 +1139,8 @@ importers:
         specifier: workspace:*
         version: link:../helpers
 
-  turborepo-tests/example-pnpm-kitchen-sink:
+  turborepo-tests/example-with-berry:
     dependencies:
-      cli:
-        specifier: workspace:*
-        version: link:../../cli
-      prysk:
-        specifier: workspace:*
-        version: link:../../packages/prysk
       turborepo-examples:
         specifier: workspace:*
         version: link:../../examples
@@ -1178,14 +1148,8 @@ importers:
         specifier: workspace:*
         version: link:../helpers
 
-  turborepo-tests/example-pnpm-with-svelte:
+  turborepo-tests/example-with-changesets:
     dependencies:
-      cli:
-        specifier: workspace:*
-        version: link:../../cli
-      prysk:
-        specifier: workspace:*
-        version: link:../../packages/prysk
       turborepo-examples:
         specifier: workspace:*
         version: link:../../examples
@@ -1193,14 +1157,8 @@ importers:
         specifier: workspace:*
         version: link:../helpers
 
-  turborepo-tests/example-yarn-non-monorepo:
+  turborepo-tests/example-with-npm:
     dependencies:
-      cli:
-        specifier: workspace:*
-        version: link:../../cli
-      prysk:
-        specifier: workspace:*
-        version: link:../../packages/prysk
       turborepo-examples:
         specifier: workspace:*
         version: link:../../examples
@@ -1208,14 +1166,53 @@ importers:
         specifier: workspace:*
         version: link:../helpers
 
-  turborepo-tests/example-yarn-with-yarn:
+  turborepo-tests/example-with-react-native-web:
     dependencies:
-      cli:
+      turborepo-examples:
         specifier: workspace:*
-        version: link:../../cli
-      prysk:
+        version: link:../../examples
+      turborepo-tests-helpers:
         specifier: workspace:*
-        version: link:../../packages/prysk
+        version: link:../helpers
+
+  turborepo-tests/example-with-rollup:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-with-svelte:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-with-tailwind:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-with-vite:
+    dependencies:
+      turborepo-examples:
+        specifier: workspace:*
+        version: link:../../examples
+      turborepo-tests-helpers:
+        specifier: workspace:*
+        version: link:../helpers
+
+  turborepo-tests/example-with-yarn:
+    dependencies:
       turborepo-examples:
         specifier: workspace:*
         version: link:../../examples
