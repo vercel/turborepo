@@ -28,4 +28,6 @@ pub enum Error {
     FailedToMakeSSOTokenName(#[source] io::Error),
     #[error("config directory not found")]
     ConfigDirNotFound,
+    #[error("sso team cannot be empty for login")]
+    EmptySSOTeam,
 }

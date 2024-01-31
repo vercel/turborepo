@@ -8,7 +8,7 @@ pub use sso::*;
 use turborepo_api_client::Client;
 use turborepo_ui::{BOLD, UI};
 
-use crate::{ui, LoginServer};
+use crate::{ui, LoginServer, Token};
 
 const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
 const VERCEL_TOKEN_FILE: &str = "auth.json";
@@ -55,10 +55,7 @@ async fn check_token(
     let response = api_client.get_user(token).await?;
     println!("{}", ui.apply(BOLD.apply_to(message)));
     ui::print_cli_authorized(&response.user.email, ui);
-    Ok(Token {
-        token: token.to_string(),
-        exists: true,
-    })
+    Ok(Token::Existing(token.to_string()))
 }
 
 fn extract_vercel_token() -> Result<String, Error> {
