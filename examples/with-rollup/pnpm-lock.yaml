@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:packages/config-eslint
       eslint:
         specifier: ^8.56.0
         version: 8.56.0
@@ -15,7 +18,7 @@ importers:
         specifier: ^3.1.1
         version: 3.1.1
       turbo:
-        specifier: ^1.12.1
+        specifier: ^1.11.3
         version: 1.12.1
 
   apps/web:
