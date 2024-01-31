@@ -10,6 +10,7 @@ ogImage: /images/blog/turbo-1-12-0/x-card.png
 
 import { Authors } from '../../components/Authors'
 import { Date } from "../../components/blog/Date";
+import { ThemeAwareImage } from '../../components/ThemeAwareImage'
 
 <Date>
   Tuesday, January 30th, 2024
@@ -23,15 +24,12 @@ import { Date } from "../../components/blog/Date";
 
 Turborepo 1.12 adds popular community-requested features and feedback improvements, including:
 
-- [**Colors in task logs**](#colors-in-task-logs): Colors from original shell logs used locally
+- [**Colors in task logs**](#colors-in-task-logs): Colors from original shell logs used by default
 - [**Errors overhaul**](#errors-overhaul): Improved error messages for misconfigurations
 - [**Improved `inputs` ergonomics**](#improved---inputs-ergonomics): Use Turborepo's defaults with your input customizations
 - [**Telemetry**](#telemetry): Help us focus on what matters most to Turborepo users
 
-We're also cleaning up our migration to Rust in this release by removing the `--go-fallback` flag and shrinking the `turbo` binary. 1.12 is:
-
-- TODO% smaller compared to 1.6 (Golang)
-- TODO% smaller compared to 1.11 (Rust)
+We're also done cleaning up our migration to Rust in this release by removing the `--go-fallback` flag and shrinking the `turbo` binary by 58% compared to 1.11.
 
 Update today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
 
@@ -39,7 +37,27 @@ Update today by running `npx @turbo/codemod migrate` or get started with `npx cr
 
 Color is a great way to quickly surface important information in user interfaces. It's common for developer tooling to highlight success in green, warnings in yellow, or errors in red.
 
-<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Vercel_logo_black.svg/2560px-Vercel_logo_black.svg.png" />
+<ThemeAwareImage
+  className="my-4 flex justify-center"
+  light={{
+    alt: 'A screenshot of a terminal running a `turbo` task with colors from the underlying shell logs.',
+    src: '/images/blog/turbo-1-12-0/log-colors-light.png',
+    props: {
+      width: 625,
+      height: 1000,
+      className: "dark:hidden block rounded-xl"
+    }
+  }}
+  dark={{
+    alt: 'A screenshot of a terminal running a `turbo` task with colors from the underlying shell logs.',
+    src: '/images/blog/turbo-1-12-0/log-colors-dark.png',
+    props: {
+      width: 625,
+      height: 1000,
+      className: "hidden dark:block rounded-xl"
+    }
+  }}
+/>
 
 In this release, we're now showing the colors from your underlying tasks in your local environment by default. This has been a popular request from the community and we're excited to ship support for macOS and Linux today. We will be following up with Windows support in a future release.
 
@@ -47,7 +65,27 @@ In this release, we're now showing the colors from your underlying tasks in your
 
 An important part of developer experience is ensuring that, when things go wrong, it's clear how to get back to the happy path. In this release, we've improved the error messages that come from Turborepo misconfigurations.
 
-<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Vercel_logo_black.svg/2560px-Vercel_logo_black.svg.png" />
+<ThemeAwareImage
+  className="my-4 flex justify-center"
+  light={{
+    alt: 'A screenshot of a terminal attempting to run a `turbo` task but receiving an informative error that an unknown key `output`, was found in the `turbo.json` file.',
+    src: '/images/blog/turbo-1-12-0/light-errors-overhaul.png',
+    props: {
+      width: 682,
+      height: 746.5,
+      className: "dark:hidden block rounded-xl"
+    }
+  }}
+  dark={{
+    alt: 'A screenshot of a terminal attempting to run a `turbo` task but receiving an informative error that an unknown key `output`, was found in the `turbo.json` file.',
+    src: '/images/blog/turbo-1-12-0/errors-overhaul-dark.png',
+    props: {
+      width: 682,
+      height: 746.5,
+      className: "hidden dark:block rounded-xl"
+    }
+  }}
+/>
 
 In this enhanced UI, we are:
 
@@ -98,9 +136,29 @@ You may also opt-out by setting an environment variable:
 - `TURBO_TELEMETRY_DISABLED=1`
 - `DO_NOT_TRACK=1` (per the [Console Do Not Track (DNT)](https://consoledonottrack.com/) specification)
 
-## Other improvements
+## Other Improvements
 
-Take a look at https://nextjs.org/blog/next-14-1#other-improvements. Can we do this? Would be awesome. 🙏
+- **[Feature]**: Enable pty usage [(PR)](https://github.com/vercel/turbo/pull/7128)
+- **[Feature]**: Support `$TURBO_DEFAULT$` in inputs [(PR)](https://github.com/vercel/turbo/pull/7113)
+- **[Feature]**: Support Yarn 4 patches [(PR)](https://github.com/vercel/turbo/pull/6974)
+- **[Feature]**: Enable telemetry [(PR)](https://github.com/vercel/turbo/pull/7122)
+- **[Improvement]**: Treat empty environment variables as unset [(PR)](https://github.com/vercel/turbo/pull/6929)
+- **[Improvement]**: Error out if dependent flags are provided without their parent [(PR)](https://github.com/vercel/turbo/pull/6780)
+- **[Improvement]**: Make sure that our concurrency check ignore packages without tasks [(PR)](https://github.com/vercel/turbo/pull/6790)
+- **[Improvement]**: Avoid panic on invalid directory filters [(PR)](https://github.com/vercel/turbo/pull/6955)
+- **[Improvement]**: Ignore permission errors during globbing [(PR)](https://github.com/vercel/turbo/pull/6957)
+- **[Improvement]**: Avoid retry panic [(PR)](https://github.com/vercel/turbo/pull/6926)
+- **[Improvement]**: Rewrite prefix after carriage return [(PR)](https://github.com/vercel/turbo/pull/6989)
+- **[Improvement]**: Validate graph extension [(PR)](https://github.com/vercel/turbo/pull/6995)
+- **[Improvement]**: Truncate metadata file when writing [(PR)](https://github.com/vercel/turbo/pull/7016)
+- **[Improvement]**: Correctly create symlinks to directories [(PR)](https://github.com/vercel/turbo/pull/6983)
+- **[Improvement]**: Make sure cookie dir exists before writing cookie [(PR)](https://github.com/vercel/turbo/pull/7015)
+- **[Improvement]**: Examples turbo.json outputs key [(PR)](https://github.com/vercel/turbo/pull/7071)
+- **[Improvement]**: Filter package.json files that are subfolders of other packages [(PR)](https://github.com/vercel/turbo/pull/7025)
+- **[Improvement]**: Sort dependents and dependencies during normalization [(PR)](https://github.com/vercel/turbo/pull/7018)
+- **[Improvement]**: Swap fallback logs to debug [(PR)](https://github.com/vercel/turbo/pull/7102)
+- **[Improvement]**: Include gitignored files in fallback [(PR)](https://github.com/vercel/turbo/pull/7105)
+- **[Improvement]**: Include default files in fallback [(PR)](https://github.com/vercel/turbo/pull/7106)
 
 ## Community
 
