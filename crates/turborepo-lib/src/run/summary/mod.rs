@@ -28,6 +28,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_api_client::{spaces::CreateSpaceRunPayload, APIAuth, APIClient};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, WorkspaceName};
+use turborepo_scm::SCM;
 use turborepo_ui::{color, cprintln, cwriteln, BOLD, BOLD_CYAN, GREY, UI};
 
 use self::{
@@ -154,8 +155,9 @@ impl RunTracker {
         spaces_api_client: APIClient,
         api_auth: Option<APIAuth>,
         user: String,
+        scm: &SCM,
     ) -> Self {
-        let scm = SCMState::get(env_at_execution_start, repo_root);
+        let scm = SCMState::get(env_at_execution_start, scm, repo_root);
 
         let spaces_client_handle =
             SpacesClient::new(spaces_id.clone(), spaces_api_client, api_auth).and_then(
