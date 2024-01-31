@@ -290,10 +290,29 @@ impl ShimArgs {
         if self.no_color {
             UI::new(true)
         } else if self.color {
+            // Do our best to enable ansi colors, but even if the terminal doesn't support
+            // still emit ansi escape sequences.
+            Self::supports_ansi();
             UI::new(false)
-        } else {
+        } else if Self::supports_ansi() {
+            // If the terminal supports ansi colors, then we can infer if we should emit
+            // colors
             UI::infer()
+        } else {
+            UI::new(true)
         }
+    }
+
+    #[cfg(windows)]
+    fn supports_ansi() -> bool {
+        // This call has the side effect of setting ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        // to true. https://learn.microsoft.com/en-us/windows/console/setconsolemode
+        crossterm::ansi_support::supports_ansi()
+    }
+
+    #[cfg(not(windows))]
+    fn supports_ansi() -> bool {
+        true
     }
 }
 
