@@ -432,13 +432,12 @@ mod tests {
             file_path.create_with_contents(contents).unwrap();
             if let Some(hash) = expected_hash {
                 let unix_pkg_file_path = unix_path.strip_prefix(&unix_pkg_path).unwrap();
-                if unix_pkg_file_path.ends_with("file")
+                if (unix_pkg_file_path.ends_with("file")
                     || unix_pkg_file_path.ends_with("package.json")
-                    || unix_pkg_file_path.ends_with("turbo.json")
+                    || unix_pkg_file_path.ends_with("turbo.json"))
+                    && !unix_pkg_file_path.ends_with("excluded-file")
                 {
-                    if !unix_pkg_file_path.ends_with("excluded-file") {
-                        expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
-                    }
+                    expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
                 }
             }
         }
