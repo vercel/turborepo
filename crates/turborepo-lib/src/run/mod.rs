@@ -463,6 +463,7 @@ impl Run {
             api_client,
             self.api_auth.clone(),
             Vendor::get_user(),
+            &scm,
         );
 
         let mut visitor = Visitor::new(
