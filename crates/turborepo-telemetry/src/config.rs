@@ -121,7 +121,7 @@ impl TelemetryConfig {
 
     pub fn show_alert(&mut self, ui: UI) {
         if !self.has_seen_alert() && self.is_enabled() && Self::is_telemetry_warning_enabled() {
-            println!(
+            eprintln!(
                 "\n{}\n{}\n{}\n{}\n{}\n",
                 color!(ui, BOLD, "{}", "Attention:"),
                 color!(
