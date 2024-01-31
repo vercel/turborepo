@@ -378,6 +378,7 @@ impl Run {
             self.opts.run_opts.env_mode,
             self.opts.run_opts.framework_inference,
             root_turbo_json.global_dot_env.as_deref(),
+            &scm,
         )?;
 
         let global_hash = global_hash_inputs.calculate_global_hash_from_inputs();

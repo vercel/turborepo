@@ -64,6 +64,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     env_mode: EnvMode,
     framework_inference: bool,
     dot_env: Option<&'a [RelativeUnixPathBuf]>,
+    hasher: &SCM,
 ) -> Result<GlobalHashableInputs<'a>, Error> {
     let global_hashable_env_vars =
         get_global_hashable_env_vars(env_at_execution_start, global_env)?;
@@ -83,8 +84,6 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
             global_deps.insert(lockfile_path);
         }
     }
-
-    let hasher = SCM::new(root_path);
 
     let global_deps_paths = global_deps
         .iter()
@@ -222,6 +221,7 @@ mod tests {
     use turborepo_env::EnvironmentVariableMap;
     use turborepo_lockfiles::Lockfile;
     use turborepo_repository::package_manager::PackageManager;
+    use turborepo_scm::SCM;
 
     use super::get_global_hash_inputs;
     use crate::{cli::EnvMode, run::global_hash::collect_global_deps};
@@ -259,6 +259,7 @@ mod tests {
             EnvMode::Infer,
             false,
             None,
+            &SCM::new(&root),
         );
         assert!(result.is_ok());
     }
