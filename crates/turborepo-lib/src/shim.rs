@@ -306,7 +306,7 @@ impl ShimArgs {
     #[cfg(windows)]
     fn supports_ansi() -> bool {
         // This call has the side effect of setting ENABLE_VIRTUAL_TERMINAL_PROCESSING
-        // to true.
+        // to true. https://learn.microsoft.com/en-us/windows/console/setconsolemode
         crossterm::ansi_support::supports_ansi()
     }
 
