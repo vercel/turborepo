@@ -82,6 +82,10 @@ inherits = "release"
 strip = true
 opt-level = "z"
 
+[profile.release-turborepo]
+inherits = "release"
+strip = true
+
 # Declare dependencies used across workspace packages requires single version bump.
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
 [workspace.dependencies]
@@ -89,17 +93,17 @@ async-recursion = "1.0.2"
 # Keep consistent with preset_env_base through swc_core
 browserslist-rs = { version = "0.14.0" }
 miette = { version = "5.10.0", features = ["fancy"] }
-mdxjs = "0.1.21"
-modularize_imports = { version = "0.66.0" }
-styled_components = { version = "0.94.0" }
-styled_jsx = { version = "0.68.1" }
-swc_core = { version = "0.87.28", features = [
+mdxjs = "0.1.22"
+modularize_imports = { version = "0.68.0" }
+styled_components = { version = "0.96.1" }
+styled_jsx = { version = "0.73.1" }
+swc_core = { version = "0.89.4", features = [
   "ecma_loader_lru",
   "ecma_loader_parking_lot",
 ] }
-swc_emotion = { version = "0.70.1" }
-swc_relay = { version = "0.42.0" }
-testing = { version = "0.35.14" }
+swc_emotion = { version = "0.72.1" }
+swc_relay = { version = "0.44.0" }
+testing = { version = "0.35.16" }
 
 auto-hash-map = { path = "crates/turbo-tasks-auto-hash-map" }
 node-file-trace = { path = "crates/node-file-trace", default-features = false }
@@ -154,7 +158,6 @@ turborepo-cache = { path = "crates/turborepo-cache" }
 turborepo-ci = { path = "crates/turborepo-ci" }
 turborepo-env = { path = "crates/turborepo-env" }
 turborepo-errors = { path = "crates/turborepo-errors" }
-turborepo-ffi = { path = "crates/turborepo-ffi" }
 turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }

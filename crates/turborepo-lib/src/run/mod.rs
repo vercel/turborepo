@@ -21,6 +21,7 @@ use chrono::{DateTime, Local};
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tracing::debug;
+use turbopath::AnchoredSystemPath;
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::{AsyncCache, RemoteCacheOpts};
@@ -69,7 +70,7 @@ pub struct Run {
 
 impl Run {
     pub fn new(base: CommandBase, api_auth: Option<APIAuth>) -> Result<Self, Error> {
-        let processes = ProcessManager::new();
+        let processes = ProcessManager::infer();
         let mut opts: Opts = base.args().try_into()?;
         let config = base.config()?;
         let is_linked = turborepo_api_client::is_linked(&api_auth);
@@ -299,8 +300,12 @@ impl Run {
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
 
-        let root_turbo_json =
-            TurboJson::load(&self.base.repo_root, &root_package_json, is_single_package)?;
+        let root_turbo_json = TurboJson::load(
+            &self.base.repo_root,
+            AnchoredSystemPath::empty(),
+            &root_package_json,
+            is_single_package,
+        )?;
 
         if self.opts.run_opts.experimental_space_id.is_none() {
             self.opts.run_opts.experimental_space_id = root_turbo_json.space_id.clone();

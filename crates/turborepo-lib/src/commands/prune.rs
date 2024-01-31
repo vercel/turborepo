@@ -423,9 +423,9 @@ impl<'a> Prune<'a> {
     }
 
     fn copy_turbo_json(&self, workspaces: &[String]) -> Result<(), Error> {
-        let original_turbo_path = self.root.resolve(turbo_json());
-
-        let new_turbo_path = self.full_directory.resolve(turbo_json());
+        let anchored_turbo_path = turbo_json();
+        let original_turbo_path = self.root.resolve(anchored_turbo_path);
+        let new_turbo_path = self.full_directory.resolve(anchored_turbo_path);
 
         let turbo_json_contents = match original_turbo_path.read_to_string() {
             Ok(contents) => contents,
@@ -436,7 +436,7 @@ impl<'a> Prune<'a> {
             Err(e) => return Err(e.into()),
         };
 
-        let turbo_json = RawTurboJson::parse(&turbo_json_contents, original_turbo_path.as_str())?;
+        let turbo_json = RawTurboJson::parse(&turbo_json_contents, anchored_turbo_path)?;
 
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
         new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;

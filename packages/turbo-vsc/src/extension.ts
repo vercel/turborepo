@@ -87,7 +87,6 @@ export function activate(context: ExtensionContext) {
 
   context.subscriptions.push(
     commands.registerCommand("turbo.daemon.start", () => {
-      const turboPath = workspace.getConfiguration("turbo").get("path");
       cp.exec(`${turboPath} daemon start`, options, (err) => {
         if (err) {
           if (err.message.includes("command not found")) {
