@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh nested_packages
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh nested_packages
 
 Run a build. In this test, the fixture is set up so that the build will
 if we read nested packages, in a manner similar to the `.next` folder
