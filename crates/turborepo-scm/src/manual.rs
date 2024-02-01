@@ -5,7 +5,7 @@ use hex::ToHex;
 use ignore::WalkBuilder;
 use sha1::{Digest, Sha1};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, IntoUnix};
-use wax::{any, Glob, Pattern};
+use wax::{any, Glob, Program};
 
 use crate::{package_deps::GitHashes, Error};
 
