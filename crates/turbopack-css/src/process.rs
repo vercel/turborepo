@@ -507,6 +507,7 @@ async fn process_content(
             _ => None,
         },
         filename: ident_str.to_string(),
+        error_recovery: true,
         ..Default::default()
     };
 
@@ -515,7 +516,8 @@ async fn process_content(
     let stylesheet = if use_lightningcss {
         StyleSheetLike::LightningCss(match StyleSheet::parse(&code, config.clone()) {
             Ok(stylesheet) => stylesheet_into_static(&stylesheet, without_warnings(config.clone())),
-            Err(_e) => {
+            Err(e) => {
+                dbg!(e);
                 // TODO(kdy1): Report errors
                 // e.to_diagnostics(&handler).emit();
                 return Ok(ParseCssResult::Unparseable.into());
