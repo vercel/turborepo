@@ -46,25 +46,20 @@ jobs:
       options: ${{ matrix.settings.container-options }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
       - name: Setup Container
         if: ${{ matrix.settings.container-setup }}
         run: ${{ matrix.settings.container-setup }}
 
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v1.2.0
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          targets: ${{ matrix.settings.target }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup capnproto
         uses: ./.github/actions/setup-capnproto
-
-      - name: Rust Setup
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          override: true
-          target: ${{ matrix.settings.target }}
 
       - name: Build Setup
         shell: bash

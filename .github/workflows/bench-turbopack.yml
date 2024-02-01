@@ -21,33 +21,18 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - name: Find PR Comment
-        id: comment
-        if: github.event_name == 'pull_request'
-        uses: peter-evans/find-comment@v2
-        with:
-          issue-number: ${{ github.event.pull_request.number }}
-          comment-author: "github-actions[bot]"
-          body-includes: "<!-- CI TURBOPACK BENCH COMMENT -->"
-
-      - name: Create or update PR comment
-        if: github.event_name == 'pull_request' && steps.comment.outputs.comment-id != ''
-        uses: peter-evans/create-or-update-comment@v2
+      - name: Set PR status comment
+        uses: ./.github/actions/status-comment
         continue-on-error: true
         with:
-          comment-id: ${{ steps.comment.outputs.comment-id }}
-          issue-number: ${{ github.event.pull_request.number }}
+          id: "bench-status"
           body: |
             ## ⏳ Turbopack Benchmark CI is running again... ⏳
 
             [Wait for it...](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }})
 
-            <!-- CI TURBOPACK BENCH COMMENT -->
-
-          edit-mode: replace
-
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: CI related changes
         id: ci
@@ -131,7 +116,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
@@ -193,7 +178,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
@@ -219,7 +204,7 @@ jobs:
 
       - name: Install critcmp
         if: always()
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@v3
         with:
           crate: critcmp
 
@@ -283,7 +268,7 @@ jobs:
           echo "pretty=$(date +'%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
 
       - name: Checkout benchmark-data
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: benchmark-data
 
@@ -303,7 +288,7 @@ jobs:
 
       - name: Push data to branch
         if: needs.determine_jobs.outputs.main_push == 'true'
-        uses: stefanzweifel/git-auto-commit-action@v4
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
           file_pattern: data/**
           commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})
@@ -339,7 +324,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Fetch the base branch
         run: git -c protocol.version=2 fetch --no-tags --progress --no-recurse-submodules --depth=1 origin +${{ github.base_ref }}:base
@@ -424,24 +409,12 @@ jobs:
           echo >> comment.md
           echo "<!-- CI TURBOPACK BENCH COMMENT -->" >> comment.md
 
-      - name: Find PR Comment
-        id: comment
-        if: always() && github.event_name == 'pull_request' && steps.info.outputs.cancelled != 'true'
-        uses: peter-evans/find-comment@v2
-        with:
-          issue-number: ${{ github.event.pull_request.number }}
-          comment-author: "github-actions[bot]"
-          body-includes: "<!-- CI TURBOPACK BENCH COMMENT -->"
-
-      - name: Create or update PR comment
-        if: always() && github.event_name == 'pull_request' && steps.info.outputs.cancelled != 'true'
-        uses: peter-evans/create-or-update-comment@v2
+      - name: Set PR status comment
+        uses: ./.github/actions/status-comment
         continue-on-error: true
         with:
-          comment-id: ${{ steps.comment.outputs.comment-id }}
-          issue-number: ${{ github.event.pull_request.number }}
-          body-file: "comment.md"
-          edit-mode: replace
+          id: "bench-status"
+          body-path: "comment.md"
 
       - name: It's not fine
         if: steps.info.outputs.failure == 'true'

@@ -62,7 +62,7 @@ jobs:
     runs-on: ${{ matrix.settings.host }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -70,6 +70,7 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix.settings.target }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node
         uses: ./.github/actions/setup-node
@@ -97,7 +98,7 @@ jobs:
     needs: [build]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
