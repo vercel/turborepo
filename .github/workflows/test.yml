@@ -21,6 +21,9 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Set PR status comment
         uses: ./.github/actions/status-comment
         continue-on-error: true
@@ -30,9 +33,6 @@ jobs:
             ## ⏳ CI is running again... ⏳
 
             [Wait for it...](https://github.com/vercel/turbo/actions/runs/${{ github.run_id }})
-
-      - name: Checkout
-        uses: actions/checkout@v4
 
       - name: CI related changes
         id: ci
@@ -867,6 +867,11 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout actions
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+
       - name: Compute info
         id: info
         if: always()
@@ -1004,6 +1009,11 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout actions
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+
       - name: Compute info
         id: info
         if: always()
