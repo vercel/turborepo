@@ -125,7 +125,7 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.bench.name }}
           path: raw.json
@@ -149,7 +149,7 @@ jobs:
           ref: benchmark-data
 
       - name: Download benchmark data
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-8-core/${{ steps.date.outputs.date }}-${{ github.sha }}
 
