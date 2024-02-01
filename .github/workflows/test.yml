@@ -428,7 +428,7 @@ jobs:
           cargo fmt --check
 
       - name: Check Cargo.toml formatting (taplo)
-        run: npx @taplo/cli format --check
+        run: npx @taplo/cli@0.5.2 format --check
 
       - name: Check licenses
         uses: EmbarkStudios/cargo-deny-action@v1
