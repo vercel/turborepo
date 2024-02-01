@@ -846,9 +846,8 @@ jobs:
 
       - name: Lint
         # Filters some workspaces out:
-        # - `cli` because (no reason anymore)
         # - Other `@vercel/*` packages because ??
-        run: turbo run lint --filter=!cli --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat --env-mode=strict
+        run: turbo run lint --filter=!@vercel/devlow-bench --filter=!@vercel/experimental-nft-next-plugin --filter=!@vercel/experimental-nft-next-plugin --filter=!turbopack-bump-action --filter=!next-integration-stat --env-mode=strict
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
