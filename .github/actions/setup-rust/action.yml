@@ -60,14 +60,14 @@ runs:
       continue-on-error: true
       uses: arduino/setup-protoc@v3.0.0
       with:
-        version: "3.x"
+        version: "23.x"
         repo-token: ${{ inputs.github-token }}
 
     - name: Set Up Protoc (second try)
       if: steps.set-up-protoc.outcome == 'failure'
       uses: arduino/setup-protoc@v3.0.0
       with:
-        version: "3.x"
+        version: "23.x"
         repo-token: ${{ inputs.github-token }}
 
     - name: "Add cargo problem matchers"
