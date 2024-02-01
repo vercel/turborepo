@@ -54,7 +54,7 @@ packageGraph.forEachNode((node) => {
 // 1. the root package.json
 // 2. create packages/
 // 3. create package directories
-const root = path.join(__dirname, "../demo", type);
+const root = path.join(__dirname, "demo", type);
 
 function generate(root, skipInstall) {
   fs.mkdirSync(root, { recursive: true });

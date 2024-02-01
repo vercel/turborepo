@@ -146,45 +146,13 @@ ifneq ($(SKIP_PUBLISH),--skip-publish)
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-types-$(TURBO_VERSION).tgz
 endif
 
-demo/lage: install
-	node $(CLI_DIR)/scripts/generate.mjs lage
-
-demo/lerna: install
-	node $(CLI_DIR)/scripts/generate.mjs lerna
-
-demo/nx: install
-	node $(CLI_DIR)/scripts/generate.mjs nx
-
-demo/turbo: install
-	node $(CLI_DIR)/scripts/generate.mjs turbo
-
-demo: demo/lage demo/lerna demo/nx demo/turbo
-
-bench/lerna: demo/lerna
-	cd $(CLI_DIR)/demo/lerna && node_modules/.bin/lerna run build
-
-bench/lage: demo/lage
-	cd $(CLI_DIR)/demo/lage && node_modules/.bin/lage build
-
-bench/nx: demo/nx
-	cd $(CLI_DIR)/demo/nx && node_modules/.bin/nx run-many --target=build --all
-
-bench/turbo: demo/turbo turbo
-	cd $(CLI_DIR)/demo/turbo && $(CLI_DIR)/turbo run test
-
-bench: bench/lerna bench/lage bench/nx bench/turbo
-
-clean: clean-build clean-demo clean-rust
+clean: clean-build clean-rust
 
 clean-rust:
 	cargo clean
 
 clean-build:
 	rm -f turbo
-
-clean-demo:
-	rm -rf node_modules
-	rm -rf demo
 
 # use target fixture-<some directory under turborepo-tests/integration/fixtures> to set up the testbed directory
 .PHONY=fixture-%
