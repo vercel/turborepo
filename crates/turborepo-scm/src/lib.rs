@@ -287,8 +287,8 @@ mod tests {
     fn test_wait_for_success() {
         // Shell script to simulate a command that hangs
         let sh = r#"
-            echo "started"
             echo "some error text" >&2
+            echo "started"
             read -p "Press enter to stop hanging"
         "#;
 
