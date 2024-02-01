@@ -285,22 +285,37 @@ mod tests {
 
     #[test]
     fn test_wait_for_success() {
-        // Shell script to simulate a command that hangs
-        let sh = r#"
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        #[cfg(windows)]
+        let mut cmd = {
+            let batch = r#"
+            echo "some error text" 1>&2
+            echo "started"
+            set /p myvar=Press enter to stop hanging
+            "#;
+
+            let script_path = root.join_component("hanging.cmd");
+            script_path.create_with_contents(batch).unwrap();
+            Command::new(script_path.as_std_path())
+        };
+
+        #[cfg(unix)]
+        let mut cmd = {
+            // Shell script to simulate a command that hangs
+            let sh = r#"
             echo "some error text" >&2
             echo "started"
             read -p "Press enter to stop hanging"
-        "#;
+            "#;
+            let bash = which::which("bash").unwrap();
+            let script_path = root.join_component("hanging.sh");
+            script_path.create_with_contents(sh).unwrap();
+            script_path.set_mode(0x755).unwrap();
+            Command::new(&bash).arg(script_path.as_str())
+        };
 
-        let bash = which::which("bash").unwrap();
-        let tmp_dir = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
-        let script_path = root.join_component("hanging.sh");
-        script_path.create_with_contents(sh).unwrap();
-        #[cfg(unix)]
-        script_path.set_mode(0x755).unwrap();
-        let mut cmd = Command::new(&bash)
-            .arg(script_path.as_str())
+        let mut cmd = cmd
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
