@@ -1,4 +1,4 @@
-//! Provides utilities for error spans.
+//! Provides utilities for error locations and spans.
 
 use std::{
     ops::{Deref, Range},
