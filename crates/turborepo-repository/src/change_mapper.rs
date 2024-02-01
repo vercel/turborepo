@@ -187,16 +187,16 @@ impl From<ChangedPackagesError> for ChangeMapError {
 mod test {
     use test_case::test_case;
 
-    use super::{ChangeMapError, ChangeMapper};
+    use super::ChangeMapper;
 
     #[cfg(unix)]
-    #[test_case("/a/b/c", &["package.lock"], "/a/b/c/package.lock", Ok(true) ; "simple")]
-    #[test_case("/a/b/c", &["a", "b", "c"], "/a/b/c/package.lock", Ok(false) ; "lockfile unchanged")]
+    #[test_case("/a/b/c", &["package.lock"], "/a/b/c/package.lock", true ; "simple")]
+    #[test_case("/a/b/c", &["a", "b", "c"], "/a/b/c/package.lock", false ; "lockfile unchanged")]
     fn test_lockfile_changed(
         turbo_root: &str,
         changed_files: &[&str],
         lockfile_path: &str,
-        expected: Result<bool, ChangeMapError>,
+        expected: bool,
     ) {
         let turbo_root = turbopath::AbsoluteSystemPathBuf::new(turbo_root).unwrap();
         let lockfile_path = turbopath::AbsoluteSystemPathBuf::new(lockfile_path).unwrap();
@@ -206,19 +206,17 @@ mod test {
             .collect();
         let changes = ChangeMapper::lockfile_changed(&turbo_root, &changed_files, &lockfile_path);
 
-        // we don't want to implement PartialEq on the error type,
-        // so simply compare the debug representations
-        assert_eq!(format!("{:?}", changes), format!("{:?}", expected));
+        assert_eq!(changes, expected);
     }
 
     #[cfg(windows)]
-    #[test_case("C:\\\\a\\b\\c", &["package.lock"], "C:\\\\a\\b\\c\\package.lock", Ok(true) ; "simple")]
-    #[test_case("C:\\\\a\\b\\c", &["a", "b", "c"],  "C:\\\\a\\b\\c\\package.lock", Ok(false) ; "lockfile unchanged")]
+    #[test_case("C:\\\\a\\b\\c", &["package.lock"], "C:\\\\a\\b\\c\\package.lock", true ; "simple")]
+    #[test_case("C:\\\\a\\b\\c", &["a", "b", "c"],  "C:\\\\a\\b\\c\\package.lock", false ; "lockfile unchanged")]
     fn test_lockfile_changed(
         turbo_root: &str,
         changed_files: &[&str],
         lockfile_path: &str,
-        expected: Result<bool, ChangeMapError>,
+        expected: bool,
     ) {
         let turbo_root = turbopath::AbsoluteSystemPathBuf::new(turbo_root).unwrap();
         let lockfile_path = turbopath::AbsoluteSystemPathBuf::new(lockfile_path).unwrap();
@@ -230,6 +228,6 @@ mod test {
 
         // we don't want to implement PartialEq on the error type,
         // so simply compare the debug representations
-        assert_eq!(format!("{:?}", changes), format!("{:?}", expected));
+        assert_eq!(changes, expected);
     }
 }
