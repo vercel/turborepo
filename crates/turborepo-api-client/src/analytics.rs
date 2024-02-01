@@ -15,6 +15,7 @@ pub trait AnalyticsClient {
 
 #[async_trait]
 impl AnalyticsClient for APIClient {
+    #[tracing::instrument(skip_all)]
     async fn record_analytics(
         &self,
         api_auth: &APIAuth,

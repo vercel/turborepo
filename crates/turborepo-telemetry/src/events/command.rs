@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 use turborepo_vercel_api::{TelemetryCommandEvent, TelemetryEvent};
 use uuid::Uuid;
@@ -76,6 +78,25 @@ impl CommandEventBuilder {
         self
     }
 
+    // args
+    pub fn track_arg_usage(&self, arg: &str, is_set: bool) -> &Self {
+        self.track(Event {
+            key: format!("arg:{}", arg),
+            value: if is_set { "set" } else { "default" }.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    pub fn track_arg_value(&self, arg: &str, val: impl Display, is_sensitive: EventType) -> &Self {
+        self.track(Event {
+            key: format!("arg:{}", arg),
+            value: val.to_string(),
+            is_sensitive,
+        });
+        self
+    }
+
     // telemetry
     pub fn track_telemetry_config(&self, enabled: bool) -> &Self {
         self.track(Event {
@@ -106,15 +127,6 @@ impl CommandEventBuilder {
     }
 
     // run
-    pub fn track_run_chrome_tracing(&self) -> &Self {
-        self.track(Event {
-            key: "chrome_tracing".to_string(),
-            value: "enabled".to_string(),
-            is_sensitive: EventType::NonSensitive,
-        });
-        self
-    }
-
     pub fn track_run_code_path(&self, path: CodePath) -> &Self {
         self.track(Event {
             key: "binary".to_string(),
@@ -122,16 +134,6 @@ impl CommandEventBuilder {
                 CodePath::Go => "go".to_string(),
                 CodePath::Rust => "rust".to_string(),
             },
-            is_sensitive: EventType::NonSensitive,
-        });
-        self
-    }
-
-    // prune
-    pub fn track_prune_method(&self, is_docker: bool) -> &Self {
-        self.track(Event {
-            key: "method".to_string(),
-            value: if is_docker { "docker" } else { "default" }.to_string(),
             is_sensitive: EventType::NonSensitive,
         });
         self

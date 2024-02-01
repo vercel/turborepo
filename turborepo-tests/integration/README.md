@@ -52,7 +52,7 @@ Setup
   $ . ${TESTDIR}/../../helpers/setup_integration_test.sh single_package
 
 Custom config
-  $ . ${TESTDIR}/../../helpers/replace_turbo_config.sh $(pwd) "my-custom-config.json"
+  $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd) "my-custom-config.json"
 
 Write your tests
 ...

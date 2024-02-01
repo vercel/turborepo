@@ -26,6 +26,7 @@ pub fn recursive_copy(
     let src = src.as_ref();
     let dst = dst.as_ref();
     let src_metadata = src.symlink_metadata()?;
+
     if src_metadata.is_dir() {
         let walker = WalkDir::new(src.as_path()).follow_links(false);
         for entry in walker.into_iter() {
@@ -43,26 +44,16 @@ pub fn recursive_copy(
                     let path = entry.path();
                     let path = AbsoluteSystemPath::from_std_path(path)?;
                     let file_type = entry.file_type();
-                    // currently we support symlinked files, but not symlinked directories:
-                    // For copying, we Mkdir and bail if we encounter a symlink to a directoy
-                    // For finding packages, we enumerate the symlink, but don't follow inside
+
                     // Note that we also don't currently copy broken symlinks
-                    let is_dir_or_symlink_to_dir = if file_type.is_dir() {
-                        true
-                    } else if file_type.is_symlink() {
-                        if let Ok(metadata) = path.stat() {
-                            metadata.is_dir()
-                        } else {
-                            // If we have a broken link, skip this entry
-                            continue;
-                        }
-                    } else {
-                        false
-                    };
+                    if file_type.is_symlink() && path.stat().is_err() {
+                        // If we have a broken link, skip this entry
+                        continue;
+                    }
 
                     let suffix = AnchoredSystemPathBuf::new(src, path)?;
                     let target = dst.resolve(&suffix);
-                    if is_dir_or_symlink_to_dir {
+                    if file_type.is_dir() {
                         let src_metadata = entry.metadata()?;
                         make_dir_copy(&target, &src_metadata)?;
                     } else {
@@ -79,7 +70,7 @@ pub fn recursive_copy(
 
 fn make_dir_copy(
     dir: impl AsRef<AbsoluteSystemPath>,
-    #[allow(dead_code)] src_metadata: &Metadata,
+    #[allow(unused_variables)] src_metadata: &Metadata,
 ) -> Result<(), Error> {
     let dir = dir.as_ref();
     let mut builder = DirBuilder::new();
@@ -191,6 +182,33 @@ mod tests {
     }
 
     #[test]
+    fn test_symlink_to_dir() -> Result<(), Error> {
+        let (_src_tmp, src_dir) = tmp_dir()?;
+        let src_symlink = src_dir.join_component("symlink");
+
+        let (_target_tmp, target_dir) = tmp_dir()?;
+        let src_target = target_dir.join_component("target");
+
+        let target_a = src_target.join_component("a");
+        target_a.ensure_dir()?;
+        target_a.create_with_contents("solid")?;
+
+        let (_dst_tmp, dst_dir) = tmp_dir()?;
+        let dst_file = dst_dir.join_component("dest");
+
+        // create symlink target
+        src_symlink.symlink_to_dir(src_target.as_path())?;
+
+        copy_file(&src_symlink, &dst_file)?;
+        assert_target_matches(&dst_file, &src_target);
+
+        let target = dst_file.read_link()?;
+        assert_eq!(target.read_dir()?.count(), 1);
+
+        Ok(())
+    }
+
+    #[test]
     fn test_copy_file_with_perms() -> Result<(), Error> {
         let (_src_tmp, src_dir) = tmp_dir()?;
         let src_file = src_dir.join_component("src");
@@ -219,7 +237,16 @@ mod tests {
         //     link -> ../b
         //     broken -> missing
         //     circle -> ../child
+        //     other -> ../sibling
+        //   sibling/
+        //     c
         let (_src_tmp, src_dir) = tmp_dir()?;
+
+        let sibling_dir = src_dir.join_component("sibling");
+        let c_path = sibling_dir.join_component("c");
+        c_path.ensure_dir()?;
+        c_path.create_with_contents("right here")?;
+
         let child_dir = src_dir.join_component("child");
         let a_path = child_dir.join_component("a");
         a_path.ensure_dir()?;
@@ -236,6 +263,9 @@ mod tests {
 
         let circle_path = child_dir.join_component("circle");
         circle_path.symlink_to_dir(["..", "child"].join(std::path::MAIN_SEPARATOR_STR))?;
+
+        let other_path = child_dir.join_component("other");
+        other_path.symlink_to_dir(["..", "sibling"].join(std::path::MAIN_SEPARATOR_STR))?;
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
 
@@ -260,15 +290,22 @@ mod tests {
         let dst_broken_path = dst_child_path.join_component("broken");
         assert!(!dst_broken_path.as_path().exists());
 
-        // Currently, we convert symlink-to-directory to empty-directory
-        // This is very likely not ideal behavior, but leaving this test here to verify
-        // that it is what we expect at this point in time.
         let dst_circle_path = dst_child_path.join_component("circle");
-        let dst_circle_metadata = fs::symlink_metadata(&dst_circle_path)?;
-        assert!(dst_circle_metadata.is_dir());
+        let dst_circle_metadata = fs::symlink_metadata(dst_circle_path)?;
+        assert!(dst_circle_metadata.is_symlink());
 
-        let num_files = fs::read_dir(dst_circle_path.as_path())?.count();
-        assert_eq!(num_files, 0);
+        let num_files = fs::read_dir(dst_child_path.as_path())?.count();
+        // We don't copy the broken symlink so there are only 4 entries
+        assert_eq!(num_files, 4);
+
+        let dst_other_path = dst_child_path.join_component("other");
+
+        let dst_other_metadata = fs::symlink_metadata(dst_other_path.as_path())?;
+        assert!(dst_other_metadata.is_symlink());
+
+        let dst_c_path = dst_other_path.join_component("c");
+
+        assert_file_matches(&c_path, dst_c_path);
 
         Ok(())
     }
