@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
 use turborepo_lockfiles::Lockfile;
-use wax::{Any, Glob, Pattern};
+use wax::{Any, Glob, Program};
 use which::which;
 
 use crate::{

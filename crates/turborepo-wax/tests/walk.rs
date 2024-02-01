@@ -4,7 +4,10 @@ use std::{collections::HashSet, path::PathBuf};
 
 use build_fs_tree::{dir, file, Build, FileSystemTree};
 use tempfile::{self, TempDir};
-use wax::{Glob, LinkBehavior, WalkBehavior};
+use wax::{
+    walk::{Entry, FileIterator, WalkBehavior},
+    Glob,
+};
 
 // TODO: Rust's testing framework does not provide a mechanism for maintaining
 //       shared state. This means that tests that write to the file system must
@@ -200,6 +203,8 @@ fn walk_with_depth() {
 #[test]
 #[cfg(any(unix, windows))]
 fn walk_with_cyclic_link_file() {
+    use wax::walk::LinkBehavior;
+
     let (_root, path) = temptree_with_cyclic_link();
 
     let glob = Glob::new("**").unwrap();
@@ -231,6 +236,8 @@ fn walk_with_cyclic_link_file() {
 #[test]
 #[cfg(any(unix, windows))]
 fn walk_with_cyclic_link_target() {
+    use wax::walk::LinkBehavior;
+
     let (_root, path) = temptree_with_cyclic_link();
 
     // Collect paths into `Vec`s so that duplicates can be detected.
