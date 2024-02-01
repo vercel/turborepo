@@ -93,7 +93,10 @@ pub enum ModuleRuleEffect {
     /// Allow to extend an existing Ecmascript module rules for the additional
     /// transforms. First argument will prepend the existing transforms, and
     /// the second argument will append the new transforms.
-    ExtendEcmascriptTransforms((Vc<EcmascriptInputTransforms>, Vc<EcmascriptInputTransforms>)),
+    ExtendEcmascriptTransforms {
+        prepend: Vc<EcmascriptInputTransforms>,
+        append: Vc<EcmascriptInputTransforms>,
+    },
     SourceTransforms(Vc<SourceTransforms>),
 }
 

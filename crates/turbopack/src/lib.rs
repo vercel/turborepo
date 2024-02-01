@@ -527,7 +527,7 @@ async fn process_default_internal(
                             }
                         };
                     }
-                    ModuleRuleEffect::ExtendEcmascriptTransforms((prepend, append)) => {
+                    ModuleRuleEffect::ExtendEcmascriptTransforms { prepend, append } => {
                         current_module_type = match current_module_type {
                             Some(ModuleType::Ecmascript {
                                 transforms,
