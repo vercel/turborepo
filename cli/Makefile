@@ -40,6 +40,46 @@ build: install
 	cd $(CLI_DIR)/../ && pnpm install --filter=eslint-config-turbo && pnpm turbo-prebuilt build --filter=eslint-config-turbo...
 	cd $(CLI_DIR)/../ && pnpm install --filter=@turbo/types && pnpm turbo-prebuilt build --filter=@turbo/types...
 
+.PHONY: publish-turbo-cross
+publish-turbo-cross: prepublish
+	goreleaser release --rm-dist -f cross-release.yml
+
+.PHONY: publish-turbo-darwin
+publish-turbo-darwin: prepublish
+	goreleaser release --rm-dist -f darwin-release.yml
+
+.PHONY: snapshot-turbo-cross
+snapshot-turbo-cross:
+	goreleaser release --snapshot --rm-dist -f cross-release.yml
+
+.PHONY: snapshot-turbo-darwin
+snapshot-turbo-darwin:
+	goreleaser release --snapshot --rm-dist -f darwin-release.yml
+
+.PHONY: snapshot-lib-turbo-darwin
+snapshot-lib-turbo-darwin:
+	goreleaser release --snapshot --rm-dist -f darwin-lib.yml
+
+.PHONY: snapshot-lib-turbo-cross
+snapshot-lib-turbo-cross:
+	goreleaser release --snapshot --rm-dist -f cross-lib.yml
+
+.PHONY: build-lib-turbo-darwin
+build-lib-turbo-darwin:
+	goreleaser release --rm-dist -f darwin-lib.yml
+
+.PHONY: build-go-turbo-darwin
+build-go-turbo-darwin:
+	goreleaser release --rm-dist -f darwin-release.yml
+
+.PHONY: build-go-turbo-cross
+build-go-turbo-cross:
+	goreleaser release --rm-dist -f cross-release.yml
+
+.PHONY: build-lib-turbo-cross
+build-lib-turbo-cross:
+	goreleaser release --rm-dist -f cross-lib.yml
+
 .PHONY: stage-release
 stage-release:
 	echo "Version: $(TURBO_VERSION)"
@@ -77,6 +117,9 @@ publish-turbo: clean build
 	git format-patch HEAD~1 --stdout | cat
 
 	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
+
+	# Publishes the native npm modules.
+	goreleaser release --rm-dist -f combined-shim.yml $(SKIP_PUBLISH)
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
 	cd $(CLI_DIR)/../packages/turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
