@@ -326,6 +326,9 @@ impl ShutdownStyle {
     /// channel when the child process exits.
     async fn process(&self, child: &mut ChildHandle) -> ChildState {
         match self {
+            // Windows doesn't give the ability to send a signal to a process so we
+            // can't make use of the graceful shutdown timeout.
+            #[allow(unused)]
             ShutdownStyle::Graceful(timeout) => {
                 // try ro run the command for the given timeout
                 #[cfg(unix)]
