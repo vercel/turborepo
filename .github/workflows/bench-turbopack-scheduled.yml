@@ -86,7 +86,7 @@ jobs:
     name: Bench - ${{ matrix.bench.title }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup-node
 
@@ -111,7 +111,7 @@ jobs:
 
       - name: Install critcmp
         if: always()
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@v3
         with:
           crate: critcmp
 
@@ -144,7 +144,7 @@ jobs:
           echo "date=$(date +'%s')" >> $GITHUB_OUTPUT
           echo "pretty=$(date +'%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
       - name: Checkout benchmark-data
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: benchmark-data
 
@@ -157,6 +157,6 @@ jobs:
         run: git pull --depth=1 --no-tags origin benchmark-data
 
       - name: Push data to branch
-        uses: stefanzweifel/git-auto-commit-action@v4
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: Benchmark result for ${{ steps.date.outputs.pretty }} (${{ github.sha }})

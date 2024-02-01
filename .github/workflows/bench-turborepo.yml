@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-node
 
       - uses: ./.github/actions/setup-turborepo-environment
@@ -60,7 +60,7 @@ jobs:
             runner: windows-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set filename for profile
         id: filename
         shell: bash
@@ -111,7 +111,7 @@ jobs:
       TINYBIRD_TOKEN: ${{secrets.TINYBIRD_TOKEN}}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: ./.github/actions/setup-node
@@ -143,7 +143,7 @@ jobs:
     needs: [time-to-first-task]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: ./.github/actions/setup-node
@@ -174,7 +174,7 @@ jobs:
         run: cat packages/turbo-benchmark/slack-payload.json | jq
 
       - name: Send payload to slack
-        uses: slackapi/slack-github-action@v1.23.0
+        uses: slackapi/slack-github-action@v1.25.0
         with:
           payload-file-path: "packages/turbo-benchmark/slack-payload.json"
         env:

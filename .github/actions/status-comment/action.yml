@@ -1,0 +1,61 @@
+name: "Status Comment"
+description: "Creates and updates a comment"
+inputs:
+  id:
+    description: "A marker to uniquely identify the comment for future updates"
+    required: true
+  issue-number:
+    description: 'The number of the issue or pull request in which to create a comment.'
+    default: ${{ github.event.pull_request.number }}
+  body:
+    description: 'The comment body. Cannot be used in conjunction with `body-path`.'
+    required: false
+    default: ""
+  body-path:
+    description: 'The path to a file containing the comment body. Cannot be used in conjunction with `body`.'
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Generate Marker String
+      id: marker
+      shell: bash
+      run: |
+        echo "marker=<!-- CI COMMENT MARKER: ${{ inputs.id }} -->" >> "$GITHUB_OUTPUT"
+
+    - name: Create comment body
+      id: body
+      shell: bash
+      run: |
+        FILE="${{ inputs.body-path }}"
+        {
+          echo "body<<EOF"
+          if [[ -f "$FILE" ]]; then
+            cat "$FILE"
+          else
+            echo "${{ input.body }}"
+          fi
+          echo
+          echo "${{ steps.marker.outputs.marker }"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Find PR Comment
+      id: comment
+      if: github.event_name == 'pull_request'
+      uses: peter-evans/find-comment@v3
+      with:
+        issue-number: ${{ inputs.issue-number }}
+        comment-author: "github-actions[bot]"
+        body-includes: ${{ steps.marker.outputs.marker }
+
+    - name: Create or update PR comment
+      if: github.event_name == 'pull_request' && steps.comment.outputs.comment-id != ''
+      uses: peter-evans/create-or-update-comment@v3
+      with:
+        issue-number: ${{ inputs.issue-number }}
+        comment-id: ${{ steps.comment.outputs.comment-id }}
+        body: ${{ steps.body.outputs.body }}
+        edit-mode: replace
