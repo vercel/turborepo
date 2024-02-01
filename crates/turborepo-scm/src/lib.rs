@@ -317,8 +317,9 @@ mod tests {
         // Previously, this would hang forever trying to read from stderr
         let err =
             wait_for_success(cmd, &mut stderr, "hanging.sh", &root, parse_result).unwrap_err();
-        // Ensure we captured stderr from the script above.
-        let error_text = format!("{:?}", err);
-        assert!(error_text.contains("some error text"));
+        // Note that we aren't guaranteed to have captured stderr, notably on windows.
+        // We should, however, have our injected error of "any error" in the error
+        // message.
+        assert!(err.to_string().contains("any error"));
     }
 }
