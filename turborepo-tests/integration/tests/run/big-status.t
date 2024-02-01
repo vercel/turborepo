@@ -6,7 +6,7 @@ Force git status to show a file with spaces in the name
 
 Verify we have a file with spaces in the name
   $ git status | grep "with spaces" | wc -l
-     10000
+  \s*10000 (re)
 
 Do a dry run to verify we can hash it
   $ ${TURBO} run build --dry -F util | grep "Inputs Files Considered"
