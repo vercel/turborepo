@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import path from "path";
+import { fileURLToPath } from "url";
 import shelljs from "shelljs";
 import fs from "fs-extra";
 import faker from "faker";
 import graphGenerator from "ngraph.generators";
 import copy from "copy-template-dir";
-import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 faker.seed(123);
