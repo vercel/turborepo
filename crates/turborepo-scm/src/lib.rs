@@ -287,19 +287,20 @@ mod tests {
     fn test_wait_for_success() {
         // Shell script to simulate a command that hangs
         let sh = r#"
-            #!/bin/bash
             echo "started"
             echo "some error text" >&2
             read -p "Press enter to stop hanging"
         "#;
 
+        let bash = which::which("bash").unwrap();
         let tmp_dir = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
         let script_path = root.join_component("hanging.sh");
         script_path.create_with_contents(sh).unwrap();
         #[cfg(unix)]
         script_path.set_mode(0x755).unwrap();
-        let mut cmd = Command::new(script_path.as_std_path())
+        let mut cmd = Command::new(&bash)
+            .arg(script_path.as_str())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .stdin(Stdio::piped())
