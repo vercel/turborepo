@@ -53,7 +53,7 @@ impl<'a> PackageChangeDetector for SCMChangeDetector<'a> {
         let mut changed_pkgs =
             self.get_changed_packages(filtered_changed_files.into_iter(), self.pkg_graph)?;
 
-        // if we run into issues, don't error, just assume all pacakges have changed
+        // if we run into issues, don't error, just assume all packages have changed
         let lockfile_changes = self.get_changes_from_lockfile(&changed_files, from_ref);
 
         if let Ok(lockfile_changes) = lockfile_changes {

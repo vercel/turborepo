@@ -755,6 +755,9 @@ pub struct RunArgs {
     #[clap(long, value_enum, default_value_t = LogPrefix::Auto)]
     pub log_prefix: LogPrefix,
 
+    #[clap(long)]
+    pub watch: bool,
+
     // NOTE: The following two are hidden because clap displays them in the help text incorrectly:
     // > Usage: turbo [OPTIONS] [TASKS]... [-- <FORWARDED_ARGS>...] [COMMAND]
     #[clap(hide = true)]
