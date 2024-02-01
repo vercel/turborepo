@@ -147,7 +147,7 @@ impl ModuleResolveResult {
         }
     }
 
-    pub fn primary_modules_ref(&self) -> impl Iterator<Item = Vc<Box<dyn Module>>> + '_ {
+    pub fn primary_modules_iter(&self) -> impl Iterator<Item = Vc<Box<dyn Module>>> + '_ {
         self.primary.iter().filter_map(|item| match *item {
             ModuleResolveResultItem::Module(a) => Some(a),
             _ => None,
@@ -158,7 +158,7 @@ impl ModuleResolveResult {
         self.affecting_sources.push(source);
     }
 
-    pub fn affecting_sources_ref(&self) -> impl Iterator<Item = Vc<Box<dyn Source>>> + '_ {
+    pub fn affecting_sources_iter(&self) -> impl Iterator<Item = Vc<Box<dyn Source>>> + '_ {
         self.affecting_sources.iter().copied()
     }
 
@@ -214,7 +214,7 @@ impl ModuleResolveResult {
     pub async fn select_first(results: Vec<Vc<ModuleResolveResult>>) -> Result<Vc<Self>> {
         let mut affecting_sources = vec![];
         for result in &results {
-            affecting_sources.extend(result.await?.affecting_sources_ref());
+            affecting_sources.extend(result.await?.affecting_sources_iter());
         }
         for result in results {
             let result_ref = result.await?;
@@ -296,7 +296,7 @@ impl ModuleResolveResult {
     #[turbo_tasks::function]
     pub async fn primary_modules(self: Vc<Self>) -> Result<Vc<Modules>> {
         let this = self.await?;
-        Ok(Vc::cell(this.primary_modules_ref().collect()))
+        Ok(Vc::cell(this.primary_modules_iter().collect()))
     }
 
     #[turbo_tasks::function]

@@ -153,10 +153,10 @@ pub async fn referenced_modules_and_affecting_sources(
         .try_join()
         .await?;
     for resolve_result in resolve_results {
-        modules.extend(resolve_result.primary_modules_ref());
+        modules.extend(resolve_result.primary_modules_iter());
         modules.extend(
             resolve_result
-                .affecting_sources_ref()
+                .affecting_sources_iter()
                 .map(|source| Vc::upcast(RawModule::new(source))),
         );
     }
