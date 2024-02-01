@@ -193,15 +193,6 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Install GoReleaser
-        uses: goreleaser/goreleaser-action@v3
-        with:
-          distribution: goreleaser-pro
-          version: v1.18.2
-          install-only: true
-        env:
-          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
-
       - name: Download Rust artifacts
         uses: actions/download-artifact@v3
         with:
