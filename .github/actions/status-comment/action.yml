@@ -35,7 +35,7 @@ runs:
           if [[ -f "$FILE" ]]; then
             cat "$FILE"
           else
-            echo "${{ input.body }}"
+            echo "${{ inputs.body }}"
           fi
           echo
           echo "${{ steps.marker.outputs.marker }"
@@ -49,7 +49,7 @@ runs:
       with:
         issue-number: ${{ inputs.issue-number }}
         comment-author: "github-actions[bot]"
-        body-includes: ${{ steps.marker.outputs.marker }
+        body-includes: ${{ steps.marker.outputs.marker }}
 
     - name: Create or update PR comment
       if: github.event_name == 'pull_request' && steps.comment.outputs.comment-id != ''
