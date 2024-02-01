@@ -77,7 +77,7 @@ jobs:
           pnpm build:release --target=${{ matrix.settings.target }}
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: turbo-library-${{ matrix.settings.target }}
           path: packages/turbo-repository/native
@@ -98,7 +98,7 @@ jobs:
           git config --global user.email 'turbobot@vercel.com'
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: native-packages
 
@@ -129,7 +129,7 @@ jobs:
           mv *.tgz tarballs/
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Upload Tarballs
           path: tarballs

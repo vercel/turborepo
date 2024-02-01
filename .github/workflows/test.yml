@@ -702,9 +702,9 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: test_reports
+          name: test-reports-linux
           path: target/nextest/**/*.xml
 
   turbopack_rust_test2:
@@ -783,9 +783,9 @@ jobs:
 
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: test_reports
+          name: test-reports-${{ matrix.os.name }}
           path: target/nextest/**/*.xml
 
   turbopack_rust_test_bench1:
@@ -966,16 +966,18 @@ jobs:
         run: npm install -g @datadog/datadog-ci@2.18.1
 
       - name: Download test results
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          pattern: test-reports-*
+          merge-multiple: true
+          path: artifacts/test-reports
 
       - name: Upload
         continue-on-error: true
         env:
           DATADOG_API_KEY: ${{ secrets.DD_KEY_TURBOPACK }}
         run: |
-          DD_ENV=ci datadog-ci junit upload --service Turbopack ./artifacts/test_reports/**/*.xml
+          DD_ENV=ci datadog-ci junit upload --service Turbopack ./artifacts/test-reports/**/*.xml
 
   done:
     name: Done
