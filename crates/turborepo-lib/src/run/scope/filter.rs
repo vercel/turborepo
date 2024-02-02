@@ -6,15 +6,19 @@ use std::{
 
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
-use turborepo_repository::package_graph::{self, PackageGraph, WorkspaceName};
+use turborepo_repository::{
+    change_mapper::ChangeMapError,
+    package_graph::{self, PackageGraph, WorkspaceName},
+};
 use turborepo_scm::SCM;
 use wax::Program;
 
 use super::{
-    change_detector::{ChangeDetectError, PackageChangeDetector, SCMChangeDetector},
+    change_detector::GitChangeDetector,
     simple_glob::{Match, SimpleGlob},
     target_selector::{InvalidSelectorError, TargetSelector},
 };
+use crate::run::scope::change_detector::ScopeChangeDetector;
 
 pub struct PackageInference {
     package_name: Option<String>,
@@ -93,7 +97,7 @@ impl PackageInference {
     }
 }
 
-pub struct FilterResolver<'a, T: PackageChangeDetector> {
+pub struct FilterResolver<'a, T: GitChangeDetector> {
     pkg_graph: &'a PackageGraph,
     turbo_root: &'a AbsoluteSystemPath,
     inference: Option<PackageInference>,
@@ -101,7 +105,7 @@ pub struct FilterResolver<'a, T: PackageChangeDetector> {
     change_detector: T,
 }
 
-impl<'a> FilterResolver<'a, SCMChangeDetector<'a>> {
+impl<'a> FilterResolver<'a, ScopeChangeDetector<'a>> {
     pub(crate) fn new(
         opts: &'a super::ScopeOpts,
         pkg_graph: &'a PackageGraph,
@@ -109,7 +113,7 @@ impl<'a> FilterResolver<'a, SCMChangeDetector<'a>> {
         inference: Option<PackageInference>,
         scm: &'a SCM,
     ) -> Self {
-        let change_detector = SCMChangeDetector::new(
+        let change_detector = ScopeChangeDetector::new(
             turbo_root,
             scm,
             pkg_graph,
@@ -120,7 +124,7 @@ impl<'a> FilterResolver<'a, SCMChangeDetector<'a>> {
     }
 }
 
-impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
+impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     pub(crate) fn new_with_change_detector(
         pkg_graph: &'a PackageGraph,
         turbo_root: &'a AbsoluteSystemPath,
@@ -495,7 +499,7 @@ impl<'a, T: PackageChangeDetector> FilterResolver<'a, T> {
         &self,
         from_ref: &str,
         to_ref: &str,
-    ) -> Result<HashSet<WorkspaceName>, ChangeDetectError> {
+    ) -> Result<HashSet<WorkspaceName>, ChangeMapError> {
         self.change_detector.changed_packages(from_ref, to_ref)
     }
 
@@ -571,7 +575,7 @@ pub enum ResolutionError {
     #[error("Unable to query SCM: {0}")]
     Scm(#[from] turborepo_scm::Error),
     #[error("Unable to calculate changes: {0}")]
-    ChangeDetectError(#[from] ChangeDetectError),
+    ChangeDetectError(#[from] ChangeMapError),
     #[error("'Invalid directory filter '{glob}': {err}")]
     InvalidDirectoryGlob {
         glob: String,
@@ -586,6 +590,7 @@ mod test {
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
     use turborepo_repository::{
+        change_mapper::ChangeMapError,
         discovery::PackageDiscovery,
         package_graph::{PackageGraph, WorkspaceName, ROOT_PKG_NAME},
         package_json::PackageJson,
@@ -593,7 +598,7 @@ mod test {
     };
 
     use super::{FilterResolver, PackageInference, TargetSelector};
-    use crate::run::scope::change_detector::{ChangeDetectError, PackageChangeDetector};
+    use crate::run::scope::change_detector::GitChangeDetector;
 
     fn get_name(name: &str) -> (Option<&str>, &str) {
         if let Some(idx) = name.rfind('/') {
@@ -630,7 +635,7 @@ mod test {
 
     /// Make a project resolver with the provided dependencies. Extras is for
     /// packages that are not dependencies of any other package.
-    fn make_project<T: PackageChangeDetector>(
+    fn make_project<T: GitChangeDetector>(
         dependencies: &[(&str, &str)],
         extras: &[&str],
         package_inference: Option<PackageInference>,
@@ -1145,12 +1150,12 @@ mod test {
         }
     }
 
-    impl<'a> PackageChangeDetector for TestChangeDetector<'a> {
+    impl<'a> GitChangeDetector for TestChangeDetector<'a> {
         fn changed_packages(
             &self,
             from: &str,
             to: &str,
-        ) -> Result<HashSet<WorkspaceName>, ChangeDetectError> {
+        ) -> Result<HashSet<WorkspaceName>, ChangeMapError> {
             Ok(self
                 .0
                 .get(&(from, to))
