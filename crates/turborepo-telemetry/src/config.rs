@@ -7,13 +7,9 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use sha2::{Digest, Sha256};
 use tracing::{debug, error};
+use turborepo_dirs::config_dir;
 use turborepo_ui::{color, BOLD, GREY, UI, UNDERLINE};
 use uuid::Uuid;
-
-// Telemetry ships disabled by default until we can announce it publicly, this
-// allows us to test it internally, and will be removed in 1.12
-// TODO:[telemetry] Remove this in `1.12`
-static ENABLED_ENV_VAR: &str = "TURBO_TELEMETRY_ENABLED";
 
 static DEBUG_ENV_VAR: &str = "TURBO_TELEMETRY_DEBUG";
 static DISABLED_ENV_VAR: &str = "TURBO_TELEMETRY_DISABLED";
@@ -125,7 +121,7 @@ impl TelemetryConfig {
 
     pub fn show_alert(&mut self, ui: UI) {
         if !self.has_seen_alert() && self.is_enabled() && Self::is_telemetry_warning_enabled() {
-            println!(
+            eprintln!(
                 "\n{}\n{}\n{}\n{}\n{}\n",
                 color!(ui, BOLD, "{}", "Attention:"),
                 color!(
@@ -188,7 +184,10 @@ impl TelemetryConfig {
     pub fn is_telemetry_warning_enabled() -> bool {
         let turbo_telemetry_msg_disabled =
             env::var(DISABLED_MESSAGE_ENV_VAR).unwrap_or("0".to_string());
-        turbo_telemetry_msg_disabled != "1" && turbo_telemetry_msg_disabled != "true"
+        let is_disabled =
+            turbo_telemetry_msg_disabled == "1" || turbo_telemetry_msg_disabled == "true";
+
+        !is_disabled
     }
 
     pub fn get_id(&self) -> &str {
@@ -226,8 +225,8 @@ fn get_config_path() -> Result<String, ConfigError> {
         let config_path = tmp_dir.join("test-telemetry.json");
         Ok(config_path.to_str().unwrap().to_string())
     } else {
-        let config_dir = dirs_next::config_dir().ok_or(ConfigError::Message(
-            "Could find telemetry config directory".to_string(),
+        let config_dir = config_dir().ok_or(ConfigError::Message(
+            "Unable to find telemetry config directory".to_string(),
         ))?;
         // stored as a sibling to the turbo global config
         let config_path = config_dir.join("turborepo").join("telemetry.json");
@@ -272,9 +271,4 @@ fn one_way_hash_with_salt(salt: &str, input: &str) -> String {
     hasher.update(salted.as_bytes());
     let generic = hasher.finalize();
     hex::encode(generic)
-}
-
-// TODO:[telemetry] Remove this in `1.12`
-pub fn is_telemetry_internal_test() -> bool {
-    env::var(ENABLED_ENV_VAR).unwrap_or("0".to_string()) == "1"
 }

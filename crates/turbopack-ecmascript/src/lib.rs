@@ -137,9 +137,12 @@ pub enum EcmascriptModuleAssetType {
     /// Module with EcmaScript code
     Ecmascript,
     /// Module with TypeScript code without types
-    Typescript,
-    /// Module with TypeScript code with references to imported types
-    TypescriptWithTypes,
+    Typescript {
+        // parse JSX syntax.
+        tsx: bool,
+        // follow references to imported types.
+        analyze_types: bool,
+    },
     /// Module with TypeScript declaration code
     TypescriptDeclaration,
 }
@@ -148,8 +151,16 @@ impl Display for EcmascriptModuleAssetType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             EcmascriptModuleAssetType::Ecmascript => write!(f, "ecmascript"),
-            EcmascriptModuleAssetType::Typescript => write!(f, "typescript"),
-            EcmascriptModuleAssetType::TypescriptWithTypes => write!(f, "typescript with types"),
+            EcmascriptModuleAssetType::Typescript { tsx, analyze_types } => {
+                write!(f, "typescript")?;
+                if *tsx {
+                    write!(f, "with JSX")?;
+                }
+                if *analyze_types {
+                    write!(f, "with types")?;
+                }
+                Ok(())
+            }
             EcmascriptModuleAssetType::TypescriptDeclaration => write!(f, "typescript declaration"),
         }
     }
@@ -424,7 +435,12 @@ impl EcmascriptModuleAsset {
         }
 
         let find_package_json = find_context_file(
-            self.origin_path().resolve().await?,
+            self.origin_path()
+                .resolve()
+                .await?
+                .parent()
+                .resolve()
+                .await?,
             package_json().resolve().await?,
         )
         .await?;

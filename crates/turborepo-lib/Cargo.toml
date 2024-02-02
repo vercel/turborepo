@@ -43,6 +43,7 @@ clap = { workspace = true, features = ["derive", "env"] }
 clap_complete = { workspace = true }
 command-group = { version = "2.1.0", features = ["with-tokio"] }
 console = { workspace = true }
+crossterm = "0.26"
 ctrlc = { version = "3.4.0", features = ["termination"] }
 dialoguer = { workspace = true, features = ["fuzzy-select"] }
 directories = "4.0.1"
@@ -64,6 +65,7 @@ notify = "5.1"
 path-clean = "1.0.1"
 petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
+portable-pty = "0.8.1"
 prost = "0.11.6"
 rand = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json"] }

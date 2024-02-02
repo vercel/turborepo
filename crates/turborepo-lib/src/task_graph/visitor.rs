@@ -48,7 +48,7 @@ pub struct Visitor<'a> {
     global_env: EnvironmentVariableMap,
     global_env_mode: EnvMode,
     manager: ProcessManager,
-    run_opts: &'a RunOpts<'a>,
+    run_opts: &'a RunOpts,
     package_graph: Arc<PackageGraph>,
     repo_root: &'a AbsoluteSystemPath,
     run_cache: Arc<RunCache>,
@@ -247,12 +247,14 @@ impl<'a> Visitor<'a> {
 
                     let workspace_directory = self.repo_root.resolve(workspace_info.package_path());
 
+                    let persistent = task_definition.persistent;
                     let mut exec_context = factory.exec_context(
                         info.clone(),
                         task_hash,
                         task_cache,
                         workspace_directory,
                         execution_env,
+                        persistent,
                     );
 
                     let output_client = self.output_client(&info);
@@ -563,6 +565,7 @@ impl<'a> ExecContextFactory<'a> {
         task_cache: TaskCache,
         workspace_directory: AbsoluteSystemPathBuf,
         execution_env: EnvironmentVariableMap,
+        persistent: bool,
     ) -> ExecContext {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         let pass_through_args = self.visitor.run_opts.args_for_task(&task_id);
@@ -586,6 +589,7 @@ impl<'a> ExecContextFactory<'a> {
             continue_on_error: self.visitor.run_opts.continue_on_error,
             pass_through_args,
             errors: self.errors.clone(),
+            persistent,
         }
     }
 
@@ -619,6 +623,7 @@ struct ExecContext {
     continue_on_error: bool,
     pass_through_args: Option<Vec<String>>,
     errors: Arc<Mutex<Vec<TaskError>>>,
+    persistent: bool,
 }
 
 enum ExecOutcome {
@@ -784,6 +789,13 @@ impl ExecContext {
         // Always last to make sure it overwrites any user configured env var.
         cmd.env("TURBO_HASH", &self.task_hash);
 
+        // Many persistent tasks if started hooked up to a pseudoterminal
+        // will shut down if stdin is closed, so we open it even if we don't pass
+        // anything to it.
+        if self.persistent {
+            cmd.open_stdin();
+        }
+
         let mut stdout_writer = match self
             .task_cache
             .output_writer(self.pretty_prefix.clone(), output_client.stdout())
@@ -840,10 +852,7 @@ impl ExecContext {
             ChildExit::Finished(Some(0)) => {
                 if let Err(e) = stdout_writer.flush() {
                     error!("{e}");
-                } else if let Err(e) = self
-                    .task_cache
-                    .save_outputs(&mut prefixed_ui, task_duration, telemetry)
-                    .await
+                } else if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await
                 {
                     error!("error caching output: {e}");
                 } else {

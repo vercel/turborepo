@@ -136,6 +136,8 @@ pub struct ModuleOptionsContext {
     pub enable_jsx: Option<Vc<JsxTransformOptions>>,
     pub enable_postcss_transform: Option<Vc<PostCssTransformOptions>>,
     pub enable_webpack_loaders: Option<Vc<WebpackLoadersOptions>>,
+    /// Follow type references and resolve declaration files in additional to
+    /// normal resolution.
     pub enable_types: bool,
     pub enable_typescript_transform: Option<Vc<TypescriptTransformOptions>>,
     pub decorators: Option<Vc<DecoratorsOptions>>,
@@ -150,6 +152,9 @@ pub struct ModuleOptionsContext {
     // however we might want to unify them in the future.
     pub enable_mdx_rs: Option<Vc<MdxTransformModuleOptions>>,
     pub preset_env_versions: Option<Vc<Environment>>,
+    #[deprecated(
+        note = "Use custom_rules with ModuleRuleEffect::ExtendEcmascriptTransforms instead"
+    )]
     pub custom_ecma_transform_plugins: Option<Vc<CustomEcmascriptTransformPlugins>>,
     /// Custom rules to be applied after all default rules.
     pub custom_rules: Vec<ModuleRule>,

@@ -8,9 +8,6 @@ use std::{
 #[cfg(feature = "miette")]
 use ::miette::LabeledSpan;
 
-#[cfg(feature = "miette")]
-pub use crate::diagnostics::miette::diagnose;
-
 /// Location and length of a token within a glob expression.
 ///
 /// Spans are encoded as a tuple of `usize`s, where the first element is the

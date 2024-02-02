@@ -5,19 +5,14 @@
     "build": {
       "env": ["RUNNER_OS"],
       "outputs": [
-        "../target/debug/go-turbo",
-        "../target/debug/go-turbo.exe",
         "../target/debug/turbo",
         "../target/debug/turbo.exe",
-        "../target/release/go-turbo",
-        "../target/release/go-turbo.exe",
         "../target/release/turbo",
         "../target/release/turbo.exe"
       ],
 
       "inputs": [
-        "{internal,cmd}/**/*.go",
-        "!**/*_test.go",
+        "../version.txt",
         "../crates/turborepo*/**/*.rs", // Rust crates
         "../crates/turborepo*/Cargo.toml",
         "../Cargo.toml",

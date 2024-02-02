@@ -10,6 +10,7 @@ use turborepo_repository::package_graph::{
 
 use super::Engine;
 use crate::{
+    config,
     run::task_id::{TaskId, TaskName},
     task_graph::TaskDefinition,
     turbo_json::{validate_extends, validate_no_package_task_syntax, RawTaskDefinition, TurboJson},
@@ -33,8 +34,11 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
-    #[error("Invalid turbo.json:\n{error_lines}")]
-    Validation { error_lines: String },
+    #[error("invalid turbo json")]
+    Validation {
+        #[related]
+        errors: Vec<config::Error>,
+    },
     #[error(transparent)]
     Graph(#[from] graph::Error),
     #[error("Invalid task name {task_name}: {reason}")]
@@ -330,15 +334,13 @@ impl<'a> EngineBuilder<'a> {
                     let validation_errors = workspace_json
                         .validate(&[validate_no_package_task_syntax, validate_extends]);
                     if !validation_errors.is_empty() {
-                        let error_lines = validation_errors
-                            .into_iter()
-                            .map(|err| format!(" - {err}"))
-                            .join("\n");
-                        return Err(Error::Validation { error_lines });
+                        return Err(Error::Validation {
+                            errors: validation_errors,
+                        });
                     }
 
                     if let Some(workspace_def) = workspace_json.pipeline.get(task_name) {
-                        task_definitions.push(workspace_def.clone());
+                        task_definitions.push(workspace_def.value.clone());
                     }
                 }
                 Ok(None) => (),
@@ -378,15 +380,14 @@ impl<'a> EngineBuilder<'a> {
                 workspace: workspace.clone(),
             }
         })?;
-        let workspace_dir =
-            self.repo_root
-                .resolve(self.package_graph.workspace_dir(workspace).ok_or_else(|| {
-                    Error::MissingPackageJson {
-                        workspace: workspace.clone(),
-                    }
-                })?);
+        let workspace_dir = self.package_graph.workspace_dir(workspace).ok_or_else(|| {
+            Error::MissingPackageJson {
+                workspace: workspace.clone(),
+            }
+        })?;
         Ok(TurboJson::load(
-            &workspace_dir,
+            self.repo_root,
+            workspace_dir,
             package_json,
             self.is_single,
         )?)
@@ -424,7 +425,7 @@ mod test {
     use serde_json::json;
     use tempdir::TempDir;
     use test_case::test_case;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
     use turborepo_lockfiles::Lockfile;
     use turborepo_repository::{
         discovery::PackageDiscovery, package_json::PackageJson, package_manager::PackageManager,
@@ -557,7 +558,7 @@ mod test {
 
     fn turbo_json(value: serde_json::Value) -> TurboJson {
         let json_text = serde_json::to_string(&value).unwrap();
-        let raw = RawTurboJson::parse(&json_text, "").unwrap();
+        let raw = RawTurboJson::parse(&json_text, AnchoredSystemPath::new("").unwrap()).unwrap();
         TurboJson::try_from(raw).unwrap()
     }
 

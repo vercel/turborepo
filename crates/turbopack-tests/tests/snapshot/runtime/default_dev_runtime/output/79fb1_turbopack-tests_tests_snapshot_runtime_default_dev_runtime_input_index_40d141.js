@@ -1238,7 +1238,7 @@ function createModuleHot(moduleId, hotData) {
 /**
  * Returns the URL relative to the origin where a chunk can be fetched from.
  */ function getChunkRelativeUrl(chunkPath) {
-    return `${CHUNK_BASE_PATH}${chunkPath}`.split("/").map((p)=>encodeURIComponent(p)).join("/");
+    return `${CHUNK_BASE_PATH}${chunkPath.split("/").map((p)=>encodeURIComponent(p)).join("/")}`;
 }
 /**
  * Subscribes to chunk list updates from the update server and applies them.
@@ -1514,7 +1514,7 @@ async function loadWebAssemblyModule(_source, wasmChunkPath) {
 })();
 function _eval({ code, url, map }) {
     code += `\n\n//# sourceURL=${location.origin}/${CHUNK_BASE_PATH}${url}`;
-    if (map) code += `\n//# sourceMappingURL=${location.origin}/${CHUNK_BASE_PATH}${map}`;
+    if (map) code += `\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${btoa(map)}`;
     return eval(code);
 }
 const chunksToRegister = globalThis.TURBOPACK;

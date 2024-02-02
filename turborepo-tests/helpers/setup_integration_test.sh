@@ -30,6 +30,7 @@ else
   EXT=""
 fi
 
+export TURBO_TELEMETRY_MESSAGE_DISABLED=1
 export TURBO=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
 
 # Undo the set -eo pipefail at the top of this script

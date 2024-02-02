@@ -95,6 +95,11 @@ impl Command {
             self.args.iter().map(|s| s.to_string_lossy()).join(" ")
         )
     }
+
+    /// If stdin is expected to be opened
+    pub fn will_open_stdin(&self) -> bool {
+        self.open_stdin
+    }
 }
 
 impl From<Command> for tokio::process::Command {
@@ -125,6 +130,36 @@ impl From<Command> for tokio::process::Command {
             });
         if let Some(cwd) = cwd {
             cmd.current_dir(cwd.as_std_path());
+        }
+        cmd
+    }
+}
+
+impl From<Command> for portable_pty::CommandBuilder {
+    fn from(value: Command) -> Self {
+        let Command {
+            program,
+            args,
+            cwd,
+            env,
+            env_clear,
+            ..
+        } = value;
+        let mut cmd = portable_pty::CommandBuilder::new(program);
+        if env_clear {
+            cmd.env_clear();
+        }
+        cmd.args(args);
+        if let Some(cwd) = cwd {
+            cmd.cwd(cwd.as_std_path());
+        } else if let Ok(cwd) = std::env::current_dir() {
+            // portably_pty defaults to a users home directory instead of cwd if one isn't
+            // configured on the command builder.
+            // We explicitly set the cwd if one exists to avoid this behavior
+            cmd.cwd(&cwd);
+        }
+        for (key, value) in env {
+            cmd.env(key, value);
         }
         cmd
     }
