@@ -148,9 +148,9 @@ impl NextJsVersion {
     /// Returns the version of Next.js to install from npm.
     pub fn version(&self) -> &'static str {
         match self {
-            NextJsVersion::V11 => "^11",
             NextJsVersion::V12 => "^12",
             NextJsVersion::V13 => "^13",
+            NextJsVersion::V14 => "^14",
             NextJsVersion::Canary => "canary",
         }
     }
@@ -159,9 +159,9 @@ impl NextJsVersion {
     /// of Next.js.
     pub fn react_version(&self) -> &'static str {
         match self {
-            NextJsVersion::V11 => "^17.0.2",
             NextJsVersion::V12 => "^18.2.0",
             NextJsVersion::V13 => "^18.2.0",
+            NextJsVersion::V14 => "^18.2.0",
             NextJsVersion::Canary => "^18.2.0",
         }
     }
