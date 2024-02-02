@@ -369,6 +369,7 @@ jobs:
 
       - name: Run tests
         run: |
+          env | grep -i API
           turbo run check-types test --filter=docs --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
