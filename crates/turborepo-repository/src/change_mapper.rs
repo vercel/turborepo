@@ -80,18 +80,18 @@ impl<'a> ChangeMapper<'a> {
         &self,
         default_global_deps: &[&str],
         changed_files: &HashSet<AnchoredSystemPathBuf>,
-    ) -> Result<bool, turborepo_scm::Error> {
+    ) -> Result<bool, ChangeMapError> {
         let global_deps = self.global_deps.iter().map(|s| s.as_str());
         let filters = global_deps.chain(default_global_deps.iter().copied());
-        let matcher = wax::any(filters).unwrap();
+        let matcher = wax::any(filters)?;
         Ok(changed_files.iter().any(|f| matcher.is_match(f.as_path())))
     }
 
     fn filter_ignored_files<'b>(
         &self,
         changed_files: impl Iterator<Item = &'b AnchoredSystemPathBuf> + 'b,
-    ) -> Result<HashSet<&'b AnchoredSystemPathBuf>, turborepo_scm::Error> {
-        let matcher = wax::any(self.ignore_patterns.iter().map(|s| s.as_str())).unwrap();
+    ) -> Result<HashSet<&'b AnchoredSystemPathBuf>, ChangeMapError> {
+        let matcher = wax::any(self.ignore_patterns.iter().map(|s| s.as_str()))?;
         Ok(changed_files
             .filter(move |f| !matcher.is_match(f.as_path()))
             .collect())
@@ -166,6 +166,8 @@ impl<'a> ChangeMapper<'a> {
 pub enum ChangeMapError {
     #[error("SCM error: {0}")]
     Scm(#[from] turborepo_scm::Error),
+    #[error(transparent)]
+    Wax(#[from] wax::BuildError),
     #[error("Package manager error: {0}")]
     PackageManager(#[from] crate::package_manager::Error),
     #[error("No lockfile")]
