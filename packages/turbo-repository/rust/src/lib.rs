@@ -1,10 +1,12 @@
+use std::{collections::HashMap, hash::Hash};
+
 use napi_derive::napi;
 use turbopath::AbsoluteSystemPath;
 use turborepo_repository::inference::RepoState as WorkspaceState;
-
 mod internal;
 
 #[napi]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct Package {
     /// The absolute path to the package root.
     #[napi(readonly)]
@@ -47,6 +49,11 @@ impl Package {
             relative_path: relative_path.to_string(),
         }
     }
+
+    // TODO: implement this
+    fn dependents(&self) -> Vec<Package> {
+        vec![]
+    }
 }
 
 #[napi]
@@ -62,5 +69,21 @@ impl Workspace {
     #[napi]
     pub async fn find_packages(&self) -> std::result::Result<Vec<Package>, napi::Error> {
         self.packages_internal().await.map_err(|e| e.into())
+    }
+
+    #[napi]
+    pub async fn package_graph(&self) -> HashMap<String, Vec<String>> {
+        let mut map = HashMap::new();
+        let packages = self.find_packages().await.unwrap();
+
+        for (_i, package) in packages.iter().enumerate() {
+            let deps = package.dependents(); // Get upstream dependencies
+            let dep_names = deps.iter().map(|p| p.relative_path.clone()).collect();
+
+            // TODO: use name instead of relative_path for both the key and value?
+            map.insert(package.relative_path.clone(), dep_names);
+        }
+
+        return map;
     }
 }
