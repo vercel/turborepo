@@ -202,7 +202,7 @@ pub fn get_bundlers() -> Vec<Box<dyn Bundler>> {
         )),
         Box::new(NextJs::new(
             NextJsVersion::V12,
-            "Next.js 13 webpack SSR",
+            "Next.js 12 webpack SSR",
             "/page",
             false,
             RenderType::ServerSidePrerendered,
