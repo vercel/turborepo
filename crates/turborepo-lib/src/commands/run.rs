@@ -33,7 +33,6 @@ pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i3
     let api_auth = base.api_auth()?;
     let api_client = base.api_client()?;
     let mut run = Run::new(base, api_auth)?;
-    debug!("using the experimental rust codepath");
     let run_fut = run.run(&handler, telemetry, api_client);
     let handler_fut = handler.done();
     tokio::select! {
