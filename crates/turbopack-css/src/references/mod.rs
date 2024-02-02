@@ -195,6 +195,7 @@ impl<'a> Visitor<'_> for ModuleReferencesVisitor<'a> {
         if !matches!(src.bytes().next(), Some(b'#') | Some(b'/')) {
             let issue_span = u.loc;
 
+            dbg!(&src);
             let vc = UrlAssetReference::new(
                 self.origin,
                 Request::parse(Value::new(src.to_string().into())),

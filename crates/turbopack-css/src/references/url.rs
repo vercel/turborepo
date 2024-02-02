@@ -186,13 +186,15 @@ impl<'i> Visitor<'i> for AssetReferenceReplacer<'_> {
     type Error = Infallible;
 
     fn visit_types(&self) -> lightningcss::visitor::VisitTypes {
-        visit_types!(URLS)
+        lightningcss::visitor::VisitTypes::all()
     }
 
     fn visit_url(&mut self, u: &mut Url) -> std::result::Result<(), Self::Error> {
         u.visit_children(self)?;
 
         if let Some(new) = self.urls.get(&*u.url) {
+            dbg!(&u.url);
+            dbg!(new);
             u.url = new.clone().into();
         }
 

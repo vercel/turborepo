@@ -383,6 +383,8 @@ pub async fn finalize_css(
                 ParseCssResult::NotFound => return Ok(FinalCssResult::NotFound.into()),
             };
 
+            // dbg!(&stylesheet);
+
             let url_references = *url_references;
 
             let mut url_map = HashMap::new();
@@ -394,9 +396,16 @@ pub async fn finalize_css(
                 }
             }
 
+            dbg!(&url_map);
+
             replace_url_references(&mut stylesheet, &url_map);
 
             let (result, srcmap) = stylesheet.to_css(cm.clone(), true, true, true)?;
+
+            if !url_map.is_empty() {
+                dbg!(&stylesheet);
+                dbg!(&result.code);
+            }
 
             Ok(FinalCssResult::Ok {
                 output_code: result.code,
