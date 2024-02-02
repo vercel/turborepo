@@ -139,7 +139,7 @@ pub struct PackageResolution {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 struct LockfileSettings {
-    auto_install_peer_deps: Option<bool>,
+    auto_install_peers: Option<bool>,
     exclude_links_from_lockfile: Option<bool>,
 }
 
@@ -905,5 +905,13 @@ c:
                 Package::new("/is-odd@3.0.1", "3.0.1"),
             ]
         )
+    }
+
+    #[test]
+    fn test_settings_parsing() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM8_6).unwrap();
+        let settings = lockfile.settings.unwrap();
+        assert_eq!(settings.auto_install_peers, Some(true));
+        assert_eq!(settings.exclude_links_from_lockfile, Some(false));
     }
 }

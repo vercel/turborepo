@@ -101,7 +101,8 @@ Make sure exit code is 2 when no args are passed
   [1]
 
   $ ${TURBO} run
-  Turbo error: at least one task must be specified
+    x at least one task must be specified
+  
   [1]
 
 Run again with an environment variable that corresponds to a run argument and assert that
