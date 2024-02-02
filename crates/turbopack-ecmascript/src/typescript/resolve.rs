@@ -275,6 +275,7 @@ pub async fn tsconfig_resolve_options(
                                     s if s.starts_with("./") || s.starts_with("../") => {
                                         Some(s.to_string())
                                     }
+                                    // tsconfig paths are always relative requests
                                     _ => Some(format!("./{s}")),
                                 }
                             })
