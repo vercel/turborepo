@@ -7,17 +7,25 @@ describe("Workspace", () => {
     const expectedRoot = path.resolve(__dirname, "../../..");
     expect(workspace.absolutePath).toBe(expectedRoot);
   });
-
   it("enumerates packages", async () => {
     const workspace = await Workspace.find();
     const packages: Package[] = await workspace.findPackages();
     expect(packages.length).not.toBe(0);
   });
-
   it("finds a package manager", async () => {
     const workspace = await Workspace.find();
     const packageManager: PackageManager = workspace.packageManager;
     expect(packageManager.name).toBe("pnpm");
   });
-  // TODO: proper tests on real fixtures
+
+  test("returns a package graph", async () => {
+    const dir = path.resolve(__dirname, "./fixtures/monorepo");
+    const workspace = await Workspace.find(dir);
+    console.log(workspace);
+    const graph = await workspace.packageGraph();
+    expect(graph).toEqual({
+      app: [],
+      ui: [],
+    });
+  });
 });

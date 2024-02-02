@@ -10,10 +10,8 @@ export class Package {
   readonly relativePath: string;
 }
 export class PackageManager {
-  /** The package manager name (lower case). */
+  /** The package manager name in lower case. */
   readonly name: string;
-  /** The package manager version (semver). */
-  readonly version: string;
 }
 export class Workspace {
   /** The absolute path to the workspace root. */
@@ -29,4 +27,5 @@ export class Workspace {
   static find(path?: string | undefined | null): Promise<Workspace>;
   /** Finds and returns packages within the workspace. */
   findPackages(): Promise<Array<Package>>;
+  packageGraph(): Promise<Record<string, Array<string>>>;
 }
