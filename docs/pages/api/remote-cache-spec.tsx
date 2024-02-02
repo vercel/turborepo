@@ -9,6 +9,15 @@ const INFO: OpenAPIV3.InfoObject = {
     "Turborepo is an intelligent build system optimized for JavaScript and TypeScript codebases.",
   version: `${API_VERSION}.0.0`,
 };
+const COMPONENTS: OpenAPIV3.ComponentsObject = {
+  securitySchemes: {
+    bearerToken: {
+      type: "http",
+      description: "Default authentication mechanism",
+      scheme: "bearer",
+    },
+  },
+};
 
 async function fetchVercelOpenAPISchema(): Promise<OpenAPIV3.Document> {
   const result = await fetch(VERCEL_OPEN_API);
@@ -25,9 +34,8 @@ function formatOpenAPISchema(schema: OpenAPIV3.Document) {
     }
   }
 
-  // we don't reference any components, we can remove this
-  delete schema.components;
-  // replace the paths and info
+  // replace the paths, info and components
+  schema.components = COMPONENTS;
   schema.info = INFO;
   schema.paths = paths;
 
