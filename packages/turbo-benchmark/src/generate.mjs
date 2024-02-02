@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import path from "path";
-import { fileURLToPath } from "url";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import shelljs from "shelljs";
 import fs from "fs-extra";
 import faker from "faker";
