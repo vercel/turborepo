@@ -336,14 +336,11 @@ fn walk_glob(
     glob: Glob,
 ) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
     glob.walk(base_path_new)
-        .not(ex_patterns.clone())
+        .not(ex_patterns)
         .unwrap_or_else(|e| {
             // Per docs, only fails if exclusion list is too large, since we're using
             // pre-compiled globs
-            panic!(
-                "Failed to compile exclusion globs: {:?}: {}",
-                ex_patterns, e,
-            )
+            panic!("Failed to compile exclusion globs: {}", e,)
         })
         .filter_map(|entry| visit_file(walk_type, entry))
         .collect::<Vec<_>>()
