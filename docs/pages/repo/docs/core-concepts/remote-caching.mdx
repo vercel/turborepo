@@ -102,11 +102,9 @@ To enable this feature, set the `remoteCache` options on your `turbo.json` confi
 
 A Remote Cache can be implemented by any HTTP server that meets Turborepo's Remote Caching API specification.
 
-At this time, the Remote Caching API is not covered by our versioning policy and is subject to change with any release. As we continue to iterate on unlocking the full potential of Remote Caching, we'll be working to stabilize the API.
-
 ### Managed Remote Cache with Vercel
 
-[Vercel](https://vercel.com), the creators and maintainers of Turborepo, provide a managed Developer Experience Platform that is fully compatible with Turborepo.
+[Vercel](https://vercel.com), the creators and maintainers of Turborepo, provide a managed Remote Cache that is fully compatible with Turborepo.
 
 Using [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching) is zero-configuration and automatically integrates with [Vercel deployments](https://vercel.com/docs/deployments/overview) through the open-source [Vercel Remote Cache SDK](https://github.com/vercel/remote-cache).
 
@@ -120,4 +118,6 @@ You can also self-host your own Remote Cache and set the remote caching domain b
 turbo run build --api="https://my-server.example.com" --token="xxxxxxxxxxxxxxxxx"
 ```
 
-You can [find the required endpoints and requests here](https://github.com/vercel/turbo/blob/main/cli/internal/client/client.go). We are currently working on an OpenAPI specification to share with the community.
+You can [find the OpenAPI specification for the API here](/api/remote-cache-spec).
+
+At this time, all versions of `turbo` are compatible with the `v8` endpoints.
