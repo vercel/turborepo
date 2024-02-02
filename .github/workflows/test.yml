@@ -368,8 +368,9 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run tests
+        # We manually set TURBO_API to an empty string to override Hetzner env
         run: |
-          turbo run check-types test --filter=docs --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+          TURBO_API= turbo run check-types test --filter=docs --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
         env:
           EXPERIMENTAL_RUST_CODEPATH: true
 
