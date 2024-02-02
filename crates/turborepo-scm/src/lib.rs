@@ -312,7 +312,9 @@ mod tests {
             let script_path = root.join_component("hanging.sh");
             script_path.create_with_contents(sh).unwrap();
             script_path.set_mode(0x755).unwrap();
-            Command::new(&bash).arg(script_path.as_str())
+            let mut cmd = Command::new(bash);
+            cmd.arg(script_path.as_str());
+            cmd
         };
 
         let mut cmd = cmd
