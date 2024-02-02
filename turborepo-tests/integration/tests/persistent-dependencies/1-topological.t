@@ -13,6 +13,7 @@
 // app-a#dev
 // └── pkg-a#dev
   $ ${TURBO} run dev
-   ERROR  run failed: error preparing engine: Invalid persistent task configuration:
-  "pkg-a#dev" is a persistent task, "app-a#dev" cannot depend on it
+    x error preparing engine: Invalid persistent task configuration:
+    | "pkg-a#dev" is a persistent task, "app-a#dev" cannot depend on it
+  
   [1]

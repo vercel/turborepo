@@ -48,7 +48,6 @@ Use our custom turbo config with an invalid env var
 
 Run build with invalid env var
   $ EXPERIMENTAL_RUST_CODEPATH=true ${TURBO} build
-   ERROR  run failed: Environment variables should not be prefixed with "$"
   invalid_env_prefix (https://turbo.build/messages/invalid-env-prefix)
   
     x Environment variables should not be prefixed with "$"
