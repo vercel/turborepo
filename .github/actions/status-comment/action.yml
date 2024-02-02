@@ -38,7 +38,7 @@ runs:
             echo "${{ inputs.body }}"
           fi
           echo
-          echo "${{ steps.marker.outputs.marker }"
+          echo "${{ steps.marker.outputs.marker }}"
           echo "EOF"
         } >> "$GITHUB_OUTPUT"
 

@@ -281,7 +281,7 @@ jobs:
         run: |
           find artifacts -size 0 -delete
           mkdir -p data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-8-core/${{ steps.date.outputs.date }}-${{ github.sha }}/
-          mv artifacts/bench_* data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-8-core/${{ steps.date.outputs.date }}-${{ github.sha }}/
+          mv artifacts/bench-* data/${{ steps.date.outputs.year }}/${{ steps.date.outputs.month }}/ubuntu-latest-8-core/${{ steps.date.outputs.date }}-${{ github.sha }}/
 
       - name: Git pull
         run: git pull --depth=1 --no-tags origin benchmark-data
