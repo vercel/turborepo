@@ -200,6 +200,13 @@ pub fn get_bundlers() -> Vec<Box<dyn Bundler>> {
             false,
             RenderType::ServerSidePrerendered,
         )),
+        Box::new(NextJs::new(
+            NextJsVersion::V12,
+            "Next.js 13 webpack SSR",
+            "/page",
+            false,
+            RenderType::ServerSidePrerendered,
+        )),
         Box::new(Parcel {}),
         Box::new(Vite::new(false, false)),
         Box::new(Vite::new(true, false)),
