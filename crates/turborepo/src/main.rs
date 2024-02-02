@@ -15,7 +15,7 @@ use crate::panic_handler::panic_handler;
 fn main() -> Result<()> {
     std::panic::set_hook(Box::new(panic_handler));
 
-    let exit_code = match turborepo_lib::main().unwrap_or_else(|err| {
+    let exit_code = turborepo_lib::main().unwrap_or_else(|err| {
         println!("{:?}", Report::new(err));
         1
     });
