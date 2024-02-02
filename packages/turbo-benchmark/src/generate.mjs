@@ -72,7 +72,9 @@ turbo-linux
     if (fs.existsSync(root)) {
       try {
         fs.rmSync(root + "/packages", { recursive: true });
-      } catch (error) {}
+      } catch (error) {
+        // do nothing
+      }
     }
 
     let deps =
