@@ -1,7 +1,7 @@
 import type { Variants } from "framer-motion";
 import { AnimatePresence, motion } from "framer-motion";
 import cn from "classnames";
-import { useTurboSite } from "../SiteSwitcher";
+import { useTurboSite } from "../site-switcher";
 import styles from "../header-logo.module.css";
 
 interface LogoProps {

@@ -1,3 +1,5 @@
+"use client";
+
 import cn from "classnames";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
