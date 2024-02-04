@@ -1,4 +1,6 @@
-import { useRouter } from "next/router";
+"use client";
+
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { ReactNode, ReactElement } from "react";
 import { useState } from "react";
@@ -247,9 +249,7 @@ export function Footer({ menu }: { menu?: boolean }): ReactElement {
           "mx-auto max-w-[90rem] py-2 px-4 flex gap-2",
           menu ? "flex" : "hidden"
         )}
-      >
-        <ThemeSwitch />
-      </div>
+      ></div>
       <hr className="dark:border-neutral-800" />
       <div
         className={cn(

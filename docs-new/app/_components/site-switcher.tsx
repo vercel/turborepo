@@ -1,11 +1,11 @@
 import cn from "classnames";
-import { useRouter } from "next/router";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 
 export type TurboSite = "pack" | "repo";
 
 export function useTurboSite(): TurboSite | undefined {
-  const { pathname } = useRouter();
+  const pathname = usePathname();
 
   if (pathname.startsWith("/repo")) {
     return "repo";

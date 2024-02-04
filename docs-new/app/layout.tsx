@@ -1,3 +1,4 @@
+import { Footer } from "@/app/_components/footer";
 import "./global.css";
 import { RootProvider } from "fumadocs-ui/provider";
 import { Inter } from "next/font/google";
@@ -12,6 +13,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     <html lang="en" className={inter.className}>
       <body>
         <RootProvider>{children}</RootProvider>
+        <Footer />
       </body>
     </html>
   );
