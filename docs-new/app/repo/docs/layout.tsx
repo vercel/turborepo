@@ -1,4 +1,4 @@
-import { pageTree } from "../source";
+import { pageTree } from "../../source";
 import { DocsLayout } from "fumadocs-ui/layout";
 import type { ReactNode } from "react";
 

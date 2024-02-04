@@ -1,0 +1,184 @@
+.leftLights::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  width: 25%;
+  height: 900px;
+  left: -12.5%;
+  top: calc(50% - 900px / 2 + 151px);
+  opacity: 0.2;
+  background: linear-gradient(180deg, #77b8ff 0%, rgba(42, 138, 246, 0.4) 100%);
+  filter: blur(125px);
+  transform: rotate(-15deg);
+  border-bottom-left-radius: 25% 25%;
+  border-bottom-right-radius: 25% 25%;
+  border-top-left-radius: 100% 100%;
+  border-top-right-radius: 100% 100%;
+  z-index: 200;
+  will-change: filter;
+  mix-blend-mode: normal;
+}
+
+.leftLights::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  width: 40%;
+  height: 422px;
+  left: 0px;
+  top: calc(50% - 422px / 2 + 298px);
+  opacity: 0.5;
+  background: linear-gradient(
+    180deg,
+    rgba(29, 92, 162, 0.2) 0%,
+    rgba(42, 138, 246, 0.4) 100%
+  );
+  filter: blur(125px);
+  will-change: filter;
+  mix-blend-mode: normal;
+}
+
+.rightLights::before {
+  z-index: 200;
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  width: 25%;
+  height: 900px;
+  right: -12.5%;
+  top: calc(50% - 900px / 2 + 151px);
+  background-image: linear-gradient(
+    180deg,
+    rgba(236, 151, 207, 0.4) 0%,
+    rgba(233, 42, 103, 1) 100%
+  );
+  filter: blur(125px);
+  transform: rotate(15deg);
+  border-bottom-left-radius: 25% 25%;
+  border-bottom-right-radius: 25% 25%;
+  border-top-left-radius: 100% 100%;
+  border-top-right-radius: 100% 100%;
+  opacity: 0.2;
+  overflow: hidden;
+  will-change: filter;
+  mix-blend-mode: normal;
+}
+
+.rightLights::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  width: 40%;
+  height: 422px;
+  right: 0px;
+  top: calc(50% - 422px / 2 + 298px);
+  opacity: 0.25;
+
+  background: linear-gradient(
+    180deg,
+    rgba(236, 151, 207, 0.4) 0%,
+    rgba(233, 42, 103, 1) 100%
+  );
+  transform: matrix(-1, 0, 0, 1, 0, 0);
+  filter: blur(125px);
+  will-change: filter;
+  mix-blend-mode: normal;
+}
+
+.counter-border {
+  --border-radius: 12px;
+  --border-size: 1px;
+  --padding: 1px;
+  --border-bg: conic-gradient(
+    from 180deg at 50% 50%,
+    #e92a67 0deg,
+    #a853ba 112.5deg,
+    #2a8af6 228.75deg,
+    rgba(42, 138, 246, 0) 360deg
+  );
+  position: relative;
+  overflow: hidden;
+  font-size: 2rem;
+  padding: calc(var(--padding) + var(--border-size));
+  border-radius: var(--border-radius);
+  display: inline-block;
+  z-index: 0;
+  backface-visibility: hidden;
+  perspective: 1000;
+  transform: translate3d(0, 0, 0);
+}
+
+.counter-border:hover {
+  cursor: pointer;
+}
+
+.counter-border i {
+  content: "";
+  position: absolute;
+  top: var(--border-size);
+  right: var(--border-size);
+  bottom: var(--border-size);
+  left: var(--border-size);
+  padding: var(--border-size);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  z-index: -1;
+  border-radius: calc(var(--border-radius) + var(--border-size));
+}
+
+.counter-border i::before {
+  content: "";
+  display: block;
+  background: var(--border-bg);
+  box-shadow: 0px 0px 40px 20px --var(--border-bg);
+  width: calc(100% * 1.41421356237);
+  padding-bottom: calc(100% * 1.41421356237);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 100%;
+  z-index: -2;
+  animation: spin 5s linear infinite;
+}
+
+@media (prefers-reduced-motion) {
+  .counter-border i::before {
+    animation: none;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(0);
+  }
+}
+
+.leftBottomLights {
+  position: absolute;
+  width: 387px;
+  height: 404px;
+  left: calc(50% - 387px / 2 - 80px);
+  bottom: -32px;
+  background: linear-gradient(180deg, #58a5ff 0%, #a67af4 100%);
+  mix-blend-mode: normal;
+  opacity: 0.15;
+  filter: blur(50px);
+  will-change: filter;
+}
+
+.rightBottomLights {
+  position: absolute;
+  width: 387px;
+  height: 404px;
+  left: calc(50% - 387px / 2 + 81px);
+  bottom: -32px;
+  background: linear-gradient(180deg, #ff3358 0%, #ff4fd8 100%);
+  mix-blend-mode: normal;
+  opacity: 0.15;
+  filter: blur(50px);
+  will-change: filter;
+}
