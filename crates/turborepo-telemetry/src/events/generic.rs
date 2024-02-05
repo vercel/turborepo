@@ -136,6 +136,15 @@ impl GenericEventBuilder {
         self
     }
 
+    pub fn track_binary_type(&self, binary_type: String) -> &Self {
+        self.track(Event {
+            key: "binary_type".to_string(),
+            value: binary_type,
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
     // args
     pub fn track_arg_usage(&self, arg: &str, is_set: bool) -> &Self {
         self.track(Event {

@@ -75,6 +75,35 @@ impl Display for OutputLogsMode {
     }
 }
 
+/// Which binary was used for the current invocation
+pub enum BinaryType {
+    /// Local binary called directly
+    Local,
+    /// Local binary was called via a global binary
+    LocalDefer,
+    /// Global binary called directly (No local binary to handoff to)
+    Global,
+    /// Global binary called because repo inference failed
+    GlobalFallback,
+    /// Repo inference was explicitly skipped via `--skip-infer`` arg
+    SkipInfer,
+    /// Repo inference was explicitly skipped via `$TURBO_BINARY_PATH` env var
+    BinPath,
+}
+
+impl Display for BinaryType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            BinaryType::Local => "local",
+            BinaryType::LocalDefer => "local-defer",
+            BinaryType::Global => "global",
+            BinaryType::GlobalFallback => "global-fallback",
+            BinaryType::SkipInfer => "skip-infer",
+            BinaryType::BinPath => "bin-path",
+        })
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum)]
 pub enum LogOrder {
     #[serde(rename = "auto")]
@@ -947,6 +976,7 @@ pub async fn run(
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,
     ui: UI,
+    binary_type: BinaryType,
 ) -> Result<i32, Error> {
     let mut cli_args = Args::new();
     let version = get_version();
@@ -1044,6 +1074,7 @@ pub async fn run(
     root_telemetry.track_platform(TurboState::platform_name());
     root_telemetry.track_version(TurboState::version());
     root_telemetry.track_cpus(num_cpus::get());
+    root_telemetry.track_binary_type(binary_type.to_string());
     // track args
     cli_args.track(&root_telemetry);
 

@@ -585,12 +585,25 @@ fn run_correct_turbo(
         try_check_for_updates(&shim_args, &turbo_state.version);
 
         if turbo_state.local_is_self() {
+            // `spawn_local_turbo`` sets the env var, so we can check for it here as an
+            // indication of whether we've been spawned from a global binary
+            let spawned_from_global = env::var(cli::INVOCATION_DIR_ENV_VAR).is_ok();
+
             env::set_var(
                 cli::INVOCATION_DIR_ENV_VAR,
                 shim_args.invocation_dir.as_path(),
             );
             debug!("Currently running turbo is local turbo.");
-            Ok(cli::run(Some(repo_state), subscriber, ui)?)
+            Ok(cli::run(
+                Some(repo_state),
+                subscriber,
+                ui,
+                if spawned_from_global {
+                    cli::BinaryType::LocalDefer
+                } else {
+                    cli::BinaryType::Local
+                },
+            )?)
         } else {
             spawn_local_turbo(&repo_state, turbo_state, shim_args)
         }
@@ -603,7 +616,12 @@ fn run_correct_turbo(
             shim_args.invocation_dir.as_path(),
         );
         debug!("Running command as global turbo");
-        Ok(cli::run(Some(repo_state), subscriber, ui)?)
+        Ok(cli::run(
+            Some(repo_state),
+            subscriber,
+            ui,
+            cli::BinaryType::Global,
+        )?)
     }
 }
 
@@ -659,7 +677,8 @@ fn spawn_local_turbo(
     command
         .args(&raw_args)
         // rather than passing an argument that local turbo might not understand, set
-        // an environment variable that can be optionally used
+        // an environment variable that can be optionally used. This is always used
+        // by `run_correct_turbo` to detect if we're done a global > local handoff
         .env(
             cli::INVOCATION_DIR_ENV_VAR,
             shim_args.invocation_dir.as_path(),
@@ -750,7 +769,7 @@ pub fn run() -> Result<i32, Error> {
     // global turbo having handled the inference. We can run without any
     // concerns.
     if args.skip_infer {
-        return Ok(cli::run(None, &subscriber, ui)?);
+        return Ok(cli::run(None, &subscriber, ui, cli::BinaryType::SkipInfer)?);
     }
 
     // If the TURBO_BINARY_PATH is set, we do inference but we do not use
@@ -759,7 +778,12 @@ pub fn run() -> Result<i32, Error> {
     if is_turbo_binary_path_set() {
         let repo_state = RepoState::infer(&args.cwd)?;
         debug!("Repository Root: {}", repo_state.root);
-        return Ok(cli::run(Some(repo_state), &subscriber, ui)?);
+        return Ok(cli::run(
+            Some(repo_state),
+            &subscriber,
+            ui,
+            cli::BinaryType::BinPath,
+        )?);
     }
 
     match RepoState::infer(&args.cwd) {
@@ -772,7 +796,12 @@ pub fn run() -> Result<i32, Error> {
             // commands like login/logout/link/unlink to still work
             debug!("Repository inference failed: {}", err);
             debug!("Running command as global turbo");
-            Ok(cli::run(None, &subscriber, ui)?)
+            Ok(cli::run(
+                None,
+                &subscriber,
+                ui,
+                cli::BinaryType::GlobalFallback,
+            )?)
         }
     }
 }
