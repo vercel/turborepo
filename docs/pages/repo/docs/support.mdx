@@ -23,12 +23,18 @@ Actions.
 
 ### Unsupported Platforms
 
-Running `turbo` on unsupported is possible by compiling from source. Building from source
-is documented in the [contributing guide](https://github.com/vercel/turbo/blob/main/CONTRIBUTING.md).
-If you build turbo from source, you will have to run the turbo binary directly instead of using
-via the Node.js package manager (via `npm install turbo`). The npm package does not contain any
-specific features, so if you are able to build the binary, you should be able to use it in the
-same way as you would use the npm package.
+Running `turbo` on unsupported platforms is possible by compiling from source. Instructions
+are available in the [contributing guide](https://github.com/vercel/turbo/blob/main/CONTRIBUTING.md).
+The built source is a single binary, so instead of installing and invoking via your Node.js package
+manager (e.g. `npm install turbo`), you will run the `turbo` binary directly:
+
+```bash
+/path/to/turbo run build
+```
+
+Since such invocations of turbo also defer to a locally installed `turbo` in your node_modules directory,
+if you're attempting to run `turbo` on a JavaScript project with `turbo` in package.json dependencies,
+use the `--skip-infer` flag to skip the deferal to the locally installed binary.
 
 ## Node.js Compatibility
 
