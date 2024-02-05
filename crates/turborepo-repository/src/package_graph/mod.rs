@@ -303,7 +303,7 @@ impl PackageGraph {
     /// Returns a list of changed packages based on the contents of a previous
     /// `Lockfile`. This assumes that none of the package.json in the workspace
     /// change, it is the responsibility of the caller to verify this.
-    pub fn changed_packages(
+    pub fn changed_packages_from_lockfile(
         &self,
         previous: &dyn Lockfile,
     ) -> Result<Vec<WorkspaceName>, ChangedPackagesError> {
