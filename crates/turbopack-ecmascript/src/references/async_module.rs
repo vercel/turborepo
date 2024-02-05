@@ -3,7 +3,7 @@ use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
 use swc_core::{
     common::DUMMY_SP,
-    ecma::ast::{ArrayLit, ArrayPat, Expr, Ident, Pat, Program},
+    ecma::ast::{ArrayLit, ArrayPat, Expr, Ident, Program},
     quote,
 };
 use turbo_tasks::{trace::TraceRawVcs, TryFlatJoinIterExt, TryJoinIterExt, Vc};
