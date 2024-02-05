@@ -213,7 +213,7 @@ fn add_async_dependency_handler(program: &mut Program, idents: &IndexSet<String>
     let stmt = quote!(
         "($deps = __turbopack_async_dependencies__.then ? (await \
          __turbopack_async_dependencies__)() : __turbopack_async_dependencies__);" as Stmt,
-        deps: Pat = Pat::Array(ArrayPat {
+        deps: AssignTarget = ArrayPat {
             span: DUMMY_SP,
             elems: idents
                 .into_iter()
@@ -221,7 +221,7 @@ fn add_async_dependency_handler(program: &mut Program, idents: &IndexSet<String>
                 .collect(),
             optional: false,
             type_ann: None,
-        }),
+        }.into(),
     );
 
     insert_hoisted_stmt(program, stmt);
