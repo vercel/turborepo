@@ -1,11 +1,11 @@
 #!/usr/bin/env node
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import shelljs from "shelljs";
-import path from "path";
 import fs from "fs-extra";
 import faker from "faker";
 import graphGenerator from "ngraph.generators";
 import copy from "copy-template-dir";
-import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 faker.seed(123);
@@ -54,7 +54,7 @@ packageGraph.forEachNode((node) => {
 // 1. the root package.json
 // 2. create packages/
 // 3. create package directories
-const root = path.join(__dirname, "../demo", type);
+const root = path.join(__dirname, "..", "demo", type);
 
 function generate(root, skipInstall) {
   fs.mkdirSync(root, { recursive: true });
@@ -72,7 +72,9 @@ turbo-linux
     if (fs.existsSync(root)) {
       try {
         fs.rmSync(root + "/packages", { recursive: true });
-      } catch (error) {}
+      } catch (error) {
+        // do nothing
+      }
     }
 
     let deps =

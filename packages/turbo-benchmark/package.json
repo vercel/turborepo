@@ -1,19 +1,34 @@
 {
   "name": "@turbo/benchmark",
   "version": "1.0.0",
-  "dependencies": {
-    "esbuild": "^0.15.0",
-    "esbuild-register": "^3.3.2",
-    "fs-extra": "^10.0.0",
-    "ndjson": "^2.0.0",
-    "node-fetch": "^2.6.8"
-  },
   "scripts": {
     "benchmark": "node -r esbuild-register src/index.ts",
     "ttft": "node -r esbuild-register src/ttft/index.ts",
     "lint": "eslint src",
     "lint:prettier": "prettier -c src --cache --ignore-path=../.prettierignore",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "demo": "pnpm run demo:lage && pnpm run demo:lerna && pnpm run demo:nx && pnpm run demo:turbo",
+    "demo:lage": "node src/generate.mjs lage",
+    "demo:lerna": "node src/generate.mjs lerna",
+    "demo:nx": "node src/generate.mjs nx",
+    "demo:turbo": "node src/generate.mjs turbo",
+    "bench": "pnpm run bench:lerna && pnpm run bench:lage && pnpm run bench:nx && pnpm run bench:turbo",
+    "bench:lerna": "cd ./demo/lerna && node_modules/.bin/lerna run build",
+    "bench:lage": "echo $PWD && cd ./demo/lage && node_modules/.bin/lage build",
+    "bench:nx": "cd ./demo/nx && node_modules/.bin/nx run-many --target=build --all",
+    "bench:turbo": "cd ./demo/turbo && ./turbo run test",
+    "clean": "rm -rf ./demo"
+  },
+  "dependencies": {
+    "esbuild": "^0.15.0",
+    "esbuild-register": "^3.3.2",
+    "fs-extra": "^10.0.0",
+    "ndjson": "^2.0.0",
+    "node-fetch": "^2.6.8",
+    "copy-template-dir": "^1.4.0",
+    "faker": "^5.1.0",
+    "ngraph.generators": "^19.3.0",
+    "shelljs": "^0.8.4"
   },
   "devDependencies": {
     "@turbo/tsconfig": "workspace:*",
