@@ -73,7 +73,6 @@ impl Workspace {
             is_multi_package,
             package_manager: PackageManager {
                 name: package_manager_name.to_string(),
-                version: "TODO".to_string(),
             },
         })
     }

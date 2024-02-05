@@ -21,9 +21,6 @@ pub struct PackageManager {
     /// The package manager name in lower case.
     #[napi(readonly)]
     pub name: String,
-    /// The package manager version.
-    #[napi(readonly)]
-    pub version: String,
 }
 
 #[napi]
