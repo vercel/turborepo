@@ -5,6 +5,11 @@ use uuid::Uuid;
 use super::{Event, EventBuilder, EventType, Identifiable};
 use crate::{config::TelemetryConfig, telem};
 
+pub enum RepoType {
+    SinglePackage,
+    Monorepo,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepoEventBuilder {
     id: String,
@@ -46,36 +51,39 @@ impl EventBuilder for RepoEventBuilder {
 
 // events
 impl RepoEventBuilder {
-    pub fn new(repo: &str) -> Self {
+    pub fn new(repo_identifier: &str) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
-            repo: TelemetryConfig::one_way_hash(repo),
+            repo: TelemetryConfig::one_way_hash(repo_identifier),
             parent_id: None,
         }
     }
 
-    pub fn track_package_manager_name(&self, name: &str) -> &Self {
+    pub fn track_package_manager(&self, name: String) -> &Self {
         self.track(Event {
-            key: "package_manager_name".to_string(),
+            key: "package_manager".to_string(),
             value: name.to_string(),
             is_sensitive: EventType::NonSensitive,
         });
         self
     }
 
-    pub fn track_package_manager_version(&self, version: &str) -> &Self {
+    pub fn track_type(&self, repo_type: RepoType) -> &Self {
         self.track(Event {
-            key: "package_manager_version".to_string(),
-            value: version.to_string(),
+            key: "repo_type".to_string(),
+            value: match repo_type {
+                RepoType::SinglePackage => "single_package".to_string(),
+                RepoType::Monorepo => "monorepo".to_string(),
+            },
             is_sensitive: EventType::NonSensitive,
         });
         self
     }
 
-    pub fn track_is_monorepo(&self, is_monorepo: bool) -> &Self {
+    pub fn track_size(&self, size: usize) -> &Self {
         self.track(Event {
-            key: "is_monorepo".to_string(),
-            value: is_monorepo.to_string(),
+            key: "workspace_count".to_string(),
+            value: size.to_string(),
             is_sensitive: EventType::NonSensitive,
         });
         self

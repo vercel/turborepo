@@ -1,9 +1,5 @@
 # turborepo-telemetry
 
-<!-- TODO: [telemetry] remove this disclaimer once live -->
-
-> ## :warning: **This feature is NOT enabled, It can only be activated by manually setting `TURBO_TELEMETRY_ENABLED=1`**
-
 ## Overview
 
 This crate provides a way to optionally record anonymous usage data.

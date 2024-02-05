@@ -22,6 +22,7 @@ pub struct CacheMultiplexer {
 }
 
 impl CacheMultiplexer {
+    #[tracing::instrument(skip_all)]
     pub fn new(
         opts: &CacheOpts,
         repo_root: &AbsoluteSystemPath,
@@ -40,7 +41,13 @@ impl CacheMultiplexer {
         }
 
         let fs_cache = use_fs_cache
-            .then(|| FSCache::new(opts.override_dir, repo_root, analytics_recorder.clone()))
+            .then(|| {
+                FSCache::new(
+                    opts.override_dir.as_deref(),
+                    repo_root,
+                    analytics_recorder.clone(),
+                )
+            })
             .transpose()?;
 
         let http_cache = use_http_cache
@@ -75,6 +82,7 @@ impl CacheMultiplexer {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn put(
         &self,
         anchor: &AbsoluteSystemPath,
@@ -125,6 +133,7 @@ impl CacheMultiplexer {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn fetch(
         &self,
         anchor: &AbsoluteSystemPath,
@@ -155,6 +164,7 @@ impl CacheMultiplexer {
         Ok(None)
     }
 
+    #[tracing::instrument(skip_all)]
     pub async fn exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         if let Some(fs) = &self.fs {
             match fs.exists(key) {

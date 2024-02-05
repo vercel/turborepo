@@ -40,6 +40,13 @@ jobs:
             TURBOPACK_BENCH_COUNTS: 100,500,1000
             TURBOPACK_BENCH_BUNDLERS: all
 
+          # This measures Next.js 14
+          - name: next 14
+            title: Next.js 14
+            run_args: '"(Turbopack SSR/1000|Next.js 14)"'
+            TURBOPACK_BENCH_COUNTS: 100,500,1000
+            TURBOPACK_BENCH_BUNDLERS: all
+
           # This measures Next.js 13
           - name: next 13
             title: Next.js 13
@@ -51,13 +58,6 @@ jobs:
           - name: next 12
             title: Next.js 12
             run_args: '"(Turbopack SSR/1000|Next.js 12)"'
-            TURBOPACK_BENCH_COUNTS: 100,500,1000
-            TURBOPACK_BENCH_BUNDLERS: all
-
-          # This measures Next.js 11
-          - name: next 11
-            title: Next.js 11
-            run_args: '"(Turbopack SSR/1000|Next.js 11)"'
             TURBOPACK_BENCH_COUNTS: 100,500,1000
             TURBOPACK_BENCH_BUNDLERS: all
 
@@ -93,6 +93,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           shared-cache-key: benchmark-bundlers
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Clear potentially cached benchmarks
         run: rm -rf target/criterion

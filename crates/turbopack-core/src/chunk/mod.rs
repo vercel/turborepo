@@ -32,7 +32,7 @@ use turbo_tasks_hash::DeterministicHash;
 
 use self::availability_info::AvailabilityInfo;
 pub use self::{
-    chunking_context::{ChunkingContext, ChunkingContextExt},
+    chunking_context::{ChunkGroupResult, ChunkingContext, ChunkingContextExt},
     data::{ChunkData, ChunkDataOption, ChunksData},
     evaluate::{EvaluatableAsset, EvaluatableAssetExt, EvaluatableAssets},
     passthrough_asset::PassthroughModule,
@@ -298,7 +298,7 @@ async fn graph_node_to_referenced_nodes(
         ChunkGraphNodeToReferences::PassthroughChunkItem(item) => (None, item.references()),
         ChunkGraphNodeToReferences::ChunkItem(item) => (Some(*item), item.references()),
     };
-    let chunk_content_context = chunk_content_context.await?;
+    let chunk_content_context = &*chunk_content_context.await?;
 
     let references = references.await?;
     let graph_nodes = references
@@ -321,13 +321,15 @@ async fn graph_node_to_referenced_nodes(
                 }]);
             };
 
-            let modules = reference.resolve_reference().primary_modules().await?;
+            // Dedupe modules to avoid duplicate work in the following loop
+            let mut modules = IndexSet::new();
+            for module in reference.resolve_reference().primary_modules().await? {
+                modules.insert(module.resolve().await?);
+            }
 
             let module_data = modules
-                .iter()
-                .map(|module| async {
-                    let module = (*module).resolve().await?;
-
+                .into_iter()
+                .map(|module| async move {
                     if Vc::try_resolve_sidecast::<Box<dyn PassthroughModule>>(module)
                         .await?
                         .is_some()

@@ -28,7 +28,7 @@ use ecmascript::{
     chunk::EcmascriptChunkPlaceable,
     references::{follow_reexports, FollowExportsResult},
     side_effect_optimization::facade::module::EcmascriptModuleFacadeModule,
-    typescript::resolve::TypescriptTypesAssetReference,
+    typescript::resolve::type_resolve,
     EcmascriptModuleAsset, EcmascriptModuleAssetType, TreeShakingMode,
 };
 use graph::{aggregate, AggregatedGraph, AggregatedGraphNodeContent};
@@ -50,9 +50,8 @@ use turbopack_core::{
         CssReferenceSubType, EcmaScriptModulesReferenceSubType, InnerAssets, ReferenceType,
     },
     resolve::{
-        options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve,
-        AffectingResolvingAssetReference, ModulePart, ModuleResolveResult, ModuleResolveResultItem,
-        ResolveResult,
+        options::ResolveOptions, origin::PlainResolveOrigin, parse::Request, resolve, ModulePart,
+        ModuleResolveResult, ModuleResolveResultItem, ResolveResult,
     },
     source::Source,
 };
@@ -117,10 +116,8 @@ async fn apply_module_type(
         }
         | ModuleType::Typescript {
             transforms,
-            options,
-        }
-        | ModuleType::TypescriptWithTypes {
-            transforms,
+            tsx: _,
+            analyze_types: _,
             options,
         }
         | ModuleType::TypescriptDeclaration {
@@ -128,8 +125,10 @@ async fn apply_module_type(
             options,
         } => {
             let context_for_module = match module_type {
-                ModuleType::TypescriptWithTypes { .. }
-                | ModuleType::TypescriptDeclaration { .. } => {
+                ModuleType::Typescript { analyze_types, .. } if *analyze_types => {
+                    module_asset_context.with_types_resolving_enabled()
+                }
+                ModuleType::TypescriptDeclaration { .. } => {
                     module_asset_context.with_types_resolving_enabled()
                 }
                 _ => module_asset_context,
@@ -145,11 +144,13 @@ async fn apply_module_type(
                 ModuleType::Ecmascript { .. } => {
                     builder = builder.with_type(EcmascriptModuleAssetType::Ecmascript)
                 }
-                ModuleType::Typescript { .. } => {
-                    builder = builder.with_type(EcmascriptModuleAssetType::Typescript)
-                }
-                ModuleType::TypescriptWithTypes { .. } => {
-                    builder = builder.with_type(EcmascriptModuleAssetType::TypescriptWithTypes)
+                ModuleType::Typescript {
+                    tsx, analyze_types, ..
+                } => {
+                    builder = builder.with_type(EcmascriptModuleAssetType::Typescript {
+                        tsx: *tsx,
+                        analyze_types: *analyze_types,
+                    })
                 }
                 ModuleType::TypescriptDeclaration { .. } => {
                     builder = builder.with_type(EcmascriptModuleAssetType::TypescriptDeclaration)
@@ -422,6 +423,7 @@ async fn process_default_internal(
     processed_rules: Vec<usize>,
 ) -> Result<Vc<ProcessResult>> {
     let ident = source.ident().resolve().await?;
+    let path_ref = ident.path().await?;
     let options = ModuleOptions::new(
         ident.path().parent(),
         module_asset_context.module_options_context(),
@@ -444,10 +446,7 @@ async fn process_default_internal(
         if processed_rules.contains(&i) {
             continue;
         }
-        if rule
-            .matches(source, &*ident.path().await?, &reference_type)
-            .await?
-        {
+        if rule.matches(source, &path_ref, &reference_type).await? {
             for effect in rule.effects() {
                 match effect {
                     ModuleRuleEffect::SourceTransforms(transforms) => {
@@ -467,34 +466,31 @@ async fn process_default_internal(
                     ModuleRuleEffect::ModuleType(module) => {
                         current_module_type = Some(*module);
                     }
-                    ModuleRuleEffect::AddEcmascriptTransforms(additional_transforms) => {
+                    ModuleRuleEffect::ExtendEcmascriptTransforms { prepend, append } => {
                         current_module_type = match current_module_type {
                             Some(ModuleType::Ecmascript {
                                 transforms,
                                 options,
                             }) => Some(ModuleType::Ecmascript {
-                                transforms: transforms.extend(*additional_transforms),
+                                transforms: prepend.extend(transforms).extend(*append),
                                 options,
                             }),
                             Some(ModuleType::Typescript {
                                 transforms,
+                                tsx,
+                                analyze_types,
                                 options,
                             }) => Some(ModuleType::Typescript {
-                                transforms: transforms.extend(*additional_transforms),
-                                options,
-                            }),
-                            Some(ModuleType::TypescriptWithTypes {
-                                transforms,
-                                options,
-                            }) => Some(ModuleType::TypescriptWithTypes {
-                                transforms: transforms.extend(*additional_transforms),
+                                transforms: prepend.extend(transforms).extend(*append),
+                                tsx,
+                                analyze_types,
                                 options,
                             }),
                             Some(ModuleType::Mdx {
                                 transforms,
                                 options,
                             }) => Some(ModuleType::Mdx {
-                                transforms: transforms.extend(*additional_transforms),
+                                transforms: prepend.extend(transforms).extend(*append),
                                 options,
                             }),
                             Some(module_type) => {
@@ -599,12 +595,12 @@ impl AssetContext for ModuleAssetContext {
         let mut result = self.process_resolve_result(result.resolve().await?, reference_type);
 
         if *self.is_types_resolving_enabled().await? {
-            let types_reference = TypescriptTypesAssetReference::new(
+            let types_result = type_resolve(
                 Vc::upcast(PlainResolveOrigin::new(Vc::upcast(self), origin_path)),
                 request,
             );
 
-            result = result.with_reference(Vc::upcast(types_reference));
+            result = ModuleResolveResult::alternatives(vec![result, types_result]);
         }
 
         Ok(result)
@@ -620,25 +616,20 @@ impl AssetContext for ModuleAssetContext {
         let transition = this.transition;
         Ok(result
             .await?
-            .map_module(
-                |source| {
-                    let reference_type = reference_type.clone();
-                    async move {
-                        let process_result = if let Some(transition) = transition {
-                            transition.process(source, self, reference_type)
-                        } else {
-                            self.process_default(source, reference_type)
-                        };
-                        Ok(match *process_result.await? {
-                            ProcessResult::Module(m) => {
-                                ModuleResolveResultItem::Module(Vc::upcast(m))
-                            }
-                            ProcessResult::Ignore => ModuleResolveResultItem::Ignore,
-                        })
-                    }
-                },
-                |i| async move { Ok(Vc::upcast(AffectingResolvingAssetReference::new(i))) },
-            )
+            .map_module(|source| {
+                let reference_type = reference_type.clone();
+                async move {
+                    let process_result = if let Some(transition) = transition {
+                        transition.process(source, self, reference_type)
+                    } else {
+                        self.process_default(source, reference_type)
+                    };
+                    Ok(match *process_result.await? {
+                        ProcessResult::Module(m) => ModuleResolveResultItem::Module(Vc::upcast(m)),
+                        ProcessResult::Ignore => ModuleResolveResultItem::Ignore,
+                    })
+                }
+            })
             .await?
             .into())
     }

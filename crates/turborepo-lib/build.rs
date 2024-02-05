@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tonic_build_result = tonic_build::configure()
         .build_server(true)
         .file_descriptor_set_path("src/daemon/file_descriptor_set.bin")
-        .compile(&["turbod.proto"], &["../../cli/internal/turbodprotocol"]);
+        .compile(&["turbod.proto"], &["./src/daemon"]);
     let capnpc_result = capnpc::CompilerCommand::new()
         .file("./src/hash/proto.capnp")
         .import_path("./src/hash/std") // we need to include the 'stdlib' for capnp-go

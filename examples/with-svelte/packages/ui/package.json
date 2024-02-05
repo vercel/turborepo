@@ -4,12 +4,17 @@
   "type": "module",
   "module": "index.ts",
   "main": "index.ts",
-  "svelte": "index.ts",
+  "exports": {
+    ".": {
+      "types": "./index.ts",
+      "svelte": "./index.ts"
+    }
+  },
   "scripts": {
     "lint": "eslint ."
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
-    "svelte": "^4.2.7"
+    "svelte": "^4.2.8"
   }
 }

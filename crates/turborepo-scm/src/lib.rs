@@ -59,6 +59,8 @@ pub enum Error {
     Ignore(#[from] ignore::Error, #[backtrace] backtrace::Backtrace),
     #[error("invalid glob: {0}")]
     Glob(#[source] Box<wax::BuildError>, backtrace::Backtrace),
+    #[error("invalid globwalk pattern: {0}")]
+    Globwalk(#[from] globwalk::GlobError),
     #[error(transparent)]
     Walk(#[from] globwalk::WalkError),
 }

@@ -21,8 +21,11 @@ use turbo_tasks_fs::{
 use turbo_tasks_memory::MemoryBackend;
 use turbopack::{
     condition::ContextCondition,
-    ecmascript::EcmascriptModuleAsset,
-    module_options::{CustomEcmascriptTransformPlugins, JsxTransformOptions, ModuleOptionsContext},
+    ecmascript::{EcmascriptInputTransform, EcmascriptModuleAsset},
+    module_options::{
+        JsxTransformOptions, ModuleOptionsContext, ModuleRule, ModuleRuleCondition,
+        ModuleRuleEffect,
+    },
     resolve_options_context::ResolveOptionsContext,
     ModuleAssetContext,
 };
@@ -30,8 +33,8 @@ use turbopack_build::{BuildChunkingContext, MinifyType};
 use turbopack_core::{
     asset::Asset,
     chunk::{
-        ChunkableModule, ChunkingContext, ChunkingContextExt, EvaluatableAssetExt,
-        EvaluatableAssets,
+        availability_info::AvailabilityInfo, ChunkableModule, ChunkingContext, ChunkingContextExt,
+        EvaluatableAssetExt, EvaluatableAssets,
     },
     compile_time_defines,
     compile_time_info::CompileTimeInfo,
@@ -226,23 +229,28 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
         .free_var_references(free_var_references!(..defines.into_iter()).cell())
         .cell();
 
-    let custom_ecma_transform_plugins = Some(CustomEcmascriptTransformPlugins::cell(
-        CustomEcmascriptTransformPlugins {
-            source_transforms: vec![
-                Vc::cell(Box::new(
-                    EmotionTransformer::new(&EmotionTransformConfig {
-                        sourcemap: Some(false),
-                        ..Default::default()
-                    })
-                    .expect("Should be able to create emotion transformer"),
-                ) as _),
-                Vc::cell(Box::new(StyledComponentsTransformer::new(
-                    &StyledComponentsTransformConfig::default(),
-                )) as _),
-            ],
-            output_transforms: vec![],
-        },
-    ));
+    let conditions = ModuleRuleCondition::any(vec![
+        ModuleRuleCondition::ResourcePathEndsWith(".js".to_string()),
+        ModuleRuleCondition::ResourcePathEndsWith(".jsx".to_string()),
+        ModuleRuleCondition::ResourcePathEndsWith(".ts".to_string()),
+        ModuleRuleCondition::ResourcePathEndsWith(".tsx".to_string()),
+    ]);
+
+    let custom_rules = ModuleRule::new(
+        conditions,
+        vec![ModuleRuleEffect::ExtendEcmascriptTransforms {
+            prepend: Vc::cell(vec![
+                EcmascriptInputTransform::Plugin(Vc::cell(Box::new(
+                    EmotionTransformer::new(&EmotionTransformConfig::default())
+                        .expect("Should be able to create emotion transformer"),
+                ) as _)),
+                EcmascriptInputTransform::Plugin(Vc::cell(Box::new(
+                    StyledComponentsTransformer::new(&StyledComponentsTransformConfig::default()),
+                ) as _)),
+            ]),
+            append: Vc::cell(vec![]),
+        }],
+    );
     let asset_context: Vc<Box<dyn AssetContext>> = Vc::upcast(ModuleAssetContext::new(
         Vc::cell(HashMap::new()),
         compile_time_info,
@@ -259,7 +267,7 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
                 }
                 .cell(),
             )],
-            custom_ecma_transform_plugins,
+            custom_rules: vec![custom_rules],
             ..Default::default()
         }
         .into(),
@@ -292,9 +300,16 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
 
     let chunking_context: Vc<Box<dyn ChunkingContext>> = match options.runtime {
         Runtime::Dev => Vc::upcast(
-            DevChunkingContext::builder(project_root, path, chunk_root_path, static_root_path, env)
-                .runtime_type(options.runtime_type)
-                .build(),
+            DevChunkingContext::builder(
+                project_root,
+                path,
+                path,
+                chunk_root_path,
+                static_root_path,
+                env,
+            )
+            .runtime_type(options.runtime_type)
+            .build(),
         ),
         Runtime::Build => Vc::upcast(
             BuildChunkingContext::builder(
@@ -329,43 +344,47 @@ async fn run_test(resource: String) -> Result<Vc<FileSystemPath>> {
     {
         // TODO: Load runtime entries from snapshots
         match options.runtime {
-            Runtime::Dev => chunking_context.evaluated_chunk_group(
+            Runtime::Dev => chunking_context.evaluated_chunk_group_assets(
                 ecmascript.ident(),
                 runtime_entries
                     .unwrap_or_else(EvaluatableAssets::empty)
                     .with_entry(Vc::upcast(ecmascript)),
+                Value::new(AvailabilityInfo::Root),
             ),
             Runtime::Build => {
-                Vc::cell(vec![Vc::try_resolve_downcast_type::<BuildChunkingContext>(
-                    chunking_context,
-                )
-                .await?
-                .unwrap()
-                .entry_chunk_group(
-                    // `expected` expects a completely flat output directory.
-                    chunk_root_path
-                        .join(
-                            entry_module
-                                .ident()
-                                .path()
-                                .file_stem()
-                                .await?
-                                .as_deref()
-                                .unwrap()
-                                .to_string(),
+                Vc::cell(vec![
+                    Vc::try_resolve_downcast_type::<BuildChunkingContext>(chunking_context)
+                        .await?
+                        .unwrap()
+                        .entry_chunk_group(
+                            // `expected` expects a completely flat output directory.
+                            chunk_root_path
+                                .join(
+                                    entry_module
+                                        .ident()
+                                        .path()
+                                        .file_stem()
+                                        .await?
+                                        .as_deref()
+                                        .unwrap()
+                                        .to_string(),
+                                )
+                                .with_extension("entry.js".to_string()),
+                            Vc::upcast(ecmascript),
+                            runtime_entries
+                                .unwrap_or_else(EvaluatableAssets::empty)
+                                .with_entry(Vc::upcast(ecmascript)),
+                            Value::new(AvailabilityInfo::Root),
                         )
-                        .with_extension("entry.js".to_string()),
-                    Vc::upcast(ecmascript),
-                    runtime_entries
-                        .unwrap_or_else(EvaluatableAssets::empty)
-                        .with_entry(Vc::upcast(ecmascript)),
-                )])
+                        .await?
+                        .asset,
+                ])
             }
         }
     } else if let Some(chunkable) =
         Vc::try_resolve_downcast::<Box<dyn ChunkableModule>>(entry_module).await?
     {
-        chunking_context.root_chunk_group(chunkable)
+        chunking_context.root_chunk_group_assets(chunkable)
     } else {
         // TODO convert into a serve-able asset
         bail!("Entry module is not chunkable, so it can't be used to bootstrap the application")

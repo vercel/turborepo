@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use turborepo_vercel_api::{TelemetryEvent, TelemetryTaskEvent};
 use uuid::Uuid;
 
-use super::{Event, EventBuilder, EventType, Identifiable};
+use super::{Event, EventBuilder, EventType, Identifiable, TrackedErrors};
 use crate::{config::TelemetryConfig, telem};
 
 // task names that will be passed through to the API without obfuscation
@@ -16,6 +16,11 @@ const ALLOWLIST: [&str; 8] = [
     "type-check",
     "check",
 ];
+
+pub enum FileHashMethod {
+    Git,
+    Manual,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageTaskEventBuilder {
@@ -83,19 +88,50 @@ impl PackageTaskEventBuilder {
     }
 
     // event methods
-    pub fn track_recursive_error(&self) -> &Self {
+    pub fn track_framework(&self, framework: &str) -> &Self {
         self.track(Event {
-            key: "error".to_string(),
-            value: "recursive".to_string(),
+            key: "framework".to_string(),
+            value: framework.to_string(),
             is_sensitive: EventType::NonSensitive,
         });
         self
     }
 
-    pub fn track_framework(&self, framework: &str) -> &Self {
+    pub fn track_env_mode(&self, mode: &str) -> &Self {
         self.track(Event {
-            key: "framework".to_string(),
-            value: framework.to_string(),
+            key: "env_mode".to_string(),
+            value: mode.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    pub fn track_file_hash_method(&self, method: FileHashMethod) -> &Self {
+        self.track(Event {
+            key: "file_hash_method".to_string(),
+            value: match method {
+                FileHashMethod::Git => "git".to_string(),
+                FileHashMethod::Manual => "manual".to_string(),
+            },
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    pub fn track_scm_mode(&self, method: &str) -> &Self {
+        self.track(Event {
+            key: "scm_mode".to_string(),
+            value: method.to_string(),
+            is_sensitive: EventType::NonSensitive,
+        });
+        self
+    }
+
+    // errors
+    pub fn track_error(&self, error: TrackedErrors) -> &Self {
+        self.track(Event {
+            key: "error".to_string(),
+            value: error.to_string(),
             is_sensitive: EventType::NonSensitive,
         });
         self

@@ -12,6 +12,7 @@ Test help flag
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
     generate    Generate a new app / package
+    telemetry   Enable or disable anonymous telemetry
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
@@ -49,12 +50,8 @@ Test help flag
             Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]
             [possible values: text, json]
-        --go-fallback
-            Fallback to use Go for task execution
         --single-package
             Run turbo in single-package mode
-    -F, --filter <FILTER>
-            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
         --force [<FORCE>]
             Ignore the existing cache (to force execution) [env: TURBO_FORCE=] [possible values: true, false]
         --framework-inference [<BOOL>]
@@ -62,19 +59,25 @@ Test help flag
         --global-deps <GLOBAL_DEPS>
             Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]
-            Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
+            Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
         --env-mode [<ENV_MODE>]
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json. Use "infer" to defer to existence of "passThroughEnv" or "globalPassThroughEnv" in turbo.json. (default infer) [default: infer] [possible values: infer, loose, strict]
+    -F, --filter <FILTER>
+            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
+        --scope <SCOPE>
+            DEPRECATED: Specify package(s) to act as entry points for task execution. Supports globs
         --ignore <IGNORE>
-            Files to ignore when calculating changed files (i.e. --since). Supports globs
+            Files to ignore when calculating changed files from '--filter'. Supports globs
+        --since <SINCE>
+            DEPRECATED: Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
         --include-dependencies
-            Include the dependencies of tasks in execution
+            DEPRECATED: Include the dependencies of tasks in execution
+        --no-deps
+            DEPRECATED: Exclude dependent task consumers from execution
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
         --[no-]daemon
             Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
-        --no-deps
-            Exclude dependent task consumers from execution
         --output-logs <OUTPUT_LOGS>
             Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
         --log-order <LOG_ORDER>
@@ -91,10 +94,6 @@ Test help flag
             Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache [env: TURBO_REMOTE_ONLY=] [default: false] [possible values: true, false]
         --remote-cache-read-only [<BOOL>]
             Treat remote cache as read only [env: TURBO_REMOTE_CACHE_READ_ONLY=] [default: false] [possible values: true, false]
-        --scope <SCOPE>
-            Specify package(s) to act as entry points for task execution. Supports globs
-        --since <SINCE>
-            Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
         --summarize [<SUMMARIZE>]
             Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]
         --log-prefix <LOG_PREFIX>
@@ -115,6 +114,7 @@ Test help flag
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
     generate    Generate a new app / package
+    telemetry   Enable or disable anonymous telemetry
     link        Link your local directory to a Vercel organization and enable remote caching
     login       Login to your Vercel account
     logout      Logout to your Vercel account
@@ -152,12 +152,8 @@ Test help flag
             Continue execution even if a task exits with an error or non-zero exit code. The default behavior is to bail
         --dry-run [<DRY_RUN>]
             [possible values: text, json]
-        --go-fallback
-            Fallback to use Go for task execution
         --single-package
             Run turbo in single-package mode
-    -F, --filter <FILTER>
-            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
         --force [<FORCE>]
             Ignore the existing cache (to force execution) [env: TURBO_FORCE=] [possible values: true, false]
         --framework-inference [<BOOL>]
@@ -165,19 +161,25 @@ Test help flag
         --global-deps <GLOBAL_DEPS>
             Specify glob of global filesystem dependencies to be hashed. Useful for .env and files
         --graph [<GRAPH>]
-            Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html). Outputs dot graph to stdout when if no filename is provided
+            Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
         --env-mode [<ENV_MODE>]
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json. Use "infer" to defer to existence of "passThroughEnv" or "globalPassThroughEnv" in turbo.json. (default infer) [default: infer] [possible values: infer, loose, strict]
+    -F, --filter <FILTER>
+            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turbo.build/repo/docs/reference/command-line-reference/run#--filter
+        --scope <SCOPE>
+            DEPRECATED: Specify package(s) to act as entry points for task execution. Supports globs
         --ignore <IGNORE>
-            Files to ignore when calculating changed files (i.e. --since). Supports globs
+            Files to ignore when calculating changed files from '--filter'. Supports globs
+        --since <SINCE>
+            DEPRECATED: Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
         --include-dependencies
-            Include the dependencies of tasks in execution
+            DEPRECATED: Include the dependencies of tasks in execution
+        --no-deps
+            DEPRECATED: Exclude dependent task consumers from execution
         --no-cache
             Avoid saving task results to the cache. Useful for development/watch tasks
         --[no-]daemon
             Force turbo to either use or not use the local daemon. If unset turbo will use the default detection logic
-        --no-deps
-            Exclude dependent task consumers from execution
         --output-logs <OUTPUT_LOGS>
             Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
         --log-order <LOG_ORDER>
@@ -194,10 +196,6 @@ Test help flag
             Ignore the local filesystem cache for all tasks. Only allow reading and caching artifacts using the remote cache [env: TURBO_REMOTE_ONLY=] [default: false] [possible values: true, false]
         --remote-cache-read-only [<BOOL>]
             Treat remote cache as read only [env: TURBO_REMOTE_CACHE_READ_ONLY=] [default: false] [possible values: true, false]
-        --scope <SCOPE>
-            Specify package(s) to act as entry points for task execution. Supports globs
-        --since <SINCE>
-            Limit/Set scope to changed packages since a mergebase. This uses the git diff ${target_branch}... mechanism to identify which packages have changed
         --summarize [<SUMMARIZE>]
             Generate a summary of the turbo run [env: TURBO_RUN_SUMMARY=] [possible values: true, false]
         --log-prefix <LOG_PREFIX>

@@ -586,14 +586,15 @@ mod test {
 
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
     use turborepo_ui::UI;
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
         cli::LinkTarget,
         commands::{link, CommandBase},
-        config::{RawTurboJson, TurborepoConfigBuilder},
+        config::TurborepoConfigBuilder,
+        turbo_json::RawTurboJson,
         Args,
     };
 
@@ -601,10 +602,7 @@ mod test {
     async fn test_link_remote_cache() -> Result<()> {
         // user config
         let user_config_file = NamedTempFile::new().unwrap();
-
-        // auth file
-        let auth_file = NamedTempFile::new().unwrap();
-        fs::write(auth_file.path(), r#"{ "token": "hello" }"#).unwrap();
+        fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
 
         // repo
         let repo_root_tmp_dir = TempDir::new().unwrap();
@@ -630,9 +628,6 @@ mod test {
         let mut base = CommandBase {
             global_config_path: Some(
                 AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
-            ),
-            global_auth_path: Some(
-                AbsoluteSystemPathBuf::try_from(auth_file.path().to_path_buf()).unwrap(),
             ),
             repo_root: repo_root.clone(),
             ui: UI::new(false),
@@ -673,14 +668,7 @@ mod test {
     async fn test_link_spaces() {
         // user config
         let user_config_file = NamedTempFile::new().unwrap();
-
-        // auth file
-        let auth_file = NamedTempFile::new().unwrap();
-        fs::write(
-            auth_file.path(),
-            r#"{ "tokens": {"vercel.com/api": "hello"} }"#,
-        )
-        .unwrap();
+        fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
 
         // repo
         let repo_root_tmp_dir = TempDir::new().unwrap();
@@ -706,9 +694,6 @@ mod test {
         let mut base = CommandBase {
             global_config_path: Some(
                 AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap(),
-            ),
-            global_auth_path: Some(
-                AbsoluteSystemPathBuf::try_from(auth_file.path().to_path_buf()).unwrap(),
             ),
             repo_root: repo_root.clone(),
             ui: UI::new(false),
@@ -744,10 +729,14 @@ mod test {
 
         // verify space id is added to turbo.json
         let turbo_json_contents = fs::read_to_string(&turbo_json_file).unwrap();
-        let turbo_json: RawTurboJson = serde_json::from_str(&turbo_json_contents).unwrap();
+        let turbo_json = RawTurboJson::parse(
+            &turbo_json_contents,
+            AnchoredSystemPath::new("turbo.json").unwrap(),
+        )
+        .unwrap();
         assert_eq!(
             turbo_json.experimental_spaces.unwrap().id.unwrap(),
-            turborepo_vercel_api_mock::EXPECTED_SPACE_ID
+            turborepo_vercel_api_mock::EXPECTED_SPACE_ID.into()
         );
     }
 }

@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use itertools::Itertools;
 use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_cache::CacheHitMetadata;
@@ -251,12 +250,10 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
             dependencies: dependencies
                 .into_iter()
                 .map(|task_id| task_id.task().to_string())
-                .sorted()
                 .collect(),
             dependents: dependents
                 .into_iter()
                 .map(|task_id| task_id.task().to_string())
-                .sorted()
                 .collect(),
             resolved_task_definition,
             framework,

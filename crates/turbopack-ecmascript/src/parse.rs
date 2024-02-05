@@ -177,7 +177,7 @@ async fn parse_internal(
     let fs_path_vc = source.ident().path();
     let fs_path = &*fs_path_vc.await?;
     let ident = &*source.ident().to_string().await?;
-    let file_path_hash = *hash_ident(source.ident().to_string()).await? as u128;
+    let file_path_hash = hash_xxh3_hash64(&*source.ident().to_string().await?) as u128;
     let ty = ty.into_value();
     let content = match content.await {
         Ok(content) => content,
@@ -278,13 +278,12 @@ async fn parse_content(
                             auto_accessors: true,
                             explicit_resource_management: true,
                         }),
-                        EcmascriptModuleAssetType::Typescript
-                        | EcmascriptModuleAssetType::TypescriptWithTypes => {
+                        EcmascriptModuleAssetType::Typescript { tsx, .. } => {
                             Syntax::Typescript(TsConfig {
                                 decorators: true,
                                 dts: false,
                                 no_early_errors: true,
-                                tsx: true,
+                                tsx,
                                 disallow_ambiguous_jsx_like: false,
                             })
                         }
@@ -293,7 +292,7 @@ async fn parse_content(
                                 decorators: true,
                                 dts: true,
                                 no_early_errors: true,
-                                tsx: true,
+                                tsx: false,
                                 disallow_ambiguous_jsx_like: false,
                             })
                         }
@@ -304,6 +303,7 @@ async fn parse_content(
                 );
 
                 let mut parser = Parser::new_from(lexer);
+                let program_result = parser.parse_program();
 
                 let mut has_errors = false;
                 for e in parser.take_errors() {
@@ -315,7 +315,7 @@ async fn parse_content(
                     return Ok(ParseResult::Unparseable);
                 }
 
-                match parser.parse_program() {
+                match program_result {
                     Ok(parsed_program) => parsed_program,
                     Err(e) => {
                         e.into_diagnostic(&handler).emit();
@@ -329,8 +329,7 @@ async fn parse_content(
 
             let is_typescript = matches!(
                 ty,
-                EcmascriptModuleAssetType::Typescript
-                    | EcmascriptModuleAssetType::TypescriptWithTypes
+                EcmascriptModuleAssetType::Typescript { .. }
                     | EcmascriptModuleAssetType::TypescriptDeclaration
             );
             parsed_program.visit_mut_with(&mut resolver(
@@ -386,12 +385,6 @@ async fn parse_content(
         *g = globals;
     }
     Ok(result.cell())
-}
-
-#[turbo_tasks::function]
-async fn hash_ident(ident: Vc<String>) -> Result<Vc<u64>> {
-    let ident = &*ident.await?;
-    Ok(Vc::cell(hash_xxh3_hash64(ident)))
 }
 
 #[turbo_tasks::value]

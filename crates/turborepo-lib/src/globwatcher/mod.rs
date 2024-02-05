@@ -13,7 +13,7 @@ use thiserror::Error;
 use tokio::time::timeout;
 use tracing::{trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
-use wax::{Glob as WaxGlob, Pattern};
+use wax::{Glob as WaxGlob, Program};
 
 // these aliases are for readability, but they're just strings. it may make
 // sense to use a newtype wrapper for these types in the future.
