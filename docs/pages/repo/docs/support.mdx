@@ -3,7 +3,7 @@ title: Support Policy
 description: Our Support Policy for Turborepo and its ecosystem
 ---
 
-## Support Policy
+## Operating Systems
 
 `turbo` is generally supported on Debian-based Linux distributions, macOS, and
 Windows on both x86_64 and ARM 64 architectures. Specifically, we build and ship
@@ -20,6 +20,15 @@ Darwin builds are intended for macOS on Intel and Apple Silicon. Linux builds
 are tested on Ubuntu, but we expect them to work on most [Debian-based][3]
 distros. Windows builds are tested on the [`windows-latest` runner][2] in GitHub
 Actions.
+
+### Unsupported Platforms
+
+Running `turbo` on unsupported is possible by compiling from source. Building from source
+is documented in the [contributing guide](https://github.com/vercel/turbo/blob/main/CONTRIBUTING.md).
+If you build turbo from source, you will have to run the turbo binary directly instead of using
+via the Node.js package manager (via `npm install turbo`). The npm package does not contain any
+specific features, so if you are able to build the binary, you should be able to use it in the
+same way as you would use the npm package.
 
 ## Node.js Compatibility
 
