@@ -207,7 +207,7 @@ jobs:
               - "x64"
               - "metal"
           - name: macos
-            runner: macos-latest
+            runner: macos-14
           - name: windows
             runner: windows-latest
     steps:
@@ -250,7 +250,7 @@ jobs:
       matrix:
         os:
           - runner: ubuntu-latest
-          - runner: macos-latest
+          - runner: macos-14
           - runner: windows-latest
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
@@ -341,7 +341,7 @@ jobs:
               - "x64"
               - "metal"
           - name: macos
-            runner: macos-latest
+            runner: macos-14
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
@@ -456,7 +456,6 @@ jobs:
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo check
@@ -478,7 +477,6 @@ jobs:
       - name: Setup Turborepo Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
-          windows: ${{ matrix.os.name == 'windows' }}
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo clippy
