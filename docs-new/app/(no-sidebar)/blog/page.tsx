@@ -1,5 +1,7 @@
+import { blogPageTree } from "@/app/source";
+
 const Page = () => {
-  return <p>todo</p>;
+  return <pre>{JSON.stringify(blogPageTree, null, 2)}</pre>;
 };
 
 export default Page;

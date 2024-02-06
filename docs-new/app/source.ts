@@ -7,3 +7,13 @@ export const { getPage, getPages, pageTree } = loader({
   rootDir: "docs",
   source: createMDXSource(map),
 });
+
+export const {
+  getPage: getBlogPage,
+  getPages: getBlogPages,
+  pageTree: blogPageTree,
+} = loader({
+  baseUrl: "/blog",
+  rootDir: "blog",
+  source: createMDXSource(map),
+});

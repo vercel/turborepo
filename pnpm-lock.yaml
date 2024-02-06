@@ -310,6 +310,12 @@ importers:
 
   docs-new:
     dependencies:
+      '@headlessui/react':
+        specifier: ^1.7.17
+        version: 1.7.18(react-dom@18.2.0)(react@18.2.0)
+      '@heroicons/react':
+        specifier: 1.0.6
+        version: 1.0.6(react@18.2.0)
       classnames:
         specifier: ^2.5.1
         version: 2.5.1
@@ -340,6 +346,9 @@ importers:
       react-dom:
         specifier: 18.2.0
         version: 18.2.0(react@18.2.0)
+      swr:
+        specifier: 2.2.4
+        version: 2.2.4(react@18.2.0)
     devDependencies:
       '@types/mdx':
         specifier: 2.0.10
