@@ -1,3 +1,5 @@
+"use client";
+
 import type { Variants } from "framer-motion";
 import { AnimatePresence, motion } from "framer-motion";
 import cn from "classnames";
