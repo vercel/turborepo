@@ -10,8 +10,8 @@ pnpm i
 
 Build native library and js wrapper
 
-```
-pnpm exec napi build --platform
+```sh
+pnpm build
 ```
 
 ## Test
