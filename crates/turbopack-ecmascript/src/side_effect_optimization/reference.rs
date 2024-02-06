@@ -8,7 +8,7 @@ use turbo_tasks::{ValueToString, Vc};
 use turbopack_core::{
     chunk::{ChunkItemExt, ChunkableModule, ChunkableModuleReference, ModuleId},
     reference::ModuleReference,
-    resolve::{ModulePart, ModuleResolveResult, RequestKey},
+    resolve::{ModulePart, ModuleResolveResult},
 };
 
 use super::{

@@ -15,7 +15,7 @@ use turbopack_core::{
     resolve::{
         origin::{ResolveOrigin, ResolveOriginExt},
         parse::Request,
-        ModuleResolveResult, RequestKey,
+        ModuleResolveResult,
     },
     source::Source,
 };

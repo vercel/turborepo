@@ -1,10 +1,8 @@
 use anyhow::Result;
 use turbo_tasks::{ValueToString, Vc};
 use turbopack_core::{
-    chunk::ChunkableModuleReference,
-    module::Module,
-    reference::ModuleReference,
-    resolve::{ModuleResolveResult, RequestKey},
+    chunk::ChunkableModuleReference, module::Module, reference::ModuleReference,
+    resolve::ModuleResolveResult,
 };
 
 /// A reference to an internal CSS asset.

@@ -6,7 +6,7 @@ use turbopack_core::{
     file_source::FileSource,
     reference::ModuleReference,
     reference_type::{ReferenceType, TypeScriptReferenceSubType},
-    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult, RequestKey},
+    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
 };
 
 use crate::typescript::{resolve::type_resolve, TsConfigModuleAsset};

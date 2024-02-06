@@ -25,7 +25,7 @@ use turbopack_core::{
     issue::{IssueSeverity, IssueSource},
     module::Module,
     reference::{ModuleReference, ModuleReferences},
-    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult, RequestKey},
+    resolve::{origin::ResolveOrigin, parse::Request, ModuleResolveResult},
     source::Source,
 };
 
