@@ -8,7 +8,7 @@ use turborepo_repository::{
     package_manager,
 };
 
-use crate::{Package, Workspace};
+use crate::{Package, PackageManager, Workspace};
 
 /// This module is used to isolate code with defined errors
 /// from code in lib.rs that needs to have errors coerced to strings /
@@ -59,10 +59,21 @@ impl Workspace {
             })?;
         let workspace_state = WorkspaceState::infer(&reference_dir)?;
         let is_multi_package = workspace_state.mode == WorkspaceType::MultiPackage;
+        let package_manager_name = workspace_state
+            .package_manager
+            .as_ref()
+            .map_err(|error| Error::PackageManager {
+                error: error.to_string(),
+                path: workspace_state.root.clone(),
+            })?
+            .clone();
         Ok(Self {
             absolute_path: workspace_state.root.to_string(),
             workspace_state,
             is_multi_package,
+            package_manager: PackageManager {
+                name: package_manager_name.to_string(),
+            },
         })
     }
 
