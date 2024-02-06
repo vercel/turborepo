@@ -1009,8 +1009,6 @@ impl VisitAstPath for Analyzer<'_> {
 
             match n.op {
                 AssignOp::Assign => {
-                    debug_assert!(n.op == AssignOp::Assign);
-
                     self.current_value = Some(self.eval_context.eval(&n.right));
                     n.left.visit_children_with_path(self, &mut ast_path);
                     self.current_value = None;
@@ -1409,6 +1407,25 @@ impl VisitAstPath for Analyzer<'_> {
 
             self.visit_opt_expr(n.init.as_ref(), &mut ast_path);
         }
+    }
+
+    fn visit_simple_assign_target<'ast: 'r, 'r>(
+        &mut self,
+        n: &'ast SimpleAssignTarget,
+        ast_path: &mut swc_core::ecma::visit::AstNodePath<'r>,
+    ) {
+        let value = self.current_value.take();
+        if let SimpleAssignTarget::Ident(i) = n {
+            self.add_value(
+                i.to_id(),
+                value.unwrap_or_else(|| {
+                    JsValue::unknown(JsValue::Variable(i.to_id()), false, "pattern without value")
+                }),
+            );
+            return;
+        }
+
+        n.visit_children_with_path(self, ast_path);
     }
 
     fn visit_pat<'ast: 'r, 'r>(
