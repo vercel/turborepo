@@ -13,7 +13,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use wax::{Any, Glob, Program};
 
 use crate::{
-    cookie_jar::{CookieError, CookieJar},
+    cookie_jar::{CookieError, CookieJar, CookieWatcher, CookiedRequest},
     NotifyError,
 };
 
@@ -80,6 +80,8 @@ impl GlobSet {
 pub enum Error {
     #[error(transparent)]
     CookieError(#[from] CookieError),
+    #[error("failed to send query to globwatcher: {0}")]
+    SendError(#[from] mpsc::error::SendError<CookiedRequest<Query>>),
     #[error("globwatcher has closed")]
     Closed,
 }
@@ -103,7 +105,7 @@ pub struct GlobWatcher {
     // dropping the other sender for the broadcast channel, causing all receivers
     // to be notified of a close.
     _exit_ch: oneshot::Sender<()>,
-    query_ch: mpsc::Sender<Query>,
+    query_ch: mpsc::Sender<CookiedRequest<Query>>,
 }
 
 #[derive(Debug)]
@@ -134,7 +136,9 @@ struct GlobTracker {
 
     recv: broadcast::Receiver<Result<Event, NotifyError>>,
 
-    query_recv: mpsc::Receiver<Query>,
+    query_recv: mpsc::Receiver<CookiedRequest<Query>>,
+
+    cookie_watcher: CookieWatcher<Query>,
 }
 
 impl GlobWatcher {
@@ -145,8 +149,9 @@ impl GlobWatcher {
     ) -> Self {
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
         let (query_ch, query_recv) = mpsc::channel(256);
+        let cookie_root = cookie_jar.root().to_owned();
         tokio::task::spawn(
-            GlobTracker::new(root.to_owned(), exit_signal, recv, query_recv).watch(),
+            GlobTracker::new(root.to_owned(), cookie_root, exit_signal, recv, query_recv).watch(),
         );
         Self {
             cookie_jar,
@@ -156,15 +161,14 @@ impl GlobWatcher {
     }
 
     pub async fn watch_globs(&self, hash: Hash, globs: GlobSet) -> Result<(), Error> {
-        self.cookie_jar.wait_for_cookie().await?;
         let (tx, rx) = oneshot::channel();
-        self.query_ch
-            .send(Query::WatchGlobs {
-                hash,
-                glob_set: globs,
-                resp: tx,
-            })
-            .await?;
+        let req = Query::WatchGlobs {
+            hash,
+            glob_set: globs,
+            resp: tx,
+        };
+        let cookied_request = self.cookie_jar.cookie_request(req).await?;
+        self.query_ch.send(cookied_request).await?;
         rx.await?
     }
 
@@ -173,15 +177,14 @@ impl GlobWatcher {
         hash: Hash,
         candidates: HashSet<String>,
     ) -> Result<HashSet<String>, Error> {
-        self.cookie_jar.wait_for_cookie().await?;
         let (tx, rx) = oneshot::channel();
-        self.query_ch
-            .send(Query::GetChangedGlobs {
-                hash,
-                candidates,
-                resp: tx,
-            })
-            .await?;
+        let req = Query::GetChangedGlobs {
+            hash,
+            candidates,
+            resp: tx,
+        };
+        let cookied_request = self.cookie_jar.cookie_request(req).await?;
+        self.query_ch.send(cookied_request).await?;
         rx.await?
     }
 }
@@ -197,9 +200,10 @@ enum WatchError {
 impl GlobTracker {
     fn new(
         root: AbsoluteSystemPathBuf,
+        cookie_root: AbsoluteSystemPathBuf,
         exit_signal: oneshot::Receiver<()>,
         recv: broadcast::Receiver<Result<Event, NotifyError>>,
-        query_recv: mpsc::Receiver<Query>,
+        query_recv: mpsc::Receiver<CookiedRequest<Query>>,
     ) -> Self {
         Self {
             root,
@@ -208,6 +212,13 @@ impl GlobTracker {
             exit_signal,
             recv,
             query_recv,
+            cookie_watcher: CookieWatcher::new(cookie_root),
+        }
+    }
+
+    fn handle_cookied_query(&mut self, cookied_query: CookiedRequest<Query>) {
+        if let Some(request) = self.cookie_watcher.check_request(cookied_query) {
+            self.handle_query(request);
         }
     }
 
@@ -267,6 +278,15 @@ impl GlobTracker {
                 for path in file_event.paths {
                     let path = AbsoluteSystemPathBuf::try_from(path)
                         .expect("filewatching should produce absolute paths");
+                    if let Some(queries) = self
+                        .cookie_watcher
+                        .pop_ready_requests(file_event.kind, &path)
+                    {
+                        for query in queries {
+                            self.handle_query(query);
+                        }
+                        return;
+                    }
                     let Ok(to_match) = self.root.anchor(path) else {
                         // irrelevant filesystem update
                         return;
@@ -281,7 +301,7 @@ impl GlobTracker {
         loop {
             tokio::select! {
                 _ = &mut self.exit_signal => return,
-                Some(query) = self.query_recv.recv().into_future() => self.handle_query(query),
+                Some(query) = self.query_recv.recv().into_future() => self.handle_cookied_query(query),
                 file_event = self.recv.recv().into_future() => self.handle_file_event(file_event)
             }
         }
