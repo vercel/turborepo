@@ -819,8 +819,7 @@ impl ResolveResult {
     /// `old_request_key` (prefix) is replaced with the `request_key`. It's not
     /// expected that the [ResolveResult] contains [RequestKey]s that don't have
     /// the `old_request_key` prefix, but if there are still some, they are
-    /// discarded. Items with unset request key are set to the passed
-    /// `request_key`.
+    /// discarded.
     #[turbo_tasks::function]
     pub async fn with_replaced_request_key(
         self: Vc<Self>,
@@ -833,24 +832,17 @@ impl ResolveResult {
             .primary
             .iter()
             .filter_map(|(k, v)| {
-                if let Some(k) = &k.request {
-                    if let Some(remaining) = k.strip_prefix(&old_request_key) {
-                        Some((
-                            RequestKey {
-                                request: request_key
-                                    .request
-                                    .as_ref()
-                                    .map(|r| format!("{}{}", r, remaining)),
-                                conditions: request_key.conditions.clone(),
-                            },
-                            v.clone(),
-                        ))
-                    } else {
-                        None
-                    }
-                } else {
-                    Some((request_key.clone(), v.clone()))
-                }
+                let remaining = k.request.as_ref()?.strip_prefix(&old_request_key)?;
+                Some((
+                    RequestKey {
+                        request: request_key
+                            .request
+                            .as_ref()
+                            .map(|r| format!("{}{}", r, remaining)),
+                        conditions: request_key.conditions.clone(),
+                    },
+                    v.clone(),
+                ))
             })
             .collect();
         Ok(ResolveResult {
