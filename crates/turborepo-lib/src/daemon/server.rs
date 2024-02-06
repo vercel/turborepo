@@ -33,7 +33,7 @@ use tower::ServiceBuilder;
 use tracing::{error, info, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_filewatch::{
-    cookie_jar::CookieJar,
+    cookie_jar::CookieWriter,
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
     package_watcher::PackageWatcher,
     FileSystemWatcher, WatchError,
@@ -97,7 +97,7 @@ async fn start_filewatching<PD: PackageDiscovery + Send + 'static>(
     backup_discovery: PD,
 ) -> Result<(), WatchError> {
     let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).await?;
-    let cookie_jar = CookieJar::new(
+    let cookie_jar = CookieWriter::new(
         watcher.cookie_dir(),
         Duration::from_millis(100),
         watcher.subscribe(),

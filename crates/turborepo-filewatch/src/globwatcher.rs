@@ -13,7 +13,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use wax::{Any, Glob, Program};
 
 use crate::{
-    cookie_jar::{CookieError, CookieJar, CookieWatcher, CookiedRequest},
+    cookie_jar::{CookieError, CookieWatcher, CookieWriter, CookiedRequest},
     NotifyError,
 };
 
@@ -99,7 +99,7 @@ impl From<oneshot::error::RecvError> for Error {
 }
 
 pub struct GlobWatcher {
-    cookie_jar: CookieJar,
+    cookie_jar: CookieWriter,
     // _exit_ch exists to trigger a close on the receiver when an instance
     // of this struct is dropped. The task that is receiving events will exit,
     // dropping the other sender for the broadcast channel, causing all receivers
@@ -144,7 +144,7 @@ struct GlobTracker {
 impl GlobWatcher {
     pub fn new(
         root: &AbsoluteSystemPath,
-        cookie_jar: CookieJar,
+        cookie_jar: CookieWriter,
         recv: broadcast::Receiver<Result<Event, NotifyError>>,
     ) -> Self {
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
@@ -370,7 +370,7 @@ mod test {
     use wax::{any, Glob};
 
     use crate::{
-        cookie_jar::CookieJar,
+        cookie_jar::CookieWriter,
         globwatcher::{GlobSet, GlobWatcher},
         FileSystemWatcher,
     };
@@ -445,7 +445,7 @@ mod test {
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
             .await
             .unwrap();
-        let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
+        let cookie_jar = CookieWriter::new(&cookie_dir, Duration::from_secs(2));
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
 
@@ -525,7 +525,7 @@ mod test {
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
             .await
             .unwrap();
-        let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
+        let cookie_jar = CookieWriter::new(&cookie_dir, Duration::from_secs(2));
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
 
@@ -615,7 +615,7 @@ mod test {
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root)
             .await
             .unwrap();
-        let cookie_jar = CookieJar::new(&cookie_dir, Duration::from_secs(2), watcher.subscribe());
+        let cookie_jar = CookieWriter::new(&cookie_dir, Duration::from_secs(2));
 
         let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
 
