@@ -559,8 +559,18 @@ impl ResolveResult {
                 self.primary.insert(k.clone(), v.clone());
             }
         }
-        self.affecting_sources
-            .extend(other.affecting_sources.iter().copied());
+        let set = self
+            .affecting_sources
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>();
+        self.affecting_sources.extend(
+            other
+                .affecting_sources
+                .iter()
+                .filter(|source| !set.contains(source))
+                .copied(),
+        );
     }
 
     pub fn is_unresolveable_ref(&self) -> bool {
@@ -805,6 +815,8 @@ impl ResolveResult {
         ))
     }
 
+    /// Returns a new [ResolveResult] where all [RequestKey]s are updates. The
+    /// `old_request_key` (prefix) is replaced with the `request_key`.
     #[turbo_tasks::function]
     pub async fn with_replaced_request_key(
         self: Vc<Self>,
