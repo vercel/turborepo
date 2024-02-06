@@ -5,6 +5,7 @@
 #![feature(hash_extract_if)]
 #![feature(option_get_or_insert_default)]
 #![feature(once_cell_try)]
+#![feature(try_blocks)]
 #![deny(clippy::all)]
 // Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
 #![allow(clippy::needless_pass_by_ref_mut)]
@@ -52,3 +53,9 @@ pub fn get_version() -> &'static str {
 pub fn main() -> Result<i32, shim::Error> {
     shim::run()
 }
+
+#[cfg(all(feature = "native-tls", feature = "rustls-tls"))]
+compile_error!("You can't enable both the `native-tls` and `rustls-tls` feature.");
+
+#[cfg(all(not(feature = "native-tls"), not(feature = "rustls-tls")))]
+compile_error!("You have to enable one of the TLS features: `native-tls` or `rustls-tls`");

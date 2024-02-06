@@ -232,6 +232,8 @@ impl Run {
         let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
 
+        // Remove allow when daemon is flagged back on
+        #[allow(unused_mut)]
         let mut daemon = match (is_ci_or_not_tty, self.opts.run_opts.daemon) {
             (true, None) => {
                 run_telemetry.track_daemon_init(DaemonInitStatus::Skipped);
@@ -272,33 +274,38 @@ impl Run {
             }
         };
 
-        // if we are forcing the daemon, we don't want to fallback to local discovery
-        let (fallback, duration) = if let Some(true) = self.opts.run_opts.daemon {
-            (None, Duration::MAX)
-        } else {
-            (
-                Some(
-                    LocalPackageDiscoveryBuilder::new(
-                        self.base.repo_root.clone(),
-                        None,
-                        Some(root_package_json.clone()),
-                    )
-                    .build()?,
-                ),
-                Duration::from_millis(10),
-            )
-        };
+        let mut pkg_dep_graph = {
+            let builder = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+                .with_single_package_mode(self.opts.run_opts.single_package);
 
-        let mut pkg_dep_graph =
-            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-                .with_single_package_mode(self.opts.run_opts.single_package)
-                .with_package_discovery(FallbackPackageDiscovery::new(
+            #[cfg(feature = "daemon-package-discovery")]
+            let builder = {
+                // if we are forcing the daemon, we don't want to fallback to local discovery
+                let (fallback, duration) = if let Some(true) = self.opts.run_opts.daemon {
+                    (None, Duration::MAX)
+                } else {
+                    (
+                        Some(
+                            LocalPackageDiscoveryBuilder::new(
+                                self.base.repo_root.clone(),
+                                None,
+                                Some(root_package_json.clone()),
+                            )
+                            .build()?,
+                        ),
+                        Duration::from_millis(10),
+                    )
+                };
+                let fallback_discovery = FallbackPackageDiscovery::new(
                     daemon.as_mut().map(DaemonPackageDiscovery::new),
                     fallback,
                     duration,
-                ))
-                .build()
-                .await?;
+                );
+                builder.with_package_discovery(fallback_discovery)
+            };
+
+            builder.build().await?
+        };
 
         repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().to_string());
         repo_telemetry.track_size(pkg_dep_graph.len());
