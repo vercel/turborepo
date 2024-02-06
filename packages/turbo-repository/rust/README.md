@@ -14,30 +14,7 @@ Build native library and js wrapper
 pnpm build
 ```
 
-## Test
+## Example Usage
 
-```
-greg@crisp:turborepo-napi (inference_crate *)$ node
-Welcome to Node.js v18.14.1.
-Type ".help" for more information.
-> let tr = require('./index.js');
-undefined
-> tr
-{
-  Repository: [Function: Repository],
-}
-> let repo = tr.Repository.detectJS('..')
-undefined
-> repo.root
-'/Users/greg/workspace/turborepo'
-> repo.isMonorepo
-true
->
-> let napiPackage = tr.Repository.detectJS()
-undefined
-> napiPackage.root
-'/Users/greg/workspace/turborepo/crates/turborepo-napi'
-> napiPackage.isMonorepo
-false
->
-```
+You can see examples in the `__tests__` directory, or see a simple script in `node scripts/test.mjs`.
+Note that this may fall out of date over time, but it's meant to be used during the early iterations.
