@@ -2063,7 +2063,6 @@ async fn resolved(
     query: Vc<String>,
 ) -> Result<Vc<ResolveResult>> {
     let RealPathResult { path, symlinks } = &*fs_path.realpath_with_links().await?;
-    let request_key = request_key.into_value();
 
     for in_package in in_package.iter() {
         // resolved is called when importing a relative path, not a

@@ -2,7 +2,7 @@ use anyhow::Result;
 use turbo_tasks::{Upcast, Value, Vc};
 use turbo_tasks_fs::FileSystemPath;
 
-use super::{options::ResolveOptions, parse::Request, ModuleResolveResult, RequestKey};
+use super::{options::ResolveOptions, parse::Request, ModuleResolveResult};
 use crate::{context::AssetContext, module::OptionModule, reference_type::ReferenceType};
 
 /// A location where resolving can occur from. It carries some meta information

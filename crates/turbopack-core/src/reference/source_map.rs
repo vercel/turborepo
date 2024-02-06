@@ -6,7 +6,7 @@ use super::ModuleReference;
 use crate::{
     file_source::FileSource,
     raw_module::RawModule,
-    resolve::{ModuleResolveResult, RequestKey},
+    resolve::ModuleResolveResult,
     source_map::{GenerateSourceMap, OptionSourceMap, SourceMap},
 };
 
