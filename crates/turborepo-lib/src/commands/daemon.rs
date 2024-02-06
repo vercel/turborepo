@@ -24,9 +24,6 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
         DaemonCommand::Clean => (false, true),
     };
 
-    println!("can_start_server: {}", can_start_server);
-    println!("can_kill_server: {}", can_kill_server);
-
     let pid_file = base.daemon_file_root().join_component("turbod.pid");
     let sock_file = base.daemon_file_root().join_component("turbod.sock");
 
@@ -45,12 +42,14 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
             };
 
             if let Err(e) = result {
-                println!("failed to restart the daemon: {:?}", e);
-                println!("falling back to clean");
+                tracing::debug!("failed to restart the daemon: {:?}", e);
+                tracing::debug!("falling back to clean");
                 clean(&pid_file, &sock_file).await?;
-                println!("connecting for second time");
+                tracing::debug!("connecting for second time");
                 let _ = connector.connect().await?;
             }
+
+            println!("restarted daemon");
         }
         DaemonCommand::Start => {
             // We don't care about the client, but we do care that we can connect
@@ -101,6 +100,7 @@ pub async fn daemon_client(command: &DaemonCommand, base: &CommandBase) -> Resul
                 }
             }
             clean(&pid_file, &sock_file).await?;
+            println!("Done");
         }
     };
 
@@ -135,7 +135,6 @@ async fn clean(
     }
 
     if success {
-        println!("Done");
         Ok(())
     } else {
         // return error
