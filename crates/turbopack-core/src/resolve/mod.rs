@@ -187,8 +187,18 @@ impl ModuleResolveResult {
                 self.primary.insert(k.clone(), v.clone());
             }
         }
-        self.affecting_sources
-            .extend(other.affecting_sources.iter().copied());
+        let set = self
+            .affecting_sources
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>();
+        self.affecting_sources.extend(
+            other
+                .affecting_sources
+                .iter()
+                .filter(|source| !set.contains(source))
+                .copied(),
+        );
     }
 
     pub fn is_unresolveable_ref(&self) -> bool {
@@ -356,6 +366,10 @@ pub enum ResolveResultItem {
     Unresolveable,
 }
 
+/// This represents the key for a request that leads to a certain results during
+/// resolving. A primary factor is the actual request string, but there are
+/// other factors like exports conditions that can affect resolting and become
+/// part of the key (assuming the condition is unknown at compile time)
 #[derive(Clone, Debug, Default, Hash, Ord, PartialOrd)]
 #[turbo_tasks::value(serialization = "auto_for_input")]
 pub struct RequestKey {
