@@ -6,4 +6,3 @@ pub mod inference;
 pub mod package_graph;
 pub mod package_json;
 pub mod package_manager;
-mod util;
