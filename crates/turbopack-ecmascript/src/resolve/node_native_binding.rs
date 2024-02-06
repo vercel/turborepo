@@ -390,27 +390,24 @@ pub async fn resolve_node_bindings_files(
         root_context_dir = parent;
     }
 
-    Ok(ModuleResolveResult::modules(
-        BINDINGS_TRY
-            .iter()
-            .map(|try_dir| {
-                let sub_path = format!("{}/{}", try_dir, &file_name);
-                async move {
-                    let path = root_context_dir.join(sub_path.clone());
-                    Ok(
-                        if matches!(*path.get_type().await?, FileSystemEntryType::File) {
-                            Some((
-                                RequestKey::new(sub_path),
-                                Vc::upcast(RawModule::new(Vc::upcast(FileSource::new(path)))),
-                            ))
-                        } else {
-                            None
-                        },
-                    )
-                }
-            })
-            .try_flat_join()
-            .await?,
-    )
-    .cell())
+    let try_path = |sub_path: String| async move {
+        let path = root_context_dir.join(sub_path.clone());
+        Ok(
+            if matches!(*path.get_type().await?, FileSystemEntryType::File) {
+                Some((
+                    RequestKey::new(sub_path),
+                    Vc::upcast(RawModule::new(Vc::upcast(FileSource::new(path)))),
+                ))
+            } else {
+                None
+            },
+        )
+    };
+
+    let modules = BINDINGS_TRY
+        .iter()
+        .map(|try_dir| try_path(format!("{}/{}", try_dir, &file_name)))
+        .try_flat_join()
+        .await?;
+    Ok(ModuleResolveResult::modules(modules).cell())
 }
