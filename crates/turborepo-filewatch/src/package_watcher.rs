@@ -554,6 +554,8 @@ mod test {
             package_data
                 .lock()
                 .unwrap()
+                .as_ref()
+                .unwrap()
                 .values()
                 .cloned()
                 .sorted_by_key(|f| f.package_json.clone())
@@ -601,6 +603,8 @@ mod test {
         assert_eq!(
             package_data
                 .lock()
+                .unwrap()
+                .as_ref()
                 .unwrap()
                 .values()
                 .cloned()
@@ -681,6 +685,8 @@ mod test {
             package_data
                 .lock()
                 .unwrap()
+                .as_ref()
+                .unwrap()
                 .values()
                 .cloned()
                 .sorted_by_key(|f| f.package_json.clone())
@@ -741,6 +747,8 @@ mod test {
         assert_eq!(
             package_data
                 .lock()
+                .unwrap()
+                .as_ref()
                 .unwrap()
                 .values()
                 .cloned()
