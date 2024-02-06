@@ -40,15 +40,16 @@ pub enum CookieError {
 
 /// CookieWriter is responsible for assigning filesystem cookies to a request
 /// for a downstream, filewatching-backed service.
+#[derive(Clone)]
 pub struct CookieWriter {
     root: AbsoluteSystemPathBuf,
     timeout: Duration,
     cookie_request_tx: mpsc::Sender<oneshot::Sender<Result<usize, CookieError>>>,
-    // _exit_ch exists to trigger a close on the receiver when an instance
-    // of this struct is dropped. The task that is receiving events will exit,
+    // _exit_ch exists to trigger a close on the receiver when all instances
+    // of this struct are dropped. The task that is receiving events will exit,
     // dropping the other sender for the broadcast channel, causing all receivers
     // to be notified of a close.
-    _exit_ch: tokio::sync::oneshot::Sender<()>,
+    _exit_ch: mpsc::Sender<()>,
 }
 
 #[derive(Debug)]
@@ -154,7 +155,7 @@ impl<T> CookieWatcher<T> {
 
 impl CookieWriter {
     pub fn new(root: &AbsoluteSystemPath, timeout: Duration) -> Self {
-        let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
+        let (exit_ch, exit_signal) = mpsc::channel(16);
         let (cookie_requests_tx, cookie_requests_rx) = mpsc::channel(16);
         tokio::spawn(watch_cookies(
             root.to_owned(),
@@ -188,14 +189,13 @@ impl CookieWriter {
 async fn watch_cookies(
     root: AbsoluteSystemPathBuf,
     mut cookie_requests: mpsc::Receiver<oneshot::Sender<Result<usize, CookieError>>>,
-    mut exit_signal: tokio::sync::oneshot::Receiver<()>,
+    mut exit_signal: mpsc::Receiver<()>,
 ) {
     let mut serial: usize = 0;
     loop {
         tokio::select! {
             biased;
-            _ = &mut exit_signal => return,
-            //event = file_events.recv() => handle_file_event(&root, &watches, event),
+            _ = exit_signal.recv() => return,
             req = cookie_requests.recv() => handle_cookie_request(&root, &mut serial, req),
         }
     }

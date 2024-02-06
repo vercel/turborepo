@@ -97,12 +97,8 @@ async fn start_filewatching<PD: PackageDiscovery + Send + 'static>(
     backup_discovery: PD,
 ) -> Result<(), WatchError> {
     let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).await?;
-    let cookie_jar = CookieWriter::new(
-        watcher.cookie_dir(),
-        Duration::from_millis(100),
-        watcher.subscribe(),
-    );
-    let glob_watcher = GlobWatcher::new(&repo_root, cookie_jar, watcher.subscribe());
+    let cookie_writer = CookieWriter::new(watcher.cookie_dir(), Duration::from_millis(100));
+    let glob_watcher = GlobWatcher::new(&repo_root, cookie_writer, watcher.subscribe());
     let package_watcher =
         PackageWatcher::new(repo_root.clone(), watcher.subscribe(), backup_discovery)
             .await
