@@ -4,7 +4,6 @@ use std::{
     fmt::{Display, Formatter, Write},
     future::Future,
     iter::once,
-    mem::take,
     pin::Pin,
 };
 
@@ -199,19 +198,6 @@ impl ModuleResolveResult {
 
 #[turbo_tasks::value_impl]
 impl ModuleResolveResult {
-    #[turbo_tasks::function]
-    pub async fn as_typings_result(self: Vc<Self>) -> Result<Vc<Self>> {
-        let mut this = self.await?.clone_value();
-        this.primary = take(&mut this.primary)
-            .into_iter()
-            .map(|(mut k, v)| {
-                k.conditions.insert("types".to_string(), true);
-                (k, v)
-            })
-            .collect();
-        Ok(this.cell())
-    }
-
     #[turbo_tasks::function]
     pub async fn with_affecting_source(
         self: Vc<Self>,
