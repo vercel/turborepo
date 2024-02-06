@@ -273,6 +273,7 @@ impl Run {
         };
 
         // if we are forcing the daemon, we don't want to fallback to local discovery
+        //#[cfg(feature = "daemon-package-discovery")]
         let (fallback, duration) = if let Some(true) = self.opts.run_opts.daemon {
             (None, Duration::MAX)
         } else {
@@ -289,16 +290,32 @@ impl Run {
             )
         };
 
-        let mut pkg_dep_graph =
-            PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
-                .with_single_package_mode(self.opts.run_opts.single_package)
-                .with_package_discovery(FallbackPackageDiscovery::new(
-                    daemon.as_mut().map(DaemonPackageDiscovery::new),
-                    fallback,
-                    duration,
-                ))
-                .build()
-                .await?;
+        // Unused until we set the daemon to be the default
+        let _fallback = FallbackPackageDiscovery::new(
+            daemon.as_mut().map(DaemonPackageDiscovery::new),
+            fallback,
+            duration,
+        );
+
+        let mut pkg_dep_graph = {
+            let builder = PackageGraph::builder(&self.base.repo_root, root_package_json.clone())
+                .with_single_package_mode(self.opts.run_opts.single_package);
+
+            #[cfg(feature = "daemon-package-discovery")]
+            let builder = builder.with_package_discovery(fallback);
+
+            #[cfg(not(feature = "daemon-package-discovery"))]
+            let builder = builder.with_package_discovery(
+                LocalPackageDiscoveryBuilder::new(
+                    self.base.repo_root.clone(),
+                    None,
+                    Some(root_package_json.clone()),
+                )
+                .build()?,
+            );
+
+            builder.build().await?
+        };
 
         repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().to_string());
         repo_telemetry.track_size(pkg_dep_graph.len());
