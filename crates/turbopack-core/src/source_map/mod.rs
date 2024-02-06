@@ -384,10 +384,10 @@ impl SourceMap {
                 } else {
                     let origin_str = origin.to_string().await?;
                     static INVALID_REGEX: Lazy<Regex> =
-                        Lazy::new(|| Regex::new(r#"(?:^|/)(?:\.\.?(?>/|$))+"#).unwrap());
+                        Lazy::new(|| Regex::new(r#"(?:^|/)(?:\.\.?(?:/|$))+"#).unwrap());
                     let source = INVALID_REGEX
                         .replace_all(&source_request, |s: &regex::Captures<'_>| {
-                            (&s[0]).replace(".", "_")
+                            s[0].replace('.', "_")
                         });
                     let source = format!("/{SOURCE_MAP_ROOT_NAME}/{}/{}", origin_str, source);
                     let source_content = source_content.unwrap_or_else(|| {
