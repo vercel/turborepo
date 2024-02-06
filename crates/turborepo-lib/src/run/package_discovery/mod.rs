@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::sync::watch::Receiver;
+use tokio::{join, sync::watch::Receiver};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::discovery::{DiscoveryResponse, Error, PackageDiscovery, WorkspaceData};
 
@@ -78,9 +78,17 @@ impl PackageDiscovery for WatchingPackageDiscovery {
             watcher.as_ref().expect("guaranteed some above").clone()
         };
 
-        Ok(DiscoveryResponse {
-            workspaces: watcher.package_watcher.get_package_data().await,
-            package_manager: watcher.package_watcher.get_package_manager().await,
-        })
+        let (package_manager, workspaces) = join! {
+            watcher.package_watcher.get_package_manager(),
+            watcher.package_watcher.get_package_data()
+        };
+
+        package_manager
+            .zip(workspaces)
+            .map(|(package_manager, workspaces)| DiscoveryResponse {
+                workspaces,
+                package_manager,
+            })
+            .ok_or(Error::Unavailable)
     }
 }

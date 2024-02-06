@@ -531,7 +531,14 @@ where
                     package_manager: proto::PackageManager::from(packages.package_manager).into(),
                 })
             })
-            .map_err(|e| tonic::Status::internal(format!("{}", e)))
+            .map_err(|e| match e {
+                turborepo_repository::discovery::Error::Unavailable => {
+                    tonic::Status::unavailable("package discovery unavailable")
+                }
+                turborepo_repository::discovery::Error::Failed(e) => {
+                    tonic::Status::internal(format!("{}", e))
+                }
+            })
     }
 }
 
