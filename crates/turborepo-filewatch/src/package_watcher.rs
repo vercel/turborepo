@@ -17,7 +17,7 @@ use tokio::{
 };
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::{
-    discovery::{PackageDiscovery, WorkspaceData},
+    discovery::{self, PackageDiscovery, WorkspaceData},
     package_manager::{self, Error, PackageManager, WorkspaceGlobs},
 };
 
@@ -77,7 +77,7 @@ struct Subscriber<T: PackageDiscovery> {
     backup_discovery: Arc<AsyncMutex<T>>,
 
     repo_root: AbsoluteSystemPathBuf,
-    package_json_path: AbsoluteSystemPathBuf,
+    root_package_json_path: AbsoluteSystemPathBuf,
 
     // package manager data
     manager_tx: Arc<watch::Sender<Option<PackageManagerState>>>,
@@ -163,7 +163,7 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
             recv,
             backup_discovery,
             repo_root,
-            package_json_path,
+            root_package_json_path: package_json_path,
             package_data,
             manager_rx,
             manager_tx,
@@ -183,7 +183,13 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
                     return
                 },
                 file_event = self.recv.recv().into_future() => match file_event {
-                    Ok(Ok(event)) => self.handle_file_event(event).await,
+                    Ok(Ok(event)) => match self.handle_file_event(&event).await {
+                        Ok(()) => {},
+                        Err(()) => {
+                            tracing::debug!("package watching is closing, exiting");
+                            return;
+                        },
+                    },
                     // if we get an error, we need to re-discover the packages
                     Ok(Err(_)) => self.rediscover_packages().await,
                     Err(RecvError::Closed) => return,
@@ -221,176 +227,213 @@ impl<T: PackageDiscovery + Send + 'static> Subscriber<T> {
         self.package_data.clone()
     }
 
-    async fn handle_file_event(&mut self, file_event: Event) {
+    /// Returns Err(()) if the package manager channel is closed, indicating
+    /// that the entire watching task should exit.
+    async fn handle_file_event(&mut self, file_event: &Event) -> Result<(), ()> {
         tracing::trace!("file event: {:?}", file_event);
 
         if file_event
             .paths
             .iter()
-            .any(|p| self.package_json_path.as_std_path().eq(p))
+            .any(|p| self.root_package_json_path.as_std_path().eq(p))
         {
-            // if the package.json changed, we need to re-infer the package manager
-            // and update the glob list
-            tracing::debug!("package.json changed");
-
-            let resp = match self.backup_discovery.lock().await.discover_packages().await {
-                Ok(pm) => pm,
-                Err(e) => {
-                    tracing::error!("error discovering package manager: {}", e);
-                    return;
-                }
-            };
-
-            let new_manager = Self::update_package_manager(
-                &resp.package_manager,
-                &self.repo_root,
-                &self.package_json_path,
-            )
-            .map(|(a, b)| (resp, a, b));
-
-            match new_manager {
-                Ok((new_manager, workspace_config_path, filter)) => {
-                    tracing::debug!(
-                        "new package manager data: {:?}, {:?}",
-                        new_manager.package_manager,
-                        filter
-                    );
-
-                    let state = PackageManagerState {
-                        manager: new_manager.package_manager,
-                        filter: Arc::new(filter),
-                        workspace_config_path,
-                    };
-
-                    // if this fails, we are closing anyways so ignore
-                    self.manager_tx.send(Some(state)).ok();
-                    {
-                        let mut data = self.package_data.lock().unwrap();
-                        *data = Some(
-                            new_manager
-                                .workspaces
-                                .into_iter()
-                                .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
-                                .collect(),
-                        );
-                    }
-                }
-                Err(e) => {
-                    // a change in the package json does not necessarily mean
-                    // that the package manager has changed, so continue with
-                    // best effort
-                    tracing::error!("error getting package manager: {}", e);
-                }
+            if let Err(e) = self.handle_root_package_json_change().await {
+                tracing::error!("error discovering package manager: {}", e);
             }
         }
 
-        // if it is the package manager, update the glob list
-        let changed = {
-            // here, we can only update if we have a valid package state
+        match self.have_workspace_globs_changed(&file_event).await {
+            Ok(true) => {
+                self.rediscover_packages().await;
+                Ok(())
+            }
+            Ok(false) => {
+                // it is the end of the function so we are going to return regardless
+                self.handle_package_json_change(&file_event).await
+            }
+            Err(()) => return Err(()),
+        }
+    }
+
+    /// Returns Err(()) if the package manager channel is closed, indicating
+    /// that the entire watching task should exit.
+    async fn handle_package_json_change(&mut self, file_event: &Event) -> Result<(), ()> {
+        let state = {
             let Ok(state) = self.manager_rx.wait_for(|v| v.is_some()).await else {
                 // the channel is closed, so there is no state to write into, return
-                return;
+                return Err(());
             };
 
-            let state = state.as_ref().expect("validated above");
-
-            if file_event
-                .paths
-                .iter()
-                .any(|p| state.workspace_config_path.as_std_path().eq(p))
-            {
-                let new_filter = state
-                    .manager
-                    .get_workspace_globs(&self.repo_root)
-                    .map(Arc::new)
-                    // under some saving strategies a file can be totally empty for a moment
-                    // during a save. these strategies emit multiple events and so we can
-                    // a previous or subsequent event in the 'cluster' will still trigger
-                    .unwrap_or_else(|_| state.filter.clone());
-
-                let changed = state.filter != new_filter;
-                if changed {
-                    let mut state = state.to_owned();
-                    state.filter = new_filter;
-                    self.manager_tx.send(Some(state)).ok();
-                }
-                changed
-            } else {
-                false
-            }
+            state.to_owned().expect("validated above")
         };
+        // here, we can only update if we have a valid package state
 
-        if changed {
-            // if the glob list has changed, do a recursive walk and replace
-            self.rediscover_packages().await;
-        } else {
-            // here, we can only update if we have a valid package state
-            let state = {
-                let Ok(state) = self.manager_rx.wait_for(|v| v.is_some()).await else {
-                    // the channel is closed, so there is no state to write into, return
-                    return;
-                };
+        // if a path is not a valid utf8 string, it is not a valid path, so ignore
+        for path in file_event
+            .paths
+            .iter()
+            .filter_map(|p| p.as_os_str().to_str())
+        {
+            let path_file = AbsoluteSystemPathBuf::new(path).expect("watched paths are absolute");
 
-                state.to_owned().expect("validated above")
+            // the path to the workspace this file is in is the parent
+            let path_workspace = path_file
+                .parent()
+                .expect("watched paths will not be at the root")
+                .to_owned();
+
+            let is_workspace = match state
+                .filter
+                .target_is_workspace(&self.repo_root, &path_workspace)
+            {
+                Ok(is_workspace) => is_workspace,
+                Err(e) => {
+                    // this will only error if `repo_root` is not an anchor of `path_workspace`.
+                    // if we hit this case, we can safely ignore it
+                    tracing::debug!("yielded path not in workspace: {:?}", e);
+                    continue;
+                }
             };
 
-            // if a path is not a valid utf8 string, it is not a valid path, so ignore
-            for path in file_event
-                .paths
-                .iter()
-                .filter_map(|p| p.as_os_str().to_str())
-            {
-                let path_file =
-                    AbsoluteSystemPathBuf::new(path).expect("watched paths are absolute");
+            if is_workspace {
+                tracing::debug!("tracing file in package: {:?}", path_file);
+                let package_json = path_workspace.join_component("package.json");
+                let turbo_json = path_workspace.join_component("turbo.json");
 
-                // the path to the workspace this file is in is the parent
-                let path_workspace = path_file
-                    .parent()
-                    .expect("watched paths will not be at the root")
-                    .to_owned();
+                let (package_exists, turbo_exists) = join!(
+                    tokio::fs::try_exists(&package_json),
+                    tokio::fs::try_exists(&turbo_json)
+                );
 
-                let is_workspace = match state
-                    .filter
-                    .target_is_workspace(&self.repo_root, &path_workspace)
-                {
-                    Ok(is_workspace) => is_workspace,
-                    Err(e) => {
-                        // this will only error if `repo_root` is not an anchor of `path_workspace`.
-                        // if we hit this case, we can safely ignore it
-                        tracing::debug!("yielded path not in workspace: {:?}", e);
-                        continue;
-                    }
-                };
-
-                if is_workspace {
-                    tracing::debug!("tracing file in package: {:?}", path_file);
-                    let package_json = path_workspace.join_component("package.json");
-                    let turbo_json = path_workspace.join_component("turbo.json");
-
-                    let (package_exists, turbo_exists) = join!(
-                        tokio::fs::try_exists(&package_json),
-                        tokio::fs::try_exists(&turbo_json)
-                    );
-
-                    let mut data = self.package_data.lock().expect("not poisoned");
-                    if let Some(data) = data.as_mut() {
-                        if let Ok(true) = package_exists {
-                            data.insert(
-                                path_workspace,
-                                WorkspaceData {
-                                    package_json,
-                                    turbo_json: turbo_exists
-                                        .unwrap_or_default()
-                                        .then_some(turbo_json),
-                                },
-                            );
-                        } else {
-                            data.remove(&path_workspace);
-                        }
+                let mut data = self.package_data.lock().expect("not poisoned");
+                if let Some(data) = data.as_mut() {
+                    if let Ok(true) = package_exists {
+                        data.insert(
+                            path_workspace,
+                            WorkspaceData {
+                                package_json,
+                                turbo_json: turbo_exists.unwrap_or_default().then_some(turbo_json),
+                            },
+                        );
+                    } else {
+                        data.remove(&path_workspace);
                     }
                 }
             }
         }
+
+        Ok(())
+    }
+
+    /// A change to the workspace config path could mean a change to the package
+    /// glob list. If this happens, we need to re-walk the packages.
+    ///
+    /// Returns Err(()) if the package manager channel is closed, indicating
+    /// that the entire watching task should exit.
+    async fn have_workspace_globs_changed(&mut self, file_event: &Event) -> Result<bool, ()> {
+        // here, we can only update if we have a valid package state
+        let state = {
+            let Ok(state) = self.manager_rx.wait_for(|v| v.is_some()).await else {
+                // we can only fail receiving if the channel is closed, so we
+                return Err(());
+            };
+
+            state.to_owned().expect("validated above")
+        };
+
+        if file_event
+            .paths
+            .iter()
+            .any(|p| state.workspace_config_path.as_std_path().eq(p))
+        {
+            let new_filter = state
+                .manager
+                .get_workspace_globs(&self.repo_root)
+                .map(Arc::new)
+                // under some saving strategies a file can be totally empty for a moment
+                // during a save. these strategies emit multiple events and so we can
+                // a previous or subsequent event in the 'cluster' will still trigger
+                .unwrap_or_else(|_| state.filter.clone());
+
+            let changed = state.filter != new_filter;
+
+            if changed {
+                let mut state = state.to_owned();
+                state.filter = new_filter;
+                self.manager_tx.send(Some(state)).ok();
+            }
+
+            Ok(changed)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// A change to the root package json means we need to re-infer the package
+    /// manager, update the glob list, and re-walk the packages.
+    ///
+    /// todo: we can probably improve the uptime here by splitting the package
+    ///       manager out of the package discovery. if the package manager has
+    ///       not changed, we probably do not need to re-walk the packages
+    async fn handle_root_package_json_change(&mut self) -> Result<(), discovery::Error> {
+        {
+            // clear all data
+            self.manager_tx.send(None).ok();
+            let mut data = self.package_data.lock().expect("not poisoned");
+            *data = None;
+        }
+        tracing::debug!("root package.json changed, refreshing package manager and globs");
+        let resp = self
+            .backup_discovery
+            .lock()
+            .await
+            .discover_packages()
+            .await?;
+        let new_manager = Self::update_package_manager(
+            &resp.package_manager,
+            &self.repo_root,
+            &self.root_package_json_path,
+        )
+        .map(|(a, b)| (resp, a, b));
+
+        // if the package.json changed, we need to re-infer the package manager
+        // and update the glob list
+
+        match new_manager {
+            Ok((new_manager, workspace_config_path, filter)) => {
+                tracing::debug!(
+                    "new package manager data: {:?}, {:?}",
+                    new_manager.package_manager,
+                    filter
+                );
+
+                let state = PackageManagerState {
+                    manager: new_manager.package_manager,
+                    filter: Arc::new(filter),
+                    workspace_config_path,
+                };
+
+                {
+                    // if this fails, we are closing anyways so ignore
+                    self.manager_tx.send(Some(state)).ok();
+                    let mut data = self.package_data.lock().unwrap();
+                    *data = Some(
+                        new_manager
+                            .workspaces
+                            .into_iter()
+                            .map(|p| (p.package_json.parent().expect("non-root").to_owned(), p))
+                            .collect(),
+                    );
+                }
+            }
+            Err(e) => {
+                // if we cannot update the package manager, we should just leave
+                // the package manager as None and make the package data unavailable
+                tracing::error!("error getting package manager: {}", e);
+            }
+        }
+
+        Ok(())
     }
 
     async fn rediscover_packages(&mut self) {
