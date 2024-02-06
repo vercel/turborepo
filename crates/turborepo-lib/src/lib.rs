@@ -17,7 +17,6 @@ mod config;
 mod daemon;
 mod engine;
 
-mod execution_state;
 mod framework;
 pub(crate) mod globwatcher;
 mod hash;
@@ -38,7 +37,6 @@ pub use crate::{
     cli::Args,
     commands::DaemonRootHasher,
     daemon::{DaemonClient, DaemonConnector},
-    execution_state::ExecutionState,
     run::package_discovery::DaemonPackageDiscovery,
 };
 
