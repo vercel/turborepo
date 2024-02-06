@@ -44,7 +44,7 @@ pub enum Error {
 
 pub struct RunCache {
     task_output_mode: Option<OutputLogsMode>,
-    cache: Arc<AsyncCache>,
+    cache: AsyncCache,
     reads_disabled: bool,
     writes_disabled: bool,
     repo_root: AbsoluteSystemPathBuf,
@@ -55,7 +55,7 @@ pub struct RunCache {
 
 impl RunCache {
     pub fn new(
-        cache: Arc<AsyncCache>,
+        cache: AsyncCache,
         repo_root: &AbsoluteSystemPath,
         opts: &RunCacheOpts,
         color_selector: ColorSelector,
@@ -380,7 +380,7 @@ pub struct ConfigCache {
     repo_root: AbsoluteSystemPathBuf,
     config_file: AbsoluteSystemPathBuf,
     anchored_path: AnchoredSystemPathBuf,
-    cache: Arc<AsyncCache>,
+    cache: AsyncCache,
 }
 
 impl ConfigCache {
@@ -388,7 +388,7 @@ impl ConfigCache {
         hash: String,
         repo_root: AbsoluteSystemPathBuf,
         config_path: &[&str],
-        cache: Arc<AsyncCache>,
+        cache: AsyncCache,
     ) -> Self {
         let config_file = repo_root.join_components(config_path);
         ConfigCache {

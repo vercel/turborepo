@@ -10,7 +10,7 @@ use console::{Style, StyledObject};
 use futures::{stream::FuturesUnordered, StreamExt};
 use regex::Regex;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, warn, Instrument, Span};
+use tracing::{debug, error, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_ci::github_header_footer;
 use turborepo_env::{EnvironmentVariableMap, ResolvedEnvMode};
@@ -35,7 +35,7 @@ use crate::{
             self, GlobalHashSummary, RunTracker, SpacesTaskClient, SpacesTaskInformation,
             TaskExecutionSummary, TaskTracker,
         },
-        task_access::{TaskAccess, TaskAccessTraceFile},
+        task_access::TaskAccess,
         task_id::TaskId,
         RunCache, TaskCache,
     },
@@ -292,12 +292,7 @@ impl<'a> Visitor<'a> {
         drop(factory);
 
         // Write out the traced-config.json file if we have one
-        match self.task_access.to_turbo_json().await {
-            Ok(_) => (),
-            Err(e) => {
-                warn!("failed to write traced-config.json: {e}");
-            }
-        }
+        self.task_access.save().await;
 
         let errors = Arc::into_inner(errors)
             .expect("only one strong reference to errors should remain")
@@ -812,7 +807,7 @@ impl ExecContext {
             cmd.env(task_access_trace_key, trace_file.to_string());
         }
 
-		// Many persistent tasks if started hooked up to a pseudoterminal
+        // Many persistent tasks if started hooked up to a pseudoterminal
         // will shut down if stdin is closed, so we open it even if we don't pass
         // anything to it.
         if self.persistent {
@@ -877,28 +872,11 @@ impl ExecContext {
                 if let Err(e) = stdout_writer.flush() {
                     error!("{e}");
                 } else {
-                    let mut cacheable = true;
-                    // If stdout_writer flush is successful, proceed with task processing
-                    if self.task_access.is_enabled() {
-                        // Task access enabled: Handle trace file processing
-                        if let Some(trace) =
-                            TaskAccessTraceFile::read(&self.task_access.repo_root, &self.task_hash)
-                        {
-                            // Trace file found
-                            if trace.can_cache(&self.task_access.repo_root) {
-                                // Cache trace and save task outputs if trace is cacheable
-                                self.task_access
-                                    .save_trace(trace, self.task_id_for_display.to_string());
-                            } else {
-                                cacheable = false;
-                            }
-                        }
-                    } else {
-                        // Task access not enabled: Directly save task outputs
-                    }
-
-                    if cacheable {
-                        // Attempt to save task outputs and log any errors encountered
+                    if self
+                        .task_access
+                        .can_cache(&self.task_hash, &self.task_id_for_display)
+                        .unwrap_or(true)
+                    {
                         if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await
                         {
                             error!("error caching output: {e}");

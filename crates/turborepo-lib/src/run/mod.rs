@@ -317,13 +317,13 @@ impl Run {
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
 
         let scm = scm.await.expect("detecting scm panicked");
-        let async_cache = Arc::new(AsyncCache::new(
+        let async_cache = AsyncCache::new(
             &self.opts.cache_opts,
             &self.base.repo_root,
             api_client.clone(),
             self.api_auth.clone(),
             analytics_sender,
-        )?);
+        )?;
 
         // restore config from task access trace if it's enabled
         let task_access = TaskAccess::new(self.base.repo_root.clone(), async_cache.clone(), &scm);

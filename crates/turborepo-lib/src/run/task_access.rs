@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     fs::{self, File},
-    io::{Error, Write},
+    io::Write,
     sync::{Arc, Mutex},
 };
 
@@ -10,6 +10,9 @@ use tracing::{debug, error, warn};
 use turbopath::{AbsoluteSystemPathBuf, PathRelation};
 use turborepo_cache::AsyncCache;
 use turborepo_scm::SCM;
+
+use super::ConfigCache;
+use crate::{config::RawTurboJson, unescape::UnescapedString};
 
 // Environment variable key that will be used to enable, and set the expected
 // trace location
@@ -21,8 +24,15 @@ pub const TASK_ACCESS_CONFIG_PATH: [&str; 2] = [".turbo", "traced-config.json"];
 /// File name where the task is expected to leave a trace result
 const TURBO_CONFIG_FILE: &str = "turbo.json";
 
-use super::ConfigCache;
-use crate::{config::RawTurboJson, unescape::UnescapedString};
+#[derive(Debug, thiserror::Error)]
+pub enum ToFileError {
+    #[error("Unable to serialize traced config: {0}")]
+    ConfigSerializeError(#[from] serde_json::Error),
+    #[error("Unable to write traced config: {0}")]
+    ConfigIOError(#[from] std::io::Error),
+    #[error("Unable to cache traced config: {0}")]
+    ConfigCacheError(#[from] turborepo_cache::CacheError),
+}
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -51,7 +61,7 @@ pub fn trace_file_path(
     repo_root.join_components(&[".turbo", task_hash, TASK_ACCESS_TRACE_NAME])
 }
 
-fn task_access_trace_enabled(repo_root: &AbsoluteSystemPathBuf) -> Result<bool, Error> {
+fn task_access_trace_enabled(repo_root: &AbsoluteSystemPathBuf) -> Result<bool, std::io::Error> {
     // TODO: use the existing config methods here
     let root_turbo_json_path = &repo_root.join_component(TURBO_CONFIG_FILE);
     if root_turbo_json_path.exists() {
@@ -134,7 +144,7 @@ pub struct TaskAccess {
 }
 
 impl TaskAccess {
-    pub fn new(repo_root: AbsoluteSystemPathBuf, cache: Arc<AsyncCache>, scm: &SCM) -> Self {
+    pub fn new(repo_root: AbsoluteSystemPathBuf, cache: AsyncCache, scm: &SCM) -> Self {
         let root = repo_root.clone();
         let enabled = task_access_trace_enabled(&root).unwrap_or(false);
         let trace_by_task = Arc::new(Mutex::new(HashMap::<String, TaskAccessTraceFile>::new()));
@@ -185,7 +195,7 @@ impl TaskAccess {
         }
     }
 
-    pub fn save_trace(&self, trace: TaskAccessTraceFile, task_id: String) {
+    pub fn save_trace(&self, task_id: String, trace: TaskAccessTraceFile) {
         let trace_by_task = self.trace_by_task.lock();
         match trace_by_task {
             Ok(mut trace_by_task) => {
@@ -202,40 +212,47 @@ impl TaskAccess {
         (TASK_ACCESS_ENV_KEY.to_string(), trace_file_path)
     }
 
-    pub async fn to_turbo_json(&self) -> Result<(), std::io::Error> {
-        if self.is_enabled() {
-            if let Some(config_cache) = &self.config_cache {
-                let traced_config =
-                    RawTurboJson::from_task_access_trace(&self.trace_by_task.lock().unwrap());
-                if traced_config.is_some() {
-                    // convert the traced_config to json and write the file to disk
-                    let traced_config_json = serde_json::to_string_pretty(&traced_config);
-                    match traced_config_json {
-                        Ok(json) => {
-                            let file_path =
-                                self.repo_root.join_components(&TASK_ACCESS_CONFIG_PATH);
-                            let file = File::create(file_path);
-                            match file {
-                                Ok(mut file) => {
-                                    write!(file, "{}", json)?;
-                                    file.flush()?;
-                                    let result = config_cache.save().await;
-                                    if result.is_err() {
-                                        debug!("error saving config cache: {:#?}", result);
-                                    }
-                                }
-                                Err(e) => {
-                                    debug!("error creating traced_config file: {:#?}", e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            debug!("error converting traced_config to json: {:#?}", e);
-                        }
-                    }
-                }
-            } else {
-                debug!("unable to cache config");
+    pub async fn save(&self) -> () {
+        match self.to_file().await {
+            Ok(_) => (),
+            Err(e) => {
+                error!("Failed to write task access trace file - {e}");
+            }
+        }
+    }
+
+    // Whether we can cache the given task, returning None if task access isn't
+    // enabled or the trace can't be found
+    pub fn can_cache(&self, task_hash: &str, task_id: &str) -> Option<bool> {
+        if !self.is_enabled() {
+            return None;
+        }
+        let trace = TaskAccessTraceFile::read(&self.repo_root, task_hash)?;
+        if trace.can_cache(&self.repo_root) {
+            self.save_trace(task_id.to_string(), trace);
+            Some(true)
+        } else {
+            Some(false)
+        }
+    }
+
+    async fn to_file(&self) -> Result<(), ToFileError> {
+        // if task access tracing is not enabled, we don't need to do anything
+        if !self.is_enabled() {
+            return Ok(());
+        }
+
+        if let Some(config_cache) = &self.config_cache {
+            let traced_config =
+                RawTurboJson::from_task_access_trace(&self.trace_by_task.lock().unwrap());
+            if traced_config.is_some() {
+                // convert the traced_config to json and write the file to disk
+                let traced_config_json = serde_json::to_string_pretty(&traced_config)?;
+                let file_path = self.repo_root.join_components(&TASK_ACCESS_CONFIG_PATH);
+                let mut file = File::create(file_path)?;
+                write!(file, "{}", traced_config_json)?;
+                file.flush()?;
+                config_cache.save().await?;
             }
         }
 
