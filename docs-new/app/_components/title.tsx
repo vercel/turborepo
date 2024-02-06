@@ -22,15 +22,12 @@ export const NavbarChildren = () => (
     >
       <path d="M16.88 3.549L7.12 20.451" />
     </svg>
-
     <Link className="hover:opacity-75" href="/" title="Home">
       <TurboAnimated height={32} />
     </Link>
     <div className={styles.siteSwitcher}>
       <SiteSwitcher />
     </div>
-    <div className="flex w-full justify-end">
-      <NavbarLinks />
-    </div>
+    <NavbarLinks />
   </>
 );

@@ -4,14 +4,14 @@ import React, { useState } from "react";
 import cn from "classnames";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Clients } from "./_clients/Clients";
+import { Clients } from "@/app/_clients/Clients";
 import { FadeIn } from "@/app/_components/home-shared/FadeIn";
 import { LandingPageGlobalStyles } from "@/app/_components/home-shared/GlobalStyles";
 import { PackLogo } from "@/app/_components/logos/PackLogo";
 import { RepoLogo } from "@/app/_components/logos/RepoLogo";
-import { TurboheroBackground } from "./_components/turbohero-background";
-import { Turborepo } from "./_components/Turborepo";
-import { Turbopack } from "./_components/Turbopack";
+import { TurboheroBackground } from "@/app/_components/turbohero-background";
+import { Turborepo } from "@/app/_components/Turborepo";
+import { Turbopack } from "@/app/_components/Turbopack";
 import styles from "./index.module.css";
 
 function Background() {
