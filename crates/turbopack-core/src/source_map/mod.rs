@@ -447,7 +447,7 @@ impl SourceMap {
                         .filter_map(|section| {
                             section
                                 .get_sourcemap()
-                                .map(|s| (section.get_offset(), CrateMapWrapper(s.clone())))
+                                .map(|s| (section.get_offset(), CrateMapWrapper::ref_cast(s)))
                         })
                         .collect::<Vec<_>>();
                     let sections = sections
@@ -455,7 +455,7 @@ impl SourceMap {
                         .map(|(offset, map)| async move {
                             Ok((
                                 offset,
-                                decoded_map_with_resolved_sources(&map, origin).await?,
+                                decoded_map_with_resolved_sources(map, origin).await?,
                             ))
                         })
                         .try_join()
@@ -464,7 +464,7 @@ impl SourceMap {
                     for (offset, map) in sections {
                         new_sections.push(sourcemap::SourceMapSection::new(
                             offset,
-                            // Urls are deprecated and we don't acceptthem
+                            // Urls are deprecated and we don't accept them
                             None,
                             Some(map.0),
                         ));
