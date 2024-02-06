@@ -26,7 +26,6 @@ use crate::{
     discovery,
     package_json::PackageJson,
     package_manager::{bun::BunDetector, npm::NpmDetector, pnpm::PnpmDetector, yarn::YarnDetector},
-    util::IsLast,
 };
 
 #[derive(Debug, Deserialize)]
@@ -484,14 +483,7 @@ impl PackageManager {
             &globs.validated_exclusions,
             globwalk::WalkType::Files,
         )?;
-
-        // we need to remove package.json files that are in subfolders of others so that
-        // we don't yield subpackages. sort, keep track of the parent of last
-        // json we encountered, and only yield it if it's not a subfolder of it
-        //
-        // ideally we would do this during traversal, but walkdir doesn't support
-        // inorder traversal so we can't
-        Ok(filter_subfolder_package_jsons(files))
+        Ok(files.into_iter())
     }
 
     pub fn lockfile_name(&self) -> &'static str {
@@ -602,56 +594,12 @@ impl PackageManager {
     }
 }
 
-fn filter_subfolder_package_jsons<T: IntoIterator<Item = AbsoluteSystemPathBuf>>(
-    map: T,
-) -> impl Iterator<Item = AbsoluteSystemPathBuf> {
-    let mut last_parent = None;
-    map.into_iter()
-        .sorted_by(|a, b| {
-            // get an iterator of the components of each path, and zip them together
-            let mut segments = a.components().with_last().zip(b.components().with_last());
-
-            // find the first pair of components that are different, and compare them
-            // if one of the segments is the last, then the other is a subfolder of it.
-            // we must always yield 'file-likes' (the last segment of a path) ahead of
-            // subfolders (non-last segments) so that we can guarantee we find the
-            // package.json before processing its subfolders
-            segments
-                .find_map(|((a_last, a_cmp), (b_last, b_cmp))| {
-                    if a_last == b_last {
-                        match a_cmp.cmp(&b_cmp) {
-                            std::cmp::Ordering::Equal => None,
-                            other => Some(other),
-                        }
-                    } else if a_last {
-                        Some(std::cmp::Ordering::Less)
-                    } else {
-                        Some(std::cmp::Ordering::Greater)
-                    }
-                })
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .filter(move |entry| {
-            match &last_parent {
-                // last_parent is the parent of the last json we yielded. if the current
-                // entry is a subfolder of it, we don't want to yield it
-                Some(parent) if entry.starts_with(parent) => false,
-                // update last_parent to the parent of the current entry
-                _ => {
-                    last_parent = Some(entry.parent().unwrap().to_owned());
-                    true
-                }
-            }
-        })
-}
-
 #[cfg(test)]
 mod tests {
-    use std::{borrow::Cow, collections::HashSet, fs::File};
+    use std::{collections::HashSet, fs::File};
 
     use pretty_assertions::assert_eq;
     use tempfile::tempdir;
-    use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
@@ -672,49 +620,6 @@ mod tests {
             }
         }
         panic!("Couldn't find Turborepo root from {}", cwd);
-    }
-
-    #[test_case(&[
-        "/a/b/package.json",
-        "/a/package.json",
-    ], &[
-        "/a/package.json",
-    ] ; "basic")]
-    #[test_case(&[
-        "/a/package.json",
-        "/a/b/package.json",
-    ], &[
-        "/a/package.json",
-    ] ; "order flipped")]
-    #[test_case(&[
-        "/a/package.json",
-        "/b/package.json",
-    ], &[
-        "/a/package.json",
-        "/b/package.json",
-    ] ; "disjoint")]
-    #[test_case(&[
-        "/a/package.json",
-        "/z/package.json",
-        "/package.json"
-    ], &[
-        "/package.json",
-    ] ; "root")]
-    fn lexicographic_file_sort(inc: &[&str], expected: &[&str]) {
-        let to_path = |s: &&str| {
-            AbsoluteSystemPathBuf::new(if cfg!(windows) {
-                Cow::from(format!("C:/{}", s))
-            } else {
-                (*s).into()
-            })
-            .unwrap()
-        };
-
-        let inc = inc.into_iter().map(to_path).collect::<Vec<_>>();
-        let expected = expected.into_iter().map(to_path).collect::<Vec<_>>();
-        let sorted = filter_subfolder_package_jsons(inc);
-        let sorted = sorted.collect::<Vec<_>>();
-        assert_eq!(sorted, expected);
     }
 
     #[test]
