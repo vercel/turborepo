@@ -102,19 +102,19 @@ impl ModuleResolveResult {
         }
     }
 
-    pub fn module(request: RequestKey, module: Vc<Box<dyn Module>>) -> ModuleResolveResult {
+    pub fn module(request_key: RequestKey, module: Vc<Box<dyn Module>>) -> ModuleResolveResult {
         ModuleResolveResult {
-            primary: indexmap! { request => ModuleResolveResultItem::Module(module) },
+            primary: indexmap! { request_key => ModuleResolveResultItem::Module(module) },
             affecting_sources: Vec::new(),
         }
     }
 
     pub fn output_asset(
-        request: RequestKey,
+        request_key: RequestKey,
         output_asset: Vc<Box<dyn OutputAsset>>,
     ) -> ModuleResolveResult {
         ModuleResolveResult {
-            primary: indexmap! { request => ModuleResolveResultItem::OutputAsset(output_asset) },
+            primary: indexmap! { request_key => ModuleResolveResultItem::OutputAsset(output_asset) },
             affecting_sources: Vec::new(),
         }
     }
@@ -484,38 +484,38 @@ impl ResolveResult {
         }
     }
 
-    pub fn primary(request: RequestKey, result: ResolveResultItem) -> ResolveResult {
+    pub fn primary(request_key: RequestKey, result: ResolveResultItem) -> ResolveResult {
         ResolveResult {
-            primary: indexmap! { request => result },
+            primary: indexmap! { request_key => result },
             affecting_sources: Vec::new(),
         }
     }
 
     pub fn primary_with_affecting_sources(
-        request: RequestKey,
+        request_key: RequestKey,
         result: ResolveResultItem,
         affecting_sources: Vec<Vc<Box<dyn Source>>>,
     ) -> ResolveResult {
         ResolveResult {
-            primary: indexmap! { request => result },
+            primary: indexmap! { request_key => result },
             affecting_sources,
         }
     }
 
-    pub fn source(request: RequestKey, source: Vc<Box<dyn Source>>) -> ResolveResult {
+    pub fn source(request_key: RequestKey, source: Vc<Box<dyn Source>>) -> ResolveResult {
         ResolveResult {
-            primary: indexmap! { request => ResolveResultItem::Source(source) },
+            primary: indexmap! { request_key => ResolveResultItem::Source(source) },
             affecting_sources: Vec::new(),
         }
     }
 
     pub fn source_with_affecting_sources(
-        request: RequestKey,
+        request_key: RequestKey,
         source: Vc<Box<dyn Source>>,
         affecting_sources: Vec<Vc<Box<dyn Source>>>,
     ) -> ResolveResult {
         ResolveResult {
-            primary: indexmap! { request => ResolveResultItem::Source(source) },
+            primary: indexmap! { request_key => ResolveResultItem::Source(source) },
             affecting_sources,
         }
     }
