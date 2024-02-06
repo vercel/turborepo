@@ -1012,7 +1012,7 @@ impl VisitAstPath for Analyzer<'_> {
                     debug_assert!(n.op == AssignOp::Assign);
 
                     self.current_value = Some(self.eval_context.eval(&n.right));
-                    n.left.visit_children_with_path(self, &mut *ast_path);
+                    n.left.visit_children_with_path(self, &mut ast_path);
                     self.current_value = None;
                 }
 
@@ -1037,7 +1037,7 @@ impl VisitAstPath for Analyzer<'_> {
                         }
                     }
 
-                    n.left.visit_children_with_path(self, &mut *ast_path);
+                    n.left.visit_children_with_path(self, &mut ast_path);
                 }
             }
         }
