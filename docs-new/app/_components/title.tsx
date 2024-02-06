@@ -3,8 +3,9 @@ import { TurboAnimated } from "@/app/_components/logos/TurboAnimated";
 import { SiteSwitcher } from "@/app/_components/site-switcher";
 import Link from "next/link";
 import styles from "./header-logo.module.css";
+import { NavbarLinks } from "./navbar-links";
 
-export const Title = () => (
+export const NavbarChildren = () => (
   <>
     <LogoContext />
     <svg
@@ -29,7 +30,7 @@ export const Title = () => (
       <SiteSwitcher />
     </div>
     <div className="flex w-full justify-end">
-      <p>links go here</p>
+      <NavbarLinks />
     </div>
   </>
 );

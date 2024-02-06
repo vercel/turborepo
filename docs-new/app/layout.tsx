@@ -8,7 +8,8 @@ import { LogoContext } from "@/app/_components/logo-context";
 import { TurboAnimated } from "@/app/_components/logos/TurboAnimated";
 import { SiteSwitcher } from "@/app/_components/site-switcher";
 import Link from "next/link";
-import { Title } from "@/app/_components/title";
+import { NavbarChildren } from "@/app/_components/title";
+import { DiscordLogo, GithubLogo } from "@/app/_components/logos";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -22,8 +23,19 @@ export default function Layout({ children }: { children: ReactNode }) {
           <FumaLayout
             nav={{
               title: <></>,
-              children: <Title />,
-              githubUrl: "https://github.com/vercel/turbo",
+              children: <NavbarChildren />,
+              links: [
+                {
+                  href: "https://github.com/vercel/turbo",
+                  label: "GitHub",
+                  icon: <GithubLogo />,
+                },
+                {
+                  href: "https://example.com",
+                  label: "Example",
+                  icon: <DiscordLogo />,
+                },
+              ],
             }}
           >
             {children}
