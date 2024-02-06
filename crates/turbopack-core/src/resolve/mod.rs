@@ -1443,7 +1443,7 @@ async fn resolve_internal_inline(
                     PatternMatch::File(matched_pattern, path) => {
                         results.push(
                             resolved(
-                                Value::new(RequestKey::new(matched_pattern.clone())),
+                                RequestKey::new(matched_pattern.clone()),
                                 *path,
                                 lookup_path,
                                 request,
@@ -1730,7 +1730,7 @@ async fn resolve_relative_request(
                     if path_pattern.is_match(matched_pattern) {
                         results.push(
                             resolved(
-                                Value::new(RequestKey::new(matched_pattern.to_string())),
+                                RequestKey::new(matched_pattern.to_string()),
                                 *path,
                                 lookup_path,
                                 request,
@@ -1746,7 +1746,7 @@ async fn resolve_relative_request(
                 if !matches_without_extension || path_pattern.is_match(matched_pattern) {
                     results.push(
                         resolved(
-                            Value::new(RequestKey::new(matched_pattern.clone())),
+                            RequestKey::new(matched_pattern.clone()),
                             *path,
                             lookup_path,
                             request,
@@ -2050,7 +2050,7 @@ async fn resolve_alias_field_result(
 
 #[tracing::instrument(level = Level::TRACE, skip_all)]
 async fn resolved(
-    request_key: Value<RequestKey>,
+    request_key: RequestKey,
     fs_path: Vc<FileSystemPath>,
     original_context: Vc<FileSystemPath>,
     original_request: Vc<Request>,
