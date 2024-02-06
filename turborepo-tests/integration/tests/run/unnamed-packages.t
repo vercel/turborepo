@@ -1,9 +1,8 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh nested_packages
 
-Run a build. In this test, the fixture is set up so that the build will
-if we read nested packages, in a manner similar to the `.next` folder
-since it will not always produce a `name` field.
+Run a build. In this test, the fixture is set up so that the nested package
+which does not have a name should be ignored. We should process it but filter.
   $ ${TURBO} build
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
