@@ -655,7 +655,7 @@ impl ResolveResult {
         })
     }
 
-    pub fn with_request_ref(&self, request: String) -> Self {
+    pub fn with_request_key_ref(&self, request: String) -> Self {
         let new_primary = self
             .primary
             .iter()
@@ -816,7 +816,11 @@ impl ResolveResult {
     }
 
     /// Returns a new [ResolveResult] where all [RequestKey]s are updates. The
-    /// `old_request_key` (prefix) is replaced with the `request_key`.
+    /// `old_request_key` (prefix) is replaced with the `request_key`. It's not
+    /// expected that the [ResolveResult] contains [RequestKey]s that don't have
+    /// the `old_request_key` prefix, but if there are still some, they are
+    /// discarded. Items with unset request key are set to the passed
+    /// `request_key`.
     #[turbo_tasks::function]
     pub async fn with_replaced_request_key(
         self: Vc<Self>,
@@ -1646,7 +1650,7 @@ async fn resolve_into_folder(
                         // we are not that strict when a main field fails to resolve
                         // we continue to try other alternatives
                         if !result.is_unresolveable_ref() {
-                            let mut result = result.with_request_ref(".".to_string());
+                            let mut result = result.with_request_key_ref(".".to_string());
                             result.add_affecting_source_ref(Vc::upcast(FileSource::new(
                                 package_json_path,
                             )));
