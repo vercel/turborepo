@@ -30,13 +30,10 @@ impl TsConfigReference {
 impl ModuleReference for TsConfigReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::module(
-            RequestKey::default(),
-            Vc::upcast(TsConfigModuleAsset::new(
-                self.origin,
-                Vc::upcast(FileSource::new(self.tsconfig)),
-            )),
-        )
+        ModuleResolveResult::module(Vc::upcast(TsConfigModuleAsset::new(
+            self.origin,
+            Vc::upcast(FileSource::new(self.tsconfig)),
+        )))
         .into()
     }
 }
@@ -89,7 +86,7 @@ impl ModuleReference for TsReferencePathAssetReference {
                         )),
                     )
                     .module();
-                ModuleResolveResult::module(RequestKey::default(), module).cell()
+                ModuleResolveResult::module(module).cell()
             } else {
                 ModuleResolveResult::unresolveable().cell()
             },

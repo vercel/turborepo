@@ -102,7 +102,14 @@ impl ModuleResolveResult {
         }
     }
 
-    pub fn module(request_key: RequestKey, module: Vc<Box<dyn Module>>) -> ModuleResolveResult {
+    pub fn module(module: Vc<Box<dyn Module>>) -> ModuleResolveResult {
+        Self::module_with_key(RequestKey::default(), module)
+    }
+
+    pub fn module_with_key(
+        request_key: RequestKey,
+        module: Vc<Box<dyn Module>>,
+    ) -> ModuleResolveResult {
         ModuleResolveResult {
             primary: indexmap! { request_key => ModuleResolveResultItem::Module(module) },
             affecting_sources: Vec::new(),
@@ -484,7 +491,11 @@ impl ResolveResult {
         }
     }
 
-    pub fn primary(request_key: RequestKey, result: ResolveResultItem) -> ResolveResult {
+    pub fn primary(result: ResolveResultItem) -> ResolveResult {
+        Self::primary_with_key(RequestKey::default(), result)
+    }
+
+    pub fn primary_with_key(request_key: RequestKey, result: ResolveResultItem) -> ResolveResult {
         ResolveResult {
             primary: indexmap! { request_key => result },
             affecting_sources: Vec::new(),
@@ -502,7 +513,11 @@ impl ResolveResult {
         }
     }
 
-    pub fn source(request_key: RequestKey, source: Vc<Box<dyn Source>>) -> ResolveResult {
+    pub fn source(source: Vc<Box<dyn Source>>) -> ResolveResult {
+        Self::source_with_key(RequestKey::default(), source)
+    }
+
+    pub fn source_with_key(request_key: RequestKey, source: Vc<Box<dyn Source>>) -> ResolveResult {
         ResolveResult {
             primary: indexmap! { request_key => ResolveResultItem::Source(source) },
             affecting_sources: Vec::new(),
@@ -1527,7 +1542,7 @@ async fn resolve_internal_inline(
             remainder,
         } => {
             let uri = format!("{}{}", protocol, remainder);
-            ResolveResult::primary(
+            ResolveResult::primary_with_key(
                 RequestKey::new(uri.clone()),
                 ResolveResultItem::OriginalReferenceTypeExternal(uri),
             )

@@ -213,11 +213,7 @@ impl TsExtendsReference {
 impl ModuleReference for TsExtendsReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::module(
-            RequestKey::default(),
-            Vc::upcast(RawModule::new(Vc::upcast(self.config))),
-        )
-        .cell()
+        ModuleResolveResult::module(Vc::upcast(RawModule::new(Vc::upcast(self.config)))).cell()
     }
 }
 

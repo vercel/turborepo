@@ -62,7 +62,7 @@ impl SingleModuleReference {
 impl ModuleReference for SingleModuleReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::module(RequestKey::default(), self.asset).cell()
+        ModuleResolveResult::module(self.asset).cell()
     }
 }
 

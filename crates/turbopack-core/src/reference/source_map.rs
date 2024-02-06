@@ -41,10 +41,9 @@ impl ModuleReference for SourceMapReference {
     #[turbo_tasks::function]
     async fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
         if let Some(file) = self.get_file().await {
-            return ModuleResolveResult::module(
-                RequestKey::default(),
-                Vc::upcast(RawModule::new(Vc::upcast(FileSource::new(file)))),
-            )
+            return ModuleResolveResult::module(Vc::upcast(RawModule::new(Vc::upcast(
+                FileSource::new(file),
+            ))))
             .cell();
         }
         ModuleResolveResult::unresolveable().into()

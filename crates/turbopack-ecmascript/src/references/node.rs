@@ -31,12 +31,9 @@ impl PackageJsonReference {
 impl ModuleReference for PackageJsonReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::module(
-            RequestKey::default(),
-            Vc::upcast(RawModule::new(Vc::upcast(FileSource::new(
-                self.package_json,
-            )))),
-        )
+        ModuleResolveResult::module(Vc::upcast(RawModule::new(Vc::upcast(FileSource::new(
+            self.package_json,
+        )))))
         .cell()
     }
 }

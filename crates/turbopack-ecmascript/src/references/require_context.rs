@@ -256,7 +256,7 @@ impl RequireContextAssetReference {
 impl ModuleReference for RequireContextAssetReference {
     #[turbo_tasks::function]
     fn resolve_reference(&self) -> Vc<ModuleResolveResult> {
-        ModuleResolveResult::module(RequestKey::default(), Vc::upcast(self.inner)).cell()
+        ModuleResolveResult::module(Vc::upcast(self.inner)).cell()
     }
 }
 
