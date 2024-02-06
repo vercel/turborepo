@@ -655,14 +655,20 @@ impl ResolveResult {
         })
     }
 
-    pub fn with_request_key_ref(&self, request: String) -> Self {
+    /// Returns a new [ResolveResult] where all [RequestKey]s are set to the
+    /// passed `request`.
+    pub fn with_request_ref(&self, request: String) -> Self {
         let new_primary = self
             .primary
             .iter()
             .map(|(k, v)| {
-                let mut new_key = k.clone();
-                new_key.request = Some(request.clone());
-                (new_key, v.clone())
+                (
+                    RequestKey {
+                        request: Some(request.clone()),
+                        conditions: k.conditions.clone(),
+                    },
+                    v.clone(),
+                )
             })
             .collect();
         ResolveResult {
@@ -852,6 +858,8 @@ impl ResolveResult {
         .into())
     }
 
+    /// Returns a new [ResolveResult] where all [RequestKey]s are set to the
+    /// passed `request`.
     #[turbo_tasks::function]
     pub async fn with_request(self: Vc<Self>, request: String) -> Result<Vc<Self>> {
         let this = self.await?;
@@ -1642,7 +1650,7 @@ async fn resolve_into_folder(
                         // we are not that strict when a main field fails to resolve
                         // we continue to try other alternatives
                         if !result.is_unresolveable_ref() {
-                            let mut result = result.with_request_key_ref(".".to_string());
+                            let mut result = result.with_request_ref(".".to_string());
                             result.add_affecting_source_ref(Vc::upcast(FileSource::new(
                                 package_json_path,
                             )));
