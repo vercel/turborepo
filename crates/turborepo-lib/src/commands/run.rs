@@ -1,4 +1,3 @@
-use tracing::debug;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{commands::CommandBase, run, run::Run, signal::SignalHandler};
