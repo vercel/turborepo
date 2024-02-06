@@ -304,15 +304,6 @@ impl Run {
             #[cfg(feature = "daemon-package-discovery")]
             let builder = builder.with_package_discovery(fallback);
 
-            #[cfg(not(feature = "daemon-package-discovery"))]
-            let builder = builder.with_package_discovery(
-                LocalPackageDiscoveryBuilder::new(
-                    self.base.repo_root.clone(),
-                    None,
-                    Some(root_package_json.clone()),
-                )
-                .build()?,
-            );
 
             builder.build().await?
         };
