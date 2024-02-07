@@ -35,6 +35,14 @@ jobs:
             setup: |
               pnpm install
           - host: ubuntu-latest
+            target: "aarch64-unknown-linux-musl"
+            install: |
+              apt-get update
+              apt-get install -y curl musl-tools
+              npm i -g pnpm@8.9.0
+            setup: |
+              pnpm install
+          - host: ubuntu-latest
             target: "x86_64-unknown-linux-musl"
             install: |
               apt-get update
