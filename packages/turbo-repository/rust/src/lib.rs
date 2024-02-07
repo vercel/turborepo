@@ -74,7 +74,7 @@ impl Package {
         ancestors
             .iter()
             .filter_map(|node| {
-                let info = graph.workspace_info(node.as_workspace()).unwrap();
+                let info = graph.workspace_info(node.as_workspace())?;
                 // If we don't get a package name back, we'll just skip it.
                 let name = info.package_name()?;
                 let anchored_package_path = info.package_path();
@@ -110,18 +110,18 @@ impl Workspace {
         };
 
         let map: HashMap<String, Vec<String>> = packages
-            .iter()
+            .into_iter()
             .map(|package| {
                 let deps = package.dependents(&self.graph, workspace_path);
                 let dep_names = deps
-                    .iter()
-                    .map(|p| p.relative_path.clone())
+                    .into_iter()
+                    .map(|p| p.relative_path)
                     .collect::<Vec<String>>();
 
-                (package.relative_path.clone(), dep_names)
+                (package.relative_path, dep_names)
             })
             .collect();
 
-        return Ok(map);
+       Ok(map)
     }
 }

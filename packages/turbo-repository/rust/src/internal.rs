@@ -36,8 +36,10 @@ pub(crate) enum Error {
     },
     #[error("Package directory {0} has no parent")]
     MissingParent(AbsoluteSystemPathBuf),
-    #[error("Package graph error")]
-    PackageGraphError,
+    #[error("Package graph error: {0}")]
+    PackageGraph(#[from] turborepo_repository::package_graph::Error),
+    #[error("package.json error: {0}")]
+    PackageJson(#[from] turborepo_repository::package_json::Error),
 }
 
 impl From<Error> for napi::Error<Status> {
@@ -84,7 +86,7 @@ impl Workspace {
             })?
             .clone();
 
-        let workspace_root = workspace_state.root.clone();
+        let workspace_root = &workspace_state.root;
         let root_package_json = PackageJson::load(&workspace_root.join_component("package.json"))?;
         let package_graph = PackageGraphBuilder::new(&workspace_root, root_package_json)
             .with_single_package_mode(!is_multi_package)
