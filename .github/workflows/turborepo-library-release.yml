@@ -121,6 +121,8 @@ jobs:
           mv native-packages/turbo-library-x86_64-apple-darwin/@turbo/repository.darwin-x64.node packages/turbo-repository/npm/darwin-x64/
           mv native-packages/turbo-library-aarch64-unknown-linux-gnu/@turbo/repository.linux-arm64-gnu.node packages/turbo-repository/npm/linux-arm64-gnu/
           mv native-packages/turbo-library-x86_64-unknown-linux-gnu/@turbo/repository.linux-x64-gnu.node packages/turbo-repository/npm/linux-x64-gnu/
+          mv native-packages/turbo-library-aarch64-unknown-linux-musl/@turbo/repository.linux-arm64-musl.node packages/turbo-repository/npm/linux-arm64-musl/
+          mv native-packages/turbo-library-x86_64-unknown-linux-musl/@turbo/repository.linux-x64-musl.node packages/turbo-repository/npm/linux-x64-musl/
           mv native-packages/turbo-library-aarch64-pc-windows-msvc/@turbo/repository.win32-arm64-msvc.node packages/turbo-repository/npm/win32-arm64-msvc/
           mv native-packages/turbo-library-x86_64-pc-windows-msvc/@turbo/repository.win32-x64-msvc.node packages/turbo-repository/npm/win32-x64-msvc/
 
@@ -136,6 +138,8 @@ jobs:
           npm pack packages/turbo-repository/npm/darwin-x64
           npm pack packages/turbo-repository/npm/linux-arm64-gnu
           npm pack packages/turbo-repository/npm/linux-x64-gnu
+          npm pack packages/turbo-repository/npm/linux-arm64-musl
+          npm pack packages/turbo-repository/npm/linux-x64-musl
           npm pack packages/turbo-repository/npm/win32-arm64-msvc
           npm pack packages/turbo-repository/npm/win32-x64-msvc
           npm pack packages/turbo-repository/js
@@ -160,6 +164,8 @@ jobs:
           npm publish -ddd --tag ${TAG} --access public turbo-repository-darwin-x64-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-arm64-gnu-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-x64-gnu-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-arm64-musl-${VERSION}.tgz
+          npm publish -ddd --tag ${TAG} --access public turbo-repository-linux-x64-musl-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-win32-arm64-msvc-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-win32-x64-msvc-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-${VERSION}.tgz
