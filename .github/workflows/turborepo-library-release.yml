@@ -26,6 +26,11 @@ jobs:
               echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
               echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
           - host: ubuntu-latest
+            target: "x86_64-unknown-linux-musl"
+            install: |
+              apt-get update
+              apt-get install -y curl musl-tools
+          - host: ubuntu-latest
             target: "x86_64-unknown-linux-gnu"
             container: amazon/aws-lambda-nodejs:18
             install: |
