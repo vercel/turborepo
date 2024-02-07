@@ -101,7 +101,9 @@ impl Workspace {
     }
 
     #[napi]
-    pub async fn package_graph(&self) -> Result<HashMap<String, Vec<String>>, Error> {
+    pub async fn find_packages_and_dependents(
+        &self,
+    ) -> Result<HashMap<String, Vec<String>>, Error> {
         let packages = self.find_packages().await?;
 
         let workspace_path = match AbsoluteSystemPath::new(self.absolute_path.as_str()) {
@@ -122,6 +124,6 @@ impl Workspace {
             })
             .collect();
 
-       Ok(map)
+        Ok(map)
     }
 }

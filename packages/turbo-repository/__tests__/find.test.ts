@@ -23,7 +23,7 @@ describe("Workspace", () => {
   test("returns a package graph", async () => {
     const dir = path.resolve(__dirname, "./fixtures/monorepo");
     const workspace = await Workspace.find(dir);
-    const graph = await workspace.packageGraph();
+    const graph = await workspace.findPackagesAndDependents();
     expect(graph).toEqual({
       "apps/app": [],
       "packages/ui": ["apps/app"],
