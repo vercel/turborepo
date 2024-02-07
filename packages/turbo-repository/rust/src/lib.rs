@@ -1,72 +1,64 @@
 use napi_derive::napi;
 use turbopath::AbsoluteSystemPath;
-use turborepo_repository::{
-    inference::RepoState as WorkspaceState, package_manager::PackageManager as RustPackageManager,
-};
+use turborepo_repository::inference::RepoState as WorkspaceState;
 
 mod internal;
 
 #[napi]
-pub struct Workspace {
-    workspace_state: WorkspaceState,
+pub struct Package {
+    /// The absolute path to the package root.
     #[napi(readonly)]
     pub absolute_path: String,
+    /// The relative path from the workspace root to the package root.
     #[napi(readonly)]
-    pub is_multi_package: bool,
+    pub relative_path: String,
 }
 
+#[derive(Clone)]
 #[napi]
+
 pub struct PackageManager {
-    #[allow(dead_code)]
-    package_manager: RustPackageManager,
+    /// The package manager name in lower case.
     #[napi(readonly)]
     pub name: String,
 }
 
 #[napi]
-pub struct Package {
+pub struct Workspace {
+    workspace_state: WorkspaceState,
+    /// The absolute path to the workspace root.
     #[napi(readonly)]
     pub absolute_path: String,
+    /// `true` when the workspace is a multi-package workspace.
+    #[napi(readonly)]
+    pub is_multi_package: bool,
+    /// The package manager used by the workspace.
+    #[napi(readonly)]
+    pub package_manager: PackageManager,
 }
 
 impl Package {
     fn new(workspace_path: &AbsoluteSystemPath, package_path: &AbsoluteSystemPath) -> Self {
-        workspace_path
+        let relative_path = workspace_path
             .anchor(package_path)
-            .expect("workspace is in the repo root");
+            .expect("Package path is within the workspace");
         Self {
             absolute_path: package_path.to_string(),
-        }
-    }
-}
-
-impl From<RustPackageManager> for PackageManager {
-    fn from(package_manager: RustPackageManager) -> Self {
-        Self {
-            name: package_manager.to_string(),
-            package_manager,
+            relative_path: relative_path.to_string(),
         }
     }
 }
 
 #[napi]
 impl Workspace {
+    /// Finds the workspace root from the given path, and returns a new
+    /// Workspace.
     #[napi(factory)]
     pub async fn find(path: Option<String>) -> Result<Workspace, napi::Error> {
         Self::find_internal(path).await.map_err(|e| e.into())
     }
 
-    #[napi]
-    pub fn package_manager(&self) -> Result<PackageManager, napi::Error> {
-        // match rather than map/map_err due to only the Ok variant implementing "Copy"
-        // match lets us handle each case independently, rather than forcing the whole
-        // value to a reference or concrete value
-        match self.workspace_state.package_manager.as_ref() {
-            Ok(pm) => Ok((*pm).into()),
-            Err(e) => Err(napi::Error::from_reason(format!("{}", e))),
-        }
-    }
-
+    /// Finds and returns packages within the workspace.
     #[napi]
     pub async fn find_packages(&self) -> std::result::Result<Vec<Package>, napi::Error> {
         self.packages_internal().await.map_err(|e| e.into())
